@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 
@@ -96,12 +97,12 @@ final class CompilerContext {
         for (Pattern param : params) {
             paramNames.addAll(extractBoundNames(param));
         }
-        if (!paramNames.contains("arguments")) {
+        if (!paramNames.contains(JSKeyword.ARGUMENTS)) {
             boolean hasVarArguments = false;
             for (Statement stmt : body) {
                 if (stmt instanceof VariableDeclaration vd && vd.kind() == VariableKind.VAR) {
                     for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                        if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                        if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
                             hasVarArguments = true;
                             break;
                         }
@@ -112,7 +113,7 @@ final class CompilerContext {
                 }
             }
             if (!hasVarArguments) {
-                paramNames.add("arguments");
+                paramNames.add(JSKeyword.ARGUMENTS);
             }
         }
         return paramNames;
@@ -233,7 +234,7 @@ final class CompilerContext {
     static boolean statementContainsVarArguments(Statement stmt) {
         if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
             for (var d : varDecl.declarations()) {
-                if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
                     return true;
                 }
             }
@@ -252,7 +253,7 @@ final class CompilerContext {
         if (stmt instanceof ForStatement forStmt) {
             if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
                 for (var d : varDecl.declarations()) {
-                    if (d.id() instanceof Identifier id && "arguments".equals(id.name())) {
+                    if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
                         return true;
                     }
                 }
@@ -480,7 +481,7 @@ final class CompilerContext {
             if (!(literal.value() instanceof String)) {
                 break;
             }
-            if (!"use strict".equals(literal.value())) {
+            if (!JSKeyword.USE_STRICT.equals(literal.value())) {
                 continue;
             }
             if (statementIndex == 0 && !isDirectiveStartAtBlockStart(block, literal)) {
@@ -572,7 +573,7 @@ final class CompilerContext {
             return false;
         }
 
-        final String strictDirective = "use strict";
+        final String strictDirective = JSKeyword.USE_STRICT;
         int sourceIndex = offset + 1;
         int directiveIndex = 0;
         while (sourceIndex < sourceCode.length()) {
@@ -597,7 +598,7 @@ final class CompilerContext {
     }
 
     boolean isSuperIdentifier(Expression expression) {
-        return expression instanceof Identifier id && "super".equals(id.name());
+        return expression instanceof Identifier id && JSKeyword.SUPER.equals(id.name());
     }
 
     boolean isSuperMemberExpression(MemberExpression memberExpr) {

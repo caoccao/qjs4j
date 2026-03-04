@@ -313,7 +313,7 @@ final class ExpressionCompiler {
         String name = id.name();
 
         // Handle 'this' keyword
-        if ("this".equals(name)) {
+        if (JSKeyword.THIS.equals(name)) {
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
             return;
         }
@@ -433,7 +433,7 @@ final class ExpressionCompiler {
                 continue;
             }
 
-            if ("get".equals(kind) || "set".equals(kind)) {
+            if (JSKeyword.GET.equals(kind) || JSKeyword.SET.equals(kind)) {
                 // Getter/setter property: use DEFINE_METHOD_COMPUTED
                 // Stack: obj -> obj key method -> obj
                 // Push key
@@ -449,7 +449,7 @@ final class ExpressionCompiler {
                 delegates.functions.compileFunctionExpression((FunctionExpression) prop.value(), true);
 
                 // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
-                int methodKind = "get".equals(kind) ? 1 : 2;
+                int methodKind = JSKeyword.GET.equals(kind) ? 1 : 2;
                 int flags = methodKind | 4; // enumerable = true for object literal properties
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, flags);
             } else {
@@ -804,7 +804,7 @@ final class ExpressionCompiler {
         if (unaryExpr.operator() == UnaryExpression.UnaryOperator.TYPEOF
                 && unaryExpr.operand() instanceof Identifier id) {
             String name = id.name();
-            if ("this".equals(name)) {
+            if (JSKeyword.THIS.equals(name)) {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else if (JSArguments.NAME.equals(name) && !compilerContext.inGlobalScope
                     && (!compilerContext.isInArrowFunction || compilerContext.hasEnclosingArgumentsBinding)

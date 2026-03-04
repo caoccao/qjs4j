@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -42,7 +43,7 @@ final class ExpressionCallMemberCompiler {
     }
 
     void compileCallExpressionRegular(CallExpression callExpr) {
-        if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
+        if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.SUPER.equals(calleeId.name())) {
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             compilerContext.emitter.emitU8(3);
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -53,7 +54,7 @@ final class ExpressionCallMemberCompiler {
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
             return;
         }
-        if (callExpr.callee() instanceof Identifier calleeId && "eval".equals(calleeId.name())) {
+        if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.EVAL.equals(calleeId.name())) {
             owner.compileExpression(callExpr.callee());
             for (Expression arg : callExpr.arguments()) {
                 owner.compileExpression(arg);
@@ -111,7 +112,7 @@ final class ExpressionCallMemberCompiler {
     }
 
     void compileCallExpressionWithSpread(CallExpression callExpr) {
-        if (callExpr.callee() instanceof Identifier calleeId && "super".equals(calleeId.name())) {
+        if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.SUPER.equals(calleeId.name())) {
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
             compilerContext.emitter.emitU8(3);
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -122,7 +123,7 @@ final class ExpressionCallMemberCompiler {
             compilerContext.emitter.emitOpcode(Opcode.INIT_CTOR);
             return;
         }
-        if (callExpr.callee() instanceof Identifier calleeId && "eval".equals(calleeId.name())) {
+        if (callExpr.callee() instanceof Identifier calleeId && JSKeyword.EVAL.equals(calleeId.name())) {
             owner.compileExpression(callExpr.callee());
             delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.arguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY_EVAL, 0);

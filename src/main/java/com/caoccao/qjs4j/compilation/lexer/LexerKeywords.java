@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.lexer;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,46 +29,46 @@ final class LexerKeywords {
 
     private static Map<String, TokenType> createKeywords() {
         Map<String, TokenType> keywords = new HashMap<>();
-        keywords.put("as", TokenType.AS);
-        keywords.put("async", TokenType.ASYNC);
-        keywords.put("await", TokenType.AWAIT);
-        keywords.put("break", TokenType.BREAK);
-        keywords.put("case", TokenType.CASE);
-        keywords.put("catch", TokenType.CATCH);
-        keywords.put("class", TokenType.CLASS);
-        keywords.put("const", TokenType.CONST);
-        keywords.put("continue", TokenType.CONTINUE);
-        keywords.put("default", TokenType.DEFAULT);
-        keywords.put("delete", TokenType.DELETE);
-        keywords.put("do", TokenType.DO);
-        keywords.put("else", TokenType.ELSE);
-        keywords.put("export", TokenType.EXPORT);
-        keywords.put("extends", TokenType.EXTENDS);
-        keywords.put("false", TokenType.FALSE);
-        keywords.put("finally", TokenType.FINALLY);
-        keywords.put("for", TokenType.FOR);
-        keywords.put("from", TokenType.FROM);
-        keywords.put("function", TokenType.FUNCTION);
-        keywords.put("if", TokenType.IF);
-        keywords.put("import", TokenType.IMPORT);
-        keywords.put("in", TokenType.IN);
-        keywords.put("instanceof", TokenType.INSTANCEOF);
-        keywords.put("let", TokenType.LET);
-        keywords.put("new", TokenType.NEW);
-        keywords.put("null", TokenType.NULL);
-        keywords.put("of", TokenType.OF);
-        keywords.put("return", TokenType.RETURN);
-        keywords.put("super", TokenType.SUPER);
-        keywords.put("switch", TokenType.SWITCH);
-        keywords.put("this", TokenType.THIS);
-        keywords.put("throw", TokenType.THROW);
-        keywords.put("true", TokenType.TRUE);
-        keywords.put("try", TokenType.TRY);
-        keywords.put("typeof", TokenType.TYPEOF);
-        keywords.put("var", TokenType.VAR);
-        keywords.put("void", TokenType.VOID);
-        keywords.put("while", TokenType.WHILE);
-        keywords.put("yield", TokenType.YIELD);
+        keywords.put(JSKeyword.AS, TokenType.AS);
+        keywords.put(JSKeyword.ASYNC, TokenType.ASYNC);
+        keywords.put(JSKeyword.AWAIT, TokenType.AWAIT);
+        keywords.put(JSKeyword.BREAK, TokenType.BREAK);
+        keywords.put(JSKeyword.CASE, TokenType.CASE);
+        keywords.put(JSKeyword.CATCH, TokenType.CATCH);
+        keywords.put(JSKeyword.CLASS, TokenType.CLASS);
+        keywords.put(JSKeyword.CONST, TokenType.CONST);
+        keywords.put(JSKeyword.CONTINUE, TokenType.CONTINUE);
+        keywords.put(JSKeyword.DEFAULT, TokenType.DEFAULT);
+        keywords.put(JSKeyword.DELETE, TokenType.DELETE);
+        keywords.put(JSKeyword.DO, TokenType.DO);
+        keywords.put(JSKeyword.ELSE, TokenType.ELSE);
+        keywords.put(JSKeyword.EXPORT, TokenType.EXPORT);
+        keywords.put(JSKeyword.EXTENDS, TokenType.EXTENDS);
+        keywords.put(JSKeyword.FALSE, TokenType.FALSE);
+        keywords.put(JSKeyword.FINALLY, TokenType.FINALLY);
+        keywords.put(JSKeyword.FOR, TokenType.FOR);
+        keywords.put(JSKeyword.FROM, TokenType.FROM);
+        keywords.put(JSKeyword.FUNCTION, TokenType.FUNCTION);
+        keywords.put(JSKeyword.IF, TokenType.IF);
+        keywords.put(JSKeyword.IMPORT, TokenType.IMPORT);
+        keywords.put(JSKeyword.IN, TokenType.IN);
+        keywords.put(JSKeyword.INSTANCEOF, TokenType.INSTANCEOF);
+        keywords.put(JSKeyword.LET, TokenType.LET);
+        keywords.put(JSKeyword.NEW, TokenType.NEW);
+        keywords.put(JSKeyword.NULL, TokenType.NULL);
+        keywords.put(JSKeyword.OF, TokenType.OF);
+        keywords.put(JSKeyword.RETURN, TokenType.RETURN);
+        keywords.put(JSKeyword.SUPER, TokenType.SUPER);
+        keywords.put(JSKeyword.SWITCH, TokenType.SWITCH);
+        keywords.put(JSKeyword.THIS, TokenType.THIS);
+        keywords.put(JSKeyword.THROW, TokenType.THROW);
+        keywords.put(JSKeyword.TRUE, TokenType.TRUE);
+        keywords.put(JSKeyword.TRY, TokenType.TRY);
+        keywords.put(JSKeyword.TYPEOF, TokenType.TYPEOF);
+        keywords.put(JSKeyword.VAR, TokenType.VAR);
+        keywords.put(JSKeyword.VOID, TokenType.VOID);
+        keywords.put(JSKeyword.WHILE, TokenType.WHILE);
+        keywords.put(JSKeyword.YIELD, TokenType.YIELD);
         return keywords;
     }
 }

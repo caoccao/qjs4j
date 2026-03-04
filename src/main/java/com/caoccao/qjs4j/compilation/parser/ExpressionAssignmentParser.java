@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.LexerState;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -29,15 +30,15 @@ import java.util.Set;
 
 final class ExpressionAssignmentParser {
     private static final Set<String> RESERVED_WORDS = Set.of(
-            "break", "case", "catch", "class", "const", "continue", "debugger",
-            "default", "delete", "do", "else", "enum", "export", "extends",
-            "false", "finally", "for", "function", "if", "import", "in",
-            "instanceof", "new", "null", "return", "super", "switch", "this",
-            "throw", "true", "try", "typeof", "var", "void", "while", "with");
+            JSKeyword.BREAK, JSKeyword.CASE, JSKeyword.CATCH, JSKeyword.CLASS, JSKeyword.CONST, JSKeyword.CONTINUE, JSKeyword.DEBUGGER,
+            JSKeyword.DEFAULT, JSKeyword.DELETE, JSKeyword.DO, JSKeyword.ELSE, JSKeyword.ENUM, JSKeyword.EXPORT, JSKeyword.EXTENDS,
+            JSKeyword.FALSE, JSKeyword.FINALLY, JSKeyword.FOR, JSKeyword.FUNCTION, JSKeyword.IF, JSKeyword.IMPORT, JSKeyword.IN,
+            JSKeyword.INSTANCEOF, JSKeyword.NEW, JSKeyword.NULL, JSKeyword.RETURN, JSKeyword.SUPER, JSKeyword.SWITCH, JSKeyword.THIS,
+            JSKeyword.THROW, JSKeyword.TRUE, JSKeyword.TRY, JSKeyword.TYPEOF, JSKeyword.VAR, JSKeyword.VOID, JSKeyword.WHILE, JSKeyword.WITH);
 
     private static final Set<String> STRICT_RESERVED_WORDS = Set.of(
-            "implements", "interface", "let", "package", "private", "protected",
-            "public", "static", "yield");
+            JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED,
+            JSKeyword.PUBLIC, JSKeyword.STATIC, JSKeyword.YIELD);
 
     private final ParserDelegates delegates;
     private final ExpressionParser expressions;
@@ -235,7 +236,7 @@ final class ExpressionAssignmentParser {
             if (statement instanceof ExpressionStatement expressionStatement
                     && expressionStatement.expression() instanceof Literal literal
                     && literal.value() instanceof String literalString) {
-                if ("use strict".equals(literalString)) {
+                if (JSKeyword.USE_STRICT.equals(literalString)) {
                     return true;
                 }
                 continue;
@@ -500,7 +501,7 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             // PrimaryExpression: this — AssignmentTargetType is "invalid" (spec 13.2.1)
-            if (left instanceof Identifier thisId && "this".equals(thisId.name())) {
+            if (left instanceof Identifier thisId && JSKeyword.THIS.equals(thisId.name())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             // In strict mode, CallExpression as assignment LHS is an early SyntaxError
@@ -514,7 +515,7 @@ final class ExpressionAssignmentParser {
             }
             if (parserContext.strictMode && left instanceof Identifier identifier) {
                 String identifierName = identifier.name();
-                if ("eval".equals(identifierName) || "arguments".equals(identifierName)) {
+                if (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
@@ -636,7 +637,7 @@ final class ExpressionAssignmentParser {
                 if (!seen.add(parameterName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
-                if (strictParameters && ("eval".equals(parameterName) || "arguments".equals(parameterName))) {
+                if (strictParameters && (JSKeyword.EVAL.equals(parameterName) || JSKeyword.ARGUMENTS.equals(parameterName))) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
             }
@@ -646,7 +647,7 @@ final class ExpressionAssignmentParser {
                 if (!seen.add(restName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
-                if (strictParameters && ("eval".equals(restName) || "arguments".equals(restName))) {
+                if (strictParameters && (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName))) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
             }
@@ -662,7 +663,7 @@ final class ExpressionAssignmentParser {
             // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
             validateBindingIdentifier(identifier.name());
             if (parserContext.strictMode
-                    && ("eval".equals(identifier.name()) || "arguments".equals(identifier.name()))) {
+                    && (JSKeyword.EVAL.equals(identifier.name()) || JSKeyword.ARGUMENTS.equals(identifier.name()))) {
                 throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
             }
             return;

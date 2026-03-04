@@ -28,17 +28,17 @@ import java.util.Objects;
  * - Integer indices (for array-like objects)
  */
 public final class PropertyKey {
-    public static final PropertyKey ASYNC = fromString("async");
+    public static final PropertyKey ASYNC = fromString(JSKeyword.ASYNC);
     public static final PropertyKey CALLEE = fromString("callee");
     public static final PropertyKey CAUSE = fromString("cause");
     public static final PropertyKey CONFIGURABLE = fromString("configurable");
-    public static final PropertyKey CONSTRUCTOR = fromString("constructor");
+    public static final PropertyKey CONSTRUCTOR = fromString(JSKeyword.CONSTRUCTOR);
     public static final PropertyKey DONE = fromString("done");
     public static final PropertyKey ENUMERABLE = fromString("enumerable");
     public static final PropertyKey ERROR = fromString("error");
     public static final PropertyKey ERRORS = fromString("errors");
     public static final PropertyKey EXEC = fromString("exec");
-    public static final PropertyKey GET = fromString("get");
+    public static final PropertyKey GET = fromString(JSKeyword.GET);
     public static final PropertyKey GROUPS = fromString("groups");
     public static final PropertyKey HAS = fromString("has");
     public static final PropertyKey INDEX = fromString("index");
@@ -55,12 +55,12 @@ public final class PropertyKey {
     public static final PropertyKey ONE = fromString("1");
     public static final PropertyKey PROMISE = fromString("promise");
     public static final PropertyKey PROTO = fromString("__proto__");
-    public static final PropertyKey PROTOTYPE = fromString("prototype");
+    public static final PropertyKey PROTOTYPE = fromString(JSKeyword.PROTOTYPE);
     public static final PropertyKey REASON = fromString("reason");
     public static final PropertyKey REJECT = fromString("reject");
     public static final PropertyKey RESOLVE = fromString("resolve");
-    public static final PropertyKey RETURN = fromString("return");
-    public static final PropertyKey SET = fromString("set");
+    public static final PropertyKey RETURN = fromString(JSKeyword.RETURN);
+    public static final PropertyKey SET = fromString(JSKeyword.SET);
     public static final PropertyKey SIZE = fromString("size");
     public static final PropertyKey STACK = fromString("stack");
     public static final PropertyKey STATUS = fromString("status");
@@ -82,7 +82,7 @@ public final class PropertyKey {
     public static final PropertyKey SYMBOL_TO_STRING_TAG = fromSymbol(JSSymbol.TO_STRING_TAG);
     public static final PropertyKey SYMBOL_UNSCOPABLES = fromSymbol(JSSymbol.UNSCOPABLES);
     public static final PropertyKey THEN = fromString("then");
-    public static final PropertyKey THROW = fromString("throw");
+    public static final PropertyKey THROW = fromString(JSKeyword.THROW);
     public static final PropertyKey TO_ISO_STRING = fromString("toISOString");
     public static final PropertyKey TO_STRING = fromString("toString");
     public static final PropertyKey VALUE = fromString("value");

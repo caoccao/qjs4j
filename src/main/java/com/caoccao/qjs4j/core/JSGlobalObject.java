@@ -2706,7 +2706,7 @@ public final class JSGlobalObject {
                     Set<String> bodyVarNames = collectBodyVarNames(callerBytecodeFunction);
                     if (bodyVarNames != null) {
                         for (String evalVar : evalVarDeclarations) {
-                            if ("arguments".equals(evalVar)) {
+                            if (JSKeyword.ARGUMENTS.equals(evalVar)) {
                                 continue;
                             }
                             if (localVarNameSet.contains(evalVar) && !bodyVarNames.contains(evalVar)) {
@@ -2730,13 +2730,13 @@ public final class JSGlobalObject {
                     }
                     for (String declarationName : evalVarDeclarations) {
                         if (isEvalInFunction
-                                && "arguments".equals(declarationName)
+                                && JSKeyword.ARGUMENTS.equals(declarationName)
                                 && callerBytecodeFunction != null) {
                             continue;
                         }
                         if (callerBytecodeFunction != null
                                 && callerBytecodeFunction.isArrow()
-                                && "arguments".equals(declarationName)
+                                && JSKeyword.ARGUMENTS.equals(declarationName)
                                 && !callerBytecodeFunction.hasArgumentsParameterBinding()) {
                             continue;
                         }

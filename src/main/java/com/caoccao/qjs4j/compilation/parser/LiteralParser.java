@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.parser;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -137,8 +138,10 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 }
                 String identifier = templateStr.substring(start, position);
                 regexAllowed = switch (identifier) {
-                    case "return", "throw", "case", "delete", "void", "typeof",
-                         "instanceof", "in", "of", "new", "do", "else", "yield", "await" -> true;
+                    case JSKeyword.RETURN, JSKeyword.THROW, JSKeyword.CASE, JSKeyword.DELETE, JSKeyword.VOID,
+                         JSKeyword.TYPEOF,
+                         JSKeyword.INSTANCEOF, JSKeyword.IN, JSKeyword.OF, JSKeyword.NEW, JSKeyword.DO, JSKeyword.ELSE,
+                         JSKeyword.YIELD, JSKeyword.AWAIT -> true;
                     default -> false;
                 };
                 continue;
@@ -286,7 +289,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Similar to parseClassElement logic
             if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
                 String name = parserContext.currentToken.value();
-                if (("get".equals(name) || "set".equals(name)) &&
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) &&
                         parserContext.nextToken.type() != TokenType.COLON &&
                         parserContext.nextToken.type() != TokenType.COMMA &&
                         parserContext.nextToken.type() != TokenType.LPAREN &&
@@ -348,10 +351,10 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 // Following QuickJS: the shorthand value is an IdentifierReference,
                 // so yield/await must be valid identifiers in the current context.
-                if (keyId.name().equals("yield") && !parserContext.isYieldIdentifierAllowed()) {
+                if (JSKeyword.YIELD.equals(keyId.name()) && !parserContext.isYieldIdentifierAllowed()) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
-                if (keyId.name().equals("await") && parserContext.isAwaitExpressionAllowed()) {
+                if (JSKeyword.AWAIT.equals(keyId.name()) && parserContext.isAwaitExpressionAllowed()) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
                 Expression value;

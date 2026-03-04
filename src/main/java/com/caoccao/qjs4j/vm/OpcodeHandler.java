@@ -2912,7 +2912,7 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.stack;
         JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf("function".equals(JSTypeChecking.typeof(value)));
+        stack[sp - 1] = JSBoolean.valueOf(JSKeyword.FUNCTION.equals(JSTypeChecking.typeof(value)));
         executionContext.pc += op.getSize();
     }
 
@@ -2920,7 +2920,7 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.stack;
         JSValue value = (JSValue) stack[sp - 1];
-        stack[sp - 1] = JSBoolean.valueOf("undefined".equals(JSTypeChecking.typeof(value)));
+        stack[sp - 1] = JSBoolean.valueOf(JSKeyword.UNDEFINED.equals(JSTypeChecking.typeof(value)));
         executionContext.pc += op.getSize();
     }
 
@@ -3200,7 +3200,7 @@ public final class OpcodeHandler {
                 }
                 // Call native function with receiver as thisArg
                 try {
-                    if (directEvalSyntax && "eval".equals(nativeFunc.getName())) {
+                    if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
                         executionContext.virtualMachine.context.scheduleDirectEvalCall();
                     }
                     JSValue result = nativeFunc.call(executionContext.virtualMachine.context, receiver, args);

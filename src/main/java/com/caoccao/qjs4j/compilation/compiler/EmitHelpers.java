@@ -161,9 +161,9 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
 
         int methodKind;
-        if ("get".equals(kind)) {
+        if (JSKeyword.GET.equals(kind)) {
             methodKind = 1;
-        } else if ("set".equals(kind)) {
+        } else if (JSKeyword.SET.equals(kind)) {
             methodKind = 2;
         } else {
             methodKind = 0;

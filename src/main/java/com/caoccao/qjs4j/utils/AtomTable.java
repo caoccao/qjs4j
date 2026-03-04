@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.utils;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -126,47 +128,47 @@ public final class AtomTable {
         }
 
         // Initialize the well-known atoms
-        setWellKnownAtom(ATOM_NULL, "null");
-        setWellKnownAtom(ATOM_FALSE, "false");
-        setWellKnownAtom(ATOM_TRUE, "true");
-        setWellKnownAtom(ATOM_IF, "if");
-        setWellKnownAtom(ATOM_ELSE, "else");
-        setWellKnownAtom(ATOM_RETURN, "return");
-        setWellKnownAtom(ATOM_VAR, "var");
-        setWellKnownAtom(ATOM_THIS, "this");
-        setWellKnownAtom(ATOM_DELETE, "delete");
-        setWellKnownAtom(ATOM_VOID, "void");
-        setWellKnownAtom(ATOM_TYPEOF, "typeof");
-        setWellKnownAtom(ATOM_NEW, "new");
-        setWellKnownAtom(ATOM_IN, "in");
-        setWellKnownAtom(ATOM_INSTANCEOF, "instanceof");
-        setWellKnownAtom(ATOM_DO, "do");
-        setWellKnownAtom(ATOM_WHILE, "while");
-        setWellKnownAtom(ATOM_FOR, "for");
-        setWellKnownAtom(ATOM_BREAK, "break");
-        setWellKnownAtom(ATOM_CONTINUE, "continue");
-        setWellKnownAtom(ATOM_SWITCH, "switch");
-        setWellKnownAtom(ATOM_CASE, "case");
-        setWellKnownAtom(ATOM_DEFAULT, "default");
-        setWellKnownAtom(ATOM_THROW, "throw");
-        setWellKnownAtom(ATOM_TRY, "try");
-        setWellKnownAtom(ATOM_CATCH, "catch");
-        setWellKnownAtom(ATOM_FINALLY, "finally");
-        setWellKnownAtom(ATOM_FUNCTION, "function");
-        setWellKnownAtom(ATOM_DEBUGGER, "debugger");
-        setWellKnownAtom(ATOM_WITH, "with");
-        setWellKnownAtom(ATOM_CLASS, "class");
-        setWellKnownAtom(ATOM_CONST, "const");
-        setWellKnownAtom(ATOM_ENUM, "enum");
-        setWellKnownAtom(ATOM_EXPORT, "export");
-        setWellKnownAtom(ATOM_EXTENDS, "extends");
-        setWellKnownAtom(ATOM_IMPORT, "import");
-        setWellKnownAtom(ATOM_SUPER, "super");
-        setWellKnownAtom(ATOM_LET, "let");
-        setWellKnownAtom(ATOM_STATIC, "static");
-        setWellKnownAtom(ATOM_YIELD, "yield");
-        setWellKnownAtom(ATOM_AWAIT, "await");
-        setWellKnownAtom(ATOM_ASYNC, "async");
+        setWellKnownAtom(ATOM_NULL, JSKeyword.NULL);
+        setWellKnownAtom(ATOM_FALSE, JSKeyword.FALSE);
+        setWellKnownAtom(ATOM_TRUE, JSKeyword.TRUE);
+        setWellKnownAtom(ATOM_IF, JSKeyword.IF);
+        setWellKnownAtom(ATOM_ELSE, JSKeyword.ELSE);
+        setWellKnownAtom(ATOM_RETURN, JSKeyword.RETURN);
+        setWellKnownAtom(ATOM_VAR, JSKeyword.VAR);
+        setWellKnownAtom(ATOM_THIS, JSKeyword.THIS);
+        setWellKnownAtom(ATOM_DELETE, JSKeyword.DELETE);
+        setWellKnownAtom(ATOM_VOID, JSKeyword.VOID);
+        setWellKnownAtom(ATOM_TYPEOF, JSKeyword.TYPEOF);
+        setWellKnownAtom(ATOM_NEW, JSKeyword.NEW);
+        setWellKnownAtom(ATOM_IN, JSKeyword.IN);
+        setWellKnownAtom(ATOM_INSTANCEOF, JSKeyword.INSTANCEOF);
+        setWellKnownAtom(ATOM_DO, JSKeyword.DO);
+        setWellKnownAtom(ATOM_WHILE, JSKeyword.WHILE);
+        setWellKnownAtom(ATOM_FOR, JSKeyword.FOR);
+        setWellKnownAtom(ATOM_BREAK, JSKeyword.BREAK);
+        setWellKnownAtom(ATOM_CONTINUE, JSKeyword.CONTINUE);
+        setWellKnownAtom(ATOM_SWITCH, JSKeyword.SWITCH);
+        setWellKnownAtom(ATOM_CASE, JSKeyword.CASE);
+        setWellKnownAtom(ATOM_DEFAULT, JSKeyword.DEFAULT);
+        setWellKnownAtom(ATOM_THROW, JSKeyword.THROW);
+        setWellKnownAtom(ATOM_TRY, JSKeyword.TRY);
+        setWellKnownAtom(ATOM_CATCH, JSKeyword.CATCH);
+        setWellKnownAtom(ATOM_FINALLY, JSKeyword.FINALLY);
+        setWellKnownAtom(ATOM_FUNCTION, JSKeyword.FUNCTION);
+        setWellKnownAtom(ATOM_DEBUGGER, JSKeyword.DEBUGGER);
+        setWellKnownAtom(ATOM_WITH, JSKeyword.WITH);
+        setWellKnownAtom(ATOM_CLASS, JSKeyword.CLASS);
+        setWellKnownAtom(ATOM_CONST, JSKeyword.CONST);
+        setWellKnownAtom(ATOM_ENUM, JSKeyword.ENUM);
+        setWellKnownAtom(ATOM_EXPORT, JSKeyword.EXPORT);
+        setWellKnownAtom(ATOM_EXTENDS, JSKeyword.EXTENDS);
+        setWellKnownAtom(ATOM_IMPORT, JSKeyword.IMPORT);
+        setWellKnownAtom(ATOM_SUPER, JSKeyword.SUPER);
+        setWellKnownAtom(ATOM_LET, JSKeyword.LET);
+        setWellKnownAtom(ATOM_STATIC, JSKeyword.STATIC);
+        setWellKnownAtom(ATOM_YIELD, JSKeyword.YIELD);
+        setWellKnownAtom(ATOM_AWAIT, JSKeyword.AWAIT);
+        setWellKnownAtom(ATOM_ASYNC, JSKeyword.ASYNC);
     }
 
     /**

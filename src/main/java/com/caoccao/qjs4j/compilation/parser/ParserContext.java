@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.lexer.LexerState;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.List;
@@ -200,7 +201,7 @@ final class ParserContext {
     }
 
     private boolean isRawUseStrictDirective(Token directiveToken) {
-        if (directiveToken.type() != TokenType.STRING || !"use strict".equals(directiveToken.value())) {
+        if (directiveToken.type() != TokenType.STRING || !JSKeyword.USE_STRICT.equals(directiveToken.value())) {
             return false;
         }
 
@@ -215,7 +216,7 @@ final class ParserContext {
             return false;
         }
 
-        final String strictDirective = "use strict";
+        final String strictDirective = JSKeyword.USE_STRICT;
         int sourceIndex = offset + 1;
         int directiveIndex = 0;
 
@@ -239,19 +240,20 @@ final class ParserContext {
 
     private boolean isStrictReservedIdentifierName(String name) {
         return switch (name) {
-            case "implements", "interface", "package", "private", "protected", "public", "static" -> true;
+            case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.PACKAGE, JSKeyword.PRIVATE, JSKeyword.PROTECTED,
+                 JSKeyword.PUBLIC, JSKeyword.STATIC -> true;
             default -> false;
         };
     }
 
     boolean isUsingDeclarationStart() {
         return currentToken.type() == TokenType.IDENTIFIER
-                && "using".equals(currentToken.value())
+                && JSKeyword.USING.equals(currentToken.value())
                 && isPatternStartToken(nextToken.type());
     }
 
     boolean isUsingIdentifierToken(Token token) {
-        return token.type() == TokenType.IDENTIFIER && "using".equals(token.value());
+        return token.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(token.value());
     }
 
     boolean isValidContinuationAfterAwaitIdentifier() {
@@ -363,10 +365,10 @@ final class ParserContext {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
             // Contextual keywords via unicode escapes still have their StringValue checked
-            if ("await".equals(name) && !isAwaitIdentifierAllowed()) {
+            if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
-            if ("yield".equals(name) && !isYieldIdentifierAllowed()) {
+            if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected token 'yield'");
             }
             advance();

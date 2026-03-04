@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.parser;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.ast.UnaryExpression.UnaryOperator;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.regexp.RegExpLiteralValue;
 
@@ -135,7 +136,7 @@ final class ExpressionPrimaryParser {
 
             // Handle new.target meta-property
             if (parserContext.match(TokenType.DOT) && parserContext.nextToken.type() == TokenType.IDENTIFIER
-                    && "target".equals(parserContext.nextToken.value())) {
+                    && JSKeyword.TARGET.equals(parserContext.nextToken.value())) {
                 if ((parserContext.isEval && !parserContext.allowNewTargetInEval)
                         || (!parserContext.isEval && parserContext.functionNesting == 0)) {
                     throw new JSSyntaxErrorException("'new.target' keyword unexpected here");
@@ -268,7 +269,7 @@ final class ExpressionPrimaryParser {
             SourceLocation loc = parserContext.getLocation();
             if (parserContext.strictMode && expr instanceof Identifier identifier) {
                 String identifierName = identifier.name();
-                if ("eval".equals(identifierName) || "arguments".equals(identifierName)) {
+                if (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName)) {
                     throw new JSSyntaxErrorException(
                             "Unexpected eval or arguments in strict mode");
                 }
@@ -402,7 +403,7 @@ final class ExpressionPrimaryParser {
             }
             case THIS -> {
                 parserContext.advance();
-                yield new Identifier("this", location);
+                yield new Identifier(JSKeyword.THIS, location);
             }
             case LPAREN -> {
                 parserContext.advance();
@@ -573,12 +574,12 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 if (parserContext.match(TokenType.LPAREN)) {
                     if (parserContext.inDerivedConstructor) {
-                        yield new Identifier("super", location);
+                        yield new Identifier(JSKeyword.SUPER, location);
                     }
                     throw new JSSyntaxErrorException("'super' keyword unexpected here");
                 }
                 if (parserContext.superPropertyAllowed && (parserContext.match(TokenType.DOT) || parserContext.match(TokenType.LBRACKET))) {
-                    yield new Identifier("super", location);
+                    yield new Identifier(JSKeyword.SUPER, location);
                 }
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }

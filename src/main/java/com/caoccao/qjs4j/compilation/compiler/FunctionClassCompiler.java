@@ -46,7 +46,7 @@ final class FunctionClassCompiler {
         }
         if (expression instanceof CallExpression callExpression
                 && callExpression.callee() instanceof Identifier calleeIdentifier
-                && "eval".equals(calleeIdentifier.name())
+                && JSKeyword.EVAL.equals(calleeIdentifier.name())
                 && !callExpression.arguments().isEmpty()
                 && callExpression.arguments().get(0) instanceof Literal firstArgumentLiteral
                 && firstArgumentLiteral.value() instanceof String evalSourceString
@@ -382,7 +382,7 @@ final class FunctionClassCompiler {
         for (ClassDeclaration.ClassElement element : classDecl.body()) {
             if (element instanceof ClassDeclaration.MethodDefinition method) {
                 // Check if it's a constructor
-                if (method.key() instanceof Identifier id && "constructor".equals(id.name()) && !method.isStatic()) {
+                if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {
@@ -631,7 +631,7 @@ final class FunctionClassCompiler {
         for (ClassDeclaration.ClassElement element : classExpr.body()) {
             if (element instanceof ClassDeclaration.MethodDefinition method) {
                 // Check if it's a constructor
-                if (method.key() instanceof Identifier id && "constructor".equals(id.name()) && !method.isStatic()) {
+                if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {
@@ -976,7 +976,7 @@ final class FunctionClassCompiler {
             if (funcDecl.isAsync()) {
                 funcSource.append("async ");
             }
-            funcSource.append("function");
+            funcSource.append(JSKeyword.FUNCTION);
             if (funcDecl.isGenerator()) {
                 funcSource.append("*");
             }
@@ -1794,8 +1794,8 @@ final class FunctionClassCompiler {
             return;
         }
         boolean isGetterSetterPair =
-                ("get".equals(existingKind) && "set".equals(kind))
-                        || ("set".equals(existingKind) && "get".equals(kind));
+                (JSKeyword.GET.equals(existingKind) && JSKeyword.SET.equals(kind))
+                        || (JSKeyword.SET.equals(existingKind) && JSKeyword.GET.equals(kind));
         if (isGetterSetterPair) {
             privateNameKinds.put(privateName, "accessor");
             return;

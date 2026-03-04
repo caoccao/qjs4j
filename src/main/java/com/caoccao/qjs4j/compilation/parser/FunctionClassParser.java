@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.parser;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -77,7 +78,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Check function name
         if (funcName != null) {
             String name = funcName.name();
-            if ("eval".equals(name) || "arguments".equals(name)) {
+            if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
                 throw new JSSyntaxErrorException("invalid function name in strict code");
             }
         }
@@ -88,7 +89,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             List<String> boundNames = extractBoundNames(param);
             for (String paramName : boundNames) {
                 // Check for reserved names
-                if ("eval".equals(paramName) || "arguments".equals(paramName)) {
+                if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
                 // Check for duplicates
@@ -101,7 +102,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (funcParams.restParameter() != null) {
             List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
             for (String restName : restBoundNames) {
-                if ("eval".equals(restName) || "arguments".equals(restName)) {
+                if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
                 }
                 if (!seen.add(restName)) {
@@ -199,7 +200,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         SourceLocation location = parserContext.getLocation();
 
         // Check for 'static' keyword
-        if (parserContext.match(TokenType.IDENTIFIER) && "static".equals(parserContext.currentToken.value())) {
+        if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.STATIC.equals(parserContext.currentToken.value())) {
             parserContext.advance();
             isStatic = true;
 
@@ -212,7 +213,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             if (parserContext.match(TokenType.ASSIGN) || parserContext.match(TokenType.SEMICOLON)) {
                 isStatic = false;
                 // Parse as field with name "static"
-                Expression key = new Identifier("static", location);
+                Expression key = new Identifier(JSKeyword.STATIC, location);
                 Expression value = null;
                 if (parserContext.match(TokenType.ASSIGN)) {
                     parserContext.advance();
@@ -246,7 +247,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             if (nextType == TokenType.ASSIGN || nextType == TokenType.SEMICOLON
                     || nextType == TokenType.COLON || nextType == TokenType.COMMA) {
                 // async = value; or async; or async: value — property named "async"
-                Expression key = new Identifier("async", methodStartLocation);
+                Expression key = new Identifier(JSKeyword.ASYNC, methodStartLocation);
                 parserContext.advance();
                 return parseMethodOrField(key, isStatic, isPrivate, false, methodStartLocation);
             }
@@ -308,7 +309,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (parserContext.match(TokenType.IDENTIFIER)) {
             String name = parserContext.currentToken.value();
             Token peekNext = parserContext.nextToken;
-            if (("get".equals(name) || "set".equals(name)) &&
+            if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) &&
                     peekNext.type() != TokenType.LPAREN &&
                     peekNext.type() != TokenType.ASSIGN &&
                     peekNext.type() != TokenType.SEMICOLON) {
@@ -722,7 +723,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Otherwise, it's a method
         // If this is a constructor in a derived class, enable super() calls
-        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && "constructor".equals(keyId.name());
+        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && JSKeyword.CONSTRUCTOR.equals(keyId.name());
         boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         if (isConstructorMethod && parserContext.parsingClassWithSuper) {

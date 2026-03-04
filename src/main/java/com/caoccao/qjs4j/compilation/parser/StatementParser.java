@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.parser;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -137,7 +138,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     private boolean isWithKeyword() {
         return parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && "with".equals(parserContext.currentToken.value());
+                && JSKeyword.WITH.equals(parserContext.currentToken.value());
     }
 
     Statement parseAsyncDeclaration() {
