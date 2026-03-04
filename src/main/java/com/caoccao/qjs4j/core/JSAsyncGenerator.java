@@ -238,8 +238,13 @@ public final class JSAsyncGenerator extends JSObject {
             if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
                 JSValue result = resultPromise.getResult();
                 processResult(result);
-                request.promise().fulfill(result);
-                scheduleDrainRequestQueue();
+                // Per ES spec: async generator yield first awaits the value
+                // (1 microtask tick) before resolving the .next() promise.
+                // Schedule a single microtask to provide this await delay.
+                context.enqueueMicrotask(() -> {
+                    request.promise().fulfill(result);
+                    scheduleDrainRequestQueue();
+                });
                 return;
             }
             if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {

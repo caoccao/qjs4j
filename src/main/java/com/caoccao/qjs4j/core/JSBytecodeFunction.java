@@ -428,27 +428,101 @@ public final class JSBytecodeFunction extends JSFunction {
      * resolve it first; otherwise use it directly.
      */
     private static void fulfillAsyncYield(JSContext context, JSPromise promise, JSValue value, boolean done) {
-        JSPromise resolvedResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
-        resolvedResultPromise.addReactions(
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
-                            JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            promise.fulfill(resolvedResult);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                ),
-                new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
-                            JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            promise.reject(error);
-                            return JSUndefined.INSTANCE;
-                        }),
-                        null,
-                        context
-                )
-        );
+        // Per ES2024 spec: yield in async generators first awaits the yielded value
+        // (YieldExpression step 4: "set value to ? Await(value)"), then yields the
+        // awaited result which synchronously resolves the .next() promise via
+        // AsyncGeneratorCompleteStep. To achieve correct microtask interleaving,
+        // already-settled promises and primitives are resolved synchronously here
+        // so that executeRequestWithGeneratorFunction can provide the single "await"
+        // tick via its microtask scheduling.
+        if (value instanceof JSPromise promiseValue) {
+            // Per ES spec PromiseResolve: access .constructor for observable side effects
+            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearPendingException();
+                promise.reject(error);
+                return;
+            }
+            if (promiseValue.getState() == JSPromise.PromiseState.FULFILLED) {
+                // Already-fulfilled promise: unwrap and fulfill synchronously
+                JSValue resolvedValue = promiseValue.getResult();
+                JSObject result = context.createJSObject();
+                result.set(PropertyKey.VALUE, resolvedValue);
+                result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                promise.fulfill(result);
+                return;
+            }
+            if (promiseValue.getState() == JSPromise.PromiseState.REJECTED) {
+                promise.reject(promiseValue.getResult());
+                return;
+            }
+            // Pending promise: add reaction to fulfill when resolved (1 tick)
+            promiseValue.addReactions(
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
+                                JSValue resolvedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                JSObject result = context.createJSObject();
+                                result.set(PropertyKey.VALUE, resolvedValue);
+                                result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                                promise.fulfill(result);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    ),
+                    new JSPromise.ReactionRecord(
+                            new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
+                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                promise.reject(error);
+                                return JSUndefined.INSTANCE;
+                            }),
+                            null,
+                            context
+                    )
+            );
+            return;
+        }
+        // Check for thenable objects
+        if (value instanceof JSObject obj) {
+            JSValue thenMethod = obj.get(context, PropertyKey.THEN);
+            if (context.hasPendingException()) {
+                JSValue error = context.getPendingException();
+                context.clearPendingException();
+                promise.reject(error);
+                return;
+            }
+            if (thenMethod instanceof JSFunction) {
+                // Thenable: use existing async-from-sync resolution path
+                JSPromise resolvedResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(context, value, done);
+                resolvedResultPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onResolve", 1, (childContext, thisArg, args) -> {
+                                    JSValue resolvedResult = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    promise.fulfill(resolvedResult);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onReject", 1, (childContext, thisArg, args) -> {
+                                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    promise.reject(error);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                context
+                        )
+                );
+                return;
+            }
+        }
+        // Primitive or non-thenable object: fulfill synchronously
+        JSObject result = context.createJSObject();
+        result.set(PropertyKey.VALUE, value);
+        result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+        promise.fulfill(result);
     }
 
     private static void fulfillAsyncYieldStarResult(

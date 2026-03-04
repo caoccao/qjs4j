@@ -29,6 +29,23 @@ public final class OpcodeHandler {
     private OpcodeHandler() {
     }
 
+    /**
+     * Convert a JSVirtualMachineException (thrown from a nested execute() call)
+     * into a VM pendingException so the outer execution loop can route it to
+     * the appropriate JS try-catch handler.
+     */
+    private static void captureVmExceptionAsPending(ExecutionContext executionContext, JSVirtualMachineException e) {
+        JSValue errorValue = e.getJsValue() != null ? e.getJsValue() : e.getJsError();
+        if (errorValue != null) {
+            executionContext.virtualMachine.pendingException = errorValue;
+        } else {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwError("Error",
+                            e.getMessage() != null ? e.getMessage() : "Unknown error");
+            executionContext.virtualMachine.context.clearPendingException();
+        }
+    }
+
     private static void checkPendingException(JSContext context) {
         if (context.hasPendingException()) {
             JSValue exception = context.getPendingException();
@@ -3055,7 +3072,18 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) & JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        VirtualMachine.NumericPair pair;
+        try {
+            pair = executionContext.virtualMachine.numericPair(left, right);
+        } catch (JSVirtualMachineException e) {
+            captureVmExceptionAsPending(executionContext, e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
         if (pair == null) {
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             return;
@@ -3289,15 +3317,16 @@ public final class OpcodeHandler {
     private static void internalHandleAwait(ExecutionContext executionContext) {
         JSValue value = executionContext.virtualMachine.valueStack.pop();
 
-        // If the value is already a promise, use it directly
-        // Otherwise, wrap it in a resolved promise
+        // If the value is already a promise, use it directly.
+        // Otherwise, wrap it via Promise.resolve() which handles thenables:
+        // if the value has a callable `then` property, it will be called with
+        // resolve/reject callbacks per ES2024 25.5.5.3 Await step 3.
         JSPromise promise;
         if (value instanceof JSPromise) {
             promise = (JSPromise) value;
         } else {
-            // Create a new promise and immediately fulfill it
             promise = executionContext.virtualMachine.context.createJSPromise();
-            promise.fulfill(value);
+            promise.resolve(executionContext.virtualMachine.context, value);
         }
 
         // For proper async/await support, we need to wait for the promise to settle
@@ -4393,7 +4422,18 @@ public final class OpcodeHandler {
 
     private static void internalHandleNot(ExecutionContext executionContext) {
         JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSValue numeric = executionContext.virtualMachine.toNumericValue(operand);
+        JSValue numeric;
+        try {
+            numeric = executionContext.virtualMachine.toNumericValue(operand);
+        } catch (JSVirtualMachineException e) {
+            captureVmExceptionAsPending(executionContext, e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
         if (numeric instanceof JSBigInt bigInt) {
             executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().not()));
             return;
@@ -4420,7 +4460,18 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) | JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        VirtualMachine.NumericPair pair;
+        try {
+            pair = executionContext.virtualMachine.numericPair(left, right);
+        } catch (JSVirtualMachineException e) {
+            captureVmExceptionAsPending(executionContext, e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
         if (pair == null) {
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             return;
@@ -4615,7 +4666,18 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) ^ JSTypeConversions.toInt32(rightNum.value())));
             return;
         }
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        VirtualMachine.NumericPair pair;
+        try {
+            pair = executionContext.virtualMachine.numericPair(left, right);
+        } catch (JSVirtualMachineException e) {
+            captureVmExceptionAsPending(executionContext, e);
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
+        if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            return;
+        }
         if (pair == null) {
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             return;

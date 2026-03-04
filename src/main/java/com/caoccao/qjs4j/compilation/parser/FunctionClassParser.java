@@ -509,12 +509,17 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             isGenerator = true;
         }
 
+        // Parse the function name in the ENCLOSING scope context, before entering
+        // the function context. Per ES spec, the BindingIdentifier of a FunctionDeclaration
+        // is bound in the enclosing scope, so contextual keyword checks (await/yield)
+        // must use the enclosing scope's rules. This allows `async function await() {}`
+        // at global scope while rejecting `function await() {}` inside async functions.
+        Identifier id = parserContext.parseIdentifier();
+
         parserContext.enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         try {
-            Identifier id = parserContext.parseIdentifier();
-
             // Per QuickJS: in_function_body == FALSE prevents yield/await during
             // the parsing of the arguments in generator/async functions.
             boolean savedInFunctionBody = parserContext.inFunctionBody;
