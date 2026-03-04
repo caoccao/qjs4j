@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Test cases for invalid left-hand side assignment target validation.
@@ -60,7 +63,14 @@ public class InvalidAssignmentTargetTest extends BaseJavetTest {
 
     @Test
     public void testAssignToFunctionCall() {
-        assertErrorWithJavet("foo() = 1");
+        // Non-strict: ReferenceError at runtime (foo is not defined)
+        assertThatThrownBy(() -> resetContext().eval("foo() = 1", FILE_NAME, moduleMode))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("ReferenceError");
+        // Strict: SyntaxError at parse time (follows QuickJS; V8 uses web-compat runtime error)
+        assertThatThrownBy(() -> resetContext().eval("'use strict';\nfoo() = 1", FILE_NAME, moduleMode))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("SyntaxError");
     }
 
     @Test
