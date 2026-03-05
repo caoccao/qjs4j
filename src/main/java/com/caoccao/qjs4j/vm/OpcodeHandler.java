@@ -63,7 +63,35 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleAdd(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            try {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.addValues(left, right));
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                    executionContext.virtualMachine.context.clearPendingException();
+                    executionContext.virtualMachine.valueStack.pop();
+                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                }
+            } catch (JSVirtualMachineException e) {
+                executionContext.virtualMachine.captureVMException(e);
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } catch (JSException e) {
+                if (e.getErrorValue() != null) {
+                    executionContext.virtualMachine.pendingException = e.getErrorValue();
+                } else {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                            "Error",
+                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } catch (JSErrorException e) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -112,7 +140,28 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleAnd(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            VirtualMachine.NumericPair pair;
+            try {
+                pair = executionContext.virtualMachine.numericPair(left, right);
+            } catch (JSVirtualMachineException e) {
+                captureVmExceptionAsPending(executionContext, e);
+                pair = null;
+            }
+            if (pair != null && executionContext.virtualMachine.pendingException != null) {
+                pair = null;
+            }
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                JSBigInt leftBigInt = (JSBigInt) pair.left();
+                JSBigInt rightBigInt = (JSBigInt) pair.right();
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().and(rightBigInt.value())));
+            } else {
+                int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) & JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -271,7 +320,20 @@ public final class OpcodeHandler {
     static void handleApplyEval(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleApplyEval(executionContext);
+        JSValue argsArrayValue = executionContext.virtualMachine.valueStack.pop();
+        JSValue callee = executionContext.virtualMachine.valueStack.pop();
+
+        JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
+        if (applyArgs == null) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else {
+            executionContext.virtualMachine.valueStack.push(callee);
+            for (JSValue applyArg : applyArgs) {
+                executionContext.virtualMachine.valueStack.push(applyArg);
+            }
+            internalHandleCall(executionContext, applyArgs.length, true);
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc = pc + op.getSize();
     }
@@ -303,7 +365,192 @@ public final class OpcodeHandler {
 
     static void handleAsyncYieldStar(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleAsyncYieldStar(executionContext);
+        JSContext context = executionContext.virtualMachine.context;
+
+        // yield* in async generators uses GetIterator(obj, async) per ES2024 7.4.3
+        JSValue asyncYieldStarIterable = executionContext.virtualMachine.valueStack.pop();
+
+        // Convert to object if needed
+        JSObject asyncYieldStarIterableObj;
+        if (asyncYieldStarIterable instanceof JSObject obj) {
+            asyncYieldStarIterableObj = obj;
+        } else {
+            asyncYieldStarIterableObj = executionContext.virtualMachine.toObject(asyncYieldStarIterable);
+            if (asyncYieldStarIterableObj == null) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError(asyncYieldStarIterable + " is not iterable"));
+            }
+        }
+
+        // GetIterator(obj, async):
+        // Step 1: Try Symbol.asyncIterator (using context-aware get to trigger getters)
+        JSValue asyncIteratorMethod = asyncYieldStarIterableObj.get(context, PropertyKey.SYMBOL_ASYNC_ITERATOR);
+        checkPendingException(context);
+
+        JSObject asyncYieldStarIteratorObj;
+
+        if (!asyncIteratorMethod.isNullOrUndefined()) {
+            // Symbol.asyncIterator exists -- must be callable (GetMethod step 3)
+            if (!(asyncIteratorMethod instanceof JSFunction asyncIterFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            JSValue asyncYieldStarIterator = asyncIterFunc.call(context, asyncYieldStarIterable, JSValue.NO_ARGS);
+            checkPendingException(context);
+            if (!(asyncYieldStarIterator instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
+            }
+            asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
+        } else {
+            // Step 2: Fall back to Symbol.iterator
+            JSValue iteratorMethod = asyncYieldStarIterableObj.get(context, PropertyKey.SYMBOL_ITERATOR);
+            checkPendingException(context);
+            if (iteratorMethod.isNullOrUndefined()) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            if (!(iteratorMethod instanceof JSFunction iterFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+            JSValue asyncYieldStarIterator = iterFunc.call(context, asyncYieldStarIterable, JSValue.NO_ARGS);
+            checkPendingException(context);
+            if (!(asyncYieldStarIterator instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("Result of the Symbol.iterator method is not an object"));
+            }
+            asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
+        }
+
+        // Check for RETURN/THROW resume records (yield* delegation protocol per ES2024 27.5.3.3)
+        JSGeneratorState.ResumeRecord asyncYieldStarResumeRecord =
+                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
+                        : null;
+
+        if (asyncYieldStarResumeRecord != null && asyncYieldStarResumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+            executionContext.virtualMachine.generatorResumeIndex++;
+            JSValue returnValue = asyncYieldStarResumeRecord.value();
+
+            JSValue returnMethodValue = asyncYieldStarIteratorObj.get(context, PropertyKey.RETURN);
+            checkPendingException(context);
+            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
+
+            if (noReturnMethod) {
+                executionContext.virtualMachine.valueStack.push(returnValue);
+            } else {
+                if (!(returnMethodValue instanceof JSFunction returnFunc)) {
+                    throw new JSVirtualMachineException(
+                            context.throwTypeError("iterator return is not a function"));
+                }
+
+                JSValue result = returnFunc.call(context, asyncYieldStarIteratorObj, new JSValue[]{returnValue});
+                checkPendingException(context);
+                if (!(result instanceof JSObject)) {
+                    throw new JSVirtualMachineException(
+                            context.throwTypeError("iterator must return an object"));
+                }
+
+                JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+                checkPendingException(context);
+                if (JSTypeConversions.toBoolean(doneValue).value()) {
+                    JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                    checkPendingException(context);
+                    executionContext.virtualMachine.valueStack.push(value);
+                } else {
+                    executionContext.virtualMachine.yieldResult =
+                            new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj);
+                    executionContext.virtualMachine.valueStack.push(result);
+                }
+            }
+        } else if (asyncYieldStarResumeRecord != null && asyncYieldStarResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+            executionContext.virtualMachine.generatorResumeIndex++;
+            JSValue throwValue = asyncYieldStarResumeRecord.value();
+
+            JSValue throwMethodValue = asyncYieldStarIteratorObj.get(context, PropertyKey.THROW);
+            checkPendingException(context);
+            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
+
+            if (noThrowMethod) {
+                JSValue closeMethod = asyncYieldStarIteratorObj.get(context, PropertyKey.RETURN);
+                if (closeMethod instanceof JSFunction closeFunc) {
+                    closeFunc.call(context, asyncYieldStarIteratorObj, JSValue.NO_ARGS);
+                }
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator does not have a throw method"));
+            }
+
+            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator throw is not a function"));
+            }
+
+            JSValue result = throwFunc.call(context, asyncYieldStarIteratorObj, new JSValue[]{throwValue});
+            checkPendingException(context);
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("iterator must return an object"));
+            }
+
+            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+            checkPendingException(context);
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                checkPendingException(context);
+                executionContext.virtualMachine.valueStack.push(value);
+            } else {
+                executionContext.virtualMachine.yieldResult =
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj);
+                executionContext.virtualMachine.valueStack.push(result);
+            }
+        } else {
+            // Default: NEXT protocol -- call iterator.next()
+            JSValue nextMethod = asyncYieldStarIteratorObj.get(context, PropertyKey.NEXT);
+            checkPendingException(context);
+            if (!(nextMethod instanceof JSFunction nextFunc)) {
+                throw new JSVirtualMachineException(
+                        context.throwTypeError("is not a function"));
+            }
+
+            // Per ES2024 spec: Invoke(iterator, "next", << received.[[Value]] >>)
+            JSValue[] nextArgs = new JSValue[]{JSUndefined.INSTANCE};
+
+            // Skip past previously-yielded values during generator replay
+            boolean asyncInnerExhausted = false;
+            while (executionContext.virtualMachine.yieldSkipCount > 0) {
+                JSValue skipResult = nextFunc.call(context, asyncYieldStarIteratorObj, nextArgs);
+                checkPendingException(context);
+                if (!(skipResult instanceof JSObject)) {
+                    throw new JSVirtualMachineException(
+                            context.throwTypeError("Iterator result must be an object"));
+                }
+                JSValue skipDone = ((JSObject) skipResult).get(context, PropertyKey.DONE);
+                checkPendingException(context);
+                if (JSTypeConversions.toBoolean(skipDone).value()) {
+                    JSValue value = ((JSObject) skipResult).get(context, PropertyKey.VALUE);
+                    checkPendingException(context);
+                    executionContext.virtualMachine.valueStack.push(value);
+                    asyncInnerExhausted = true;
+                    break;
+                }
+                executionContext.virtualMachine.yieldSkipCount--;
+            }
+
+            if (!asyncInnerExhausted) {
+                JSValue result = nextFunc.call(context, asyncYieldStarIteratorObj, nextArgs);
+                checkPendingException(context);
+
+                if (!(result instanceof JSObject)) {
+                    throw new JSVirtualMachineException(
+                            context.throwTypeError("Iterator result must be an object"));
+                }
+
+                executionContext.virtualMachine.yieldResult =
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj, nextMethod);
+                executionContext.virtualMachine.valueStack.push(result);
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
@@ -322,7 +569,45 @@ public final class OpcodeHandler {
 
     static void handleAwait(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleAwait(executionContext);
+        JSValue value = executionContext.virtualMachine.valueStack.pop();
+
+        // If the value is already a promise, use it directly.
+        // Otherwise, wrap it via Promise.resolve() which handles thenables.
+        JSPromise promise;
+        if (value instanceof JSPromise) {
+            promise = (JSPromise) value;
+        } else {
+            promise = executionContext.virtualMachine.context.createJSPromise();
+            promise.resolve(executionContext.virtualMachine.context, value);
+        }
+
+        // Per ES2024 spec (25.5.5.3 Await), await always takes exactly 1 microtask tick.
+        // When running in suspension mode (inside an async function), always suspend and let
+        // the reaction callbacks in resumeAsyncFunctionExecution handle resumption via microtask.
+        if (executionContext.virtualMachine.awaitSuspensionEnabled && executionContext.virtualMachine.activeGeneratorState != null) {
+            executionContext.virtualMachine.awaitSuspensionPromise = promise;
+        } else {
+            // Fallback for non-suspension mode: if the promise is pending, process microtasks
+            if (promise.getState() == JSPromise.PromiseState.PENDING) {
+                executionContext.virtualMachine.context.processMicrotasks();
+            }
+
+            // Now the promise should be settled, push the resolved value
+            if (promise.getState() == JSPromise.PromiseState.FULFILLED) {
+                executionContext.virtualMachine.valueStack.push(promise.getResult());
+            } else if (promise.getState() == JSPromise.PromiseState.REJECTED) {
+                JSValue result = promise.getResult();
+                IJSPromiseRejectCallback callback = executionContext.virtualMachine.context.getPromiseRejectCallback();
+                if (callback != null) {
+                    callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, promise, result);
+                }
+                executionContext.virtualMachine.pendingException = result;
+                executionContext.virtualMachine.context.setPendingException(result);
+            } else {
+                // Promise is still pending - this shouldn't happen
+                throw new JSVirtualMachineException("Promise did not settle after processing microtasks");
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.awaitSuspensionPromise != null) {
@@ -344,53 +629,6 @@ public final class OpcodeHandler {
         internalHandleCall(executionContext, argumentCount, false);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
-    }
-
-    static void handleTailCall(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        byte[] instructions = executionContext.instructions;
-        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-
-        // Peek at the callee to check if we can use the trampoline
-        int calleeIndex = executionContext.sp - argumentCount - 2;
-        JSValue callee = (JSValue) executionContext.stack[calleeIndex];
-
-        // Check if callee is a non-constructor bytecode function eligible for TCO
-        boolean canTrampoline = false;
-        if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
-            canTrampoline = !bytecodeFunc.isClassConstructor();
-        }
-
-        if (canTrampoline) {
-            // Pop arguments, receiver, callee for trampoline
-            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
-            for (int i = argumentCount - 1; i >= 0; i--) {
-                args[i] = executionContext.virtualMachine.valueStack.pop();
-            }
-            JSValue receiver = executionContext.virtualMachine.valueStack.pop();
-            callee = executionContext.virtualMachine.valueStack.pop();
-            executionContext.virtualMachine.propertyAccessLock = false;
-            executionContext.virtualMachine.resetPropertyAccessTracking();
-
-            // Store the tail call request for the trampoline loop in execute()
-            executionContext.virtualMachine.tailCallPending =
-                    new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, receiver, args);
-            // Clean up the current frame (same as RETURN)
-            executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
-            executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
-            executionContext.opcodeRequestedReturn = true;
-            return;
-        }
-
-        // Fallback: call normally and return the result (like CALL + RETURN)
-        internalHandleCall(executionContext, argumentCount, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        JSValue result = (JSValue) executionContext.stack[--executionContext.sp];
-        executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
-        executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
-        executionContext.returnValue = result;
-        executionContext.opcodeRequestedReturn = true;
     }
 
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
@@ -426,7 +664,64 @@ public final class OpcodeHandler {
         byte[] instructions = executionContext.instructions;
         int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleCallConstructor(executionContext, argumentCount);
+        // Pop arguments
+        JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+        for (int i = argumentCount - 1; i >= 0; i--) {
+            args[i] = executionContext.virtualMachine.valueStack.pop();
+        }
+        // Pop constructor
+        JSValue constructor = executionContext.virtualMachine.valueStack.pop();
+        // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
+        if (constructor instanceof JSProxy jsProxy) {
+            // Following QuickJS JS_CallConstructorInternal:
+            // Check if target is a constructor BEFORE checking for construct trap
+            JSValue target = jsProxy.getTarget();
+            if (JSTypeChecking.isConstructor(target)) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.proxyConstruct(jsProxy, args, jsProxy));
+            } else {
+                executionContext.virtualMachine.context.throwTypeError("proxy is not a constructor");
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            }
+        } else if (constructor instanceof JSFunction jsFunction) {
+            // Check if the function is constructable
+            if (!JSTypeChecking.isConstructor(jsFunction)) {
+                executionContext.virtualMachine.context.throwTypeError(jsFunction.getName() + " is not a constructor");
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                JSValue result;
+                try {
+                    result = executionContext.virtualMachine.constructFunction(jsFunction, args, jsFunction);
+                } catch (JSVirtualMachineException e) {
+                    if (e.getJsValue() != null) {
+                        executionContext.virtualMachine.pendingException = e.getJsValue();
+                    } else if (e.getJsError() != null) {
+                        executionContext.virtualMachine.pendingException = e.getJsError();
+                    } else if (executionContext.virtualMachine.context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                    } else {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    }
+                    executionContext.virtualMachine.context.clearPendingException();
+                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    result = null;
+                }
+                if (result != null) {
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    } else {
+                        executionContext.virtualMachine.valueStack.push(result);
+                    }
+                }
+            }
+        } else {
+            executionContext.virtualMachine.context.throwTypeError("not a constructor");
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc = pc + op.getSize();
     }
@@ -462,7 +757,8 @@ public final class OpcodeHandler {
 
     static void handleDec(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleDec(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, -1));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -776,7 +1072,17 @@ public final class OpcodeHandler {
 
     static void handleDelete(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleDelete(executionContext);
+        JSValue property = executionContext.virtualMachine.valueStack.pop();
+        JSValue object = executionContext.virtualMachine.valueStack.pop();
+        boolean result = false;
+        if (object instanceof JSObject jsObj) {
+            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
+            result = jsObj.delete(executionContext.virtualMachine.context, key);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            }
+        }
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -799,7 +1105,25 @@ public final class OpcodeHandler {
 
     static void handleDiv(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleDiv(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        if (pair == null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            if (rightBigInt.value().equals(VirtualMachine.BIGINT_ZERO)) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Division by zero");
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().divide(rightBigInt.value())));
+            }
+        } else {
+            JSNumber leftNumber = (JSNumber) pair.left();
+            JSNumber rightNumber = (JSNumber) pair.right();
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() / rightNumber.value()));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -836,7 +1160,10 @@ public final class OpcodeHandler {
 
     static void handleEq(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleEq(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        boolean result = JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -898,7 +1225,36 @@ public final class OpcodeHandler {
 
     static void handleExp(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleExp(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        if (pair == null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            BigInteger exponent = rightBigInt.value();
+            if (exponent.signum() < 0) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Exponent must be positive");
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                final int exponentInt;
+                try {
+                    exponentInt = exponent.intValueExact();
+                } catch (ArithmeticException e) {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("BigInt exponent is too large");
+                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                    executionContext.pc += op.getSize();
+                    return;
+                }
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().pow(exponentInt)));
+            }
+        } else {
+            JSNumber leftNumber = (JSNumber) pair.left();
+            JSNumber rightNumber = (JSNumber) pair.right();
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(Math.pow(leftNumber.value(), rightNumber.value())));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1040,35 +1396,240 @@ public final class OpcodeHandler {
 
     static void handleForAwaitOfNext(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForAwaitOfNext(executionContext);
+        JSValue catchOffset = executionContext.virtualMachine.valueStack.pop();
+        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);
+        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            throw new JSVirtualMachineException("Next method must be a function");
+        }
+        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
+        executionContext.virtualMachine.valueStack.push(catchOffset);
+        executionContext.virtualMachine.valueStack.push(result);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleForAwaitOfStart(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForAwaitOfStart(executionContext);
+        // Pop the iterable from the stack
+        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
+
+        // Auto-box primitives (strings, numbers, etc.) to access their Symbol.asyncIterator or Symbol.iterator
+        JSObject iterableObj;
+        if (iterable instanceof JSObject obj) {
+            iterableObj = obj;
+        } else {
+            // Try to auto-box the primitive
+            iterableObj = executionContext.virtualMachine.toObject(iterable);
+            if (iterableObj == null) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
+            }
+        }
+
+        // First, try Symbol.asyncIterator
+        JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
+        JSValue iteratorMethod = null;
+        boolean wrapSyncIteratorAsAsync = false;
+
+        if (asyncIteratorMethod instanceof JSFunction) {
+            iteratorMethod = asyncIteratorMethod;
+        } else if (asyncIteratorMethod != null && !asyncIteratorMethod.isNullOrUndefined()) {
+            // Non-callable, non-nullish value: TypeError.
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        } else {
+            // Fall back to Symbol.iterator (sync iterator that will be auto-wrapped)
+            iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
+
+            if (!(iteratorMethod instanceof JSFunction)) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
+            }
+            wrapSyncIteratorAsAsync = true;
+        }
+
+        // Call the iterator method to get an iterator
+        JSValue iterator = ((JSFunction) iteratorMethod).call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator must return an object");
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        // Get the next() method from the iterator
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
+
+        if (!(nextMethod instanceof JSFunction nextFunction)) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator must have a next method");
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        JSValue nextMethodForStack = nextFunction;
+        if (wrapSyncIteratorAsAsync) {
+            final JSObject syncIteratorObject = iteratorObj;
+            final JSFunction syncNextFunction = nextFunction;
+            nextMethodForStack = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+                JSValue syncResult;
+                try {
+                    syncResult = syncNextFunction.call(childContext, syncIteratorObject, JSValue.NO_ARGS);
+                } catch (JSException e) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    if (childContext.hasPendingException()) {
+                        childContext.clearAllPendingExceptions();
+                    }
+                    rejectedPromise.reject(e.getErrorValue());
+                    return rejectedPromise;
+                } catch (Exception e) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    JSValue reason;
+                    if (childContext.hasPendingException()) {
+                        reason = childContext.getPendingException();
+                        childContext.clearAllPendingExceptions();
+                    } else {
+                        String message = e.getMessage();
+                        reason = new JSString(message != null ? message : e.toString());
+                    }
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                if (!(syncResult instanceof JSObject syncResultObject)) {
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(childContext.throwTypeError("iterator result must be an object"));
+                    childContext.clearPendingException();
+                    return rejectedPromise;
+                }
+
+                JSValue syncValue = syncResultObject.get(childContext, PropertyKey.VALUE);
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                JSValue doneValue = syncResultObject.get(childContext, PropertyKey.DONE);
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                boolean syncDone = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+                if (childContext.hasPendingException()) {
+                    JSValue reason = childContext.getPendingException();
+                    childContext.clearAllPendingExceptions();
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(reason);
+                    return rejectedPromise;
+                }
+                JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(childContext, syncValue, syncDone);
+                if (syncDone) {
+                    return asyncFromSyncResultPromise;
+                }
+                JSPromise closeOnRejectionPromise = childContext.createJSPromise();
+                asyncFromSyncResultPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onFulfilled", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue iteratorResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    closeOnRejectionPromise.fulfill(iteratorResult);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                childContext
+                        ),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                    JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    JSValue returnMethodValue = syncIteratorObject.get(callbackContext, PropertyKey.RETURN);
+                                    if (callbackContext.hasPendingException()) {
+                                        callbackContext.clearAllPendingExceptions();
+                                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                                        JSValue closeResult = returnFunction.call(callbackContext, syncIteratorObject, JSValue.NO_ARGS);
+                                        if (callbackContext.hasPendingException()) {
+                                            callbackContext.clearAllPendingExceptions();
+                                        } else if (!(closeResult instanceof JSObject)) {
+                                            // Preserve the original rejection reason during close-on-rejection.
+                                        }
+                                    } else if (returnMethodValue.isNullOrUndefined()) {
+                                        // No return method.
+                                    } else {
+                                        // Non-callable return method is ignored here to preserve original rejection.
+                                    }
+                                    closeOnRejectionPromise.reject(reason);
+                                    return JSUndefined.INSTANCE;
+                                }),
+                                null,
+                                childContext
+                        )
+                );
+                return closeOnRejectionPromise;
+            });
+        }
+
+        // Push iterator, next method, and catch offset (0) onto the stack
+        executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
+        executionContext.virtualMachine.valueStack.push(nextMethodForStack);       // next() method
+        executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleForInEnd(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForInEnd(executionContext);
+        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
+        if (!(stackValue instanceof JSInternalValue internal) ||
+                !(internal.value() instanceof JSForInEnumerator)) {
+            throw new JSVirtualMachineException("Invalid for-in enumerator in FOR_IN_END");
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleForInNext(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForInNext(executionContext);
+        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
+        if (!(stackValue instanceof JSInternalValue internal) ||
+                !(internal.value() instanceof JSForInEnumerator enumerator)) {
+            throw new JSVirtualMachineException("Invalid for-in enumerator");
+        }
+        JSValue nextKey = enumerator.next();
+        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
+        executionContext.virtualMachine.valueStack.push(nextKey);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleForInStart(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForInStart(executionContext);
+        JSValue obj = executionContext.virtualMachine.valueStack.pop();
+        JSForInEnumerator enumerator = new JSForInEnumerator(obj);
+        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1077,14 +1638,171 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int depth = executionContext.bytecode.readU8(pc + 1);
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForOfNext(executionContext, depth);
+        // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
+        // The depth parameter tells us how many values are between catch_offset and top
+        // Following QuickJS: offset = -3 - depth
+
+        // Pop depth values temporarily
+        if (executionContext.virtualMachine.forOfTempValues.length < depth) {
+            executionContext.virtualMachine.forOfTempValues = new JSValue[Math.max(depth, executionContext.virtualMachine.forOfTempValues.length * 2)];
+        }
+        for (int i = 0; i < depth; i++) {
+            executionContext.virtualMachine.forOfTempValues[i] = executionContext.virtualMachine.valueStack.pop();
+        }
+        // Now top of stack is the iterator catch marker (JSCatchOffset(0))
+        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
+
+        // Now peek next method and iterator (don't pop - they stay for next iteration)
+        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);  // next method (top)
+        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);    // iterator object (below next)
+
+        // Call iterator.next()
+        if (!(nextMethod instanceof JSFunction nextFunc)) {
+            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
+            String iterType = iterator == null ? "null" : iterator.getClass().getSimpleName();
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                    "Next method must be a function in FOR_OF_NEXT (nextMethod="
+                            + actualType + ", iterator=" + iterType + ")"));
+        }
+
+        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
+
+        // Check for pending exception (e.g., TypedArray detachment during iteration)
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            // Restore stack before throwing
+            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+            for (int i = depth - 1; i >= 0; i--) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                executionContext.virtualMachine.forOfTempValues[i] = null;
+            }
+            JSValue pendingEx = executionContext.virtualMachine.context.getPendingException();
+            if (pendingEx instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator next threw", pendingEx);
+        }
+
+        if (!(result instanceof JSObject resultObj)) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+        }
+
+        // Get the done property
+        JSValue doneValue = resultObj.get(executionContext.virtualMachine.context, PropertyKey.DONE);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+            for (int i = depth - 1; i >= 0; i--) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                executionContext.virtualMachine.forOfTempValues[i] = null;
+            }
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
+        }
+        boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+
+        JSValue value = JSUndefined.INSTANCE;
+        if (!done) {
+            value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+                for (int i = depth - 1; i >= 0; i--) {
+                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                    executionContext.virtualMachine.forOfTempValues[i] = null;
+                }
+                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+                if (pendingException instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+            }
+            if (value == null) {
+                value = JSUndefined.INSTANCE;
+            }
+        }
+
+        // Push catch_offset back, then restore temp values, then push value and done
+        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+        for (int i = depth - 1; i >= 0; i--) {
+            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+            executionContext.virtualMachine.forOfTempValues[i] = null;
+        }
+        executionContext.virtualMachine.valueStack.push(value);
+        executionContext.virtualMachine.valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc = pc + op.getSize();
     }
 
     static void handleForOfStart(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleForOfStart(executionContext);
+        // Pop the iterable from the stack
+        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
+
+        // Auto-box primitives (strings, numbers, etc.) to access their Symbol.iterator
+        JSObject iterableObj;
+        if (iterable instanceof JSObject obj) {
+            iterableObj = obj;
+        } else {
+            // Try to auto-box the primitive
+            iterableObj = executionContext.virtualMachine.toObject(iterable);
+            if (iterableObj == null) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+            }
+        }
+
+        // Get Symbol.iterator method
+        JSValue iteratorMethod = iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Object is not iterable", pendingException);
+        }
+
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+        }
+
+        // Call the Symbol.iterator method to get an iterator
+        // Use the original iterable value for the 'this' binding, not the boxed version
+        JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator method threw", pendingException);
+        }
+
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
+        }
+
+        // Get the next() method from the iterator
+        JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("Iterator next lookup threw", pendingException);
+        }
+
+        // Per spec (GetIterator step 5): store the next value as-is.
+        if (nextMethod == null) {
+            nextMethod = JSUndefined.INSTANCE;
+        }
+
+        // Push iterator, next method, and catch offset onto the stack.
+        executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
+        executionContext.virtualMachine.valueStack.push(nextMethod);       // next() method
+        executionContext.virtualMachine.valueStack.pushStackValue(JSCatchOffset.ITERATOR_CLOSE_MARKER);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1575,7 +2293,14 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleGt(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() > rightNum.value()));
+            } else {
+                boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, right, left);
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -1591,7 +2316,15 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleGte(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() >= rightNum.value()));
+            } else {
+                boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, right, left) ||
+                        JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -1649,14 +2382,22 @@ public final class OpcodeHandler {
 
     static void handleIn(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleIn(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        if (!(right instanceof JSObject jsObj)) {
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("invalid 'in' operand"));
+        }
+        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, left);
+        boolean result = jsObj.has(key);
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleInc(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleInc(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, 1));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1674,14 +2415,110 @@ public final class OpcodeHandler {
 
     static void handleInitCtor(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleInitCtor(executionContext);
+        JSValue frameNewTarget = executionContext.virtualMachine.currentFrame.getNewTarget();
+        if (frameNewTarget.isNullOrUndefined()) {
+            // Keep direct VM opcode tests stable when executionContext.virtualMachine.execute() is used without constructor plumbing.
+            if (executionContext.virtualMachine.currentFrame.getCaller() == null) {
+                JSValue fallbackThis = executionContext.virtualMachine.currentFrame.getThisArg();
+                if (fallbackThis instanceof JSObject) {
+                    executionContext.virtualMachine.valueStack.push(fallbackThis);
+                    executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                    executionContext.pc += op.getSize();
+                    return;
+                }
+            }
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("class constructors must be invoked with 'new'"));
+        }
+
+        // Per ES spec BindThisValue: if thisBindingStatus is "initialized", throw ReferenceError.
+        // Arrow functions share the this-binding with the enclosing derived constructor.
+        // Check if this was already initialized by a previous super() call.
+        JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
+        if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
+            JSValue capturedThis = arrowBf.getCapturedThisArg();
+            if (capturedThis instanceof JSObject) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwReferenceError(
+                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+            }
+        }
+
+        // Explicit super(...): APPLY constructor mode left the initialized this value on stack.
+        if (executionContext.virtualMachine.valueStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
+            JSValue thisValue = executionContext.virtualMachine.valueStack.pop();
+            if (!(thisValue instanceof JSObject jsObject)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
+            }
+            executionContext.virtualMachine.currentFrame.setThisArg(jsObject);
+            // Update shared derivedThisRef so arrow functions see the initialized this
+            VarRef derivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
+            if (derivedThisRef != null) {
+                derivedThisRef.set(jsObject);
+            }
+            // For arrow functions inside derived constructors, propagate the initialized this
+            // back to the enclosing constructor frame if it's still on the call stack.
+            if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
+                StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
+                while (callerFrame != null) {
+                    JSFunction callerFunc = callerFrame.getFunction();
+                    if (callerFunc instanceof JSBytecodeFunction callerBf) {
+                        if (callerBf.isDerivedConstructor()) {
+                            callerFrame.setThisArg(jsObject);
+                            VarRef callerThisRef = callerFrame.getDerivedThisRef();
+                            if (callerThisRef != null) {
+                                callerThisRef.set(jsObject);
+                            }
+                            break;
+                        }
+                        if (!callerBf.isArrow()) {
+                            break;
+                        }
+                    } else {
+                        break;
+                    }
+                    callerFrame = callerFrame.getCaller();
+                }
+            }
+            executionContext.virtualMachine.valueStack.push(jsObject);
+        } else {
+            // Default derived constructor path:
+            // constructor(...args) { super(...args); }
+            JSObject superConstructorObject = currentFunction.getPrototype();
+            if (!(superConstructorObject instanceof JSFunction superConstructor)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("parent class must be constructor"));
+            }
+
+            JSValue superResult = executionContext.virtualMachine.constructFunction(superConstructor, executionContext.virtualMachine.currentFrame.getArguments(), frameNewTarget);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (!(superResult instanceof JSObject superObject)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
+            } else {
+                executionContext.virtualMachine.currentFrame.setThisArg(superObject);
+                VarRef defaultDerivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
+                if (defaultDerivedThisRef != null) {
+                    defaultDerivedThisRef.set(superObject);
+                }
+                executionContext.virtualMachine.valueStack.push(superObject);
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleInitialYield(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleInitialYield(executionContext);
+        // Initial yield - generator is being created
+        // Per ES spec, parameter defaults are evaluated before INITIAL_YIELD,
+        // so errors during parameter initialization are thrown during the generator function call.
+        if (executionContext.virtualMachine.yieldSkipCount > 0) {
+            executionContext.virtualMachine.yieldSkipCount--;
+        } else {
+            // Signal suspension at INITIAL_YIELD.
+            executionContext.virtualMachine.yieldResult =
+                    new YieldResult(YieldResult.Type.INITIAL_YIELD, JSUndefined.INSTANCE);
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
@@ -1736,7 +2573,45 @@ public final class OpcodeHandler {
 
     static void handleInstanceof(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleInstanceof(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+
+        // Per ECMAScript spec, right must be an object
+        if (!(right instanceof JSObject constructor)) {
+            throw new JSVirtualMachineException("Right-hand side of instanceof is not an object");
+        }
+
+        JSValue hasInstanceMethod = constructor.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_HAS_INSTANCE);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+            if (pendingException instanceof JSError jsError) {
+                throw new JSVirtualMachineException(jsError);
+            }
+            throw new JSVirtualMachineException("instanceof check failed");
+        }
+        if (!(hasInstanceMethod instanceof JSUndefined) && !(hasInstanceMethod instanceof JSNull)) {
+            if (!(hasInstanceMethod instanceof JSFunction hasInstanceFunction)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("@@hasInstance is not callable"));
+            }
+            JSValue result = hasInstanceFunction.call(executionContext.virtualMachine.context, right, new JSValue[]{left});
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+                if (pendingException instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException("instanceof check failed");
+            }
+            executionContext.virtualMachine.valueStack.push(JSTypeConversions.toBoolean(result) == JSBoolean.TRUE ? JSBoolean.TRUE : JSBoolean.FALSE);
+        } else {
+            boolean callable = right instanceof JSFunction;
+            if (right instanceof JSProxy proxy && JSTypeChecking.isFunction(proxy.getTarget())) {
+                callable = true;
+            }
+            if (!callable) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("Right-hand side of instanceof is not callable"));
+            }
+            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1896,7 +2771,9 @@ public final class OpcodeHandler {
 
     static void handleLogicalNot(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleLogicalNot(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        boolean result = JSTypeConversions.toBoolean(operand) == JSBoolean.FALSE;
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1911,7 +2788,14 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleLt(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() < rightNum.value()));
+            } else {
+                boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, left, right);
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -1927,7 +2811,15 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleLte(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() <= rightNum.value()));
+            } else {
+                boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, left, right) ||
+                        JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -1955,7 +2847,25 @@ public final class OpcodeHandler {
 
     static void handleMod(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleMod(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+        if (pair == null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else if (pair.bigInt()) {
+            JSBigInt leftBigInt = (JSBigInt) pair.left();
+            JSBigInt rightBigInt = (JSBigInt) pair.right();
+            if (rightBigInt.value().equals(VirtualMachine.BIGINT_ZERO)) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Division by zero");
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().remainder(rightBigInt.value())));
+            }
+        } else {
+            JSNumber leftNumber = (JSNumber) pair.left();
+            JSNumber rightNumber = (JSNumber) pair.right();
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() % rightNumber.value()));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -1970,7 +2880,20 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleMul(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                JSBigInt leftBigInt = (JSBigInt) pair.left();
+                JSBigInt rightBigInt = (JSBigInt) pair.right();
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().multiply(rightBigInt.value())));
+            } else {
+                JSNumber leftNumber = (JSNumber) pair.left();
+                JSNumber rightNumber = (JSNumber) pair.right();
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() * rightNumber.value()));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -1978,14 +2901,23 @@ public final class OpcodeHandler {
 
     static void handleNeg(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleNeg(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        JSValue numeric = executionContext.virtualMachine.toNumericValue(operand);
+        if (numeric instanceof JSBigInt bigInt) {
+            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().negate()));
+        } else {
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(-((JSNumber) numeric).value()));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleNeq(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleNeq(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        boolean result = !JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2024,7 +2956,24 @@ public final class OpcodeHandler {
 
     static void handleNot(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleNot(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        JSValue numeric;
+        try {
+            numeric = executionContext.virtualMachine.toNumericValue(operand);
+        } catch (JSVirtualMachineException e) {
+            captureVmExceptionAsPending(executionContext, e);
+            numeric = null;
+        }
+        if (numeric == null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else if (executionContext.virtualMachine.pendingException != null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else if (numeric instanceof JSBigInt bigInt) {
+            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().not()));
+        } else {
+            int result = ~JSTypeConversions.toInt32(executionContext.virtualMachine.context, numeric);
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2041,7 +2990,32 @@ public final class OpcodeHandler {
 
     static void handleOr(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleOr(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) | JSTypeConversions.toInt32(rightNum.value())));
+        } else {
+            VirtualMachine.NumericPair pair;
+            try {
+                pair = executionContext.virtualMachine.numericPair(left, right);
+            } catch (JSVirtualMachineException e) {
+                captureVmExceptionAsPending(executionContext, e);
+                pair = null;
+            }
+            if (pair != null && executionContext.virtualMachine.pendingException != null) {
+                pair = null;
+            }
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                JSBigInt leftBigInt = (JSBigInt) pair.left();
+                JSBigInt rightBigInt = (JSBigInt) pair.right();
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().or(rightBigInt.value())));
+            } else {
+                int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) | JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2078,28 +3052,54 @@ public final class OpcodeHandler {
 
     static void handlePlus(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandlePlus(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        JSNumber result = JSTypeConversions.toNumber(executionContext.virtualMachine.context, operand);
+        executionContext.virtualMachine.capturePendingException();
+        executionContext.virtualMachine.valueStack.push(result);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handlePostDec(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandlePostDec(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        JSValue oldValue = executionContext.virtualMachine.toNumericValue(operand);
+        executionContext.virtualMachine.valueStack.push(oldValue);
+        if (oldValue instanceof JSBigInt bigInt) {
+            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().subtract(VirtualMachine.BIGINT_ONE)));
+        } else {
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(((JSNumber) oldValue).value() - 1));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handlePostInc(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandlePostInc(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        JSValue oldValue = executionContext.virtualMachine.toNumericValue(operand);
+        executionContext.virtualMachine.valueStack.push(oldValue);
+        if (oldValue instanceof JSBigInt bigInt) {
+            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().add(VirtualMachine.BIGINT_ONE)));
+        } else {
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(((JSNumber) oldValue).value() + 1));
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handlePrivateIn(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandlePrivateIn(executionContext);
+        JSValue privateField = executionContext.virtualMachine.valueStack.pop();
+        JSValue object = executionContext.virtualMachine.valueStack.pop();
+        if (!(object instanceof JSObject jsObj)) {
+            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("invalid 'in' operand"));
+        }
+        boolean result = false;
+        if (privateField instanceof JSSymbol symbol) {
+            result = jsObj.has(PropertyKey.fromSymbol(symbol));
+        }
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2710,7 +3710,18 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleSar(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), false));
+            } else {
+                int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left());
+                int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -2884,7 +3895,18 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleShl(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), true));
+            } else {
+                int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left());
+                int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(leftInt << (rightInt & 0x1F)));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -2892,7 +3914,44 @@ public final class OpcodeHandler {
 
     static void handleShr(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleShr(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        JSValue leftPrimitive = null;
+        JSValue rightPrimitive = null;
+        try {
+            leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left, JSTypeConversions.PreferredType.NUMBER);
+            rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+        } catch (JSException e) {
+            if (e.getErrorValue() != null) {
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+            } else {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        e.getMessage() != null ? e.getMessage() : "toPrimitive");
+            }
+        }
+        if (leftPrimitive == null || rightPrimitive == null) {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        } else {
+            executionContext.virtualMachine.capturePendingException();
+            if (executionContext.virtualMachine.pendingException != null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (leftPrimitive instanceof JSBigInt || rightPrimitive instanceof JSBigInt) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("BigInts do not support >>>");
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                JSValue leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
+                JSValue rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
+                if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum) {
+                    executionContext.virtualMachine.valueStack.push(JSNumber.of((JSTypeConversions.toInt32(leftNum.value()) >>> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)) & 0xFFFFFFFFL));
+                } else {
+                    int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
+                    int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, rightNumeric);
+                    executionContext.virtualMachine.valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
+                }
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2907,14 +3966,20 @@ public final class OpcodeHandler {
 
     static void handleStrictEq(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleStrictEq(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        boolean result = JSTypeConversions.strictEquals(left, right);
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleStrictNeq(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleStrictNeq(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        boolean result = !JSTypeConversions.strictEquals(left, right);
+        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2929,7 +3994,20 @@ public final class OpcodeHandler {
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
-            internalHandleSub(executionContext);
+            JSValue right = executionContext.virtualMachine.valueStack.pop();
+            JSValue left = executionContext.virtualMachine.valueStack.pop();
+            VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                JSBigInt leftBigInt = (JSBigInt) pair.left();
+                JSBigInt rightBigInt = (JSBigInt) pair.right();
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().subtract(rightBigInt.value())));
+            } else {
+                JSNumber leftNumber = (JSNumber) pair.left();
+                JSNumber rightNumber = (JSNumber) pair.right();
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() - rightNumber.value()));
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         }
         executionContext.pc += op.getSize();
@@ -2955,6 +4033,53 @@ public final class OpcodeHandler {
         stack[sp - 2] = firstPairLeft;
         stack[sp - 1] = firstPairRight;
         executionContext.pc += 1;
+    }
+
+    static void handleTailCall(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        byte[] instructions = executionContext.instructions;
+        int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
+        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+
+        // Peek at the callee to check if we can use the trampoline
+        int calleeIndex = executionContext.sp - argumentCount - 2;
+        JSValue callee = (JSValue) executionContext.stack[calleeIndex];
+
+        // Check if callee is a non-constructor bytecode function eligible for TCO
+        boolean canTrampoline = false;
+        if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
+            canTrampoline = !bytecodeFunc.isClassConstructor();
+        }
+
+        if (canTrampoline) {
+            // Pop arguments, receiver, callee for trampoline
+            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+            for (int i = argumentCount - 1; i >= 0; i--) {
+                args[i] = executionContext.virtualMachine.valueStack.pop();
+            }
+            JSValue receiver = executionContext.virtualMachine.valueStack.pop();
+            callee = executionContext.virtualMachine.valueStack.pop();
+            executionContext.virtualMachine.propertyAccessLock = false;
+            executionContext.virtualMachine.resetPropertyAccessTracking();
+
+            // Store the tail call request for the trampoline loop in execute()
+            executionContext.virtualMachine.tailCallPending =
+                    new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, receiver, args);
+            // Clean up the current frame (same as RETURN)
+            executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+            executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+            executionContext.opcodeRequestedReturn = true;
+            return;
+        }
+
+        // Fallback: call normally and return the result (like CALL + RETURN)
+        internalHandleCall(executionContext, argumentCount, false);
+        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        JSValue result = (JSValue) executionContext.stack[--executionContext.sp];
+        executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
+        executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
+        executionContext.returnValue = result;
+        executionContext.opcodeRequestedReturn = true;
     }
 
     static void handleThrow(Opcode op, ExecutionContext executionContext) {
@@ -3046,7 +4171,9 @@ public final class OpcodeHandler {
 
     static void handleTypeof(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleTypeof(executionContext);
+        JSValue operand = executionContext.virtualMachine.valueStack.pop();
+        String type = JSTypeChecking.typeof(operand);
+        executionContext.virtualMachine.valueStack.push(new JSString(type));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -3074,14 +4201,79 @@ public final class OpcodeHandler {
 
     static void handleXor(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleXor(executionContext);
+        JSValue right = executionContext.virtualMachine.valueStack.pop();
+        JSValue left = executionContext.virtualMachine.valueStack.pop();
+        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
+            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) ^ JSTypeConversions.toInt32(rightNum.value())));
+        } else {
+            VirtualMachine.NumericPair pair;
+            try {
+                pair = executionContext.virtualMachine.numericPair(left, right);
+            } catch (JSVirtualMachineException e) {
+                captureVmExceptionAsPending(executionContext, e);
+                pair = null;
+            }
+            if (pair != null && executionContext.virtualMachine.pendingException != null) {
+                pair = null;
+            }
+            if (pair == null) {
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else if (pair.bigInt()) {
+                JSBigInt leftBigInt = (JSBigInt) pair.left();
+                JSBigInt rightBigInt = (JSBigInt) pair.right();
+                executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().xor(rightBigInt.value())));
+            } else {
+                int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) ^ JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
+                executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleYield(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleYield(executionContext);
+        // Check if we should skip this yield (resuming from later point)
+        if (executionContext.virtualMachine.yieldSkipCount > 0) {
+            executionContext.virtualMachine.yieldSkipCount--;
+            JSValue yieldedValue = executionContext.virtualMachine.valueStack.pop();
+            JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                    ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex++)
+                    : null;
+            if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                executionContext.virtualMachine.pendingException = resumeRecord.value();
+                executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
+            } else if (resumeRecord != null) {
+                executionContext.virtualMachine.valueStack.push(resumeRecord.value());
+            } else {
+                // If resume data is missing, default to undefined to preserve stack shape.
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            }
+            // Don't yield - just continue execution from the resumed generator state.
+        } else {
+            // At the target yield - check for RETURN/THROW resume records (replay mode)
+            JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                    ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
+                    : null;
+            if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+                executionContext.virtualMachine.generatorResumeIndex++;
+                executionContext.virtualMachine.valueStack.pop(); // Pop the yielded value
+                // Trigger force return through finally handlers
+                executionContext.virtualMachine.generatorReturnValue = resumeRecord.value();
+                executionContext.virtualMachine.pendingException = resumeRecord.value();
+                executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
+                executionContext.virtualMachine.valueStack.push(resumeRecord.value());
+            } else {
+                // Pop the yielded value from stack
+                JSValue value = executionContext.virtualMachine.valueStack.pop();
+
+                // Create yield result to signal suspension.
+                executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD, value);
+
+                // Push the value back so it can be returned
+                executionContext.virtualMachine.valueStack.push(value);
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
@@ -3098,7 +4290,183 @@ public final class OpcodeHandler {
 
     static void handleYieldStar(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleYieldStar(executionContext);
+        // yield* delegates to another iterator
+        // Pop the iterable from the stack
+        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
+
+        // Get the iterator from the iterable
+        JSObject iterableObj;
+        if (iterable instanceof JSObject obj) {
+            iterableObj = obj;
+        } else {
+            iterableObj = executionContext.virtualMachine.toObject(iterable);
+            if (iterableObj == null) {
+                throw new JSVirtualMachineException("Object is not iterable");
+            }
+        }
+
+        // Get Symbol.iterator method
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
+        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+            throw new JSVirtualMachineException("Object is not iterable");
+        }
+
+        // Call Symbol.iterator to get the iterator
+        JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
+        if (!(iterator instanceof JSObject iteratorObj)) {
+            throw new JSVirtualMachineException("Iterator method must return an object");
+        }
+
+        // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
+        JSGeneratorState.ResumeRecord resumeRecord =
+                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
+                        : null;
+
+        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
+            JSValue returnValue = resumeRecord.value();
+
+            // Get "return" method from iterator
+            JSValue returnMethodValue = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.getPendingException().toString(),
+                        executionContext.virtualMachine.context.getPendingException());
+            }
+            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
+
+            if (noReturnMethod) {
+                // No return method - complete with the return value (don't yield)
+                executionContext.virtualMachine.valueStack.push(returnValue);
+            } else {
+                if (!(returnMethodValue instanceof JSFunction returnFunc)) {
+                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
+                }
+
+                // Call iterator.return(value)
+                JSValue result = returnFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{returnValue});
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
+                }
+
+                // Check result is an object (per spec, TypeError if not)
+                if (!(result instanceof JSObject)) {
+                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                }
+
+                // Check done flag
+                JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
+                }
+                if (JSTypeConversions.toBoolean(doneValue).value()) {
+                    // Done - push value and complete (don't yield)
+                    JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    executionContext.virtualMachine.valueStack.push(value);
+                } else {
+                    // Not done - yield the result and continue delegation.
+                    executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                    executionContext.virtualMachine.valueStack.push(result);
+                }
+            }
+        } else if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
+            JSValue throwValue = resumeRecord.value();
+
+            // Get "throw" method from iterator
+            JSValue throwMethodValue = iteratorObj.get(PropertyKey.THROW);
+            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
+
+            if (noThrowMethod) {
+                // No throw method - close iterator and throw TypeError
+                JSValue closeMethod = iteratorObj.get(PropertyKey.RETURN);
+                if (closeMethod instanceof JSFunction closeFunc) {
+                    closeFunc.call(executionContext.virtualMachine.context, iteratorObj, JSValue.NO_ARGS);
+                }
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                        "iterator does not have a throw method"));
+            }
+
+            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
+            }
+
+            // Call iterator.throw(value)
+            JSValue result = throwFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{throwValue});
+
+            // Check result is an object
+            if (!(result instanceof JSObject)) {
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+            }
+
+            // Check done flag
+            JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
+            if (JSTypeConversions.toBoolean(doneValue).value()) {
+                // Done - push value and complete the yield* expression
+                JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
+                executionContext.virtualMachine.valueStack.push(value);
+            } else {
+                // Not done - yield the result.
+                executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                executionContext.virtualMachine.valueStack.push(result);
+            }
+        } else {
+            // Default: NEXT protocol - call iterator.next()
+            JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
+            if (!(nextMethod instanceof JSFunction nextFunc)) {
+                throw new JSVirtualMachineException("Iterator must have a next method");
+            }
+
+            // Skip past previously-yielded values during generator replay.
+            boolean innerExhausted = false;
+            while (executionContext.virtualMachine.yieldSkipCount > 0) {
+                JSValue skipResult = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
+                if (!(skipResult instanceof JSObject)) {
+                    throw new JSVirtualMachineException("Iterator result must be an object");
+                }
+                JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
+                if (JSTypeConversions.toBoolean(skipDone).value()) {
+                    // Inner iterator exhausted during skip
+                    JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
+                    executionContext.virtualMachine.valueStack.push(value);
+                    innerExhausted = true;
+                    break;
+                }
+                executionContext.virtualMachine.yieldSkipCount--;
+            }
+
+            if (!innerExhausted) {
+                JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
+
+                // The result should be an object (the iterator result)
+                if (!(result instanceof JSObject)) {
+                    throw new JSVirtualMachineException("Iterator result must be an object");
+                }
+
+                // Check if the inner iterator is done
+                JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
+                if (JSTypeConversions.toBoolean(doneValue).value()) {
+                    // Inner iterator done - yield* expression value is the final value
+                    JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
+                    executionContext.virtualMachine.valueStack.push(value);
+                    // Don't set yieldResult - the yield* expression completes
+                } else {
+                    // Set yield result to the raw iterator result object
+                    executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                    executionContext.virtualMachine.valueStack.push(result);
+                }
+            }
+        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
         if (executionContext.virtualMachine.yieldResult != null) {
@@ -3135,338 +4503,6 @@ public final class OpcodeHandler {
         return varRefs;
     }
 
-    private static void internalHandleAdd(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        try {
-            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.addValues(left, right));
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.virtualMachine.valueStack.pop();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            }
-        } catch (JSVirtualMachineException e) {
-            executionContext.virtualMachine.captureVMException(e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        } catch (JSException e) {
-            if (e.getErrorValue() != null) {
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-            } else {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
-                        "Error",
-                        e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-            }
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        } catch (JSErrorException e) {
-            executionContext.virtualMachine.pendingException =
-                    executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        }
-    }
-
-    private static void internalHandleAnd(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number AND
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) & JSTypeConversions.toInt32(rightNum.value())));
-            return;
-        }
-        VirtualMachine.NumericPair pair;
-        try {
-            pair = executionContext.virtualMachine.numericPair(left, right);
-        } catch (JSVirtualMachineException e) {
-            captureVmExceptionAsPending(executionContext, e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (executionContext.virtualMachine.pendingException != null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().and(rightBigInt.value())));
-            return;
-        }
-        int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) & JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
-    }
-
-    private static void internalHandleApplyEval(ExecutionContext executionContext) {
-        JSValue argsArrayValue = executionContext.virtualMachine.valueStack.pop();
-        JSValue callee = executionContext.virtualMachine.valueStack.pop();
-
-        JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
-        if (applyArgs == null) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-
-        executionContext.virtualMachine.valueStack.push(callee);
-        for (JSValue applyArg : applyArgs) {
-            executionContext.virtualMachine.valueStack.push(applyArg);
-        }
-        internalHandleCall(executionContext, applyArgs.length, true);
-    }
-
-    private static void internalHandleAsyncYieldStar(ExecutionContext executionContext) {
-        JSContext context = executionContext.virtualMachine.context;
-
-        // yield* in async generators uses GetIterator(obj, async) per ES2024 7.4.3
-        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
-
-        // Convert to object if needed
-        JSObject iterableObj;
-        if (iterable instanceof JSObject obj) {
-            iterableObj = obj;
-        } else {
-            iterableObj = executionContext.virtualMachine.toObject(iterable);
-            if (iterableObj == null) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError(iterable + " is not iterable"));
-            }
-        }
-
-        // GetIterator(obj, async):
-        // Step 1: Try Symbol.asyncIterator (using context-aware get to trigger getters)
-        JSValue asyncIteratorMethod = iterableObj.get(context, PropertyKey.SYMBOL_ASYNC_ITERATOR);
-        checkPendingException(context);
-
-        JSObject iteratorObj;
-
-        if (!asyncIteratorMethod.isNullOrUndefined()) {
-            // Symbol.asyncIterator exists — must be callable (GetMethod step 3)
-            if (!(asyncIteratorMethod instanceof JSFunction asyncIterFunc)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
-            }
-            JSValue iterator = asyncIterFunc.call(context, iterable, JSValue.NO_ARGS);
-            checkPendingException(context);
-            if (!(iterator instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
-            }
-            iteratorObj = (JSObject) iterator;
-        } else {
-            // Step 2: Fall back to Symbol.iterator
-            JSValue iteratorMethod = iterableObj.get(context, PropertyKey.SYMBOL_ITERATOR);
-            checkPendingException(context);
-            if (iteratorMethod.isNullOrUndefined()) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
-            }
-            if (!(iteratorMethod instanceof JSFunction iterFunc)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
-            }
-            JSValue iterator = iterFunc.call(context, iterable, JSValue.NO_ARGS);
-            checkPendingException(context);
-            if (!(iterator instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("Result of the Symbol.iterator method is not an object"));
-            }
-            iteratorObj = (JSObject) iterator;
-        }
-
-        // Check for RETURN/THROW resume records (yield* delegation protocol per ES2024 27.5.3.3)
-        JSGeneratorState.ResumeRecord resumeRecord =
-                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
-                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
-                        : null;
-
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
-            executionContext.virtualMachine.generatorResumeIndex++;
-            JSValue returnValue = resumeRecord.value();
-
-            JSValue returnMethodValue = iteratorObj.get(context, PropertyKey.RETURN);
-            checkPendingException(context);
-            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
-
-            if (noReturnMethod) {
-                executionContext.virtualMachine.valueStack.push(returnValue);
-                return;
-            }
-
-            if (!(returnMethodValue instanceof JSFunction returnFunc)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator return is not a function"));
-            }
-
-            JSValue result = returnFunc.call(context, iteratorObj, new JSValue[]{returnValue});
-            checkPendingException(context);
-            if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator must return an object"));
-            }
-
-            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
-            checkPendingException(context);
-            if (JSTypeConversions.toBoolean(doneValue).value()) {
-                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
-                checkPendingException(context);
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            } else {
-                executionContext.virtualMachine.yieldResult =
-                        new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                executionContext.virtualMachine.valueStack.push(result);
-                return;
-            }
-        }
-
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
-            executionContext.virtualMachine.generatorResumeIndex++;
-            JSValue throwValue = resumeRecord.value();
-
-            JSValue throwMethodValue = iteratorObj.get(context, PropertyKey.THROW);
-            checkPendingException(context);
-            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
-
-            if (noThrowMethod) {
-                JSValue closeMethod = iteratorObj.get(context, PropertyKey.RETURN);
-                if (closeMethod instanceof JSFunction closeFunc) {
-                    closeFunc.call(context, iteratorObj, JSValue.NO_ARGS);
-                }
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator does not have a throw method"));
-            }
-
-            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator throw is not a function"));
-            }
-
-            JSValue result = throwFunc.call(context, iteratorObj, new JSValue[]{throwValue});
-            checkPendingException(context);
-            if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator must return an object"));
-            }
-
-            JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
-            checkPendingException(context);
-            if (JSTypeConversions.toBoolean(doneValue).value()) {
-                JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
-                checkPendingException(context);
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            } else {
-                executionContext.virtualMachine.yieldResult =
-                        new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                executionContext.virtualMachine.valueStack.push(result);
-                return;
-            }
-        }
-
-        // Default: NEXT protocol — call iterator.next()
-        JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
-        checkPendingException(context);
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            throw new JSVirtualMachineException(
-                    context.throwTypeError("is not a function"));
-        }
-
-        // Per ES2024 spec: Invoke(iterator, "next", « received.[[Value]] »)
-        // First call uses undefined; subsequent calls pass the received value.
-        JSValue[] nextArgs = new JSValue[]{JSUndefined.INSTANCE};
-
-        // Skip past previously-yielded values during generator replay
-        while (executionContext.virtualMachine.yieldSkipCount > 0) {
-            JSValue skipResult = nextFunc.call(context, iteratorObj, nextArgs);
-            checkPendingException(context);
-            if (!(skipResult instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("Iterator result must be an object"));
-            }
-            JSValue skipDone = ((JSObject) skipResult).get(context, PropertyKey.DONE);
-            checkPendingException(context);
-            if (JSTypeConversions.toBoolean(skipDone).value()) {
-                JSValue value = ((JSObject) skipResult).get(context, PropertyKey.VALUE);
-                checkPendingException(context);
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            }
-            executionContext.virtualMachine.yieldSkipCount--;
-        }
-
-        JSValue result = nextFunc.call(context, iteratorObj, nextArgs);
-        checkPendingException(context);
-
-        // The result should be an object (for sync iterators) or could be
-        // a Promise/thenable (for async iterators). Pass it through as-is;
-        // fulfillAsyncYieldStarResult will handle the Await step and done/value reading.
-        // Per ES2024 spec: "If generatorKind is async, then set innerResult to ? Await(innerResult)"
-        // The done/value check must happen AFTER the Await, not here.
-        if (!(result instanceof JSObject)) {
-            throw new JSVirtualMachineException(
-                    context.throwTypeError("Iterator result must be an object"));
-        }
-
-        executionContext.virtualMachine.yieldResult =
-                new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj, nextMethod);
-        executionContext.virtualMachine.valueStack.push(result);
-    }
-
-    private static void internalHandleAwait(ExecutionContext executionContext) {
-        JSValue value = executionContext.virtualMachine.valueStack.pop();
-
-        // If the value is already a promise, use it directly.
-        // Otherwise, wrap it via Promise.resolve() which handles thenables:
-        // if the value has a callable `then` property, it will be called with
-        // resolve/reject callbacks per ES2024 25.5.5.3 Await step 3.
-        JSPromise promise;
-        if (value instanceof JSPromise) {
-            promise = (JSPromise) value;
-        } else {
-            promise = executionContext.virtualMachine.context.createJSPromise();
-            promise.resolve(executionContext.virtualMachine.context, value);
-        }
-
-        // For proper async/await support, we need to wait for the promise to settle
-        // and push the resolved value (not the promise itself)
-
-        // Per ES2024 spec (25.5.5.3 Await), await always takes exactly 1 microtask tick,
-        // even when the awaited value is already a fulfilled/rejected promise or a non-promise.
-        // When running in suspension mode (inside an async function), always suspend and let
-        // the reaction callbacks in resumeAsyncFunctionExecution handle resumption via microtask.
-        if (executionContext.virtualMachine.awaitSuspensionEnabled && executionContext.virtualMachine.activeGeneratorState != null) {
-            executionContext.virtualMachine.awaitSuspensionPromise = promise;
-            return;
-        }
-
-        // Fallback for non-suspension mode: if the promise is pending, process microtasks
-        if (promise.getState() == JSPromise.PromiseState.PENDING) {
-            executionContext.virtualMachine.context.processMicrotasks();
-        }
-
-        // Now the promise should be settled, push the resolved value
-        if (promise.getState() == JSPromise.PromiseState.FULFILLED) {
-            executionContext.virtualMachine.valueStack.push(promise.getResult());
-        } else if (promise.getState() == JSPromise.PromiseState.REJECTED) {
-            // Rejected await operand throws into the current async control flow.
-            // Let VM catch handling propagate it to surrounding try/catch.
-            JSValue result = promise.getResult();
-            IJSPromiseRejectCallback callback = executionContext.virtualMachine.context.getPromiseRejectCallback();
-            if (callback != null) {
-                callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, promise, result);
-            }
-            executionContext.virtualMachine.pendingException = result;
-            executionContext.virtualMachine.context.setPendingException(result);
-        } else {
-            // Promise is still pending - this shouldn't happen
-            throw new JSVirtualMachineException("Promise did not settle after processing microtasks");
-        }
-    }
 
     private static void internalHandleCall(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
@@ -3671,1368 +4707,6 @@ public final class OpcodeHandler {
         }
     }
 
-    private static void internalHandleCallConstructor(ExecutionContext executionContext, int argCount) {
-        // Pop arguments
-        JSValue[] args = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
-        for (int i = argCount - 1; i >= 0; i--) {
-            args[i] = executionContext.virtualMachine.valueStack.pop();
-        }
-        // Pop constructor
-        JSValue constructor = executionContext.virtualMachine.valueStack.pop();
-        // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
-        if (constructor instanceof JSProxy jsProxy) {
-            // Following QuickJS JS_CallConstructorInternal:
-            // Check if target is a constructor BEFORE checking for construct trap
-            JSValue target = jsProxy.getTarget();
-            if (JSTypeChecking.isConstructor(target)) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.proxyConstruct(jsProxy, args, jsProxy));
-            } else {
-                executionContext.virtualMachine.context.throwTypeError("proxy is not a constructor");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            }
-        } else if (constructor instanceof JSFunction jsFunction) {
-            // Check if the function is constructable
-            if (!JSTypeChecking.isConstructor(jsFunction)) {
-                executionContext.virtualMachine.context.throwTypeError(jsFunction.getName() + " is not a constructor");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            JSValue result;
-            try {
-                result = executionContext.virtualMachine.constructFunction(jsFunction, args, jsFunction);
-            } catch (JSVirtualMachineException e) {
-                // Constructor internally called a bytecode function that threw
-                // (e.g., getter in iterable item). Convert to executionContext.virtualMachine.pendingException so
-                // the main loop can route it to JavaScript catch handlers.
-                if (e.getJsValue() != null) {
-                    executionContext.virtualMachine.pendingException = e.getJsValue();
-                } else if (e.getJsError() != null) {
-                    executionContext.virtualMachine.pendingException = e.getJsError();
-                } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                } else {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
-                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            } else {
-                executionContext.virtualMachine.valueStack.push(result);
-            }
-        } else {
-            executionContext.virtualMachine.context.throwTypeError("not a constructor");
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        }
-    }
-
-    private static void internalHandleDec(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, -1));
-    }
-
-    private static void internalHandleDelete(ExecutionContext executionContext) {
-        JSValue property = executionContext.virtualMachine.valueStack.pop();
-        JSValue object = executionContext.virtualMachine.valueStack.pop();
-        boolean result = false;
-        if (object instanceof JSObject jsObj) {
-            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
-            result = jsObj.delete(executionContext.virtualMachine.context, key);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            }
-        }
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleDiv(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            if (rightBigInt.value().equals(VirtualMachine.BIGINT_ZERO)) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Division by zero");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().divide(rightBigInt.value())));
-            return;
-        }
-        JSNumber leftNumber = (JSNumber) pair.left();
-        JSNumber rightNumber = (JSNumber) pair.right();
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() / rightNumber.value()));
-    }
-
-    private static void internalHandleEq(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleExp(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            BigInteger exponent = rightBigInt.value();
-            if (exponent.signum() < 0) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Exponent must be positive");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            final int exponentInt;
-            try {
-                exponentInt = exponent.intValueExact();
-            } catch (ArithmeticException e) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("BigInt exponent is too large");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().pow(exponentInt)));
-            return;
-        }
-        JSNumber leftNumber = (JSNumber) pair.left();
-        JSNumber rightNumber = (JSNumber) pair.right();
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(Math.pow(leftNumber.value(), rightNumber.value())));
-    }
-
-    private static void internalHandleForAwaitOfNext(ExecutionContext executionContext) {
-        // Stack layout before: iter, next, catch_offset (bottom to top)
-        // Stack layout after: iter, next, catch_offset, result (bottom to top)
-
-        // Pop catch offset temporarily
-        JSValue catchOffset = executionContext.virtualMachine.valueStack.pop();
-
-        // Peek next method and iterator (don't pop - they stay for next iteration)
-        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);  // next method
-        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);    // iterator object
-
-        // Call iterator.next()
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            throw new JSVirtualMachineException("Next method must be a function");
-        }
-
-        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-
-        // Restore catch_offset and push the result
-        executionContext.virtualMachine.valueStack.push(catchOffset);  // Restore catch_offset
-        executionContext.virtualMachine.valueStack.push(result);        // Push the result (promise that resolves to {value, done})
-    }
-
-    private static void internalHandleForAwaitOfStart(ExecutionContext executionContext) {
-        // Pop the iterable from the stack
-        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
-
-        // Auto-box primitives (strings, numbers, etc.) to access their Symbol.asyncIterator or Symbol.iterator
-        JSObject iterableObj;
-        if (iterable instanceof JSObject obj) {
-            iterableObj = obj;
-        } else {
-            // Try to auto-box the primitive
-            iterableObj = executionContext.virtualMachine.toObject(iterable);
-            if (iterableObj == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
-                return;
-            }
-        }
-
-        // First, try Symbol.asyncIterator
-        JSValue asyncIteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
-        JSValue iteratorMethod = null;
-        boolean wrapSyncIteratorAsAsync = false;
-
-        if (asyncIteratorMethod instanceof JSFunction) {
-            iteratorMethod = asyncIteratorMethod;
-        } else if (asyncIteratorMethod != null && !asyncIteratorMethod.isNullOrUndefined()) {
-            // Non-callable, non-nullish value: TypeError.
-            executionContext.virtualMachine.pendingException =
-                    executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
-            return;
-        } else {
-            // Fall back to Symbol.iterator (sync iterator that will be auto-wrapped)
-            iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
-
-            if (!(iteratorMethod instanceof JSFunction)) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("object is not async iterable");
-                return;
-            }
-            wrapSyncIteratorAsAsync = true;
-        }
-
-        // Call the iterator method to get an iterator
-        JSValue iterator = ((JSFunction) iteratorMethod).call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            return;
-        }
-
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator must return an object");
-            return;
-        }
-
-        // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
-
-        if (!(nextMethod instanceof JSFunction nextFunction)) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator must have a next method");
-            return;
-        }
-
-        JSValue nextMethodForStack = nextFunction;
-        if (wrapSyncIteratorAsAsync) {
-            final JSObject syncIteratorObject = iteratorObj;
-            final JSFunction syncNextFunction = nextFunction;
-            nextMethodForStack = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
-                JSValue syncResult;
-                try {
-                    syncResult = syncNextFunction.call(childContext, syncIteratorObject, JSValue.NO_ARGS);
-                } catch (JSException e) {
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    if (childContext.hasPendingException()) {
-                        childContext.clearAllPendingExceptions();
-                    }
-                    rejectedPromise.reject(e.getErrorValue());
-                    return rejectedPromise;
-                } catch (Exception e) {
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    JSValue reason;
-                    if (childContext.hasPendingException()) {
-                        reason = childContext.getPendingException();
-                        childContext.clearAllPendingExceptions();
-                    } else {
-                        String message = e.getMessage();
-                        reason = new JSString(message != null ? message : e.toString());
-                    }
-                    rejectedPromise.reject(reason);
-                    return rejectedPromise;
-                }
-                if (childContext.hasPendingException()) {
-                    JSValue reason = childContext.getPendingException();
-                    childContext.clearAllPendingExceptions();
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(reason);
-                    return rejectedPromise;
-                }
-                if (!(syncResult instanceof JSObject syncResultObject)) {
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(childContext.throwTypeError("iterator result must be an object"));
-                    childContext.clearPendingException();
-                    return rejectedPromise;
-                }
-
-                JSValue value = syncResultObject.get(childContext, PropertyKey.VALUE);
-                if (childContext.hasPendingException()) {
-                    JSValue reason = childContext.getPendingException();
-                    childContext.clearAllPendingExceptions();
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(reason);
-                    return rejectedPromise;
-                }
-                JSValue doneValue = syncResultObject.get(childContext, PropertyKey.DONE);
-                if (childContext.hasPendingException()) {
-                    JSValue reason = childContext.getPendingException();
-                    childContext.clearAllPendingExceptions();
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(reason);
-                    return rejectedPromise;
-                }
-                boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
-                if (childContext.hasPendingException()) {
-                    JSValue reason = childContext.getPendingException();
-                    childContext.clearAllPendingExceptions();
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(reason);
-                    return rejectedPromise;
-                }
-                JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(childContext, value, done);
-                if (done) {
-                    return asyncFromSyncResultPromise;
-                }
-                JSPromise closeOnRejectionPromise = childContext.createJSPromise();
-                asyncFromSyncResultPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfilled", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue iteratorResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    closeOnRejectionPromise.fulfill(iteratorResult);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                childContext
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    JSValue returnMethodValue = syncIteratorObject.get(callbackContext, PropertyKey.RETURN);
-                                    if (callbackContext.hasPendingException()) {
-                                        callbackContext.clearAllPendingExceptions();
-                                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                        JSValue closeResult = returnFunction.call(callbackContext, syncIteratorObject, JSValue.NO_ARGS);
-                                        if (callbackContext.hasPendingException()) {
-                                            callbackContext.clearAllPendingExceptions();
-                                        } else if (!(closeResult instanceof JSObject)) {
-                                            // Preserve the original rejection reason during close-on-rejection.
-                                        }
-                                    } else if (returnMethodValue.isNullOrUndefined()) {
-                                        // No return method.
-                                    } else {
-                                        // Non-callable return method is ignored here to preserve original rejection.
-                                    }
-                                    closeOnRejectionPromise.reject(reason);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                childContext
-                        )
-                );
-                return closeOnRejectionPromise;
-            });
-        }
-
-        // Push iterator, next method, and catch offset (0) onto the stack
-        executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
-        executionContext.virtualMachine.valueStack.push(nextMethodForStack);       // next() method
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
-    }
-
-    private static void internalHandleForInEnd(ExecutionContext executionContext) {
-        // Clean up the enumerator from the stack
-        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
-        if (!(stackValue instanceof JSInternalValue internal) ||
-                !(internal.value() instanceof JSForInEnumerator)) {
-            throw new JSVirtualMachineException("Invalid for-in enumerator in FOR_IN_END");
-        }
-        // Just pop it, no need to do anything else
-    }
-
-    private static void internalHandleForInNext(ExecutionContext executionContext) {
-        // The enumerator should be on top of the stack (peek at it, don't pop)
-        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
-
-        if (!(stackValue instanceof JSInternalValue internal) ||
-                !(internal.value() instanceof JSForInEnumerator enumerator)) {
-            throw new JSVirtualMachineException("Invalid for-in enumerator");
-        }
-
-        // Get the next key from the enumerator
-        JSValue nextKey = enumerator.next();
-
-        // Push enumerator back first (so it stays at same position)
-        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
-
-        // Then push the key onto the stack
-        executionContext.virtualMachine.valueStack.push(nextKey);
-    }
-
-    private static void internalHandleForInStart(ExecutionContext executionContext) {
-        // Pop the object from the stack
-        JSValue obj = executionContext.virtualMachine.valueStack.pop();
-
-        // Create a for-in enumerator
-        JSForInEnumerator enumerator = new JSForInEnumerator(obj);
-
-        // Push the enumerator onto the stack (wrapped in a special internal object)
-        // We'll use JSInternalValue to hold it
-        executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
-    }
-
-    private static void internalHandleForOfNext(ExecutionContext executionContext, int depth) {
-        // Stack layout: ... iter next catch_offset [depth values] (bottom to top)
-        // The depth parameter tells us how many values are between catch_offset and top
-        // Following QuickJS: offset = -3 - depth
-        // iter is at sp[offset] = sp[-3-depth], next is at sp[offset+1] = sp[-2-depth]
-
-        // Pop depth values temporarily
-        if (executionContext.virtualMachine.forOfTempValues.length < depth) {
-            executionContext.virtualMachine.forOfTempValues = new JSValue[Math.max(depth, executionContext.virtualMachine.forOfTempValues.length * 2)];
-        }
-        for (int i = 0; i < depth; i++) {
-            executionContext.virtualMachine.forOfTempValues[i] = executionContext.virtualMachine.valueStack.pop();
-        }
-        // Now top of stack is the iterator catch marker (JSCatchOffset(0))
-        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
-
-        // Now peek next method and iterator (don't pop - they stay for next iteration)
-        // Stack is now: ... iter next (top)
-        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);  // next method (top)
-        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);    // iterator object (below next)
-
-        // Call iterator.next()
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
-            String iterType = iterator == null ? "null" : iterator.getClass().getSimpleName();
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
-                    "Next method must be a function in FOR_OF_NEXT (nextMethod="
-                            + actualType + ", iterator=" + iterType + ")"));
-        }
-
-        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-
-        // Check for pending exception (e.g., TypedArray detachment during iteration)
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            // Restore stack before throwing
-            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-            for (int i = depth - 1; i >= 0; i--) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                executionContext.virtualMachine.forOfTempValues[i] = null;
-            }
-            JSValue pendingEx = executionContext.virtualMachine.context.getPendingException();
-            if (pendingEx instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator next threw", pendingEx);
-        }
-
-        // For sync iterators, extract value and done from the result object
-        // QuickJS FOR_OF_NEXT pushes: iter, next, catch_offset, value, done
-        // So we need to extract {value, done} from result
-
-        if (!(result instanceof JSObject resultObj)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
-        }
-
-        // Get the done property
-        JSValue doneValue = resultObj.get(executionContext.virtualMachine.context, PropertyKey.DONE);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-            for (int i = depth - 1; i >= 0; i--) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                executionContext.virtualMachine.forOfTempValues[i] = null;
-            }
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
-        }
-        boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
-
-        JSValue value = JSUndefined.INSTANCE;
-        if (!done) {
-            value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-                for (int i = depth - 1; i >= 0; i--) {
-                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                    executionContext.virtualMachine.forOfTempValues[i] = null;
-                }
-                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-                if (pendingException instanceof JSError jsError) {
-                    throw new JSVirtualMachineException(jsError);
-                }
-                throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
-            }
-            if (value == null) {
-                value = JSUndefined.INSTANCE;
-            }
-        }
-
-        // Push catch_offset back, then restore temp values, then push value and done
-        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-        for (int i = depth - 1; i >= 0; i--) {
-            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-            executionContext.virtualMachine.forOfTempValues[i] = null;
-        }
-        executionContext.virtualMachine.valueStack.push(value);
-        executionContext.virtualMachine.valueStack.push(done ? JSBoolean.TRUE : JSBoolean.FALSE);
-    }
-
-    private static void internalHandleForOfStart(ExecutionContext executionContext) {
-        // Pop the iterable from the stack
-        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
-
-        // Auto-box primitives (strings, numbers, etc.) to access their Symbol.iterator
-        JSObject iterableObj;
-        if (iterable instanceof JSObject obj) {
-            iterableObj = obj;
-        } else {
-            // Try to auto-box the primitive
-            iterableObj = executionContext.virtualMachine.toObject(iterable);
-            if (iterableObj == null) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
-            }
-        }
-
-        // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Object is not iterable", pendingException);
-        }
-
-        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
-        }
-
-        // Call the Symbol.iterator method to get an iterator
-        // Use the original iterable value for the 'this' binding, not the boxed version
-        JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator method threw", pendingException);
-        }
-
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
-        }
-
-        // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator next lookup threw", pendingException);
-        }
-
-        // Per spec (GetIterator step 5): store the next value as-is.
-        // The check for callable happens later in IteratorNext (FOR_OF_NEXT).
-        if (nextMethod == null) {
-            nextMethod = JSUndefined.INSTANCE;
-        }
-
-        // Push iterator, next method, and catch offset onto the stack.
-        // The catch offset is a dedicated iterator-close marker.
-        // The VM exception handler recognizes it and auto-closes the iterator
-        // when unwinding past it.
-        executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
-        executionContext.virtualMachine.valueStack.push(nextMethod);       // next() method
-        executionContext.virtualMachine.valueStack.pushStackValue(JSCatchOffset.ITERATOR_CLOSE_MARKER);
-    }
-
-    private static void internalHandleGt(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number comparison
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() > rightNum.value()));
-            return;
-        }
-        boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, right, left);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleGte(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number comparison
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() >= rightNum.value()));
-            return;
-        }
-        boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, right, left) ||
-                JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleIn(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        if (!(right instanceof JSObject jsObj)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("invalid 'in' operand"));
-        }
-
-        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, left);
-        boolean result = jsObj.has(key);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleInc(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.incrementValue(operand, 1));
-    }
-
-    private static void internalHandleInitCtor(ExecutionContext executionContext) {
-        JSValue frameNewTarget = executionContext.virtualMachine.currentFrame.getNewTarget();
-        if (frameNewTarget.isNullOrUndefined()) {
-            // Keep direct VM opcode tests stable when executionContext.virtualMachine.execute() is used without constructor plumbing.
-            if (executionContext.virtualMachine.currentFrame.getCaller() == null) {
-                JSValue fallbackThis = executionContext.virtualMachine.currentFrame.getThisArg();
-                if (fallbackThis instanceof JSObject) {
-                    executionContext.virtualMachine.valueStack.push(fallbackThis);
-                    return;
-                }
-            }
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("class constructors must be invoked with 'new'"));
-        }
-
-        // Per ES spec BindThisValue: if thisBindingStatus is "initialized", throw ReferenceError.
-        // Arrow functions share the this-binding with the enclosing derived constructor.
-        // Check if this was already initialized by a previous super() call.
-        JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
-        if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
-            JSValue capturedThis = arrowBf.getCapturedThisArg();
-            if (capturedThis instanceof JSObject) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwReferenceError(
-                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
-            }
-        }
-
-        // Explicit super(...): APPLY constructor mode left the initialized this value on stack.
-        if (executionContext.virtualMachine.valueStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
-            JSValue thisValue = executionContext.virtualMachine.valueStack.pop();
-            if (!(thisValue instanceof JSObject jsObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
-            }
-            executionContext.virtualMachine.currentFrame.setThisArg(jsObject);
-            // Update shared derivedThisRef so arrow functions see the initialized this
-            VarRef derivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
-            if (derivedThisRef != null) {
-                derivedThisRef.set(jsObject);
-            }
-            // For arrow functions inside derived constructors, propagate the initialized this
-            // back to the enclosing constructor frame if it's still on the call stack.
-            if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
-                StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
-                while (callerFrame != null) {
-                    JSFunction callerFunc = callerFrame.getFunction();
-                    if (callerFunc instanceof JSBytecodeFunction callerBf) {
-                        if (callerBf.isDerivedConstructor()) {
-                            callerFrame.setThisArg(jsObject);
-                            VarRef callerThisRef = callerFrame.getDerivedThisRef();
-                            if (callerThisRef != null) {
-                                callerThisRef.set(jsObject);
-                            }
-                            break;
-                        }
-                        if (!callerBf.isArrow()) {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                    callerFrame = callerFrame.getCaller();
-                }
-            }
-            executionContext.virtualMachine.valueStack.push(jsObject);
-            return;
-        }
-
-        // Default derived constructor path:
-        // constructor(...args) { super(...args); }
-        JSObject superConstructorObject = currentFunction.getPrototype();
-        if (!(superConstructorObject instanceof JSFunction superConstructor)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("parent class must be constructor"));
-        }
-
-        JSValue superResult = executionContext.virtualMachine.constructFunction(superConstructor, executionContext.virtualMachine.currentFrame.getArguments(), frameNewTarget);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (!(superResult instanceof JSObject superObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
-        }
-        executionContext.virtualMachine.currentFrame.setThisArg(superObject);
-        VarRef defaultDerivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
-        if (defaultDerivedThisRef != null) {
-            defaultDerivedThisRef.set(superObject);
-        }
-        executionContext.virtualMachine.valueStack.push(superObject);
-    }
-
-    private static void internalHandleInitialYield(ExecutionContext executionContext) {
-        // Initial yield - generator is being created
-        // In QuickJS, this is where generator creation stops and returns the generator object.
-        // Per ES spec, parameter defaults are evaluated before INITIAL_YIELD,
-        // so errors during parameter initialization (e.g., SyntaxError from eval)
-        // are thrown during the generator function call, not during .next().
-        if (executionContext.virtualMachine.yieldSkipCount > 0) {
-            executionContext.virtualMachine.yieldSkipCount--;
-            return;
-        }
-        // Signal suspension at INITIAL_YIELD.
-        executionContext.virtualMachine.yieldResult =
-                new YieldResult(YieldResult.Type.INITIAL_YIELD, JSUndefined.INSTANCE);
-    }
-
-    private static void internalHandleInstanceof(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-
-        // Per ECMAScript spec, right must be an object
-        if (!(right instanceof JSObject constructor)) {
-            throw new JSVirtualMachineException("Right-hand side of instanceof is not an object");
-        }
-
-        JSValue hasInstanceMethod = constructor.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_HAS_INSTANCE);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("instanceof check failed");
-        }
-        if (!(hasInstanceMethod instanceof JSUndefined) && !(hasInstanceMethod instanceof JSNull)) {
-            if (!(hasInstanceMethod instanceof JSFunction hasInstanceFunction)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("@@hasInstance is not callable"));
-            }
-            JSValue result = hasInstanceFunction.call(executionContext.virtualMachine.context, right, new JSValue[]{left});
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-                if (pendingException instanceof JSError jsError) {
-                    throw new JSVirtualMachineException(jsError);
-                }
-                throw new JSVirtualMachineException("instanceof check failed");
-            }
-            executionContext.virtualMachine.valueStack.push(JSTypeConversions.toBoolean(result) == JSBoolean.TRUE ? JSBoolean.TRUE : JSBoolean.FALSE);
-            return;
-        }
-
-        boolean callable = right instanceof JSFunction;
-        if (right instanceof JSProxy proxy && JSTypeChecking.isFunction(proxy.getTarget())) {
-            callable = true;
-        }
-        if (!callable) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("Right-hand side of instanceof is not callable"));
-        }
-
-        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
-    }
-
-    private static void internalHandleLogicalAnd(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Short-circuit: return left if falsy, otherwise right
-        if (JSTypeConversions.toBoolean(left) == JSBoolean.FALSE) {
-            executionContext.virtualMachine.valueStack.push(left);
-        } else {
-            executionContext.virtualMachine.valueStack.push(right);
-        }
-    }
-
-    private static void internalHandleLogicalNot(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        boolean result = JSTypeConversions.toBoolean(operand) == JSBoolean.FALSE;
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleLogicalOr(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Short-circuit: return left if truthy, otherwise right
-        if (JSTypeConversions.toBoolean(left) == JSBoolean.TRUE) {
-            executionContext.virtualMachine.valueStack.push(left);
-        } else {
-            executionContext.virtualMachine.valueStack.push(right);
-        }
-    }
-
-    private static void internalHandleLt(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number comparison (avoids toPrimitive/toNumber overhead)
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() < rightNum.value()));
-            return;
-        }
-        boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleLte(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Fast path for number comparison (avoids double type conversion)
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(leftNum.value() <= rightNum.value()));
-            return;
-        }
-        boolean result = JSTypeConversions.lessThan(executionContext.virtualMachine.context, left, right) ||
-                JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleMod(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            if (rightBigInt.value().equals(VirtualMachine.BIGINT_ZERO)) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwRangeError("Division by zero");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                return;
-            }
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().remainder(rightBigInt.value())));
-            return;
-        }
-        JSNumber leftNumber = (JSNumber) pair.left();
-        JSNumber rightNumber = (JSNumber) pair.right();
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() % rightNumber.value()));
-    }
-
-    private static void internalHandleMul(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().multiply(rightBigInt.value())));
-            return;
-        }
-        JSNumber leftNumber = (JSNumber) pair.left();
-        JSNumber rightNumber = (JSNumber) pair.right();
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() * rightNumber.value()));
-    }
-
-    private static void internalHandleNeg(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSValue numeric = executionContext.virtualMachine.toNumericValue(operand);
-        if (numeric instanceof JSBigInt bigInt) {
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().negate()));
-            return;
-        }
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(-((JSNumber) numeric).value()));
-    }
-
-    private static void internalHandleNeq(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = !JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleNot(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSValue numeric;
-        try {
-            numeric = executionContext.virtualMachine.toNumericValue(operand);
-        } catch (JSVirtualMachineException e) {
-            captureVmExceptionAsPending(executionContext, e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (executionContext.virtualMachine.pendingException != null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (numeric instanceof JSBigInt bigInt) {
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().not()));
-            return;
-        }
-        int result = ~JSTypeConversions.toInt32(executionContext.virtualMachine.context, numeric);
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
-    }
-
-    private static void internalHandleOr(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) | JSTypeConversions.toInt32(rightNum.value())));
-            return;
-        }
-        VirtualMachine.NumericPair pair;
-        try {
-            pair = executionContext.virtualMachine.numericPair(left, right);
-        } catch (JSVirtualMachineException e) {
-            captureVmExceptionAsPending(executionContext, e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (executionContext.virtualMachine.pendingException != null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().or(rightBigInt.value())));
-            return;
-        }
-        int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) | JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
-    }
-
-    private static void internalHandlePlus(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSNumber result = JSTypeConversions.toNumber(executionContext.virtualMachine.context, operand);
-        executionContext.virtualMachine.capturePendingException();
-        executionContext.virtualMachine.valueStack.push(result);
-    }
-
-    private static void internalHandlePostDec(ExecutionContext executionContext) {
-        // POST_DEC: [value] -> [old_value, new_value]
-        // Takes value on top, pushes old value then new value
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSValue oldValue = executionContext.virtualMachine.toNumericValue(operand);
-        executionContext.virtualMachine.valueStack.push(oldValue);
-        if (oldValue instanceof JSBigInt bigInt) {
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().subtract(VirtualMachine.BIGINT_ONE)));
-            return;
-        }
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(((JSNumber) oldValue).value() - 1));
-    }
-
-    private static void internalHandlePostInc(ExecutionContext executionContext) {
-        // POST_INC: [value] -> [old_value, new_value]
-        // Takes value on top, pushes old value then new value
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        JSValue oldValue = executionContext.virtualMachine.toNumericValue(operand);
-        executionContext.virtualMachine.valueStack.push(oldValue);
-        if (oldValue instanceof JSBigInt bigInt) {
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(bigInt.value().add(VirtualMachine.BIGINT_ONE)));
-            return;
-        }
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(((JSNumber) oldValue).value() + 1));
-    }
-
-    private static void internalHandlePrivateIn(ExecutionContext executionContext) {
-        JSValue privateField = executionContext.virtualMachine.valueStack.pop();
-        JSValue object = executionContext.virtualMachine.valueStack.pop();
-
-        if (!(object instanceof JSObject jsObj)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("invalid 'in' operand"));
-        }
-
-        boolean result = false;
-        if (privateField instanceof JSSymbol symbol) {
-            result = jsObj.has(PropertyKey.fromSymbol(symbol));
-        }
-
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleSar(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) >> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)));
-            return;
-        }
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), false));
-            return;
-        }
-        int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left());
-        int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftInt >> (rightInt & 0x1F)));
-    }
-
-    private static void internalHandleShl(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) << (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)));
-            return;
-        }
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.shiftBigInt((JSBigInt) pair.left(), (JSBigInt) pair.right(), true));
-            return;
-        }
-        int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left());
-        int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftInt << (rightInt & 0x1F)));
-    }
-
-    private static void internalHandleShr(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        JSValue leftPrimitive;
-        JSValue rightPrimitive;
-        try {
-            leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left, JSTypeConversions.PreferredType.NUMBER);
-            rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
-        } catch (JSVirtualMachineException e) {
-            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        } catch (JSException e) {
-            if (e.getErrorValue() != null) {
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-            } else {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
-                        e.getMessage() != null ? e.getMessage() : "toPrimitive");
-            }
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        executionContext.virtualMachine.capturePendingException();
-        if (executionContext.virtualMachine.pendingException != null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (leftPrimitive instanceof JSBigInt || rightPrimitive instanceof JSBigInt) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("BigInts do not support >>>");
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        JSValue leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
-        JSValue rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
-        if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of((JSTypeConversions.toInt32(leftNum.value()) >>> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)) & 0xFFFFFFFFL));
-            return;
-        }
-        int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
-        int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, rightNumeric);
-        executionContext.virtualMachine.valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
-    }
-
-    private static void internalHandleStrictEq(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = JSTypeConversions.strictEquals(left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleStrictNeq(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        boolean result = !JSTypeConversions.strictEquals(left, right);
-        executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
-    }
-
-    private static void internalHandleSub(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        VirtualMachine.NumericPair pair = executionContext.virtualMachine.numericPair(left, right);
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().subtract(rightBigInt.value())));
-            return;
-        }
-        JSNumber leftNumber = (JSNumber) pair.left();
-        JSNumber rightNumber = (JSNumber) pair.right();
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(leftNumber.value() - rightNumber.value()));
-    }
-
-    private static void internalHandleTypeof(ExecutionContext executionContext) {
-        JSValue operand = executionContext.virtualMachine.valueStack.pop();
-        String type = JSTypeChecking.typeof(operand);
-        executionContext.virtualMachine.valueStack.push(new JSString(type));
-    }
-
-    private static void internalHandleXor(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        if (left instanceof JSNumber leftNum && right instanceof JSNumber rightNum) {
-            executionContext.virtualMachine.valueStack.push(JSNumber.of(JSTypeConversions.toInt32(leftNum.value()) ^ JSTypeConversions.toInt32(rightNum.value())));
-            return;
-        }
-        VirtualMachine.NumericPair pair;
-        try {
-            pair = executionContext.virtualMachine.numericPair(left, right);
-        } catch (JSVirtualMachineException e) {
-            captureVmExceptionAsPending(executionContext, e);
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (executionContext.virtualMachine.pendingException != null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            return;
-        }
-        if (pair.bigInt()) {
-            JSBigInt leftBigInt = (JSBigInt) pair.left();
-            JSBigInt rightBigInt = (JSBigInt) pair.right();
-            executionContext.virtualMachine.valueStack.push(new JSBigInt(leftBigInt.value().xor(rightBigInt.value())));
-            return;
-        }
-        int result = JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.left()) ^ JSTypeConversions.toInt32(executionContext.virtualMachine.context, pair.right());
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
-    }
-
-    private static void internalHandleYield(ExecutionContext executionContext) {
-        // Check if we should skip this yield (resuming from later point)
-        if (executionContext.virtualMachine.yieldSkipCount > 0) {
-            executionContext.virtualMachine.yieldSkipCount--;
-            JSValue yieldedValue = executionContext.virtualMachine.valueStack.pop();
-            JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
-                    ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex++)
-                    : null;
-            if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
-                executionContext.virtualMachine.pendingException = resumeRecord.value();
-                executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
-            } else if (resumeRecord != null) {
-                executionContext.virtualMachine.valueStack.push(resumeRecord.value());
-            } else {
-                // If resume data is missing, default to undefined to preserve stack shape.
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            }
-            // Don't yield - just continue execution from the resumed generator state.
-            return;
-        }
-
-        // At the target yield - check for RETURN/THROW resume records (replay mode)
-        JSGeneratorState.ResumeRecord resumeRecord = executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
-                ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
-                : null;
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
-            executionContext.virtualMachine.generatorResumeIndex++;
-            executionContext.virtualMachine.valueStack.pop(); // Pop the yielded value
-            // Trigger force return through finally handlers generatorForceReturn = true;
-            executionContext.virtualMachine.generatorReturnValue = resumeRecord.value();
-            executionContext.virtualMachine.pendingException = resumeRecord.value();
-            executionContext.virtualMachine.context.setPendingException(resumeRecord.value());
-            executionContext.virtualMachine.valueStack.push(resumeRecord.value());
-            return;
-        }
-
-        // Pop the yielded value from stack
-        JSValue value = executionContext.virtualMachine.valueStack.pop();
-
-        // Create yield result to signal suspension.
-        executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD, value);
-
-        // Push the value back so it can be returned
-        executionContext.virtualMachine.valueStack.push(value);
-    }
-
-    private static void internalHandleYieldStar(ExecutionContext executionContext) {
-        // yield* delegates to another iterator
-        // Pop the iterable from the stack
-        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
-
-        // Get the iterator from the iterable
-        JSObject iterableObj;
-        if (iterable instanceof JSObject obj) {
-            iterableObj = obj;
-        } else {
-            iterableObj = executionContext.virtualMachine.toObject(iterable);
-            if (iterableObj == null) {
-                throw new JSVirtualMachineException("Object is not iterable");
-            }
-        }
-
-        // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
-        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            throw new JSVirtualMachineException("Object is not iterable");
-        }
-
-        // Call Symbol.iterator to get the iterator
-        JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException("Iterator method must return an object");
-        }
-
-        // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
-        // Following QuickJS js_generator_next: when resumed with GEN_MAGIC_RETURN or GEN_MAGIC_THROW,
-        // the magic and value are passed to the yield* bytecode which calls the appropriate method.
-        JSGeneratorState.ResumeRecord resumeRecord =
-                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
-                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
-                        : null;
-
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
-            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
-            JSValue returnValue = resumeRecord.value();
-
-            // Get "return" method from iterator
-            JSValue returnMethodValue = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.getPendingException().toString(),
-                        executionContext.virtualMachine.context.getPendingException());
-            }
-            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
-
-            if (noReturnMethod) {
-                // No return method - complete with the return value (don't yield)
-                executionContext.virtualMachine.valueStack.push(returnValue);
-                return;
-            }
-
-            if (!(returnMethodValue instanceof JSFunction returnFunc)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
-            }
-
-            // Call iterator.return(value)
-            JSValue result = returnFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{returnValue});
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.getPendingException().toString(),
-                        executionContext.virtualMachine.context.getPendingException());
-            }
-
-            // Check result is an object (per spec, TypeError if not)
-            if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
-            }
-
-            // Check done flag
-            JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.getPendingException().toString(),
-                        executionContext.virtualMachine.context.getPendingException());
-            }
-            if (JSTypeConversions.toBoolean(doneValue).value()) {
-                // Done - push value and complete (don't yield)
-                JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
-                if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
-                }
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            } else {
-                // Not done - yield the result and continue delegation.
-                executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                executionContext.virtualMachine.valueStack.push(result);
-                return;
-            }
-        }
-
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
-            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
-            JSValue throwValue = resumeRecord.value();
-
-            // Get "throw" method from iterator
-            JSValue throwMethodValue = iteratorObj.get(PropertyKey.THROW);
-            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
-
-            if (noThrowMethod) {
-                // No throw method - close iterator and throw TypeError
-                JSValue closeMethod = iteratorObj.get(PropertyKey.RETURN);
-                if (closeMethod instanceof JSFunction closeFunc) {
-                    closeFunc.call(executionContext.virtualMachine.context, iteratorObj, JSValue.NO_ARGS);
-                }
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
-                        "iterator does not have a throw method"));
-            }
-
-            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
-            }
-
-            // Call iterator.throw(value)
-            JSValue result = throwFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{throwValue});
-
-            // Check result is an object
-            if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
-            }
-
-            // Check done flag
-            JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
-            if (JSTypeConversions.toBoolean(doneValue).value()) {
-                // Done - push value and complete the yield* expression
-                JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            } else {
-                // Not done - yield the result.
-                executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                executionContext.virtualMachine.valueStack.push(result);
-                return;
-            }
-        }
-
-        // Default: NEXT protocol - call iterator.next()
-        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
-        if (!(nextMethod instanceof JSFunction nextFunc)) {
-            throw new JSVirtualMachineException("Iterator must have a next method");
-        }
-
-        // Skip past previously-yielded values during generator replay.
-        // Each yield* value counts as one yield, so we consume executionContext.virtualMachine.yieldSkipCount
-        // values from the inner iterator to reach the correct position.
-        while (executionContext.virtualMachine.yieldSkipCount > 0) {
-            JSValue skipResult = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-            if (!(skipResult instanceof JSObject)) {
-                throw new JSVirtualMachineException("Iterator result must be an object");
-            }
-            JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
-            if (JSTypeConversions.toBoolean(skipDone).value()) {
-                // Inner iterator exhausted during skip — yield* expression is done
-                JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
-                executionContext.virtualMachine.valueStack.push(value);
-                return;
-            }
-            executionContext.virtualMachine.yieldSkipCount--;
-        }
-
-        JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-
-        // The result should be an object (the iterator result)
-        if (!(result instanceof JSObject)) {
-            throw new JSVirtualMachineException("Iterator result must be an object");
-        }
-
-        // Check if the inner iterator is done
-        JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
-        if (JSTypeConversions.toBoolean(doneValue).value()) {
-            // Inner iterator done - yield* expression value is the final value
-            JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
-            executionContext.virtualMachine.valueStack.push(value);
-            // Don't set executionContext.virtualMachine.yieldResult - the yield* expression completes
-            return;
-        }
-
-        // Set yield result to the raw iterator result object
-        // This is what QuickJS does with *pdone = 2.
-        executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-
-        // Push the result back on the stack
-        executionContext.virtualMachine.valueStack.push(result);
-    }
 
     private static JSValue readVarRefValue(ExecutionContext executionContext, int varRefIndex) {
         String capturedVarName = null;
