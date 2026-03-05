@@ -629,6 +629,15 @@ final class FunctionClassCompiler {
         String className = classExpr.id() != null ? classExpr.id().name()
                 : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");
 
+        // Per ES2024 ClassDefinitionEvaluation: create a new lexical scope for the class name
+        // binding so that methods and heritage closures can capture it.
+        int classNameLocalIndex = -1;
+        boolean hasClassNameScope = classExpr.id() != null;
+        if (hasClassNameScope) {
+            compilerContext.enterScope();
+            classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
+        }
+
         // Compile superclass expression or emit undefined
         if (classExpr.superClass() != null) {
             delegates.expressions.compileExpression(classExpr.superClass());
@@ -733,6 +742,12 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
+        // Initialize the class name binding (ES2024 ClassDefinitionEvaluation step 22)
+        if (hasClassNameScope) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
+        }
+
         // Compile methods
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
@@ -827,6 +842,11 @@ final class FunctionClassCompiler {
         // Drop prototype, keep constructor on stack
         compilerContext.emitter.emitOpcode(Opcode.NIP);
         // Stack: constructor
+
+        // Exit the class name scope
+        if (hasClassNameScope) {
+            compilerContext.exitScope();
+        }
 
         // For class expressions, we leave the constructor on the stack
         // (unlike class declarations which bind it to a variable)

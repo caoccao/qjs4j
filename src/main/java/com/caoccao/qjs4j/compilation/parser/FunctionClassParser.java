@@ -805,6 +805,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.inFunctionBody = false;
         }
 
+        // Per ES2024: A method defines a new function scope, so await/yield
+        // should be allowed as identifiers in non-async/non-generator methods
+        // even when the enclosing context (e.g. a class static block) disallows them.
+        boolean savedInClassStaticInitForParams = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
+
         parserContext.expect(TokenType.LPAREN);
         FunctionParams funcParams = parseFunctionParameters();
         int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
@@ -814,6 +820,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         parserContext.inFunctionBody = savedInFunctionBody;
+        parserContext.inClassStaticInit = savedInClassStaticInitForParams;
 
         // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
         checkDuplicateParameters(funcParams);

@@ -2212,15 +2212,12 @@ public final class OpcodeHandler {
 
         JSValue value;
         if (!targetObject.has(key)) {
-            if (executionContext.virtualMachine.context.isStrictMode()) {
-                String name = key != null ? key.toPropertyString() : "variable";
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(name + " is not defined");
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            value = JSUndefined.INSTANCE;
+            String name = key != null ? key.toPropertyString() : "variable";
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(name + " is not defined");
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         } else {
             value = targetObject.get(executionContext.virtualMachine.context, key);
         }

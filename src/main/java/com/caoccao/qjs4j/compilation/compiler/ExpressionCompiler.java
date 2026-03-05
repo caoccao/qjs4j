@@ -164,7 +164,10 @@ final class ExpressionCompiler {
         switch (binExpr.operator()) {
             case LOGICAL_AND -> {
                 // left && right: if left is falsy, return left; otherwise evaluate and return right
+                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.left());
+                compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -174,7 +177,10 @@ final class ExpressionCompiler {
             }
             case LOGICAL_OR -> {
                 // left || right: if left is truthy, return left; otherwise evaluate and return right
+                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.left());
+                compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -184,7 +190,10 @@ final class ExpressionCompiler {
             }
             case NULLISH_COALESCING -> {
                 // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
+                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.left());
+                compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
@@ -246,13 +255,16 @@ final class ExpressionCompiler {
     }
 
     void compileConditionalExpression(ConditionalExpression condExpr) {
-        // Compile test
+        // Compile test (not in tail position)
+        boolean savedTailCalls = compilerContext.emitTailCalls;
+        compilerContext.emitTailCalls = false;
         compileExpression(condExpr.test());
+        compilerContext.emitTailCalls = savedTailCalls;
 
         // Jump to alternate if false
         int jumpToAlternate = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
-        // Compile consequent
+        // Compile consequent (in tail position)
         compileExpression(condExpr.consequent());
 
         // Jump over alternate
@@ -261,7 +273,8 @@ final class ExpressionCompiler {
         // Patch jump to alternate
         compilerContext.emitter.patchJump(jumpToAlternate, compilerContext.emitter.currentOffset());
 
-        // Compile alternate
+        // Compile alternate (in tail position)
+        compilerContext.emitTailCalls = savedTailCalls;
         compileExpression(condExpr.alternate());
 
         // Patch jump to end
@@ -536,11 +549,16 @@ final class ExpressionCompiler {
         List<Expression> expressions = seqExpr.expressions();
 
         for (int i = 0; i < expressions.size(); i++) {
-            compileExpression(expressions.get(i));
-
-            // Drop the value of all expressions except the last one
             if (i < expressions.size() - 1) {
+                // Non-last expressions are not in tail position
+                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.emitTailCalls = false;
+                compileExpression(expressions.get(i));
+                compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else {
+                // Last expression inherits tail call context
+                compileExpression(expressions.get(i));
             }
         }
         // The last expression's value remains on the stack

@@ -112,11 +112,12 @@ final class ParserContext {
      */
     void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
         savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting,
-                inClassFieldInitializer ? 1 : 0});
+                inClassFieldInitializer ? 1 : 0, inClassStaticInit ? 1 : 0});
         functionNesting++;
         generatorFunctionNesting = generatorFunction ? 1 : 0;
         asyncFunctionNesting = asyncFunction ? 1 : 0;
         inClassFieldInitializer = false;
+        inClassStaticInit = false;
     }
 
     void exitFunctionContext(boolean asyncFunction) {
@@ -131,6 +132,7 @@ final class ParserContext {
         generatorFunctionNesting = saved[0];
         asyncFunctionNesting = saved[1];
         inClassFieldInitializer = saved[2] != 0;
+        inClassStaticInit = saved[3] != 0;
         functionNesting--;
     }
 

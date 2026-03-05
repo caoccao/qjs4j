@@ -436,8 +436,7 @@ final class ExpressionPrimaryParser {
                         yield new ArrayExpression(List.of(new SpreadElement(restArg, restLocation)), location);
                     }
 
-                    if (parserContext.nextToken.type() != TokenType.COMMA &&
-                            parserContext.nextToken.type() != TokenType.RPAREN) {
+                    {
                         boolean savedIn = parserContext.inOperatorAllowed;
                         parserContext.inOperatorAllowed = true;
                         Expression firstExpr = expressions.parseAssignmentExpression();
@@ -495,74 +494,6 @@ final class ExpressionPrimaryParser {
 
                         // Otherwise, regular sequence expression
                         yield new SequenceExpression(elements, location);
-                    }
-
-                    List<Expression> potentialParams = new ArrayList<>();
-                    Identifier firstParam = parserContext.parseIdentifier();
-                    if (parserContext.match(TokenType.ASSIGN)) {
-                        SourceLocation assignLoc = parserContext.getLocation();
-                        parserContext.advance();
-                        Expression defaultExpr = expressions.parseAssignmentExpression();
-                        potentialParams.add(new AssignmentExpression(firstParam,
-                                AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
-                    } else {
-                        potentialParams.add(firstParam);
-                    }
-
-                    while (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance();
-
-                        if (parserContext.match(TokenType.ELLIPSIS)) {
-                            SourceLocation restLocation = parserContext.getLocation();
-                            parserContext.advance();
-                            Expression restArg;
-                            if (parserContext.match(TokenType.LBRACKET)) {
-                                restArg = delegates.literals.parseArrayExpression();
-                            } else if (parserContext.match(TokenType.LBRACE)) {
-                                restArg = delegates.literals.parseObjectExpression();
-                            } else {
-                                restArg = parserContext.parseIdentifier();
-                            }
-                            potentialParams.add(new SpreadElement(restArg, restLocation));
-                            break;
-                        }
-
-                        Expression paramExpr;
-                        if (parserContext.match(TokenType.IDENTIFIER)) {
-                            paramExpr = parserContext.parseIdentifier();
-                        } else if (parserContext.match(TokenType.LBRACE)) {
-                            paramExpr = delegates.literals.parseObjectExpression();
-                        } else if (parserContext.match(TokenType.LBRACKET)) {
-                            paramExpr = delegates.literals.parseArrayExpression();
-                        } else if (parserContext.match(TokenType.RPAREN)) {
-                            // Trailing comma in arrow parameters: (a, b,) => {}
-                            break;
-                        } else {
-                            throw new JSSyntaxErrorException("Unexpected token in arrow function parameters at line " +
-                                    parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
-                        }
-                        if (parserContext.match(TokenType.ASSIGN)) {
-                            SourceLocation assignLoc = parserContext.getLocation();
-                            parserContext.advance();
-                            Expression defaultExpr = expressions.parseAssignmentExpression();
-                            potentialParams.add(new AssignmentExpression(paramExpr,
-                                    AssignmentExpression.AssignmentOperator.ASSIGN, defaultExpr, assignLoc));
-                        } else {
-                            potentialParams.add(paramExpr);
-                        }
-                    }
-
-                    parserContext.expect(TokenType.RPAREN);
-
-                    if (potentialParams.size() == 1 && !(potentialParams.get(0) instanceof SpreadElement)) {
-                        yield potentialParams.get(0);
-                    } else if (parserContext.match(TokenType.ARROW)
-                            || potentialParams.stream().anyMatch(e -> e instanceof SpreadElement)) {
-                        // Arrow function params or contains spread element
-                        yield new ArrayExpression(potentialParams, location);
-                    } else {
-                        // Not arrow params - treat as comma expression (grouping)
-                        yield new SequenceExpression(potentialParams, location);
                     }
                 } else {
                     boolean savedIn = parserContext.inOperatorAllowed;

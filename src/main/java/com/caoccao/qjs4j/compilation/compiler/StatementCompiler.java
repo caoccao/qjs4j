@@ -42,6 +42,34 @@ final class StatementCompiler {
         loopCompiler = new StatementLoopCompiler(this, compilerContext, delegates);
     }
 
+    private static boolean isTailCallableCallExpression(CallExpression callExpr) {
+        return callExpr.arguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
+                && !(callExpr.callee() instanceof Identifier id && JSKeyword.SUPER.equals(id.name()));
+    }
+
+    private static boolean hasTailCallInTailPosition(Expression expr) {
+        if (expr instanceof CallExpression callExpr) {
+            return isTailCallableCallExpression(callExpr);
+        }
+        if (expr instanceof BinaryExpression binExpr
+                && binExpr.operator() == BinaryExpression.BinaryOperator.NULLISH_COALESCING) {
+            return hasTailCallInTailPosition(binExpr.right());
+        }
+        if (expr instanceof ConditionalExpression condExpr) {
+            return hasTailCallInTailPosition(condExpr.consequent())
+                    || hasTailCallInTailPosition(condExpr.alternate());
+        }
+        if (expr instanceof BinaryExpression binExpr
+                && (binExpr.operator() == BinaryExpression.BinaryOperator.LOGICAL_AND
+                || binExpr.operator() == BinaryExpression.BinaryOperator.LOGICAL_OR)) {
+            return hasTailCallInTailPosition(binExpr.right());
+        }
+        if (expr instanceof SequenceExpression seqExpr && !seqExpr.expressions().isEmpty()) {
+            return hasTailCallInTailPosition(seqExpr.expressions().get(seqExpr.expressions().size() - 1));
+        }
+        return false;
+    }
+
     void compileBlockStatement(BlockStatement block) {
         boolean savedGlobalScope = compilerContext.inGlobalScope;
         compilerContext.enterScope();
@@ -347,25 +375,39 @@ final class StatementCompiler {
     }
 
     void compileReturnStatement(ReturnStatement retStmt) {
-        // Tail call optimization: when the return argument is a simple call expression
+        // Tail call optimization: when the return argument has a call in tail position
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
         // Exclude spread calls (which use APPLY, not CALL) and super calls from TCO.
-        if (retStmt.argument() instanceof CallExpression callExpr
+        if (retStmt.argument() instanceof CallExpression
+                && hasTailCallInTailPosition(retStmt.argument())
                 && compilerContext.strictMode
                 && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
-                && !compilerContext.hasActiveIteratorLoops()
-                && callExpr.arguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
-                && !(callExpr.callee() instanceof Identifier id && JSKeyword.SUPER.equals(id.name()))) {
+                && !compilerContext.hasActiveIteratorLoops()) {
+            // Direct call in tail position: TAIL_CALL handles the return entirely
             compilerContext.emitTailCalls = true;
             delegates.expressions.compileExpression(retStmt.argument());
             compilerContext.emitTailCalls = false;
             return;
         }
 
+        // For non-direct-call expressions with tail calls in sub-positions
+        // (e.g., return a ?? f(), return 0, f(), return a ? f() : g()),
+        // set emitTailCalls and fall through to emit RETURN for non-tail paths.
+        boolean enableTco = retStmt.argument() != null
+                && hasTailCallInTailPosition(retStmt.argument())
+                && compilerContext.strictMode
+                && !compilerContext.isInAsyncFunction
+                && compilerContext.activeFinallyGosubPatches.isEmpty()
+                && !compilerContext.hasActiveIteratorLoops();
+
         if (retStmt.argument() != null) {
+            if (enableTco) {
+                compilerContext.emitTailCalls = true;
+            }
             delegates.expressions.compileExpression(retStmt.argument());
+            compilerContext.emitTailCalls = false;
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }

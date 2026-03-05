@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.compilation.ast.ConditionalExpression;
 import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 final class ExpressionBinaryParser {
     private final ExpressionParser expressions;
@@ -138,11 +139,17 @@ final class ExpressionBinaryParser {
     Expression parseLogicalAndExpression() {
         Expression left = expressions.parseBitwiseOrExpression();
 
+        boolean hasLogicalAnd = false;
         while (parserContext.match(TokenType.LOGICAL_AND)) {
+            hasLogicalAnd = true;
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression right = expressions.parseBitwiseOrExpression();
             left = new BinaryExpression(BinaryOperator.LOGICAL_AND, left, right, location);
+        }
+
+        if (hasLogicalAnd && parserContext.match(TokenType.NULLISH_COALESCING)) {
+            throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
         }
 
         return left;
@@ -151,14 +158,32 @@ final class ExpressionBinaryParser {
     Expression parseLogicalOrExpression() {
         Expression left = expressions.parseLogicalAndExpression();
 
-        while (parserContext.match(TokenType.LOGICAL_OR) || parserContext.match(TokenType.NULLISH_COALESCING)) {
-            BinaryOperator op = parserContext.match(TokenType.LOGICAL_OR)
-                    ? BinaryOperator.LOGICAL_OR
-                    : BinaryOperator.NULLISH_COALESCING;
+        if (parserContext.match(TokenType.NULLISH_COALESCING)) {
+            // Parse CoalesceExpression: left ?? right ?? ...
+            // Cannot mix with || or && (ES2020 spec)
+            do {
+                SourceLocation location = parserContext.getLocation();
+                parserContext.advance();
+                Expression right = expressions.parseBitwiseOrExpression();
+                left = new BinaryExpression(BinaryOperator.NULLISH_COALESCING, left, right, location);
+            } while (parserContext.match(TokenType.NULLISH_COALESCING));
+            if (parserContext.match(TokenType.LOGICAL_OR) || parserContext.match(TokenType.LOGICAL_AND)) {
+                throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
+            }
+            return left;
+        }
+
+        boolean hasLogicalOr = false;
+        while (parserContext.match(TokenType.LOGICAL_OR)) {
+            hasLogicalOr = true;
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression right = expressions.parseLogicalAndExpression();
-            left = new BinaryExpression(op, left, right, location);
+            left = new BinaryExpression(BinaryOperator.LOGICAL_OR, left, right, location);
+        }
+
+        if (hasLogicalOr && parserContext.match(TokenType.NULLISH_COALESCING)) {
+            throw new JSSyntaxErrorException("cannot mix '??' with '&&' or '||'");
         }
 
         return left;
