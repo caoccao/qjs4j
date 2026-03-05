@@ -406,7 +406,8 @@ final class ExpressionAssignmentCompiler {
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
                     }
                 } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_VAR, name);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, name);
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {

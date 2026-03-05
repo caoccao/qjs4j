@@ -3842,30 +3842,6 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
-    static void handleSetVar(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
-        JSValue value = (JSValue) executionContext.stack[executionContext.sp - 1];
-        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
-            executionContext.frame.setDynamicVarBinding(variableName, value);
-            executionContext.pc = pc + op.getSize();
-            return;
-        }
-        PropertyKey variableKey = PropertyKey.fromString(variableName);
-        JSContext context = executionContext.virtualMachine.context;
-        JSObject globalObject = context.getGlobalObject();
-        if (context.isStrictMode() && !globalObject.has(variableKey)) {
-            throw new JSVirtualMachineException(context.throwReferenceError(variableName + " is not defined"));
-        }
-        globalObject.set(context, variableKey, value);
-        if (context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = context.getPendingException();
-            context.clearPendingException();
-        }
-        executionContext.pc = pc + op.getSize();
-    }
-
     static void handleSetVarRef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);

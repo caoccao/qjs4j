@@ -2625,7 +2625,7 @@ public final class JSGlobalObject {
                     localVarNameSet.add(name);
                     overlayBinding(global, name, locals[i], savedGlobals, absentKeys, touchedOverlayKeys);
                     // Function name bindings are immutable: make the overlay property
-                    // non-writable so SET_VAR throws TypeError in strict mode and
+                    // non-writable so PUT_VAR throws TypeError in strict mode and
                     // silently fails in sloppy mode.
                     if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
                         PropertyDescriptor fnDesc = new PropertyDescriptor();

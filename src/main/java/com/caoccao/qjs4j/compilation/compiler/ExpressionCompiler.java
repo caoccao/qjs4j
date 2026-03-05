@@ -681,7 +681,10 @@ final class ExpressionCompiler {
                     if (capturedIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
                     } else {
-                        compilerContext.emitter.emitOpcodeAtom(isPrefix ? Opcode.SET_VAR : Opcode.PUT_VAR, id.name());
+                        if (isPrefix) {
+                            compilerContext.emitter.emitOpcode(Opcode.DUP);
+                        }
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
                     }
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
