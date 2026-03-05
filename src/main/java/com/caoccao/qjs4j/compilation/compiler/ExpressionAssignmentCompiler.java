@@ -68,6 +68,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitU8(4);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                     delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     compilerContext.emitter.emitOpcode(Opcode.DUP3);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
                 } else {
@@ -342,6 +343,7 @@ final class ExpressionAssignmentCompiler {
                 compilerContext.emitter.emitU8(4);
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                 delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.DUP3);
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
             } else {

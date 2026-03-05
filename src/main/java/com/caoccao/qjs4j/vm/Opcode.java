@@ -46,7 +46,7 @@ public enum Opcode {
     DUP(17, 1, 1, 2, OpcodeHandler::handleDup),                                // a -> a a
     DUP1(18, 1, 2, 3, OpcodeHandler::handleDup1),                              // a b -> a a b
     DUP2(19, 1, 2, 4, OpcodeHandler::handleDup2),                              // a b -> a b a b
-    DUP3(20, 1, 3, 6, OpcodeHandler::handleInvalid),                           // a b c -> a b c a b c
+    DUP3(20, 1, 3, 6, OpcodeHandler::handleDup3),                              // a b c -> a b c a b c
     INSERT2(21, 1, 2, 3, OpcodeHandler::handleInsert2),                        // obj a -> a obj a (dup_x1)
     INSERT3(22, 1, 3, 4, OpcodeHandler::handleInsert3),                        // obj prop a -> a obj prop a (dup_x2)
     INSERT4(23, 1, 4, 5, OpcodeHandler::handleInsert4),                        // this obj prop a -> a this obj prop a

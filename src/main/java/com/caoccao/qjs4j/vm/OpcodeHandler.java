@@ -1159,6 +1159,17 @@ public final class OpcodeHandler {
         executionContext.pc += 1;
     }
 
+    // a b c -> a b c a b c
+    static void handleDup3(Opcode op, ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        stack[sp] = stack[sp - 3];
+        stack[sp + 1] = stack[sp - 2];
+        stack[sp + 2] = stack[sp - 1];
+        executionContext.sp = sp + 3;
+        executionContext.pc += 1;
+    }
+
     static void handleEq(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue right = executionContext.virtualMachine.valueStack.pop();
