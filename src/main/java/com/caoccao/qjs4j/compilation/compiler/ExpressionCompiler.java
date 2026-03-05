@@ -309,7 +309,21 @@ final class ExpressionCompiler {
             delegates.functions.compileClassExpression(classExpr);
         } else if (expr instanceof SequenceExpression seqExpr) {
             compileSequenceExpression(seqExpr);
+        } else if (expr instanceof ImportExpression importExpr) {
+            compileImportExpression(importExpr);
         }
+    }
+
+    void compileImportExpression(ImportExpression importExpr) {
+        // Stack: -> specifier options
+        compileExpression(importExpr.source());
+        if (importExpr.options() != null) {
+            compileExpression(importExpr.options());
+        } else {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        // Stack: specifier options -> promise
+        compilerContext.emitter.emitOpcode(Opcode.IMPORT);
     }
 
     void compileIdentifier(Identifier id) {
@@ -329,6 +343,12 @@ final class ExpressionCompiler {
             } else {
                 compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
             }
+            return;
+        }
+
+        // Handle 'import.meta' meta-property
+        if ("import.meta".equals(name)) {
+            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 6);
             return;
         }
 

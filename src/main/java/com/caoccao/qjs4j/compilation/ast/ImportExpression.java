@@ -17,13 +17,17 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed interface for all expression nodes.
+ * Represents a dynamic import() expression.
+ * <p>
+ * import(source) or import(source, options)
  */
-public sealed interface Expression extends ASTNode permits
-        Literal, Identifier, PrivateIdentifier, BinaryExpression, UnaryExpression,
-        AssignmentExpression, ConditionalExpression, CallExpression,
-        MemberExpression, NewExpression, FunctionExpression,
-        ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
-        YieldExpression, TemplateLiteral, TaggedTemplateExpression, ClassExpression,
-        SpreadElement, SequenceExpression, ImportExpression {
+public record ImportExpression(
+        Expression source,
+        Expression options,
+        SourceLocation location
+) implements Expression {
+    @Override
+    public SourceLocation getLocation() {
+        return location;
+    }
 }

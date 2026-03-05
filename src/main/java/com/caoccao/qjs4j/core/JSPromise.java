@@ -445,7 +445,7 @@ public final class JSPromise extends JSObject {
         }
     }
 
-    private static final class ResolveState {
-        private boolean alreadyResolved;
+    public static final class ResolveState {
+        public boolean alreadyResolved;
     }
 }

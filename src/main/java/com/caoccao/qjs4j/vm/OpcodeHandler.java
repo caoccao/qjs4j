@@ -2668,6 +2668,106 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
+    // specifier options -> promise (dynamic module import)
+    static void handleImport(Opcode op, ExecutionContext executionContext) {
+        JSContext context = executionContext.virtualMachine.context;
+        JSValue options = (JSValue) executionContext.stack[--executionContext.sp];
+        JSValue specifier = (JSValue) executionContext.stack[--executionContext.sp];
+
+        // Create a promise that will be resolved when the module loads
+        JSPromise promise = context.createJSPromise();
+        final JSPromise.ResolveState resolveState = new JSPromise.ResolveState();
+
+        // Enqueue a microtask to perform the actual module loading (following QuickJS js_dynamic_import_job)
+        context.enqueueMicrotask(() -> {
+            try {
+                // Convert specifier to string
+                String specifierStr = JSTypeConversions.toString(context, specifier).toString();
+                if (context.hasPendingException()) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(error);
+                    }
+                    return;
+                }
+
+                // Validate options if provided (following QuickJS js_dynamic_import)
+                if (!(options instanceof JSUndefined)) {
+                    if (!(options instanceof JSObject)) {
+                        JSValue error = context.throwTypeError("options must be an object");
+                        context.clearPendingException();
+                        if (!resolveState.alreadyResolved) {
+                            resolveState.alreadyResolved = true;
+                            promise.reject(error);
+                        }
+                        return;
+                    }
+                    // Check for options.with property (import attributes)
+                    JSValue withValue = ((JSObject) options).get(context, PropertyKey.fromString("with"));
+                    if (context.hasPendingException()) {
+                        JSValue error = context.getPendingException();
+                        context.clearPendingException();
+                        if (!resolveState.alreadyResolved) {
+                            resolveState.alreadyResolved = true;
+                            promise.reject(error);
+                        }
+                        return;
+                    }
+                    if (!(withValue instanceof JSUndefined)) {
+                        if (!(withValue instanceof JSObject)) {
+                            JSValue error = context.throwTypeError("options.with must be an object");
+                            context.clearPendingException();
+                            if (!resolveState.alreadyResolved) {
+                                resolveState.alreadyResolved = true;
+                                promise.reject(error);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                // Check if module is already cached
+                JSModule cachedModule = context.getModule(specifierStr);
+                if (cachedModule != null) {
+                    // Module already loaded - resolve with its namespace
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.resolve(context, cachedModule.getNamespace());
+                    }
+                    return;
+                }
+
+                // No module loader registered - reject with TypeError
+                // (following QuickJS: "could not load module 'xxx'")
+                JSValue error = context.throwTypeError("Cannot find module '" + specifierStr + "'");
+                context.clearPendingException();
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    promise.reject(error);
+                }
+            } catch (Exception e) {
+                if (context.hasPendingException()) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(error);
+                    }
+                } else {
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(new JSString("Error loading module: " + e.getMessage()));
+                    }
+                }
+            }
+        });
+
+        executionContext.stack[executionContext.sp++] = promise;
+        executionContext.pc += op.getSize();
+    }
+
     static void handleInvalid(Opcode op, ExecutionContext executionContext) {
         throw new JSVirtualMachineException("Invalid opcode at PC " + executionContext.pc);
     }

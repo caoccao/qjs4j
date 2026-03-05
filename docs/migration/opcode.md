@@ -1,6 +1,6 @@
 # Unimplemented Opcodes
 
-qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 11 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
+qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 10 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
 
 ## Stack Manipulation
 
@@ -33,12 +33,6 @@ In QuickJS, adds a private brand symbol to a newly constructed object so that `C
 ### REGEXP (52) — `pattern bytecode_string -> regexp`
 
 In QuickJS C, the compiler compiles a regex literal into two constants: the pattern string and a regex bytecode string. At runtime, the `regexp` opcode pops both and assembles a `JSRegExp` object. qjs4j eliminates this two-phase approach. The compiler at `ExpressionCompiler.java:374` calls `new JSRegExp(pattern, flags)`, which runs `RegExpCompiler.compile()` to produce `RegExpBytecode` immediately. The fully constructed `JSRegExp` object is stored directly in the constant pool and pushed onto the stack via `PUSH_CONST`. Java's object system allows storing the complete regex object as a constant, unlike C which can only store raw byte sequences.
-
-## Modules
-
-### IMPORT (54) — `specifier options -> promise`
-
-Implements ES6 dynamic `import()` expressions. qjs4j supports static `import`/`export` declarations for ES modules but does not support dynamic `import()` calls. The parser recognizes `import(` syntax and routes it to expression parsing, but the compiler has no emission path for the `IMPORT` opcode. This is a known unsupported feature.
 
 ## With Statement
 

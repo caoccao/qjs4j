@@ -646,6 +646,9 @@ final class ExpressionAssignmentParser {
             if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.name())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
+            if (left instanceof Identifier importMetaId && "import.meta".equals(importMetaId.name())) {
+                throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
+            }
             // PrimaryExpression: this — AssignmentTargetType is "invalid" (spec 13.2.1)
             if (left instanceof Identifier thisId && JSKeyword.THIS.equals(thisId.name())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");

@@ -614,6 +614,37 @@ final class ExpressionPrimaryParser {
                 }
                 yield delegates.functions.parseClassExpression();
             }
+            case IMPORT -> {
+                parserContext.advance(); // consume 'import'
+                if (parserContext.match(TokenType.DOT)) {
+                    // import.meta
+                    if (parserContext.nextToken.type() == TokenType.IDENTIFIER
+                            && "meta".equals(parserContext.nextToken.value())) {
+                        parserContext.advance(); // consume '.'
+                        parserContext.advance(); // consume 'meta'
+                        yield new Identifier("import.meta", location);
+                    } else {
+                        throw new JSSyntaxErrorException("The only valid meta property for import is 'import.meta'");
+                    }
+                } else if (parserContext.match(TokenType.LPAREN)) {
+                    parserContext.advance(); // consume '('
+                    Expression source = expressions.parseAssignmentExpression();
+                    Expression options = null;
+                    if (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance(); // consume ','
+                        if (!parserContext.match(TokenType.RPAREN)) {
+                            options = expressions.parseAssignmentExpression();
+                            if (parserContext.match(TokenType.COMMA)) {
+                                parserContext.advance(); // consume trailing comma
+                            }
+                        }
+                    }
+                    parserContext.expect(TokenType.RPAREN);
+                    yield new ImportExpression(source, options, location);
+                } else {
+                    throw new JSSyntaxErrorException("Unexpected token " + parserContext.currentToken.type());
+                }
+            }
             case SUPER -> {
                 parserContext.advance();
                 if (parserContext.match(TokenType.LPAREN)) {

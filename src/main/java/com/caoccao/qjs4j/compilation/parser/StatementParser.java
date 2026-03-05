@@ -507,7 +507,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     delegates.functions.parseClassDeclaration();
             case IMPORT -> {
                 Token nextToken = parserContext.peek();
-                boolean isDynamicImportExpression = nextToken != null && nextToken.type() == TokenType.LPAREN;
+                boolean isDynamicImportExpression = nextToken != null
+                        && (nextToken.type() == TokenType.LPAREN || nextToken.type() == TokenType.DOT);
                 if (parserContext.moduleMode && parserContext.functionNesting == 0 && !isDynamicImportExpression) {
                     yield parseImportDeclarationStatement();
                 }
