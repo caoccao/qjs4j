@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.builtins.NumberPrototype;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -94,10 +95,30 @@ public final class JSTypeConversions {
         // Object to primitive conversion (ES2020 7.2.14)
         // If one is object and other is primitive, convert object to primitive
         if (!isPrimitive(x) && isPrimitive(y)) {
-            return abstractEquals(context, toPrimitive(context, x, PreferredType.DEFAULT), y);
+            JSValue px;
+            try {
+                px = toPrimitive(context, x, PreferredType.DEFAULT);
+            } catch (JSVirtualMachineException e) {
+                capturePendingException(context, e);
+                return false;
+            }
+            if (context.hasPendingException()) {
+                return false;
+            }
+            return abstractEquals(context, px, y);
         }
         if (isPrimitive(x) && !isPrimitive(y)) {
-            return abstractEquals(context, x, toPrimitive(context, y, PreferredType.DEFAULT));
+            JSValue py;
+            try {
+                py = toPrimitive(context, y, PreferredType.DEFAULT);
+            } catch (JSVirtualMachineException e) {
+                capturePendingException(context, e);
+                return false;
+            }
+            if (context.hasPendingException()) {
+                return false;
+            }
+            return abstractEquals(context, x, py);
         }
 
         // Annex B: IsHTMLDDA object is equivalent to null/undefined for == and !=.
@@ -105,6 +126,17 @@ public final class JSTypeConversions {
             return true;
         }
         return y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined();
+    }
+
+    private static void capturePendingException(JSContext context, JSVirtualMachineException e) {
+        if (!context.hasPendingException()) {
+            JSValue jsValue = e.getJsValue();
+            if (jsValue != null) {
+                context.setPendingException(jsValue);
+            } else {
+                context.setPendingException(context.throwError("Error", e.getMessage()));
+            }
+        }
     }
 
     private static int compareBigIntAndNumber(BigInteger bigInt, double number) {
@@ -117,7 +149,7 @@ public final class JSTypeConversions {
         if (number == Double.NEGATIVE_INFINITY) {
             return 1;
         }
-        return new BigDecimal(bigInt).compareTo(BigDecimal.valueOf(number));
+        return new BigDecimal(bigInt).compareTo(new BigDecimal(number));
     }
 
     /**

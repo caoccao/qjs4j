@@ -1198,6 +1198,12 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         boolean result = JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            return;
+        }
         executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
@@ -2563,7 +2569,7 @@ public final class OpcodeHandler {
                     return;
                 }
 
-                // No module loader registered - reject with TypeError
+                // No module loader - reject with TypeError
                 // (following QuickJS: "could not load module 'xxx'")
                 JSValue error = context.throwTypeError("Cannot find module '" + specifierStr + "'");
                 context.clearPendingException();
@@ -2578,6 +2584,15 @@ public final class OpcodeHandler {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
                         promise.reject(error);
+                    }
+                } else if (e instanceof JSVirtualMachineException vme) {
+                    // Extract the original JS error value from the VM exception
+                    JSValue errorValue = vme.getJsValue() != null ? vme.getJsValue()
+                            : vme.getJsError() != null ? vme.getJsError()
+                            : new JSString(vme.getMessage() != null ? vme.getMessage() : "Unknown error");
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(errorValue);
                     }
                 } else {
                     if (!resolveState.alreadyResolved) {
@@ -3129,6 +3144,12 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         boolean result = !JSTypeConversions.abstractEquals(executionContext.virtualMachine.context, left, right);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            return;
+        }
         executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();

@@ -230,12 +230,24 @@ public final class VirtualMachine {
     }
 
     JSValue addValues(JSValue left, JSValue right) {
-        JSValue leftPrimitive = JSTypeConversions.toPrimitive(context, left, JSTypeConversions.PreferredType.DEFAULT);
+        JSValue leftPrimitive;
+        try {
+            leftPrimitive = JSTypeConversions.toPrimitive(context, left, JSTypeConversions.PreferredType.DEFAULT);
+        } catch (JSVirtualMachineException e) {
+            captureVMException(e);
+            return JSUndefined.INSTANCE;
+        }
         if (context.hasPendingException()) {
             capturePendingException();
             return JSUndefined.INSTANCE;
         }
-        JSValue rightPrimitive = JSTypeConversions.toPrimitive(context, right, JSTypeConversions.PreferredType.DEFAULT);
+        JSValue rightPrimitive;
+        try {
+            rightPrimitive = JSTypeConversions.toPrimitive(context, right, JSTypeConversions.PreferredType.DEFAULT);
+        } catch (JSVirtualMachineException e) {
+            captureVMException(e);
+            return JSUndefined.INSTANCE;
+        }
         if (context.hasPendingException()) {
             capturePendingException();
             return JSUndefined.INSTANCE;
