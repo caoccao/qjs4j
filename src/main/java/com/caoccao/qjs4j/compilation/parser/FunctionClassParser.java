@@ -787,6 +787,18 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                                                      SourceLocation location) {
         // If next token is LPAREN, it's a method; otherwise it's a field
         if (!parserContext.match(TokenType.LPAREN)) {
+            // Validate field name: "constructor" and "prototype" are invalid field names
+            if (!computed) {
+                String fieldName = null;
+                if (key instanceof Identifier fieldId) {
+                    fieldName = fieldId.name();
+                } else if (key instanceof Literal fieldLit && fieldLit.value() instanceof String str) {
+                    fieldName = str;
+                }
+                if (JSKeyword.CONSTRUCTOR.equals(fieldName) || JSKeyword.PROTOTYPE.equals(fieldName)) {
+                    throw new JSSyntaxErrorException("invalid field name");
+                }
+            }
             // It's a field (with optional initializer)
             Expression value = null;
             if (parserContext.match(TokenType.ASSIGN)) {

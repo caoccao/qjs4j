@@ -654,18 +654,6 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
-    // Method call: compiler emits DUP → GET_FIELD → SWAP → args → CALL_METHOD.
-    // SWAP puts the stack in func/receiver order (same as CALL) and locks property
-    // access tracking during argument evaluation.
-    static void handleCallMethod(Opcode op, ExecutionContext executionContext) {
-        handleCall(op, executionContext);
-    }
-
-    // Tail-call variant of CALL_METHOD.
-    static void handleTailCallMethod(Opcode op, ExecutionContext executionContext) {
-        handleTailCall(op, executionContext);
-    }
-
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         byte[] instructions = executionContext.instructions;
@@ -731,6 +719,13 @@ public final class OpcodeHandler {
         }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc = pc + op.getSize();
+    }
+
+    // Method call: compiler emits DUP → GET_FIELD → SWAP → args → CALL_METHOD.
+    // SWAP puts the stack in func/receiver order (same as CALL) and locks property
+    // access tracking during argument evaluation.
+    static void handleCallMethod(Opcode op, ExecutionContext executionContext) {
+        handleCall(op, executionContext);
     }
 
     static void handleCatch(Opcode op, ExecutionContext executionContext) {
@@ -983,6 +978,7 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         int methodFlags = executionContext.bytecode.readU8(pc + 1);
         boolean enumerable = (methodFlags & 4) != 0;
+        boolean nonWritable = (methodFlags & 8) != 0;
         int methodKind = methodFlags & 3;
 
         JSValue methodValue = (JSValue) stack[--sp];
@@ -1011,14 +1007,20 @@ public final class OpcodeHandler {
 
             boolean defineSucceeded;
             if (methodKind == 0) {
+                PropertyDescriptor.DataState dataState;
+                if (nonWritable) {
+                    dataState = enumerable
+                            ? PropertyDescriptor.DataState.EnumerableConfigurable
+                            : PropertyDescriptor.DataState.Configurable;
+                } else {
+                    dataState = enumerable
+                            ? PropertyDescriptor.DataState.All
+                            : PropertyDescriptor.DataState.ConfigurableWritable;
+                }
                 defineSucceeded = object.defineProperty(
                         executionContext.virtualMachine.context,
                         key,
-                        PropertyDescriptor.dataDescriptor(
-                                methodValue,
-                                enumerable
-                                        ? PropertyDescriptor.DataState.All
-                                        : PropertyDescriptor.DataState.ConfigurableWritable));
+                        PropertyDescriptor.dataDescriptor(methodValue, dataState));
             } else if (methodKind == 1) {
                 JSFunction getter = methodValue instanceof JSFunction function ? function : null;
                 JSFunction setter = null;
@@ -1217,10 +1219,12 @@ public final class OpcodeHandler {
             JSValue callee = executionContext.virtualMachine.valueStack.pop();
             executionContext.virtualMachine.propertyAccessLock = false;
 
-            // Check if callee is a non-constructor bytecode function eligible for TCO
+            // Check if callee is a non-constructor, non-async/generator bytecode function eligible for TCO
             boolean canTrampoline = false;
             if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
-                canTrampoline = !bytecodeFunc.isClassConstructor();
+                canTrampoline = !bytecodeFunc.isClassConstructor()
+                        && !bytecodeFunc.isAsync()
+                        && !bytecodeFunc.isGenerator();
             }
 
             if (canTrampoline) {
@@ -2120,7 +2124,29 @@ public final class OpcodeHandler {
 
         JSValue value = JSUndefined.INSTANCE;
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            value = object.get(executionContext.virtualMachine.context, PropertyKey.fromSymbol(symbol));
+            PropertyKey key = PropertyKey.fromSymbol(symbol);
+            // Private fields are per-object, not accessible through Proxy delegation
+            if (object instanceof JSProxy
+                    || !object.hasOwnProperty(key)) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot read private member " + symbol.getDescription()
+                                        + " from an object whose class did not declare it"));
+            }
+            // Check for setter-only accessor (no getter) — spec: PrivateGet step 5
+            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+            if (descriptor != null && descriptor.isAccessorDescriptor()
+                    && !(descriptor.getGetter() instanceof JSFunction)) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot read private member " + symbol.getDescription()
+                                        + " from an object whose class did not declare it"));
+            }
+            value = object.get(executionContext.virtualMachine.context, key);
+        } else if (!(objectValue instanceof JSObject)) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot read private member from a non-object"));
         }
 
         stack[sp++] = value;
@@ -2432,6 +2458,106 @@ public final class OpcodeHandler {
         }
     }
 
+    // specifier options -> promise (dynamic module import)
+    static void handleImport(Opcode op, ExecutionContext executionContext) {
+        JSContext context = executionContext.virtualMachine.context;
+        JSValue options = (JSValue) executionContext.stack[--executionContext.sp];
+        JSValue specifier = (JSValue) executionContext.stack[--executionContext.sp];
+
+        // Create a promise that will be resolved when the module loads
+        JSPromise promise = context.createJSPromise();
+        final JSPromise.ResolveState resolveState = new JSPromise.ResolveState();
+
+        // Enqueue a microtask to perform the actual module loading (following QuickJS js_dynamic_import_job)
+        context.enqueueMicrotask(() -> {
+            try {
+                // Convert specifier to string
+                String specifierStr = JSTypeConversions.toString(context, specifier).toString();
+                if (context.hasPendingException()) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(error);
+                    }
+                    return;
+                }
+
+                // Validate options if provided (following QuickJS js_dynamic_import)
+                if (!(options instanceof JSUndefined)) {
+                    if (!(options instanceof JSObject)) {
+                        JSValue error = context.throwTypeError("options must be an object");
+                        context.clearPendingException();
+                        if (!resolveState.alreadyResolved) {
+                            resolveState.alreadyResolved = true;
+                            promise.reject(error);
+                        }
+                        return;
+                    }
+                    // Check for options.with property (import attributes)
+                    JSValue withValue = ((JSObject) options).get(context, PropertyKey.fromString("with"));
+                    if (context.hasPendingException()) {
+                        JSValue error = context.getPendingException();
+                        context.clearPendingException();
+                        if (!resolveState.alreadyResolved) {
+                            resolveState.alreadyResolved = true;
+                            promise.reject(error);
+                        }
+                        return;
+                    }
+                    if (!(withValue instanceof JSUndefined)) {
+                        if (!(withValue instanceof JSObject)) {
+                            JSValue error = context.throwTypeError("options.with must be an object");
+                            context.clearPendingException();
+                            if (!resolveState.alreadyResolved) {
+                                resolveState.alreadyResolved = true;
+                                promise.reject(error);
+                            }
+                            return;
+                        }
+                    }
+                }
+
+                // Check if module is already cached
+                JSModule cachedModule = context.getModule(specifierStr);
+                if (cachedModule != null) {
+                    // Module already loaded - resolve with its namespace
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.resolve(context, cachedModule.getNamespace());
+                    }
+                    return;
+                }
+
+                // No module loader registered - reject with TypeError
+                // (following QuickJS: "could not load module 'xxx'")
+                JSValue error = context.throwTypeError("Cannot find module '" + specifierStr + "'");
+                context.clearPendingException();
+                if (!resolveState.alreadyResolved) {
+                    resolveState.alreadyResolved = true;
+                    promise.reject(error);
+                }
+            } catch (Exception e) {
+                if (context.hasPendingException()) {
+                    JSValue error = context.getPendingException();
+                    context.clearPendingException();
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(error);
+                    }
+                } else {
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(new JSString("Error loading module: " + e.getMessage()));
+                    }
+                }
+            }
+        });
+
+        executionContext.stack[executionContext.sp++] = promise;
+        executionContext.pc += op.getSize();
+    }
+
     static void handleIn(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue right = executionContext.virtualMachine.valueStack.pop();
@@ -2665,106 +2791,6 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.ordinaryHasInstance(right, left) ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
-    // specifier options -> promise (dynamic module import)
-    static void handleImport(Opcode op, ExecutionContext executionContext) {
-        JSContext context = executionContext.virtualMachine.context;
-        JSValue options = (JSValue) executionContext.stack[--executionContext.sp];
-        JSValue specifier = (JSValue) executionContext.stack[--executionContext.sp];
-
-        // Create a promise that will be resolved when the module loads
-        JSPromise promise = context.createJSPromise();
-        final JSPromise.ResolveState resolveState = new JSPromise.ResolveState();
-
-        // Enqueue a microtask to perform the actual module loading (following QuickJS js_dynamic_import_job)
-        context.enqueueMicrotask(() -> {
-            try {
-                // Convert specifier to string
-                String specifierStr = JSTypeConversions.toString(context, specifier).toString();
-                if (context.hasPendingException()) {
-                    JSValue error = context.getPendingException();
-                    context.clearPendingException();
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.reject(error);
-                    }
-                    return;
-                }
-
-                // Validate options if provided (following QuickJS js_dynamic_import)
-                if (!(options instanceof JSUndefined)) {
-                    if (!(options instanceof JSObject)) {
-                        JSValue error = context.throwTypeError("options must be an object");
-                        context.clearPendingException();
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            promise.reject(error);
-                        }
-                        return;
-                    }
-                    // Check for options.with property (import attributes)
-                    JSValue withValue = ((JSObject) options).get(context, PropertyKey.fromString("with"));
-                    if (context.hasPendingException()) {
-                        JSValue error = context.getPendingException();
-                        context.clearPendingException();
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            promise.reject(error);
-                        }
-                        return;
-                    }
-                    if (!(withValue instanceof JSUndefined)) {
-                        if (!(withValue instanceof JSObject)) {
-                            JSValue error = context.throwTypeError("options.with must be an object");
-                            context.clearPendingException();
-                            if (!resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                promise.reject(error);
-                            }
-                            return;
-                        }
-                    }
-                }
-
-                // Check if module is already cached
-                JSModule cachedModule = context.getModule(specifierStr);
-                if (cachedModule != null) {
-                    // Module already loaded - resolve with its namespace
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.resolve(context, cachedModule.getNamespace());
-                    }
-                    return;
-                }
-
-                // No module loader registered - reject with TypeError
-                // (following QuickJS: "could not load module 'xxx'")
-                JSValue error = context.throwTypeError("Cannot find module '" + specifierStr + "'");
-                context.clearPendingException();
-                if (!resolveState.alreadyResolved) {
-                    resolveState.alreadyResolved = true;
-                    promise.reject(error);
-                }
-            } catch (Exception e) {
-                if (context.hasPendingException()) {
-                    JSValue error = context.getPendingException();
-                    context.clearPendingException();
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.reject(error);
-                    }
-                } else {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.reject(new JSString("Error loading module: " + e.getMessage()));
-                    }
-                }
-            }
-        });
-
-        executionContext.stack[executionContext.sp++] = promise;
         executionContext.pc += op.getSize();
     }
 
@@ -3593,7 +3619,37 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            object.set(executionContext.virtualMachine.context, PropertyKey.fromSymbol(symbol), value);
+            PropertyKey key = PropertyKey.fromSymbol(symbol);
+            // Private fields are per-object, not accessible through Proxy delegation
+            if (object instanceof JSProxy
+                    || !object.hasOwnProperty(key)) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot write private member " + symbol.getDescription()
+                                        + " to an object whose class did not declare it"));
+            }
+            // Check for getter-only accessor (no setter) or non-writable method — spec: PrivateSet steps 4-6
+            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+            if (descriptor != null) {
+                if (descriptor.isAccessorDescriptor()
+                        && !(descriptor.getSetter() instanceof JSFunction)) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError(
+                                    "Cannot write private member " + symbol.getDescription()
+                                            + " to an object whose class did not declare it"));
+                }
+                if (descriptor.isDataDescriptor() && !descriptor.isWritable()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError(
+                                    "Cannot write private member " + symbol.getDescription()
+                                            + " to an object whose class did not declare it"));
+                }
+            }
+            object.set(executionContext.virtualMachine.context, key, value);
+        } else if (!(objectValue instanceof JSObject)) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot write private member to a non-object"));
         }
 
         stack[sp++] = value;
@@ -3831,6 +3887,16 @@ public final class OpcodeHandler {
         executionContext.pc += 1;
     }
 
+    static void handleRot3r(Opcode op, ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue thirdValue = stack[sp - 1];
+        stack[sp - 1] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 3];
+        stack[sp - 3] = thirdValue;
+        executionContext.pc += 1;
+    }
+
     // x a b c -> a b c x
     static void handleRot4l(Opcode op, ExecutionContext executionContext) {
         JSStackValue[] stack = executionContext.stack;
@@ -3853,16 +3919,6 @@ public final class OpcodeHandler {
         stack[sp - 3] = stack[sp - 2];
         stack[sp - 2] = stack[sp - 1];
         stack[sp - 1] = firstValue;
-        executionContext.pc += 1;
-    }
-
-    static void handleRot3r(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSStackValue thirdValue = stack[sp - 1];
-        stack[sp - 1] = stack[sp - 2];
-        stack[sp - 2] = stack[sp - 3];
-        stack[sp - 3] = thirdValue;
         executionContext.pc += 1;
     }
 
@@ -4187,10 +4243,13 @@ public final class OpcodeHandler {
         int calleeIndex = executionContext.sp - argumentCount - 2;
         JSValue callee = (JSValue) executionContext.stack[calleeIndex];
 
-        // Check if callee is a non-constructor bytecode function eligible for TCO
+        // Check if callee is a non-constructor, non-async/generator bytecode function eligible for TCO.
+        // Async and generator functions require special wrapping in call() that the trampoline bypasses.
         boolean canTrampoline = false;
         if (callee instanceof JSBytecodeFunction bytecodeFunc && !(callee instanceof JSClass)) {
-            canTrampoline = !bytecodeFunc.isClassConstructor();
+            canTrampoline = !bytecodeFunc.isClassConstructor()
+                    && !bytecodeFunc.isAsync()
+                    && !bytecodeFunc.isGenerator();
         }
 
         if (canTrampoline) {
@@ -4204,9 +4263,22 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.propertyAccessLock = false;
             executionContext.virtualMachine.resetPropertyAccessTracking();
 
+            // Apply OrdinaryCallBindThis for the tail-called function, matching JSBytecodeFunction.call()
+            JSBytecodeFunction tailCallee = (JSBytecodeFunction) callee;
+            if (tailCallee.isArrow() && tailCallee.getCapturedThisArg() != null) {
+                receiver = tailCallee.getCapturedThisArg();
+            }
+            if (!tailCallee.isStrict() && !(receiver instanceof JSObject)) {
+                if (receiver instanceof JSUndefined || receiver instanceof JSNull) {
+                    receiver = executionContext.virtualMachine.context.getGlobalObject();
+                } else {
+                    receiver = JSTypeConversions.toObject(executionContext.virtualMachine.context, receiver);
+                }
+            }
+
             // Store the tail call request for the trampoline loop in execute()
             executionContext.virtualMachine.tailCallPending =
-                    new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, receiver, args);
+                    new VirtualMachine.TailCallRequest(tailCallee, receiver, args);
             // Clean up the current frame (same as RETURN)
             executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
             executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
@@ -4222,6 +4294,11 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
         executionContext.returnValue = result;
         executionContext.opcodeRequestedReturn = true;
+    }
+
+    // Tail-call variant of CALL_METHOD.
+    static void handleTailCallMethod(Opcode op, ExecutionContext executionContext) {
+        handleTailCall(op, executionContext);
     }
 
     static void handleThrow(Opcode op, ExecutionContext executionContext) {

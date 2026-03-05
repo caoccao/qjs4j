@@ -210,6 +210,51 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new DoWhileStatement(body, test, location);
     }
 
+    Statement parseExportDeclaration() {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.EXPORT);
+
+        if (parserContext.match(TokenType.DEFAULT)) {
+            parserContext.advance();
+
+            if (parserContext.match(TokenType.CLASS)) {
+                // export default class { ... } — infer name "default" per spec
+                ClassExpression classExpr = delegates.functions.parseClassExpression();
+                if (classExpr.id() == null) {
+                    classExpr = new ClassExpression(
+                            new Identifier(JSKeyword.DEFAULT, classExpr.location()),
+                            classExpr.superClass(),
+                            classExpr.body(),
+                            classExpr.location());
+                }
+                return new ExpressionStatement(classExpr, location);
+            } else if (parserContext.match(TokenType.FUNCTION)) {
+                return delegates.functions.parseFunctionDeclaration(false, false);
+            } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
+                    && parserContext.peek().type() == TokenType.FUNCTION) {
+                return parseAsyncDeclaration();
+            } else {
+                // export default <expression>;
+                Expression expr = delegates.expressions.parseAssignmentExpression();
+                parserContext.consumeSemicolon();
+                return new ExpressionStatement(expr, location);
+            }
+        }
+
+        // export var/let/const/function/class ...
+        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)) {
+            return parseVariableDeclaration();
+        }
+        if (parserContext.match(TokenType.FUNCTION)) {
+            return delegates.functions.parseFunctionDeclaration(false, false);
+        }
+        if (parserContext.match(TokenType.CLASS)) {
+            return delegates.functions.parseClassDeclaration();
+        }
+
+        throw new JSSyntaxErrorException("Unexpected export syntax");
+    }
+
     Statement parseExpressionStatement() {
         SourceLocation location = parserContext.getLocation();
         Expression expression = delegates.expressions.parseExpression();
@@ -505,6 +550,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     delegates.functions.parseFunctionDeclaration(false, false);
             case CLASS -> // Class declarations are treated as statements in JavaScript
                     delegates.functions.parseClassDeclaration();
+            case EXPORT -> {
+                if (!parserContext.moduleMode) {
+                    throw new JSSyntaxErrorException("Unexpected token 'export'");
+                }
+                yield parseExportDeclaration();
+            }
             case IMPORT -> {
                 Token nextToken = parserContext.peek();
                 boolean isDynamicImportExpression = nextToken != null

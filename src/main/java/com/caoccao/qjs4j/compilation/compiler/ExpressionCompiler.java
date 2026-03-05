@@ -314,18 +314,6 @@ final class ExpressionCompiler {
         }
     }
 
-    void compileImportExpression(ImportExpression importExpr) {
-        // Stack: -> specifier options
-        compileExpression(importExpr.source());
-        if (importExpr.options() != null) {
-            compileExpression(importExpr.options());
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-        }
-        // Stack: specifier options -> promise
-        compilerContext.emitter.emitOpcode(Opcode.IMPORT);
-    }
-
     void compileIdentifier(Identifier id) {
         String name = id.name();
 
@@ -358,6 +346,18 @@ final class ExpressionCompiler {
         }
 
         emitIdentifierLookupWithoutWith(name);
+    }
+
+    void compileImportExpression(ImportExpression importExpr) {
+        // Stack: -> specifier options
+        compileExpression(importExpr.source());
+        if (importExpr.options() != null) {
+            compileExpression(importExpr.options());
+        } else {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+        // Stack: specifier options -> promise
+        compilerContext.emitter.emitOpcode(Opcode.IMPORT);
     }
 
     void compileLiteral(Literal literal) {

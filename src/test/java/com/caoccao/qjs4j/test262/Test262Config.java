@@ -66,7 +66,7 @@ public class Test262Config {
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        config.maxTests = 31500;
+        config.maxTests = 32000;
         return config;
     }
 
@@ -75,7 +75,6 @@ public class Test262Config {
 
         // Define unsupported features
         config.addUnsupportedFeatures(
-                "import.meta",
                 "Temporal",
                 "source-phase-imports");
 

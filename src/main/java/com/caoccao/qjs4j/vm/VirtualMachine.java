@@ -1058,12 +1058,18 @@ public final class VirtualMachine {
     JSString getComputedNameString(JSValue keyValue) {
         if (keyValue instanceof JSSymbol symbol) {
             String description = symbol.getDescription();
+            if (description != null && description.startsWith("#")) {
+                return new JSString(description);
+            }
             return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
         }
         PropertyKey key = PropertyKey.fromValue(context, keyValue);
         if (key.isSymbol()) {
             JSSymbol symbol = key.asSymbol();
             String description = symbol != null ? symbol.getDescription() : null;
+            if (description != null && description.startsWith("#")) {
+                return new JSString(description);
+            }
             return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
         }
         return new JSString(key.toPropertyString());

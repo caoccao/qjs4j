@@ -761,7 +761,14 @@ final class StatementCompiler {
 
             // Compile initializer or push undefined
             if (declarator.init() != null) {
+                // Pass inferred name to anonymous class expressions for NamedEvaluation
+                if (declarator.id() instanceof Identifier targetId
+                        && declarator.init() instanceof ClassExpression classExpr
+                        && classExpr.id() == null) {
+                    compilerContext.inferredClassName = targetId.name();
+                }
                 delegates.expressions.compileExpression(declarator.init());
+                compilerContext.inferredClassName = null;
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }

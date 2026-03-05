@@ -45,6 +45,7 @@ final class CompilerContext {
     boolean hasEnclosingArgumentsBinding;
     boolean inClassFieldInitializer;
     boolean inGlobalScope;
+    String inferredClassName;
     boolean isGlobalProgram;
     boolean isInArrowFunction;
     boolean isInAsyncFunction;

@@ -22,6 +22,39 @@ import org.junit.jupiter.api.Test;
 class ImportExpressionTest extends BaseJavetTest {
 
     @Test
+    void testDynamicImportCatchReturnsPromise() {
+        // import().catch() should also return a promise
+        assertStringWithJavet("typeof import('nonexistent').catch(e => e)");
+    }
+
+    @Test
+    void testDynamicImportInAsyncFunction() {
+        // import() should work inside async functions
+        assertStringWithJavet(
+                "let result = '';\n" +
+                        "async function f() { result = typeof import('x').then; }\n" +
+                        "f();\n" +
+                        "result"
+        );
+    }
+
+    @Test
+    void testDynamicImportInNonModuleCode() {
+        // import() should work in non-module (script) code too
+        assertStringWithJavet("typeof import('nonexistent').then");
+    }
+
+    @Test
+    void testDynamicImportRejectedPromise() {
+        // import() of non-existent module should reject
+        assertBooleanWithJavet(
+                "let rejected = false;\n" +
+                        "import('nonexistent').catch(e => { rejected = true; });\n" +
+                        "rejected"
+        );
+    }
+
+    @Test
     void testDynamicImportReturnsPromise() {
         // import() should return a promise
         assertStringWithJavet("typeof import('nonexistent').then");
@@ -34,18 +67,12 @@ class ImportExpressionTest extends BaseJavetTest {
     }
 
     @Test
-    void testDynamicImportCatchReturnsPromise() {
-        // import().catch() should also return a promise
-        assertStringWithJavet("typeof import('nonexistent').catch(e => e)");
-    }
-
-    @Test
-    void testDynamicImportRejectedPromise() {
-        // import() of non-existent module should reject
+    void testDynamicImportSpecifierToString() {
+        // import() should convert specifier to string
         assertBooleanWithJavet(
-                "let rejected = false;\n" +
-                "import('nonexistent').catch(e => { rejected = true; });\n" +
-                "rejected"
+                "let caught = false;\n" +
+                        "import({toString() { return 'nonexistent'; }}).catch(e => { caught = true; });\n" +
+                        "caught"
         );
     }
 
@@ -59,33 +86,6 @@ class ImportExpressionTest extends BaseJavetTest {
     void testDynamicImportWithOptionsAndWith() {
         // import() with options.with should still return a promise
         assertStringWithJavet("typeof import('nonexistent', { with: { type: 'json' } })");
-    }
-
-    @Test
-    void testDynamicImportSpecifierToString() {
-        // import() should convert specifier to string
-        assertBooleanWithJavet(
-                "let caught = false;\n" +
-                "import({toString() { return 'nonexistent'; }}).catch(e => { caught = true; });\n" +
-                "caught"
-        );
-    }
-
-    @Test
-    void testDynamicImportInNonModuleCode() {
-        // import() should work in non-module (script) code too
-        assertStringWithJavet("typeof import('nonexistent').then");
-    }
-
-    @Test
-    void testDynamicImportInAsyncFunction() {
-        // import() should work inside async functions
-        assertStringWithJavet(
-                "let result = '';\n" +
-                "async function f() { result = typeof import('x').then; }\n" +
-                "f();\n" +
-                "result"
-        );
     }
 
     @Test

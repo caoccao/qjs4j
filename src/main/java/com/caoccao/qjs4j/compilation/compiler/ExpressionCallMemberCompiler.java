@@ -22,6 +22,8 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.util.ArrayList;
+
 final class ExpressionCallMemberCompiler {
     private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
@@ -65,7 +67,7 @@ final class ExpressionCallMemberCompiler {
             compilerContext.emitter.emitOpcode(Opcode.EVAL);
             compilerContext.emitter.emitU16(callExpr.arguments().size());
             int evalFlags = isTailCallForEval ? 1 : 0;
-            if (compilerContext.inClassFieldInitializer) {
+            if (compilerContext.inClassFieldInitializer || compilerContext.classFieldEvalContext) {
                 evalFlags |= 2;  // bit 1: in class field initializer
             }
             compilerContext.emitter.emitU16(evalFlags);
@@ -204,6 +206,13 @@ final class ExpressionCallMemberCompiler {
             return;
         }
 
+        // Detect non-optional continuation of an optional chain (e.g., `.#f` in `o?.c.#f`)
+        // The entire chain after `?.` must short-circuit together.
+        if (!memberExpr.optional() && isPartOfOptionalChain(memberExpr.object())) {
+            compileOptionalChainFull(memberExpr);
+            return;
+        }
+
         owner.compileExpression(memberExpr.object());
 
         if (memberExpr.optional()) {
@@ -249,6 +258,51 @@ final class ExpressionCallMemberCompiler {
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
     }
 
+    /**
+     * Compile an optional chain as a single unit so all accesses after `?.` share
+     * one short-circuit exit. E.g., `o?.c.#f` → null-check o, then access .c and .#f
+     * inside the non-null branch.
+     */
+    private void compileOptionalChainFull(MemberExpression memberExpr) {
+        // Collect the chain of member accesses from outermost to innermost,
+        // stopping at the nearest optional root.
+        var chain = new ArrayList<MemberExpression>();
+        Expression current = memberExpr;
+        while (current instanceof MemberExpression mem) {
+            chain.add(0, mem);
+            if (mem.optional()) {
+                break;
+            }
+            current = mem.object();
+        }
+
+        // chain[0] is the optional root (e.g., o?.c), chain[0].object is o
+        MemberExpression optionalRoot = chain.get(0);
+
+        // Compile the object of the optional root (may itself be an optional chain)
+        owner.compileExpression(optionalRoot.object());
+
+        // Null check — short-circuit the entire chain
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToUndefined = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        // Normal path: compile all chain accesses
+        for (MemberExpression link : chain) {
+            emitPropertyAccess(link);
+        }
+
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        // Undefined path
+        compilerContext.emitter.patchJump(jumpToUndefined, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+
+        // End
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+    }
+
     private void emitPendingPostSuperInitialization() {
         if (compilerContext.pendingPostSuperInitialization != null) {
             compilerContext.pendingPostSuperInitialization.run();
@@ -271,5 +325,12 @@ final class ExpressionCallMemberCompiler {
         } else if (memberExpr.property() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
         }
+    }
+
+    private boolean isPartOfOptionalChain(Expression expr) {
+        if (expr instanceof MemberExpression mem) {
+            return mem.optional() || isPartOfOptionalChain(mem.object());
+        }
+        return false;
     }
 }

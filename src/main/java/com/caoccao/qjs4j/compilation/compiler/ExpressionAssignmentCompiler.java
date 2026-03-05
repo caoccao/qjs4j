@@ -272,7 +272,14 @@ final class ExpressionAssignmentCompiler {
             compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
+        // Pass inferred name to anonymous class expressions for NamedEvaluation
+        if (operator == AssignmentExpression.AssignmentOperator.ASSIGN
+                && assignExpr.right() instanceof ClassExpression classExpr
+                && classExpr.id() == null) {
+            compilerContext.inferredClassName = name;
+        }
         owner.compileExpression(assignExpr.right());
+        compilerContext.inferredClassName = null;
 
         if (operator == AssignmentExpression.AssignmentOperator.ASSIGN
                 && assignExpr.lhsIsIdentifierRef()

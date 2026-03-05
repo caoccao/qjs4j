@@ -33,6 +33,7 @@ final class FunctionClassCompiler {
     private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
     private final FunctionClassFieldCompiler fieldCompiler;
+
     FunctionClassCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
@@ -158,6 +159,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        functionContext.privateSymbols = compilerContext.privateSymbols;
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
@@ -165,8 +167,10 @@ final class FunctionClassCompiler {
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
         functionContext.isInArrowFunction = true;  // Arrow functions don't have their own arguments
-        // Arrow functions inherit class field eval context (new.target resolves to undefined)
-        functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext;
+        // Arrow functions inherit class field eval context (new.target resolves to undefined,
+        // eval('arguments') should throw SyntaxError)
+        functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext
+                || compilerContext.inClassFieldInitializer;
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -414,7 +418,10 @@ final class FunctionClassCompiler {
         }
 
         // Create symbols for all private names (fields + methods), once per class.
-        Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classDecl.body());
+        // Merge with outer class's private symbols so nested classes can access outer private members.
+        Map<String, JSSymbol> ownPrivateSymbols = createPrivateSymbols(classDecl.body());
+        Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
+        privateSymbols.putAll(ownPrivateSymbols);
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
         List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
@@ -609,7 +616,8 @@ final class FunctionClassCompiler {
         // Class expressions are almost identical to class declarations,
         // but they leave the constructor on the stack instead of binding it to a variable
 
-        String className = classExpr.id() != null ? classExpr.id().name() : "";
+        String className = classExpr.id() != null ? classExpr.id().name()
+                : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");
 
         // Compile superclass expression or emit undefined
         if (classExpr.superClass() != null) {
@@ -662,7 +670,10 @@ final class FunctionClassCompiler {
             }
         }
 
-        Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classExpr.body());
+        // Merge with outer class's private symbols so nested classes can access outer private members.
+        Map<String, JSSymbol> ownPrivateSymbols = createPrivateSymbols(classExpr.body());
+        Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
+        privateSymbols.putAll(ownPrivateSymbols);
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
         List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
@@ -856,6 +867,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        functionContext.privateSymbols = compilerContext.privateSymbols;
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
@@ -1083,6 +1095,7 @@ final class FunctionClassCompiler {
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        functionContext.privateSymbols = compilerContext.privateSymbols;
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
@@ -1371,9 +1384,13 @@ final class FunctionClassCompiler {
         // Extract method source code from original source for Function.prototype.toString
         String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
+        // Private methods have a # prefix in their .name property (ES2024 spec)
+        String functionName = (method.key() instanceof PrivateIdentifier)
+                ? "#" + methodName
+                : methodName;
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
-                methodName,
+                functionName,
                 definedArgCount,
                 JSValue.NO_ARGS, // closureVars empty; private symbols use PUSH_CONST, captures use VarRefs
                 null,            // prototype
@@ -1432,13 +1449,13 @@ final class FunctionClassCompiler {
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
-                // Regular private method: use DEFINE_PRIVATE_FIELD
+                // Regular private method: use DEFINE_METHOD_COMPUTED with non-writable flag (bit 3)
+                // so that PUT_PRIVATE_FIELD can detect methods and throw TypeError on [[Set]]
                 // Stack: [this, symbol, func] → [this]
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function());
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function());
+                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 8);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         }
@@ -1677,7 +1694,7 @@ final class FunctionClassCompiler {
         }
         LinkedHashMap<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
         for (String privateName : privateNameKinds.keySet()) {
-            privateSymbols.put(privateName, new JSSymbol(privateName));
+            privateSymbols.put(privateName, new JSSymbol("#" + privateName));
         }
         return privateSymbols;
     }
@@ -1821,14 +1838,13 @@ final class FunctionClassCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
             } else {
-                // Regular private static method: use DEFINE_PRIVATE_FIELD
+                // Regular private static method: use DEFINE_METHOD_COMPUTED with non-writable flag
                 // Stack before: constructor proto
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor method
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
-                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor symbol
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor symbol method
+                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 8); // proto constructor constructor
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
             }

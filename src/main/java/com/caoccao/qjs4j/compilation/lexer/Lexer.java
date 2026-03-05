@@ -41,7 +41,7 @@ public final class Lexer {
      */
     private static final Set<TokenType> CONTEXTUAL_KEYWORD_TYPES = Set.of(
             TokenType.ASYNC, TokenType.AWAIT, TokenType.YIELD,
-            TokenType.AS, TokenType.FROM, TokenType.OF, TokenType.LET
+            TokenType.AS, TokenType.DEFAULT, TokenType.FROM, TokenType.OF, TokenType.LET
     );
     private static final Map<String, TokenType> KEYWORDS = LexerKeywords.KEYWORDS;
 
@@ -383,9 +383,8 @@ public final class Lexer {
 
         // Resolve keyword type from the KEYWORDS map
         TokenType type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
-        // Contextual keywords (async, await, yield, etc.) with unicode escapes must be
-        // treated as identifiers, not keywords. True reserved words (return, if, for, etc.)
-        // are still recognized even with escapes per ES2024 12.6.
+        // Contextual keywords and export-related keywords with unicode escapes must be
+        // treated as identifiers, not keywords per ES2024 12.1.1.
         if (hasEscape && CONTEXTUAL_KEYWORD_TYPES.contains(type)) {
             type = TokenType.IDENTIFIER;
         }
