@@ -3699,6 +3699,19 @@ public final class OpcodeHandler {
         executionContext.pc += 1;
     }
 
+    // x a b c d -> a b c d x
+    static void handleRot5l(Opcode op, ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstValue = stack[sp - 5];
+        stack[sp - 5] = stack[sp - 4];
+        stack[sp - 4] = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 1];
+        stack[sp - 1] = firstValue;
+        executionContext.pc += 1;
+    }
+
     static void handleRot3r(Opcode op, ExecutionContext executionContext) {
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;

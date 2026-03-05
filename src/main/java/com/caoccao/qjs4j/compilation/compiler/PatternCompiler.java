@@ -862,7 +862,11 @@ final class PatternCompiler {
         // Now assign using the pre-evaluated references
         // Stack: [pre-eval-values...] value
         if (target instanceof MemberExpression memberExpr) {
-            if (memberExpr.computed()) {
+            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
+                compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_SUPER_VALUE leaves value
+            } else if (memberExpr.computed()) {
                 // Stack: [obj, key, value] — already correct for PUT_ARRAY_EL
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_ARRAY_EL leaves value
@@ -972,7 +976,13 @@ final class PatternCompiler {
         }
         if (target instanceof MemberExpression memberExpr && !memberExpr.optional()) {
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
-                return 0; // super member handled differently
+                // Pre-evaluate super reference: this, superObj, key
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object
             delegates.expressions.compileExpression(memberExpr.object());
