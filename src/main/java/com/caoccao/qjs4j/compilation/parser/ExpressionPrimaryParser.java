@@ -38,6 +38,13 @@ final class ExpressionPrimaryParser {
         this.expressions = expressions;
     }
 
+    private static boolean isPrivateDeleteTarget(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.property() instanceof PrivateIdentifier;
+        }
+        return false;
+    }
+
     Expression parseCallExpression() {
         Expression expr = expressions.parseMemberExpression();
 
@@ -798,6 +805,14 @@ final class ExpressionPrimaryParser {
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression operand = parseUnaryExpression();
+            if (op == UnaryOperator.DELETE) {
+                if (parserContext.strictMode && operand instanceof Identifier) {
+                    throw new JSSyntaxErrorException("Delete of an unqualified identifier in strict mode.");
+                }
+                if (isPrivateDeleteTarget(operand)) {
+                    throw new JSSyntaxErrorException("Private fields can not be deleted");
+                }
+            }
             return new UnaryExpression(op, operand, true, location);
         }
 

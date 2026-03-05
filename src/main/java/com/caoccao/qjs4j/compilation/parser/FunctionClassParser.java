@@ -804,12 +804,15 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             if (parserContext.match(TokenType.ASSIGN)) {
                 parserContext.advance();
                 boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
+                boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
                 parserContext.inClassFieldInitializer = true;
+                parserContext.superPropertyAllowed = true;
                 parserContext.enterFunctionContext(false);
                 try {
                     value = delegates.expressions.parseAssignmentExpression();
                 } finally {
                     parserContext.exitFunctionContext(false);
+                    parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                     parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
                 }
             }
@@ -841,7 +844,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         parserContext.enterFunctionContext(false);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         parserContext.inClassStaticInit = true;
+        parserContext.superPropertyAllowed = true;
         try {
             while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 Statement stmt = delegates.statements.parseStatement();
@@ -850,6 +855,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 }
             }
         } finally {
+            parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
             parserContext.inClassStaticInit = savedInClassStaticInit;
             parserContext.exitFunctionContext(false);
         }

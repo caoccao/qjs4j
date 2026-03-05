@@ -97,6 +97,19 @@ final class FunctionClassCompiler {
         return false;
     }
 
+    private static boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
+    }
+
     /**
      * Convert a pattern to a string representation for source generation.
      * Used when generating synthetic source for Function constructor.
@@ -1872,18 +1885,5 @@ final class FunctionClassCompiler {
     }
 
     record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {
-    }
-
-    private static boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.id() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.id() == null;
-        }
-        return false;
     }
 }
