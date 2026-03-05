@@ -75,8 +75,7 @@ final class ExpressionAssignmentCompiler {
                     owner.compileExpression(memberExpr.object());
                     if (memberExpr.computed()) {
                         owner.compileExpression(memberExpr.property());
-                        compilerContext.emitter.emitOpcode(Opcode.DUP2);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
                     } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
                         String fieldName = privateId.name();
                         JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
