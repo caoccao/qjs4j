@@ -32,6 +32,25 @@ import java.util.Set;
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext parserContext, ParserDelegates delegates) {
+    private static String getSimpleClassElementName(Expression key) {
+        if (key instanceof Identifier identifier) {
+            return identifier.name();
+        }
+        if (key instanceof Literal literal && literal.value() instanceof String literalString) {
+            return literalString;
+        }
+        return null;
+    }
+
+    private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
+        if (!isPrivate) {
+            return false;
+        }
+        if (key instanceof PrivateIdentifier privateIdentifier) {
+            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.name());
+        }
+        return false;
+    }
 
     /**
      * Extract all bound identifier names from a pattern.
@@ -217,6 +236,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 body.add(element);
             }
         }
+        validateClassElements(body);
 
         parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
 
@@ -281,6 +301,43 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             Expression key = new PrivateIdentifier(name, methodStartLocation);
             return parseMethodOrField(key, isStatic, isPrivate, true, methodStartLocation);
+        }
+
+        if (parserContext.match(TokenType.IDENTIFIER)
+                && "accessor".equals(parserContext.currentToken.value())) {
+            TokenType nextType = parserContext.nextToken.type();
+            boolean hasNoLineTerminatorAfterAccessor =
+                    parserContext.nextToken.line() == parserContext.currentToken.line();
+            if (hasNoLineTerminatorAfterAccessor
+                    && nextType != TokenType.ASSIGN
+                    && nextType != TokenType.SEMICOLON
+                    && nextType != TokenType.COMMA
+                    && nextType != TokenType.RBRACE) {
+                parserContext.advance(); // consume "accessor"
+                boolean computed = false;
+                Expression key;
+                if (parserContext.match(TokenType.PRIVATE_NAME)) {
+                    String privateName = parserContext.currentToken.value();
+                    String keyName = privateName.substring(1);
+                    key = new PrivateIdentifier(keyName, parserContext.getLocation());
+                    isPrivate = true;
+                    parserContext.advance();
+                } else if (parserContext.match(TokenType.LBRACKET)) {
+                    computed = true;
+                    parserContext.advance();
+                    boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                    parserContext.inOperatorAllowed = true;
+                    key = delegates.expressions.parseAssignmentExpression();
+                    parserContext.inOperatorAllowed = savedInOperatorAllowed;
+                    parserContext.expect(TokenType.RBRACKET);
+                } else {
+                    key = delegates.expressions.parsePropertyName();
+                }
+                validateClassFieldName(key, computed, isPrivate);
+                Expression value = parseClassFieldInitializer();
+                parserContext.consumeSemicolon();
+                return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
+            }
         }
 
         // Check for async method: async name() {} or async *name() {}
@@ -447,6 +504,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 body.add(element);
             }
         }
+        validateClassElements(body);
 
         parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
 
@@ -787,35 +845,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                                                      SourceLocation location) {
         // If next token is LPAREN, it's a method; otherwise it's a field
         if (!parserContext.match(TokenType.LPAREN)) {
-            // Validate field name: "constructor" and "prototype" are invalid field names
-            if (!computed) {
-                String fieldName = null;
-                if (key instanceof Identifier fieldId) {
-                    fieldName = fieldId.name();
-                } else if (key instanceof Literal fieldLit && fieldLit.value() instanceof String str) {
-                    fieldName = str;
-                }
-                if (JSKeyword.CONSTRUCTOR.equals(fieldName) || JSKeyword.PROTOTYPE.equals(fieldName)) {
-                    throw new JSSyntaxErrorException("invalid field name");
-                }
-            }
-            // It's a field (with optional initializer)
-            Expression value = null;
-            if (parserContext.match(TokenType.ASSIGN)) {
-                parserContext.advance();
-                boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
-                boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
-                parserContext.inClassFieldInitializer = true;
-                parserContext.superPropertyAllowed = true;
-                parserContext.enterFunctionContext(false);
-                try {
-                    value = delegates.expressions.parseAssignmentExpression();
-                } finally {
-                    parserContext.exitFunctionContext(false);
-                    parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
-                    parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
-                }
-            }
+            validateClassFieldName(key, computed, isPrivate);
+            Expression value = parseClassFieldInitializer();
             parserContext.consumeSemicolon();
             return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
         }
@@ -833,6 +864,76 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.inDerivedConstructor = savedInDerivedConstructor;
         parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
+    }
+
+    private Expression parseClassFieldInitializer() {
+        Expression value = null;
+        if (parserContext.match(TokenType.ASSIGN)) {
+            parserContext.advance();
+            boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
+            boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+            parserContext.inClassFieldInitializer = true;
+            parserContext.superPropertyAllowed = true;
+            parserContext.enterFunctionContext(false);
+            try {
+                value = delegates.expressions.parseAssignmentExpression();
+            } finally {
+                parserContext.exitFunctionContext(false);
+                parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+                parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
+            }
+        }
+        return value;
+    }
+
+    private void validateClassElements(List<ClassDeclaration.ClassElement> classElements) {
+        int constructorMethodCount = 0;
+        for (ClassDeclaration.ClassElement classElement : classElements) {
+            if (classElement instanceof ClassDeclaration.PropertyDefinition field) {
+                validateClassFieldName(field.key(), field.computed(), field.isPrivate());
+                continue;
+            }
+            if (classElement instanceof ClassDeclaration.MethodDefinition method) {
+                if (isPrivateConstructorName(method.key(), method.isPrivate())) {
+                    throw new JSSyntaxErrorException("invalid method name");
+                }
+                if (method.computed() || method.isPrivate()) {
+                    continue;
+                }
+                String methodName = getSimpleClassElementName(method.key());
+                if (methodName == null) {
+                    continue;
+                }
+                if (method.isStatic() && JSKeyword.PROTOTYPE.equals(methodName)) {
+                    throw new JSSyntaxErrorException("invalid method name");
+                }
+                if (!method.isStatic() && JSKeyword.CONSTRUCTOR.equals(methodName)) {
+                    boolean isSpecialMethod = !"method".equals(method.kind())
+                            || method.value().isAsync()
+                            || method.value().isGenerator();
+                    if (isSpecialMethod) {
+                        throw new JSSyntaxErrorException("invalid method name");
+                    }
+                    constructorMethodCount++;
+                }
+            }
+        }
+        if (constructorMethodCount > 1) {
+            throw new JSSyntaxErrorException("property constructor appears more than once");
+        }
+    }
+
+    private void validateClassFieldName(Expression key, boolean computed, boolean isPrivate) {
+        if (isPrivateConstructorName(key, isPrivate)) {
+            throw new JSSyntaxErrorException("invalid method name");
+        }
+        if (computed || isPrivate) {
+            return;
+        }
+        String fieldName = getSimpleClassElementName(key);
+        if (JSKeyword.CONSTRUCTOR.equals(fieldName) || JSKeyword.PROTOTYPE.equals(fieldName)) {
+            throw new JSSyntaxErrorException("invalid field name");
+        }
     }
 
     /**
