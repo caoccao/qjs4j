@@ -70,7 +70,7 @@ final class EmitHelpers {
     }
 
     void emitArgumentsArrayWithSpread(List<Expression> arguments) {
-        compilerContext.emitter.emitOpcode(Opcode.ARRAY_NEW);
+        compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         boolean hasSpread = arguments.stream()
                 .anyMatch(arg -> arg instanceof SpreadElement);

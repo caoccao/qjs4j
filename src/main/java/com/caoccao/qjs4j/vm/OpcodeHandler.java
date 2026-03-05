@@ -358,11 +358,6 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
-    static void handleArrayNew(Opcode op, ExecutionContext executionContext) {
-        executionContext.stack[executionContext.sp++] = executionContext.virtualMachine.context.createJSArray();
-        executionContext.pc += op.getSize();
-    }
-
     static void handleAsyncYieldStar(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSContext context = executionContext.virtualMachine.context;

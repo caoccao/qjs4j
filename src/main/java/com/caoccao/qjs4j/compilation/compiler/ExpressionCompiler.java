@@ -45,7 +45,7 @@ final class ExpressionCompiler {
     }
 
     void compileArrayExpression(ArrayExpression arrayExpr) {
-        compilerContext.emitter.emitOpcode(Opcode.ARRAY_NEW);
+        compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes
         boolean hasSpread = arrayExpr.elements().stream()
