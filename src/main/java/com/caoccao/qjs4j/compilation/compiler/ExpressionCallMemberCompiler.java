@@ -75,16 +75,18 @@ final class ExpressionCallMemberCompiler {
         // Reset flag immediately so nested calls (in callee/arguments) are not treated as tail calls
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
-        Opcode callOpcode = isTailCall ? Opcode.TAIL_CALL : Opcode.CALL;
 
         if (callExpr.callee() instanceof MemberExpression memberExpr) {
+            Opcode callMethodOpcode = isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD;
+
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 delegates.emitHelpers.emitGetSuperValue(memberExpr, true);
+                // Stack: [this, func] → SWAP → [func, this]
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 for (Expression arg : callExpr.arguments()) {
                     owner.compileExpression(arg);
                 }
-                compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
+                compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.arguments().size());
                 return;
             }
 
@@ -107,13 +109,14 @@ final class ExpressionCallMemberCompiler {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
             }
 
+            // SWAP converts obj/func to func/obj (internalHandleCall's expected layout)
+            // and sets propertyAccessLock to protect the error-message chain during arg evaluation
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-
             for (Expression arg : callExpr.arguments()) {
                 owner.compileExpression(arg);
             }
 
-            compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
+            compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.arguments().size());
         } else {
             if (callExpr.callee() instanceof Identifier calleeId && compilerContext.hasActiveWithObject()) {
                 // Inside a with scope, lookup returns [value, receiver] where receiver
@@ -126,6 +129,7 @@ final class ExpressionCallMemberCompiler {
             for (Expression arg : callExpr.arguments()) {
                 owner.compileExpression(arg);
             }
+            Opcode callOpcode = isTailCall ? Opcode.TAIL_CALL : Opcode.CALL;
             compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.arguments().size());
         }
     }

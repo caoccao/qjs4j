@@ -1,22 +1,12 @@
 # Unimplemented Opcodes
 
-qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 14 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
+qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 12 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
 
 ## Stack Manipulation
 
 ### NIP1 (16) — `a b c -> b c`
 
 Dead code in QuickJS itself. Both emission sites in `quickjs.c` (lines 25292 and 26723) are inside `#else` branches of `#if 1` blocks. The active `#if 1` branch uses `OP_append` for array spread operations. The `#else` branch is an alternative implementation using a manual `for_of_start`/`for_of_next` loop that cleans up the 3-slot iterator record with three `OP_nip1` calls. Since QuickJS never compiles the `#else` path, qjs4j does not implement this opcode.
-
-## Function Calls
-
-### CALL_METHOD (36) — `obj func args -> ret`
-
-A combined method-call opcode in QuickJS that pops both the receiver object and the function, calls with the object as `this`, and pushes the result. qjs4j compiles method calls (`obj.method(args)`) as separate steps: `DUP` the object, `GET_FIELD` to load the method, then `CALL` with the receiver already on the stack. This achieves the same result using existing opcodes.
-
-### TAIL_CALL_METHOD (37) — `obj func args ->`
-
-The tail-call variant of `CALL_METHOD`. Not emitted by qjs4j's compiler. Method calls in tail position use `TAIL_CALL` instead, with the same DUP+GET_FIELD decomposition as `CALL_METHOD`.
 
 ## Constructor Checks
 

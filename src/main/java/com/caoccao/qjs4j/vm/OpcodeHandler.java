@@ -654,6 +654,18 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
+    // Method call: compiler emits DUP → GET_FIELD → SWAP → args → CALL_METHOD.
+    // SWAP puts the stack in func/receiver order (same as CALL) and locks property
+    // access tracking during argument evaluation.
+    static void handleCallMethod(Opcode op, ExecutionContext executionContext) {
+        handleCall(op, executionContext);
+    }
+
+    // Tail-call variant of CALL_METHOD.
+    static void handleTailCallMethod(Opcode op, ExecutionContext executionContext) {
+        handleTailCall(op, executionContext);
+    }
+
     static void handleCallConstructor(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         byte[] instructions = executionContext.instructions;

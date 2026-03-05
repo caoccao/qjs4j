@@ -556,8 +556,7 @@ final class ExpressionCompiler {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
             }
 
-            // Now stack is: receiver, method
-            // Swap so method is on top: method, receiver
+            // SWAP converts obj/func to func/obj for internalHandleCall and locks property chain
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         } else {
             // Regular function call: func`template`
@@ -568,12 +567,9 @@ final class ExpressionCompiler {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        // Stack is now: function, receiver
-
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, delegates.functions.createTaggedTemplateObject(template));
-        // Stack: function, receiver, template_object
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {
@@ -583,8 +579,12 @@ final class ExpressionCompiler {
         // Call the tag function
         // argCount = 1 (template array) + number of expressions
         int argCount = 1 + expressions.size();
-        compilerContext.emitter.emitOpcode(Opcode.CALL);
-        compilerContext.emitter.emitU16(argCount);
+        boolean isMethodCall = taggedTemplate.tag() instanceof MemberExpression;
+        if (isMethodCall) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL_METHOD, argCount);
+        } else {
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, argCount);
+        }
     }
 
     void compileTemplateLiteral(TemplateLiteral templateLiteral) {

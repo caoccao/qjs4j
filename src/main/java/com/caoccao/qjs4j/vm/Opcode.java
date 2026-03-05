@@ -62,8 +62,8 @@ public enum Opcode {
     CALL_CONSTRUCTOR(33, 3, -1, 1, OpcodeHandler::handleCallConstructor),      // func new.target args -> ret (npop args not counted)
     CALL(34, 3, -1, 1, OpcodeHandler::handleCall),                             // func args -> ret (npop args not counted)
     TAIL_CALL(35, 3, -1, 0, OpcodeHandler::handleTailCall),                    // func args -> (npop args not counted)
-    CALL_METHOD(36, 3, -1, 1, OpcodeHandler::handleInvalid),                   // obj func args -> ret (npop args not counted)
-    TAIL_CALL_METHOD(37, 3, -1, 0, OpcodeHandler::handleInvalid),              // obj func args -> (npop args not counted)
+    CALL_METHOD(36, 3, -1, 1, OpcodeHandler::handleCallMethod),                // func receiver args -> ret
+    TAIL_CALL_METHOD(37, 3, -1, 0, OpcodeHandler::handleTailCallMethod),       // func receiver args -> (tail call)
     ARRAY_FROM(38, 3, -1, 1, OpcodeHandler::handleArrayFrom),                  // args -> array (npop args not counted)
     APPLY(39, 3, 3, 1, OpcodeHandler::handleApply),                            // func this args -> ret
     RETURN(40, 1, 1, 0, OpcodeHandler::handleReturn),                          // val ->
