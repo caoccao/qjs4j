@@ -475,11 +475,10 @@ final class FunctionClassCompiler {
                 constructorFunc.setSourceCode(classSource);
             }
         }
+        constructorFunc.setClassPrivateSymbols(ownPrivateSymbols.values());
 
-        // Emit constructor: use FCLOSURE when it captures outer variables, PUSH_CONST otherwise
-        Opcode constructorPushOpcode = constructorFunc.getCaptureSourceInfos() != null
-                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
-        compilerContext.emitter.emitOpcodeConstant(constructorPushOpcode, constructorFunc);
+        // Class definitions must allocate a fresh constructor function per evaluation.
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, constructorFunc);
         // Stack: superClass constructor
 
         // Emit DEFINE_CLASS opcode with class name
@@ -573,10 +572,8 @@ final class FunctionClassCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             // Stack: proto constructor constructor
 
-            // Push the static initializer function: use FCLOSURE if it captures outer variables
-            Opcode staticInitPushOpcode = staticInitializerFunc.getCaptureSourceInfos() != null
-                    ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
-            compilerContext.emitter.emitOpcodeConstant(staticInitPushOpcode, staticInitializerFunc);
+            // Static initializers must also be fresh closures per class evaluation.
+            compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, staticInitializerFunc);
             // Stack: proto constructor constructor func
 
             // SWAP so we have: proto constructor func constructor
@@ -726,11 +723,10 @@ final class FunctionClassCompiler {
                 constructorFunc.setSourceCode(classSource);
             }
         }
+        constructorFunc.setClassPrivateSymbols(ownPrivateSymbols.values());
 
-        // Emit constructor: use FCLOSURE when it captures outer variables, PUSH_CONST otherwise
-        Opcode constructorPushOpcode = constructorFunc.getCaptureSourceInfos() != null
-                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
-        compilerContext.emitter.emitOpcodeConstant(constructorPushOpcode, constructorFunc);
+        // Class expressions must allocate a fresh constructor function per evaluation.
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, constructorFunc);
         // Stack: superClass constructor
 
         // Emit DEFINE_CLASS opcode with class name
@@ -811,10 +807,8 @@ final class FunctionClassCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             // Stack: proto constructor constructor
 
-            // Push the static initializer function: use FCLOSURE if it captures outer variables
-            Opcode staticInitPushOpcode = staticInitializerFunc.getCaptureSourceInfos() != null
-                    ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
-            compilerContext.emitter.emitOpcodeConstant(staticInitPushOpcode, staticInitializerFunc);
+            // Static initializers must also be fresh closures per class evaluation.
+            compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, staticInitializerFunc);
             // Stack: proto constructor constructor func
 
             // SWAP so we have: proto constructor func constructor
@@ -1850,7 +1844,7 @@ final class FunctionClassCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor symbol
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor symbol method
+                compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function()); // proto constructor constructor symbol method
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind); // proto constructor constructor
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
@@ -1860,7 +1854,7 @@ final class FunctionClassCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor symbol
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor symbol method
+                compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, entry.function()); // proto constructor constructor symbol method
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 8); // proto constructor constructor
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
                 compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto

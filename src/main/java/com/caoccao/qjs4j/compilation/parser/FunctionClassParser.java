@@ -222,23 +222,29 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.expect(TokenType.LBRACE);
         List<ClassDeclaration.ClassElement> body = new ArrayList<>();
         boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
+        boolean savedStrictMode = parserContext.strictMode;
         parserContext.parsingClassWithSuper = superClass != null;
+        parserContext.strictMode = true;
+        parserContext.lexer.setStrictMode(true);
+        try {
+            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                // Skip empty semicolons
+                if (parserContext.match(TokenType.SEMICOLON)) {
+                    parserContext.advance();
+                    continue;
+                }
 
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            // Skip empty semicolons
-            if (parserContext.match(TokenType.SEMICOLON)) {
-                parserContext.advance();
-                continue;
+                ClassDeclaration.ClassElement element = parseClassElement();
+                if (element != null) {
+                    body.add(element);
+                }
             }
-
-            ClassDeclaration.ClassElement element = parseClassElement();
-            if (element != null) {
-                body.add(element);
-            }
+            validateClassElements(body);
+        } finally {
+            parserContext.strictMode = savedStrictMode;
+            parserContext.lexer.setStrictMode(savedStrictMode);
+            parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
         }
-        validateClassElements(body);
-
-        parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
 
         // Capture the end position before advancing past the closing brace
         int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
@@ -261,35 +267,30 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         boolean isStatic = false;
         boolean isPrivate = false;
         SourceLocation location = parserContext.getLocation();
+        SourceLocation methodStartLocation = location;
 
         // Check for 'static' keyword
         if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.STATIC.equals(parserContext.currentToken.value())) {
-            parserContext.advance();
-            isStatic = true;
+            TokenType nextType = parserContext.nextToken.type();
+            boolean treatAsStaticModifier = nextType != TokenType.SEMICOLON
+                    && nextType != TokenType.RBRACE
+                    && nextType != TokenType.LPAREN
+                    && nextType != TokenType.ASSIGN;
+            if (treatAsStaticModifier) {
+                parserContext.advance();
+                isStatic = true;
+                methodStartLocation = parserContext.getLocation();
 
-            // Check for static block: static { }
-            if (parserContext.match(TokenType.LBRACE)) {
-                return parseStaticBlock();
-            }
-
-            // Handle 'static' as a property name (e.g., static = 42;)
-            if (parserContext.match(TokenType.ASSIGN) || parserContext.match(TokenType.SEMICOLON)) {
-                isStatic = false;
-                // Parse as field with name "static"
-                Expression key = new Identifier(JSKeyword.STATIC, location);
-                Expression value = null;
-                if (parserContext.match(TokenType.ASSIGN)) {
-                    parserContext.advance();
-                    value = delegates.expressions.parseAssignmentExpression();
+                // Check for static block: static { }
+                if (parserContext.match(TokenType.LBRACE)) {
+                    return parseStaticBlock();
                 }
-                parserContext.consumeSemicolon();
-                return new ClassDeclaration.PropertyDefinition(key, value, false, isStatic, false);
+            } else {
+                Expression key = new Identifier(JSKeyword.STATIC, location);
+                parserContext.advance();
+                return parseMethodOrField(key, false, false, false, location);
             }
         }
-
-        // Capture method start location AFTER consuming 'static' (if any).
-        // This is where method source code should begin (excludes 'static').
-        SourceLocation methodStartLocation = parserContext.getLocation();
 
         // Check for private identifier (#name)
         if (parserContext.match(TokenType.PRIVATE_NAME)) {
@@ -490,23 +491,29 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.expect(TokenType.LBRACE);
         List<ClassDeclaration.ClassElement> body = new ArrayList<>();
         boolean savedParsingClassWithSuper2 = parserContext.parsingClassWithSuper;
+        boolean savedStrictMode = parserContext.strictMode;
         parserContext.parsingClassWithSuper = superClass != null;
+        parserContext.strictMode = true;
+        parserContext.lexer.setStrictMode(true);
+        try {
+            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                // Skip empty semicolons
+                if (parserContext.match(TokenType.SEMICOLON)) {
+                    parserContext.advance();
+                    continue;
+                }
 
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            // Skip empty semicolons
-            if (parserContext.match(TokenType.SEMICOLON)) {
-                parserContext.advance();
-                continue;
+                ClassDeclaration.ClassElement element = parseClassElement();
+                if (element != null) {
+                    body.add(element);
+                }
             }
-
-            ClassDeclaration.ClassElement element = parseClassElement();
-            if (element != null) {
-                body.add(element);
-            }
+            validateClassElements(body);
+        } finally {
+            parserContext.strictMode = savedStrictMode;
+            parserContext.lexer.setStrictMode(savedStrictMode);
+            parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
         }
-        validateClassElements(body);
-
-        parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
 
         // Capture the end position before advancing past the closing brace
         int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
@@ -800,6 +807,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         parserContext.expect(TokenType.LPAREN);
         FunctionParams funcParams = parseFunctionParameters();
+        int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
+        if ((JSKeyword.GET.equals(kind) && formalParameterCount != 0)
+                || (JSKeyword.SET.equals(kind) && formalParameterCount != 1)) {
+            throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
+        }
 
         parserContext.inFunctionBody = savedInFunctionBody;
 

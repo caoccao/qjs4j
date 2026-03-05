@@ -24,6 +24,8 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigInteger;
+import java.util.IdentityHashMap;
+import java.util.Set;
 
 public final class OpcodeHandler {
     private OpcodeHandler() {
@@ -1301,26 +1303,40 @@ public final class OpcodeHandler {
         int functionIndex = executionContext.bytecode.readU32(pc + 1);
         JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
         if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalResolvePrivateSymbolRemap(
+                    executionContext,
+                    templateFunction,
+                    pc,
+                    op,
+                    sp
+            );
+            JSBytecodeFunction closureTemplate = templateFunction;
+            if (symbolRemap != null && !symbolRemap.isEmpty()) {
+                closureTemplate = templateFunction.copyTemplateWithRemappedPrivateSymbols(symbolRemap);
+            }
+            int[] captureInfos = closureTemplate.getCaptureSourceInfos();
             JSBytecodeFunction closureFunction;
             if (captureInfos != null) {
                 VarRef[] capturedVarRefs = internalCreateVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
-                int selfIndex = templateFunction.getSelfCaptureIndex();
+                closureFunction = closureTemplate.copyWithVarRefs(capturedVarRefs);
+                int selfIndex = closureTemplate.getSelfCaptureIndex();
                 if (selfIndex >= 0 && selfIndex < capturedVarRefs.length) {
                     capturedVarRefs[selfIndex].set(closureFunction);
                 }
             } else {
-                int closureCount = templateFunction.getClosureVars().length;
+                int closureCount = closureTemplate.getClosureVars().length;
                 JSValue[] capturedClosureVars = new JSValue[closureCount];
                 for (int i = closureCount - 1; i >= 0; i--) {
                     capturedClosureVars[i] = (JSValue) stack[--sp];
                 }
-                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
-                int selfIndex = templateFunction.getSelfCaptureIndex();
+                closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
+                int selfIndex = closureTemplate.getSelfCaptureIndex();
                 if (selfIndex >= 0 && selfIndex < capturedClosureVars.length) {
                     capturedClosureVars[selfIndex] = closureFunction;
                 }
+            }
+            if (symbolRemap != null && !symbolRemap.isEmpty()) {
+                closureFunction.setClassPrivateSymbolRemap(symbolRemap);
             }
             // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
@@ -1375,18 +1391,32 @@ public final class OpcodeHandler {
         int functionIndex = executionContext.bytecode.readU8(pc + 1);
         JSValue functionValue = executionContext.bytecode.getConstants()[functionIndex];
         if (functionValue instanceof JSBytecodeFunction templateFunction) {
-            int[] captureInfos = templateFunction.getCaptureSourceInfos();
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalResolvePrivateSymbolRemap(
+                    executionContext,
+                    templateFunction,
+                    pc,
+                    op,
+                    sp
+            );
+            JSBytecodeFunction closureTemplate = templateFunction;
+            if (symbolRemap != null && !symbolRemap.isEmpty()) {
+                closureTemplate = templateFunction.copyTemplateWithRemappedPrivateSymbols(symbolRemap);
+            }
+            int[] captureInfos = closureTemplate.getCaptureSourceInfos();
             JSBytecodeFunction closureFunction;
             if (captureInfos != null) {
                 VarRef[] capturedVarRefs = internalCreateVarRefsFromCaptures(captureInfos, executionContext.frame);
-                closureFunction = templateFunction.copyWithVarRefs(capturedVarRefs);
+                closureFunction = closureTemplate.copyWithVarRefs(capturedVarRefs);
             } else {
-                int closureCount = templateFunction.getClosureVars().length;
+                int closureCount = closureTemplate.getClosureVars().length;
                 JSValue[] capturedClosureVars = new JSValue[closureCount];
                 for (int i = closureCount - 1; i >= 0; i--) {
                     capturedClosureVars[i] = (JSValue) stack[--sp];
                 }
-                closureFunction = templateFunction.copyWithClosureVars(capturedClosureVars);
+                closureFunction = closureTemplate.copyWithClosureVars(capturedClosureVars);
+            }
+            if (symbolRemap != null && !symbolRemap.isEmpty()) {
+                closureFunction.setClassPrivateSymbolRemap(symbolRemap);
             }
             // Arrow functions capture this, arguments, new.target, active function, and home object from the enclosing scope
             if (closureFunction.isArrow()) {
@@ -3354,6 +3384,18 @@ public final class OpcodeHandler {
                 | ((instructions[pc + 3] & 0xFF) << 8)
                 | (instructions[pc + 4] & 0xFF);
         JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
+        if (constantValue instanceof JSSymbol symbol) {
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalGetActivePrivateSymbolRemap(
+                    executionContext,
+                    executionContext.sp
+            );
+            if (symbolRemap != null) {
+                JSSymbol remappedSymbol = symbolRemap.get(symbol);
+                if (remappedSymbol != null) {
+                    constantValue = remappedSymbol;
+                }
+            }
+        }
         executionContext.virtualMachine.initializeConstantValueIfNeeded(constantValue);
         executionContext.stack[executionContext.sp++] = constantValue;
         executionContext.pc = pc + op.getSize();
@@ -3363,6 +3405,18 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int constIndex = executionContext.instructions[pc + 1] & 0xFF;
         JSValue constantValue = executionContext.bytecode.getConstants()[constIndex];
+        if (constantValue instanceof JSSymbol symbol) {
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = internalGetActivePrivateSymbolRemap(
+                    executionContext,
+                    executionContext.sp
+            );
+            if (symbolRemap != null) {
+                JSSymbol remappedSymbol = symbolRemap.get(symbol);
+                if (remappedSymbol != null) {
+                    constantValue = remappedSymbol;
+                }
+            }
+        }
         executionContext.virtualMachine.initializeConstantValueIfNeeded(constantValue);
         executionContext.stack[executionContext.sp++] = constantValue;
         executionContext.pc = pc + op.getSize();
@@ -4690,6 +4744,60 @@ public final class OpcodeHandler {
             }
         }
         return varRefs;
+    }
+
+    private static IdentityHashMap<JSSymbol, JSSymbol> internalResolvePrivateSymbolRemap(
+            ExecutionContext executionContext,
+            JSBytecodeFunction templateFunction,
+            int pc,
+            Opcode op,
+            int sp) {
+        IdentityHashMap<JSSymbol, JSSymbol> activeRemap =
+                internalGetActivePrivateSymbolRemap(executionContext, sp);
+        if (internalStartsClassDefinition(executionContext, pc, op)) {
+            Set<JSSymbol> classPrivateSymbols = templateFunction.getClassPrivateSymbols();
+            if (classPrivateSymbols != null && !classPrivateSymbols.isEmpty()) {
+                IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = new IdentityHashMap<>();
+                if (activeRemap != null && !activeRemap.isEmpty()) {
+                    symbolRemap.putAll(activeRemap);
+                }
+                for (JSSymbol privateSymbol : classPrivateSymbols) {
+                    symbolRemap.put(privateSymbol, new JSSymbol(privateSymbol.getDescription()));
+                }
+                return symbolRemap;
+            }
+        }
+        return activeRemap;
+    }
+
+    private static IdentityHashMap<JSSymbol, JSSymbol> internalGetActivePrivateSymbolRemap(
+            ExecutionContext executionContext,
+            int sp) {
+        JSStackValue[] stack = executionContext.stack;
+        for (int i = sp - 1; i >= 0; i--) {
+            if (stack[i] instanceof JSBytecodeFunction stackFunction) {
+                IdentityHashMap<JSSymbol, JSSymbol> stackRemap = stackFunction.getClassPrivateSymbolRemap();
+                if (stackRemap != null && !stackRemap.isEmpty()) {
+                    return stackRemap;
+                }
+            }
+        }
+        if (executionContext.frame.getFunction() instanceof JSBytecodeFunction frameFunction) {
+            IdentityHashMap<JSSymbol, JSSymbol> frameRemap = frameFunction.getClassPrivateSymbolRemap();
+            if (frameRemap != null && !frameRemap.isEmpty()) {
+                return frameRemap;
+            }
+        }
+        return null;
+    }
+
+    private static boolean internalStartsClassDefinition(ExecutionContext executionContext, int pc, Opcode op) {
+        int nextPc = pc + op.getSize();
+        if (nextPc >= executionContext.instructions.length) {
+            return false;
+        }
+        Opcode nextOpcode = executionContext.decodedOpcodes[nextPc];
+        return nextOpcode == Opcode.DEFINE_CLASS || nextOpcode == Opcode.DEFINE_CLASS_COMPUTED;
     }
 
 

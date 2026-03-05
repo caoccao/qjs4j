@@ -129,9 +129,7 @@ final class EmitHelpers {
                                    JSBytecodeFunction methodFunc, String methodName) {
         String kind = method.kind();
         boolean isComputedKey = method.computed() && !(method.key() instanceof Literal);
-        // Use FCLOSURE when method captures outer variables, PUSH_CONST otherwise
-        Opcode pushMethodOpcode = methodFunc.getCaptureSourceInfos() != null
-                ? Opcode.FCLOSURE : Opcode.PUSH_CONST;
+        // Class definitions must create fresh function objects per evaluation.
 
         if (isComputedKey) {
             delegates.expressions.compileExpression(method.key());
@@ -143,7 +141,7 @@ final class EmitHelpers {
             delegates.expressions.compileExpression(method.key());
         }
 
-        compilerContext.emitter.emitOpcodeConstant(pushMethodOpcode, methodFunc);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
 
         int methodKind;
         if (JSKeyword.GET.equals(kind)) {

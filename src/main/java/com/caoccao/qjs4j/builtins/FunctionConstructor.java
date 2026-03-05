@@ -106,17 +106,6 @@ public final class FunctionConstructor {
             }
         }
 
-        // ES2024 CreateDynamicFunction step 30-31:
-        // If AllPrivateIdentifiersValid of body/parameters with empty list is false, throw SyntaxError
-        if (containsPrivateIdentifier(body)) {
-            return context.throwSyntaxError("Unexpected private field");
-        }
-        for (String paramName : paramNames) {
-            if (containsPrivateIdentifier(paramName)) {
-                return context.throwSyntaxError("Unexpected private field");
-            }
-        }
-
         // Build the function source code
         StringBuilder functionSource = new StringBuilder(sourcePrefix);
         if (!paramNames.isEmpty()) {
@@ -159,58 +148,6 @@ public final class FunctionConstructor {
         } catch (Exception e) {
             return context.throwError(errorPrefix + e.getMessage());
         }
-    }
-
-    /**
-     * Check if a source string contains a private identifier (#name).
-     * Used for AllPrivateIdentifiersValid validation in CreateDynamicFunction.
-     */
-    private static boolean containsPrivateIdentifier(String source) {
-        if (source == null || source.isEmpty()) {
-            return false;
-        }
-        for (int i = 0; i < source.length() - 1; i++) {
-            char ch = source.charAt(i);
-            if (ch == '#') {
-                // Check if next char is a valid identifier start
-                char next = source.charAt(i + 1);
-                if (Character.isLetter(next) || next == '_' || next == '$') {
-                    // Check if preceded by a dot (private field access like o.#f)
-                    // or at start or after whitespace/operator
-                    return true;
-                }
-            }
-            // Skip string literals
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                char quote = ch;
-                i++;
-                while (i < source.length()) {
-                    char c = source.charAt(i);
-                    if (c == '\\') {
-                        i++; // skip escaped character
-                    } else if (c == quote) {
-                        break;
-                    }
-                    i++;
-                }
-            }
-            // Skip single-line comments
-            if (ch == '/' && i + 1 < source.length()) {
-                if (source.charAt(i + 1) == '/') {
-                    i += 2;
-                    while (i < source.length() && source.charAt(i) != '\n') {
-                        i++;
-                    }
-                } else if (source.charAt(i + 1) == '*') {
-                    i += 2;
-                    while (i + 1 < source.length() && !(source.charAt(i) == '*' && source.charAt(i + 1) == '/')) {
-                        i++;
-                    }
-                    i++; // skip the closing /
-                }
-            }
-        }
-        return false;
     }
 
     private static String toSourceString(JSContext context, JSValue value) {

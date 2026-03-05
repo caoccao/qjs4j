@@ -22,6 +22,11 @@ import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.VarRef;
 import com.caoccao.qjs4j.vm.YieldResult;
 
+import java.util.Collection;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.Set;
+
 /**
  * Represents a JavaScript function compiled to bytecode.
  * Based on QuickJS JSFunctionBytecode structure.
@@ -58,6 +63,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private JSValue capturedNewTarget;
     private JSValue capturedThisArg;
     private String[] capturedVarNames;
+    private Set<JSSymbol> classPrivateSymbols;
+    private IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap;
     private boolean classConstructor;
     private boolean derivedConstructor;
     private boolean hasArgumentsParameterBinding;
@@ -1377,6 +1384,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedArguments = this.capturedArguments;
         copiedFunction.capturedNewTarget = this.capturedNewTarget;
         copiedFunction.capturedVarNames = this.capturedVarNames;
+        copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
+        copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
         return copiedFunction;
     }
 
@@ -1409,7 +1418,17 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedArguments = this.capturedArguments;
         copiedFunction.capturedNewTarget = this.capturedNewTarget;
         copiedFunction.capturedVarNames = this.capturedVarNames;
+        copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
+        copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
         return copiedFunction;
+    }
+
+    public JSBytecodeFunction copyTemplateWithRemappedPrivateSymbols(
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap) {
+        if (symbolRemap == null || symbolRemap.isEmpty()) {
+            return this;
+        }
+        return internalCopyTemplateWithRemappedPrivateSymbols(symbolRemap, new IdentityHashMap<>());
     }
 
     /**
@@ -1471,6 +1490,14 @@ public final class JSBytecodeFunction extends JSFunction {
             return null;
         }
         return capturedVarNames[captureSlot];
+    }
+
+    public Set<JSSymbol> getClassPrivateSymbols() {
+        return classPrivateSymbols;
+    }
+
+    public IdentityHashMap<JSSymbol, JSSymbol> getClassPrivateSymbolRemap() {
+        return classPrivateSymbolRemap;
     }
 
     /**
@@ -1640,6 +1667,20 @@ public final class JSBytecodeFunction extends JSFunction {
         this.capturedVarNames = capturedVarNames;
     }
 
+    public void setClassPrivateSymbolRemap(IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap) {
+        this.classPrivateSymbolRemap = classPrivateSymbolRemap;
+    }
+
+    public void setClassPrivateSymbols(Collection<JSSymbol> classPrivateSymbols) {
+        if (classPrivateSymbols == null || classPrivateSymbols.isEmpty()) {
+            this.classPrivateSymbols = Set.of();
+            return;
+        }
+        Set<JSSymbol> symbolSet = Collections.newSetFromMap(new IdentityHashMap<>());
+        symbolSet.addAll(classPrivateSymbols);
+        this.classPrivateSymbols = symbolSet;
+    }
+
     /**
      * Mark this function as a class constructor.
      * Called during DEFINE_CLASS opcode execution.
@@ -1677,6 +1718,87 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setSourceCode(String sourceCode) {
         this.sourceCode = sourceCode;
+    }
+
+    private JSBytecodeFunction internalCopyTemplateWithRemappedPrivateSymbols(
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap,
+            IdentityHashMap<JSBytecodeFunction, JSBytecodeFunction> functionMemo) {
+        JSBytecodeFunction memoizedFunction = functionMemo.get(this);
+        if (memoizedFunction != null) {
+            return memoizedFunction;
+        }
+        Bytecode remappedBytecode = internalCopyBytecodeWithRemappedPrivateSymbols(symbolRemap, functionMemo);
+        JSBytecodeFunction copiedFunction = new JSBytecodeFunction(
+                remappedBytecode,
+                name,
+                length,
+                closureVars,
+                prototype,
+                isConstructor,
+                isAsync,
+                isGenerator,
+                isArrow,
+                strict,
+                sourceCode,
+                selfCaptureIndex
+        );
+        functionMemo.put(this, copiedFunction);
+        copiedFunction.captureSourceInfos = captureSourceInfos;
+        copiedFunction.classPrivateSymbolRemap = classPrivateSymbolRemap;
+        copiedFunction.classPrivateSymbols = classPrivateSymbols;
+        copiedFunction.classConstructor = classConstructor;
+        copiedFunction.derivedConstructor = derivedConstructor;
+        copiedFunction.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
+        copiedFunction.hasParameterExpressions = hasParameterExpressions;
+        copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.varRefs = varRefs;
+        copiedFunction.capturedActiveFunction = capturedActiveFunction;
+        copiedFunction.capturedArguments = capturedArguments;
+        copiedFunction.capturedDerivedThisRef = capturedDerivedThisRef;
+        copiedFunction.capturedNewTarget = capturedNewTarget;
+        copiedFunction.capturedThisArg = capturedThisArg;
+        copiedFunction.capturedVarNames = capturedVarNames;
+        return copiedFunction;
+    }
+
+    private Bytecode internalCopyBytecodeWithRemappedPrivateSymbols(
+            IdentityHashMap<JSSymbol, JSSymbol> symbolRemap,
+            IdentityHashMap<JSBytecodeFunction, JSBytecodeFunction> functionMemo) {
+        JSValue[] originalConstants = bytecode.getConstants();
+        if (originalConstants.length == 0) {
+            return bytecode;
+        }
+        JSValue[] copiedConstants = new JSValue[originalConstants.length];
+        boolean changed = false;
+        for (int i = 0; i < originalConstants.length; i++) {
+            JSValue originalConstant = originalConstants[i];
+            JSValue copiedConstant = originalConstant;
+            if (originalConstant instanceof JSSymbol originalSymbol) {
+                JSSymbol remappedSymbol = symbolRemap.get(originalSymbol);
+                if (remappedSymbol != null) {
+                    copiedConstant = remappedSymbol;
+                }
+            } else if (originalConstant instanceof JSBytecodeFunction bytecodeFunction) {
+                copiedConstant = bytecodeFunction.internalCopyTemplateWithRemappedPrivateSymbols(
+                        symbolRemap,
+                        functionMemo
+                );
+            }
+            copiedConstants[i] = copiedConstant;
+            if (copiedConstant != originalConstant) {
+                changed = true;
+            }
+        }
+        if (!changed) {
+            return bytecode;
+        }
+        return new Bytecode(
+                bytecode.getInstructions(),
+                copiedConstants,
+                bytecode.getAtoms(),
+                bytecode.getLocalCount(),
+                bytecode.getLocalVarNames()
+        );
     }
 
     @Override
