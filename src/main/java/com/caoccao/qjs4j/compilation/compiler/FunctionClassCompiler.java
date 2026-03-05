@@ -1560,6 +1560,10 @@ final class FunctionClassCompiler {
             // Stack: this value symbol -> this symbol value
             initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             initCtx.emitter.emitOpcode(Opcode.SWAP);
+            // Set function name from private symbol (e.g., "#field") for anonymous functions
+            if (field.value() != null && isAnonymousFunctionDefinition(field.value())) {
+                initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+            }
             initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
         } else {
             if (field.computed()) {
@@ -1868,5 +1872,18 @@ final class FunctionClassCompiler {
     }
 
     record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {
+    }
+
+    private static boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
     }
 }
