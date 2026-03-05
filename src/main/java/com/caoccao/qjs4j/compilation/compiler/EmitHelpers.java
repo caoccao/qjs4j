@@ -75,38 +75,19 @@ final class EmitHelpers {
         boolean hasSpread = arguments.stream()
                 .anyMatch(arg -> arg instanceof SpreadElement);
 
-        if (!hasSpread) {
-            for (Expression arg : arguments) {
-                delegates.expressions.compileExpression(arg);
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
-            }
-            return;
-        }
-
-        // QuickJS-style lowering keeps an explicit append index once spread appears.
-        int idx = 0;
-        boolean needsIndex = false;
+        // Always use index-based pattern (QuickJS style)
+        compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
-                if (!needsIndex) {
-                    compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
-                    needsIndex = true;
-                }
                 delegates.expressions.compileExpression(spreadElement.argument());
                 compilerContext.emitter.emitOpcode(Opcode.APPEND);
-            } else if (needsIndex) {
+            } else {
                 delegates.expressions.compileExpression(arg);
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.INC);
-            } else {
-                delegates.expressions.compileExpression(arg);
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
-                idx++;
             }
         }
-        if (needsIndex) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
     }
 
     /**

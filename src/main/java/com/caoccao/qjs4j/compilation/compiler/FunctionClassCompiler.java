@@ -1551,11 +1551,10 @@ final class FunctionClassCompiler {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }
 
-            // Stack: this key value
-            initCtx.emitter.emitOpcode(Opcode.DEFINE_PROP);
+            // Stack: this key value -> this
+            initCtx.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+            initCtx.emitter.emitOpcode(Opcode.DROP);
         }
-        // Stack: this
-        initCtx.emitter.emitOpcode(Opcode.DROP);
         initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
         initCtx.emitter.emitOpcode(Opcode.RETURN);
 

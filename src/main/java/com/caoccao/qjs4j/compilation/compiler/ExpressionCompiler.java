@@ -54,11 +54,14 @@ final class ExpressionCompiler {
                 .anyMatch(e -> e == null);
 
         if (!hasSpread && !hasHoles) {
-            // Simple case: no spread elements, no holes - use PUSH_ARRAY
+            // Simple case: no spread elements, no holes
+            compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
             for (Expression element : arrayExpr.elements()) {
                 compileExpression(element);
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_ARRAY);
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
+                compilerContext.emitter.emitOpcode(Opcode.INC);
             }
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else {
             // Complex case: has spread elements or holes
             // Following QuickJS: emit position tracking
@@ -462,23 +465,28 @@ final class ExpressionCompiler {
                     compileExpression(prop.value());
                     compilerContext.emitter.emitOpcode(Opcode.SET_PROTO);
                 } else {
-                    // Push key
-                    if (prop.key() instanceof Identifier id && !prop.computed()) {
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
-                    } else {
-                        compileExpression(prop.key());
-                    }
-
                     // Push value
                     if (prop.method() && prop.value() instanceof FunctionExpression methodFunc) {
+                        // Push key for DEFINE_METHOD_COMPUTED
+                        if (prop.key() instanceof Identifier id && !prop.computed()) {
+                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                        } else {
+                            compileExpression(prop.key());
+                        }
                         // Concise methods are not constructors per ES spec
                         delegates.functions.compileFunctionExpression(methodFunc, true);
                         // Object literal methods are enumerable.
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-                    } else {
+                    } else if (prop.key() instanceof Identifier id && !prop.computed()) {
+                        // Non-computed identifier key: use DEFINE_FIELD with atom
                         compileExpression(prop.value());
-                        // Define data property.
-                        compilerContext.emitter.emitOpcode(Opcode.DEFINE_PROP);
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, id.name());
+                    } else {
+                        // Computed or non-identifier key: define own data property directly.
+                        // Stack: [obj] -> [obj, key, value] -> [obj]
+                        compileExpression(prop.key());
+                        compileExpression(prop.value());
+                        compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
                     }
                 }
             }
@@ -596,11 +604,12 @@ final class ExpressionCompiler {
 
         // Add each expression and subsequent quasi using string concatenation (ADD)
         for (int i = 0; i < expressions.size(); i++) {
-            // Compile the expression
-            compileExpression(expressions.get(i));
-
             // Template substitutions use ToString coercion (not + operator default hint).
-            compilerContext.emitter.emitOpcode(Opcode.TO_STRING);
+            // Call String(expr) to ensure ToString semantics.
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "String");
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compileExpression(expressions.get(i));
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
 
             // Concatenate using ADD after explicit ToString on the substitution.
             compilerContext.emitter.emitOpcode(Opcode.ADD);

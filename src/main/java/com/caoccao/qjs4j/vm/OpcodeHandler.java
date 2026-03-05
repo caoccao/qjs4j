@@ -916,7 +916,16 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object) {
-            object.set(PropertyKey.fromString(fieldName), value);
+            PropertyKey fieldKey = PropertyKey.fromString(fieldName);
+            boolean defineSucceeded = object.defineProperty(
+                    executionContext.virtualMachine.context,
+                    fieldKey,
+                    PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
+            if (!defineSucceeded) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot redefine property: " + fieldKey.toPropertyString()));
+            }
         }
 
         stack[sp++] = objectValue;
@@ -937,7 +946,18 @@ public final class OpcodeHandler {
             if (methodValue instanceof JSFunction methodFunction) {
                 methodFunction.setHomeObject(object);
             }
-            object.set(PropertyKey.fromString(methodName), methodValue);
+            PropertyKey methodKey = PropertyKey.fromString(methodName);
+            boolean defineSucceeded = object.defineProperty(
+                    executionContext.virtualMachine.context,
+                    methodKey,
+                    PropertyDescriptor.dataDescriptor(
+                            methodValue,
+                            PropertyDescriptor.DataState.ConfigurableWritable));
+            if (!defineSucceeded) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot redefine property: " + methodKey.toPropertyString()));
+            }
         }
 
         stack[sp++] = objectValue;
@@ -1049,20 +1069,6 @@ public final class OpcodeHandler {
         stack[sp++] = objectValue;
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleDefineProp(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue propertyValue = (JSValue) stack[--sp];
-        JSValue propertyKeyValue = (JSValue) stack[--sp];
-        JSValue objectValue = (JSValue) stack[sp - 1];
-        if (objectValue instanceof JSObject jsObject) {
-            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyKeyValue);
-            jsObject.defineProperty(executionContext.virtualMachine.context, key, propertyValue, PropertyDescriptor.DataState.All);
-        }
-        executionContext.sp = sp;
-        executionContext.pc += op.getSize();
     }
 
     static void handleDelete(Opcode op, ExecutionContext executionContext) {
@@ -1591,17 +1597,6 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
         executionContext.virtualMachine.valueStack.push(nextMethodForStack);       // next() method
         executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
-    static void handleForInEnd(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSStackValue stackValue = executionContext.virtualMachine.valueStack.popStackValue();
-        if (!(stackValue instanceof JSInternalValue internal) ||
-                !(internal.value() instanceof JSForInEnumerator)) {
-            throw new JSVirtualMachineException("Invalid for-in enumerator in FOR_IN_END");
-        }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -3147,18 +3142,6 @@ public final class OpcodeHandler {
         executionContext.pc += 1;
     }
 
-    static void handlePushArray(Opcode op, ExecutionContext executionContext) {
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue element = (JSValue) stack[--sp];
-        JSValue arrayValue = (JSValue) stack[sp - 1];
-        if (arrayValue instanceof JSArray jsArray) {
-            jsArray.push(element);
-        }
-        executionContext.sp = sp;
-        executionContext.pc += op.getSize();
-    }
-
     static void handlePushAtomValue(Opcode op, ExecutionContext executionContext) {
         byte[] instructions = executionContext.instructions;
         int pc = executionContext.pc;
@@ -4108,36 +4091,6 @@ public final class OpcodeHandler {
         }
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleToPropKey2(Opcode op, ExecutionContext executionContext) {
-        int pc = executionContext.pc;
-        JSStackValue[] stack = executionContext.stack;
-        int sp = executionContext.sp;
-        JSValue rawKey = (JSValue) stack[--sp];
-        JSValue baseObject = (JSValue) stack[--sp];
-        stack[sp++] = baseObject;
-        try {
-            stack[sp++] = executionContext.virtualMachine.toPropertyKeyValue(rawKey);
-        } catch (JSVirtualMachineException e) {
-            sp--;
-            executionContext.virtualMachine.captureVMException(e);
-            executionContext.sp = sp;
-            executionContext.pc = pc;
-            return;
-        }
-        executionContext.sp = sp;
-        executionContext.pc = pc + op.getSize();
-    }
-
-    static void handleToString(Opcode op, ExecutionContext executionContext) {
-        int sp = executionContext.sp;
-        JSStackValue[] stack = executionContext.stack;
-        JSValue value = (JSValue) stack[sp - 1];
-        if (!(value instanceof JSString)) {
-            stack[sp - 1] = JSTypeConversions.toString(executionContext.virtualMachine.context, value);
-        }
-        executionContext.pc += op.getSize();
     }
 
     static void handleTypeof(Opcode op, ExecutionContext executionContext) {

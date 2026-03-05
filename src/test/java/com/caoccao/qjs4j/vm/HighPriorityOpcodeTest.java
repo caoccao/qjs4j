@@ -139,12 +139,10 @@ public class HighPriorityOpcodeTest extends BaseTest {
         emitter.emitOpcodeU32(Opcode.PUSH_I32, 3);
         emitter.emitOpcode(Opcode.POW);
         emitter.emitOpcode(Opcode.LNOT);
-        emitter.emitOpcode(Opcode.TO_STRING);
         emitter.emitOpcode(Opcode.RETURN);
 
         JSValue value = execute(emitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE);
-        assertThat(value).isInstanceOf(JSString.class);
-        assertThat(((JSString) value).value()).isEqualTo("false");
+        assertThat(value).isEqualTo(JSBoolean.FALSE);
     }
 
     @Test

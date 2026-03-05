@@ -48,8 +48,7 @@ final class FunctionClassFieldCompiler {
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
         delegates.expressions.compileExpression(field.key());
         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-        compilerContext.emitter.emitOpcode(Opcode.DEFINE_PROP);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
     }
 
@@ -103,7 +102,7 @@ final class FunctionClassFieldCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
 
-                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PROP);
+                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
             }
 
             compilerContext.emitter.emitOpcode(Opcode.DROP);

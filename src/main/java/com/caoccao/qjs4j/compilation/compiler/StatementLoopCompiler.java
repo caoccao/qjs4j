@@ -237,7 +237,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_END);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.loopStack.pop();
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
