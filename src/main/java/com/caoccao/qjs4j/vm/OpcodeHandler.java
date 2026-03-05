@@ -2006,6 +2006,38 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
+    // obj -> obj val (get named property, keep object on stack)
+    static void handleGetField2(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
+        JSValue objectValue = (JSValue) executionContext.stack[executionContext.sp - 1];
+
+        JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
+        if (targetObject != null) {
+            JSValue result = targetObject.get(executionContext.virtualMachine.context, PropertyKey.fromString(fieldName));
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+            } else {
+                if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
+                    if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+                        executionContext.virtualMachine.propertyAccessChain.append('.');
+                    }
+                    executionContext.virtualMachine.propertyAccessChain.append(fieldName);
+                }
+                executionContext.stack[executionContext.sp++] = result;
+            }
+        } else {
+            String typeName = objectValue instanceof JSNull ? "null" : "undefined";
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("cannot read property '" + fieldName + "' of " + typeName);
+            executionContext.virtualMachine.resetPropertyAccessTracking();
+            executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+        }
+        executionContext.pc = pc + op.getSize();
+    }
+
     static void handleGetLength(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];

@@ -88,8 +88,7 @@ final class ExpressionAssignmentCompiler {
                             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                         }
                     } else if (memberExpr.property() instanceof Identifier propId) {
-                        compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
                     }
                 }
             }
@@ -350,8 +349,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.DUP2);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else if (memberExpr.property() instanceof Identifier propId) {
-                    compilerContext.emitter.emitOpcode(Opcode.DUP);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
                 }
             }
         }

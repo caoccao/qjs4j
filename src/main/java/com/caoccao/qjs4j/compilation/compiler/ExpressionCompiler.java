@@ -543,17 +543,13 @@ final class ExpressionCompiler {
             // Push object (receiver)
             compileExpression(memberExpr.object());
 
-            // Duplicate it (one copy for 'this', one for property access)
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-
-            // Get the method
+            // Get the method while keeping the object on the stack
             if (memberExpr.computed()) {
-                // obj[expr]
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compileExpression(memberExpr.property());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.property() instanceof Identifier propId) {
-                // obj.prop
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
             }
 
             // SWAP converts obj/func to func/obj for internalHandleCall and locks property chain
@@ -736,8 +732,7 @@ final class ExpressionCompiler {
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
-                            compilerContext.emitter.emitOpcode(Opcode.DUP);
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
                             compilerContext.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
                             compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
@@ -747,8 +742,7 @@ final class ExpressionCompiler {
                             compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                         } else {
                             // Postfix: obj.prop++ - returns old value (must be ToNumber'd per ES spec)
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name()); // obj old_val
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name()); // obj old_val
                             compilerContext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
                             compilerContext.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
@@ -1084,17 +1078,15 @@ final class ExpressionCompiler {
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
-        // Found and not blocked: DUP withObj, GET_FIELD → stack: [withObj, value], SWAP → [value, withObj]
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        // Found and not blocked: GET_FIELD2 keeps withObj, SWAP → [value, withObj]
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, name);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
 
         // Found without unscopables check:
         compilerContext.emitter.patchJump(jumpToResolveWithoutUnscopables, compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, name);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         int jumpToEndWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.GOTO);
 

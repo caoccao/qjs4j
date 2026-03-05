@@ -91,12 +91,13 @@ final class ExpressionCallMemberCompiler {
             }
 
             owner.compileExpression(memberExpr.object());
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
 
             if (memberExpr.computed()) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 owner.compileExpression(memberExpr.property());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 String fieldName = privateId.name();
                 JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
                 if (symbol != null) {
@@ -106,7 +107,7 @@ final class ExpressionCallMemberCompiler {
                     throw new JSSyntaxErrorException("Unexpected private field");
                 }
             } else if (memberExpr.property() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
             }
 
             // SWAP converts obj/func to func/obj (internalHandleCall's expected layout)
@@ -164,14 +165,15 @@ final class ExpressionCallMemberCompiler {
             }
 
             owner.compileExpression(memberExpr.object());
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
 
             if (memberExpr.computed()) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 owner.compileExpression(memberExpr.property());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.property() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.name());
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
             } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
                 String fieldName = privateId.name();
                 JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
                 if (symbol != null) {

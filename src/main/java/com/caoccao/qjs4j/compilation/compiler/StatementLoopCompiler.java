@@ -336,8 +336,7 @@ final class StatementLoopCompiler {
         if (forOfStmt.isAsync()) {
             compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
             compilerContext.emitter.emitOpcode(Opcode.AWAIT);
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "done");
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             if (isExpressionBased) {

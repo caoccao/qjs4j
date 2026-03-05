@@ -88,7 +88,7 @@ public enum Opcode {
     GET_REF_VALUE(59, 1, 2, 3, OpcodeHandler::handleGetRefValue),              // obj prop -> obj prop val (get reference value)
     PUT_REF_VALUE(60, 1, 3, 0, OpcodeHandler::handlePutRefValue),              // obj prop val -> (put reference value)
     GET_FIELD(61, 5, 1, 1, OpcodeHandler::handleGetField),                     // obj -> val (get named property by atom)
-    GET_FIELD2(62, 5, 1, 1, OpcodeHandler::handleInvalid),                     // obj -> obj val (get field, keep object)
+    GET_FIELD2(62, 5, 1, 2, OpcodeHandler::handleGetField2),                    // obj -> obj val (get field, keep object)
     PUT_FIELD(63, 5, 2, 0, OpcodeHandler::handlePutField),                     // obj val -> (set named property by atom)
     GET_PRIVATE_FIELD(64, 1, 2, 1, OpcodeHandler::handleGetPrivateField),      // obj prop -> value
     PUT_PRIVATE_FIELD(65, 1, 3, 0, OpcodeHandler::handlePutPrivateField),      // obj value prop ->

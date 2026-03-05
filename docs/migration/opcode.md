@@ -1,6 +1,6 @@
 # Unimplemented Opcodes
 
-qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 12 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
+qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 11 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
 
 ## Stack Manipulation
 
@@ -39,12 +39,6 @@ In QuickJS C, the compiler compiles a regex literal into two constants: the patt
 ### IMPORT (54) — `specifier options -> promise`
 
 Implements ES6 dynamic `import()` expressions. qjs4j supports static `import`/`export` declarations for ES modules but does not support dynamic `import()` calls. The parser recognizes `import(` syntax and routes it to expression parsing, but the compiler has no emission path for the `IMPORT` opcode. This is a known unsupported feature.
-
-## Property Access
-
-### GET_FIELD2 (62) — `obj -> obj val`
-
-Gets a named property while keeping the object on the stack. In QuickJS, this is an optimization used in property access chains, optional chaining, and compound member expressions. qjs4j achieves the same stack effect by emitting `DUP` before `GET_FIELD`: the object is duplicated first, then one copy is consumed by `GET_FIELD`, leaving the original object and the retrieved value on the stack.
 
 ## With Statement
 

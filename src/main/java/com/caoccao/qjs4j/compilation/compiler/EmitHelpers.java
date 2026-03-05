@@ -305,8 +305,7 @@ final class EmitHelpers {
 
     void emitMethodCallOnLocalObject(int localIndex, String methodName, int argCount) {
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, argCount);
     }
@@ -316,8 +315,7 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, argLocalIndex);
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, methodName);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, methodName);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, argLocalIndex);
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
