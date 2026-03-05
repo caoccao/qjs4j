@@ -1,6 +1,6 @@
 # Unimplemented Opcodes
 
-qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 16 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
+qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of these, 15 map to `handleInvalid` and are never executed. This document explains why each one is unnecessary.
 
 ## Stack Manipulation
 
@@ -8,10 +8,6 @@ qjs4j defines 244 opcodes matching QuickJS's `quickjs-opcode.h` numbering. Of th
 
 Dead code in QuickJS itself. Both emission sites in `quickjs.c` (lines 25292 and 26723) are inside `#else` branches of `#if 1` blocks. The active `#if 1` branch uses `OP_append` for array spread operations. The `#else` branch is an alternative implementation using a manual `for_of_start`/`for_of_next` loop that cleans up the 3-slot iterator record with three `OP_nip1` calls. Since QuickJS never compiles the `#else` path, qjs4j does not implement this opcode.
 
-
-### ROT4L (31) — `x a b c -> a b c x`
-
-Used in QuickJS for complex assignment expressions (`PUT_LVALUE_NOKEEP_BOTTOM` pattern at line 25569). qjs4j's compiler does not emit this opcode. The same stack transformations are achieved using combinations of `PERM3`/`PERM4`/`PERM5` and `INSERT2`/`INSERT3`/`INSERT4`.
 
 ### ROT5L (32) — `x a b c d -> a b c d x`
 

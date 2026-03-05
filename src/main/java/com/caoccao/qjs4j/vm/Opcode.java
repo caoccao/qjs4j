@@ -57,7 +57,7 @@ public enum Opcode {
     SWAP2(28, 1, 4, 4, OpcodeHandler::handleSwap2),                            // a b c d -> c d a b
     ROT3L(29, 1, 3, 3, OpcodeHandler::handleRot3l),                            // x a b -> a b x
     ROT3R(30, 1, 3, 3, OpcodeHandler::handleRot3r),                            // a b x -> x a b
-    ROT4L(31, 1, 4, 4, OpcodeHandler::handleInvalid),                          // x a b c -> a b c x
+    ROT4L(31, 1, 4, 4, OpcodeHandler::handleRot4l),                            // x a b c -> a b c x
     ROT5L(32, 1, 5, 5, OpcodeHandler::handleInvalid),                          // x a b c d -> a b c d x
     CALL_CONSTRUCTOR(33, 3, -1, 1, OpcodeHandler::handleCallConstructor),      // func new.target args -> ret (npop args not counted)
     CALL(34, 3, -1, 1, OpcodeHandler::handleCall),                             // func args -> ret (npop args not counted)

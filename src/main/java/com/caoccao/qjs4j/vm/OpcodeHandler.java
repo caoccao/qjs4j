@@ -3521,14 +3521,15 @@ public final class OpcodeHandler {
         executionContext.pc = pc + op.getSize();
     }
 
+    // Stack: this obj key val -> val (QuickJS order: value at top)
     static void handlePutSuperValue(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;
+        JSValue assignedValue = (JSValue) stack[--sp];
         JSValue keyValue = (JSValue) stack[--sp];
         JSValue superObjectValue = (JSValue) stack[--sp];
         JSValue receiverValue = (JSValue) stack[--sp];
-        JSValue assignedValue = (JSValue) stack[--sp];
 
         if (!(superObjectValue instanceof JSObject superObject)) {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super object expected"));
@@ -3680,6 +3681,18 @@ public final class OpcodeHandler {
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;
         JSStackValue firstValue = stack[sp - 3];
+        stack[sp - 3] = stack[sp - 2];
+        stack[sp - 2] = stack[sp - 1];
+        stack[sp - 1] = firstValue;
+        executionContext.pc += 1;
+    }
+
+    // x a b c -> a b c x
+    static void handleRot4l(Opcode op, ExecutionContext executionContext) {
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSStackValue firstValue = stack[sp - 4];
+        stack[sp - 4] = stack[sp - 3];
         stack[sp - 3] = stack[sp - 2];
         stack[sp - 2] = stack[sp - 1];
         stack[sp - 1] = firstValue;

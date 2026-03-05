@@ -181,6 +181,8 @@ final class PatternCompiler {
                 compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                 delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                // Stack: [value, this, superObj, key] → ROT4L → [this, superObj, key, value]
+                compilerContext.emitter.emitOpcode(Opcode.ROT4L);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else {
                 // Stack: [value]

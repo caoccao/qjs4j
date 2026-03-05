@@ -123,9 +123,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
                     delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
                     owner.compileExpression(assignExpr.right());
-                    // Stack: [this, superObj, key, value] → rotate value to bottom
-                    compilerContext.emitter.emitOpcode(Opcode.INSERT4);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                     return;
                 }
@@ -161,8 +159,7 @@ final class ExpressionAssignmentCompiler {
                 }
             } else {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
-                    compilerContext.emitter.emitOpcode(Opcode.INSERT4);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    // Stack: [this, superObj, key, newValue] → PUT_SUPER_VALUE pops value from top
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 } else if (memberExpr.computed()) {
                     // Stack: [obj, prop, newValue] — already in QuickJS order
@@ -382,8 +379,7 @@ final class ExpressionAssignmentCompiler {
                 // Stack: [obj, prop, value] — already in QuickJS order for PUT_ARRAY_EL
             }
             case 3 -> {
-                compilerContext.emitter.emitOpcode(Opcode.INSERT4);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                // Stack: [this, superObj, key, newValue] — already in correct order for PUT_SUPER_VALUE
             }
             default -> throw new JSCompilerException("Invalid depth for logical assignment");
         }
