@@ -697,7 +697,12 @@ final class ExpressionCompiler {
                 if (isLocalBinding) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
+                    List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+                    if (!withObjectLocals.isEmpty()) {
+                        emitWithAwareDeleteIdentifier(id.name(), withObjectLocals, 0);
+                    } else {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
+                    }
                 }
             } else {
                 // delete non-reference expression => evaluate for side effects, then true
@@ -1076,6 +1081,60 @@ final class ExpressionCompiler {
         compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1);
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
+    }
+
+    /**
+     * Emit with-aware delete for identifiers inside with-scope.
+     * Checks each with-object for the property (respecting @@unscopables),
+     * and if found, deletes it from the with-object. Otherwise falls back to DELETE_VAR.
+     * Stack: ... -> ... result (boolean)
+     */
+    private void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth) {
+        if (withDepth >= withObjectLocals.size()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+            return;
+        }
+
+        int withObjectLocalIndex = withObjectLocals.get(withDepth);
+        // Load with-object and check if it has the property
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+        compilerContext.emitter.emitOpcode(Opcode.IN);
+
+        int jumpToFallback = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+
+        // Check @@unscopables
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToDeleteWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        // Property found and not blocked by unscopables: delete from with-object
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.DELETE);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        // No unscopables object: delete from with-object
+        compilerContext.emitter.patchJump(jumpToDeleteWithoutUnscopables, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop undefined unscopables result
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.DELETE);
+        int jumpToEndWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        // Property not in with-object or blocked by unscopables: fall through
+        int fallbackOffset = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
+        compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
+        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop with-object
+        emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
     }

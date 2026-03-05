@@ -1133,7 +1133,13 @@ public final class VirtualMachine {
 
     NumericPair numericPair(JSValue left, JSValue right) {
         JSValue leftNumeric = toNumericValue(left);
+        if (pendingException != null) {
+            return null;
+        }
         JSValue rightNumeric = toNumericValue(right);
+        if (pendingException != null) {
+            return null;
+        }
         boolean leftIsBigInt = leftNumeric instanceof JSBigInt;
         boolean rightIsBigInt = rightNumeric instanceof JSBigInt;
         if (leftIsBigInt != rightIsBigInt) {
@@ -1505,7 +1511,13 @@ public final class VirtualMachine {
     }
 
     JSValue toNumericValue(JSValue value) {
-        JSValue primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.NUMBER);
+        JSValue primitive;
+        try {
+            primitive = JSTypeConversions.toPrimitive(context, value, JSTypeConversions.PreferredType.NUMBER);
+        } catch (JSVirtualMachineException e) {
+            capturePendingExceptionFromVmOrContext(e);
+            return JSNumber.of(Double.NaN);
+        }
         capturePendingException();
         if (primitive instanceof JSBigInt || primitive instanceof JSNumber) {
             return primitive;

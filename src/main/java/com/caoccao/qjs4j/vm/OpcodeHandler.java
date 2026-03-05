@@ -1091,13 +1091,20 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue property = executionContext.virtualMachine.valueStack.pop();
         JSValue object = executionContext.virtualMachine.valueStack.pop();
-        boolean result = false;
-        if (object instanceof JSObject jsObj) {
-            PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
-            result = jsObj.delete(executionContext.virtualMachine.context, key);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            }
+        JSObject targetObject = executionContext.virtualMachine.toObject(object);
+        if (targetObject == null) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot convert undefined or null to object");
+            executionContext.virtualMachine.valueStack.push(JSBoolean.FALSE);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
+        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
+        boolean result = targetObject.delete(executionContext.virtualMachine.context, key);
+        if (executionContext.virtualMachine.context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
         }
         executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
