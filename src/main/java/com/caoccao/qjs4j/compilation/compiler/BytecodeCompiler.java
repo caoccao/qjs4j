@@ -89,6 +89,10 @@ public final class BytecodeCompiler {
         return delegates;
     }
 
+    public void setClassFieldEvalContext(boolean classFieldEvalContext) {
+        compilerContext.classFieldEvalContext = classFieldEvalContext;
+    }
+
     public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
         compilerContext.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
     }

@@ -32,6 +32,7 @@ import com.caoccao.qjs4j.vm.Bytecode;
 public final class Compiler {
     private final String fileName;
     private final String source;
+    private boolean classFieldEval;
     private boolean evalAllowNewTarget;
     private boolean evalAllowSuperProperty;
     private boolean inheritedStrictMode;
@@ -64,6 +65,9 @@ public final class Compiler {
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setSourceCode(source);
             compiler.setPredeclareProgramLexicalsAsLocals(predeclareProgramLexicalsAsLocals);
+            if (classFieldEval) {
+                compiler.setClassFieldEvalContext(true);
+            }
             Bytecode bytecode = compiler.compile(ast);
             String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
             boolean strict = isModule || ast.strict();
@@ -93,7 +97,15 @@ public final class Compiler {
                 inheritedStrictMode,
                 evalAllowSuperProperty,
                 evalAllowNewTarget);
+        if (classFieldEval) {
+            parser.setClassFieldEval(true);
+        }
         return parser.parse();
+    }
+
+    public Compiler setClassFieldEval(boolean classFieldEval) {
+        this.classFieldEval = classFieldEval;
+        return this;
     }
 
     /**

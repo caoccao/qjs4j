@@ -1447,16 +1447,16 @@ public final class JSBytecodeFunction extends JSFunction {
         return capturedArguments;
     }
 
+    public VarRef getCapturedDerivedThisRef() {
+        return capturedDerivedThisRef;
+    }
+
     /**
      * Get the captured new.target value for arrow functions.
      * Arrow functions lexically inherit new.target from the enclosing function.
      */
     public JSValue getCapturedNewTarget() {
         return capturedNewTarget;
-    }
-
-    public VarRef getCapturedDerivedThisRef() {
-        return capturedDerivedThisRef;
     }
 
     /**
@@ -1616,16 +1616,16 @@ public final class JSBytecodeFunction extends JSFunction {
         this.capturedArguments = capturedArguments;
     }
 
+    public void setCapturedDerivedThisRef(VarRef ref) {
+        this.capturedDerivedThisRef = ref;
+    }
+
     /**
      * Set the captured new.target value for arrow functions.
      * Called during FCLOSURE to capture the enclosing function's new.target.
      */
     public void setCapturedNewTarget(JSValue capturedNewTarget) {
         this.capturedNewTarget = capturedNewTarget;
-    }
-
-    public void setCapturedDerivedThisRef(VarRef ref) {
-        this.capturedDerivedThisRef = ref;
     }
 
     /**

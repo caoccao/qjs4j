@@ -60,6 +60,10 @@ final class FunctionClassFieldCompiler {
 
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
 
+            // Track class field initializer context for ContainsArguments check in eval
+            boolean savedInClassFieldInitializer = compilerContext.inClassFieldInitializer;
+            compilerContext.inClassFieldInitializer = true;
+
             if (isPrivate) {
                 if (!(field.key() instanceof PrivateIdentifier privateId)) {
                     throw new JSCompilerException("Invalid private field key");
@@ -105,6 +109,7 @@ final class FunctionClassFieldCompiler {
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
             }
 
+            compilerContext.inClassFieldInitializer = savedInClassFieldInitializer;
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }

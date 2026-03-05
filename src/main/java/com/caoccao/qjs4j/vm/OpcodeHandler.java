@@ -1172,7 +1172,14 @@ public final class OpcodeHandler {
     static void handleEval(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int argumentCount = executionContext.bytecode.readU16(pc + 1);
-        int tailFlag = executionContext.bytecode.readU16(pc + 3);
+        int evalFlags = executionContext.bytecode.readU16(pc + 3);
+        boolean inClassFieldInitializer = (evalFlags & 2) != 0;
+        int tailFlag = evalFlags & 1;
+
+        // Schedule class field eval flag before the eval function is called
+        if (inClassFieldInitializer) {
+            executionContext.virtualMachine.context.scheduleClassFieldEvalCall();
+        }
 
         if (tailFlag != 0) {
             // Tail position eval call: handle TCO when callee is not the real eval
@@ -2058,7 +2065,7 @@ public final class OpcodeHandler {
 
         JSValue value = JSUndefined.INSTANCE;
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            value = object.get(PropertyKey.fromSymbol(symbol));
+            value = object.get(executionContext.virtualMachine.context, PropertyKey.fromSymbol(symbol));
         }
 
         stack[sp++] = value;
@@ -3431,7 +3438,7 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
-            object.set(PropertyKey.fromSymbol(symbol), value);
+            object.set(executionContext.virtualMachine.context, PropertyKey.fromSymbol(symbol), value);
         }
 
         stack[sp++] = value;

@@ -33,12 +33,6 @@ final class ExpressionCallMemberCompiler {
         this.delegates = delegates;
     }
 
-    private void emitPendingPostSuperInitialization() {
-        if (compilerContext.pendingPostSuperInitialization != null) {
-            compilerContext.pendingPostSuperInitialization.run();
-        }
-    }
-
     void compileCallExpression(CallExpression callExpr) {
         boolean hasSpread = callExpr.arguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
         if (hasSpread) {
@@ -70,7 +64,11 @@ final class ExpressionCallMemberCompiler {
             }
             compilerContext.emitter.emitOpcode(Opcode.EVAL);
             compilerContext.emitter.emitU16(callExpr.arguments().size());
-            compilerContext.emitter.emitU16(isTailCallForEval ? 1 : 0);
+            int evalFlags = isTailCallForEval ? 1 : 0;
+            if (compilerContext.inClassFieldInitializer) {
+                evalFlags |= 2;  // bit 1: in class field initializer
+            }
+            compilerContext.emitter.emitU16(evalFlags);
             return;
         }
         // Determine which CALL opcode to use (TAIL_CALL when in tail position)
@@ -243,6 +241,12 @@ final class ExpressionCallMemberCompiler {
             owner.compileExpression(arg);
         }
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.arguments().size());
+    }
+
+    private void emitPendingPostSuperInitialization() {
+        if (compilerContext.pendingPostSuperInitialization != null) {
+            compilerContext.pendingPostSuperInitialization.run();
+        }
     }
 
     private void emitPropertyAccess(MemberExpression memberExpr) {

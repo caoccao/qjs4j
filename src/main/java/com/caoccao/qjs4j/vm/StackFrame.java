@@ -146,6 +146,10 @@ public final class StackFrame {
         return caller;
     }
 
+    public VarRef getDerivedThisRef() {
+        return derivedThisRef;
+    }
+
     public JSValue getDynamicVarBinding(String name) {
         if (dynamicVarBindings == null) {
             return null;
@@ -194,14 +198,6 @@ public final class StackFrame {
 
     public JSValue getThisArg() {
         return thisArg;
-    }
-
-    public VarRef getDerivedThisRef() {
-        return derivedThisRef;
-    }
-
-    public void setDerivedThisRef(VarRef derivedThisRef) {
-        this.derivedThisRef = derivedThisRef;
     }
 
     /**
@@ -259,6 +255,10 @@ public final class StackFrame {
         } else {
             unmappedArgumentsObject = argumentsObject;
         }
+    }
+
+    public void setDerivedThisRef(VarRef derivedThisRef) {
+        this.derivedThisRef = derivedThisRef;
     }
 
     public void setDynamicVarBinding(String name, JSValue value) {

@@ -40,7 +40,10 @@ final class CompilerContext {
     final Deque<CompilerScope> scopes;
     final Set<String> tdzLocals;
     final Deque<Integer> withObjectLocalStack;
+    boolean classFieldEvalContext;
+    boolean emitTailCalls;
     boolean hasEnclosingArgumentsBinding;
+    boolean inClassFieldInitializer;
     boolean inGlobalScope;
     boolean isGlobalProgram;
     boolean isInArrowFunction;
@@ -53,7 +56,6 @@ final class CompilerContext {
     int scopeDepth;
     String sourceCode;
     boolean strictMode;
-    boolean emitTailCalls;
     CompilerScope varDeclarationScopeOverride;
     boolean varInGlobalProgram;
 

@@ -119,4 +119,10 @@ public final class Parser {
     Expression parseExpression() {
         return delegates.expressions.parseExpression();
     }
+
+    public void setClassFieldEval(boolean classFieldEval) {
+        if (classFieldEval) {
+            parserContext.inClassFieldInitializer = true;
+        }
+    }
 }

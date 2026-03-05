@@ -785,23 +785,27 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     ClassDeclaration.ClassElement parseMethodOrField(Expression key, boolean isStatic,
                                                      boolean isPrivate, boolean computed,
                                                      SourceLocation location) {
-        // Check if it's a field (has = or semicolon)
-        if (parserContext.match(TokenType.ASSIGN) || parserContext.match(TokenType.SEMICOLON)) {
+        // If next token is LPAREN, it's a method; otherwise it's a field
+        if (!parserContext.match(TokenType.LPAREN)) {
+            // It's a field (with optional initializer)
             Expression value = null;
             if (parserContext.match(TokenType.ASSIGN)) {
                 parserContext.advance();
+                boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
+                parserContext.inClassFieldInitializer = true;
                 parserContext.enterFunctionContext(false);
                 try {
                     value = delegates.expressions.parseAssignmentExpression();
                 } finally {
                     parserContext.exitFunctionContext(false);
+                    parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
                 }
             }
             parserContext.consumeSemicolon();
             return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
         }
 
-        // Otherwise, it's a method
+        // It's a method
         // If this is a constructor in a derived class, enable super() calls
         boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && JSKeyword.CONSTRUCTOR.equals(keyId.name());
         boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;

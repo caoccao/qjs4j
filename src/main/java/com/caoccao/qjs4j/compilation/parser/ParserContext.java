@@ -44,6 +44,7 @@ final class ParserContext {
     Token currentToken;
     int functionNesting;
     int generatorFunctionNesting;
+    boolean inClassFieldInitializer;
     boolean inClassStaticInit;
     boolean inDerivedConstructor;
     boolean inFunctionBody = true;
@@ -110,10 +111,12 @@ final class ParserContext {
      * identifiers in nested non-generator/non-async functions.
      */
     void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting});
+        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting,
+                inClassFieldInitializer ? 1 : 0});
         functionNesting++;
         generatorFunctionNesting = generatorFunction ? 1 : 0;
         asyncFunctionNesting = asyncFunction ? 1 : 0;
+        inClassFieldInitializer = false;
     }
 
     void exitFunctionContext(boolean asyncFunction) {
@@ -127,6 +130,7 @@ final class ParserContext {
         int[] saved = savedFunctionNestingStack.pop();
         generatorFunctionNesting = saved[0];
         asyncFunctionNesting = saved[1];
+        inClassFieldInitializer = saved[2] != 0;
         functionNesting--;
     }
 
@@ -384,6 +388,11 @@ final class ParserContext {
             }
             if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
                 throw new JSSyntaxErrorException("Unexpected token 'yield'");
+            }
+            // ES2024 14.7.1 Static Semantics: ContainsArguments
+            // 'arguments' is forbidden in class field initializers (including arrows)
+            if (JSKeyword.ARGUMENTS.equals(name) && inClassFieldInitializer) {
+                throw new JSSyntaxErrorException("'arguments' is not allowed in class field initializer or static initialization block");
             }
             advance();
             return new Identifier(name, location);

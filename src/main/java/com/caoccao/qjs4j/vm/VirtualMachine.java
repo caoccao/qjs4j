@@ -58,9 +58,6 @@ public final class VirtualMachine {
     YieldResult yieldResult;  // Set when generator yields
     int yieldSkipCount;  // How many yields to skip (for resuming generators)
 
-    /** Tail call request used for trampoline-based tail call optimization. */
-    record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args) {}
-
     public VirtualMachine(JSContext context) {
         this.valueStack = new CallStack();
         this.context = context;
@@ -1654,6 +1651,12 @@ public final class VirtualMachine {
     }
 
     record NumericPair(JSValue left, JSValue right, boolean bigInt) {
+    }
+
+    /**
+     * Tail call request used for trampoline-based tail call optimization.
+     */
+    record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args) {
     }
 
 }

@@ -323,7 +323,12 @@ final class ExpressionCompiler {
 
         // Handle 'new.target' meta-property
         if ("new.target".equals(name)) {
-            compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+            if (compilerContext.classFieldEvalContext) {
+                // ES2024: eval in class field initializer treats new.target as undefined
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            } else {
+                compilerContext.emitter.emitOpcodeU8(Opcode.SPECIAL_OBJECT, 3);
+            }
             return;
         }
 
@@ -1001,6 +1006,46 @@ final class ExpressionCompiler {
         emitWithAwareIdentifierLookup(name, withObjectLocals, 0);
     }
 
+    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth) {
+        if (withDepth >= withObjectLocals.size()) {
+            emitIdentifierLookupWithoutWith(name);
+            return;
+        }
+
+        int withObjectLocalIndex = withObjectLocals.get(withDepth);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+        compilerContext.emitter.emitOpcode(Opcode.IN);
+
+        int jumpToFallback = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToResolveWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
+        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+        int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        compilerContext.emitter.patchJump(jumpToResolveWithoutUnscopables, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+        int jumpToEndWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        int fallbackOffset = compilerContext.emitter.currentOffset();
+        compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
+        compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1);
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
+    }
+
     /**
      * Emit with-aware identifier lookup for call expressions.
      * Pushes two values: [value, receiver] where receiver is the with object
@@ -1059,46 +1104,6 @@ final class ExpressionCompiler {
         compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         emitWithAwareIdentifierLookupForCall(name, withObjectLocals, withDepth + 1);
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
-        compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
-    }
-
-    private void emitWithAwareIdentifierLookup(String name, List<Integer> withObjectLocals, int withDepth) {
-        if (withDepth >= withObjectLocals.size()) {
-            emitIdentifierLookupWithoutWith(name);
-            return;
-        }
-
-        int withObjectLocalIndex = withObjectLocals.get(withDepth);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-        compilerContext.emitter.emitOpcode(Opcode.IN);
-
-        int jumpToFallback = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToResolveWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
-        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        int jumpToFallbackWhenBlocked = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        compilerContext.emitter.patchJump(jumpToResolveWithoutUnscopables, compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
-        int jumpToEndWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        int fallbackOffset = compilerContext.emitter.currentOffset();
-        compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
-        compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        emitWithAwareIdentifierLookup(name, withObjectLocals, withDepth + 1);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
     }

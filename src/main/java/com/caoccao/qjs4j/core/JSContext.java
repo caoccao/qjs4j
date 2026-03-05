@@ -75,6 +75,7 @@ public final class JSContext implements AutoCloseable {
     private boolean inCatchHandler;
     private int maxStackDepth;
     private JSValue nativeConstructorNewTarget;
+    private boolean pendingClassFieldEval;
     private int pendingDirectEvalCalls;
     // Exception state
     private JSValue pendingException;
@@ -195,6 +196,12 @@ public final class JSContext implements AutoCloseable {
         clearErrorStackTrace();
         // Remove from runtime
         runtime.destroyContext(this);
+    }
+
+    public boolean consumeScheduledClassFieldEvalCall() {
+        boolean result = pendingClassFieldEval;
+        pendingClassFieldEval = false;
+        return result;
     }
 
     public boolean consumeScheduledDirectEvalCall() {
@@ -817,6 +824,7 @@ public final class JSContext implements AutoCloseable {
                 : null;
         boolean allowNewTargetInEval = false;
         boolean allowSuperPropertyInEval = false;
+        boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
         if (isDirectEval) {
             compiler.setEval(true);
             if (directEvalCallerFrame != null
@@ -824,6 +832,10 @@ public final class JSContext implements AutoCloseable {
                 allowNewTargetInEval = !callerBytecodeFunction.isArrow() && directEvalCallerFrame.getCaller() != null;
                 allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
                         && callerBytecodeFunction.getHomeObject() != null;
+            }
+            // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
+            if (isClassFieldEval) {
+                compiler.setClassFieldEval(true);
             }
             compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval);
             // Direct eval creates a fresh lexical environment whose bindings do not leak.
@@ -1509,6 +1521,10 @@ public final class JSContext implements AutoCloseable {
         for (String absentKey : evalOverlaySnapshot.absentKeys()) {
             globalObject.delete(this, PropertyKey.fromString(absentKey));
         }
+    }
+
+    public void scheduleClassFieldEvalCall() {
+        pendingClassFieldEval = true;
     }
 
     public void scheduleDirectEvalCall() {

@@ -33,7 +33,6 @@ final class FunctionClassCompiler {
     private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
     private final FunctionClassFieldCompiler fieldCompiler;
-
     FunctionClassCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
@@ -166,6 +165,8 @@ final class FunctionClassCompiler {
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
         functionContext.isInArrowFunction = true;  // Arrow functions don't have their own arguments
+        // Arrow functions inherit class field eval context (new.target resolves to undefined)
+        functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext;
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -414,9 +415,9 @@ final class FunctionClassCompiler {
 
         // Create symbols for all private names (fields + methods), once per class.
         Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classDecl.body());
-        LinkedHashMap<String, JSBytecodeFunction> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
+        List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
-        LinkedHashMap<String, JSBytecodeFunction> privateStaticMethodFunctions = compilePrivateMethodFunctions(
+        List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
                 privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         // Compile constructor function (or create default) with field initialization
@@ -489,7 +490,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
-                        Map.of(),
+                        List.of(),
                         false
                 );
 
@@ -512,7 +513,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
-                        Map.of(),
+                        List.of(),
                         false
                 );
 
@@ -662,9 +663,9 @@ final class FunctionClassCompiler {
         }
 
         Map<String, JSSymbol> privateSymbols = createPrivateSymbols(classExpr.body());
-        LinkedHashMap<String, JSBytecodeFunction> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
+        List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
-        LinkedHashMap<String, JSBytecodeFunction> privateStaticMethodFunctions = compilePrivateMethodFunctions(
+        List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
                 privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         // Compile constructor function (or create default)
@@ -729,7 +730,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
-                        Map.of(),
+                        List.of(),
                         false
                 );
 
@@ -748,7 +749,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
-                        Map.of(),
+                        List.of(),
                         false
                 );
 
@@ -1267,7 +1268,7 @@ final class FunctionClassCompiler {
             List<ClassDeclaration.PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
-            Map<String, JSBytecodeFunction> privateInstanceMethodFunctions,
+            List<PrivateMethodEntry> privateInstanceMethodFunctions,
             boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
         BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
@@ -1391,11 +1392,11 @@ final class FunctionClassCompiler {
         return methodFunc;
     }
 
-    LinkedHashMap<String, JSBytecodeFunction> compilePrivateMethodFunctions(
+    List<PrivateMethodEntry> compilePrivateMethodFunctions(
             List<ClassDeclaration.MethodDefinition> privateMethods,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        LinkedHashMap<String, JSBytecodeFunction> privateMethodFunctions = new LinkedHashMap<>();
+        List<PrivateMethodEntry> privateMethodEntries = new ArrayList<>();
         for (ClassDeclaration.MethodDefinition method : privateMethods) {
             String methodName = compilerContext.getMethodName(method);
             JSBytecodeFunction methodFunc = compileMethodAsFunction(
@@ -1405,28 +1406,41 @@ final class FunctionClassCompiler {
                     List.of(),
                     privateSymbols,
                     computedFieldSymbols,
-                    Map.of(),
+                    List.of(),
                     false
             );
-            privateMethodFunctions.put(methodName, methodFunc);
+            privateMethodEntries.add(new PrivateMethodEntry(methodName, methodFunc, method.kind()));
         }
-        return privateMethodFunctions;
+        return privateMethodEntries;
     }
 
     void compilePrivateMethodInitialization(
-            Map<String, JSBytecodeFunction> privateMethodFunctions,
+            List<PrivateMethodEntry> privateMethodEntries,
             Map<String, JSSymbol> privateSymbols) {
-        for (Map.Entry<String, JSBytecodeFunction> entry : privateMethodFunctions.entrySet()) {
-            JSSymbol symbol = privateSymbols.get(entry.getKey());
+        for (PrivateMethodEntry entry : privateMethodEntries) {
+            JSSymbol symbol = privateSymbols.get(entry.name());
             if (symbol == null) {
-                throw new JSCompilerException("Private method symbol not found: #" + entry.getKey());
+                throw new JSCompilerException("Private method symbol not found: #" + entry.name());
             }
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue());
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
+                // Private getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
+                // Stack: [this, symbol, func] → [this]
+                int methodKind = JSKeyword.GET.equals(entry.kind()) ? 1 : 2;
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function());
+                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else {
+                // Regular private method: use DEFINE_PRIVATE_FIELD
+                // Stack: [this, symbol, func] → [this]
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function());
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            }
         }
     }
 
@@ -1591,7 +1605,7 @@ final class FunctionClassCompiler {
             List<ClassDeclaration.PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
-            Map<String, JSBytecodeFunction> privateInstanceMethodFunctions) {
+            List<PrivateMethodEntry> privateInstanceMethodFunctions) {
         // Pass parent captureResolver so default constructors can capture outer scope variables
         BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
         CompilerContext ctorCtx = constructorCompiler.context();
@@ -1787,23 +1801,37 @@ final class FunctionClassCompiler {
     }
 
     void installPrivateStaticMethods(
-            Map<String, JSBytecodeFunction> privateStaticMethodFunctions,
+            List<PrivateMethodEntry> privateStaticMethodEntries,
             Map<String, JSSymbol> privateSymbols) {
-        for (Map.Entry<String, JSBytecodeFunction> entry : privateStaticMethodFunctions.entrySet()) {
-            JSSymbol symbol = privateSymbols.get(entry.getKey());
+        for (PrivateMethodEntry entry : privateStaticMethodEntries) {
+            JSSymbol symbol = privateSymbols.get(entry.name());
             if (symbol == null) {
-                throw new JSCompilerException("Private static method symbol not found: #" + entry.getKey());
+                throw new JSCompilerException("Private static method symbol not found: #" + entry.name());
             }
 
-            // Stack before: constructor proto
-            compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
-            compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.getValue()); // proto constructor constructor method
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
-            compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
-            compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
-            compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
+            if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
+                // Private static getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
+                int methodKind = JSKeyword.GET.equals(entry.kind()) ? 1 : 2;
+                // Stack before: constructor proto
+                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
+                compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor symbol
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor symbol method
+                compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, methodKind); // proto constructor constructor
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
+                compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
+            } else {
+                // Regular private static method: use DEFINE_PRIVATE_FIELD
+                // Stack before: constructor proto
+                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor
+                compilerContext.emitter.emitOpcode(Opcode.DUP);  // proto constructor constructor
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, entry.function()); // proto constructor constructor method
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // proto constructor constructor method symbol
+                compilerContext.emitter.emitOpcode(Opcode.SWAP); // proto constructor constructor symbol method
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD); // proto constructor constructor
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // proto constructor
+                compilerContext.emitter.emitOpcode(Opcode.SWAP); // constructor proto
+            }
         }
     }
 
@@ -1821,5 +1849,8 @@ final class FunctionClassCompiler {
             return;
         }
         throw new JSCompilerException("private class field is already defined");
+    }
+
+    record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {
     }
 }
