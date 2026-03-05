@@ -1894,23 +1894,9 @@ public final class OpcodeHandler {
         executionContext.pc += op.getSize();
     }
 
-    static void handleLogicalAnd(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleLogicalAnd(executionContext);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
     static void handleLogicalNot(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleLogicalNot(executionContext);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-    }
-
-    static void handleLogicalOr(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleLogicalOr(executionContext);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
@@ -2046,13 +2032,6 @@ public final class OpcodeHandler {
     static void handleNull(Opcode op, ExecutionContext executionContext) {
         executionContext.stack[executionContext.sp++] = JSNull.INSTANCE;
         executionContext.pc += 1;
-    }
-
-    static void handleNullishCoalesce(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        internalHandleNullishCoalesce(executionContext);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
     }
 
     static void handleObjectNew(Opcode op, ExecutionContext executionContext) {
@@ -4577,17 +4556,6 @@ public final class OpcodeHandler {
         }
         int result = ~JSTypeConversions.toInt32(executionContext.virtualMachine.context, numeric);
         executionContext.virtualMachine.valueStack.push(JSNumber.of(result));
-    }
-
-    private static void internalHandleNullishCoalesce(ExecutionContext executionContext) {
-        JSValue right = executionContext.virtualMachine.valueStack.pop();
-        JSValue left = executionContext.virtualMachine.valueStack.pop();
-        // Return right if left is null or undefined
-        if (left instanceof JSNull || left instanceof JSUndefined) {
-            executionContext.virtualMachine.valueStack.push(right);
-        } else {
-            executionContext.virtualMachine.valueStack.push(left);
-        }
     }
 
     private static void internalHandleOr(ExecutionContext executionContext) {
