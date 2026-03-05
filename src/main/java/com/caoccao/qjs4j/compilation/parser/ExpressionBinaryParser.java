@@ -92,7 +92,10 @@ final class ExpressionBinaryParser {
         if (parserContext.match(TokenType.QUESTION)) {
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
+            boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+            parserContext.inOperatorAllowed = true;
             Expression consequent = expressions.parseAssignmentExpression();
+            parserContext.inOperatorAllowed = savedInOperatorAllowed;
             parserContext.expect(TokenType.COLON);
             Expression alternate = expressions.parseAssignmentExpression();
 

@@ -700,7 +700,9 @@ final class ExpressionCompiler {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
                 }
             } else {
-                // delete literal / non-reference expression => true
+                // delete non-reference expression => evaluate for side effects, then true
+                compileExpression(operand);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
             return;
