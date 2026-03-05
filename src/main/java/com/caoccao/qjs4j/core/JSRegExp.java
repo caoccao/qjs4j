@@ -40,14 +40,10 @@ public final class JSRegExp extends JSObject {
         String rawFlags = flags != null ? flags : "";
 
         // Compile the pattern to bytecode
-        try {
-            RegExpCompiler compiler = new RegExpCompiler();
-            this.bytecode = compiler.compile(this.pattern, rawFlags);
-            this.engine = new RegExpEngine(bytecode);
-            this.flags = this.bytecode.flagsToString();
-        } catch (Exception e) {
-            throw new RuntimeException("Invalid regular expression: " + e.getMessage(), e);
-        }
+        RegExpCompiler compiler = new RegExpCompiler();
+        this.bytecode = compiler.compile(this.pattern, rawFlags);
+        this.engine = new RegExpEngine(bytecode);
+        this.flags = this.bytecode.flagsToString();
 
         // Per spec, lastIndex is an own data property:
         // writable, non-enumerable, non-configurable.
@@ -109,7 +105,7 @@ public final class JSRegExp extends JSObject {
         try {
             return context.createJSRegExp(pattern, flags);
         } catch (Exception e) {
-            return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
+            return context.throwSyntaxError("Invalid regular expression: /" + pattern + "/: " + e.getMessage());
         }
     }
 

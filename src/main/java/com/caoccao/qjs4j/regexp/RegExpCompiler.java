@@ -2416,7 +2416,7 @@ public final class RegExpCompiler {
                     }
                     String name = groupNameParseResult.name();
                     if (currentAltStack.peek().contains(name)) {
-                        throw new RegExpSyntaxException("duplicate group name");
+                        throw new RegExpSyntaxException("Duplicate capture group name");
                     }
                     currentAltStack.peek().add(name);
                     if (!captureIndices.containsKey(name)) {

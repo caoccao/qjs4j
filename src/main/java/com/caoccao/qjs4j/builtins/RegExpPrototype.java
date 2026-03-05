@@ -143,7 +143,7 @@ public final class RegExpPrototype {
         try {
             regexp.reinitialize(pattern, flags);
         } catch (Exception e) {
-            return context.throwSyntaxError("Invalid regular expression: " + e.getMessage());
+            return context.throwSyntaxError("Invalid regular expression: /" + pattern + "/: " + e.getMessage());
         }
 
         // Spec step 12: Perform ? Set(obj, "lastIndex", 0, true).

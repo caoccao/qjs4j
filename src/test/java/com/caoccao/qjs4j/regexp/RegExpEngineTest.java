@@ -263,9 +263,16 @@ public class RegExpEngineTest extends BaseJavetTest {
 
     @Test
     public void testNamedCaptureGroupsDuplicateNameThrows() {
-        assertThatThrownBy(() -> resetContext().eval("new RegExp('(?<x>a)(?<x>b)')"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("duplicate group name");
+        assertErrorWithJavet("new RegExp('(?<x>a)(?<x>b)')");
+    }
+
+    @Test
+    public void testNamedCaptureGroupsDuplicateNamesAcrossAlternatives() {
+        assertObjectWithJavet("""
+                const dateRegex = /(?<year>\\d{4})-(?<month>\\d{2})-(?<day>\\d{2})|(?<month>\\d{2})\\/(?<day>\\d{2})\\/(?<year>\\d{4})/;
+                const match1 = '2025-03-15'.match(dateRegex);
+                const match2 = '03/15/2025'.match(dateRegex);
+                [match1.groups, match2.groups]""");
     }
 
     @Test
