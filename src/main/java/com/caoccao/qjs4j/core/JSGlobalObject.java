@@ -2133,20 +2133,6 @@ public final class JSGlobalObject {
             }
         }
 
-        private static Set<String> collectFunctionDeclarationNames(List<Statement> body) {
-            Set<String> functionDeclarationNames = new LinkedHashSet<>();
-            if (body == null) {
-                return functionDeclarationNames;
-            }
-            for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
-                Statement statement = body.get(statementIndex);
-                if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
-                    functionDeclarationNames.add(functionDeclaration.id().name());
-                }
-            }
-            return functionDeclarationNames;
-        }
-
         private static Set<String> collectFunctionVarEnvironmentNames(JSBytecodeFunction callerBytecodeFunction) {
             String source = callerBytecodeFunction.getSourceCode();
             if (source == null || source.isBlank()) {
@@ -2679,8 +2665,13 @@ public final class JSGlobalObject {
                         Program evalAst = evalCompiler.parse(false);
                         evalVarDeclarations = new HashSet<>();
                         evalLexDeclarations = new HashSet<>();
-                        AstUtils.collectGlobalDeclarations(evalAst, evalVarDeclarations, evalLexDeclarations);
-                        evalFunctionDeclarations = collectFunctionDeclarationNames(evalAst.body());
+                        evalFunctionDeclarations = new LinkedHashSet<>();
+                        AstUtils.collectGlobalDeclarations(
+                                evalAst,
+                                evalVarDeclarations,
+                                evalLexDeclarations,
+                                null,
+                                evalFunctionDeclarations);
                         parsedEvalDeclarations = true;
                         evalCodeStrict = evalCodeStrict || evalAst.strict();
                     } catch (Exception ignored) {

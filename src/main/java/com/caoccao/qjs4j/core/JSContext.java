@@ -17,8 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.AstUtils;
-import com.caoccao.qjs4j.compilation.ast.FunctionDeclaration;
-import com.caoccao.qjs4j.compilation.ast.Statement;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.vm.StackFrame;
@@ -1153,8 +1151,7 @@ public final class JSContext implements AutoCloseable {
                 Set<String> newConstDecls = new HashSet<>();
                 Set<String> newVarDecls = new HashSet<>();
                 Set<String> newLexDecls = new HashSet<>();
-                AstUtils.collectGlobalConstDeclarations(compileResult.ast(), newConstDecls);
-                AstUtils.collectGlobalDeclarations(compileResult.ast(), newVarDecls, newLexDecls);
+                AstUtils.collectGlobalDeclarations(compileResult.ast(), newVarDecls, newLexDecls, newConstDecls);
 
                 // Check: let/const names must not collide with existing lex declarations
                 // or restricted global properties (non-configurable or script-level var)
@@ -1214,43 +1211,41 @@ public final class JSContext implements AutoCloseable {
             // If any function declaration targets a non-configurable global property that is
             // not both writable and enumerable, throw TypeError before any code runs.
             // Following QuickJS js_closure2 first-pass check with JS_CheckDefineGlobalVar.
+            Set<String> globalEvalFunctionNames = null;
             if (!isModule && isDirectEval) {
-                List<Statement> evalBody = compileResult.ast().body();
-                Set<String> checkedFuncNames = new HashSet<>();
-                Set<String> globalEvalFunctionNames = new HashSet<>();
-                for (int i = evalBody.size() - 1; i >= 0; i--) {
-                    if (evalBody.get(i) instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
-                        String funcName = funcDecl.id().name();
-                        if (checkedFuncNames.add(funcName)) {
-                            globalEvalFunctionNames.add(funcName);
-                            PropertyKey key = PropertyKey.fromString(funcName);
-                            PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                            if (desc != null && !desc.isConfigurable()) {
-                                if (desc.isAccessorDescriptor()
-                                        || !(desc.isWritable() && desc.isEnumerable())) {
-                                    throw new JSException(throwTypeError("cannot define variable '" + funcName + "'"));
-                                }
-                            }
-                            if (desc == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
-                                throw new JSException(throwTypeError("cannot define variable '" + funcName + "'"));
-                            }
-                            if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                                if (desc == null || desc.isConfigurable()) {
-                                    JSValue initialValue = desc != null && desc.hasValue()
-                                            ? desc.getValue()
-                                            : JSUndefined.INSTANCE;
-                                    jsGlobalObject.getGlobalObject().defineProperty(
-                                            key,
-                                            PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
-                                }
-                            }
+                Set<String> evalVarDeclarations = new HashSet<>();
+                Set<String> evalLexDeclarations = new HashSet<>();
+                globalEvalFunctionNames = new LinkedHashSet<>();
+                AstUtils.collectGlobalDeclarations(
+                        compileResult.ast(),
+                        evalVarDeclarations,
+                        evalLexDeclarations,
+                        null,
+                        globalEvalFunctionNames);
+                for (String functionName : globalEvalFunctionNames) {
+                    PropertyKey key = PropertyKey.fromString(functionName);
+                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
+                    if (desc != null && !desc.isConfigurable()) {
+                        if (desc.isAccessorDescriptor()
+                                || !(desc.isWritable() && desc.isEnumerable())) {
+                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
+                        }
+                    }
+                    if (desc == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
+                        throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
+                    }
+                    if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
+                        if (desc == null || desc.isConfigurable()) {
+                            JSValue initialValue = desc != null && desc.hasValue()
+                                    ? desc.getValue()
+                                    : JSUndefined.INSTANCE;
+                            jsGlobalObject.getGlobalObject().defineProperty(
+                                    key,
+                                    PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
                         }
                     }
                 }
                 if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                    Set<String> evalVarDeclarations = new HashSet<>();
-                    Set<String> evalLexDeclarations = new HashSet<>();
-                    AstUtils.collectGlobalDeclarations(compileResult.ast(), evalVarDeclarations, evalLexDeclarations);
                     for (String declarationName : evalVarDeclarations) {
                         if (globalEvalFunctionNames.contains(declarationName)) {
                             continue;
@@ -1294,14 +1289,10 @@ public final class JSContext implements AutoCloseable {
                     && isDirectEval
                     && directEvalCallerFrame != null
                     && directEvalCallerFrame.getCaller() == null) {
-                List<Statement> evalBody = compileResult.ast().body();
-                Set<String> functionNames = new HashSet<>();
-                for (int i = evalBody.size() - 1; i >= 0; i--) {
-                    if (evalBody.get(i) instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
-                        functionNames.add(functionDeclaration.id().name());
-                    }
+                if (globalEvalFunctionNames == null) {
+                    globalEvalFunctionNames = new LinkedHashSet<>();
                 }
-                for (String functionName : functionNames) {
+                for (String functionName : globalEvalFunctionNames) {
                     PropertyKey key = PropertyKey.fromString(functionName);
                     if (!jsGlobalObject.getGlobalObject().has(key)) {
                         continue;

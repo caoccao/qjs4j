@@ -67,21 +67,63 @@ public final class AstUtils {
             Program program,
             Set<String> varDecls,
             Set<String> lexDecls) {
-        for (Statement stmt : program.body()) {
+        collectGlobalDeclarations(program, varDecls, lexDecls, null, null);
+    }
+
+    /**
+     * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
+     * Collects var and lex (let/const) names declared at the top level, and optionally const names.
+     *
+     * @param program    The parsed program AST
+     * @param varDecls   Output: var/function names declared by this program
+     * @param lexDecls   Output: let/const names declared by this program
+     * @param constDecls Optional output: const names declared by this program
+     */
+    public static void collectGlobalDeclarations(
+            Program program,
+            Set<String> varDecls,
+            Set<String> lexDecls,
+            Set<String> constDecls) {
+        collectGlobalDeclarations(program, varDecls, lexDecls, constDecls, null);
+    }
+
+    /**
+     * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
+     * Collects var and lex (let/const) names declared at the top level, and optionally const/function names.
+     *
+     * @param program      The parsed program AST
+     * @param varDecls     Output: var/function names declared by this program
+     * @param lexDecls     Output: let/const names declared by this program
+     * @param constDecls   Optional output: const names declared by this program
+     * @param functionDecls Optional output: top-level function declaration names in reverse source order
+     */
+    public static void collectGlobalDeclarations(
+            Program program,
+            Set<String> varDecls,
+            Set<String> lexDecls,
+            Set<String> constDecls,
+            Set<String> functionDecls) {
+        List<Statement> body = program.body();
+        for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
+            Statement stmt = body.get(statementIndex);
             if (stmt instanceof VariableDeclaration varDecl) {
                 if (varDecl.kind() == VariableKind.VAR) {
                     for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
                         collectPatternNames(d.id(), varDecls);
                     }
                 } else {
+                    boolean isConstDeclaration = varDecl.kind() == VariableKind.CONST;
                     // let or const
                     for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                        collectPatternNames(d.id(), lexDecls);
+                        collectPatternNames(d.id(), lexDecls, isConstDeclaration ? constDecls : null);
                     }
                 }
             } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 if (funcDecl.id() != null) {
                     varDecls.add(funcDecl.id().name());
+                    if (functionDecls != null) {
+                        functionDecls.add(funcDecl.id().name());
+                    }
                 }
             } else if (stmt instanceof ClassDeclaration classDecl) {
                 if (classDecl.id() != null) {
@@ -95,7 +137,7 @@ public final class AstUtils {
         if (!program.strict()) {
             Set<String> topLevelLexicals = new HashSet<>(lexDecls);
             Set<String> annexBCandidates = new HashSet<>();
-            for (Statement stmt : program.body()) {
+            for (Statement stmt : body) {
                 scanAnnexBForCollisionCheck(stmt, topLevelLexicals, annexBCandidates);
             }
             varDecls.addAll(annexBCandidates);
@@ -103,20 +145,27 @@ public final class AstUtils {
     }
 
     static void collectPatternNames(Pattern pattern, Set<String> names) {
+        collectPatternNames(pattern, names, null);
+    }
+
+    private static void collectPatternNames(Pattern pattern, Set<String> primary, Set<String> secondary) {
         if (pattern instanceof Identifier id) {
-            names.add(id.name());
+            primary.add(id.name());
+            if (secondary != null) {
+                secondary.add(id.name());
+            }
         } else if (pattern instanceof ArrayPattern arr) {
             for (Pattern element : arr.elements()) {
                 if (element != null) {
-                    collectPatternNames(element, names);
+                    collectPatternNames(element, primary, secondary);
                 }
             }
         } else if (pattern instanceof ObjectPattern obj) {
             for (ObjectPattern.Property prop : obj.properties()) {
-                collectPatternNames(prop.value(), names);
+                collectPatternNames(prop.value(), primary, secondary);
             }
         } else if (pattern instanceof RestElement rest) {
-            collectPatternNames(rest.argument(), names);
+            collectPatternNames(rest.argument(), primary, secondary);
         }
     }
 
