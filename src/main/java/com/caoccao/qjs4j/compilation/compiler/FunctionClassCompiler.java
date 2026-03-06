@@ -278,8 +278,7 @@ final class FunctionClassCompiler {
                 try {
                     // Phase 0: Pre-declare var and top-level function names as locals so nested
                     // closures resolve captures to VarRef slots consistently with function bodies.
-                    funcDelegates.analysis.hoistVarDeclarationsAsLocals(block.body());
-                    funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(block.body());
+                    funcDelegates.analysis.hoistAllDeclarationsAsLocals(block.body());
 
                     // Phase 1: Hoist top-level function declarations before executing body statements.
                     for (Statement statement : block.body()) {
@@ -975,8 +974,7 @@ final class FunctionClassCompiler {
         // declarations that may capture them. Without this, Phase 1 function hoisting
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        funcDelegates.analysis.hoistVarDeclarationsAsLocals(funcDecl.body().body());
-        funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(funcDecl.body().body());
+        funcDelegates.analysis.hoistAllDeclarationsAsLocals(funcDecl.body().body());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
@@ -1228,8 +1226,7 @@ final class FunctionClassCompiler {
         // declarations that may capture them. Without this, Phase 1 function hoisting
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        funcDelegates.analysis.hoistVarDeclarationsAsLocals(functionExpression.body().body());
-        funcDelegates.analysis.hoistTopLevelFunctionDeclarationNamesAsLocals(functionExpression.body().body());
+        funcDelegates.analysis.hoistAllDeclarationsAsLocals(functionExpression.body().body());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).

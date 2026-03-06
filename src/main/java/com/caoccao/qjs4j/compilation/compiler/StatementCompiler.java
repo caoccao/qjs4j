@@ -74,13 +74,20 @@ final class StatementCompiler {
         boolean savedGlobalScope = compilerContext.inGlobalScope;
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
-        // Phase 0: Pre-declare block-scoped let/const variables so that function
-        // declarations hoisted in Phase 1 can capture them via closure.
-        preDeclareLexicalBindings(block.body());
-        // Phase 1: Hoist function declarations to top of block (ES2015+ block-scoped
-        // functions are initialized before any statements in the block execute).
+        // Single pass: pre-declare lexical bindings and hoist function declarations
         for (Statement stmt : block.body()) {
-            if (stmt instanceof FunctionDeclaration funcDecl) {
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    Set<String> names = new HashSet<>();
+                    delegates.analysis.collectPatternBindingNames(d.id(), names);
+                    for (String name : names) {
+                        compilerContext.currentScope().declareLocal(name);
+                        if (vd.kind() == VariableKind.CONST) {
+                            compilerContext.currentScope().markConstLocal(name);
+                        }
+                    }
+                }
+            } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 delegates.functions.compileFunctionDeclaration(funcDecl);
             }
         }
@@ -871,26 +878,4 @@ final class StatementCompiler {
         return false;
     }
 
-    /**
-     * Pre-declare block-scoped let/const bindings in the current scope.
-     * This must be called before hoisting function declarations so that
-     * closures created by those function declarations can capture the
-     * let/const variables from the same block scope.
-     */
-    private void preDeclareLexicalBindings(List<Statement> body) {
-        for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    Set<String> names = new HashSet<>();
-                    delegates.analysis.collectPatternBindingNames(d.id(), names);
-                    for (String name : names) {
-                        compilerContext.currentScope().declareLocal(name);
-                        if (vd.kind() == VariableKind.CONST) {
-                            compilerContext.currentScope().markConstLocal(name);
-                        }
-                    }
-                }
-            }
-        }
-    }
 }

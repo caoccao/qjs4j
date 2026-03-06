@@ -159,29 +159,26 @@ final class CompilerAnalysis {
             return; // Annex B does not apply in strict mode
         }
 
-        // Collect top-level lexical bindings (let/const) from the function body.
+        // Single pass: collect lexical bindings, Annex B candidates, and already-declared names
         Set<String> topLevelLexicals = new HashSet<>();
-        collectLexicalBindings(body, topLevelLexicals);
-
-        // Scan for Annex B candidates in the function body
         Set<String> candidates = new HashSet<>();
-        for (Statement stmt : body) {
-            scanAnnexBStatement(stmt, topLevelLexicals, candidates);
-        }
-
-        if (candidates.isEmpty()) {
-            return;
-        }
-
-        // Collect names that are already declared (explicit var, top-level functions)
-        // to avoid creating duplicate bindings.
         Set<String> alreadyDeclared = new HashSet<>();
         for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    collectPatternBindingNames(d.id(), topLevelLexicals);
+                }
+            }
             if (stmt instanceof FunctionDeclaration fd && fd.id() != null) {
                 alreadyDeclared.add(fd.id().name());
             } else {
                 collectVarNamesFromStatement(stmt, alreadyDeclared);
             }
+            scanAnnexBStatement(stmt, topLevelLexicals, candidates);
+        }
+
+        if (candidates.isEmpty()) {
+            return;
         }
 
         for (String name : candidates) {
@@ -215,31 +212,30 @@ final class CompilerAnalysis {
      * compiling earlier hoisted functions (e.g. function A capturing function B declared later in
      * the same function body).
      */
-    void hoistTopLevelFunctionDeclarationNamesAsLocals(List<Statement> body) {
-        for (Statement stmt : body) {
-            if (stmt instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
-                String functionName = functionDeclaration.id().name();
-                if (compilerContext.currentScope().getLocal(functionName) == null) {
-                    compilerContext.currentScope().declareLocal(functionName);
-                }
-            }
-        }
-    }
-
     /**
-     * Pre-declare all variable names as locals in the current scope.
+     * Pre-declare all variable and function declaration names as locals in the current scope
+     * in a single pass over the function body.
+     * <p>
      * This ensures bindings are visible during Phase 1 (function declaration hoisting),
-     * so nested function declarations can properly capture outer variables via VarRef.
+     * so nested function declarations can properly capture outer variables via VarRef,
+     * and sibling function declarations are visible to closure capture resolution.
      * <p>
      * Handles:
+     * - Function declarations: top-level names declared as locals
      * - var declarations: function-scoped, recurse into blocks (they hoist)
      * - let/const declarations: block-scoped, only top-level of function body
      * (they don't hoist into nested blocks but ARE in scope at function level)
      */
-    void hoistVarDeclarationsAsLocals(List<Statement> body) {
+    void hoistAllDeclarationsAsLocals(List<Statement> body) {
         Set<String> varNames = new HashSet<>();
         for (Statement stmt : body) {
-            if (stmt instanceof FunctionDeclaration) {
+            if (stmt instanceof FunctionDeclaration functionDeclaration) {
+                if (functionDeclaration.id() != null) {
+                    String functionName = functionDeclaration.id().name();
+                    if (compilerContext.currentScope().getLocal(functionName) == null) {
+                        compilerContext.currentScope().declareLocal(functionName);
+                    }
+                }
                 continue;
             }
             // Collect var names (recurses into blocks since var is function-scoped)
