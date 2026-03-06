@@ -783,9 +783,9 @@ public final class VirtualMachine {
                 return variableObject;
 
             case 6: // SPECIAL_OBJECT_IMPORT_META
-                // Return import.meta object for ES6 modules
-                // For now return undefined - needs module support
-                return JSUndefined.INSTANCE;
+                JSStackFrame scriptFrame = context.getCurrentStackFrame();
+                String filename = scriptFrame != null ? scriptFrame.filename() : null;
+                return context.createImportMetaObject(filename);
 
             default:
                 throw new JSVirtualMachineException("Unknown special object type: " + objectType);

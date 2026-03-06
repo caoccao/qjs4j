@@ -32,26 +32,6 @@ import java.util.Set;
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext parserContext, ParserDelegates delegates) {
-    private static String getSimpleClassElementName(Expression key) {
-        if (key instanceof Identifier identifier) {
-            return identifier.name();
-        }
-        if (key instanceof Literal literal && literal.value() instanceof String literalString) {
-            return literalString;
-        }
-        return null;
-    }
-
-    private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
-        if (!isPrivate) {
-            return false;
-        }
-        if (key instanceof PrivateIdentifier privateIdentifier) {
-            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.name());
-        }
-        return false;
-    }
-
     /**
      * Extract all bound identifier names from a pattern.
      * Used for strict mode parameter validation.
@@ -82,6 +62,26 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return extractBoundNames(restElement.argument());
         }
         return List.of();
+    }
+
+    private static String getSimpleClassElementName(Expression key) {
+        if (key instanceof Identifier identifier) {
+            return identifier.name();
+        }
+        if (key instanceof Literal literal && literal.value() instanceof String literalString) {
+            return literalString;
+        }
+        return null;
+    }
+
+    private static boolean isPrivateConstructorName(Expression key, boolean isPrivate) {
+        if (!isPrivate) {
+            return false;
+        }
+        if (key instanceof PrivateIdentifier privateIdentifier) {
+            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.name());
+        }
+        return false;
     }
 
     /**
@@ -529,6 +529,26 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         return new ClassExpression(id, superClass, body, location);
     }
 
+    private Expression parseClassFieldInitializer() {
+        Expression value = null;
+        if (parserContext.match(TokenType.ASSIGN)) {
+            parserContext.advance();
+            boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
+            boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+            parserContext.inClassFieldInitializer = true;
+            parserContext.superPropertyAllowed = true;
+            parserContext.enterFunctionContext(false);
+            try {
+                value = delegates.expressions.parseAssignmentExpression();
+            } finally {
+                parserContext.exitFunctionContext(false);
+                parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+                parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
+            }
+        }
+        return value;
+    }
+
     /**
      * Parse a function body with "use strict" directive detection and parameter validation.
      * Following QuickJS: after parsing '{', check for directives, then validate parameters
@@ -885,24 +905,33 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
-    private Expression parseClassFieldInitializer() {
-        Expression value = null;
-        if (parserContext.match(TokenType.ASSIGN)) {
-            parserContext.advance();
-            boolean savedInClassFieldInitializer = parserContext.inClassFieldInitializer;
-            boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
-            parserContext.inClassFieldInitializer = true;
-            parserContext.superPropertyAllowed = true;
-            parserContext.enterFunctionContext(false);
-            try {
-                value = delegates.expressions.parseAssignmentExpression();
-            } finally {
-                parserContext.exitFunctionContext(false);
-                parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
-                parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
+    /**
+     * Parse a static initialization block: static { statements }
+     */
+    ClassDeclaration.StaticBlock parseStaticBlock() {
+        parserContext.expect(TokenType.LBRACE);
+        List<Statement> statements = new ArrayList<>();
+
+        parserContext.enterFunctionContext(false);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+        parserContext.inClassStaticInit = true;
+        parserContext.superPropertyAllowed = true;
+        try {
+            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                Statement stmt = delegates.statements.parseStatement();
+                if (stmt != null) {
+                    statements.add(stmt);
+                }
             }
+        } finally {
+            parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            parserContext.exitFunctionContext(false);
         }
-        return value;
+
+        parserContext.expect(TokenType.RBRACE);
+        return new ClassDeclaration.StaticBlock(statements);
     }
 
     private void validateClassElements(List<ClassDeclaration.ClassElement> classElements) {
@@ -953,35 +982,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (JSKeyword.CONSTRUCTOR.equals(fieldName) || JSKeyword.PROTOTYPE.equals(fieldName)) {
             throw new JSSyntaxErrorException("invalid field name");
         }
-    }
-
-    /**
-     * Parse a static initialization block: static { statements }
-     */
-    ClassDeclaration.StaticBlock parseStaticBlock() {
-        parserContext.expect(TokenType.LBRACE);
-        List<Statement> statements = new ArrayList<>();
-
-        parserContext.enterFunctionContext(false);
-        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
-        boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
-        parserContext.inClassStaticInit = true;
-        parserContext.superPropertyAllowed = true;
-        try {
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                Statement stmt = delegates.statements.parseStatement();
-                if (stmt != null) {
-                    statements.add(stmt);
-                }
-            }
-        } finally {
-            parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
-            parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(false);
-        }
-
-        parserContext.expect(TokenType.RBRACE);
-        return new ClassDeclaration.StaticBlock(statements);
     }
 
     /**

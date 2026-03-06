@@ -24,7 +24,14 @@ import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Represents a JavaScript execution context.
@@ -43,6 +50,7 @@ public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     // Call stack management
     private final Deque<JSStackFrame> callStack;
+    private final Map<String, DynamicImportModuleRecord> dynamicImportModuleCache;
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
     private final Deque<EvalOverlayFrame> evalOverlayFrames;
@@ -104,6 +112,7 @@ public final class JSContext implements AutoCloseable {
         this.jsGlobalObject = new JSGlobalObject(this);
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
+        this.dynamicImportModuleCache = new HashMap<>();
         this.moduleCache = new HashMap<>();
         this.pendingException = null;
         this.runtime = runtime;
@@ -115,6 +124,22 @@ public final class JSContext implements AutoCloseable {
 
         this.currentThis = jsGlobalObject.getGlobalObject();
         initializeGlobalObject();
+    }
+
+    private void appendDynamicImportExportAssignments(
+            StringBuilder transformedSourceBuilder,
+            String exportBindingName,
+            List<LocalExportBinding> localExportBindings) {
+        transformedSourceBuilder.append("const __qjs4jModuleExports = globalThis[\"")
+                .append(exportBindingName)
+                .append("\"];\n");
+        for (LocalExportBinding localExportBinding : localExportBindings) {
+            transformedSourceBuilder.append("__qjs4jModuleExports[\"")
+                    .append(localExportBinding.exportedName())
+                    .append("\"] = ")
+                    .append(localExportBinding.localName())
+                    .append(";\n");
+        }
     }
 
     /**
@@ -173,6 +198,7 @@ public final class JSContext implements AutoCloseable {
      * Clear the module cache.
      */
     private void clearModuleCache() {
+        dynamicImportModuleCache.clear();
         moduleCache.clear();
     }
 
@@ -210,6 +236,15 @@ public final class JSContext implements AutoCloseable {
             return true;
         }
         return false;
+    }
+
+    public JSObject createImportMetaObject(String filename) {
+        JSObject importMetaObject = new JSObject();
+        importMetaObject.setPrototype(null);
+        if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
+            importMetaObject.set(PropertyKey.fromString("url"), new JSString(filename));
+        }
+        return importMetaObject;
     }
 
     public JSAggregateError createJSAggregateError(String message) {
@@ -745,6 +780,11 @@ public final class JSContext implements AutoCloseable {
         return jsWeakSet;
     }
 
+    private String createModuleExportBindingName(String resolvedSpecifier) {
+        return "__qjs4jDynamicImportExports$" + Math.abs(resolvedSpecifier.hashCode()) + "$"
+                + dynamicImportModuleCache.size();
+    }
+
     /**
      * Enqueue a microtask to be executed.
      *
@@ -1082,11 +1122,57 @@ public final class JSContext implements AutoCloseable {
         return eval(code, filename, isModule, false, true, true, false, false);
     }
 
+    private void evaluateDynamicImportModule(DynamicImportModuleRecord moduleRecord) {
+        if (!moduleRecord.hasExportSyntax()) {
+            validateModuleScriptEarlyErrors(moduleRecord.rawSource());
+            eval(moduleRecord.rawSource(), moduleRecord.resolvedSpecifier(), true);
+            return;
+        }
+        String exportBindingName = moduleRecord.exportBindingName();
+        JSObject globalObject = getGlobalObject();
+        JSObject moduleNamespace = moduleRecord.namespace();
+        globalObject.set(this, PropertyKey.fromString(exportBindingName), moduleNamespace);
+        try {
+            String transformedSource = moduleRecord.transformedSource();
+            eval(transformedSource, moduleRecord.resolvedSpecifier(), false);
+        } finally {
+            globalObject.delete(this, PropertyKey.fromString(exportBindingName));
+        }
+    }
+
     /**
      * Exit strict mode.
      */
     public void exitStrictMode() {
         this.strictMode = false;
+    }
+
+    private List<String> extractSimpleDeclarationNames(String declarationSource) {
+        String declarationText = declarationSource.trim();
+        int firstSpaceIndex = declarationText.indexOf(' ');
+        if (firstSpaceIndex < 0 || firstSpaceIndex >= declarationText.length() - 1) {
+            return List.of();
+        }
+        String declaratorsText = declarationText.substring(firstSpaceIndex + 1).trim();
+        if (declaratorsText.endsWith(";")) {
+            declaratorsText = declaratorsText.substring(0, declaratorsText.length() - 1).trim();
+        }
+        if (declaratorsText.isEmpty()) {
+            return List.of();
+        }
+        String[] declarators = declaratorsText.split(",");
+        List<String> declarationNames = new ArrayList<>(declarators.length);
+        for (String declarator : declarators) {
+            String declaratorText = declarator.trim();
+            int assignmentIndex = declaratorText.indexOf('=');
+            if (assignmentIndex >= 0) {
+                declaratorText = declaratorText.substring(0, assignmentIndex).trim();
+            }
+            if (!declaratorText.isEmpty()) {
+                declarationNames.add(declaratorText);
+            }
+        }
+        return declarationNames;
     }
 
     /**
@@ -1131,6 +1217,21 @@ public final class JSContext implements AutoCloseable {
      */
     public JSValue getCurrentThis() {
         return currentThis;
+    }
+
+    private String getDynamicImportModuleExport(
+            DynamicImportModuleRecord moduleRecord,
+            String exportName,
+            String targetSpecifier) {
+        if (moduleRecord.ambiguousExportNames().contains(exportName)) {
+            throw new JSException(throwSyntaxError("ambiguous indirect export: " + exportName));
+        }
+        PropertyKey exportKey = PropertyKey.fromString(exportName);
+        if (!moduleRecord.namespace().hasOwnProperty(exportKey)) {
+            throw new JSException(throwSyntaxError(
+                    "module '" + targetSpecifier + "' does not provide export '" + exportName + "'"));
+        }
+        return exportName;
     }
 
     /**
@@ -1432,6 +1533,48 @@ public final class JSContext implements AutoCloseable {
         return waitable;
     }
 
+    public JSObject loadDynamicImportModule(String specifier, String referrerFilename) {
+        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
+        DynamicImportModuleRecord moduleRecord = loadDynamicImportModuleRecord(resolvedSpecifier, new HashSet<>());
+        return moduleRecord.namespace();
+    }
+
+    private DynamicImportModuleRecord loadDynamicImportModuleRecord(
+            String resolvedSpecifier,
+            Set<String> importResolutionStack) {
+        DynamicImportModuleRecord cachedRecord = dynamicImportModuleCache.get(resolvedSpecifier);
+        if (cachedRecord != null) {
+            if (cachedRecord.status() == DynamicImportModuleStatus.EVALUATED) {
+                return cachedRecord;
+            }
+            if (cachedRecord.status() == DynamicImportModuleStatus.LOADING) {
+                return cachedRecord;
+            }
+        }
+
+        DynamicImportModuleRecord moduleRecord = new DynamicImportModuleRecord(resolvedSpecifier);
+        moduleRecord.setStatus(DynamicImportModuleStatus.LOADING);
+        dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
+
+        try {
+            String sourceCode = Files.readString(Path.of(resolvedSpecifier));
+            moduleRecord.setRawSource(sourceCode);
+            parseDynamicImportModuleSource(moduleRecord);
+            evaluateDynamicImportModule(moduleRecord);
+            resolveDynamicImportReExports(moduleRecord, importResolutionStack);
+            moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+            return moduleRecord;
+        } catch (IOException ioException) {
+            throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
+        } catch (JSException jsException) {
+            dynamicImportModuleCache.remove(resolvedSpecifier);
+            throw jsException;
+        } catch (Exception exception) {
+            dynamicImportModuleCache.remove(resolvedSpecifier);
+            throw new JSException(throwError("Error", exception.getMessage() != null ? exception.getMessage() : "Module load error"));
+        }
+    }
+
     /**
      * Load and cache a JavaScript module.
      *
@@ -1455,6 +1598,168 @@ public final class JSContext implements AutoCloseable {
 
         // For now, return null to indicate module not found
         // A full implementation would load from filesystem or URL
+    }
+
+    private void mergeStarReExport(
+            DynamicImportModuleRecord moduleRecord,
+            DynamicImportModuleRecord targetModuleRecord,
+            Map<String, String> exportOrigins,
+            String targetSpecifier) {
+        for (PropertyKey key : targetModuleRecord.namespace().getOwnPropertyKeys()) {
+            if (!key.isString()) {
+                continue;
+            }
+            String exportName = key.asString();
+            if ("default".equals(exportName)) {
+                continue;
+            }
+            if (targetModuleRecord.ambiguousExportNames().contains(exportName)) {
+                moduleRecord.ambiguousExportNames().add(exportName);
+                moduleRecord.namespace().delete(this, PropertyKey.fromString(exportName));
+                exportOrigins.remove(exportName);
+                continue;
+            }
+            if (moduleRecord.explicitExportNames().contains(exportName)) {
+                continue;
+            }
+            String existingOrigin = exportOrigins.get(exportName);
+            if (existingOrigin == null) {
+                JSValue value = targetModuleRecord.namespace().get(key);
+                moduleRecord.namespace().set(PropertyKey.fromString(exportName), value);
+                exportOrigins.put(exportName, targetSpecifier);
+                continue;
+            }
+            if (!existingOrigin.equals(targetSpecifier)) {
+                moduleRecord.ambiguousExportNames().add(exportName);
+                moduleRecord.namespace().delete(this, PropertyKey.fromString(exportName));
+                exportOrigins.remove(exportName);
+            }
+        }
+    }
+
+    private void parseDynamicImportExportList(
+            String exportListText,
+            String sourceSpecifier,
+            List<LocalExportBinding> localExportBindings,
+            List<ReExportBinding> reExportBindings) {
+        String[] exportEntries = exportListText.split(",");
+        for (String exportEntry : exportEntries) {
+            String exportText = exportEntry.trim();
+            if (exportText.isEmpty()) {
+                continue;
+            }
+            String[] aliasParts = exportText.split("\\s+as\\s+");
+            String localName = aliasParts[0].trim();
+            String exportedName = aliasParts.length > 1 ? aliasParts[1].trim() : localName;
+            if (sourceSpecifier == null) {
+                localExportBindings.add(new LocalExportBinding(localName, exportedName));
+            } else {
+                reExportBindings.add(new ReExportBinding(sourceSpecifier, localName, exportedName, false));
+            }
+        }
+    }
+
+    private void parseDynamicImportModuleSource(DynamicImportModuleRecord moduleRecord) {
+        String sourceCode = moduleRecord.rawSource();
+        StringBuilder transformedSourceBuilder = new StringBuilder(sourceCode.length() + 128);
+        List<LocalExportBinding> localExportBindings = new ArrayList<>();
+        List<ReExportBinding> reExportBindings = new ArrayList<>();
+        boolean hasExportSyntax = false;
+        int defaultExportIndex = 0;
+
+        String[] lines = sourceCode.split("\n", -1);
+        for (String line : lines) {
+            String trimmedLine = line.stripLeading();
+            if (!trimmedLine.startsWith("export ")) {
+                transformedSourceBuilder.append(line).append('\n');
+                continue;
+            }
+
+            hasExportSyntax = true;
+            String exportClause = trimmedLine.substring("export ".length()).trim();
+            if (exportClause.startsWith("default ")) {
+                String defaultExpression = exportClause.substring("default ".length()).trim();
+                if (defaultExpression.endsWith(";")) {
+                    defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
+                }
+                String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
+                transformedSourceBuilder.append("const ")
+                        .append(defaultLocalName)
+                        .append(" = ")
+                        .append(defaultExpression)
+                        .append(";\n");
+                localExportBindings.add(new LocalExportBinding(defaultLocalName, "default"));
+                continue;
+            }
+
+            if (exportClause.startsWith("var ")
+                    || exportClause.startsWith("let ")
+                    || exportClause.startsWith("const ")) {
+                transformedSourceBuilder.append(line.replaceFirst("export\\s+", "")).append('\n');
+                for (String declarationName : extractSimpleDeclarationNames(exportClause)) {
+                    localExportBindings.add(new LocalExportBinding(declarationName, declarationName));
+                }
+                continue;
+            }
+
+            if (exportClause.startsWith("{")) {
+                int closeBraceIndex = exportClause.indexOf('}');
+                if (closeBraceIndex < 0) {
+                    throw new JSException(throwSyntaxError("Invalid export statement"));
+                }
+                String exportListText = exportClause.substring(1, closeBraceIndex).trim();
+                String afterBraceText = exportClause.substring(closeBraceIndex + 1).trim();
+                if (afterBraceText.endsWith(";")) {
+                    afterBraceText = afterBraceText.substring(0, afterBraceText.length() - 1).trim();
+                }
+                String sourceSpecifier = null;
+                if (!afterBraceText.isEmpty()) {
+                    if (!afterBraceText.startsWith("from ")) {
+                        throw new JSException(throwSyntaxError("Invalid export statement"));
+                    }
+                    String fromText = afterBraceText.substring("from ".length()).trim();
+                    sourceSpecifier = stripQuotedSpecifier(fromText);
+                }
+                parseDynamicImportExportList(exportListText, sourceSpecifier, localExportBindings, reExportBindings);
+                continue;
+            }
+
+            if (exportClause.startsWith("*")) {
+                String afterStarText = exportClause.substring(1).trim();
+                if (!afterStarText.startsWith("from ")) {
+                    throw new JSException(throwSyntaxError("Invalid export statement"));
+                }
+                String fromText = afterStarText.substring("from ".length()).trim();
+                if (fromText.endsWith(";")) {
+                    fromText = fromText.substring(0, fromText.length() - 1).trim();
+                }
+                String sourceSpecifier = stripQuotedSpecifier(fromText);
+                reExportBindings.add(new ReExportBinding(sourceSpecifier, "*", "*", true));
+                continue;
+            }
+
+            throw new JSException(throwSyntaxError("Unexpected export syntax"));
+        }
+
+        moduleRecord.setHasExportSyntax(hasExportSyntax);
+        moduleRecord.localExportBindings().addAll(localExportBindings);
+        moduleRecord.reExportBindings().addAll(reExportBindings);
+        for (LocalExportBinding localExportBinding : localExportBindings) {
+            moduleRecord.explicitExportNames().add(localExportBinding.exportedName());
+            moduleRecord.exportOrigins().put(localExportBinding.exportedName(), moduleRecord.resolvedSpecifier());
+        }
+
+        if (hasExportSyntax) {
+            String exportBindingName = createModuleExportBindingName(moduleRecord.resolvedSpecifier());
+            appendDynamicImportExportAssignments(transformedSourceBuilder, exportBindingName, localExportBindings);
+            String transformedSource = "(function () {\n"
+                    + transformedSourceBuilder
+                    + "})();\n";
+            moduleRecord.setTransformedSource(transformedSource);
+            moduleRecord.setExportBindingName(exportBindingName);
+        } else {
+            moduleRecord.setTransformedSource(sourceCode);
+        }
     }
 
     public void popEvalOverlay() {
@@ -1508,6 +1813,68 @@ public final class JSContext implements AutoCloseable {
 
     public void registerModule(String specifier, JSModule module) {
         moduleCache.put(specifier, module);
+    }
+
+    private void resolveDynamicImportReExports(
+            DynamicImportModuleRecord moduleRecord,
+            Set<String> importResolutionStack) {
+        if (moduleRecord.reExportBindings().isEmpty()) {
+            return;
+        }
+
+        if (!importResolutionStack.add(moduleRecord.resolvedSpecifier())) {
+            throw new JSException(throwSyntaxError("Circular module dependency"));
+        }
+        try {
+            Map<String, String> exportOrigins = moduleRecord.exportOrigins();
+            for (ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
+                String targetSpecifier = resolveDynamicImportSpecifier(
+                        reExportBinding.sourceSpecifier(),
+                        moduleRecord.resolvedSpecifier(),
+                        reExportBinding.sourceSpecifier());
+                DynamicImportModuleRecord targetModuleRecord = loadDynamicImportModuleRecord(targetSpecifier, importResolutionStack);
+                if (reExportBinding.starExport()) {
+                    mergeStarReExport(moduleRecord, targetModuleRecord, exportOrigins, targetSpecifier);
+                    continue;
+                }
+                String importedName = getDynamicImportModuleExport(targetModuleRecord, reExportBinding.importedName(), targetSpecifier);
+                JSValue importedValue = targetModuleRecord.namespace().get(PropertyKey.fromString(importedName));
+                moduleRecord.namespace().set(PropertyKey.fromString(reExportBinding.exportedName()), importedValue);
+                moduleRecord.explicitExportNames().add(reExportBinding.exportedName());
+                exportOrigins.put(reExportBinding.exportedName(), targetSpecifier);
+            }
+        } finally {
+            importResolutionStack.remove(moduleRecord.resolvedSpecifier());
+        }
+    }
+
+    private String resolveDynamicImportSpecifier(
+            String specifier,
+            String referrerFilename,
+            String errorSpecifier) {
+        final Path rawSpecifierPath;
+        try {
+            rawSpecifierPath = Paths.get(specifier);
+        } catch (InvalidPathException invalidPathException) {
+            throw new JSException(throwTypeError("Cannot find module '" + errorSpecifier + "'"));
+        }
+
+        Path resolvedPath = rawSpecifierPath;
+        if (!resolvedPath.isAbsolute()
+                && referrerFilename != null
+                && !referrerFilename.isEmpty()
+                && !referrerFilename.startsWith("<")) {
+            Path referrerPath = Paths.get(referrerFilename);
+            Path parentPath = referrerPath.getParent();
+            if (parentPath != null) {
+                resolvedPath = parentPath.resolve(resolvedPath);
+            }
+        }
+        resolvedPath = resolvedPath.normalize();
+        if (!Files.exists(resolvedPath)) {
+            throw new JSException(throwTypeError("Cannot find module '" + errorSpecifier + "'"));
+        }
+        return resolvedPath.toString();
     }
 
     public void resumeEvalOverlays(EvalOverlaySnapshot evalOverlaySnapshot) {
@@ -1607,6 +1974,19 @@ public final class JSContext implements AutoCloseable {
 
     public void setWaitable(boolean waitable) {
         this.waitable = waitable;
+    }
+
+    private String stripQuotedSpecifier(String text) {
+        String specifierText = text.trim();
+        if (specifierText.length() < 2) {
+            throw new JSException(throwSyntaxError("Invalid module specifier"));
+        }
+        char firstChar = specifierText.charAt(0);
+        char lastChar = specifierText.charAt(specifierText.length() - 1);
+        if (!((firstChar == '\'' || firstChar == '"') && firstChar == lastChar)) {
+            throw new JSException(throwSyntaxError("Invalid module specifier"));
+        }
+        return specifierText.substring(1, specifierText.length() - 1);
     }
 
     public EvalOverlaySnapshot suspendEvalOverlays() {
@@ -1786,10 +2166,143 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
+    private void validateModuleScriptEarlyErrors(String sourceCode) {
+        String sourceWithoutComments = sourceCode
+                .replaceAll("(?s)/\\*.*?\\*/", "")
+                .replaceAll("(?m)//.*$", "");
+        Matcher varMatcher = Pattern.compile("\\bvar\\s+([A-Za-z_$][A-Za-z0-9_$]*)").matcher(sourceWithoutComments);
+        Set<String> varNames = new HashSet<>();
+        while (varMatcher.find()) {
+            varNames.add(varMatcher.group(1));
+        }
+        Matcher functionMatcher = Pattern.compile("\\bfunction\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\(")
+                .matcher(sourceWithoutComments);
+        while (functionMatcher.find()) {
+            String functionName = functionMatcher.group(1);
+            if (varNames.contains(functionName)) {
+                throw new JSException(throwSyntaxError("Identifier '" + functionName + "' has already been declared"));
+            }
+        }
+    }
+
+    private enum DynamicImportModuleStatus {
+        LOADING,
+        EVALUATED
+    }
+
+    private static final class DynamicImportModuleRecord {
+        private final Set<String> ambiguousExportNames;
+        private final Set<String> explicitExportNames;
+        private final Map<String, String> exportOrigins;
+        private final List<LocalExportBinding> localExportBindings;
+        private final JSObject namespace;
+        private final List<ReExportBinding> reExportBindings;
+        private final String resolvedSpecifier;
+        private String exportBindingName;
+        private boolean hasExportSyntax;
+        private String rawSource;
+        private DynamicImportModuleStatus status;
+        private String transformedSource;
+
+        private DynamicImportModuleRecord(String resolvedSpecifier) {
+            this.ambiguousExportNames = new HashSet<>();
+            this.explicitExportNames = new HashSet<>();
+            this.exportOrigins = new HashMap<>();
+            this.namespace = new JSObject();
+            this.namespace.setPrototype(null);
+            this.localExportBindings = new ArrayList<>();
+            this.reExportBindings = new ArrayList<>();
+            this.resolvedSpecifier = resolvedSpecifier;
+            this.status = DynamicImportModuleStatus.LOADING;
+            this.exportBindingName = null;
+            this.hasExportSyntax = false;
+            this.rawSource = "";
+            this.transformedSource = "";
+        }
+
+        private Set<String> ambiguousExportNames() {
+            return ambiguousExportNames;
+        }
+
+        private Set<String> explicitExportNames() {
+            return explicitExportNames;
+        }
+
+        private String exportBindingName() {
+            return exportBindingName;
+        }
+
+        private Map<String, String> exportOrigins() {
+            return exportOrigins;
+        }
+
+        private boolean hasExportSyntax() {
+            return hasExportSyntax;
+        }
+
+        private List<LocalExportBinding> localExportBindings() {
+            return localExportBindings;
+        }
+
+        private JSObject namespace() {
+            return namespace;
+        }
+
+        private String rawSource() {
+            return rawSource;
+        }
+
+        private List<ReExportBinding> reExportBindings() {
+            return reExportBindings;
+        }
+
+        private String resolvedSpecifier() {
+            return resolvedSpecifier;
+        }
+
+        private void setExportBindingName(String exportBindingName) {
+            this.exportBindingName = exportBindingName;
+        }
+
+        private void setHasExportSyntax(boolean hasExportSyntax) {
+            this.hasExportSyntax = hasExportSyntax;
+        }
+
+        private void setRawSource(String rawSource) {
+            this.rawSource = rawSource;
+        }
+
+        private void setStatus(DynamicImportModuleStatus status) {
+            this.status = status;
+        }
+
+        private void setTransformedSource(String transformedSource) {
+            this.transformedSource = transformedSource;
+        }
+
+        private DynamicImportModuleStatus status() {
+            return status;
+        }
+
+        private String transformedSource() {
+            return transformedSource;
+        }
+    }
+
     private record EvalOverlayFrame(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
     }
 
     public record EvalOverlaySnapshot(Map<String, JSValue> values, Set<String> absentKeys) {
+    }
+
+    private record LocalExportBinding(String localName, String exportedName) {
+    }
+
+    private record ReExportBinding(
+            String sourceSpecifier,
+            String importedName,
+            String exportedName,
+            boolean starExport) {
     }
 
 }

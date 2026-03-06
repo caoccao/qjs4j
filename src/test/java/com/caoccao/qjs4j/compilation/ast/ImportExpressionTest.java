@@ -17,86 +17,106 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.core.JSPromise;
+import com.caoccao.qjs4j.core.JSTypeConversions;
+import com.caoccao.qjs4j.core.JSValue;
 import org.junit.jupiter.api.Test;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class ImportExpressionTest extends BaseJavetTest {
-
-    @Test
-    void testDynamicImportCatchReturnsPromise() {
-        // import().catch() should also return a promise
-        assertStringWithJavet("typeof import('nonexistent').catch(e => e)");
+    private void assertRejectedPromiseReason(String code, String expectedReason) {
+        JSValue jsValue = resetContext().eval(code, FILE_NAME, moduleMode);
+        assertThat(jsValue).as(code).isInstanceOf(JSPromise.class);
+        JSPromise promise = (JSPromise) jsValue;
+        assertThat(awaitPromise(promise)).as(code).isTrue();
+        assertThat(promise.getState()).as(code).isEqualTo(JSPromise.PromiseState.REJECTED);
+        assertThat(JSTypeConversions.toString(context, promise.getResult()).toString()).as(code).isEqualTo(expectedReason);
     }
 
     @Test
-    void testDynamicImportInAsyncFunction() {
-        // import() should work inside async functions
+    void testDynamicImportArgumentConversionRejectsPromise() {
+        assertRejectedPromiseReason("""
+                import({
+                    toString() {
+                        throw new TypeError('Invalid module specifier');
+                    }
+                });
+                """, "TypeError: Invalid module specifier");
+    }
+
+    @Test
+    void testDynamicImportInAsyncFunctionReturnsPromise() {
         assertStringWithJavet(
-                "let result = '';\n" +
-                        "async function f() { result = typeof import('x').then; }\n" +
-                        "f();\n" +
-                        "result"
+                """
+                        async function load() {
+                            return typeof import('missing-dynamic-import-module.js').then;
+                        }
+                        load();
+                        """
         );
     }
 
     @Test
-    void testDynamicImportInNonModuleCode() {
-        // import() should work in non-module (script) code too
-        assertStringWithJavet("typeof import('nonexistent').then");
+    void testDynamicImportInvalidOptionsTypeError() {
+        assertRejectedPromiseReason(
+                "import('missing-dynamic-import-module.js', 1);",
+                "TypeError: options must be an object");
     }
 
     @Test
-    void testDynamicImportRejectedPromise() {
-        // import() of non-existent module should reject
-        assertBooleanWithJavet(
-                "let rejected = false;\n" +
-                        "import('nonexistent').catch(e => { rejected = true; });\n" +
-                        "rejected"
-        );
+    void testDynamicImportInvalidWithTypeError() {
+        assertRejectedPromiseReason(
+                "import('missing-dynamic-import-module.js', { with: 1 });",
+                "TypeError: options.with must be an object");
+    }
+
+    @Test
+    void testDynamicImportMissingModuleError() {
+        assertRejectedPromiseReason(
+                "import('missing-dynamic-import-module.js');",
+                "TypeError: Cannot find module 'missing-dynamic-import-module.js'");
     }
 
     @Test
     void testDynamicImportReturnsPromise() {
-        // import() should return a promise
-        assertStringWithJavet("typeof import('nonexistent').then");
+        assertStringWithJavet("typeof import('missing-dynamic-import-module.js').then");
     }
 
     @Test
     void testDynamicImportReturnsPromiseObject() {
-        // import() result should be an object (Promise)
-        assertStringWithJavet("typeof import('nonexistent')");
+        assertStringWithJavet("typeof import('missing-dynamic-import-module.js')");
     }
 
     @Test
     void testDynamicImportSpecifierToString() {
-        // import() should convert specifier to string
-        assertBooleanWithJavet(
-                "let caught = false;\n" +
-                        "import({toString() { return 'nonexistent'; }}).catch(e => { caught = true; });\n" +
-                        "caught"
-        );
+        assertRejectedPromiseReason("""
+                import({
+                    toString() {
+                        return 'missing-dynamic-import-module.js';
+                    }
+                });
+                """, "TypeError: Cannot find module 'missing-dynamic-import-module.js'");
     }
 
     @Test
-    void testDynamicImportWithOptions() {
-        // import() with options should still return a promise
-        assertStringWithJavet("typeof import('nonexistent', {})");
-    }
-
-    @Test
-    void testDynamicImportWithOptionsAndWith() {
-        // import() with options.with should still return a promise
-        assertStringWithJavet("typeof import('nonexistent', { with: { type: 'json' } })");
+    void testDynamicImportWithOptionsAccessorError() {
+        assertRejectedPromiseReason("""
+                import('missing-dynamic-import-module.js', {
+                    get with() {
+                        throw new TypeError('Invalid import options');
+                    }
+                });
+                """, "TypeError: Invalid import options");
     }
 
     @Test
     void testDynamicImportWithTrailingComma() {
-        // import() should support trailing comma
-        assertStringWithJavet("typeof import('nonexistent',)");
+        assertStringWithJavet("typeof import('missing-dynamic-import-module.js',)");
     }
 
     @Test
     void testDynamicImportWithTwoArgsTrailingComma() {
-        // import() should support trailing comma after options
-        assertStringWithJavet("typeof import('nonexistent', {},)");
+        assertStringWithJavet("typeof import('missing-dynamic-import-module.js', {},)");
     }
 }

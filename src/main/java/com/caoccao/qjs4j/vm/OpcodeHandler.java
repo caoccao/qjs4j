@@ -2503,6 +2503,8 @@ public final class OpcodeHandler {
         JSContext context = executionContext.virtualMachine.context;
         JSValue options = (JSValue) executionContext.stack[--executionContext.sp];
         JSValue specifier = (JSValue) executionContext.stack[--executionContext.sp];
+        JSStackFrame currentStackFrame = context.getCurrentStackFrame();
+        String referrerFilename = currentStackFrame != null ? currentStackFrame.filename() : null;
 
         // Create a promise that will be resolved when the module loads
         JSPromise promise = context.createJSPromise();
@@ -2558,24 +2560,10 @@ public final class OpcodeHandler {
                     }
                 }
 
-                // Check if module is already cached
-                JSModule cachedModule = context.getModule(specifierStr);
-                if (cachedModule != null) {
-                    // Module already loaded - resolve with its namespace
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.resolve(context, cachedModule.getNamespace());
-                    }
-                    return;
-                }
-
-                // No module loader - reject with TypeError
-                // (following QuickJS: "could not load module 'xxx'")
-                JSValue error = context.throwTypeError("Cannot find module '" + specifierStr + "'");
-                context.clearPendingException();
+                JSObject moduleNamespace = context.loadDynamicImportModule(specifierStr, referrerFilename);
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
-                    promise.reject(error);
+                    promise.resolve(context, moduleNamespace);
                 }
             } catch (Exception e) {
                 if (context.hasPendingException()) {
@@ -2584,6 +2572,12 @@ public final class OpcodeHandler {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
                         promise.reject(error);
+                    }
+                } else if (e instanceof JSException jsException) {
+                    JSValue errorValue = jsException.getErrorValue();
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        promise.reject(errorValue);
                     }
                 } else if (e instanceof JSVirtualMachineException vme) {
                     // Extract the original JS error value from the VM exception
@@ -2597,7 +2591,8 @@ public final class OpcodeHandler {
                 } else {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
-                        promise.reject(new JSString("Error loading module: " + e.getMessage()));
+                        promise.reject(context.throwError("Error loading module: " + e.getMessage()));
+                        context.clearPendingException();
                     }
                 }
             }
@@ -4771,30 +4766,6 @@ public final class OpcodeHandler {
         return varRefs;
     }
 
-    private static IdentityHashMap<JSSymbol, JSSymbol> internalResolvePrivateSymbolRemap(
-            ExecutionContext executionContext,
-            JSBytecodeFunction templateFunction,
-            int pc,
-            Opcode op,
-            int sp) {
-        IdentityHashMap<JSSymbol, JSSymbol> activeRemap =
-                internalGetActivePrivateSymbolRemap(executionContext, sp);
-        if (internalStartsClassDefinition(executionContext, pc, op)) {
-            Set<JSSymbol> classPrivateSymbols = templateFunction.getClassPrivateSymbols();
-            if (classPrivateSymbols != null && !classPrivateSymbols.isEmpty()) {
-                IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = new IdentityHashMap<>();
-                if (activeRemap != null && !activeRemap.isEmpty()) {
-                    symbolRemap.putAll(activeRemap);
-                }
-                for (JSSymbol privateSymbol : classPrivateSymbols) {
-                    symbolRemap.put(privateSymbol, new JSSymbol(privateSymbol.getDescription()));
-                }
-                return symbolRemap;
-            }
-        }
-        return activeRemap;
-    }
-
     private static IdentityHashMap<JSSymbol, JSSymbol> internalGetActivePrivateSymbolRemap(
             ExecutionContext executionContext,
             int sp) {
@@ -4815,16 +4786,6 @@ public final class OpcodeHandler {
         }
         return null;
     }
-
-    private static boolean internalStartsClassDefinition(ExecutionContext executionContext, int pc, Opcode op) {
-        int nextPc = pc + op.getSize();
-        if (nextPc >= executionContext.instructions.length) {
-            return false;
-        }
-        Opcode nextOpcode = executionContext.decodedOpcodes[nextPc];
-        return nextOpcode == Opcode.DEFINE_CLASS || nextOpcode == Opcode.DEFINE_CLASS_COMPUTED;
-    }
-
 
     private static void internalHandleCall(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
@@ -5029,6 +4990,38 @@ public final class OpcodeHandler {
         }
     }
 
+    private static IdentityHashMap<JSSymbol, JSSymbol> internalResolvePrivateSymbolRemap(
+            ExecutionContext executionContext,
+            JSBytecodeFunction templateFunction,
+            int pc,
+            Opcode op,
+            int sp) {
+        IdentityHashMap<JSSymbol, JSSymbol> activeRemap =
+                internalGetActivePrivateSymbolRemap(executionContext, sp);
+        if (internalStartsClassDefinition(executionContext, pc, op)) {
+            Set<JSSymbol> classPrivateSymbols = templateFunction.getClassPrivateSymbols();
+            if (classPrivateSymbols != null && !classPrivateSymbols.isEmpty()) {
+                IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = new IdentityHashMap<>();
+                if (activeRemap != null && !activeRemap.isEmpty()) {
+                    symbolRemap.putAll(activeRemap);
+                }
+                for (JSSymbol privateSymbol : classPrivateSymbols) {
+                    symbolRemap.put(privateSymbol, new JSSymbol(privateSymbol.getDescription()));
+                }
+                return symbolRemap;
+            }
+        }
+        return activeRemap;
+    }
+
+    private static boolean internalStartsClassDefinition(ExecutionContext executionContext, int pc, Opcode op) {
+        int nextPc = pc + op.getSize();
+        if (nextPc >= executionContext.instructions.length) {
+            return false;
+        }
+        Opcode nextOpcode = executionContext.decodedOpcodes[nextPc];
+        return nextOpcode == Opcode.DEFINE_CLASS || nextOpcode == Opcode.DEFINE_CLASS_COMPUTED;
+    }
 
     private static JSValue readVarRefValue(ExecutionContext executionContext, int varRefIndex) {
         String capturedVarName = null;

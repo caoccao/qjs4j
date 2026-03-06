@@ -42,11 +42,6 @@ final class StatementCompiler {
         loopCompiler = new StatementLoopCompiler(this, compilerContext, delegates);
     }
 
-    private static boolean isTailCallableCallExpression(CallExpression callExpr) {
-        return callExpr.arguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
-                && !(callExpr.callee() instanceof Identifier id && JSKeyword.SUPER.equals(id.name()));
-    }
-
     private static boolean hasTailCallInTailPosition(Expression expr) {
         if (expr instanceof CallExpression callExpr) {
             return isTailCallableCallExpression(callExpr);
@@ -68,6 +63,11 @@ final class StatementCompiler {
             return hasTailCallInTailPosition(seqExpr.expressions().get(seqExpr.expressions().size() - 1));
         }
         return false;
+    }
+
+    private static boolean isTailCallableCallExpression(CallExpression callExpr) {
+        return callExpr.arguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
+                && !(callExpr.callee() instanceof Identifier id && JSKeyword.SUPER.equals(id.name()));
     }
 
     void compileBlockStatement(BlockStatement block) {

@@ -109,7 +109,7 @@ final class ExpressionPrimaryParser {
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     // Optional computed member: expr?.[prop]
                     parserContext.advance();
-                    Expression property = expressions.parseAssignmentExpression();
+                    Expression property = expressions.parseExpression();
                     parserContext.expect(TokenType.RBRACKET);
                     expr = new MemberExpression(expr, property, true, true, location);
                 } else {
@@ -125,7 +125,7 @@ final class ExpressionPrimaryParser {
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
-                Expression property = expressions.parseAssignmentExpression();
+                Expression property = expressions.parseExpression();
                 parserContext.expect(TokenType.RBRACKET);
                 expr = new MemberExpression(expr, property, true, false, location);
             } else {
@@ -555,12 +555,21 @@ final class ExpressionPrimaryParser {
             case IMPORT -> {
                 parserContext.advance(); // consume 'import'
                 if (parserContext.match(TokenType.DOT)) {
-                    // import.meta
                     if (parserContext.nextToken.type() == TokenType.IDENTIFIER
                             && "meta".equals(parserContext.nextToken.value())) {
+                        // import.meta
                         parserContext.advance(); // consume '.'
                         parserContext.advance(); // consume 'meta'
                         yield new Identifier("import.meta", location);
+                    } else if (parserContext.nextToken.type() == TokenType.IDENTIFIER
+                            && "defer".equals(parserContext.nextToken.value())) {
+                        // import.defer(specifier)
+                        parserContext.advance(); // consume '.'
+                        parserContext.advance(); // consume 'defer'
+                        parserContext.expect(TokenType.LPAREN);
+                        Expression source = expressions.parseAssignmentExpression();
+                        parserContext.expect(TokenType.RPAREN);
+                        yield new ImportExpression(source, null, location);
                     } else {
                         throw new JSSyntaxErrorException("The only valid meta property for import is 'import.meta'");
                     }
