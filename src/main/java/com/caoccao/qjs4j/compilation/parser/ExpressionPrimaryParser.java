@@ -199,6 +199,10 @@ final class ExpressionPrimaryParser {
                 parserContext.expect(TokenType.RPAREN);
             }
 
+            if (callee instanceof ImportExpression) {
+                throw new JSSyntaxErrorException("Unexpected import call in constructor position");
+            }
+
             return new NewExpression(callee, args, location);
         }
 

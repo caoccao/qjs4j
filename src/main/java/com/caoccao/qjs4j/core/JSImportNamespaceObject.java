@@ -121,22 +121,18 @@ public final class JSImportNamespaceObject extends JSObject {
         if (!finalized) {
             return keys;
         }
-        List<PropertyKey> exportKeys = new ArrayList<>();
-        List<PropertyKey> nonExportStringKeys = new ArrayList<>();
+        List<PropertyKey> stringKeys = new ArrayList<>();
         List<PropertyKey> symbolKeys = new ArrayList<>();
         for (PropertyKey key : keys) {
             if (key.isSymbol()) {
                 symbolKeys.add(key);
-            } else if (isExportProperty(key)) {
-                exportKeys.add(key);
             } else {
-                nonExportStringKeys.add(key);
+                stringKeys.add(key);
             }
         }
-        exportKeys.sort(Comparator.comparing(PropertyKey::asString));
+        stringKeys.sort(Comparator.comparing(PropertyKey::asString));
         List<PropertyKey> orderedKeys = new ArrayList<>(keys.size());
-        orderedKeys.addAll(exportKeys);
-        orderedKeys.addAll(nonExportStringKeys);
+        orderedKeys.addAll(stringKeys);
         orderedKeys.addAll(symbolKeys);
         return orderedKeys;
     }
@@ -145,10 +141,34 @@ public final class JSImportNamespaceObject extends JSObject {
         return key != null && key.isString() && exportNames.contains(key.asString());
     }
 
+    @Override
+    public PropertyKey[] ownPropertyKeys() {
+        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    }
+
     public void registerExportName(String exportName) {
         if (exportName != null && !exportName.isEmpty()) {
             exportNames.add(exportName);
         }
+    }
+
+    @Override
+    public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+        if (finalized) {
+            if (context != null && context.isStrictMode()) {
+                context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+            }
+            return;
+        }
+        super.set(context, key, value, receiver);
+    }
+
+    @Override
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+        if (finalized) {
+            return false;
+        }
+        return super.setWithResult(context, key, value, receiver);
     }
 
     private boolean validateExportDefine(PropertyKey key, PropertyDescriptor descriptor) {

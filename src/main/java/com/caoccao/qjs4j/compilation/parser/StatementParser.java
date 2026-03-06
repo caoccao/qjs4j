@@ -497,15 +497,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (parserContext.match(TokenType.MUL)) {
             parserContext.advance();
             parserContext.expect(TokenType.AS);
-            Identifier namespaceIdentifier = parserContext.parseIdentifier();
+            parserContext.parseIdentifier();
             parserContext.expect(TokenType.FROM);
             parserContext.expect(TokenType.STRING);
             parserContext.consumeSemicolon();
-
-            ObjectExpression emptyNamespaceObject = new ObjectExpression(List.of(), location);
-            VariableDeclaration.VariableDeclarator namespaceDeclarator =
-                    new VariableDeclaration.VariableDeclarator(namespaceIdentifier, emptyNamespaceObject);
-            return new VariableDeclaration(List.of(namespaceDeclarator), VariableKind.CONST, location);
+            return null; // Resolved by module pre-evaluation import binding setup.
         }
 
         throw new JSSyntaxErrorException("Unsupported import declaration");
