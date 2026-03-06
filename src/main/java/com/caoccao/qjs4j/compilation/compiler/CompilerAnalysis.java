@@ -147,6 +147,57 @@ final class CompilerAnalysis {
     }
 
     /**
+     * Pre-declare all variable and function declaration names as locals in the current scope
+     * in a single pass over the function body.
+     * <p>
+     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
+     * so nested function declarations can properly capture outer variables via VarRef,
+     * and sibling function declarations are visible to closure capture resolution.
+     * <p>
+     * Handles:
+     * - Function declarations: top-level names declared as locals
+     * - var declarations: function-scoped, recurse into blocks (they hoist)
+     * - let/const declarations: block-scoped, only top-level of function body
+     * (they don't hoist into nested blocks but ARE in scope at function level)
+     */
+    void hoistAllDeclarationsAsLocals(List<Statement> body) {
+        Set<String> varNames = new HashSet<>();
+        for (Statement stmt : body) {
+            if (stmt instanceof FunctionDeclaration functionDeclaration) {
+                if (functionDeclaration.id() != null) {
+                    String functionName = functionDeclaration.id().name();
+                    if (compilerContext.currentScope().getLocal(functionName) == null) {
+                        compilerContext.currentScope().declareLocal(functionName);
+                    }
+                }
+                continue;
+            }
+            // Collect var names (recurses into blocks since var is function-scoped)
+            collectVarNamesFromStatement(stmt, varNames);
+            // Collect top-level let/const names (don't recurse — they're block-scoped)
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    collectPatternBindingNames(d.id(), varNames);
+                }
+            }
+        }
+        for (String varName : varNames) {
+            if (compilerContext.currentScope().getLocal(varName) == null) {
+                compilerContext.currentScope().declareLocal(varName);
+            }
+        }
+    }
+
+    /**
+     * Pre-declare top-level function declaration names as locals in the current function scope
+     * before compiling any hoisted function declarations.
+     * <p>
+     * This ensures sibling function declarations are visible to closure capture resolution while
+     * compiling earlier hoisted functions (e.g. function A capturing function B declared later in
+     * the same function body).
+     */
+
+    /**
      * Annex B.3.3.1: Hoist eligible function declarations from blocks/if-statements
      * to the function scope as var bindings (initialized to undefined).
      *
@@ -200,56 +251,6 @@ final class CompilerAnalysis {
                 compilerContext.annexBFunctionScopeLocals.put(name, localIndex);
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
-            }
-        }
-    }
-
-    /**
-     * Pre-declare top-level function declaration names as locals in the current function scope
-     * before compiling any hoisted function declarations.
-     * <p>
-     * This ensures sibling function declarations are visible to closure capture resolution while
-     * compiling earlier hoisted functions (e.g. function A capturing function B declared later in
-     * the same function body).
-     */
-    /**
-     * Pre-declare all variable and function declaration names as locals in the current scope
-     * in a single pass over the function body.
-     * <p>
-     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
-     * so nested function declarations can properly capture outer variables via VarRef,
-     * and sibling function declarations are visible to closure capture resolution.
-     * <p>
-     * Handles:
-     * - Function declarations: top-level names declared as locals
-     * - var declarations: function-scoped, recurse into blocks (they hoist)
-     * - let/const declarations: block-scoped, only top-level of function body
-     * (they don't hoist into nested blocks but ARE in scope at function level)
-     */
-    void hoistAllDeclarationsAsLocals(List<Statement> body) {
-        Set<String> varNames = new HashSet<>();
-        for (Statement stmt : body) {
-            if (stmt instanceof FunctionDeclaration functionDeclaration) {
-                if (functionDeclaration.id() != null) {
-                    String functionName = functionDeclaration.id().name();
-                    if (compilerContext.currentScope().getLocal(functionName) == null) {
-                        compilerContext.currentScope().declareLocal(functionName);
-                    }
-                }
-                continue;
-            }
-            // Collect var names (recurses into blocks since var is function-scoped)
-            collectVarNamesFromStatement(stmt, varNames);
-            // Collect top-level let/const names (don't recurse — they're block-scoped)
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
-                }
-            }
-        }
-        for (String varName : varNames) {
-            if (compilerContext.currentScope().getLocal(varName) == null) {
-                compilerContext.currentScope().declareLocal(varName);
             }
         }
     }

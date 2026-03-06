@@ -91,10 +91,10 @@ public final class AstUtils {
      * Collect global declarations from a parsed program following ES2024 GlobalDeclarationInstantiation.
      * Collects var and lex (let/const) names declared at the top level, and optionally const/function names.
      *
-     * @param program      The parsed program AST
-     * @param varDecls     Output: var/function names declared by this program
-     * @param lexDecls     Output: let/const names declared by this program
-     * @param constDecls   Optional output: const names declared by this program
+     * @param program       The parsed program AST
+     * @param varDecls      Output: var/function names declared by this program
+     * @param lexDecls      Output: let/const names declared by this program
+     * @param constDecls    Optional output: const names declared by this program
      * @param functionDecls Optional output: top-level function declaration names in reverse source order
      */
     public static void collectGlobalDeclarations(

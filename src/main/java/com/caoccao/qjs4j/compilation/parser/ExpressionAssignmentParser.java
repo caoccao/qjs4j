@@ -447,6 +447,8 @@ final class ExpressionAssignmentParser {
 
                     ASTNode body;
                     parserContext.enterFunctionContext(true);
+                    boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+                    parserContext.inClassStaticInit = false;
                     try {
                         if (parserContext.match(TokenType.LBRACE)) {
                             body = delegates.statements.parseBlockStatement();
@@ -454,6 +456,7 @@ final class ExpressionAssignmentParser {
                             body = parseAssignmentExpression();
                         }
                     } finally {
+                        parserContext.inClassStaticInit = savedInClassStaticInit;
                         parserContext.exitFunctionContext(true);
                     }
 
@@ -474,6 +477,8 @@ final class ExpressionAssignmentParser {
 
                 if (parserContext.match(TokenType.LPAREN) && parserContext.peekPastParensIsArrow()) {
                     parserContext.enterFunctionContext(true);
+                    boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+                    parserContext.inClassStaticInit = false;
                     try {
                         parserContext.advance();
                         FunctionParams funcParams = delegates.functions.parseFunctionParameters();
@@ -505,6 +510,7 @@ final class ExpressionAssignmentParser {
                                 true,
                                 fullLocation);
                     } finally {
+                        parserContext.inClassStaticInit = savedInClassStaticInit;
                         parserContext.exitFunctionContext(true);
                     }
                 }
@@ -609,6 +615,8 @@ final class ExpressionAssignmentParser {
 
             ASTNode body;
             parserContext.enterFunctionContext(false);
+            boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+            parserContext.inClassStaticInit = false;
             try {
                 if (parserContext.match(TokenType.LBRACE)) {
                     body = delegates.statements.parseBlockStatement();
@@ -616,6 +624,7 @@ final class ExpressionAssignmentParser {
                     body = parseAssignmentExpression();
                 }
             } finally {
+                parserContext.inClassStaticInit = savedInClassStaticInit;
                 parserContext.exitFunctionContext(false);
             }
             validateArrowParameters(params, defaults, restParameter, body);

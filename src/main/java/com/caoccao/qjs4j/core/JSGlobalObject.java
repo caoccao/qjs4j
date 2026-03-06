@@ -2079,6 +2079,49 @@ public final class JSGlobalObject {
 
     public static class GlobalFunction {
 
+        /**
+         * Analyze caller function var-environment names in one parse.
+         * bodyVarNames excludes parameter names.
+         * functionVarEnvironmentNames includes parameter names and body var declarations.
+         */
+        private static CallerVarEnvironmentAnalysis analyzeCallerVarEnvironment(JSBytecodeFunction callerBytecodeFunction) {
+            String source = callerBytecodeFunction.getSourceCode();
+            if (source == null || source.isBlank()) {
+                return null;
+            }
+            Expression functionLikeExpression = extractFunctionLikeExpression(source);
+            if (functionLikeExpression == null) {
+                return null;
+            }
+            Set<String> bodyVarNames = new HashSet<>();
+            Set<String> functionVarEnvironmentNames = new HashSet<>();
+            if (functionLikeExpression instanceof FunctionExpression functionExpression) {
+                for (Pattern parameter : functionExpression.params()) {
+                    collectPatternNames(parameter, functionVarEnvironmentNames);
+                }
+                if (functionExpression.restParameter() != null) {
+                    collectPatternNames(functionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                }
+                collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), bodyVarNames);
+                functionVarEnvironmentNames.addAll(bodyVarNames);
+                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
+            }
+            if (functionLikeExpression instanceof ArrowFunctionExpression arrowFunctionExpression) {
+                for (Pattern parameter : arrowFunctionExpression.params()) {
+                    collectPatternNames(parameter, functionVarEnvironmentNames);
+                }
+                if (arrowFunctionExpression.restParameter() != null) {
+                    collectPatternNames(arrowFunctionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                }
+                if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
+                    collectVarEnvironmentNamesFromStatements(blockStatement.body(), bodyVarNames);
+                }
+                functionVarEnvironmentNames.addAll(bodyVarNames);
+                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
+            }
+            return null;
+        }
+
         private static void appendPercentHex(StringBuilder result, int c) {
             result.append('%');
             result.append(HEX_CHARS[(c >> 4) & 0xF]);
@@ -2096,83 +2139,6 @@ public final class JSGlobalObject {
                 return c - 'a' + 10;
             }
             return -1;
-        }
-
-        /**
-         * Collect only body-level var declaration names from a function (excludes parameter names).
-         * Used to distinguish parameter bindings from body var bindings in functions with
-         * parameter expressions, for eval var conflict detection.
-         */
-        private static Set<String> collectBodyVarNames(JSBytecodeFunction callerBytecodeFunction) {
-            String source = callerBytecodeFunction.getSourceCode();
-            if (source == null || source.isBlank()) {
-                return null;
-            }
-            String wrappedSource = "(" + source + ")";
-            try {
-                Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
-                if (parsedProgram.body().isEmpty()
-                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
-                    return null;
-                }
-                Expression expression = expressionStatement.expression();
-                Set<String> bodyVarNames = new HashSet<>();
-                if (expression instanceof FunctionExpression functionExpression) {
-                    collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), bodyVarNames);
-                    return bodyVarNames;
-                }
-                if (expression instanceof ArrowFunctionExpression arrowFunctionExpression) {
-                    if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
-                        collectVarEnvironmentNamesFromStatements(blockStatement.body(), bodyVarNames);
-                    }
-                    return bodyVarNames;
-                }
-                return null;
-            } catch (Exception ignored) {
-                return null;
-            }
-        }
-
-        private static Set<String> collectFunctionVarEnvironmentNames(JSBytecodeFunction callerBytecodeFunction) {
-            String source = callerBytecodeFunction.getSourceCode();
-            if (source == null || source.isBlank()) {
-                return null;
-            }
-            String wrappedSource = "(" + source + ")";
-            try {
-                Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
-                if (parsedProgram.body().isEmpty()
-                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
-                    return null;
-                }
-                Expression expression = expressionStatement.expression();
-                Set<String> functionVarEnvironmentNames = new HashSet<>();
-                if (expression instanceof FunctionExpression functionExpression) {
-                    for (Pattern parameter : functionExpression.params()) {
-                        collectPatternNames(parameter, functionVarEnvironmentNames);
-                    }
-                    if (functionExpression.restParameter() != null) {
-                        collectPatternNames(functionExpression.restParameter().argument(), functionVarEnvironmentNames);
-                    }
-                    collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), functionVarEnvironmentNames);
-                    return functionVarEnvironmentNames;
-                }
-                if (expression instanceof ArrowFunctionExpression arrowFunctionExpression) {
-                    for (Pattern parameter : arrowFunctionExpression.params()) {
-                        collectPatternNames(parameter, functionVarEnvironmentNames);
-                    }
-                    if (arrowFunctionExpression.restParameter() != null) {
-                        collectPatternNames(arrowFunctionExpression.restParameter().argument(), functionVarEnvironmentNames);
-                    }
-                    if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
-                        collectVarEnvironmentNamesFromStatements(blockStatement.body(), functionVarEnvironmentNames);
-                    }
-                    return functionVarEnvironmentNames;
-                }
-                return null;
-            } catch (Exception ignored) {
-                return null;
-            }
         }
 
         private static void collectPatternNames(Pattern pattern, Set<String> names) {
@@ -2702,6 +2668,7 @@ public final class JSGlobalObject {
                 // eval cannot create a var with the same name as a parameter.
                 // Per spec, the parameter scope is separate from the var scope,
                 // so "var x" in eval conflicts with parameter "x".
+                CallerVarEnvironmentAnalysis callerVarEnvironmentAnalysis = null;
                 if (isEvalInFunction
                         && callerBytecodeFunction != null
                         && callerBytecodeFunction.hasParameterExpressions()
@@ -2710,7 +2677,10 @@ public final class JSGlobalObject {
                         && parsedEvalDeclarations
                         && evalVarDeclarations != null
                         && localVarNameSet != null) {
-                    Set<String> bodyVarNames = collectBodyVarNames(callerBytecodeFunction);
+                    callerVarEnvironmentAnalysis = analyzeCallerVarEnvironment(callerBytecodeFunction);
+                    Set<String> bodyVarNames = callerVarEnvironmentAnalysis != null
+                            ? callerVarEnvironmentAnalysis.bodyVarNames()
+                            : null;
                     if (bodyVarNames != null) {
                         for (String evalVar : evalVarDeclarations) {
                             if (JSKeyword.ARGUMENTS.equals(evalVar)) {
@@ -2733,7 +2703,12 @@ public final class JSGlobalObject {
                     if (callerBytecodeFunction != null
                             && callerFrame != null
                             && callerFrame.getCaller() != null) {
-                        functionVarEnvironmentNames = collectFunctionVarEnvironmentNames(callerBytecodeFunction);
+                        if (callerVarEnvironmentAnalysis == null) {
+                            callerVarEnvironmentAnalysis = analyzeCallerVarEnvironment(callerBytecodeFunction);
+                        }
+                        functionVarEnvironmentNames = callerVarEnvironmentAnalysis != null
+                                ? callerVarEnvironmentAnalysis.functionVarEnvironmentNames()
+                                : null;
                     }
                     for (String declarationName : evalVarDeclarations) {
                         if (isEvalInFunction
@@ -2999,6 +2974,24 @@ public final class JSGlobalObject {
             }
         }
 
+        private static Expression extractFunctionLikeExpression(String source) {
+            Expression directExpression = parseTopLevelExpression("(" + source + ")");
+            if (directExpression instanceof FunctionExpression || directExpression instanceof ArrowFunctionExpression) {
+                return directExpression;
+            }
+
+            Expression objectLiteralExpression = parseTopLevelExpression("({" + source + "})");
+            if (!(objectLiteralExpression instanceof ObjectExpression objectExpression)
+                    || objectExpression.properties().isEmpty()) {
+                return null;
+            }
+            ObjectExpression.Property firstProperty = objectExpression.properties().get(0);
+            if (firstProperty.value() instanceof FunctionExpression functionExpression) {
+                return functionExpression;
+            }
+            return null;
+        }
+
         private static int fromHex(char c) {
             if (c >= '0' && c <= '9') {
                 return c - '0';
@@ -3243,6 +3236,19 @@ public final class JSGlobalObject {
             return JSNumber.of(sign * result);
         }
 
+        private static Expression parseTopLevelExpression(String wrappedSource) {
+            try {
+                Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
+                if (parsedProgram.body().isEmpty()
+                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
+                    return null;
+                }
+                return expressionStatement.expression();
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+
         private static int parseWithDepth(String localName) {
             int depth = 0;
             int index = "$withObject".length();
@@ -3311,6 +3317,11 @@ public final class JSGlobalObject {
             }
 
             return new JSString(result.toString());
+        }
+
+        private record CallerVarEnvironmentAnalysis(
+                Set<String> bodyVarNames,
+                Set<String> functionVarEnvironmentNames) {
         }
 
         private record WithObjectCandidate(int depth, JSObject object) {

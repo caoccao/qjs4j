@@ -495,7 +495,7 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.emitOpcodeAtom(Opcode.MAKE_VAR_REF, name);
     }
 
-    private void emitIdentifierReference(String name) {
+    void emitIdentifierReference(String name) {
         if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
             emitWithAwareIdentifierReference(name);
         } else {

@@ -601,8 +601,11 @@ public final class VirtualMachine {
         }
 
         for (PropertyKey key : sourceObject.ownPropertyKeys()) {
+            if (excludedKeys != null && excludedKeys.contains(key)) {
+                continue;
+            }
             PropertyDescriptor descriptor = sourceObject.getOwnPropertyDescriptor(key);
-            if (descriptor == null || !descriptor.isEnumerable() || (excludedKeys != null && excludedKeys.contains(key))) {
+            if (descriptor == null || !descriptor.isEnumerable()) {
                 continue;
             }
             JSValue propertyValue = sourceObject.get(context, key);
@@ -1084,7 +1087,7 @@ public final class VirtualMachine {
             if (description != null && description.startsWith("#")) {
                 return new JSString(description);
             }
-            return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
+            return new JSString(description == null || description.isEmpty() ? "" : "[" + description + "]");
         }
         PropertyKey key = PropertyKey.fromValue(context, keyValue);
         if (key.isSymbol()) {
@@ -1093,7 +1096,7 @@ public final class VirtualMachine {
             if (description != null && description.startsWith("#")) {
                 return new JSString(description);
             }
-            return new JSString(description == null || description.isEmpty() ? "[]" : "[" + description + "]");
+            return new JSString(description == null || description.isEmpty() ? "" : "[" + description + "]");
         }
         return new JSString(key.toPropertyString());
     }

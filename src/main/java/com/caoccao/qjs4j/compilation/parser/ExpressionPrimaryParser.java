@@ -38,6 +38,16 @@ final class ExpressionPrimaryParser {
         this.expressions = expressions;
     }
 
+    private static boolean isOptionalChainExpression(Expression expression) {
+        if (expression instanceof MemberExpression memberExpression) {
+            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
+        }
+        return false;
+    }
+
     private static boolean isPrivateDeleteTarget(Expression expression) {
         if (expression instanceof MemberExpression memberExpression) {
             return memberExpression.property() instanceof PrivateIdentifier;
@@ -50,6 +60,9 @@ final class ExpressionPrimaryParser {
 
         while (true) {
             if (parserContext.match(TokenType.TEMPLATE)) {
+                if (isOptionalChainExpression(expr)) {
+                    throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
+                }
                 SourceLocation location = parserContext.getLocation();
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, location);
@@ -239,6 +252,9 @@ final class ExpressionPrimaryParser {
     Expression parsePostPrimaryExpression(Expression expr, SourceLocation location) {
         while (true) {
             if (parserContext.match(TokenType.TEMPLATE)) {
+                if (isOptionalChainExpression(expr)) {
+                    throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
+                }
                 SourceLocation loc = parserContext.getLocation();
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, loc);
@@ -266,6 +282,41 @@ final class ExpressionPrimaryParser {
                 }
                 parserContext.expect(TokenType.RPAREN);
                 expr = new CallExpression(expr, args, false, loc);
+            } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
+                SourceLocation loc = parserContext.getLocation();
+                parserContext.advance();
+                if (parserContext.match(TokenType.LPAREN)) {
+                    parserContext.advance();
+                    List<Expression> args = new ArrayList<>();
+                    if (!parserContext.match(TokenType.RPAREN)) {
+                        do {
+                            if (parserContext.match(TokenType.COMMA)) {
+                                parserContext.advance();
+                                if (parserContext.match(TokenType.RPAREN)) {
+                                    break;
+                                }
+                            }
+                            if (parserContext.match(TokenType.ELLIPSIS)) {
+                                SourceLocation spreadLoc = parserContext.getLocation();
+                                parserContext.advance();
+                                Expression argument = expressions.parseAssignmentExpression();
+                                args.add(new SpreadElement(argument, spreadLoc));
+                            } else {
+                                args.add(expressions.parseAssignmentExpression());
+                            }
+                        } while (parserContext.match(TokenType.COMMA));
+                    }
+                    parserContext.expect(TokenType.RPAREN);
+                    expr = new CallExpression(expr, args, true, loc);
+                } else if (parserContext.match(TokenType.LBRACKET)) {
+                    parserContext.advance();
+                    Expression property = expressions.parseExpression();
+                    parserContext.expect(TokenType.RBRACKET);
+                    expr = new MemberExpression(expr, property, true, true, loc);
+                } else {
+                    Expression property = expressions.parsePropertyName();
+                    expr = new MemberExpression(expr, property, false, true, loc);
+                }
             } else if (parserContext.match(TokenType.DOT)) {
                 SourceLocation loc = parserContext.getLocation();
                 parserContext.advance();
@@ -336,9 +387,16 @@ final class ExpressionPrimaryParser {
                         || JSKeyword.THIS.equals(identifierName)) {
                     throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
                 }
+                if (parserContext.strictMode
+                        && (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName))) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+                }
             }
             // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
             if (parserContext.strictMode && expr instanceof CallExpression) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+            }
+            if (isOptionalChainExpression(expr)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
             }
             UnaryOperator op = parserContext.match(TokenType.INC) ? UnaryOperator.INC : UnaryOperator.DEC;
@@ -698,6 +756,22 @@ final class ExpressionPrimaryParser {
                 }
                 yield new Literal(numValue, location);
             }
+            case BIGINT -> {
+                String value = parserContext.currentToken.value();
+                parserContext.advance();
+                String normalizedValue = value.replace("_", "");
+                BigInteger bigIntValue;
+                if (normalizedValue.startsWith("0x") || normalizedValue.startsWith("0X")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 16);
+                } else if (normalizedValue.startsWith("0b") || normalizedValue.startsWith("0B")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 2);
+                } else if (normalizedValue.startsWith("0o") || normalizedValue.startsWith("0O")) {
+                    bigIntValue = new BigInteger(normalizedValue.substring(2), 8);
+                } else {
+                    bigIntValue = new BigInteger(normalizedValue);
+                }
+                yield new Literal(bigIntValue, location);
+            }
             case LBRACKET -> {
                 parserContext.advance();
                 // Allow 'in' operator inside computed property names
@@ -768,9 +842,16 @@ final class ExpressionPrimaryParser {
                         || JSKeyword.THIS.equals(identifierName)) {
                     throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
                 }
+                if (parserContext.strictMode
+                        && (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName))) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
+                }
             }
             // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
             if (parserContext.strictMode && operand instanceof CallExpression) {
+                throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
+            }
+            if (isOptionalChainExpression(operand)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
             }
             return new UnaryExpression(op, operand, true, location);

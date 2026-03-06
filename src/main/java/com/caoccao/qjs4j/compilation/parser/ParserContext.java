@@ -258,6 +258,10 @@ final class ParserContext {
         return false;
     }
 
+    boolean isStrictReservedIdentifier(String name) {
+        return isStrictReservedIdentifierName(name);
+    }
+
     private boolean isStrictReservedIdentifierName(String name) {
         return switch (name) {
             case JSKeyword.IMPLEMENTS, JSKeyword.INTERFACE, JSKeyword.LET, JSKeyword.PACKAGE, JSKeyword.PRIVATE,
@@ -431,6 +435,14 @@ final class ParserContext {
         }
         if (match(TokenType.OF)) {
             String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
+        if (match(TokenType.LET)) {
+            String name = currentToken.value();
+            if (strictMode && isStrictReservedIdentifierName(name)) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            }
             advance();
             return new Identifier(name, location);
         }

@@ -817,45 +817,35 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      */
     FunctionExpression parseMethod(String kind, SourceLocation methodStartLocation,
                                    boolean isAsync, boolean isGenerator) {
-        // Parse parameter list
-        // Per QuickJS: in_function_body == FALSE prevents yield/await during
-        // the parsing of the arguments in generator/async functions.
-        boolean savedInFunctionBody = parserContext.inFunctionBody;
-        if (isAsync || isGenerator) {
-            parserContext.inFunctionBody = false;
-        }
-
-        // Per ES2024: A method defines a new function scope, so await/yield
-        // should be allowed as identifiers in non-async/non-generator methods
-        // even when the enclosing context (e.g. a class static block) disallows them.
-        boolean savedInClassStaticInitForParams = parserContext.inClassStaticInit;
-        parserContext.inClassStaticInit = false;
-
-        parserContext.expect(TokenType.LPAREN);
-        FunctionParams funcParams = parseFunctionParameters();
-        int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
-        if ((JSKeyword.GET.equals(kind) && formalParameterCount != 0)
-                || (JSKeyword.SET.equals(kind) && formalParameterCount != 1)) {
-            throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
-        }
-
-        parserContext.inFunctionBody = savedInFunctionBody;
-        parserContext.inClassStaticInit = savedInClassStaticInitForParams;
-
-        // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
-        checkDuplicateParameters(funcParams);
-        if (parserContext.strictMode) {
-            checkStrictModeParameters(funcParams, null);
-        }
-
-        // Parse method body
         parserContext.enterFunctionContext(isAsync, isGenerator);
+        boolean savedInFunctionBody = parserContext.inFunctionBody;
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
+
         BlockStatement body;
+        FunctionParams funcParams;
         try {
-            body = delegates.statements.parseBlockStatement();
+            // Per QuickJS: in_function_body == FALSE prevents yield/await during
+            // parsing of parameters in async/generator functions.
+            if (isAsync || isGenerator) {
+                parserContext.inFunctionBody = false;
+            }
+
+            parserContext.expect(TokenType.LPAREN);
+            funcParams = parseFunctionParameters();
+            int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
+            if ((JSKeyword.GET.equals(kind) && formalParameterCount != 0)
+                    || (JSKeyword.SET.equals(kind) && formalParameterCount != 1)) {
+                throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
+            }
+
+            parserContext.inFunctionBody = savedInFunctionBody;
+
+            // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
+            checkDuplicateParameters(funcParams);
+            body = parseFunctionBody(funcParams, null);
         } finally {
+            parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
             parserContext.exitFunctionContext(isAsync, isGenerator);
         }

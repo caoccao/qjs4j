@@ -533,6 +533,9 @@ final class ExpressionCompiler {
                     } else if (prop.key() instanceof Identifier id && !prop.computed()) {
                         // Non-computed identifier key: use DEFINE_FIELD with atom
                         compileExpression(prop.value());
+                        if (isAnonymousFunctionDefinition(prop.value())) {
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.name());
+                        }
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, id.name());
                     } else {
                         // Computed or non-identifier key: define own data property directly.
@@ -540,6 +543,9 @@ final class ExpressionCompiler {
                         compileExpression(prop.key());
                         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         compileExpression(prop.value());
+                        if (isAnonymousFunctionDefinition(prop.value())) {
+                            compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+                        }
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
                     }
                 }
@@ -740,49 +746,76 @@ final class ExpressionCompiler {
             boolean isPrefix = unaryExpr.prefix();
 
             if (operand instanceof Identifier id) {
-                // Simple variable: get, inc/dec, set/put
-                compileExpression(operand);
-                compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
-                        : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
+                if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
+                    // Use reference semantics so with-scope resolution happens before local/captured fallback.
+                    assignmentCompiler.emitIdentifierReference(id.name());
+                    compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
+                    compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                            : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
+                    if (isPrefix) {
+                        // obj prop new -> new obj prop new -> store -> new
+                        compilerContext.emitter.emitOpcode(Opcode.INSERT3);
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+                    } else {
+                        // obj prop old new -> old obj prop new -> store -> old
+                        compilerContext.emitter.emitOpcode(Opcode.PERM4);
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+                    }
+                    return;
+                }
+
                 Integer localIndex = compilerContext.findLocalInScopes(id.name());
                 if (localIndex != null) {
+                    // Local binding.
+                    compileExpression(operand);
+                    compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                            : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
                     compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
+                    return;
+                }
+
+                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
+                if (capturedIndex != null) {
+                    // Captured binding.
+                    compileExpression(operand);
+                    compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                            : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
+                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
+                    return;
+                }
+
+                // Unresolved identifier: use reference semantics so strict errors and with-scopes are handled correctly.
+                assignmentCompiler.emitIdentifierReference(id.name());
+                compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
+                compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
+                        : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
+                if (isPrefix) {
+                    // obj prop new -> new obj prop new -> store -> new
+                    compilerContext.emitter.emitOpcode(Opcode.INSERT3);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 } else {
-                    Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
-                    if (capturedIndex != null) {
-                        compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
-                    } else {
-                        if (isPrefix) {
-                            compilerContext.emitter.emitOpcode(Opcode.DUP);
-                        }
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
-                    }
+                    // obj prop old new -> old obj prop new -> store -> old
+                    compilerContext.emitter.emitOpcode(Opcode.PERM4);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
                 if (memberExpr.computed()) {
                     // Array element: obj[prop]
                     compileExpression(memberExpr.object());
                     compileExpression(memberExpr.property());
+                    compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
 
                     if (isPrefix) {
                         // Prefix: ++arr[i] - returns new value
-                        compilerContext.emitter.emitOpcode(Opcode.DUP2);
-                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-                        compilerContext.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                        compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
                         // Stack: [obj, prop, new_val] — already in QuickJS order
                         compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     } else {
-                        // Postfix: arr[i]++ - returns old value (must be ToNumber'd per ES spec)
-                        compilerContext.emitter.emitOpcode(Opcode.DUP2); // obj prop obj prop
-                        compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL); // obj prop old_val
-                        compilerContext.emitter.emitOpcode(Opcode.PLUS); // obj prop old_numeric (ToNumber conversion)
-                        compilerContext.emitter.emitOpcode(Opcode.DUP); // obj prop old_numeric old_numeric
-                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                        compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj prop old_val new_val
+                        // Postfix: arr[i]++ - returns old value
+                        compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj prop old_val new_val
                         // PERM4 to rearrange: [obj, prop, old_val, new_val] -> [old_val, obj, prop, new_val]
                         compilerContext.emitter.emitOpcode(Opcode.PERM4); // old_val obj prop new_val
+                        // PUT_ARRAY_EL leaves assigned value on stack, so drop it to preserve old value result.
                         compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL); // old_val new_val
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // old_val
                     }
@@ -794,20 +827,15 @@ final class ExpressionCompiler {
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
                             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
-                            compilerContext.emitter.emitOpcode(Opcode.PLUS); // ToNumber conversion
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB);
+                            compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
                             compilerContext.emitter.emitOpcode(Opcode.SWAP);
                             // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
                             compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
                         } else {
-                            // Postfix: obj.prop++ - returns old value (must be ToNumber'd per ES spec)
+                            // Postfix: obj.prop++ - returns old value
                             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name()); // obj old_val
-                            compilerContext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
+                            compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj old_val new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
                             // ROT3L: [old_val, new_val, obj]
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
@@ -830,31 +858,19 @@ final class ExpressionCompiler {
                             compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            compilerContext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj new_val
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj new_val new_val
-                            compilerContext.emitter.emitOpcode(Opcode.ROT3R); // new_val obj new_val
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // new_val obj new_val symbol
-                            compilerContext.emitter.emitOpcode(Opcode.SWAP); // new_val obj symbol new_val
+                            compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC); // obj new_val
+                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // obj new_val symbol
                             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // new_val
                         } else {
-                            // Postfix: obj.#field++ - returns old value (must be ToNumber'd per ES spec)
+                            // Postfix: obj.#field++ - returns old value
                             compilerContext.emitter.emitOpcode(Opcode.DUP); // obj obj
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD); // obj old_val
-                            compilerContext.emitter.emitOpcode(Opcode.PLUS); // obj old_numeric (ToNumber conversion)
-                            compilerContext.emitter.emitOpcode(Opcode.DUP); // obj old_numeric old_numeric
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(1));
-                            compilerContext.emitter.emitOpcode(isInc ? Opcode.ADD : Opcode.SUB); // obj old_val new_val
+                            compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj old_val new_val
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol); // old_val new_val obj symbol
-                            // Need: obj symbol new_val for PUT_PRIVATE_FIELD
-                            // Have: old_val new_val obj symbol
-                            // SWAP to get: old_val new_val symbol obj
-                            compilerContext.emitter.emitOpcode(Opcode.SWAP); // old_val new_val symbol obj
-                            // ROT3L to get: old_val obj symbol new_val
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val obj symbol new_val
+                            compilerContext.emitter.emitOpcode(Opcode.SWAP); // old_val obj new_val symbol
                             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
                         }
                     } else {
@@ -1218,6 +1234,19 @@ final class ExpressionCompiler {
         emitWithAwareIdentifierLookupForCall(name, withObjectLocals, withDepth + 1);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
+    }
+
+    private boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
     }
 
     private boolean isProtoDataProperty(ObjectExpression.Property property) {

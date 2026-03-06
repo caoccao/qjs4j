@@ -581,23 +581,29 @@ final class PatternCompiler {
                     // Stack: [excludeList, source]
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                     // Stack: [source, excludeList]
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    // Stack: [source, excludeList, excludeList]
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
-                    // Stack: [source, excludeList, null]
+                    // Stack: [source, excludeList, excludeList, null]
                     if (!prop.computed() && propertyKey instanceof Identifier identifier) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                     } else if (!prop.computed() && propertyKey instanceof Literal literal && literal.value() instanceof String propertyName) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                     } else if (!prop.computed() && propertyKey instanceof Literal literal
                             && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.value()).longValue()));
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                     } else {
                         // Computed property key: re-evaluate expression to get the key name
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
                         delegates.expressions.compileExpression(propertyKey);
                         compilerContext.emitter.emitOpcode(Opcode.NULL);
-                        compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop index
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
                     }
+                    // DEFINE_FIELD leaves excludeList on stack, so normalize both paths to:
                     // Stack: [source, excludeList]
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                     // Stack: [excludeList, source]

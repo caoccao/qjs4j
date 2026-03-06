@@ -272,7 +272,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 if (parserContext.nextToken.type() == TokenType.COLON || parserContext.nextToken.type() == TokenType.COMMA) {
                     // { async: value } or { async, ... } - async is property name
                     // Don't advance, let parsePropertyName handle it
-                } else {
+                } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
                     // async is likely a modifier for method
                     isAsync = true;
                     parserContext.advance();
@@ -289,7 +289,16 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Similar to parseClassElement logic
             if (!isAsync && !isGenerator && parserContext.match(TokenType.IDENTIFIER)) {
                 String name = parserContext.currentToken.value();
+                if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name))
+                        && parserContext.currentToken.escaped()
+                        && parserContext.nextToken.type() != TokenType.COLON
+                        && parserContext.nextToken.type() != TokenType.COMMA
+                        && parserContext.nextToken.type() != TokenType.LPAREN
+                        && parserContext.nextToken.type() != TokenType.RBRACE) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
                 if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) &&
+                        !parserContext.currentToken.escaped() &&
                         parserContext.nextToken.type() != TokenType.COLON &&
                         parserContext.nextToken.type() != TokenType.COMMA &&
                         parserContext.nextToken.type() != TokenType.LPAREN &&
@@ -330,6 +339,9 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             Expression key = delegates.expressions.parsePropertyName();
 
             // Determine if this is a method or regular property
+            if ((isAsync || isGenerator) && !parserContext.match(TokenType.LPAREN)) {
+                throw new JSSyntaxErrorException("Unexpected token " + parserContext.currentToken.type());
+            }
             if (parserContext.match(TokenType.LPAREN)) {
                 // Method shorthand: name() {} or async name() {} or *name() {} or async *name() {}
                 boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
@@ -351,10 +363,15 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 // Following QuickJS: the shorthand value is an IdentifierReference,
                 // so yield/await must be valid identifiers in the current context.
+                if (parserContext.strictMode && parserContext.isStrictReservedIdentifier(keyId.name())) {
+                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+                }
                 if (JSKeyword.YIELD.equals(keyId.name()) && !parserContext.isYieldIdentifierAllowed()) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
-                if (JSKeyword.AWAIT.equals(keyId.name()) && parserContext.isAwaitExpressionAllowed()) {
+                if (JSKeyword.AWAIT.equals(keyId.name())
+                        && (parserContext.isAwaitExpressionAllowed()
+                        || (parserContext.inClassStaticInit && parserContext.functionNesting == 1))) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
                 Expression value;
