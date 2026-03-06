@@ -25,6 +25,7 @@ public abstract sealed class JSFunction extends JSObject
     public static final String NAME = "Function";
     private JSContext homeContext;
     private JSObject homeObject;
+    private String importMetaFilename;
 
     /**
      * Call this function with the given context, this value, and arguments.
@@ -37,6 +38,10 @@ public abstract sealed class JSFunction extends JSObject
 
     public JSObject getHomeObject() {
         return homeObject;
+    }
+
+    public String getImportMetaFilename() {
+        return importMetaFilename;
     }
 
     /**
@@ -122,6 +127,10 @@ public abstract sealed class JSFunction extends JSObject
 
     public void setHomeObject(JSObject homeObject) {
         this.homeObject = homeObject;
+    }
+
+    public void setImportMetaFilename(String importMetaFilename) {
+        this.importMetaFilename = importMetaFilename;
     }
 
     @Override

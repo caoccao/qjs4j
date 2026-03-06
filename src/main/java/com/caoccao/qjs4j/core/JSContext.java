@@ -52,6 +52,8 @@ public final class JSContext implements AutoCloseable {
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
             Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
+    private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
+            Pattern.compile("(?m)^\\s*import\\s+([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2\\s*;?\\s*$");
     private static final Pattern MODULE_NAMESPACE_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s*\\*\\s*as\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2\\s*;?\\s*$");
     private static final Pattern MODULE_SIDE_EFFECT_IMPORT_PATTERN =
@@ -71,6 +73,7 @@ public final class JSContext implements AutoCloseable {
     private final Set<String> globalConstDeclarations;
     private final Set<String> globalLexDeclarations;
     private final Set<String> globalVarDeclarations;
+    private final Map<String, JSObject> importMetaCache;
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
     private final Map<String, JSObject> iteratorPrototypes;
     private final JSGlobalObject jsGlobalObject;
@@ -118,6 +121,7 @@ public final class JSContext implements AutoCloseable {
         this.globalConstDeclarations = new HashSet<>();
         this.globalLexDeclarations = new HashSet<>();
         this.globalVarDeclarations = new HashSet<>();
+        this.importMetaCache = new HashMap<>();
         this.waitable = true;
         this.inCatchHandler = false;
         this.evalOverlayFrames = new ArrayDeque<>();
@@ -172,6 +176,100 @@ public final class JSContext implements AutoCloseable {
                     .append("\", { enumerable: true, configurable: false, get() { return ")
                     .append(localExportBinding.localName())
                     .append("; } });\n");
+        }
+    }
+
+    private void applyImportClauseBindings(
+            JSObject globalObject,
+            Map<String, JSValue> savedGlobals,
+            Set<String> absentKeys,
+            JSObject namespaceObject,
+            String importClause) {
+        String clause = importClause.trim();
+        if (clause.isEmpty()) {
+            return;
+        }
+        if (clause.startsWith("{")) {
+            bindNamedImports(globalObject, savedGlobals, absentKeys, namespaceObject, clause);
+            return;
+        }
+
+        int commaIndex = clause.indexOf(',');
+        if (commaIndex < 0) {
+            JSValue defaultValue = namespaceObject.get(this, PropertyKey.fromString("default"));
+            bindImportOverlayValue(globalObject, savedGlobals, absentKeys, clause, defaultValue);
+            return;
+        }
+
+        String defaultBinding = clause.substring(0, commaIndex).trim();
+        if (!defaultBinding.isEmpty()) {
+            JSValue defaultValue = namespaceObject.get(this, PropertyKey.fromString("default"));
+            bindImportOverlayValue(globalObject, savedGlobals, absentKeys, defaultBinding, defaultValue);
+        }
+
+        String remainder = clause.substring(commaIndex + 1).trim();
+        if (remainder.startsWith("*")) {
+            String namespaceBinding = remainder.replaceFirst("^\\*\\s*as\\s+", "").trim();
+            if (!namespaceBinding.isEmpty()) {
+                bindImportOverlayValue(globalObject, savedGlobals, absentKeys, namespaceBinding, namespaceObject);
+            }
+        } else if (remainder.startsWith("{")) {
+            bindNamedImports(globalObject, savedGlobals, absentKeys, namespaceObject, remainder);
+        }
+    }
+
+    private void bindImportOverlayValue(
+            JSObject globalObject,
+            Map<String, JSValue> savedGlobals,
+            Set<String> absentKeys,
+            String localName,
+            JSValue value) {
+        String bindingName = localName.trim();
+        if (bindingName.isEmpty()) {
+            return;
+        }
+        PropertyKey key = PropertyKey.fromString(bindingName);
+        if (globalObject.has(key)) {
+            if (!savedGlobals.containsKey(bindingName)) {
+                savedGlobals.put(bindingName, globalObject.get(key));
+            }
+        } else {
+            absentKeys.add(bindingName);
+        }
+        globalObject.set(this, key, value != null ? value : JSUndefined.INSTANCE);
+    }
+
+    private void bindNamedImports(
+            JSObject globalObject,
+            Map<String, JSValue> savedGlobals,
+            Set<String> absentKeys,
+            JSObject namespaceObject,
+            String namedClause) {
+        String clause = namedClause.trim();
+        if (!clause.startsWith("{") || !clause.endsWith("}")) {
+            return;
+        }
+        String specifiersText = clause.substring(1, clause.length() - 1).trim();
+        if (specifiersText.isEmpty()) {
+            return;
+        }
+        for (String rawSpecifier : specifiersText.split(",")) {
+            String specifier = rawSpecifier.trim();
+            if (specifier.isEmpty()) {
+                continue;
+            }
+            String importedName;
+            String localName;
+            String[] aliasParts = specifier.split("\\s+as\\s+");
+            if (aliasParts.length == 2) {
+                importedName = aliasParts[0].trim();
+                localName = aliasParts[1].trim();
+            } else {
+                importedName = specifier;
+                localName = specifier;
+            }
+            JSValue importedValue = namespaceObject.get(this, PropertyKey.fromString(importedName));
+            bindImportOverlayValue(globalObject, savedGlobals, absentKeys, localName, importedValue);
         }
     }
 
@@ -232,6 +330,7 @@ public final class JSContext implements AutoCloseable {
      */
     private void clearModuleCache() {
         dynamicImportModuleCache.clear();
+        importMetaCache.clear();
         moduleCache.clear();
     }
 
@@ -272,10 +371,15 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject createImportMetaObject(String filename) {
-        JSObject importMetaObject = new JSObject();
-        importMetaObject.setPrototype(null);
-        if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
-            importMetaObject.set(PropertyKey.fromString("url"), new JSString(filename));
+        String cacheKey = filename != null ? filename : "";
+        JSObject importMetaObject = importMetaCache.get(cacheKey);
+        if (importMetaObject == null) {
+            importMetaObject = new JSObject();
+            importMetaObject.setPrototype(null);
+            if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
+                importMetaObject.set(PropertyKey.fromString("url"), new JSString(filename));
+            }
+            importMetaCache.put(cacheKey, importMetaObject);
         }
         return importMetaObject;
     }
@@ -987,6 +1091,9 @@ public final class JSContext implements AutoCloseable {
                 skipEvaluatedDynamicImportModule = true;
             }
         }
+        boolean evaluatingRawDynamicImportModule =
+                dynamicImportEvalModuleRecord != null
+                        && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
 
         Compiler compiler = new Compiler(code, filename);
         // Per QuickJS, eval code has is_eval=true which prevents top-level return.
@@ -1025,7 +1132,7 @@ public final class JSContext implements AutoCloseable {
                 return JSUndefined.INSTANCE;
             }
 
-            if (dynamicImportEvalModuleRecord != null && dynamicImportEvalModuleRecord.hasExportSyntax()) {
+            if (evaluatingRawDynamicImportModule && dynamicImportEvalModuleRecord.hasExportSyntax()) {
                 evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
                 resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
                 dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
@@ -1159,6 +1266,7 @@ public final class JSContext implements AutoCloseable {
 
             // Initialize the function's prototype chain so it inherits from Function.prototype
             func.initializePrototypeChain(this);
+            func.setImportMetaFilename(filename);
 
             if (isModule && !isDirectEval) {
                 moduleNamespaceImportOverlay = evaluateModuleNamespaceImports(code, filename);
@@ -1224,7 +1332,7 @@ public final class JSContext implements AutoCloseable {
             // Process all pending microtasks before returning
             processMicrotasks();
 
-            if (dynamicImportEvalModuleRecord != null
+            if (evaluatingRawDynamicImportModule
                     && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
                 dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
                 dynamicImportEvalModuleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
@@ -1312,31 +1420,39 @@ public final class JSContext implements AutoCloseable {
         globalObject.set(this, PropertyKey.fromString(exportBindingName), moduleNamespace);
         try {
             String transformedSource = moduleRecord.transformedSource();
-            eval(transformedSource, moduleRecord.resolvedSpecifier(), false);
+            eval(transformedSource, moduleRecord.resolvedSpecifier(), true);
         } finally {
             globalObject.delete(this, PropertyKey.fromString(exportBindingName));
         }
     }
 
     private EvalOverlayFrame evaluateModuleNamespaceImports(String code, String filename) {
-        Matcher matcher = MODULE_NAMESPACE_IMPORT_PATTERN.matcher(code);
         JSObject globalObject = getGlobalObject();
         Map<String, JSValue> savedGlobals = new HashMap<>();
         Set<String> absentKeys = new HashSet<>();
 
-        while (matcher.find()) {
-            String localName = matcher.group(1);
-            String specifier = matcher.group(3);
+        Matcher namespaceMatcher = MODULE_NAMESPACE_IMPORT_PATTERN.matcher(code);
+        while (namespaceMatcher.find()) {
+            String localName = namespaceMatcher.group(1);
+            String specifier = namespaceMatcher.group(3);
             JSObject namespaceObject = loadDynamicImportModule(specifier, filename);
-            PropertyKey key = PropertyKey.fromString(localName);
-            if (globalObject.has(key)) {
-                if (!savedGlobals.containsKey(localName)) {
-                    savedGlobals.put(localName, globalObject.get(key));
-                }
-            } else {
-                absentKeys.add(localName);
+            bindImportOverlayValue(globalObject, savedGlobals, absentKeys, localName, namespaceObject);
+        }
+
+        Matcher bindingMatcher = MODULE_BINDING_IMPORT_PATTERN.matcher(code);
+        while (bindingMatcher.find()) {
+            String importClause = bindingMatcher.group(1).trim();
+            if (importClause.startsWith("*")) {
+                continue;
             }
-            globalObject.set(this, key, namespaceObject);
+            String specifier = bindingMatcher.group(3);
+            JSObject namespaceObject = loadDynamicImportModule(specifier, filename);
+            applyImportClauseBindings(
+                    globalObject,
+                    savedGlobals,
+                    absentKeys,
+                    namespaceObject,
+                    importClause);
         }
 
         if (savedGlobals.isEmpty() && absentKeys.isEmpty()) {

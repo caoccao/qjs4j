@@ -26,6 +26,7 @@ public sealed class JSError extends JSObject permits
         JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
     public static final String NAME = "Error";
     protected final JSContext context;
+    private String vmMessage;
 
     /**
      * Create an Error with a message.
@@ -198,9 +199,17 @@ public sealed class JSError extends JSObject permits
         return JSTypeConversions.toString(context, nameValue);
     }
 
+    public String getVmMessage() {
+        return vmMessage;
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(getName(), getMessage());
+    }
+
+    public void setVmMessage(String vmMessage) {
+        this.vmMessage = vmMessage;
     }
 
     @Override

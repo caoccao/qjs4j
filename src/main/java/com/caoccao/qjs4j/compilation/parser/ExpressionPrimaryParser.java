@@ -142,11 +142,17 @@ final class ExpressionPrimaryParser {
     Expression parseMemberExpression() {
         if (parserContext.match(TokenType.NEW)) {
             SourceLocation location = parserContext.getLocation();
+            if (parserContext.currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Unexpected token NEW");
+            }
             parserContext.advance();
 
             // Handle new.target meta-property
             if (parserContext.match(TokenType.DOT) && parserContext.nextToken.type() == TokenType.IDENTIFIER
                     && JSKeyword.TARGET.equals(parserContext.nextToken.value())) {
+                if (parserContext.nextToken.escaped()) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
                 if ((parserContext.isEval && !parserContext.allowNewTargetInEval)
                         || (!parserContext.isEval && parserContext.functionNesting == 0)) {
                     throw new JSSyntaxErrorException("'new.target' keyword unexpected here");
@@ -156,11 +162,15 @@ final class ExpressionPrimaryParser {
                 return new Identifier("new.target", location);
             }
 
-            if (parserContext.match(TokenType.IMPORT)) {
+            boolean startsWithImport = parserContext.match(TokenType.IMPORT);
+            if (startsWithImport && parserContext.nextToken.type() == TokenType.LPAREN) {
                 throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
 
             Expression callee = parseMemberExpression();
+            if (startsWithImport && callee instanceof ImportExpression) {
+                throw new JSSyntaxErrorException("Unexpected import call in constructor position");
+            }
 
             while (true) {
                 if (parserContext.match(TokenType.DOT)) {
@@ -319,6 +329,14 @@ final class ExpressionPrimaryParser {
         Expression expr = expressions.parseCallExpression();
 
         if (!parserContext.hasNewlineBefore() && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
+            if (expr instanceof Identifier identifier) {
+                String identifierName = identifier.name();
+                if ("import.meta".equals(identifierName)
+                        || "new.target".equals(identifierName)
+                        || JSKeyword.THIS.equals(identifierName)) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
+                }
+            }
             // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
             if (parserContext.strictMode && expr instanceof CallExpression) {
                 throw new JSSyntaxErrorException("Invalid left-hand side expression in postfix operation");
@@ -566,13 +584,18 @@ final class ExpressionPrimaryParser {
                 parserContext.advance(); // consume 'import'
                 if (parserContext.match(TokenType.DOT)) {
                     if (parserContext.nextToken.type() == TokenType.IDENTIFIER
-                            && "meta".equals(parserContext.nextToken.value())) {
+                            && "meta".equals(parserContext.nextToken.value())
+                            && !parserContext.nextToken.escaped()) {
+                        if (!parserContext.moduleMode) {
+                            throw new JSSyntaxErrorException("Cannot use 'import.meta' outside a module");
+                        }
                         // import.meta
                         parserContext.advance(); // consume '.'
                         parserContext.advance(); // consume 'meta'
                         yield new Identifier("import.meta", location);
                     } else if (parserContext.nextToken.type() == TokenType.IDENTIFIER
-                            && "defer".equals(parserContext.nextToken.value())) {
+                            && "defer".equals(parserContext.nextToken.value())
+                            && !parserContext.nextToken.escaped()) {
                         // import.defer(specifier)
                         parserContext.advance(); // consume '.'
                         parserContext.advance(); // consume 'defer'
@@ -738,6 +761,14 @@ final class ExpressionPrimaryParser {
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression operand = parseUnaryExpression();
+            if (operand instanceof Identifier identifier) {
+                String identifierName = identifier.name();
+                if ("import.meta".equals(identifierName)
+                        || "new.target".equals(identifierName)
+                        || JSKeyword.THIS.equals(identifierName)) {
+                    throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");
+                }
+            }
             // In strict mode, CallExpression as update operand is an early SyntaxError (spec 13.4.1)
             if (parserContext.strictMode && operand instanceof CallExpression) {
                 throw new JSSyntaxErrorException("Invalid left-hand side expression in prefix operation");

@@ -40,7 +40,6 @@ import java.math.BigInteger;
  * - ToLength
  */
 public final class JSTypeConversions {
-
     /**
      * Abstract Equality Comparison (==).
      * ES2020 7.2.14
@@ -204,43 +203,106 @@ public final class JSTypeConversions {
      * ES2020 7.2.13
      */
     public static boolean lessThan(JSContext context, JSValue x, JSValue y) {
-        // Convert to primitives
-        JSValue px = toPrimitive(context, x, PreferredType.NUMBER);
-        JSValue py = toPrimitive(context, y, PreferredType.NUMBER);
+        return lessThanResult(context, x, y) == RelationalComparisonResult.TRUE;
+    }
 
-        // If both are strings, compare lexicographically
-        if (px instanceof JSString xStr && py instanceof JSString yStr) {
-            return xStr.value().compareTo(yStr.value()) < 0;
+    public static RelationalComparisonResult lessThanResult(JSContext context, JSValue x, JSValue y) {
+        return lessThanResult(context, x, y, true);
+    }
+
+    public static RelationalComparisonResult lessThanResult(
+            JSContext context,
+            JSValue x,
+            JSValue y,
+            boolean leftFirst) {
+        JSValue px;
+        JSValue py;
+        if (leftFirst) {
+            px = toPrimitive(context, x, PreferredType.NUMBER);
+            if (context.hasPendingException()) {
+                return RelationalComparisonResult.UNDEFINED;
+            }
+            py = toPrimitive(context, y, PreferredType.NUMBER);
+        } else {
+            py = toPrimitive(context, y, PreferredType.NUMBER);
+            if (context.hasPendingException()) {
+                return RelationalComparisonResult.UNDEFINED;
+            }
+            px = toPrimitive(context, x, PreferredType.NUMBER);
+        }
+        if (context.hasPendingException()) {
+            return RelationalComparisonResult.UNDEFINED;
+        }
+
+        if (px instanceof JSString xString && py instanceof JSString yString) {
+            return xString.value().compareTo(yString.value()) < 0
+                    ? RelationalComparisonResult.TRUE
+                    : RelationalComparisonResult.FALSE;
         }
 
         if (px instanceof JSBigInt xBigInt) {
+            if (py instanceof JSString yString) {
+                JSBigInt yBigInt = tryStringToBigInt(yString.value());
+                if (yBigInt == null) {
+                    return RelationalComparisonResult.UNDEFINED;
+                }
+                return xBigInt.value().compareTo(yBigInt.value()) < 0
+                        ? RelationalComparisonResult.TRUE
+                        : RelationalComparisonResult.FALSE;
+            }
             if (py instanceof JSBigInt yBigInt) {
-                return xBigInt.value().compareTo(yBigInt.value()) < 0;
+                return xBigInt.value().compareTo(yBigInt.value()) < 0
+                        ? RelationalComparisonResult.TRUE
+                        : RelationalComparisonResult.FALSE;
             }
-            double ny = py instanceof JSNumber n ? n.value() : toNumber(context, py).value();
-            if (Double.isNaN(ny)) {
-                return false;
+            double numberY = py instanceof JSNumber number ? number.value() : toNumber(context, py).value();
+            if (context.hasPendingException()) {
+                return RelationalComparisonResult.UNDEFINED;
             }
-            return compareBigIntAndNumber(xBigInt.value(), ny) < 0;
+            if (Double.isNaN(numberY)) {
+                return RelationalComparisonResult.UNDEFINED;
+            }
+            return compareBigIntAndNumber(xBigInt.value(), numberY) < 0
+                    ? RelationalComparisonResult.TRUE
+                    : RelationalComparisonResult.FALSE;
         }
+
         if (py instanceof JSBigInt yBigInt) {
-            double nx = px instanceof JSNumber n ? n.value() : toNumber(context, px).value();
-            if (Double.isNaN(nx)) {
-                return false;
+            if (px instanceof JSString xString) {
+                JSBigInt xBigInt = tryStringToBigInt(xString.value());
+                if (xBigInt == null) {
+                    return RelationalComparisonResult.UNDEFINED;
+                }
+                return xBigInt.value().compareTo(yBigInt.value()) < 0
+                        ? RelationalComparisonResult.TRUE
+                        : RelationalComparisonResult.FALSE;
             }
-            return compareBigIntAndNumber(yBigInt.value(), nx) > 0;
+            double numberX = px instanceof JSNumber number ? number.value() : toNumber(context, px).value();
+            if (context.hasPendingException()) {
+                return RelationalComparisonResult.UNDEFINED;
+            }
+            if (Double.isNaN(numberX)) {
+                return RelationalComparisonResult.UNDEFINED;
+            }
+            return compareBigIntAndNumber(yBigInt.value(), numberX) > 0
+                    ? RelationalComparisonResult.TRUE
+                    : RelationalComparisonResult.FALSE;
         }
 
-        // Otherwise, convert to numbers and compare
-        double nx = toNumber(context, px).value();
-        double ny = toNumber(context, py).value();
-
-        // If either is NaN, return false
-        if (Double.isNaN(nx) || Double.isNaN(ny)) {
-            return false;
+        double numberX = toNumber(context, px).value();
+        if (context.hasPendingException()) {
+            return RelationalComparisonResult.UNDEFINED;
         }
-
-        return nx < ny;
+        double numberY = toNumber(context, py).value();
+        if (context.hasPendingException()) {
+            return RelationalComparisonResult.UNDEFINED;
+        }
+        if (Double.isNaN(numberX) || Double.isNaN(numberY)) {
+            return RelationalComparisonResult.UNDEFINED;
+        }
+        return numberX < numberY
+                ? RelationalComparisonResult.TRUE
+                : RelationalComparisonResult.FALSE;
     }
 
     private static boolean numberEqualsBigInt(double number, BigInteger bigInt) {
@@ -835,6 +897,14 @@ public final class JSTypeConversions {
         return toUint8Clamp(toNumber(context, value).value());
     }
 
+    private static JSBigInt tryStringToBigInt(String value) {
+        try {
+            return stringToBigInt(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     /**
      * Preferred type for ToPrimitive operation.
      */
@@ -842,5 +912,11 @@ public final class JSTypeConversions {
         NUMBER,
         STRING,
         DEFAULT
+    }
+
+    public enum RelationalComparisonResult {
+        TRUE,
+        FALSE,
+        UNDEFINED
     }
 }

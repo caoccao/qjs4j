@@ -38,6 +38,12 @@ public class JSVirtualMachineException extends RuntimeException {
         this.jsValue = jsError;
     }
 
+    public JSVirtualMachineException(String message, JSError jsError) {
+        super(message);
+        this.jsError = jsError;
+        this.jsValue = jsError;
+    }
+
     public JSVirtualMachineException(String message, JSValue jsValue) {
         super(message);
         this.jsError = null;

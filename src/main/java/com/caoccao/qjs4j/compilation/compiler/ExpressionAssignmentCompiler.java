@@ -311,12 +311,22 @@ final class ExpressionAssignmentCompiler {
     void compileLogicalAssignment(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
         AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+        boolean privateMemberAssignment = false;
 
         int depthLvalue;
         if (left instanceof Identifier) {
             depthLvalue = 0;
         } else if (left instanceof MemberExpression memberExpr) {
-            depthLvalue = compilerContext.isSuperMemberExpression(memberExpr) ? 3 : (memberExpr.computed() ? 2 : 1);
+            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                depthLvalue = 3;
+            } else if (memberExpr.computed()) {
+                depthLvalue = 2;
+            } else if (memberExpr.property() instanceof PrivateIdentifier) {
+                depthLvalue = 2;
+                privateMemberAssignment = true;
+            } else {
+                depthLvalue = 1;
+            }
         } else {
             throw new JSCompilerException("Invalid left-hand side in logical assignment");
         }
@@ -354,6 +364,15 @@ final class ExpressionAssignmentCompiler {
                     owner.compileExpression(memberExpr.property());
                     compilerContext.emitter.emitOpcode(Opcode.DUP2);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else if (memberExpr.property() instanceof PrivateIdentifier privateIdentifier) {
+                    String fieldName = privateIdentifier.name();
+                    JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
+                    if (symbol == null) {
+                        throw new JSCompilerException("undefined private field '#" + fieldName + "'");
+                    }
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP2);
+                    compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
                 } else if (memberExpr.property() instanceof Identifier propId) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
                 }
@@ -374,6 +393,10 @@ final class ExpressionAssignmentCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         owner.compileExpression(assignExpr.right());
+        if (left instanceof Identifier identifier
+                && isAnonymousFunctionDefinition(assignExpr.right())) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.name());
+        }
 
         switch (depthLvalue) {
             case 0 -> {
@@ -386,6 +409,10 @@ final class ExpressionAssignmentCompiler {
                 // Stack: [this, superObj, key, newValue] — already in correct order for PUT_SUPER_VALUE
             }
             default -> throw new JSCompilerException("Invalid depth for logical assignment");
+        }
+        if (privateMemberAssignment) {
+            // PUT_PRIVATE_FIELD expects: [obj, value, privateSymbol]
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
         }
 
         if (left instanceof Identifier id) {
@@ -417,6 +444,8 @@ final class ExpressionAssignmentCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else if (memberExpr.computed()) {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+            } else if (privateMemberAssignment) {
+                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
             } else if (memberExpr.property() instanceof Identifier propId) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
             }

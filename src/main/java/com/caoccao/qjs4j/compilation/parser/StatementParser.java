@@ -136,6 +136,19 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
+    private boolean containsCoverInitializedName(ObjectExpression objectExpression) {
+        for (ObjectExpression.Property property : objectExpression.properties()) {
+            if (!property.shorthand()) {
+                continue;
+            }
+            if (property.value() instanceof AssignmentExpression assignmentExpression
+                    && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isWithKeyword() {
         return parserContext.currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.WITH.equals(parserContext.currentToken.value());
@@ -286,6 +299,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     Statement parseExpressionStatement() {
         SourceLocation location = parserContext.getLocation();
         Expression expression = delegates.expressions.parseExpression();
+        if (expression instanceof ObjectExpression objectExpression
+                && containsCoverInitializedName(objectExpression)) {
+            throw new JSSyntaxErrorException("Invalid shorthand property initializer");
+        }
         parserContext.consumeSemicolon();
         return new ExpressionStatement(expression, location);
     }
@@ -504,7 +521,43 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return null; // Resolved by module pre-evaluation import binding setup.
         }
 
+        if (parserContext.match(TokenType.LBRACE)) {
+            parseNamedImportSpecifiers();
+            parserContext.expect(TokenType.FROM);
+            parserContext.expect(TokenType.STRING);
+            parserContext.consumeSemicolon();
+            return null;
+        }
+
+        if (parserContext.match(TokenType.IDENTIFIER)) {
+            parserContext.parseIdentifier(); // default import binding
+            if (parserContext.match(TokenType.COMMA)) {
+                parserContext.advance();
+                if (parserContext.match(TokenType.MUL)) {
+                    parserContext.advance();
+                    parserContext.expect(TokenType.AS);
+                    parserContext.parseIdentifier();
+                } else if (parserContext.match(TokenType.LBRACE)) {
+                    parseNamedImportSpecifiers();
+                } else {
+                    throw new JSSyntaxErrorException("Unsupported import declaration");
+                }
+            }
+            parserContext.expect(TokenType.FROM);
+            parserContext.expect(TokenType.STRING);
+            parserContext.consumeSemicolon();
+            return null;
+        }
+
         throw new JSSyntaxErrorException("Unsupported import declaration");
+    }
+
+    private void parseImportIdentifierName() {
+        switch (parserContext.currentToken.type()) {
+            case IDENTIFIER, ASYNC, AWAIT, FROM, OF, YIELD, DEFAULT -> parserContext.advance();
+            default ->
+                    throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+        }
     }
 
     /**
@@ -518,6 +571,27 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.COLON);
         Statement body = parseStatement();
         return new LabeledStatement(label, body, location);
+    }
+
+    private void parseNamedImportSpecifiers() {
+        parserContext.expect(TokenType.LBRACE);
+        if (!parserContext.match(TokenType.RBRACE)) {
+            while (true) {
+                parseImportIdentifierName();
+                if (parserContext.match(TokenType.AS)) {
+                    parserContext.advance();
+                    parserContext.parseIdentifier();
+                }
+                if (!parserContext.match(TokenType.COMMA)) {
+                    break;
+                }
+                parserContext.advance();
+                if (parserContext.match(TokenType.RBRACE)) {
+                    break;
+                }
+            }
+        }
+        parserContext.expect(TokenType.RBRACE);
     }
 
     Statement parseReturnStatement() {

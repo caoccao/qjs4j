@@ -459,6 +459,16 @@ final class ExpressionCompiler {
     }
 
     void compileObjectExpression(ObjectExpression objExpr) {
+        int protoDataPropertyCount = 0;
+        for (ObjectExpression.Property property : objExpr.properties()) {
+            if (isProtoDataProperty(property)) {
+                protoDataPropertyCount++;
+                if (protoDataPropertyCount > 1) {
+                    throw new JSCompilerException("Duplicate __proto__ fields are not allowed in object literals");
+                }
+            }
+        }
+
         compilerContext.emitter.emitOpcode(Opcode.OBJECT);
 
         for (ObjectExpression.Property prop : objExpr.properties()) {
@@ -482,10 +492,12 @@ final class ExpressionCompiler {
                 // Push key
                 if (prop.computed()) {
                     compileExpression(prop.key());
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 } else if (prop.key() instanceof Identifier id) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
                 } else {
                     compileExpression(prop.key());
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 }
 
                 // Compile the getter/setter function (not constructable per ES spec)
@@ -512,6 +524,7 @@ final class ExpressionCompiler {
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
                         } else {
                             compileExpression(prop.key());
+                            compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         }
                         // Concise methods are not constructors per ES spec
                         delegates.functions.compileFunctionExpression(methodFunc, true);
@@ -525,6 +538,7 @@ final class ExpressionCompiler {
                         // Computed or non-identifier key: define own data property directly.
                         // Stack: [obj] -> [obj, key, value] -> [obj]
                         compileExpression(prop.key());
+                        compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         compileExpression(prop.value());
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
                     }
@@ -862,6 +876,11 @@ final class ExpressionCompiler {
         if (unaryExpr.operator() == UnaryExpression.UnaryOperator.TYPEOF
                 && unaryExpr.operand() instanceof Identifier id) {
             String name = id.name();
+            if ("import.meta".equals(name) || "new.target".equals(name)) {
+                compileExpression(unaryExpr.operand());
+                compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+                return;
+            }
             if (JSKeyword.THIS.equals(name)) {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else if (JSArguments.NAME.equals(name) && !compilerContext.inGlobalScope
@@ -1199,5 +1218,18 @@ final class ExpressionCompiler {
         emitWithAwareIdentifierLookupForCall(name, withObjectLocals, withDepth + 1);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
+    }
+
+    private boolean isProtoDataProperty(ObjectExpression.Property property) {
+        if (property.computed() || property.shorthand() || property.method() || !"init".equals(property.kind())) {
+            return false;
+        }
+        if (property.key() instanceof Identifier identifier) {
+            return "__proto__".equals(identifier.name());
+        }
+        if (property.key() instanceof Literal literal && literal.value() instanceof String stringValue) {
+            return "__proto__".equals(stringValue);
+        }
+        return false;
     }
 }

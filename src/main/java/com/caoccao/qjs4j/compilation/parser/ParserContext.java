@@ -138,7 +138,7 @@ final class ParserContext {
 
     Token expect(TokenType type) {
         if (!match(type)) {
-            throw new RuntimeException("Expected " + type + " but got " + currentToken.type() +
+            throw new JSSyntaxErrorException("Expected " + type + " but got " + currentToken.type() +
                     " at line " + currentToken.line() + ", column " + currentToken.column());
         }
         Token token = currentToken;
@@ -291,7 +291,11 @@ final class ParserContext {
     // ---- Context management ----
 
     boolean isValidForInOfTarget(Expression expr) {
-        if (expr instanceof Identifier || expr instanceof MemberExpression) {
+        if (expr instanceof Identifier identifier) {
+            String name = identifier.name();
+            return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+        }
+        if (expr instanceof MemberExpression) {
             return true;
         }
         return !strictMode && expr instanceof CallExpression;

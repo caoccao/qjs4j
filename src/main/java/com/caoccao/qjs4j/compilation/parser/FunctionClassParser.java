@@ -844,6 +844,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
         checkDuplicateParameters(funcParams);
+        if (parserContext.strictMode) {
+            checkStrictModeParameters(funcParams, null);
+        }
 
         // Parse method body
         parserContext.enterFunctionContext(isAsync, isGenerator);

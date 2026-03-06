@@ -818,6 +818,11 @@ final class ExpressionAssignmentParser {
 
     private void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
         if (expression instanceof Identifier identifier) {
+            if ("import.meta".equals(identifier.name())
+                    || "new.target".equals(identifier.name())
+                    || JSKeyword.THIS.equals(identifier.name())) {
+                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            }
             // Per spec: IdentifierReference cannot be a ReservedWord.
             // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
             validateBindingIdentifier(identifier.name());

@@ -223,6 +223,10 @@ public final class VirtualMachine {
                 executionContext.previousFrame,
                 executionContext.savedStrictMode);
         if (exception instanceof JSError jsError) {
+            String vmMessage = jsError.getVmMessage();
+            if (vmMessage != null && !vmMessage.isEmpty()) {
+                throw new JSVirtualMachineException(vmMessage, jsError);
+            }
             throw new JSVirtualMachineException(jsError);
         }
         String exceptionMessage = executionContext.virtualMachine.safeExceptionToString(executionContext.virtualMachine.context, exception);
@@ -783,8 +787,15 @@ public final class VirtualMachine {
                 return variableObject;
 
             case 6: // SPECIAL_OBJECT_IMPORT_META
-                JSStackFrame scriptFrame = context.getCurrentStackFrame();
-                String filename = scriptFrame != null ? scriptFrame.filename() : null;
+                String filename = null;
+                JSFunction activeFunction = currentFrame.getFunction();
+                if (activeFunction != null) {
+                    filename = activeFunction.getImportMetaFilename();
+                }
+                if (filename == null || filename.isEmpty()) {
+                    JSStackFrame scriptFrame = context.getCurrentStackFrame();
+                    filename = scriptFrame != null ? scriptFrame.filename() : null;
+                }
                 return context.createImportMetaObject(filename);
 
             default:
