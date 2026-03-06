@@ -54,6 +54,9 @@ final class ExpressionPrimaryParser {
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, location);
             } else if (parserContext.match(TokenType.LPAREN)) {
+                if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.name())) {
+                    throw new JSSyntaxErrorException("Unexpected token '('");
+                }
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 List<Expression> args = new ArrayList<>();
@@ -553,6 +556,9 @@ final class ExpressionPrimaryParser {
                 yield delegates.functions.parseClassExpression();
             }
             case IMPORT -> {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Unexpected token IMPORT");
+                }
                 parserContext.advance(); // consume 'import'
                 if (parserContext.match(TokenType.DOT)) {
                     if (parserContext.nextToken.type() == TokenType.IDENTIFIER
@@ -569,25 +575,31 @@ final class ExpressionPrimaryParser {
                         parserContext.expect(TokenType.LPAREN);
                         Expression source = expressions.parseAssignmentExpression();
                         parserContext.expect(TokenType.RPAREN);
-                        yield new ImportExpression(source, null, location);
+                        yield new ImportExpression(source, null, true, location);
                     } else {
                         throw new JSSyntaxErrorException("The only valid meta property for import is 'import.meta'");
                     }
                 } else if (parserContext.match(TokenType.LPAREN)) {
                     parserContext.advance(); // consume '('
-                    Expression source = expressions.parseAssignmentExpression();
-                    Expression options = null;
-                    if (parserContext.match(TokenType.COMMA)) {
-                        parserContext.advance(); // consume ','
-                        if (!parserContext.match(TokenType.RPAREN)) {
-                            options = expressions.parseAssignmentExpression();
-                            if (parserContext.match(TokenType.COMMA)) {
-                                parserContext.advance(); // consume trailing comma
+                    boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                    parserContext.inOperatorAllowed = true;
+                    try {
+                        Expression source = expressions.parseAssignmentExpression();
+                        Expression options = null;
+                        if (parserContext.match(TokenType.COMMA)) {
+                            parserContext.advance(); // consume ','
+                            if (!parserContext.match(TokenType.RPAREN)) {
+                                options = expressions.parseAssignmentExpression();
+                                if (parserContext.match(TokenType.COMMA)) {
+                                    parserContext.advance(); // consume trailing comma
+                                }
                             }
                         }
+                        parserContext.expect(TokenType.RPAREN);
+                        yield new ImportExpression(source, options, location);
+                    } finally {
+                        parserContext.inOperatorAllowed = savedInOperatorAllowed;
                     }
-                    parserContext.expect(TokenType.RPAREN);
-                    yield new ImportExpression(source, options, location);
                 } else {
                     throw new JSSyntaxErrorException("Unexpected token " + parserContext.currentToken.type());
                 }

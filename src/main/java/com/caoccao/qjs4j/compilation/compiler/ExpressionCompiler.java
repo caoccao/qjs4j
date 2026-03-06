@@ -366,6 +366,8 @@ final class ExpressionCompiler {
         compileExpression(importExpr.source());
         if (importExpr.options() != null) {
             compileExpression(importExpr.options());
+        } else if (importExpr.defer()) {
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.INSTANCE);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }

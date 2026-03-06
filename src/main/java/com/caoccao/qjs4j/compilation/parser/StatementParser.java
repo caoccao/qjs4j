@@ -251,6 +251,34 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (parserContext.match(TokenType.CLASS)) {
             return delegates.functions.parseClassDeclaration();
         }
+        if (parserContext.match(TokenType.LBRACE)) {
+            parserContext.advance();
+            while (!parserContext.match(TokenType.RBRACE)) {
+                if (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
+                    continue;
+                }
+                parserContext.parseIdentifier();
+                if (parserContext.match(TokenType.IDENTIFIER)
+                        && JSKeyword.AS.equals(parserContext.currentToken.value())) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
+                if (parserContext.match(TokenType.AS)) {
+                    parserContext.advance();
+                    parserContext.parseIdentifier();
+                }
+                if (parserContext.match(TokenType.COMMA)) {
+                    parserContext.advance();
+                }
+            }
+            parserContext.expect(TokenType.RBRACE);
+            if (parserContext.match(TokenType.FROM)) {
+                parserContext.advance();
+                parserContext.expect(TokenType.STRING);
+            }
+            parserContext.consumeSemicolon();
+            return new BlockStatement(List.of(), location);
+        }
 
         throw new JSSyntaxErrorException("Unexpected export syntax");
     }

@@ -48,6 +48,16 @@ import java.util.regex.Pattern;
  */
 public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
+    private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
+            Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
+    private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
+            Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
+    private static final Pattern MODULE_SIDE_EFFECT_IMPORT_PATTERN =
+            Pattern.compile("(?m)^\\s*import\\s*(['\"])([^'\"\\r\\n]+)\\1\\s*;?\\s*$");
+    private static final Pattern MODULE_STATIC_IMPORT_PATTERN =
+            Pattern.compile("(?m)^\\s*import\\s+(?:[^;]*?\\s+from\\s+)?['\"]([^'\"\\r\\n]+)['\"]\\s*;?\\s*$");
+    private static final Pattern MODULE_TOP_LEVEL_AWAIT_PATTERN =
+            Pattern.compile("(?m)^\\s*await\\b");
     // Call stack management
     private final Deque<JSStackFrame> callStack;
     private final Map<String, DynamicImportModuleRecord> dynamicImportModuleCache;
@@ -131,14 +141,14 @@ public final class JSContext implements AutoCloseable {
             String exportBindingName,
             List<LocalExportBinding> localExportBindings) {
         transformedSourceBuilder.append("const __qjs4jModuleExports = globalThis[\"")
-                .append(exportBindingName)
+                .append(escapeJavaScriptString(exportBindingName))
                 .append("\"];\n");
         for (LocalExportBinding localExportBinding : localExportBindings) {
-            transformedSourceBuilder.append("__qjs4jModuleExports[\"")
-                    .append(localExportBinding.exportedName())
-                    .append("\"] = ")
+            transformedSourceBuilder.append("Object.defineProperty(__qjs4jModuleExports, \"")
+                    .append(escapeJavaScriptString(localExportBinding.exportedName()))
+                    .append("\", { enumerable: true, configurable: false, get() { return ")
                     .append(localExportBinding.localName())
-                    .append(";\n");
+                    .append("; } });\n");
         }
     }
 
@@ -785,6 +795,21 @@ public final class JSContext implements AutoCloseable {
                 + dynamicImportModuleCache.size();
     }
 
+    private JSImportNamespaceObject createModuleNamespaceObject() {
+        return new JSImportNamespaceObject(this);
+    }
+
+    private void defineDynamicImportNamespaceValue(
+            DynamicImportModuleRecord moduleRecord,
+            String exportName,
+            JSValue exportValue) {
+        moduleRecord.namespace().defineProperty(
+                PropertyKey.fromString(exportName),
+                exportValue,
+                PropertyDescriptor.DataState.EnumerableWritable);
+        moduleRecord.namespace().registerExportName(exportName);
+    }
+
     /**
      * Enqueue a microtask to be executed.
      *
@@ -799,6 +824,15 @@ public final class JSContext implements AutoCloseable {
      */
     public void enterStrictMode() {
         this.strictMode = true;
+    }
+
+    private String escapeJavaScriptString(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        return text
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"");
     }
 
     /**
@@ -856,6 +890,28 @@ public final class JSContext implements AutoCloseable {
             return throwError("RangeError", "Maximum call stack size exceeded");
         }
 
+        DynamicImportModuleRecord dynamicImportEvalModuleRecord = null;
+        boolean skipEvaluatedDynamicImportModule = false;
+        if (isModule
+                && !isDirectEval
+                && filename != null
+                && !filename.isEmpty()
+                && !filename.startsWith("<")
+                && (code.contains("import(") || code.contains("import.defer("))) {
+            String resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
+            dynamicImportEvalModuleRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
+            if (dynamicImportEvalModuleRecord == null) {
+                dynamicImportEvalModuleRecord =
+                        new DynamicImportModuleRecord(resolvedModuleSpecifier, createModuleNamespaceObject());
+                dynamicImportEvalModuleRecord.setStatus(DynamicImportModuleStatus.LOADING);
+                dynamicImportEvalModuleRecord.setRawSource(code);
+                parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
+                dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
+            } else if (dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.EVALUATED) {
+                skipEvaluatedDynamicImportModule = true;
+            }
+        }
+
         Compiler compiler = new Compiler(code, filename);
         // Per QuickJS, eval code has is_eval=true which prevents top-level return.
         // Only syntactic direct eval should inherit caller frame semantics.
@@ -888,6 +944,20 @@ public final class JSContext implements AutoCloseable {
             compiler.setPredeclareProgramLexicalsAsLocals(true);
         }
         try {
+            if (skipEvaluatedDynamicImportModule) {
+                processMicrotasks();
+                return JSUndefined.INSTANCE;
+            }
+
+            if (dynamicImportEvalModuleRecord != null && dynamicImportEvalModuleRecord.hasExportSyntax()) {
+                evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
+                resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
+                dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
+                dynamicImportEvalModuleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+                processMicrotasks();
+                return JSUndefined.INSTANCE;
+            }
+
             // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
             JSBytecodeFunction func;
             Compiler.CompileResult compileResult = compiler.compile(isModule);
@@ -1014,6 +1084,10 @@ public final class JSContext implements AutoCloseable {
             // Initialize the function's prototype chain so it inherits from Function.prototype
             func.initializePrototypeChain(this);
 
+            if (isModule && !isDirectEval) {
+                evaluateModuleSideEffectImports(code, filename);
+            }
+
             // Phase 4: Execute bytecode in the virtual machine
             // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
             // In strict mode functions called without receiver, 'this' is undefined, and
@@ -1073,13 +1147,31 @@ public final class JSContext implements AutoCloseable {
             // Process all pending microtasks before returning
             processMicrotasks();
 
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
+                dynamicImportEvalModuleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+            }
+
             return result != null ? result : JSUndefined.INSTANCE;
         } catch (JSException e) {
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
+            }
             throw e;
         } catch (JSCompilerException e) {
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
+            }
             JSValue error = throwError("SyntaxError", e.getMessage());
             throw new JSException(error);
         } catch (JSVirtualMachineException e) {
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
+            }
             // VM exception - check if it has a JSError, otherwise check pending exception
             if (e.getJsError() != null) {
                 throw new JSException(e.getJsError());
@@ -1094,9 +1186,17 @@ public final class JSContext implements AutoCloseable {
             JSValue error = throwError("Error", "VM error: " + e.getMessage());
             throw new JSException(error);
         } catch (JSErrorException e) {
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
+            }
             JSValue error = throwError(e.getErrorType().name(), e.getMessage());
             throw new JSException(error);
         } catch (Exception e) {
+            if (dynamicImportEvalModuleRecord != null
+                    && dynamicImportEvalModuleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
+            }
             JSValue error = throwError("Error", "Execution error: " + e.getMessage());
             throw new JSException(error);
         } finally {
@@ -1140,11 +1240,31 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    private void evaluateModuleSideEffectImports(String code, String filename) {
+        Matcher matcher = MODULE_SIDE_EFFECT_IMPORT_PATTERN.matcher(code);
+        while (matcher.find()) {
+            String specifier = matcher.group(2);
+            loadDynamicImportModule(specifier, filename);
+        }
+    }
+
     /**
      * Exit strict mode.
      */
     public void exitStrictMode() {
         this.strictMode = false;
+    }
+
+    private String extractExportedFunctionOrClassName(String exportClause) {
+        Matcher functionMatcher = DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN.matcher(exportClause);
+        if (functionMatcher.find()) {
+            return functionMatcher.group(1);
+        }
+        Matcher classMatcher = DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN.matcher(exportClause);
+        if (classMatcher.find()) {
+            return classMatcher.group(1);
+        }
+        return null;
     }
 
     private List<String> extractSimpleDeclarationNames(String declarationSource) {
@@ -1173,6 +1293,44 @@ public final class JSContext implements AutoCloseable {
             }
         }
         return declarationNames;
+    }
+
+    private void gatherDeferredAsyncDependencySpecifiers(
+            String resolvedSpecifier,
+            String sourceCode,
+            Set<String> visitedSpecifiers,
+            Set<String> asyncDependencySpecifiers) {
+        if (!visitedSpecifiers.add(resolvedSpecifier)) {
+            return;
+        }
+        if (MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(sourceCode).find()) {
+            asyncDependencySpecifiers.add(resolvedSpecifier);
+            return;
+        }
+        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(sourceCode);
+        while (matcher.find()) {
+            String childSpecifier = matcher.group(1);
+            String resolvedChildSpecifier = resolveDynamicImportSpecifier(
+                    childSpecifier,
+                    resolvedSpecifier,
+                    childSpecifier);
+            String childSourceCode;
+            try {
+                DynamicImportModuleRecord childRecord = dynamicImportModuleCache.get(resolvedChildSpecifier);
+                if (childRecord != null && childRecord.rawSource() != null && !childRecord.rawSource().isEmpty()) {
+                    childSourceCode = childRecord.rawSource();
+                } else {
+                    childSourceCode = Files.readString(Path.of(resolvedChildSpecifier));
+                }
+            } catch (IOException ioException) {
+                throw new JSException(throwTypeError("Cannot find module '" + childSpecifier + "'"));
+            }
+            gatherDeferredAsyncDependencySpecifiers(
+                    resolvedChildSpecifier,
+                    childSourceCode,
+                    visitedSpecifiers,
+                    asyncDependencySpecifiers);
+        }
     }
 
     /**
@@ -1534,14 +1692,90 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject loadDynamicImportModule(String specifier, String referrerFilename) {
+        return loadDynamicImportModule(specifier, referrerFilename, null);
+    }
+
+    public JSObject loadDynamicImportModule(
+            String specifier,
+            String referrerFilename,
+            Map<String, String> importAttributes) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
-        DynamicImportModuleRecord moduleRecord = loadDynamicImportModuleRecord(resolvedSpecifier, new HashSet<>());
+        DynamicImportModuleRecord moduleRecord =
+                loadDynamicImportModuleRecord(resolvedSpecifier, new HashSet<>(), importAttributes);
         return moduleRecord.namespace();
+    }
+
+    public JSObject loadDynamicImportModuleDeferred(
+            String specifier,
+            String referrerFilename,
+            Map<String, String> importAttributes) {
+        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
+        DynamicImportModuleRecord moduleRecord = dynamicImportModuleCache.get(resolvedSpecifier);
+        if (moduleRecord == null) {
+            moduleRecord = new DynamicImportModuleRecord(resolvedSpecifier, createModuleNamespaceObject());
+            moduleRecord.setStatus(DynamicImportModuleStatus.LOADING);
+            dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
+            try {
+                String sourceCode = Files.readString(Path.of(resolvedSpecifier));
+                moduleRecord.setRawSource(sourceCode);
+                if (resolvedSpecifier.endsWith(".json")) {
+                    String importType = importAttributes != null ? importAttributes.get("type") : null;
+                    if (!"json".equals(importType)) {
+                        throw new JSException(throwTypeError("Import attribute type must be 'json'"));
+                    }
+                    JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
+                    defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
+                    moduleRecord.explicitExportNames().add("default");
+                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                    moduleRecord.namespace().finalizeNamespace();
+                    moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+                    return moduleRecord.namespace();
+                }
+                parseDynamicImportModuleSource(moduleRecord);
+            } catch (IOException ioException) {
+                dynamicImportModuleCache.remove(resolvedSpecifier);
+                throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
+            } catch (JSException jsException) {
+                dynamicImportModuleCache.remove(resolvedSpecifier);
+                throw jsException;
+            }
+        }
+
+        if (moduleRecord.status() == DynamicImportModuleStatus.EVALUATED) {
+            return moduleRecord.namespace();
+        }
+
+        LinkedHashSet<String> asyncDependencySpecifiers = new LinkedHashSet<>();
+        gatherDeferredAsyncDependencySpecifiers(
+                resolvedSpecifier,
+                moduleRecord.rawSource(),
+                new HashSet<>(),
+                asyncDependencySpecifiers);
+        for (String asyncDependencySpecifier : asyncDependencySpecifiers) {
+            if (asyncDependencySpecifier.equals(resolvedSpecifier)
+                    && moduleRecord.status() == DynamicImportModuleStatus.LOADING) {
+                evaluateDynamicImportModule(moduleRecord);
+                resolveDynamicImportReExports(moduleRecord, new HashSet<>());
+                moduleRecord.namespace().finalizeNamespace();
+                moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+            } else {
+                loadDynamicImportModuleRecord(asyncDependencySpecifier, new HashSet<>(), importAttributes);
+            }
+        }
+
+        if (moduleRecord.status() == DynamicImportModuleStatus.EVALUATED) {
+            return moduleRecord.namespace();
+        }
+        if (moduleRecord.deferredNamespace() == null) {
+            moduleRecord.setDeferredNamespace(new JSDeferredModuleNamespace(this, moduleRecord));
+        }
+        return moduleRecord.deferredNamespace();
     }
 
     private DynamicImportModuleRecord loadDynamicImportModuleRecord(
             String resolvedSpecifier,
-            Set<String> importResolutionStack) {
+            Set<String> importResolutionStack,
+            Map<String, String> importAttributes) {
         DynamicImportModuleRecord cachedRecord = dynamicImportModuleCache.get(resolvedSpecifier);
         if (cachedRecord != null) {
             if (cachedRecord.status() == DynamicImportModuleStatus.EVALUATED) {
@@ -1552,16 +1786,31 @@ public final class JSContext implements AutoCloseable {
             }
         }
 
-        DynamicImportModuleRecord moduleRecord = new DynamicImportModuleRecord(resolvedSpecifier);
+        DynamicImportModuleRecord moduleRecord =
+                new DynamicImportModuleRecord(resolvedSpecifier, createModuleNamespaceObject());
         moduleRecord.setStatus(DynamicImportModuleStatus.LOADING);
         dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
 
         try {
             String sourceCode = Files.readString(Path.of(resolvedSpecifier));
             moduleRecord.setRawSource(sourceCode);
+            if (resolvedSpecifier.endsWith(".json")) {
+                String importType = importAttributes != null ? importAttributes.get("type") : null;
+                if (!"json".equals(importType)) {
+                    throw new JSException(throwTypeError("Import attribute type must be 'json'"));
+                }
+                JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
+                defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
+                moduleRecord.explicitExportNames().add("default");
+                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                moduleRecord.namespace().finalizeNamespace();
+                moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+                return moduleRecord;
+            }
             parseDynamicImportModuleSource(moduleRecord);
             evaluateDynamicImportModule(moduleRecord);
             resolveDynamicImportReExports(moduleRecord, importResolutionStack);
+            moduleRecord.namespace().finalizeNamespace();
             moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
             return moduleRecord;
         } catch (IOException ioException) {
@@ -1624,8 +1873,8 @@ public final class JSContext implements AutoCloseable {
             }
             String existingOrigin = exportOrigins.get(exportName);
             if (existingOrigin == null) {
-                JSValue value = targetModuleRecord.namespace().get(key);
-                moduleRecord.namespace().set(PropertyKey.fromString(exportName), value);
+                JSValue value = targetModuleRecord.namespace().get(this, key);
+                defineDynamicImportNamespaceValue(moduleRecord, exportName, value);
                 exportOrigins.put(exportName, targetSpecifier);
                 continue;
             }
@@ -1669,9 +1918,10 @@ public final class JSContext implements AutoCloseable {
 
         String[] lines = sourceCode.split("\n", -1);
         for (String line : lines) {
-            String trimmedLine = line.stripLeading();
+            String normalizedLine = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
+            String trimmedLine = normalizedLine.stripLeading();
             if (!trimmedLine.startsWith("export ")) {
-                transformedSourceBuilder.append(line).append('\n');
+                transformedSourceBuilder.append(normalizedLine).append('\n');
                 continue;
             }
 
@@ -1685,9 +1935,24 @@ public final class JSContext implements AutoCloseable {
                 String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
                 transformedSourceBuilder.append("const ")
                         .append(defaultLocalName)
-                        .append(" = ")
+                        .append(" = (0, ")
                         .append(defaultExpression)
-                        .append(";\n");
+                        .append(");\n");
+                transformedSourceBuilder.append("if (typeof ")
+                        .append(defaultLocalName)
+                        .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
+                        .append(defaultLocalName)
+                        .append(", \"name\") || ")
+                        .append(defaultLocalName)
+                        .append(".name === \"\" || ")
+                        .append(defaultLocalName)
+                        .append(".name === \"")
+                        .append(defaultLocalName)
+                        .append("\")) {\n")
+                        .append("  Object.defineProperty(")
+                        .append(defaultLocalName)
+                        .append(", \"name\", { value: \"default\", configurable: true });\n")
+                        .append("}\n");
                 localExportBindings.add(new LocalExportBinding(defaultLocalName, "default"));
                 continue;
             }
@@ -1695,10 +1960,22 @@ public final class JSContext implements AutoCloseable {
             if (exportClause.startsWith("var ")
                     || exportClause.startsWith("let ")
                     || exportClause.startsWith("const ")) {
-                transformedSourceBuilder.append(line.replaceFirst("export\\s+", "")).append('\n');
+                transformedSourceBuilder.append(normalizedLine.replaceFirst("export\\s+", "")).append('\n');
                 for (String declarationName : extractSimpleDeclarationNames(exportClause)) {
                     localExportBindings.add(new LocalExportBinding(declarationName, declarationName));
                 }
+                continue;
+            }
+
+            if (exportClause.startsWith("function ")
+                    || exportClause.startsWith("async function ")
+                    || exportClause.startsWith("class ")) {
+                transformedSourceBuilder.append(normalizedLine.replaceFirst("export\\s+", "")).append('\n');
+                String declarationName = extractExportedFunctionOrClassName(exportClause);
+                if (declarationName == null || declarationName.isEmpty()) {
+                    throw new JSException(throwSyntaxError("Invalid export statement"));
+                }
+                localExportBindings.add(new LocalExportBinding(declarationName, declarationName));
                 continue;
             }
 
@@ -1747,6 +2024,7 @@ public final class JSContext implements AutoCloseable {
         for (LocalExportBinding localExportBinding : localExportBindings) {
             moduleRecord.explicitExportNames().add(localExportBinding.exportedName());
             moduleRecord.exportOrigins().put(localExportBinding.exportedName(), moduleRecord.resolvedSpecifier());
+            moduleRecord.namespace().registerExportName(localExportBinding.exportedName());
         }
 
         if (hasExportSyntax) {
@@ -1760,6 +2038,41 @@ public final class JSContext implements AutoCloseable {
         } else {
             moduleRecord.setTransformedSource(sourceCode);
         }
+    }
+
+    private JSValue parseJsonModuleSource(String sourceCode) {
+        JSValue jsonValue = getGlobalObject().get(PropertyKey.fromString("JSON"));
+        if (hasPendingException()) {
+            JSValue error = getPendingException();
+            clearPendingException();
+            throw new JSException(error);
+        }
+        if (!(jsonValue instanceof JSObject jsonObject)) {
+            throw new JSException(throwTypeError("JSON is not an object"));
+        }
+
+        JSValue parseValue = jsonObject.get(this, PropertyKey.fromString("parse"));
+        if (hasPendingException()) {
+            JSValue error = getPendingException();
+            clearPendingException();
+            throw new JSException(error);
+        }
+
+        JSValue[] parseArguments = new JSValue[]{new JSString(sourceCode)};
+        JSValue parsedValue;
+        if (parseValue instanceof JSFunction parseFunction) {
+            parsedValue = parseFunction.call(this, jsonObject, parseArguments);
+        } else if (parseValue instanceof JSProxy parseProxy) {
+            parsedValue = parseProxy.apply(this, jsonObject, parseArguments);
+        } else {
+            throw new JSException(throwTypeError("JSON.parse is not a function"));
+        }
+        if (hasPendingException()) {
+            JSValue error = getPendingException();
+            clearPendingException();
+            throw new JSException(error);
+        }
+        return parsedValue;
     }
 
     public void popEvalOverlay() {
@@ -1832,14 +2145,15 @@ public final class JSContext implements AutoCloseable {
                         reExportBinding.sourceSpecifier(),
                         moduleRecord.resolvedSpecifier(),
                         reExportBinding.sourceSpecifier());
-                DynamicImportModuleRecord targetModuleRecord = loadDynamicImportModuleRecord(targetSpecifier, importResolutionStack);
+                DynamicImportModuleRecord targetModuleRecord =
+                        loadDynamicImportModuleRecord(targetSpecifier, importResolutionStack, null);
                 if (reExportBinding.starExport()) {
                     mergeStarReExport(moduleRecord, targetModuleRecord, exportOrigins, targetSpecifier);
                     continue;
                 }
                 String importedName = getDynamicImportModuleExport(targetModuleRecord, reExportBinding.importedName(), targetSpecifier);
-                JSValue importedValue = targetModuleRecord.namespace().get(PropertyKey.fromString(importedName));
-                moduleRecord.namespace().set(PropertyKey.fromString(reExportBinding.exportedName()), importedValue);
+                JSValue importedValue = targetModuleRecord.namespace().get(this, PropertyKey.fromString(importedName));
+                defineDynamicImportNamespaceValue(moduleRecord, reExportBinding.exportedName(), importedValue);
                 moduleRecord.explicitExportNames().add(reExportBinding.exportedName());
                 exportOrigins.put(reExportBinding.exportedName(), targetSpecifier);
             }
@@ -2195,25 +2509,26 @@ public final class JSContext implements AutoCloseable {
         private final Set<String> explicitExportNames;
         private final Map<String, String> exportOrigins;
         private final List<LocalExportBinding> localExportBindings;
-        private final JSObject namespace;
+        private final JSImportNamespaceObject namespace;
         private final List<ReExportBinding> reExportBindings;
         private final String resolvedSpecifier;
+        private JSObject deferredNamespace;
         private String exportBindingName;
         private boolean hasExportSyntax;
         private String rawSource;
         private DynamicImportModuleStatus status;
         private String transformedSource;
 
-        private DynamicImportModuleRecord(String resolvedSpecifier) {
+        private DynamicImportModuleRecord(String resolvedSpecifier, JSImportNamespaceObject namespace) {
             this.ambiguousExportNames = new HashSet<>();
             this.explicitExportNames = new HashSet<>();
             this.exportOrigins = new HashMap<>();
-            this.namespace = new JSObject();
-            this.namespace.setPrototype(null);
+            this.namespace = namespace;
             this.localExportBindings = new ArrayList<>();
             this.reExportBindings = new ArrayList<>();
             this.resolvedSpecifier = resolvedSpecifier;
             this.status = DynamicImportModuleStatus.LOADING;
+            this.deferredNamespace = null;
             this.exportBindingName = null;
             this.hasExportSyntax = false;
             this.rawSource = "";
@@ -2222,6 +2537,10 @@ public final class JSContext implements AutoCloseable {
 
         private Set<String> ambiguousExportNames() {
             return ambiguousExportNames;
+        }
+
+        private JSObject deferredNamespace() {
+            return deferredNamespace;
         }
 
         private Set<String> explicitExportNames() {
@@ -2244,7 +2563,7 @@ public final class JSContext implements AutoCloseable {
             return localExportBindings;
         }
 
-        private JSObject namespace() {
+        private JSImportNamespaceObject namespace() {
             return namespace;
         }
 
@@ -2258,6 +2577,10 @@ public final class JSContext implements AutoCloseable {
 
         private String resolvedSpecifier() {
             return resolvedSpecifier;
+        }
+
+        private void setDeferredNamespace(JSObject deferredNamespace) {
+            this.deferredNamespace = deferredNamespace;
         }
 
         private void setExportBindingName(String exportBindingName) {
@@ -2303,6 +2626,102 @@ public final class JSContext implements AutoCloseable {
             String importedName,
             String exportedName,
             boolean starExport) {
+    }
+
+    private final class JSDeferredModuleNamespace extends JSObject {
+        private final JSContext context;
+        private final DynamicImportModuleRecord moduleRecord;
+
+        private JSDeferredModuleNamespace(
+                JSContext context,
+                DynamicImportModuleRecord moduleRecord) {
+            super();
+            this.context = context;
+            this.moduleRecord = moduleRecord;
+            setPrototype(null);
+        }
+
+        private boolean canExportThenWithoutEvaluation() {
+            if (moduleRecord.explicitExportNames().contains("then")) {
+                return true;
+            }
+            for (ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
+                if (reExportBinding.starExport()) {
+                    return true;
+                }
+                if ("then".equals(reExportBinding.exportedName())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+            return ensureEvaluated().defineProperty(context, key, descriptor);
+        }
+
+        @Override
+        public boolean delete(JSContext context, PropertyKey key) {
+            return ensureEvaluated().delete(context, key);
+        }
+
+        private JSImportNamespaceObject ensureEvaluated() {
+            if (moduleRecord.status() != DynamicImportModuleStatus.EVALUATED) {
+                evaluateDynamicImportModule(moduleRecord);
+                resolveDynamicImportReExports(moduleRecord, new HashSet<>());
+                moduleRecord.namespace().finalizeNamespace();
+                moduleRecord.setStatus(DynamicImportModuleStatus.EVALUATED);
+            }
+            return moduleRecord.namespace();
+        }
+
+        @Override
+        public JSValue get(JSContext context, PropertyKey key) {
+            if (shouldBypassThenLookup(key)) {
+                return JSUndefined.INSTANCE;
+            }
+            return ensureEvaluated().get(context != null ? context : this.context, key);
+        }
+
+        @Override
+        public JSValue get(PropertyKey key) {
+            if (shouldBypassThenLookup(key)) {
+                return JSUndefined.INSTANCE;
+            }
+            return ensureEvaluated().get(context, key);
+        }
+
+        @Override
+        public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+            if (shouldBypassThenLookup(key)) {
+                return null;
+            }
+            return ensureEvaluated().getOwnPropertyDescriptor(key);
+        }
+
+        @Override
+        public List<PropertyKey> getOwnPropertyKeys() {
+            return ensureEvaluated().getOwnPropertyKeys();
+        }
+
+        @Override
+        public boolean has(PropertyKey key) {
+            if (shouldBypassThenLookup(key)) {
+                return false;
+            }
+            return ensureEvaluated().has(key);
+        }
+
+        private boolean shouldBypassThenLookup(PropertyKey key) {
+            if (moduleRecord.status() == DynamicImportModuleStatus.EVALUATED) {
+                return false;
+            }
+            if (!PropertyKey.THEN.equals(key)) {
+                return false;
+            }
+            return !canExportThenWithoutEvaluation();
+        }
     }
 
 }

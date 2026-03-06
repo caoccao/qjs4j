@@ -14,25 +14,15 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.compilation.lexer;
+package com.caoccao.qjs4j.core;
 
 /**
- * Represents a lexical token.
+ * Internal sentinel used by bytecode for import.defer().
  */
-public record Token(
-        TokenType type,
-        String value,
-        int line,
-        int column,
-        int offset,
-        boolean escaped
-) {
-    public Token(
-            TokenType type,
-            String value,
-            int line,
-            int column,
-            int offset) {
-        this(type, value, line, column, offset, false);
+public final class JSImportDeferMarker extends JSObject {
+    public static final JSImportDeferMarker INSTANCE = new JSImportDeferMarker();
+
+    private JSImportDeferMarker() {
+        super();
     }
 }

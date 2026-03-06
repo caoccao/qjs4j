@@ -24,7 +24,9 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigInteger;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.Set;
 
 public final class OpcodeHandler {
@@ -53,6 +55,58 @@ public final class OpcodeHandler {
             JSValue exception = context.getPendingException();
             throw new JSVirtualMachineException(exception.toString(), exception);
         }
+    }
+
+    private static JSValue clearAndGetPendingException(JSContext context) {
+        JSValue exceptionValue = context.getPendingException();
+        context.clearPendingException();
+        return exceptionValue;
+    }
+
+    private static Map<String, String> collectImportAttributes(JSContext context, JSValue optionsValue) {
+        if (optionsValue instanceof JSUndefined) {
+            return null;
+        }
+        if (!(optionsValue instanceof JSObject optionsObject)) {
+            JSValue errorValue = context.throwTypeError("options must be an object");
+            JSValue pendingError = clearAndGetPendingException(context);
+            throw new JSException(pendingError != null ? pendingError : errorValue);
+        }
+
+        JSValue withValue = optionsObject.get(context, PropertyKey.fromString("with"));
+        if (context.hasPendingException()) {
+            throw new JSException(clearAndGetPendingException(context));
+        }
+        if (withValue instanceof JSUndefined) {
+            return null;
+        }
+        if (!(withValue instanceof JSObject withObject)) {
+            JSValue errorValue = context.throwTypeError("options.with must be an object");
+            JSValue pendingError = clearAndGetPendingException(context);
+            throw new JSException(pendingError != null ? pendingError : errorValue);
+        }
+
+        Map<String, String> attributes = new HashMap<>();
+        PropertyKey[] enumerableKeys = withObject.enumerableKeys();
+        if (context.hasPendingException()) {
+            throw new JSException(clearAndGetPendingException(context));
+        }
+        for (PropertyKey key : enumerableKeys) {
+            if (!key.isString()) {
+                continue;
+            }
+            JSValue attributeValue = withObject.get(context, key);
+            if (context.hasPendingException()) {
+                throw new JSException(clearAndGetPendingException(context));
+            }
+            if (!(attributeValue instanceof JSString attributeString)) {
+                JSValue errorValue = context.throwTypeError("Import assertion value must be a string");
+                JSValue pendingError = clearAndGetPendingException(context);
+                throw new JSException(pendingError != null ? pendingError : errorValue);
+            }
+            attributes.put(key.asString(), attributeString.value());
+        }
+        return attributes;
     }
 
     static void handleAdd(Opcode op, ExecutionContext executionContext) {
@@ -2502,65 +2556,87 @@ public final class OpcodeHandler {
     static void handleImport(Opcode op, ExecutionContext executionContext) {
         JSContext context = executionContext.virtualMachine.context;
         JSValue options = (JSValue) executionContext.stack[--executionContext.sp];
+        boolean deferPhase = options instanceof JSImportDeferMarker;
+        if (deferPhase) {
+            options = JSUndefined.INSTANCE;
+        }
         JSValue specifier = (JSValue) executionContext.stack[--executionContext.sp];
         JSStackFrame currentStackFrame = context.getCurrentStackFrame();
         String referrerFilename = currentStackFrame != null ? currentStackFrame.filename() : null;
 
-        // Create a promise that will be resolved when the module loads
         JSPromise promise = context.createJSPromise();
         final JSPromise.ResolveState resolveState = new JSPromise.ResolveState();
+        final String specifierString;
+        final Map<String, String> importAttributes;
 
-        // Enqueue a microtask to perform the actual module loading (following QuickJS js_dynamic_import_job)
+        try {
+            specifierString = JSTypeConversions.toString(context, specifier).toString();
+            if (context.hasPendingException()) {
+                throw new JSException(clearAndGetPendingException(context));
+            }
+            importAttributes = collectImportAttributes(context, options);
+        } catch (JSException exception) {
+            context.clearPendingException();
+            JSValue errorValue = exception.getErrorValue();
+            if (errorValue == null) {
+                errorValue = context.throwError("Error", exception.getMessage());
+                context.clearPendingException();
+            }
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                promise.reject(errorValue);
+            }
+            executionContext.stack[executionContext.sp++] = promise;
+            executionContext.pc += op.getSize();
+            return;
+        } catch (JSVirtualMachineException exception) {
+            context.clearPendingException();
+            JSValue errorValue = exception.getJsValue();
+            if (errorValue == null) {
+                errorValue = exception.getJsError();
+            }
+            if (errorValue == null) {
+                errorValue = context.throwError("Error", exception.getMessage() != null
+                        ? exception.getMessage()
+                        : "Module load error");
+                context.clearPendingException();
+            }
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                promise.reject(errorValue);
+            }
+            executionContext.stack[executionContext.sp++] = promise;
+            executionContext.pc += op.getSize();
+            return;
+        } catch (Exception exception) {
+            context.clearPendingException();
+            JSValue errorValue = context.throwError(
+                    "Error",
+                    exception.getMessage() != null ? exception.getMessage() : "Module load error");
+            context.clearPendingException();
+            if (!resolveState.alreadyResolved) {
+                resolveState.alreadyResolved = true;
+                promise.reject(errorValue);
+            }
+            executionContext.stack[executionContext.sp++] = promise;
+            executionContext.pc += op.getSize();
+            return;
+        }
+
         context.enqueueMicrotask(() -> {
             try {
-                // Convert specifier to string
-                String specifierStr = JSTypeConversions.toString(context, specifier).toString();
-                if (context.hasPendingException()) {
-                    JSValue error = context.getPendingException();
-                    context.clearPendingException();
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        promise.reject(error);
-                    }
-                    return;
+                JSObject moduleNamespace;
+                if (deferPhase) {
+                    moduleNamespace = context.loadDynamicImportModuleDeferred(
+                            specifierString,
+                            referrerFilename,
+                            importAttributes);
+                } else {
+                    moduleNamespace = context.loadDynamicImportModule(
+                            specifierString,
+                            referrerFilename,
+                            importAttributes);
                 }
-
-                // Validate options if provided (following QuickJS js_dynamic_import)
-                if (!(options instanceof JSUndefined)) {
-                    if (!(options instanceof JSObject)) {
-                        JSValue error = context.throwTypeError("options must be an object");
-                        context.clearPendingException();
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            promise.reject(error);
-                        }
-                        return;
-                    }
-                    // Check for options.with property (import attributes)
-                    JSValue withValue = ((JSObject) options).get(context, PropertyKey.fromString("with"));
-                    if (context.hasPendingException()) {
-                        JSValue error = context.getPendingException();
-                        context.clearPendingException();
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            promise.reject(error);
-                        }
-                        return;
-                    }
-                    if (!(withValue instanceof JSUndefined)) {
-                        if (!(withValue instanceof JSObject)) {
-                            JSValue error = context.throwTypeError("options.with must be an object");
-                            context.clearPendingException();
-                            if (!resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                promise.reject(error);
-                            }
-                            return;
-                        }
-                    }
-                }
-
-                JSObject moduleNamespace = context.loadDynamicImportModule(specifierStr, referrerFilename);
                 if (!resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
                     promise.resolve(context, moduleNamespace);

@@ -389,7 +389,7 @@ public final class Lexer {
             type = TokenType.IDENTIFIER;
         }
 
-        return new Token(type, value, startLine, startColumn, startPos);
+        return new Token(type, value, startLine, startColumn, startPos, hasEscape);
     }
 
     private Token scanNumber(int startPos, int startLine, int startColumn) {

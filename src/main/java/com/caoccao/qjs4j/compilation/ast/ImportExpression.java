@@ -24,8 +24,16 @@ package com.caoccao.qjs4j.compilation.ast;
 public record ImportExpression(
         Expression source,
         Expression options,
+        boolean defer,
         SourceLocation location
 ) implements Expression {
+    public ImportExpression(
+            Expression source,
+            Expression options,
+            SourceLocation location) {
+        this(source, options, false, location);
+    }
+
     @Override
     public SourceLocation getLocation() {
         return location;
