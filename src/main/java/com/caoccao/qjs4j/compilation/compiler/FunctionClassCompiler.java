@@ -387,7 +387,7 @@ final class FunctionClassCompiler {
         }
         // Stack: superClass
 
-        // Separate class elements by type
+        // Separate class elements by type and collect private symbols in a single pass
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
         List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
         List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
@@ -396,6 +396,7 @@ final class FunctionClassCompiler {
         List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
         IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
         ClassDeclaration.MethodDefinition constructor = null;
+        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
         for (ClassDeclaration.ClassElement element : classDecl.body()) {
             if (element instanceof ClassDeclaration.MethodDefinition method) {
@@ -408,6 +409,9 @@ final class FunctionClassCompiler {
                     } else {
                         privateInstanceMethods.add(method);
                     }
+                    if (method.key() instanceof PrivateIdentifier privateId) {
+                        registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                    }
                 } else {
                     methods.add(method);
                 }
@@ -416,6 +420,10 @@ final class FunctionClassCompiler {
                     staticInitializers.add(field);
                 } else {
                     instanceFields.add(field);
+                }
+
+                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), "field");
                 }
 
                 if (field.computed() && !field.isPrivate()) {
@@ -430,9 +438,12 @@ final class FunctionClassCompiler {
             }
         }
 
-        // Create symbols for all private names (fields + methods), once per class.
+        // Create symbols for all private names collected during the scan above.
         // Merge with outer class's private symbols so nested classes can access outer private members.
-        Map<String, JSSymbol> ownPrivateSymbols = createPrivateSymbols(classDecl.body());
+        LinkedHashMap<String, JSSymbol> ownPrivateSymbols = new LinkedHashMap<>();
+        for (String privateName : privateNameKinds.keySet()) {
+            ownPrivateSymbols.put(privateName, new JSSymbol("#" + privateName));
+        }
         Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
         privateSymbols.putAll(ownPrivateSymbols);
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
@@ -646,7 +657,7 @@ final class FunctionClassCompiler {
         }
         // Stack: superClass
 
-        // Separate class elements by type
+        // Separate class elements by type and collect private symbols in a single pass
         List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
         List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
         List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
@@ -655,6 +666,7 @@ final class FunctionClassCompiler {
         List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
         IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
         ClassDeclaration.MethodDefinition constructor = null;
+        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
         for (ClassDeclaration.ClassElement element : classExpr.body()) {
             if (element instanceof ClassDeclaration.MethodDefinition method) {
@@ -667,6 +679,9 @@ final class FunctionClassCompiler {
                     } else {
                         privateInstanceMethods.add(method);
                     }
+                    if (method.key() instanceof PrivateIdentifier privateId) {
+                        registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                    }
                 } else {
                     methods.add(method);
                 }
@@ -675,6 +690,10 @@ final class FunctionClassCompiler {
                     staticInitializers.add(field);
                 } else {
                     instanceFields.add(field);
+                }
+
+                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.name(), "field");
                 }
 
                 if (field.computed() && !field.isPrivate()) {
@@ -689,8 +708,12 @@ final class FunctionClassCompiler {
             }
         }
 
+        // Create symbols for all private names collected during the scan above.
         // Merge with outer class's private symbols so nested classes can access outer private members.
-        Map<String, JSSymbol> ownPrivateSymbols = createPrivateSymbols(classExpr.body());
+        LinkedHashMap<String, JSSymbol> ownPrivateSymbols = new LinkedHashMap<>();
+        for (String privateName : privateNameKinds.keySet()) {
+            ownPrivateSymbols.put(privateName, new JSSymbol("#" + privateName));
+        }
         Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
         privateSymbols.putAll(ownPrivateSymbols);
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
@@ -1708,26 +1731,6 @@ final class FunctionClassCompiler {
         delegates.emitHelpers.emitCapturedValues(constructorCompiler, ctorFunc);
 
         return ctorFunc;
-    }
-
-    Map<String, JSSymbol> createPrivateSymbols(List<ClassDeclaration.ClassElement> classElements) {
-        LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
-        for (ClassDeclaration.ClassElement element : classElements) {
-            if (element instanceof ClassDeclaration.PropertyDefinition field) {
-                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), "field");
-                }
-            } else if (element instanceof ClassDeclaration.MethodDefinition method) {
-                if (method.isPrivate() && method.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), method.kind());
-                }
-            }
-        }
-        LinkedHashMap<String, JSSymbol> privateSymbols = new LinkedHashMap<>();
-        for (String privateName : privateNameKinds.keySet()) {
-            privateSymbols.put(privateName, new JSSymbol("#" + privateName));
-        }
-        return privateSymbols;
     }
 
     JSArray createTaggedTemplateObject(TemplateLiteral template) {
