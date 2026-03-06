@@ -262,53 +262,51 @@ final class StatementCompiler {
         compilerContext.strictMode = program.strict();  // Set strict mode from program directive
         compilerContext.enterScope();
 
-        // Pre-declare class declarations as locals with TDZ.
-        // Per ES spec EvalDeclarationInstantiation step 14: lexically declared names
-        // are instantiated here but not initialized. Accessing them before their
-        // declaration throws ReferenceError (temporal dead zone).
-        // Following QuickJS js_closure_define_global_var pattern for eval lexical bindings.
-        for (Statement stmt : program.body()) {
+        List<Statement> body = program.body();
+
+        // Single pass: pre-declare TDZ locals, register global bindings, and hoist functions
+        Set<String> hoistedFunctionNames = new HashSet<>();
+        Set<String> varNames = new HashSet<>();
+        for (Statement stmt : body) {
+            // Pre-declare class declarations as locals with TDZ (ES spec EvalDeclarationInstantiation step 14)
             if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
                 String className = classDecl.id().name();
                 int localIndex = compilerContext.currentScope().declareLocal(className);
                 compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
-            } else if (compilerContext.predeclareProgramLexicalsAsLocals
-                    && stmt instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.kind() != VariableKind.VAR) {
-                Set<String> lexicalNames = new HashSet<>();
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    delegates.analysis.collectPatternBindingNames(declarator.id(), lexicalNames);
-                }
-                for (String lexicalName : lexicalNames) {
-                    int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
-                    if (variableDeclaration.kind() == VariableKind.CONST) {
-                        compilerContext.currentScope().markConstLocal(lexicalName);
+                compilerContext.nonDeletableGlobalBindings.add(className);
+            } else if (stmt instanceof VariableDeclaration variableDeclaration) {
+                if (compilerContext.predeclareProgramLexicalsAsLocals
+                        && variableDeclaration.kind() != VariableKind.VAR) {
+                    Set<String> lexicalNames = new HashSet<>();
+                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                        delegates.analysis.collectPatternBindingNames(declarator.id(), lexicalNames);
                     }
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                    compilerContext.tdzLocals.add(lexicalName);
+                    for (String lexicalName : lexicalNames) {
+                        int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                        if (variableDeclaration.kind() == VariableKind.CONST) {
+                            compilerContext.currentScope().markConstLocal(lexicalName);
+                        }
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.tdzLocals.add(lexicalName);
+                    }
                 }
-            }
-        }
-
-        delegates.analysis.registerGlobalProgramBindings(program.body());
-
-        List<Statement> body = program.body();
-
-        // Phase 1: Hoist top-level function declarations (ES spec requires function
-        // declarations to be initialized before any code executes).
-        Set<String> hoistedFunctionNames = new HashSet<>();
-        Set<String> varNames = new HashSet<>();
-        for (Statement stmt : body) {
-            if (stmt instanceof FunctionDeclaration funcDecl) {
+                // Register non-deletable global bindings for all variable declarations
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    delegates.analysis.collectPatternBindingNames(declarator.id(), compilerContext.nonDeletableGlobalBindings);
+                }
+                // Collect var names for hoisting
+                if (variableDeclaration.kind() == VariableKind.VAR) {
+                    delegates.analysis.collectVarNamesFromStatement(stmt, varNames);
+                }
+            } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 if (funcDecl.id() != null) {
                     hoistedFunctionNames.add(funcDecl.id().name());
+                    compilerContext.nonDeletableGlobalBindings.add(funcDecl.id().name());
                 }
                 delegates.functions.compileFunctionDeclaration(funcDecl);
             } else {
-                // Collect var names from all statements, including nested ones.
-                // var declarations are function/global-scoped and must be hoisted
-                // regardless of block nesting (for, try, if, etc.).
+                // Collect var names from other statements (for, try, if, etc.)
                 delegates.analysis.collectVarNamesFromStatement(stmt, varNames);
             }
         }
@@ -330,8 +328,8 @@ final class StatementCompiler {
         // nested inside blocks, if-statements, catch clauses, etc.
         delegates.analysis.scanAnnexBFunctions(body, declaredFuncVarNames);
 
-        // Find the effective last statement index (last non-FunctionDeclaration),
-        // since function declarations don't contribute a completion value.
+        // Phase 2: Compile all non-FunctionDeclaration statements in source order.
+        // Find effective last index inline (last non-FunctionDeclaration).
         int effectiveLastIndex = -1;
         for (int i = body.size() - 1; i >= 0; i--) {
             if (!(body.get(i) instanceof FunctionDeclaration)) {
@@ -339,8 +337,6 @@ final class StatementCompiler {
                 break;
             }
         }
-
-        // Phase 2: Compile all non-FunctionDeclaration statements in source order.
         boolean lastProducesValue = false;
 
         for (int i = 0; i < body.size(); i++) {
@@ -354,7 +350,6 @@ final class StatementCompiler {
             if (isLast && stmt instanceof ExpressionStatement) {
                 lastProducesValue = true;
             } else if (isLast && stmt instanceof TryStatement) {
-                // Try statements can produce values
                 lastProducesValue = true;
             }
 

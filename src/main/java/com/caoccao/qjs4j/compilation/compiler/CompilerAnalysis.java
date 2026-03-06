@@ -254,37 +254,23 @@ final class CompilerAnalysis {
         }
     }
 
-    void registerGlobalProgramBindings(List<Statement> body) {
-        for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration varDecl) {
-                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                    collectPatternBindingNames(declarator.id(), compilerContext.nonDeletableGlobalBindings);
-                }
-            } else if (stmt instanceof FunctionDeclaration funcDecl) {
-                if (funcDecl.id() != null) {
-                    compilerContext.nonDeletableGlobalBindings.add(funcDecl.id().name());
-                }
-            } else if (stmt instanceof ClassDeclaration classDecl) {
-                if (classDecl.id() != null) {
-                    compilerContext.nonDeletableGlobalBindings.add(classDecl.id().name());
-                }
-            }
-        }
-    }
-
     void scanAnnexBBlock(List<Statement> body, Set<String> parentLexicals, Set<String> result) {
+        // Single pass: collect lexical bindings and function names, then scan for Annex B candidates
         Set<String> blockLexicals = new HashSet<>(parentLexicals);
-        collectLexicalBindings(body, blockLexicals);
-        // Per B.3.3.1: block-scoped function declarations create lexical bindings.
-        // Include them so nested blocks see them as lexical conflicts (replacing a
-        // nested function with var F would clash with the enclosing lexical F).
-        // Use a separate set for nested checks so same-level declarations are not blocked.
-        Set<String> blockLexicalsWithFuncs = new HashSet<>(blockLexicals);
+        Set<String> blockFuncNames = new HashSet<>();
         for (Statement s : body) {
-            if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                blockLexicalsWithFuncs.add(fd.id().name());
+            if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    collectPatternBindingNames(d.id(), blockLexicals);
+                }
+            } else if (s instanceof FunctionDeclaration fd && fd.id() != null) {
+                blockFuncNames.add(fd.id().name());
             }
         }
+        // Per B.3.3.1: block-scoped function declarations create lexical bindings.
+        // Include them so nested blocks see them as lexical conflicts.
+        Set<String> blockLexicalsWithFuncs = new HashSet<>(blockLexicals);
+        blockLexicalsWithFuncs.addAll(blockFuncNames);
         for (Statement s : body) {
             if (s instanceof FunctionDeclaration fd && fd.id() != null) {
                 if (!blockLexicals.contains(fd.id().name())) {
@@ -299,16 +285,17 @@ final class CompilerAnalysis {
         if (compilerContext.strictMode) {
             return; // Annex B does not apply in strict mode
         }
-        // Collect top-level lexical bindings (let/const) from the program body.
+        // Single pass: collect top-level lexical bindings and scan for Annex B candidates.
         // Per B.3.3.3 step ii, if replacing the function declaration with "var F"
         // would produce an early error (conflict with let/const), the extension is skipped.
         Set<String> topLevelLexicals = new HashSet<>();
-        collectLexicalBindings(programBody, topLevelLexicals);
-
         Set<String> candidates = new HashSet<>();
         for (Statement stmt : programBody) {
-            // Only recurse into compound statements; top-level FunctionDeclarations
-            // are regular hoisting, not Annex B.
+            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
+                    collectPatternBindingNames(d.id(), topLevelLexicals);
+                }
+            }
             scanAnnexBStatement(stmt, topLevelLexicals, candidates);
         }
         for (String name : candidates) {
