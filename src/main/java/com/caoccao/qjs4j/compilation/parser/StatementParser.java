@@ -228,6 +228,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.EXPORT);
 
         if (parserContext.match(TokenType.DEFAULT)) {
+            if (parserContext.currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+            }
             parserContext.advance();
 
             if (parserContext.match(TokenType.CLASS)) {
@@ -277,6 +280,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
                 if (parserContext.match(TokenType.AS)) {
+                    if (parserContext.currentToken.escaped()) {
+                        throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                    }
                     parserContext.advance();
                     parserContext.parseIdentifier();
                 }
@@ -286,6 +292,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             parserContext.expect(TokenType.RBRACE);
             if (parserContext.match(TokenType.FROM)) {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
                 parserContext.advance();
                 parserContext.expect(TokenType.STRING);
             }
@@ -596,8 +605,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     Statement parseReturnStatement() {
         SourceLocation location = parserContext.getLocation();
-        // QuickJS: "return not in a function" error when return is in eval code at top level
-        if (parserContext.isEval && parserContext.functionNesting == 0) {
+        // Return is only valid inside function bodies.
+        if (parserContext.functionNesting == 0) {
             throw new JSSyntaxErrorException("return not in a function");
         }
         parserContext.expect(TokenType.RETURN);

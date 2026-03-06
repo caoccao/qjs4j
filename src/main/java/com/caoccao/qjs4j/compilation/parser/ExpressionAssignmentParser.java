@@ -426,6 +426,37 @@ final class ExpressionAssignmentParser {
                 || startTokenType == TokenType.OF;
 
         if (parserContext.match(TokenType.ASYNC)) {
+            if (parserContext.currentToken.escaped()
+                    && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+                TokenType nextType = parserContext.nextToken.type();
+                if (nextType == TokenType.FUNCTION) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
+                if (nextType == TokenType.IDENTIFIER || nextType == TokenType.LPAREN) {
+                    Token lookAheadCurrent = parserContext.currentToken;
+                    Token lookAheadNext = parserContext.nextToken;
+                    int lookAheadPrevLine = parserContext.previousTokenLine;
+                    int lookAheadPrevEndOffset = parserContext.previousTokenEndOffset;
+                    LexerState lookAheadLexer = parserContext.lexer.saveState();
+                    try {
+                        parserContext.advance(); // consume escaped async
+                        if (nextType == TokenType.IDENTIFIER
+                                && parserContext.match(TokenType.IDENTIFIER)
+                                && parserContext.nextToken.type() == TokenType.ARROW) {
+                            throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                        }
+                        if (nextType == TokenType.LPAREN && parserContext.peekPastParensIsArrow()) {
+                            throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                        }
+                    } finally {
+                        parserContext.currentToken = lookAheadCurrent;
+                        parserContext.nextToken = lookAheadNext;
+                        parserContext.previousTokenLine = lookAheadPrevLine;
+                        parserContext.previousTokenEndOffset = lookAheadPrevEndOffset;
+                        parserContext.lexer.restoreState(lookAheadLexer);
+                    }
+                }
+            }
             SourceLocation asyncLocation = location;
             Token savedCurrent = parserContext.currentToken;
             Token savedNext = parserContext.nextToken;
@@ -446,7 +477,7 @@ final class ExpressionAssignmentParser {
                     parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
-                    parserContext.enterFunctionContext(true);
+                    parserContext.enterArrowFunctionContext(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
@@ -457,7 +488,7 @@ final class ExpressionAssignmentParser {
                         }
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
-                        parserContext.exitFunctionContext(true);
+                        parserContext.exitArrowFunctionContext(true);
                     }
 
                     // Async arrows have the same early errors as regular arrows (spec 15.8.1)
@@ -476,7 +507,7 @@ final class ExpressionAssignmentParser {
                 }
 
                 if (parserContext.match(TokenType.LPAREN) && parserContext.peekPastParensIsArrow()) {
-                    parserContext.enterFunctionContext(true);
+                    parserContext.enterArrowFunctionContext(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
@@ -511,7 +542,7 @@ final class ExpressionAssignmentParser {
                                 fullLocation);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
-                        parserContext.exitFunctionContext(true);
+                        parserContext.exitArrowFunctionContext(true);
                     }
                 }
             }
@@ -549,6 +580,7 @@ final class ExpressionAssignmentParser {
                         && !parserContext.match(TokenType.RBRACE)
                         && !parserContext.match(TokenType.RBRACKET)
                         && !parserContext.match(TokenType.RPAREN)
+                        && !parserContext.match(TokenType.TEMPLATE)
                         && !parserContext.match(TokenType.COLON)
                         && !parserContext.match(TokenType.COMMA)
                         && !parserContext.match(TokenType.EOF)) {
@@ -614,7 +646,7 @@ final class ExpressionAssignmentParser {
             parserContext.advance();
 
             ASTNode body;
-            parserContext.enterFunctionContext(false);
+            parserContext.enterArrowFunctionContext(false);
             boolean savedInClassStaticInit = parserContext.inClassStaticInit;
             parserContext.inClassStaticInit = false;
             try {
@@ -625,7 +657,7 @@ final class ExpressionAssignmentParser {
                 }
             } finally {
                 parserContext.inClassStaticInit = savedInClassStaticInit;
-                parserContext.exitFunctionContext(false);
+                parserContext.exitArrowFunctionContext(false);
             }
             validateArrowParameters(params, defaults, restParameter, body);
 

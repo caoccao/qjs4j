@@ -352,6 +352,10 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 parserContext.advance();
                 return parseMethodOrField(key, isStatic, isPrivate, false, methodStartLocation);
             }
+            if (parserContext.currentToken.escaped()
+                    && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+            }
 
             parserContext.advance(); // consume 'async'
 

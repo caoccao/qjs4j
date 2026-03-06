@@ -487,6 +487,9 @@ public final class StringPrototype {
     private static JSValue createHTML(JSContext context, JSValue thisArg, JSValue[] args,
                                       String tag, String attr) {
         JSString str = toStringCheckObject(context, thisArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         StringBuilder result = new StringBuilder();
 
         result.append('<').append(tag);
@@ -495,6 +498,9 @@ public final class StringPrototype {
             // Attribute requires a value from args[0]
             JSValue attrValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             JSString attrStr = toStringCheckObject(context, attrValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             String attrText = attrStr.value();
 
             result.append(' ').append(attr).append("=\"");
@@ -1114,12 +1120,18 @@ public final class StringPrototype {
      */
     public static JSValue normalize(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         // Default to NFC
         UnicodeNormalization.Form form = UnicodeNormalization.Form.NFC;
 
         if (args.length > 0 && !JSUndefined.INSTANCE.equals(args[0])) {
             JSString formStr = JSTypeConversions.toString(context, args[0]);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             String formName = formStr.value();
 
             // Parse normalization form
@@ -1354,6 +1366,9 @@ public final class StringPrototype {
                         return JSUndefined.INSTANCE;
                     }
                     String flagsStr = JSTypeConversions.toString(context, flags).value();
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
                     if (!flagsStr.contains("g")) {
                         return context.throwTypeError("String.prototype.replaceAll called with a non-global RegExp argument");
                     }
@@ -1375,10 +1390,19 @@ public final class StringPrototype {
         }
 
         JSString str = toStringCheckObject(context, thisArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String s = str.value();
         String searchStr = JSTypeConversions.toString(context, searchValue).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         boolean functionalReplace = replaceValue instanceof JSFunction;
         String replaceStr = functionalReplace ? null : JSTypeConversions.toString(context, replaceValue).value();
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         // Collect all match positions
         java.util.List<Integer> matchPositions = new java.util.ArrayList<>();
@@ -1616,6 +1640,9 @@ public final class StringPrototype {
         }
 
         JSString str = toStringCheckObject(context, thisArg);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String s = str.value();
 
         JSArray arr = context.createJSArray();

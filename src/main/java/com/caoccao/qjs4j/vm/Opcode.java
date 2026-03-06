@@ -81,7 +81,7 @@ public enum Opcode {
     REGEXP(52, 1, 0, 1, OpcodeHandler::handleInvalid),                         // create RegExp from pattern and bytecode string
     GET_SUPER(53, 1, 1, 1, OpcodeHandler::handleGetSuper),                     // obj -> super
     IMPORT(54, 1, 2, 1, OpcodeHandler::handleImport),                           // specifier options -> promise (dynamic module import)
-    GET_VAR_UNDEF(55, 3, 0, 1, OpcodeHandler::handleGetVarUndef),              // push undefined if variable does not exist -> val
+    GET_VAR_UNDEF(55, 5, 0, 1, OpcodeHandler::handleGetVarUndef),              // push undefined if variable does not exist -> val
     GET_VAR(56, 5, 0, 1, OpcodeHandler::handleGetVar),                         // throw exception if variable does not exist -> val
     PUT_VAR(57, 5, 1, 0, OpcodeHandler::handlePutVar),                         // val -> (store to variable)
     PUT_VAR_INIT(58, 3, 1, 0, OpcodeHandler::handlePutVarInit),                // val -> (initialize global lexical variable)

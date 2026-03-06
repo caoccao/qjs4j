@@ -27,17 +27,27 @@ import com.caoccao.qjs4j.core.JSValue;
  * instead of a regular JSValue. The generator execution logic can then
  * detect this and suspend execution properly.
  *
- * @param value            The yielded value
- * @param delegateIterator The delegated iterator for yield* (optional)
- * @param cachedNextMethod The cached next method from GetIterator for yield* (optional)
+ * @param value                    The yielded value
+ * @param delegateIterator         The delegated iterator for yield* (optional)
+ * @param cachedNextMethod         The cached next method from GetIterator for yield* (optional)
+ * @param delegationProgramCounter The opcode program counter for yield* delegation (optional)
  */
-public record YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod) {
+public record YieldResult(
+        Type type,
+        JSValue value,
+        JSObject delegateIterator,
+        JSValue cachedNextMethod,
+        int delegationProgramCounter) {
     public YieldResult(Type type, JSValue value) {
-        this(type, value, null, null);
+        this(type, value, null, null, -1);
     }
 
     public YieldResult(Type type, JSValue value, JSObject delegateIterator) {
-        this(type, value, delegateIterator, null);
+        this(type, value, delegateIterator, null, -1);
+    }
+
+    public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod) {
+        this(type, value, delegateIterator, cachedNextMethod, -1);
     }
 
     public boolean isInitialYield() {

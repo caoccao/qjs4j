@@ -33,6 +33,8 @@ public final class UnicodeData {
 
     // ASCII character type table (0-255)
     private static final byte[] ASCII_CTYPE_BITS = new byte[256];
+    private static final int[] ID_CONTINUE_RANGES = UnicodePropertyResolver.resolveBinaryProperty("ID_Continue");
+    private static final int[] ID_START_RANGES = UnicodePropertyResolver.resolveBinaryProperty("ID_Start");
 
     static {
         // Initialize ASCII character types
@@ -85,6 +87,24 @@ public final class UnicodeData {
         return 0x10000 + 0x400 * (high - 0xD800) + (low - 0xDC00);
     }
 
+    private static boolean isCodePointInRanges(int[] ranges, int codePoint) {
+        int low = 0;
+        int high = (ranges.length / 2) - 1;
+        while (low <= high) {
+            int mid = (low + high) >>> 1;
+            int start = ranges[mid * 2];
+            int end = ranges[mid * 2 + 1];
+            if (codePoint < start) {
+                high = mid - 1;
+            } else if (codePoint > end) {
+                low = mid + 1;
+            } else {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Check if character is a decimal digit.
      */
@@ -128,7 +148,9 @@ public final class UnicodeData {
             return true;
         }
 
-        // Use Java's Character class for Unicode support
+        if (ID_CONTINUE_RANGES != null) {
+            return isCodePointInRanges(ID_CONTINUE_RANGES, codePoint);
+        }
         return Character.isUnicodeIdentifierPart(codePoint);
     }
 
@@ -143,7 +165,9 @@ public final class UnicodeData {
                     UNICODE_C_UNDER | UNICODE_C_DOLLAR)) != 0;
         }
 
-        // Use Java's Character class for Unicode support
+        if (ID_START_RANGES != null) {
+            return isCodePointInRanges(ID_START_RANGES, codePoint);
+        }
         return Character.isUnicodeIdentifierStart(codePoint);
     }
 

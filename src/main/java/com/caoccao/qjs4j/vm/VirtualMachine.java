@@ -600,7 +600,7 @@ public final class VirtualMachine {
             excludedKeys.add(PropertyKey.fromValue(context, excludeListValue));
         }
 
-        for (PropertyKey key : sourceObject.ownPropertyKeys()) {
+        for (PropertyKey key : sourceObject.getOwnPropertyKeys()) {
             if (excludedKeys != null && excludedKeys.contains(key)) {
                 continue;
             }
@@ -860,6 +860,8 @@ public final class VirtualMachine {
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
+        pendingException = null;
+        context.clearPendingException();
         // Outer loop for tail call optimization trampoline.
         // When TAIL_CALL fires, it sets tailCallPending and returns from the inner loop.
         // This outer loop then restarts execution with the new function/args without
@@ -1004,6 +1006,9 @@ public final class VirtualMachine {
         JSBytecodeFunction function = state.getFunction();
         JSValue thisArg = state.getThisArg();
         JSValue[] args = state.getArgs();
+        int previousYieldSkipCount = yieldSkipCount;
+        List<JSGeneratorState.ResumeRecord> previousGeneratorResumeRecords = generatorResumeRecords;
+        int previousGeneratorResumeIndex = generatorResumeIndex;
 
         // Clear any previous yield result
         yieldResult = null;
@@ -1043,6 +1048,9 @@ public final class VirtualMachine {
             activeGeneratorState = previousActiveGeneratorState;
             generatorForceReturn = previousGeneratorForceReturn;
             generatorReturnValue = previousGeneratorReturnValue;
+            yieldSkipCount = previousYieldSkipCount;
+            generatorResumeRecords = previousGeneratorResumeRecords;
+            generatorResumeIndex = previousGeneratorResumeIndex;
         }
 
         // Check if generator yielded
@@ -1559,100 +1567,7 @@ public final class VirtualMachine {
      * Since JSFunction now extends JSObject, functions are already objects.
      */
     JSObject toObject(JSValue value) {
-        // JSFunction extends JSObject, so this handles both objects and functions
-        if (value instanceof JSObject jsObj) {
-            return jsObj;
-        }
-
-        if (value instanceof JSNull || value instanceof JSUndefined) {
-            return null;
-        }
-
-        JSObject global = context.getGlobalObject();
-
-        // Auto-box primitives
-        if (value instanceof JSString str) {
-            // Get String.prototype from global object
-            JSValue stringCtor = global.get(JSString.NAME);
-            if (stringCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    // Create a String exotic object wrapper with String.prototype.
-                    // Per spec: indexed character properties are own, enumerable, not writable, not configurable.
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    // Store the primitive value
-                    wrapper.setPrimitiveValue(str);
-                    // Add indexed character properties (enumerable, not writable, not configurable)
-                    String stringValue = str.value();
-                    for (int i = 0; i < stringValue.length(); i++) {
-                        wrapper.defineProperty(PropertyKey.fromIndex(i),
-                                new JSString(String.valueOf(stringValue.charAt(i))),
-                                PropertyDescriptor.DataState.Enumerable);
-                    }
-                    // Add length property as own property (not enumerable, not writable, not configurable)
-                    wrapper.defineProperty(PropertyKey.fromString("length"), JSNumber.of(stringValue.length()), PropertyDescriptor.DataState.None);
-                    return wrapper;
-                }
-            }
-        }
-
-        if (value instanceof JSNumber num) {
-            // Get Number.prototype from global object
-            JSValue numberCtor = global.get(JSNumberObject.NAME);
-            if (numberCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    wrapper.setPrimitiveValue(num);
-                    return wrapper;
-                }
-            }
-        }
-
-        if (value instanceof JSBoolean bool) {
-            // Get Boolean.prototype from global object
-            JSValue booleanCtor = global.get(JSBoolean.NAME);
-            if (booleanCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSObject wrapper = new JSObject();
-                    wrapper.setPrototype(protoObj);
-                    wrapper.setPrimitiveValue(bool);
-                    return wrapper;
-                }
-            }
-        }
-
-        if (value instanceof JSBigInt bigInt) {
-            // Get BigInt.prototype from global object
-            JSValue bigIntCtor = global.get(JSBigInt.NAME);
-            if (bigIntCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    JSBigIntObject wrapper = new JSBigIntObject(bigInt);
-                    wrapper.setPrototype(protoObj);
-                    return wrapper;
-                }
-            }
-        }
-
-        if (value instanceof JSSymbol sym) {
-            // Get Symbol.prototype from global object
-            JSValue symbolCtor = global.get(JSSymbol.NAME);
-            if (symbolCtor instanceof JSObject ctorObj) {
-                JSValue prototype = ctorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject protoObj) {
-                    // Create a Symbol object wrapper (not a generic JSObject)
-                    JSSymbolObject wrapper = new JSSymbolObject(sym);
-                    wrapper.setPrototype(protoObj);
-                    return wrapper;
-                }
-            }
-        }
-
-        return null;
+        return JSTypeConversions.toObject(context, value);
     }
 
     /**

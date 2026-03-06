@@ -2089,6 +2089,19 @@ public final class IteratorPrototype {
         }
 
         @Override
+        public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return valueValue;
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return doneValue;
+                }
+            }
+            return super.get(context, key, receiver);
+        }
+
+        @Override
         public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
             if (pristine) {
                 if (PropertyKey.VALUE.equals(key)) {

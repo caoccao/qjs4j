@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Lexical analyzer for JavaScript source code.
@@ -35,14 +34,6 @@ import java.util.Set;
  * - Template literals (basic support)
  */
 public final class Lexer {
-    /**
-     * Contextual keywords that are NOT true reserved words per ES2024 12.7.2.
-     * When these appear with unicode escapes, they must be treated as identifiers.
-     */
-    private static final Set<TokenType> CONTEXTUAL_KEYWORD_TYPES = Set.of(
-            TokenType.ASYNC, TokenType.AWAIT, TokenType.YIELD,
-            TokenType.AS, TokenType.DEFAULT, TokenType.FROM, TokenType.OF, TokenType.LET
-    );
     private static final Map<String, TokenType> KEYWORDS = LexerKeywords.KEYWORDS;
 
     final String source;
@@ -101,7 +92,7 @@ public final class Lexer {
                  ARROW,
                  // After keywords that start expressions
                  RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
-                 IF, WHILE, FOR, CASE -> true;
+                 IF, WHILE, FOR, CASE, YIELD -> true;
             default -> false;
         };
     }
@@ -139,10 +130,7 @@ public final class Lexer {
     // Core scanning logic
 
     private boolean isIdentifierPartCodePoint(int codePoint) {
-        if (codePoint <= Character.MAX_VALUE) {
-            return isIdentifierPart((char) codePoint);
-        }
-        return Character.isUnicodeIdentifierPart(codePoint);
+        return UnicodeData.isIdentifierPart(codePoint);
     }
 
     boolean isIdentifierStart(char c) {
@@ -151,10 +139,7 @@ public final class Lexer {
     }
 
     private boolean isIdentifierStartCodePoint(int codePoint) {
-        if (codePoint <= Character.MAX_VALUE) {
-            return isIdentifierStart((char) codePoint);
-        }
-        return Character.isUnicodeIdentifierStart(codePoint);
+        return UnicodeData.isIdentifierStart(codePoint);
     }
 
     private Token makeToken(TokenType type, String value) {
@@ -381,13 +366,10 @@ public final class Lexer {
 
         String value = valueBuilder.toString();
 
-        // Resolve keyword type from the KEYWORDS map
+        // Resolve keyword type from the KEYWORDS map.
+        // Escaped IdentifierName whose StringValue matches a keyword still tokenizes
+        // as that keyword in order to preserve parser behavior and V8 parity.
         TokenType type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
-        // Contextual keywords and export-related keywords with unicode escapes must be
-        // treated as identifiers, not keywords per ES2024 12.1.1.
-        if (hasEscape && CONTEXTUAL_KEYWORD_TYPES.contains(type)) {
-            type = TokenType.IDENTIFIER;
-        }
 
         return new Token(type, value, startLine, startColumn, startPos, hasEscape);
     }
@@ -904,8 +886,19 @@ public final class Lexer {
 
         // Private identifiers (#name)
         if (c == '#') {
-            // Check if next character is an identifier start
-            if (!isAtEnd() && (isIdentifierStart(peek()) || peek() == '\\')) {
+            boolean hasIdentifierStart = false;
+            if (!isAtEnd()) {
+                char nextChar = peek();
+                if (isIdentifierStart(nextChar) || nextChar == '\\') {
+                    hasIdentifierStart = true;
+                } else if (Character.isHighSurrogate(nextChar)
+                        && position + 1 < source.length()
+                        && Character.isLowSurrogate(source.charAt(position + 1))) {
+                    int codePoint = Character.toCodePoint(nextChar, source.charAt(position + 1));
+                    hasIdentifierStart = isIdentifierStartCodePoint(codePoint);
+                }
+            }
+            if (hasIdentifierStart) {
                 StringBuilder name = new StringBuilder();
 
                 if (peek() == '\\') {
@@ -917,10 +910,20 @@ public final class Lexer {
                     name.appendCodePoint(codePoint);
                 } else {
                     char first = advance();
-                    if (!isIdentifierStart(first)) {
+                    if (Character.isHighSurrogate(first)
+                            && !isAtEnd()
+                            && Character.isLowSurrogate(peek())) {
+                        char trailingSurrogate = advance();
+                        int codePoint = Character.toCodePoint(first, trailingSurrogate);
+                        if (!isIdentifierStartCodePoint(codePoint)) {
+                            throw new JSSyntaxErrorException("Invalid or unexpected token");
+                        }
+                        name.appendCodePoint(codePoint);
+                    } else if (!isIdentifierStart(first)) {
                         throw new JSSyntaxErrorException("Invalid or unexpected token");
+                    } else {
+                        name.append(first);
                     }
-                    name.append(first);
                 }
 
                 while (!isAtEnd()) {
@@ -936,6 +939,18 @@ public final class Lexer {
                         }
                         if (!isIdentifierPartCodePoint(codePoint)) {
                             throw new JSSyntaxErrorException("Invalid or unexpected token");
+                        }
+                        name.appendCodePoint(codePoint);
+                    } else if (Character.isHighSurrogate(peek())
+                            && position + 1 < source.length()
+                            && Character.isLowSurrogate(source.charAt(position + 1))) {
+                        char highSurrogate = advance();
+                        char lowSurrogate = advance();
+                        int codePoint = Character.toCodePoint(highSurrogate, lowSurrogate);
+                        if (!isIdentifierPartCodePoint(codePoint)) {
+                            position -= 2;
+                            column -= 2;
+                            break;
                         }
                         name.appendCodePoint(codePoint);
                     } else if (isIdentifierPart(peek())) {

@@ -222,6 +222,9 @@ public final class NumberPrototype {
                     // then handle special values (steps 6+)
                     int radix = args.length > 0 && !(args[0] instanceof JSUndefined)
                             ? (int) JSTypeConversions.toInteger(context, args[0]) : 10;
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
                     if (radix < 2 || radix > 36) {
                         return context.throwRangeError("toString() radix must be between 2 and 36");
                     }

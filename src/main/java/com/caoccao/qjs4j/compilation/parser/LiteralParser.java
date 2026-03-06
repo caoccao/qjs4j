@@ -273,6 +273,9 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     // { async: value } or { async, ... } - async is property name
                     // Don't advance, let parsePropertyName handle it
                 } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
+                    if (parserContext.currentToken.escaped()) {
+                        throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                    }
                     // async is likely a modifier for method
                     isAsync = true;
                     parserContext.advance();
@@ -417,6 +420,8 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.inheritedStrictMode,
                 parserContext.functionNesting,
                 parserContext.asyncFunctionNesting,
+                parserContext.generatorFunctionNesting,
+                parserContext.newTargetNesting,
                 parserContext.superPropertyAllowed,
                 parserContext.allowNewTargetInEval);
         Expression expression = expressionParser.parseExpression();
@@ -494,6 +499,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                         i++;
                     }
                 }
+                case '\u2028', '\u2029' -> i += 2; // Line continuation
                 case '\\', '\'', '"', '`', '$' -> {
                     result.append(next);
                     i += 2;

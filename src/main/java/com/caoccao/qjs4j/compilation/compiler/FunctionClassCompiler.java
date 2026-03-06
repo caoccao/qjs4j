@@ -617,10 +617,15 @@ final class FunctionClassCompiler {
                 Integer localIndex = compilerContext.findLocalInScopes(varName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
-                    // Also store as global variable so class methods (compiled with separate
-                    // BytecodeCompiler contexts) can access this class via GET_VAR
-                    compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                    // Direct eval creates an ephemeral lexical environment. When program
+                    // lexicals are predeclared as locals, do not materialize class bindings
+                    // on the global object.
+                    if (!compilerContext.predeclareProgramLexicalsAsLocals) {
+                        // Also store as global variable so class methods (compiled with separate
+                        // BytecodeCompiler contexts) can access this class via GET_VAR.
+                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+                    }
                 }
             } else {
                 compilerContext.nonDeletableGlobalBindings.add(varName);

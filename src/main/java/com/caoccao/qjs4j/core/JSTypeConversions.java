@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.builtins.NumberPrototype;
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
-import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
-import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+import com.caoccao.qjs4j.exceptions.*;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -331,6 +328,33 @@ public final class JSTypeConversions {
         }
     }
 
+    private static void setPendingExceptionFromInvocation(JSContext context, Throwable throwable) {
+        if (context == null) {
+            return;
+        }
+        if (throwable instanceof JSVirtualMachineException virtualMachineException) {
+            if (virtualMachineException.getJsValue() != null) {
+                context.setPendingException(virtualMachineException.getJsValue());
+                return;
+            }
+            if (virtualMachineException.getJsError() != null) {
+                context.setPendingException(virtualMachineException.getJsError());
+                return;
+            }
+            context.throwError(
+                    "Error",
+                    throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
+            return;
+        }
+        if (throwable instanceof JSException jsException && jsException.getErrorValue() != null) {
+            context.setPendingException(jsException.getErrorValue());
+            return;
+        }
+        context.throwError(
+                "Error",
+                throwable.getMessage() == null ? "Unhandled exception" : throwable.getMessage());
+    }
+
     /**
      * Strict Equality Comparison (===).
      * ES2020 7.2.15
@@ -523,6 +547,9 @@ public final class JSTypeConversions {
         }
         if (value instanceof JSObject objectValue) {
             JSValue primitive = toPrimitive(context, objectValue, PreferredType.NUMBER);
+            if (context != null && context.hasPendingException()) {
+                return new JSBigInt(BigInteger.ZERO);
+            }
             return toBigInt(context, primitive);
         }
         throw new JSTypeErrorException(
@@ -615,22 +642,18 @@ public final class JSTypeConversions {
      * Mirrors QuickJS JS_ToInt32Free() bit-level conversion semantics.
      */
     public static int toInt32(double d) {
-        long bits = Double.doubleToRawLongBits(d);
-        int e = (int) ((bits >>> 52) & 0x7ff);
-
-        if (e <= (1023 + 30)) {
-            return (int) d;
-        } else if (e <= (1023 + 30 + 53)) {
-            long v = (bits & ((1L << 52) - 1)) | (1L << 52);
-            v = v << ((e - 1023) - 52 + 32);
-            int result = (int) (v >>> 32);
-            if ((bits >>> 63) != 0) {
-                result = -result;
-            }
-            return result;
+        if (!Double.isFinite(d) || d == 0.0d) {
+            return 0;
         }
-        // Includes NaN and infinities.
-        return 0;
+        double integer = Math.copySign(Math.floor(Math.abs(d)), d);
+        double modulo = integer % 4294967296.0d; // 2^32
+        if (modulo < 0.0d) {
+            modulo += 4294967296.0d;
+        }
+        if (modulo >= 2147483648.0d) { // 2^31
+            modulo -= 4294967296.0d;
+        }
+        return (int) modulo;
     }
 
     /**
@@ -712,6 +735,9 @@ public final class JSTypeConversions {
 
         // For objects, call ToPrimitive with NUMBER hint
         JSValue primitive = toPrimitive(context, value, PreferredType.NUMBER);
+        if (context != null && context.hasPendingException()) {
+            return JSNumber.of(Double.NaN);
+        }
         if (primitive == value) {
             return JSNumber.of(Double.NaN);
         }
@@ -783,7 +809,13 @@ public final class JSTypeConversions {
                     case NUMBER -> "number";
                     case DEFAULT -> "default";
                 };
-                JSValue result = toPrimitiveFunction.call(context, obj, new JSValue[]{new JSString(hintString)});
+                JSValue result;
+                try {
+                    result = toPrimitiveFunction.call(context, obj, new JSValue[]{new JSString(hintString)});
+                } catch (RuntimeException runtimeException) {
+                    setPendingExceptionFromInvocation(context, runtimeException);
+                    return JSUndefined.INSTANCE;
+                }
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -805,7 +837,13 @@ public final class JSTypeConversions {
                     return JSUndefined.INSTANCE;
                 }
                 if (method instanceof JSFunction func) {
-                    JSValue result = func.call(context, obj, JSValue.NO_ARGS);
+                    JSValue result;
+                    try {
+                        result = func.call(context, obj, JSValue.NO_ARGS);
+                    } catch (RuntimeException runtimeException) {
+                        setPendingExceptionFromInvocation(context, runtimeException);
+                        return JSUndefined.INSTANCE;
+                    }
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -842,6 +880,9 @@ public final class JSTypeConversions {
 
         // For objects, call ToPrimitive with STRING hint
         JSValue primitive = toPrimitive(context, value, PreferredType.STRING);
+        if (context != null && context.hasPendingException()) {
+            return new JSString("");
+        }
         if (primitive == value) {
             return new JSString("[object Object]");
         }

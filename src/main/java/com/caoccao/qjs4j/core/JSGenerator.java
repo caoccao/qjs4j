@@ -248,135 +248,29 @@ public final class JSGenerator extends JSObject {
             return createIteratorResult(returnVal, true);
         }
 
-        // Generator is suspended at a yield point
+        // Generator is suspended at a yield point.
+        // For both `yield` and `yield*`, resume through the VM so normal control
+        // flow (including finally blocks) is preserved.
         if (generatorState != null) {
-            // Check if suspended at a yield* point - need to handle delegation protocol
-            // Following QuickJS js_generator_next with GEN_MAGIC_RETURN:
-            // For SUSPENDED_YIELD_STAR, the return value and magic are pushed on the stack,
-            // and the yield* bytecode calls iterator.return(value).
-            YieldResult lastYield = generatorState.getLastYieldResult();
-            if (lastYield != null && lastYield.isYieldStar()) {
-                JSObject delegateIterator = lastYield.delegateIterator();
-                if (delegateIterator != null) {
-                    JSValue returnMethodValue = delegateIterator.get(context, PropertyKey.RETURN);
-                    if (context.hasPendingException()) {
-                        state = State.COMPLETED;
-                        done = true;
-                        generatorState.setCompleted(true);
-                        throw new JSVirtualMachineException(
-                                context.getPendingException().toString(),
-                                context.getPendingException());
-                    }
-                    if (!(returnMethodValue instanceof JSUndefined) && !(returnMethodValue instanceof JSNull)) {
-                        if (!(returnMethodValue instanceof JSFunction returnFunction)) {
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            throw new JSVirtualMachineException(
-                                    context.throwTypeError("iterator return is not a function"));
-                        }
-                        JSValue returnResult = returnFunction.call(context, delegateIterator, new JSValue[]{returnVal});
-                        if (context.hasPendingException()) {
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            throw new JSVirtualMachineException(
-                                    context.getPendingException().toString(),
-                                    context.getPendingException());
-                        }
-                        if (!(returnResult instanceof JSObject returnResultObject)) {
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            throw new JSVirtualMachineException(
-                                    context.throwTypeError("iterator must return an object"));
-                        }
-                        JSValue doneValue = returnResultObject.get(context, PropertyKey.DONE);
-                        if (context.hasPendingException()) {
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            throw new JSVirtualMachineException(
-                                    context.getPendingException().toString(),
-                                    context.getPendingException());
-                        }
-                        boolean iteratorDone = JSTypeConversions.toBoolean(doneValue).isBooleanTrue();
-                        if (context.hasPendingException()) {
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            throw new JSVirtualMachineException(
-                                    context.getPendingException().toString(),
-                                    context.getPendingException());
-                        }
-                        if (iteratorDone) {
-                            JSValue iteratorValue = returnResultObject.get(context, PropertyKey.VALUE);
-                            if (context.hasPendingException()) {
-                                state = State.COMPLETED;
-                                done = true;
-                                generatorState.setCompleted(true);
-                                throw new JSVirtualMachineException(
-                                        context.getPendingException().toString(),
-                                        context.getPendingException());
-                            }
-                            state = State.COMPLETED;
-                            done = true;
-                            generatorState.setCompleted(true);
-                            return createIteratorResult(iteratorValue, true);
-                        }
-                        state = State.SUSPENDED_YIELD;
-                        return returnResultObject;
-                    }
-                }
-                // The replay-based generator implementation replays an earlier yield point
-                // before reaching the delegated yield* resume site. Preserve RETURN for the
-                // later yield* handler by consuming a dummy NEXT during replay.
-                generatorState.recordResume(JSGeneratorState.ResumeKind.NEXT, JSUndefined.INSTANCE);
-                generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
-                state = State.EXECUTING;
-                try {
-                    JSValue yieldValue = context.getVirtualMachine().executeGenerator(generatorState, context);
-                    if (generatorState.isCompleted()) {
-                        state = State.COMPLETED;
-                        done = true;
-                        return createIteratorResult(yieldValue, true);
-                    } else {
-                        // Inner iterator returned done:false - continue delegation
-                        state = State.SUSPENDED_YIELD;
-                        YieldResult newYield = generatorState.getLastYieldResult();
-                        if (newYield != null && newYield.isYieldStar() && yieldValue instanceof JSObject resultObj) {
-                            return resultObj;
-                        }
-                        return createIteratorResult(yieldValue, false);
-                    }
-                } catch (Exception e) {
-                    state = State.COMPLETED;
-                    done = true;
-                    generatorState.setCompleted(true);
-                    throw e;
-                }
-            }
-
-            // Regular yield - resume with RETURN semantics
-            // The VM will trigger force return, skipping code after yield,
-            // skipping catch handlers, but executing finally handlers.
             state = State.EXECUTING;
             if (generatorState.hasSuspendedExecutionState() && !generatorState.hasPendingResumeRecord()) {
                 generatorState.setPendingResumeRecord(JSGeneratorState.ResumeKind.RETURN, returnVal);
+            } else if (!generatorState.hasSuspendedExecutionState()) {
+                generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
             }
-            generatorState.recordResume(JSGeneratorState.ResumeKind.RETURN, returnVal);
 
             try {
                 JSValue result = context.getVirtualMachine().executeGenerator(generatorState, context);
                 if (generatorState.isCompleted()) {
                     state = State.COMPLETED;
                     done = true;
-                    // Use the actual result, not returnVal, because a return statement
-                    // in a finally block can override the return value
                     return createIteratorResult(result, true);
                 } else {
-                    // Generator yielded during a finally block - suspend there
                     state = State.SUSPENDED_YIELD;
+                    YieldResult newYield = generatorState.getLastYieldResult();
+                    if (newYield != null && newYield.isYieldStar() && result instanceof JSObject resultObject) {
+                        return resultObject;
+                    }
                     return createIteratorResult(result, false);
                 }
             } catch (Exception e) {
@@ -436,6 +330,10 @@ public final class JSGenerator extends JSObject {
                     return createIteratorResult(yieldValue, true);
                 }
                 state = State.SUSPENDED_YIELD;
+                YieldResult lastYield = generatorState.getLastYieldResult();
+                if (lastYield != null && lastYield.isYieldStar() && yieldValue instanceof JSObject resultObject) {
+                    return resultObject;
+                }
                 return createIteratorResult(yieldValue, false);
             } catch (Exception e) {
                 state = State.COMPLETED;

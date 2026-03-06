@@ -46,6 +46,9 @@ final class StatementCompiler {
         if (expr instanceof CallExpression callExpr) {
             return isTailCallableCallExpression(callExpr);
         }
+        if (expr instanceof TaggedTemplateExpression) {
+            return true;
+        }
         if (expr instanceof BinaryExpression binExpr
                 && binExpr.operator() == BinaryExpression.BinaryOperator.NULLISH_COALESCING) {
             return hasTailCallInTailPosition(binExpr.right());
@@ -256,10 +259,120 @@ final class StatementCompiler {
         }
     }
 
+    private void compileModuleProgram(Program program) {
+        compilerContext.inGlobalScope = false;
+        compilerContext.isGlobalProgram = false;
+        compilerContext.strictMode = true;
+        compilerContext.enterScope();
+
+        List<Statement> body = program.body();
+
+        Set<String> hoistedFunctionNames = new HashSet<>();
+        Set<String> hoistedVarNames = new HashSet<>();
+        for (Statement statement : body) {
+            if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.id() != null) {
+                String className = classDeclaration.id().name();
+                if (compilerContext.currentScope().getLocal(className) == null) {
+                    int localIndex = compilerContext.currentScope().declareLocal(className);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                }
+                compilerContext.currentScope().markConstLocal(className);
+                compilerContext.tdzLocals.add(className);
+                continue;
+            }
+            if (statement instanceof VariableDeclaration variableDeclaration) {
+                if (variableDeclaration.kind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                        delegates.analysis.collectPatternBindingNames(declarator.id(), hoistedVarNames);
+                    }
+                } else {
+                    Set<String> lexicalNames = new HashSet<>();
+                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                        delegates.analysis.collectPatternBindingNames(declarator.id(), lexicalNames);
+                    }
+                    for (String lexicalName : lexicalNames) {
+                        if (compilerContext.currentScope().getLocal(lexicalName) == null) {
+                            int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        }
+                        if (variableDeclaration.kind() == VariableKind.CONST) {
+                            compilerContext.currentScope().markConstLocal(lexicalName);
+                        }
+                        compilerContext.tdzLocals.add(lexicalName);
+                    }
+                }
+                continue;
+            }
+            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
+                hoistedFunctionNames.add(functionDeclaration.id().name());
+                delegates.functions.compileFunctionDeclaration(functionDeclaration);
+                continue;
+            }
+            delegates.analysis.collectVarNamesFromStatement(statement, hoistedVarNames);
+        }
+
+        for (String variableName : hoistedVarNames) {
+            if (hoistedFunctionNames.contains(variableName)) {
+                continue;
+            }
+            if (compilerContext.currentScope().getLocal(variableName) == null) {
+                int localIndex = compilerContext.currentScope().declareLocal(variableName);
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            }
+        }
+
+        int effectiveLastIndex = -1;
+        for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
+            if (!(body.get(statementIndex) instanceof FunctionDeclaration)) {
+                effectiveLastIndex = statementIndex;
+                break;
+            }
+        }
+        boolean lastProducesValue = false;
+
+        for (int statementIndex = 0; statementIndex < body.size(); statementIndex++) {
+            Statement statement = body.get(statementIndex);
+            if (statement instanceof FunctionDeclaration) {
+                continue;
+            }
+
+            boolean isLast = statementIndex == effectiveLastIndex;
+            if (isLast && (statement instanceof ExpressionStatement || statement instanceof TryStatement)) {
+                lastProducesValue = true;
+            }
+            compileStatement(statement, isLast);
+        }
+
+        if (!lastProducesValue) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+
+        int programResultLocalIndex = compilerContext.currentScope().declareLocal(
+                "$program_result_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
+        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.RETURN);
+
+        int localCount = compilerContext.currentScope().getLocalCount();
+        if (localCount > compilerContext.maxLocalCount) {
+            compilerContext.maxLocalCount = localCount;
+        }
+        compilerContext.inGlobalScope = false;
+    }
+
     void compileProgram(Program program) {
-        compilerContext.inGlobalScope = true;
-        compilerContext.isGlobalProgram = true;
+        if (program.isModule()) {
+            compileModuleProgram(program);
+            return;
+        }
+
         compilerContext.strictMode = program.strict();  // Set strict mode from program directive
+        boolean useLocalProgramScope =
+                compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
+        compilerContext.inGlobalScope = !useLocalProgramScope;
+        compilerContext.isGlobalProgram = !useLocalProgramScope;
         compilerContext.enterScope();
 
         List<Statement> body = program.body();
@@ -316,7 +429,16 @@ final class StatementCompiler {
         // Per ES2024 CreateGlobalVarBinding, only create binding if it doesn't already exist.
         for (String varName : varNames) {
             if (!hoistedFunctionNames.contains(varName)) {
-                delegates.emitHelpers.emitConditionalVarInit(varName);
+                if (useLocalProgramScope) {
+                    Integer localIndex = compilerContext.currentScope().getLocal(varName);
+                    if (localIndex == null) {
+                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                    }
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                } else {
+                    delegates.emitHelpers.emitConditionalVarInit(varName);
+                }
             }
         }
 
@@ -688,7 +810,9 @@ final class StatementCompiler {
      * Compile a block for try/catch/finally, preserving the value of the last expression.
      */
     void compileTryFinallyBlock(BlockStatement block) {
+        boolean savedGlobalScope = compilerContext.inGlobalScope;
         compilerContext.enterScope();
+        compilerContext.inGlobalScope = false;
         List<Statement> body = block.body();
         for (int i = 0; i < body.size(); i++) {
             boolean isLast = (i == body.size() - 1);
@@ -712,6 +836,7 @@ final class StatementCompiler {
         if (body.isEmpty()) {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
+        compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
     }
@@ -800,6 +925,24 @@ final class StatementCompiler {
                 int usingStackLocalIndex = delegates.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration);
                 delegates.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
                 delegates.patterns.compilePatternAssignment(declarator.id());
+                continue;
+            }
+
+            // var declarations without an initializer are handled during declaration
+            // instantiation (binding remains unchanged if already initialized).
+            if (varDecl.kind() == VariableKind.VAR && declarator.init() == null) {
+                if (declarator.id() instanceof Identifier identifier
+                        && compilerContext.isLocalBindingFunctionName(identifier.name())) {
+                    // Named function expressions create an immutable name binding in an outer
+                    // function-name environment. A same-name `var` declaration in the body
+                    // must initialize the function-scope binding to undefined.
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    delegates.patterns.compileVarPatternAssignment(declarator.id());
+                    continue;
+                }
+                if (!(declarator.id() instanceof Identifier)) {
+                    throw new JSCompilerException("Missing initializer in destructuring declaration");
+                }
                 continue;
             }
 

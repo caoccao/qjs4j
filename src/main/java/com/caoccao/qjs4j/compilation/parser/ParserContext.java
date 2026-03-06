@@ -27,6 +27,7 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Shared mutable state for the parser.
@@ -34,6 +35,44 @@ import java.util.List;
  * that are shared across the delegate parser classes.
  */
 final class ParserContext {
+    private static final Set<String> ALWAYS_RESERVED_IDENTIFIER_NAMES = Set.of(
+            JSKeyword.BREAK,
+            JSKeyword.CASE,
+            JSKeyword.CATCH,
+            JSKeyword.CLASS,
+            JSKeyword.CONST,
+            JSKeyword.CONTINUE,
+            JSKeyword.DEBUGGER,
+            JSKeyword.DEFAULT,
+            JSKeyword.DELETE,
+            JSKeyword.DO,
+            JSKeyword.ELSE,
+            JSKeyword.ENUM,
+            JSKeyword.EXPORT,
+            JSKeyword.EXTENDS,
+            JSKeyword.FALSE,
+            JSKeyword.FINALLY,
+            JSKeyword.FOR,
+            JSKeyword.FUNCTION,
+            JSKeyword.IF,
+            JSKeyword.IMPORT,
+            JSKeyword.IN,
+            JSKeyword.INSTANCEOF,
+            JSKeyword.NEW,
+            JSKeyword.NULL,
+            JSKeyword.RETURN,
+            JSKeyword.SUPER,
+            JSKeyword.SWITCH,
+            JSKeyword.THIS,
+            JSKeyword.THROW,
+            JSKeyword.TRUE,
+            JSKeyword.TRY,
+            JSKeyword.TYPEOF,
+            JSKeyword.VAR,
+            JSKeyword.VOID,
+            JSKeyword.WHILE,
+            JSKeyword.WITH
+    );
     final boolean allowNewTargetInEval;
     final boolean inheritedStrictMode;
     final boolean isEval;
@@ -49,6 +88,7 @@ final class ParserContext {
     boolean inDerivedConstructor;
     boolean inFunctionBody = true;
     boolean inOperatorAllowed = true;
+    int newTargetNesting;
     Token nextToken;
     boolean parsingClassWithSuper;
     int previousTokenEndOffset;
@@ -58,6 +98,8 @@ final class ParserContext {
 
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
                   int functionNesting, int asyncFunctionNesting,
+                  int generatorFunctionNesting,
+                  int newTargetNesting,
                   boolean initialSuperPropertyAllowed,
                   boolean allowNewTargetInEval) {
         this.lexer = lexer;
@@ -67,6 +109,8 @@ final class ParserContext {
         this.inheritedStrictMode = inheritedStrictMode;
         this.functionNesting = functionNesting;
         this.asyncFunctionNesting = asyncFunctionNesting;
+        this.generatorFunctionNesting = generatorFunctionNesting;
+        this.newTargetNesting = newTargetNesting;
         this.superPropertyAllowed = initialSuperPropertyAllowed;
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
@@ -92,6 +136,10 @@ final class ParserContext {
         throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
     }
 
+    void enterArrowFunctionContext(boolean asyncFunction) {
+        enterFunctionContext(asyncFunction);
+    }
+
     /**
      * Enter an arrow function or class field/static block context.
      * Arrow functions inherit generator/async nesting from their enclosing context.
@@ -111,13 +159,18 @@ final class ParserContext {
      * identifiers in nested non-generator/non-async functions.
      */
     void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting,
+        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting, newTargetNesting,
                 inClassFieldInitializer ? 1 : 0, inClassStaticInit ? 1 : 0});
         functionNesting++;
         generatorFunctionNesting = generatorFunction ? 1 : 0;
         asyncFunctionNesting = asyncFunction ? 1 : 0;
+        newTargetNesting = 1;
         inClassFieldInitializer = false;
         inClassStaticInit = false;
+    }
+
+    void exitArrowFunctionContext(boolean asyncFunction) {
+        exitFunctionContext(asyncFunction);
     }
 
     void exitFunctionContext(boolean asyncFunction) {
@@ -131,8 +184,9 @@ final class ParserContext {
         int[] saved = savedFunctionNestingStack.pop();
         generatorFunctionNesting = saved[0];
         asyncFunctionNesting = saved[1];
-        inClassFieldInitializer = saved[2] != 0;
-        inClassStaticInit = saved[3] != 0;
+        newTargetNesting = saved[2];
+        inClassFieldInitializer = saved[3] != 0;
+        inClassStaticInit = saved[4] != 0;
         functionNesting--;
     }
 
@@ -167,6 +221,10 @@ final class ParserContext {
     }
 
     // ---- Validation methods ----
+
+    private boolean isAlwaysReservedIdentifierName(String name) {
+        return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
+    }
 
     boolean isAssignmentOperator(TokenType type) {
         return type == TokenType.ASSIGN || type == TokenType.PLUS_ASSIGN ||
@@ -389,6 +447,9 @@ final class ParserContext {
         SourceLocation location = getLocation();
         if (match(TokenType.IDENTIFIER)) {
             String name = currentToken.value();
+            if (isAlwaysReservedIdentifierName(name)) {
+                throw new JSSyntaxErrorException("Unexpected reserved word");
+            }
             if (strictMode && isStrictReservedIdentifierName(name)) {
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }

@@ -587,6 +587,9 @@ final class ExpressionCompiler {
     }
 
     void compileTaggedTemplateExpression(TaggedTemplateExpression taggedTemplate) {
+        boolean isTailCall = compilerContext.emitTailCalls;
+        compilerContext.emitTailCalls = false;
+
         // Tagged template: tag`template`
         // The tag function receives:
         // 1. A template object (array-like) with cooked strings and a 'raw' property
@@ -637,9 +640,13 @@ final class ExpressionCompiler {
         int argCount = 1 + expressions.size();
         boolean isMethodCall = taggedTemplate.tag() instanceof MemberExpression;
         if (isMethodCall) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL_METHOD, argCount);
+            compilerContext.emitter.emitOpcodeU16(
+                    isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD,
+                    argCount);
         } else {
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, argCount);
+            compilerContext.emitter.emitOpcodeU16(
+                    isTailCall ? Opcode.TAIL_CALL : Opcode.CALL,
+                    argCount);
         }
     }
 
@@ -799,6 +806,29 @@ final class ExpressionCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
+                if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                    // Super property update follows super-reference semantics:
+                    // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
+                    compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                    delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+                    compilerContext.emitter.emitOpcode(Opcode.DUP3);
+                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
+
+                    if (isPrefix) {
+                        compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
+                    } else {
+                        compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC);
+                        compilerContext.emitter.emitOpcode(Opcode.PERM5); // old this superObj key new
+                        compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE); // old new
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // old
+                    }
+                    return;
+                }
                 if (memberExpr.computed()) {
                     // Array element: obj[prop]
                     compileExpression(memberExpr.object());
@@ -919,9 +949,7 @@ final class ExpressionCompiler {
                     if (capturedIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                     } else {
-                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                        compilerContext.emitter.emitU8(5);
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, name);
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR_UNDEF, name);
                     }
                 }
             }

@@ -199,7 +199,9 @@ public final class OpcodeHandler {
         JSValue rightValue = (JSValue) stack[sp - 1];
         JSValue leftValue = (JSValue) stack[sp - 2];
         if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) & ((int) rightNumber.value()));
+            int leftInt = JSTypeConversions.toInt32(leftNumber.value());
+            int rightInt = JSTypeConversions.toInt32(rightNumber.value());
+            stack[sp - 2] = JSNumber.of(leftInt & rightInt);
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
@@ -343,37 +345,45 @@ public final class OpcodeHandler {
         JSValue thisArgValue = (JSValue) stack[--sp];
 
         JSValue result;
-        if (isConstructorCall != 0) {
-            JSValue constructorNewTarget = thisArgValue;
-            if (constructorNewTarget.isNullOrUndefined()) {
-                constructorNewTarget = functionValue;
-            }
-            result = JSReflectObject.construct(
-                    executionContext.virtualMachine.context,
-                    JSUndefined.INSTANCE,
-                    new JSValue[]{functionValue, argsArrayValue, constructorNewTarget});
-        } else {
-            JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
-            if (applyArgs == null) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            if (functionValue instanceof JSProxy proxyFunction) {
-                result = executionContext.virtualMachine.proxyApply(proxyFunction, thisArgValue, applyArgs);
-            } else if (functionValue instanceof JSFunction applyFunction) {
-                result = applyFunction.call(executionContext.virtualMachine.context, thisArgValue, applyArgs);
+        try {
+            if (isConstructorCall != 0) {
+                JSValue constructorNewTarget = thisArgValue;
+                if (constructorNewTarget.isNullOrUndefined()) {
+                    constructorNewTarget = functionValue;
+                }
+                result = JSReflectObject.construct(
+                        executionContext.virtualMachine.context,
+                        JSUndefined.INSTANCE,
+                        new JSValue[]{functionValue, argsArrayValue, constructorNewTarget});
             } else {
-                executionContext.virtualMachine.pendingException =
-                        executionContext.virtualMachine.context.throwTypeError("Value is not a function");
-                executionContext.virtualMachine.context.clearPendingException();
-                stack[sp++] = JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
+                JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
+                if (applyArgs == null) {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                if (functionValue instanceof JSProxy proxyFunction) {
+                    result = executionContext.virtualMachine.proxyApply(proxyFunction, thisArgValue, applyArgs);
+                } else if (functionValue instanceof JSFunction applyFunction) {
+                    result = applyFunction.call(executionContext.virtualMachine.context, thisArgValue, applyArgs);
+                } else {
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.throwTypeError("Value is not a function");
+                    executionContext.virtualMachine.context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
             }
+        } catch (JSVirtualMachineException exception) {
+            executionContext.virtualMachine.captureVMException(exception);
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         if (executionContext.virtualMachine.context.hasPendingException()) {
@@ -1183,12 +1193,15 @@ public final class OpcodeHandler {
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         boolean deleted;
+        JSContext context = executionContext.virtualMachine.context;
         if (executionContext.frame.hasDynamicVarBinding(variableName)) {
             // Eval-created function-scope var bindings are not deletable.
             deleted = false;
+        } else if (context.hasGlobalLexicalBinding(variableName)) {
+            // Global lexical bindings are never deletable.
+            deleted = false;
         } else {
-            deleted = executionContext.virtualMachine.context.getGlobalObject()
-                    .delete(executionContext.virtualMachine.context, PropertyKey.fromString(variableName));
+            deleted = context.getGlobalObject().delete(context, PropertyKey.fromString(variableName));
         }
         executionContext.stack[executionContext.sp++] = JSBoolean.valueOf(deleted);
         executionContext.pc = pc + op.getSize();
@@ -2116,7 +2129,7 @@ public final class OpcodeHandler {
         }
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-        JSValue result = targetObject.get(executionContext.virtualMachine.context, key);
+        JSValue result = targetObject.get(executionContext.virtualMachine.context, key, arrayObjectValue);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
@@ -2136,7 +2149,10 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(executionContext.virtualMachine.context, PropertyKey.fromString(fieldName));
+            JSValue result = targetObject.get(
+                    executionContext.virtualMachine.context,
+                    PropertyKey.fromString(fieldName),
+                    objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 executionContext.virtualMachine.context.clearPendingException();
@@ -2168,7 +2184,10 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(executionContext.virtualMachine.context, PropertyKey.fromString(fieldName));
+            JSValue result = targetObject.get(
+                    executionContext.virtualMachine.context,
+                    PropertyKey.fromString(fieldName),
+                    objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 executionContext.virtualMachine.context.clearPendingException();
@@ -2309,11 +2328,12 @@ public final class OpcodeHandler {
         JSStackValue[] stack = executionContext.stack;
         JSValue propertyValue = (JSValue) stack[sp - 1];
         JSValue objectValue = (JSValue) stack[sp - 2];
-        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyValue);
+        JSContext context = executionContext.virtualMachine.context;
+        PropertyKey key = PropertyKey.fromValue(context, propertyValue);
 
         if (objectValue.isUndefined()) {
             String name = key != null ? key.toPropertyString() : "variable";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(name + " is not defined");
+            executionContext.virtualMachine.pendingException = context.throwReferenceError(name + " is not defined");
             stack[sp++] = JSUndefined.INSTANCE;
             executionContext.sp = sp;
             executionContext.pc = pc + op.getSize();
@@ -2322,23 +2342,39 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject == null) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("value has no property");
+            executionContext.virtualMachine.pendingException = context.throwTypeError("value has no property");
             stack[sp++] = JSUndefined.INSTANCE;
             executionContext.sp = sp;
             executionContext.pc = pc + op.getSize();
             return;
         }
 
+        if (targetObject == context.getGlobalObject() && key != null && key.isString()) {
+            String variableName = key.asString();
+            if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
+                if (!context.isGlobalLexicalBindingInitialized(variableName)) {
+                    executionContext.virtualMachine.pendingException =
+                            context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
+                    stack[sp++] = JSUndefined.INSTANCE;
+                } else {
+                    stack[sp++] = context.readGlobalLexicalBinding(variableName);
+                }
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+        }
+
         JSValue value;
         if (!targetObject.has(key)) {
             String name = key != null ? key.toPropertyString() : "variable";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(name + " is not defined");
+            executionContext.virtualMachine.pendingException = context.throwReferenceError(name + " is not defined");
             stack[sp++] = JSUndefined.INSTANCE;
             executionContext.sp = sp;
             executionContext.pc = pc + op.getSize();
             return;
         } else {
-            value = targetObject.get(executionContext.virtualMachine.context, key);
+            value = targetObject.get(context, key);
         }
         stack[sp++] = value;
         executionContext.sp = sp;
@@ -2372,7 +2408,13 @@ public final class OpcodeHandler {
         JSValue receiverValue = (JSValue) stack[--sp];
 
         if (!(superObjectValue instanceof JSObject superObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super object expected"));
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("super object expected");
+            executionContext.virtualMachine.context.clearPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, keyValue);
@@ -2402,7 +2444,15 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.stack;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        String[] atomPool = executionContext.bytecode.getAtoms();
+        if (atomPool.length == 0 || atomIndex < 0 || atomIndex >= atomPool.length) {
+            int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+            stack[sp++] = readVarRefValue(executionContext, varRefIndex);
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        String variableName = atomPool[atomIndex];
         // Check dynamic var bindings in current frame and caller frames.
         // Variables introduced by eval("var x = ...") are stored in the caller frame's
         // dynamicVarBindings. Inner functions must be able to see these via the scope chain.
@@ -2417,13 +2467,37 @@ public final class OpcodeHandler {
             }
             checkFrame = checkFrame.getCaller();
         }
+        JSContext context = executionContext.virtualMachine.context;
         PropertyKey key = PropertyKey.fromString(variableName);
-        JSObject globalObject = executionContext.virtualMachine.context.getGlobalObject();
+        JSObject globalObject = context.getGlobalObject();
+        if (context.hasEvalOverlayBinding(variableName) && globalObject.has(key)) {
+            JSValue variableValue = globalObject.get(context, key);
+            if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
+                executionContext.virtualMachine.resetPropertyAccessTracking();
+                executionContext.virtualMachine.propertyAccessChain.append(variableName);
+            }
+            stack[sp++] = variableValue;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        if (context.hasGlobalLexicalBinding(variableName)) {
+            if (!context.isGlobalLexicalBindingInitialized(variableName)) {
+                executionContext.virtualMachine.pendingException =
+                        context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
+                stack[sp++] = JSUndefined.INSTANCE;
+            } else {
+                stack[sp++] = context.readGlobalLexicalBinding(variableName);
+            }
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         if (!globalObject.has(key)) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwReferenceError(variableName + " is not defined");
+            executionContext.virtualMachine.pendingException = context.throwReferenceError(variableName + " is not defined");
             stack[sp++] = JSUndefined.INSTANCE;
         } else {
-            JSValue variableValue = globalObject.get(key);
+            JSValue variableValue = globalObject.get(context, key);
             if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
                 executionContext.virtualMachine.resetPropertyAccessTracking();
                 executionContext.virtualMachine.propertyAccessChain.append(variableName);
@@ -2466,8 +2540,56 @@ public final class OpcodeHandler {
 
     static void handleGetVarUndef(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        int varRefIndex = executionContext.bytecode.readU16(pc + 1);
-        executionContext.stack[executionContext.sp++] = readVarRefValue(executionContext, varRefIndex);
+        int sp = executionContext.sp;
+        JSStackValue[] stack = executionContext.stack;
+        int atomIndex = executionContext.bytecode.readU32(pc + 1);
+        String[] atomPool = executionContext.bytecode.getAtoms();
+        if (atomPool.length == 0 || atomIndex < 0 || atomIndex >= atomPool.length) {
+            int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+            stack[sp++] = readVarRefValue(executionContext, varRefIndex);
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        String variableName = atomPool[atomIndex];
+
+        // Check dynamic var bindings in current frame and caller frames.
+        StackFrame checkFrame = executionContext.frame;
+        while (checkFrame != null) {
+            if (checkFrame.hasDynamicVarBinding(variableName)) {
+                JSValue variableValue = checkFrame.getDynamicVarBinding(variableName);
+                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            checkFrame = checkFrame.getCaller();
+        }
+
+        JSContext context = executionContext.virtualMachine.context;
+        PropertyKey key = PropertyKey.fromString(variableName);
+        JSObject globalObject = context.getGlobalObject();
+        if (context.hasEvalOverlayBinding(variableName) && globalObject.has(key)) {
+            stack[sp++] = globalObject.get(context, key);
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        if (context.hasGlobalLexicalBinding(variableName)) {
+            if (!context.isGlobalLexicalBindingInitialized(variableName)) {
+                executionContext.virtualMachine.pendingException =
+                        context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
+                stack[sp++] = JSUndefined.INSTANCE;
+            } else {
+                stack[sp++] = context.readGlobalLexicalBinding(variableName);
+            }
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+
+        stack[sp++] = globalObject.has(key) ? globalObject.get(context, key) : JSUndefined.INSTANCE;
+        executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
 
@@ -2818,12 +2940,28 @@ public final class OpcodeHandler {
         // Arrow functions share the this-binding with the enclosing derived constructor.
         // Check if this was already initialized by a previous super() call.
         JSFunction currentFunction = executionContext.virtualMachine.currentFrame.getFunction();
+        JSValue existingThisValue = executionContext.virtualMachine.currentFrame.getThisArg();
+        if (existingThisValue instanceof JSObject) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwReferenceError(
+                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
         if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
             JSValue capturedThis = arrowBf.getCapturedThisArg();
             if (capturedThis instanceof JSObject) {
-                throw new JSVirtualMachineException(
+                executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwReferenceError(
-                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
             }
         }
 
@@ -2831,7 +2969,13 @@ public final class OpcodeHandler {
         if (executionContext.virtualMachine.valueStack.getStackTop() > executionContext.virtualMachine.currentFrame.getStackBase()) {
             JSValue thisValue = executionContext.virtualMachine.valueStack.pop();
             if (!(thisValue instanceof JSObject jsObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("super() returned non-object");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
             }
             executionContext.virtualMachine.currentFrame.setThisArg(jsObject);
             // Update shared derivedThisRef so arrow functions see the initialized this
@@ -2869,15 +3013,25 @@ public final class OpcodeHandler {
             // constructor(...args) { super(...args); }
             JSObject superConstructorObject = currentFunction.getPrototype();
             if (!(superConstructorObject instanceof JSFunction superConstructor)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("parent class must be constructor"));
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
             }
 
             JSValue superResult = executionContext.virtualMachine.constructFunction(superConstructor, executionContext.virtualMachine.currentFrame.getArguments(), frameNewTarget);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } else if (!(superResult instanceof JSObject superObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super() returned non-object"));
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("super() returned non-object");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } else {
                 executionContext.virtualMachine.currentFrame.setThisArg(superObject);
                 VarRef defaultDerivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
@@ -3273,7 +3427,15 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
         String atomName = executionContext.bytecode.getAtoms()[atomIndex];
-        executionContext.stack[executionContext.sp++] = executionContext.virtualMachine.context.getGlobalObject();
+        JSContext context = executionContext.virtualMachine.context;
+        PropertyKey key = PropertyKey.fromString(atomName);
+        JSValue baseObject;
+        if (context.hasGlobalLexicalBinding(atomName) || context.getGlobalObject().has(key)) {
+            baseObject = context.getGlobalObject();
+        } else {
+            baseObject = JSUndefined.INSTANCE;
+        }
+        executionContext.stack[executionContext.sp++] = baseObject;
         executionContext.stack[executionContext.sp++] = new JSString(atomName);
         executionContext.pc = pc + op.getSize();
     }
@@ -3703,15 +3865,19 @@ public final class OpcodeHandler {
         if (derivedThisRef != null) {
             JSValue thisValue = derivedThisRef.get();
             if (executionContext.virtualMachine.isUninitialized(thisValue)) {
-                throw new JSVirtualMachineException(
+                executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwReferenceError(
-                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.stack[executionContext.sp++] = JSUndefined.INSTANCE;
+                executionContext.pc += op.getSize();
+                return;
             }
             executionContext.stack[executionContext.sp++] = thisValue;
         } else {
             executionContext.stack[executionContext.sp++] = executionContext.frame.getThisArg();
         }
-        executionContext.pc += 1;
+        executionContext.pc += op.getSize();
     }
 
     static void handlePushTrue(Opcode op, ExecutionContext executionContext) {
@@ -3978,9 +4144,10 @@ public final class OpcodeHandler {
         JSContext context = executionContext.virtualMachine.context;
         if (targetObject == context.getGlobalObject() && key != null && key.isString()) {
             String variableName = key.asString();
-            if (variableName != null && context.hasGlobalLexDeclaration(variableName)) {
-                if (!targetObject.has(key)) {
-                    executionContext.virtualMachine.pendingException = context.throwReferenceError(variableName + " is not defined");
+            if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
+                if (!context.isGlobalLexicalBindingInitialized(variableName)) {
+                    executionContext.virtualMachine.pendingException =
+                            context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
                     executionContext.sp = sp;
                     executionContext.pc = pc + op.getSize();
                     return;
@@ -3991,6 +4158,10 @@ public final class OpcodeHandler {
                     executionContext.pc = pc + op.getSize();
                     return;
                 }
+                context.writeGlobalLexicalBinding(variableName, setValue);
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
         }
 
@@ -4022,7 +4193,13 @@ public final class OpcodeHandler {
         JSValue receiverValue = (JSValue) stack[--sp];
 
         if (!(superObjectValue instanceof JSObject superObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("super object expected"));
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("super object expected");
+            executionContext.virtualMachine.context.clearPendingException();
+            stack[sp++] = assignedValue;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, keyValue);
@@ -4049,7 +4226,15 @@ public final class OpcodeHandler {
     static void handlePutVar(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
         int atomIndex = executionContext.bytecode.readU32(pc + 1);
-        String variableName = executionContext.bytecode.getAtoms()[atomIndex];
+        String[] atomPool = executionContext.bytecode.getAtoms();
+        if (atomPool.length == 0 || atomIndex < 0 || atomIndex >= atomPool.length) {
+            int varRefIndex = executionContext.bytecode.readU16(pc + 1);
+            JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
+            writeVarRefValue(executionContext, varRefIndex, value);
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        String variableName = atomPool[atomIndex];
         JSValue value = (JSValue) executionContext.stack[--executionContext.sp];
         // Check dynamic var bindings in current frame and caller frames
         StackFrame checkFrame = executionContext.frame;
@@ -4062,7 +4247,53 @@ public final class OpcodeHandler {
             checkFrame = checkFrame.getCaller();
         }
         JSContext context = executionContext.virtualMachine.context;
-        context.getGlobalObject().set(context, PropertyKey.fromString(variableName), value);
+        PropertyKey variableKey = PropertyKey.fromString(variableName);
+        JSObject globalObject = context.getGlobalObject();
+        if (context.hasEvalOverlayBinding(variableName) && globalObject.has(variableKey)) {
+            globalObject.set(context, variableKey, value);
+            if (context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = context.getPendingException();
+                context.clearPendingException();
+            }
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        if (context.hasGlobalLexicalBinding(variableName)) {
+            if (context.hasGlobalConstDeclaration(variableName)
+                    && context.isGlobalLexicalBindingInitialized(variableName)) {
+                executionContext.virtualMachine.pendingException =
+                        context.throwTypeError("Assignment to constant variable.");
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            context.writeGlobalLexicalBinding(variableName, value);
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        if (context.consumeGlobalFunctionBindingInitialization(variableName)) {
+            PropertyDescriptor functionDescriptor = new PropertyDescriptor();
+            functionDescriptor.setValue(value);
+            PropertyDescriptor existingDescriptor = globalObject.getOwnPropertyDescriptor(variableKey);
+            if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
+                functionDescriptor.setWritable(true);
+                functionDescriptor.setEnumerable(true);
+                functionDescriptor.setConfigurable(context.isActiveGlobalFunctionBindingConfigurable());
+            }
+            globalObject.defineProperty(variableKey, functionDescriptor);
+            if (context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = context.getPendingException();
+                context.clearPendingException();
+            }
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        if (context.isStrictMode() && !globalObject.has(variableKey)) {
+            executionContext.virtualMachine.pendingException =
+                    context.throwReferenceError(variableName + " is not defined");
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        globalObject.set(context, variableKey, value);
         if (context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = context.getPendingException();
             context.clearPendingException();
@@ -4218,7 +4449,9 @@ public final class OpcodeHandler {
         JSValue rightValue = (JSValue) stack[sp - 1];
         JSValue leftValue = (JSValue) stack[sp - 2];
         if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
-            stack[sp - 2] = JSNumber.of(((int) leftNumber.value()) >> (((int) rightNumber.value()) & 0x1F));
+            int leftInt = JSTypeConversions.toInt32(leftNumber.value());
+            int rightInt = JSTypeConversions.toInt32(rightNumber.value());
+            stack[sp - 2] = JSNumber.of(leftInt >> (rightInt & 0x1F));
             executionContext.sp = sp - 1;
         } else {
             executionContext.virtualMachine.valueStack.stackTop = sp;
@@ -4407,10 +4640,12 @@ public final class OpcodeHandler {
         JSValue right = executionContext.virtualMachine.valueStack.pop();
         JSValue left = executionContext.virtualMachine.valueStack.pop();
         JSValue leftPrimitive = null;
+        JSValue leftNumeric = null;
+        boolean leftIsBigInt = false;
         JSValue rightPrimitive = null;
+        JSValue rightNumeric = null;
         try {
             leftPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, left, JSTypeConversions.PreferredType.NUMBER);
-            rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
         } catch (JSVirtualMachineException e) {
             executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
         } catch (JSException e) {
@@ -4421,26 +4656,60 @@ public final class OpcodeHandler {
                         e.getMessage() != null ? e.getMessage() : "toPrimitive");
             }
         }
-        if (leftPrimitive == null || rightPrimitive == null) {
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-        } else {
-            executionContext.virtualMachine.capturePendingException();
-            if (executionContext.virtualMachine.pendingException != null) {
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-            } else if (leftPrimitive instanceof JSBigInt || rightPrimitive instanceof JSBigInt) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("BigInts do not support >>>");
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+        if (leftPrimitive != null && executionContext.virtualMachine.pendingException == null) {
+            if (leftPrimitive instanceof JSBigInt) {
+                leftIsBigInt = true;
+                leftNumeric = leftPrimitive;
             } else {
-                JSValue leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
-                JSValue rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
-                if (leftNumeric instanceof JSNumber leftNum && rightNumeric instanceof JSNumber rightNum) {
-                    executionContext.virtualMachine.valueStack.push(JSNumber.of((JSTypeConversions.toInt32(leftNum.value()) >>> (JSTypeConversions.toInt32(rightNum.value()) & 0x1F)) & 0xFFFFFFFFL));
+                leftNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, leftPrimitive);
+                executionContext.virtualMachine.capturePendingException();
+            }
+        }
+        if (leftNumeric != null && executionContext.virtualMachine.pendingException == null) {
+            try {
+                rightPrimitive = JSTypeConversions.toPrimitive(executionContext.virtualMachine.context, right, JSTypeConversions.PreferredType.NUMBER);
+            } catch (JSVirtualMachineException e) {
+                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            } catch (JSException e) {
+                if (e.getErrorValue() != null) {
+                    executionContext.virtualMachine.pendingException = e.getErrorValue();
                 } else {
-                    int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
-                    int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, rightNumeric);
-                    executionContext.virtualMachine.valueStack.push(JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                            "Error",
+                            e.getMessage() != null ? e.getMessage() : "toPrimitive");
                 }
             }
+        }
+        if (rightPrimitive != null && executionContext.virtualMachine.pendingException == null) {
+            if (rightPrimitive instanceof JSBigInt) {
+                rightNumeric = rightPrimitive;
+            } else {
+                rightNumeric = JSTypeConversions.toNumber(executionContext.virtualMachine.context, rightPrimitive);
+                executionContext.virtualMachine.capturePendingException();
+            }
+        }
+        if (executionContext.virtualMachine.pendingException == null
+                && (leftIsBigInt || rightNumeric instanceof JSBigInt)) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("BigInts do not support >>>");
+            executionContext.virtualMachine.context.clearPendingException();
+        }
+        if (leftNumeric instanceof JSNumber leftNum
+                && rightNumeric instanceof JSNumber rightNum
+                && executionContext.virtualMachine.pendingException == null) {
+            int leftInt = JSTypeConversions.toInt32(leftNum.value());
+            int rightInt = JSTypeConversions.toInt32(rightNum.value());
+            executionContext.virtualMachine.valueStack.push(
+                    JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
+        } else if (leftNumeric != null
+                && rightNumeric != null
+                && executionContext.virtualMachine.pendingException == null) {
+            int leftInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, leftNumeric);
+            int rightInt = JSTypeConversions.toInt32(executionContext.virtualMachine.context, rightNumeric);
+            executionContext.virtualMachine.valueStack.push(
+                    JSNumber.of((leftInt >>> (rightInt & 0x1F)) & 0xFFFFFFFFL));
+        } else {
+            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
         }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
@@ -4774,66 +5043,171 @@ public final class OpcodeHandler {
         // yield* delegates to another iterator
         // Pop the iterable from the stack
         JSValue iterable = executionContext.virtualMachine.valueStack.pop();
+        try {
 
-        // Get the iterator from the iterable
-        JSObject iterableObj;
-        if (iterable instanceof JSObject obj) {
-            iterableObj = obj;
-        } else {
-            iterableObj = executionContext.virtualMachine.toObject(iterable);
-            if (iterableObj == null) {
-                throw new JSVirtualMachineException("Object is not iterable");
-            }
-        }
+            // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
+            JSGeneratorState.ResumeRecord resumeRecord =
+                    executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
+                            ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
+                            : null;
+            YieldResult lastYieldResult = executionContext.virtualMachine.activeGeneratorState != null
+                    ? executionContext.virtualMachine.activeGeneratorState.getLastYieldResult()
+                    : null;
+            boolean reuseDelegateIterator = resumeRecord != null
+                    && lastYieldResult != null
+                    && lastYieldResult.isYieldStar()
+                    && lastYieldResult.delegateIterator() != null
+                    && lastYieldResult.delegationProgramCounter() == executionContext.pc;
 
-        // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
-        if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
-            throw new JSVirtualMachineException("Object is not iterable");
-        }
-
-        // Call Symbol.iterator to get the iterator
-        JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
-        if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException("Iterator method must return an object");
-        }
-
-        // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
-        JSGeneratorState.ResumeRecord resumeRecord =
-                executionContext.virtualMachine.generatorResumeIndex < executionContext.virtualMachine.generatorResumeRecords.size()
-                        ? executionContext.virtualMachine.generatorResumeRecords.get(executionContext.virtualMachine.generatorResumeIndex)
-                        : null;
-
-        if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
-            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
-            JSValue returnValue = resumeRecord.value();
-
-            // Get "return" method from iterator
-            JSValue returnMethodValue = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.getPendingException().toString(),
-                        executionContext.virtualMachine.context.getPendingException());
-            }
-            boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
-
-            if (noReturnMethod) {
-                // No return method - complete with the return value (don't yield)
-                executionContext.virtualMachine.valueStack.push(returnValue);
+            JSObject iteratorObj;
+            if (reuseDelegateIterator) {
+                iteratorObj = lastYieldResult.delegateIterator();
             } else {
-                if (!(returnMethodValue instanceof JSFunction returnFunc)) {
-                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
+                // Get the iterator from the iterable
+                JSObject iterableObj;
+                if (iterable instanceof JSObject obj) {
+                    iterableObj = obj;
+                } else {
+                    iterableObj = executionContext.virtualMachine.toObject(iterable);
+                    if (iterableObj == null) {
+                        throw new JSVirtualMachineException("Object is not iterable");
+                    }
                 }
 
-                // Call iterator.return(value)
-                JSValue result = returnFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{returnValue});
+                // Get Symbol.iterator method
+                JSValue iteratorMethod =
+                        iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
+                }
+                if (!(iteratorMethod instanceof JSFunction iteratorFunc)) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+                }
+
+                // Call Symbol.iterator to get the iterator
+                JSValue iterator = iteratorFunc.call(executionContext.virtualMachine.context, iterable, JSValue.NO_ARGS);
+                if (!(iterator instanceof JSObject iteratorObject)) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
+                }
+                iteratorObj = iteratorObject;
+            }
+
+            if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
+                executionContext.virtualMachine.generatorResumeIndex++; // consume the record
+                JSValue returnValue = resumeRecord.value();
+
+                // Get "return" method from iterator
+                JSValue returnMethodValue = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
+                }
+                boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
+
+                if (noReturnMethod) {
+                    internalStartGeneratorReturnCompletion(executionContext, returnValue);
+                    executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                    executionContext.pc += op.getSize();
+                    return;
+                } else {
+                    if (!(returnMethodValue instanceof JSFunction returnFunc)) {
+                        throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
+                    }
+
+                    // Call iterator.return(value)
+                    JSValue result = returnFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{returnValue});
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+
+                    // Check result is an object (per spec, TypeError if not)
+                    if (!(result instanceof JSObject)) {
+                        throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                    }
+
+                    // Check done flag
+                    JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    if (JSTypeConversions.toBoolean(doneValue).value()) {
+                        JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            throw new JSVirtualMachineException(
+                                    executionContext.virtualMachine.context.getPendingException().toString(),
+                                    executionContext.virtualMachine.context.getPendingException());
+                        }
+                        internalStartGeneratorReturnCompletion(executionContext, value);
+                        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                        executionContext.pc += op.getSize();
+                        return;
+                    } else {
+                        // Not done - yield the result and continue delegation.
+                        executionContext.virtualMachine.yieldResult = new YieldResult(
+                                YieldResult.Type.YIELD_STAR,
+                                result,
+                                iteratorObj,
+                                null,
+                                executionContext.pc);
+                        executionContext.virtualMachine.valueStack.push(result);
+                    }
+                }
+            } else if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                executionContext.virtualMachine.generatorResumeIndex++; // consume the record
+                JSValue throwValue = resumeRecord.value();
+
+                // Get "throw" method from iterator
+                JSValue throwMethodValue =
+                        iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.THROW);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
+                }
+                boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
+
+                if (noThrowMethod) {
+                    // No throw method - close iterator and throw TypeError
+                    JSValue closeMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    if (closeMethod instanceof JSFunction closeFunc) {
+                        closeFunc.call(executionContext.virtualMachine.context, iteratorObj, JSValue.NO_ARGS);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            throw new JSVirtualMachineException(
+                                    executionContext.virtualMachine.context.getPendingException().toString(),
+                                    executionContext.virtualMachine.context.getPendingException());
+                        }
+                    }
+                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                            "iterator does not have a throw method"));
+                }
+
+                if (!(throwMethodValue instanceof JSFunction throwFunc)) {
+                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
+                }
+
+                // Call iterator.throw(value)
+                JSValue result = throwFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{throwValue});
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
                             executionContext.virtualMachine.context.getPendingException());
                 }
 
-                // Check result is an object (per spec, TypeError if not)
+                // Check result is an object
                 if (!(result instanceof JSObject)) {
                     throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
                 }
@@ -4846,7 +5220,7 @@ public final class OpcodeHandler {
                             executionContext.virtualMachine.context.getPendingException());
                 }
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
-                    // Done - push value and complete (don't yield)
+                    // Done - push value and complete the yield* expression
                     JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
@@ -4855,105 +5229,128 @@ public final class OpcodeHandler {
                     }
                     executionContext.virtualMachine.valueStack.push(value);
                 } else {
-                    // Not done - yield the result and continue delegation.
-                    executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
+                    // Not done - yield the result.
+                    executionContext.virtualMachine.yieldResult = new YieldResult(
+                            YieldResult.Type.YIELD_STAR,
+                            result,
+                            iteratorObj,
+                            null,
+                            executionContext.pc);
                     executionContext.virtualMachine.valueStack.push(result);
                 }
-            }
-        } else if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
-            executionContext.virtualMachine.generatorResumeIndex++; // consume the record
-            JSValue throwValue = resumeRecord.value();
-
-            // Get "throw" method from iterator
-            JSValue throwMethodValue = iteratorObj.get(PropertyKey.THROW);
-            boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
-
-            if (noThrowMethod) {
-                // No throw method - close iterator and throw TypeError
-                JSValue closeMethod = iteratorObj.get(PropertyKey.RETURN);
-                if (closeMethod instanceof JSFunction closeFunc) {
-                    closeFunc.call(executionContext.virtualMachine.context, iteratorObj, JSValue.NO_ARGS);
-                }
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
-                        "iterator does not have a throw method"));
-            }
-
-            if (!(throwMethodValue instanceof JSFunction throwFunc)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
-            }
-
-            // Call iterator.throw(value)
-            JSValue result = throwFunc.call(executionContext.virtualMachine.context, iteratorObj, new JSValue[]{throwValue});
-
-            // Check result is an object
-            if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
-            }
-
-            // Check done flag
-            JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
-            if (JSTypeConversions.toBoolean(doneValue).value()) {
-                // Done - push value and complete the yield* expression
-                JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
-                executionContext.virtualMachine.valueStack.push(value);
             } else {
-                // Not done - yield the result.
-                executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                executionContext.virtualMachine.valueStack.push(result);
-            }
-        } else {
-            // Default: NEXT protocol - call iterator.next()
-            JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
-            if (!(nextMethod instanceof JSFunction nextFunc)) {
-                throw new JSVirtualMachineException("Iterator must have a next method");
-            }
-
-            // Skip past previously-yielded values during generator replay.
-            boolean innerExhausted = false;
-            while (executionContext.virtualMachine.yieldSkipCount > 0) {
-                JSValue skipResult = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-                if (!(skipResult instanceof JSObject)) {
-                    throw new JSVirtualMachineException("Iterator result must be an object");
+                // Default: NEXT protocol - call iterator.next()
+                JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.getPendingException().toString(),
+                            executionContext.virtualMachine.context.getPendingException());
                 }
-                JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
-                if (JSTypeConversions.toBoolean(skipDone).value()) {
-                    // Inner iterator exhausted during skip
-                    JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
-                    executionContext.virtualMachine.valueStack.push(value);
-                    innerExhausted = true;
-                    break;
+                if (!(nextMethod instanceof JSFunction nextFunc)) {
+                    throw new JSVirtualMachineException("Iterator must have a next method");
                 }
-                executionContext.virtualMachine.yieldSkipCount--;
+                if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.NEXT) {
+                    executionContext.virtualMachine.generatorResumeIndex++;
+                }
+                JSValue nextArgument = resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.NEXT
+                        ? resumeRecord.value()
+                        : JSUndefined.INSTANCE;
+                JSValue[] undefinedNextArgs = new JSValue[]{JSUndefined.INSTANCE};
+                JSValue[] nextArgs = new JSValue[]{nextArgument};
+
+                // Skip past previously-yielded values during generator replay.
+                int remainingYieldSkips = executionContext.virtualMachine.yieldSkipCount;
+                boolean innerExhausted = false;
+                while (!reuseDelegateIterator && remainingYieldSkips > 0) {
+                    JSValue skipResult = nextFunc.call(executionContext.virtualMachine.context, iteratorObj, undefinedNextArgs);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    if (!(skipResult instanceof JSObject)) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                    }
+                    JSValue skipDone = ((JSObject) skipResult).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    if (JSTypeConversions.toBoolean(skipDone).value()) {
+                        // Inner iterator exhausted during skip
+                        JSValue value = ((JSObject) skipResult).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            throw new JSVirtualMachineException(
+                                    executionContext.virtualMachine.context.getPendingException().toString(),
+                                    executionContext.virtualMachine.context.getPendingException());
+                        }
+                        executionContext.virtualMachine.valueStack.push(value);
+                        innerExhausted = true;
+                        break;
+                    }
+                    remainingYieldSkips--;
+                }
+                executionContext.virtualMachine.yieldSkipCount = remainingYieldSkips;
+
+                if (!innerExhausted) {
+                    JSValue result = nextFunc.call(executionContext.virtualMachine.context, iteratorObj, nextArgs);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+
+                    // The result should be an object (the iterator result)
+                    if (!(result instanceof JSObject)) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                    }
+
+                    // Check if the inner iterator is done
+                    JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.getPendingException().toString(),
+                                executionContext.virtualMachine.context.getPendingException());
+                    }
+                    if (JSTypeConversions.toBoolean(doneValue).value()) {
+                        if (reuseDelegateIterator && executionContext.virtualMachine.yieldSkipCount > 0) {
+                            executionContext.virtualMachine.yieldSkipCount--;
+                        }
+                        // Inner iterator done - yield* expression value is the final value
+                        JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        if (executionContext.virtualMachine.context.hasPendingException()) {
+                            throw new JSVirtualMachineException(
+                                    executionContext.virtualMachine.context.getPendingException().toString(),
+                                    executionContext.virtualMachine.context.getPendingException());
+                        }
+                        executionContext.virtualMachine.valueStack.push(value);
+                        // Don't set yieldResult - the yield* expression completes
+                    } else {
+                        // Set yield result to the raw iterator result object
+                        executionContext.virtualMachine.yieldResult = new YieldResult(
+                                YieldResult.Type.YIELD_STAR,
+                                result,
+                                iteratorObj,
+                                null,
+                                executionContext.pc);
+                        executionContext.virtualMachine.valueStack.push(result);
+                    }
+                }
             }
-
-            if (!innerExhausted) {
-                JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-
-                // The result should be an object (the iterator result)
-                if (!(result instanceof JSObject)) {
-                    throw new JSVirtualMachineException("Iterator result must be an object");
-                }
-
-                // Check if the inner iterator is done
-                JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
-                if (JSTypeConversions.toBoolean(doneValue).value()) {
-                    // Inner iterator done - yield* expression value is the final value
-                    JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
-                    executionContext.virtualMachine.valueStack.push(value);
-                    // Don't set yieldResult - the yield* expression completes
-                } else {
-                    // Set yield result to the raw iterator result object
-                    executionContext.virtualMachine.yieldResult = new YieldResult(YieldResult.Type.YIELD_STAR, result, iteratorObj);
-                    executionContext.virtualMachine.valueStack.push(result);
-                }
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            if (executionContext.virtualMachine.yieldResult != null) {
+                JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+                executionContext.virtualMachine.clearActiveGeneratorSuspendedExecutionState();
+                executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, returnValue);
             }
-        }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
-        if (executionContext.virtualMachine.yieldResult != null) {
-            JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-            executionContext.virtualMachine.clearActiveGeneratorSuspendedExecutionState();
-            executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, returnValue);
+        } catch (JSVirtualMachineException exception) {
+            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(exception);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
         }
     }
 
@@ -5230,6 +5627,20 @@ public final class OpcodeHandler {
             }
         }
         return activeRemap;
+    }
+
+    /**
+     * Create VarRef array from capture source info during FCLOSURE.
+     * For LOCAL sources, creates/reuses a VarRef pointing to the parent's local slot.
+     * For VAR_REF sources, shares the parent's existing VarRef.
+     */
+    private static void internalStartGeneratorReturnCompletion(
+            ExecutionContext executionContext,
+            JSValue returnValue) {
+        executionContext.virtualMachine.generatorReturnValue = returnValue;
+        executionContext.virtualMachine.generatorForceReturn = true;
+        executionContext.virtualMachine.pendingException = returnValue;
+        executionContext.virtualMachine.context.setPendingException(returnValue);
     }
 
     private static boolean internalStartsClassDefinition(ExecutionContext executionContext, int pc, Opcode op) {

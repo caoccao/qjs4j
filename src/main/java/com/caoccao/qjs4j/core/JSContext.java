@@ -50,6 +50,7 @@ public final class JSContext implements AutoCloseable {
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
             Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
+    private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSObject();
     private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s+([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2\\s*;?\\s*$");
     private static final Pattern MODULE_NAMESPACE_IMPORT_PATTERN =
@@ -70,6 +71,7 @@ public final class JSContext implements AutoCloseable {
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
     private final Set<String> globalConstDeclarations;
     private final Set<String> globalLexDeclarations;
+    private final Map<String, JSValue> globalLexicalBindings;
     private final Set<String> globalVarDeclarations;
     private final Map<String, JSObject> importMetaCache;
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
@@ -80,6 +82,8 @@ public final class JSContext implements AutoCloseable {
     private final Map<String, JSModule> moduleCache;
     private final JSRuntime runtime;
     private final VirtualMachine virtualMachine;
+    private boolean activeGlobalFunctionBindingConfigurable;
+    private Set<String> activeGlobalFunctionBindingInitializations;
     // Internal constructor references (not exposed in global scope)
     private JSObject asyncFunctionConstructor;
     private JSObject asyncGeneratorFunctionPrototype;
@@ -115,9 +119,12 @@ public final class JSContext implements AutoCloseable {
      */
     public JSContext(JSRuntime runtime) {
         this.callStack = new ArrayDeque<>();
+        this.activeGlobalFunctionBindingConfigurable = false;
+        this.activeGlobalFunctionBindingInitializations = null;
         this.errorStackTrace = new ArrayList<>();
         this.globalConstDeclarations = new HashSet<>();
         this.globalLexDeclarations = new HashSet<>();
+        this.globalLexicalBindings = new HashMap<>();
         this.globalVarDeclarations = new HashSet<>();
         this.importMetaCache = new HashMap<>();
         this.waitable = true;
@@ -352,6 +359,11 @@ public final class JSContext implements AutoCloseable {
         clearErrorStackTrace();
         // Remove from runtime
         runtime.destroyContext(this);
+    }
+
+    public boolean consumeGlobalFunctionBindingInitialization(String name) {
+        return activeGlobalFunctionBindingInitializations != null
+                && activeGlobalFunctionBindingInitializations.remove(name);
     }
 
     public boolean consumeScheduledClassFieldEvalCall() {
@@ -1143,6 +1155,7 @@ public final class JSContext implements AutoCloseable {
             JSBytecodeFunction func;
             Compiler.CompileResult compileResult = compiler.compile(isModule);
             func = compileResult.function();
+            Set<String> globalScriptFunctionNames = null;
             if (!isModule && !isDirectEval && !skipGlobalDeclarationTracking) {
                 // Top-level script: check GlobalDeclarationInstantiation per ES2024 16.1.7
                 func = compileResult.function();
@@ -1151,7 +1164,13 @@ public final class JSContext implements AutoCloseable {
                 Set<String> newConstDecls = new HashSet<>();
                 Set<String> newVarDecls = new HashSet<>();
                 Set<String> newLexDecls = new HashSet<>();
-                AstUtils.collectGlobalDeclarations(compileResult.ast(), newVarDecls, newLexDecls, newConstDecls);
+                globalScriptFunctionNames = new LinkedHashSet<>();
+                AstUtils.collectGlobalDeclarations(
+                        compileResult.ast(),
+                        newVarDecls,
+                        newLexDecls,
+                        newConstDecls,
+                        globalScriptFunctionNames);
 
                 // Check: let/const names must not collide with existing lex declarations
                 // or restricted global properties (non-configurable or script-level var)
@@ -1183,18 +1202,45 @@ public final class JSContext implements AutoCloseable {
                     }
                 }
 
+                // Check CreateGlobalFunctionBinding preconditions before execution.
+                for (String functionName : globalScriptFunctionNames) {
+                    PropertyKey key = PropertyKey.fromString(functionName);
+                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
+                    if (desc == null) {
+                        if (!jsGlobalObject.getGlobalObject().isExtensible()) {
+                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
+                        }
+                        continue;
+                    }
+                    if (!desc.isConfigurable()) {
+                        if (desc.isAccessorDescriptor()
+                                || !(desc.isWritable() && desc.isEnumerable())) {
+                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
+                        }
+                    }
+                }
+
                 // Register new declarations for future collision checks
                 globalConstDeclarations.addAll(newConstDecls);
                 globalLexDeclarations.addAll(newLexDecls);
                 globalVarDeclarations.addAll(newVarDecls);
+                for (String lexicalName : newLexDecls) {
+                    globalLexicalBindings.putIfAbsent(lexicalName, GLOBAL_LEXICAL_UNINITIALIZED);
+                }
 
                 // CreateGlobalVarDeclaration: define var bindings as non-configurable
                 // properties on the global object (per ES2024 9.1.1.4.17 / QuickJS
                 // js_closure_define_global_var with is_direct_or_indirect_eval=FALSE).
                 // This must happen BEFORE execution so bindings exist at script start.
                 for (String name : newVarDecls) {
+                    if (globalScriptFunctionNames.contains(name)) {
+                        continue;
+                    }
                     PropertyKey key = PropertyKey.fromString(name);
                     PropertyDescriptor existing = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
+                    if (existing == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
+                        throw new JSException(throwTypeError("cannot define variable '" + name + "'"));
+                    }
                     if (existing == null) {
                         // Property doesn't exist: create {writable, enumerable, NOT configurable}
                         jsGlobalObject.getGlobalObject().defineProperty(key,
@@ -1268,6 +1314,26 @@ public final class JSContext implements AutoCloseable {
                 evaluateModuleSideEffectImports(code, filename);
             }
 
+            Set<String> globalFunctionBindingInitializations = null;
+            boolean globalFunctionBindingsConfigurable = false;
+            if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
+                globalFunctionBindingInitializations = new HashSet<>(globalScriptFunctionNames);
+            }
+            if (!isModule
+                    && isDirectEval
+                    && directEvalCallerFrame != null
+                    && directEvalCallerFrame.getCaller() == null
+                    && globalEvalFunctionNames != null) {
+                if (globalFunctionBindingInitializations == null) {
+                    globalFunctionBindingInitializations = new HashSet<>();
+                }
+                globalFunctionBindingInitializations.addAll(globalEvalFunctionNames);
+                globalFunctionBindingsConfigurable = true;
+            }
+            setGlobalFunctionBindingInitializations(
+                    globalFunctionBindingInitializations,
+                    globalFunctionBindingsConfigurable);
+
             // Phase 4: Execute bytecode in the virtual machine
             // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
             // In strict mode functions called without receiver, 'this' is undefined, and
@@ -1283,7 +1349,12 @@ public final class JSContext implements AutoCloseable {
                     func.setHomeObject(directEvalCallerFrame.getFunction().getHomeObject());
                 }
             }
-            JSValue result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS, evalNewTarget);
+            JSValue result;
+            try {
+                result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS, evalNewTarget);
+            } finally {
+                setGlobalFunctionBindingInitializations(null, false);
+            }
 
             if (!isModule
                     && isDirectEval
@@ -1310,6 +1381,21 @@ public final class JSContext implements AutoCloseable {
                         descriptor.setEnumerable(existingDescriptor.isEnumerable());
                         descriptor.setConfigurable(false);
                     }
+                    jsGlobalObject.getGlobalObject().defineProperty(key, descriptor);
+                }
+            }
+            if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
+                for (String functionName : globalScriptFunctionNames) {
+                    PropertyKey key = PropertyKey.fromString(functionName);
+                    if (!jsGlobalObject.getGlobalObject().has(key)) {
+                        continue;
+                    }
+                    JSValue functionValue = jsGlobalObject.getGlobalObject().get(key);
+                    PropertyDescriptor descriptor = new PropertyDescriptor();
+                    descriptor.setValue(functionValue);
+                    descriptor.setWritable(true);
+                    descriptor.setEnumerable(true);
+                    descriptor.setConfigurable(false);
                     jsGlobalObject.getGlobalObject().defineProperty(key, descriptor);
                 }
             }
@@ -1852,12 +1938,26 @@ public final class JSContext implements AutoCloseable {
         return virtualMachine;
     }
 
+    public boolean hasEvalOverlayBinding(String name) {
+        for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
+            if (evalOverlayFrame.savedGlobals().containsKey(name)
+                    || evalOverlayFrame.absentKeys().contains(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public boolean hasGlobalConstDeclaration(String name) {
         return globalConstDeclarations.contains(name);
     }
 
     public boolean hasGlobalLexDeclaration(String name) {
         return globalLexDeclarations.contains(name);
+    }
+
+    public boolean hasGlobalLexicalBinding(String name) {
+        return globalLexicalBindings.containsKey(name);
     }
 
     /**
@@ -1899,10 +1999,19 @@ public final class JSContext implements AutoCloseable {
         return typedArray;
     }
 
+    public boolean isActiveGlobalFunctionBindingConfigurable() {
+        return activeGlobalFunctionBindingConfigurable;
+    }
+
     private boolean isDynamicImportDefaultDeclarationClause(String defaultClause) {
         return defaultClause.startsWith("function")
                 || defaultClause.startsWith("async function")
                 || defaultClause.startsWith("class");
+    }
+
+    public boolean isGlobalLexicalBindingInitialized(String name) {
+        JSValue value = globalLexicalBindings.get(name);
+        return value != null && value != GLOBAL_LEXICAL_UNINITIALIZED;
     }
 
     /**
@@ -2370,6 +2479,10 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
+    public JSValue readGlobalLexicalBinding(String name) {
+        return globalLexicalBindings.get(name);
+    }
+
     /**
      * Register a module in the cache.
      */
@@ -2538,6 +2651,11 @@ public final class JSContext implements AutoCloseable {
      */
     public void setGeneratorFunctionPrototype(JSObject generatorFunctionPrototype) {
         this.generatorFunctionPrototype = generatorFunctionPrototype;
+    }
+
+    public void setGlobalFunctionBindingInitializations(Set<String> functionNames, boolean configurable) {
+        activeGlobalFunctionBindingConfigurable = configurable;
+        activeGlobalFunctionBindingInitializations = functionNames;
     }
 
     /**
@@ -2792,6 +2910,10 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    public void writeGlobalLexicalBinding(String name, JSValue value) {
+        globalLexicalBindings.put(name, value);
+    }
+
     private enum DynamicImportModuleStatus {
         LOADING,
         EVALUATED
@@ -2975,6 +3097,17 @@ public final class JSContext implements AutoCloseable {
                 return JSUndefined.INSTANCE;
             }
             return ensureEvaluated().get(context != null ? context : this.context, key);
+        }
+
+        @Override
+        public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
+            if (shouldBypassThenLookup(key)) {
+                return JSUndefined.INSTANCE;
+            }
+            return ensureEvaluated().get(
+                    context != null ? context : this.context,
+                    key,
+                    receiver != null ? receiver : this);
         }
 
         @Override

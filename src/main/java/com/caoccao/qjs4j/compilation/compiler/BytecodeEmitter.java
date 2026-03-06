@@ -155,7 +155,11 @@ public final class BytecodeEmitter {
      */
     public void emitOpcodeU16(Opcode op, int value) {
         emitOpcode(op);
-        emitU16(value);
+        if (op.getSize() == 5) {
+            emitU32(value);
+        } else {
+            emitU16(value);
+        }
     }
 
     /**

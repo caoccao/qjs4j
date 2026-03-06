@@ -107,11 +107,7 @@ public final class AstUtils {
         for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
             Statement stmt = body.get(statementIndex);
             if (stmt instanceof VariableDeclaration varDecl) {
-                if (varDecl.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                        collectPatternNames(d.id(), varDecls);
-                    }
-                } else {
+                if (varDecl.kind() != VariableKind.VAR) {
                     boolean isConstDeclaration = varDecl.kind() == VariableKind.CONST;
                     // let or const
                     for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
@@ -130,6 +126,9 @@ public final class AstUtils {
                     lexDecls.add(classDecl.id().name());
                 }
             }
+        }
+        for (Statement statement : body) {
+            collectVarScopedNames(statement, varDecls);
         }
 
         // Also collect Annex B function hoisting candidates (functions in blocks/if/switch)
@@ -166,6 +165,105 @@ public final class AstUtils {
             }
         } else if (pattern instanceof RestElement rest) {
             collectPatternNames(rest.argument(), primary, secondary);
+        }
+    }
+
+    /**
+     * Collect var-scoped declarations from a statement subtree.
+     * Recurses through statement forms that do not create function scope and
+     * skips descending into function/class bodies.
+     */
+    private static void collectVarScopedNames(Statement statement, Set<String> varDecls) {
+        if (statement instanceof VariableDeclaration variableDeclaration
+                && variableDeclaration.kind() == VariableKind.VAR) {
+            for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                collectPatternNames(declarator.id(), varDecls);
+            }
+            return;
+        }
+        if (statement instanceof ForStatement forStatement) {
+            if (forStatement.init() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    collectPatternNames(declarator.id(), varDecls);
+                }
+            }
+            if (forStatement.body() != null) {
+                collectVarScopedNames(forStatement.body(), varDecls);
+            }
+            return;
+        }
+        if (statement instanceof ForInStatement forInStatement) {
+            if (forInStatement.left() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    collectPatternNames(declarator.id(), varDecls);
+                }
+            }
+            if (forInStatement.body() != null) {
+                collectVarScopedNames(forInStatement.body(), varDecls);
+            }
+            return;
+        }
+        if (statement instanceof ForOfStatement forOfStatement) {
+            if (forOfStatement.left() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.kind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    collectPatternNames(declarator.id(), varDecls);
+                }
+            }
+            if (forOfStatement.body() != null) {
+                collectVarScopedNames(forOfStatement.body(), varDecls);
+            }
+            return;
+        }
+        if (statement instanceof BlockStatement blockStatement) {
+            for (Statement nestedStatement : blockStatement.body()) {
+                collectVarScopedNames(nestedStatement, varDecls);
+            }
+            return;
+        }
+        if (statement instanceof IfStatement ifStatement) {
+            collectVarScopedNames(ifStatement.consequent(), varDecls);
+            if (ifStatement.alternate() != null) {
+                collectVarScopedNames(ifStatement.alternate(), varDecls);
+            }
+            return;
+        }
+        if (statement instanceof WhileStatement whileStatement) {
+            collectVarScopedNames(whileStatement.body(), varDecls);
+            return;
+        }
+        if (statement instanceof DoWhileStatement doWhileStatement) {
+            collectVarScopedNames(doWhileStatement.body(), varDecls);
+            return;
+        }
+        if (statement instanceof TryStatement tryStatement) {
+            for (Statement nestedStatement : tryStatement.block().body()) {
+                collectVarScopedNames(nestedStatement, varDecls);
+            }
+            if (tryStatement.handler() != null) {
+                for (Statement nestedStatement : tryStatement.handler().body().body()) {
+                    collectVarScopedNames(nestedStatement, varDecls);
+                }
+            }
+            if (tryStatement.finalizer() != null) {
+                for (Statement nestedStatement : tryStatement.finalizer().body()) {
+                    collectVarScopedNames(nestedStatement, varDecls);
+                }
+            }
+            return;
+        }
+        if (statement instanceof SwitchStatement switchStatement) {
+            for (SwitchStatement.SwitchCase switchCase : switchStatement.cases()) {
+                for (Statement nestedStatement : switchCase.consequent()) {
+                    collectVarScopedNames(nestedStatement, varDecls);
+                }
+            }
+            return;
+        }
+        if (statement instanceof LabeledStatement labeledStatement) {
+            collectVarScopedNames(labeledStatement.body(), varDecls);
         }
     }
 
