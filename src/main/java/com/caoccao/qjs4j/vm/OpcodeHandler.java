@@ -359,7 +359,13 @@ public final class OpcodeHandler {
             } else if (functionValue instanceof JSFunction applyFunction) {
                 result = applyFunction.call(executionContext.virtualMachine.context, thisArgValue, applyArgs);
             } else {
-                throw new JSVirtualMachineException("APPLY: not a function");
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("Value is not a function");
+                executionContext.virtualMachine.context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
         }
 

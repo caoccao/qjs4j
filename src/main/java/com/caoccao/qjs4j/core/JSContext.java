@@ -139,6 +139,26 @@ public final class JSContext implements AutoCloseable {
         initializeGlobalObject();
     }
 
+    private void appendDynamicImportDefaultExportNameFixup(
+            StringBuilder transformedSourceBuilder,
+            String localName) {
+        transformedSourceBuilder.append("if (typeof ")
+                .append(localName)
+                .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
+                .append(localName)
+                .append(", \"name\") || ")
+                .append(localName)
+                .append(".name === \"\" || ")
+                .append(localName)
+                .append(".name === \"")
+                .append(localName)
+                .append("\")) {\n")
+                .append("  Object.defineProperty(")
+                .append(localName)
+                .append(", \"name\", { value: \"default\", configurable: true });\n")
+                .append("}\n");
+    }
+
     private void appendDynamicImportExportAssignments(
             StringBuilder transformedSourceBuilder,
             String exportBindingName,
@@ -1772,6 +1792,12 @@ public final class JSContext implements AutoCloseable {
         return typedArray;
     }
 
+    private boolean isDynamicImportDefaultDeclarationClause(String defaultClause) {
+        return defaultClause.startsWith("function")
+                || defaultClause.startsWith("async function")
+                || defaultClause.startsWith("class");
+    }
+
     /**
      * Check if in strict mode.
      */
@@ -2027,32 +2053,36 @@ public final class JSContext implements AutoCloseable {
             hasExportSyntax = true;
             String exportClause = trimmedLine.substring("export ".length()).trim();
             if (exportClause.startsWith("default ")) {
-                String defaultExpression = exportClause.substring("default ".length()).trim();
-                while (defaultExpression.endsWith(";")) {
-                    defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
+                String defaultClause = exportClause.substring("default ".length()).trim();
+                if (isDynamicImportDefaultDeclarationClause(defaultClause)) {
+                    String declarationName = extractExportedFunctionOrClassName(defaultClause);
+                    String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+default\\s+", "$1");
+                    boolean anonymousDefaultDeclaration = false;
+                    if (declarationName == null || declarationName.isEmpty()) {
+                        String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
+                        declarationName = defaultLocalName;
+                        declarationLine = renameAnonymousDefaultExportDeclaration(declarationLine, defaultLocalName);
+                        anonymousDefaultDeclaration = true;
+                    }
+                    transformedSourceBuilder.append(declarationLine).append('\n');
+                    if (anonymousDefaultDeclaration) {
+                        appendDynamicImportDefaultExportNameFixup(transformedSourceBuilder, declarationName);
+                    }
+                    localExportBindings.add(new LocalExportBinding(declarationName, "default"));
+                } else {
+                    String defaultExpression = defaultClause;
+                    while (defaultExpression.endsWith(";")) {
+                        defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
+                    }
+                    String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
+                    transformedSourceBuilder.append("const ")
+                            .append(defaultLocalName)
+                            .append(" = (0, ")
+                            .append(defaultExpression)
+                            .append(");\n");
+                    appendDynamicImportDefaultExportNameFixup(transformedSourceBuilder, defaultLocalName);
+                    localExportBindings.add(new LocalExportBinding(defaultLocalName, "default"));
                 }
-                String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
-                transformedSourceBuilder.append("const ")
-                        .append(defaultLocalName)
-                        .append(" = (0, ")
-                        .append(defaultExpression)
-                        .append(");\n");
-                transformedSourceBuilder.append("if (typeof ")
-                        .append(defaultLocalName)
-                        .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
-                        .append(defaultLocalName)
-                        .append(", \"name\") || ")
-                        .append(defaultLocalName)
-                        .append(".name === \"\" || ")
-                        .append(defaultLocalName)
-                        .append(".name === \"")
-                        .append(defaultLocalName)
-                        .append("\")) {\n")
-                        .append("  Object.defineProperty(")
-                        .append(defaultLocalName)
-                        .append(", \"name\", { value: \"default\", configurable: true });\n")
-                        .append("}\n");
-                localExportBindings.add(new LocalExportBinding(defaultLocalName, "default"));
                 continue;
             }
 
@@ -2242,6 +2272,27 @@ public final class JSContext implements AutoCloseable {
 
     public void registerModule(String specifier, JSModule module) {
         moduleCache.put(specifier, module);
+    }
+
+    private String renameAnonymousDefaultExportDeclaration(
+            String declarationLine,
+            String defaultLocalName) {
+        String replacementName = Matcher.quoteReplacement(defaultLocalName);
+        String renamedFunctionDeclaration = declarationLine.replaceFirst(
+                "^(\\s*(?:async\\s+)?function(?:\\s*\\*)?)\\s*\\(",
+                "$1 " + replacementName + "(");
+        if (!renamedFunctionDeclaration.equals(declarationLine)) {
+            return renamedFunctionDeclaration;
+        }
+
+        String renamedClassDeclaration = declarationLine.replaceFirst(
+                "^(\\s*class)\\b",
+                "$1 " + replacementName);
+        if (!renamedClassDeclaration.equals(declarationLine)) {
+            return renamedClassDeclaration;
+        }
+
+        throw new JSException(throwSyntaxError("Invalid default export declaration"));
     }
 
     private void resolveDynamicImportReExports(

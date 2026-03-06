@@ -33,6 +33,13 @@ final class ExpressionBinaryParser {
         this.expressions = expressions;
     }
 
+    private boolean isDisallowedExponentiationUnaryBaseToken(TokenType tokenType) {
+        return switch (tokenType) {
+            case BIT_NOT, DELETE, MINUS, NOT, PLUS, TYPEOF, VOID -> true;
+            default -> false;
+        };
+    }
+
     Expression parseAdditiveExpression() {
         Expression left = expressions.parseMultiplicativeExpression();
 
@@ -127,9 +134,13 @@ final class ExpressionBinaryParser {
     }
 
     Expression parseExponentiationExpression() {
+        TokenType firstTokenType = parserContext.currentToken.type();
         Expression left = expressions.parseUnaryExpression();
 
         if (parserContext.match(TokenType.EXP)) {
+            if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)) {
+                throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
+            }
             SourceLocation location = parserContext.getLocation();
             parserContext.advance();
             Expression right = parseExponentiationExpression();

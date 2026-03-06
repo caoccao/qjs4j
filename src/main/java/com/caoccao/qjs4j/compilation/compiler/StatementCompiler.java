@@ -810,6 +810,10 @@ final class StatementCompiler {
                     compilerContext.inferredClassName = targetId.name();
                 }
                 delegates.expressions.compileExpression(declarator.init());
+                if (declarator.id() instanceof Identifier targetId
+                        && isAnonymousFunctionDefinition(declarator.init())) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.name());
+                }
                 compilerContext.inferredClassName = null;
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -852,6 +856,19 @@ final class StatementCompiler {
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
+    }
+
+    private boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.id() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.id() == null;
+        }
+        return false;
     }
 
     /**

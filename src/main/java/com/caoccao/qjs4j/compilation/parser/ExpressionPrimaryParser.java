@@ -156,6 +156,10 @@ final class ExpressionPrimaryParser {
                 return new Identifier("new.target", location);
             }
 
+            if (parserContext.match(TokenType.IMPORT)) {
+                throw new JSSyntaxErrorException("Unexpected import call in constructor position");
+            }
+
             Expression callee = parseMemberExpression();
 
             while (true) {
@@ -197,10 +201,6 @@ final class ExpressionPrimaryParser {
                     } while (parserContext.match(TokenType.COMMA));
                 }
                 parserContext.expect(TokenType.RPAREN);
-            }
-
-            if (callee instanceof ImportExpression) {
-                throw new JSSyntaxErrorException("Unexpected import call in constructor position");
             }
 
             return new NewExpression(callee, args, location);

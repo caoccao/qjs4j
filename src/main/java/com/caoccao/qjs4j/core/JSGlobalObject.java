@@ -2840,11 +2840,18 @@ public final class JSGlobalObject {
                 if (!isDirectEvalCall) {
                     suspendedOverlaySnapshot = realmContext.suspendEvalOverlays();
                 }
+                String evalFilename = "<eval>";
+                JSStackFrame callerStackFrame = callerContext.getCurrentStackFrame();
+                if (callerStackFrame != null
+                        && callerStackFrame.filename() != null
+                        && !callerStackFrame.filename().isEmpty()) {
+                    evalFilename = callerStackFrame.filename();
+                }
                 JSValue result;
                 try {
                     result = isDirectEvalCall
-                            ? realmContext.evalDirect(code, "<eval>", inheritedStrictMode)
-                            : realmContext.evalIndirect(code, "<eval>");
+                            ? realmContext.evalDirect(code, evalFilename, inheritedStrictMode)
+                            : realmContext.evalIndirect(code, evalFilename);
                 } finally {
                     if (suspendedOverlaySnapshot != null) {
                         realmContext.resumeEvalOverlays(suspendedOverlaySnapshot);
