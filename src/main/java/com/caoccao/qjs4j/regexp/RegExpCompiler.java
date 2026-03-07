@@ -721,8 +721,8 @@ public final class RegExpCompiler {
                             value = (value << 4) | hexVal;
                             digitCount++;
                             context.pos++;
-                            if (digitCount > 6) {
-                                throw new RegExpSyntaxException("Unicode escape too long");
+                            if (value > 0x10FFFF) {
+                                throw new RegExpSyntaxException("Unicode escape out of range");
                             }
                         }
                         if (digitCount == 0) {

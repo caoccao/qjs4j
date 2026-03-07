@@ -412,7 +412,7 @@ final class ExpressionCompiler {
                 String flags = lastSlash < source.length() - 1 ? source.substring(lastSlash + 1) : "";
                 try {
                     JSRegExp regexp = new JSRegExp(pattern, flags);
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, regexp);
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.REGEXP, regexp);
                     return;
                 } catch (Exception e) {
                     throw new JSSyntaxErrorException("Invalid regular expression literal: " + source);

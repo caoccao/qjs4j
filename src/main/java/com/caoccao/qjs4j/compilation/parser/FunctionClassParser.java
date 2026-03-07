@@ -619,6 +619,83 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         return new BlockStatement(body, location);
     }
 
+    /**
+     * Parse export default function declaration with optional name.
+     * Per ES spec, export default HoistableDeclaration allows anonymous functions.
+     */
+    Statement parseExportDefaultFunctionDeclaration(boolean isAsync) {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.FUNCTION);
+
+        boolean isGenerator = false;
+        if (parserContext.match(TokenType.MUL)) {
+            parserContext.advance();
+            isGenerator = true;
+        }
+
+        // If there's a name, parse as regular function declaration
+        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
+            Identifier id = parserContext.parseIdentifier();
+            // Named function in export default creates a lexical binding for the name
+            parserContext.addModuleLexicalName(id.name());
+            parserContext.enterFunctionContext(isAsync, isGenerator);
+            boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+            parserContext.inClassStaticInit = false;
+            try {
+                boolean savedInFunctionBody = parserContext.inFunctionBody;
+                if (isAsync || isGenerator) {
+                    parserContext.inFunctionBody = false;
+                }
+                parserContext.expect(TokenType.LPAREN);
+                FunctionParams funcParams = parseFunctionParameters();
+                parserContext.inFunctionBody = savedInFunctionBody;
+                BlockStatement body = parseFunctionBody(funcParams, id);
+                SourceLocation fullLocation = new SourceLocation(
+                        location.line(), location.column(), location.offset(),
+                        parserContext.previousTokenEndOffset);
+                return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(),
+                        funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+            } finally {
+                parserContext.inClassStaticInit = savedInClassStaticInit;
+                parserContext.exitFunctionContext(isAsync, isGenerator);
+            }
+        }
+
+        // Anonymous: parse as function expression with inferred name "default"
+        Identifier defaultId = new Identifier(JSKeyword.DEFAULT, location);
+        parserContext.enterFunctionContext(isAsync, isGenerator);
+        boolean savedInClassStaticInit = parserContext.inClassStaticInit;
+        parserContext.inClassStaticInit = false;
+        try {
+            boolean savedInFunctionBody = parserContext.inFunctionBody;
+            if (isAsync || isGenerator) {
+                parserContext.inFunctionBody = false;
+            }
+            parserContext.expect(TokenType.LPAREN);
+            FunctionParams funcParams = parseFunctionParameters();
+            parserContext.inFunctionBody = savedInFunctionBody;
+            BlockStatement body = parseFunctionBody(funcParams, defaultId);
+            SourceLocation fullLocation = new SourceLocation(
+                    location.line(), location.column(), location.offset(),
+                    parserContext.previousTokenEndOffset);
+            return new FunctionDeclaration(defaultId, funcParams.params(), funcParams.defaults(),
+                    funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+        } finally {
+            parserContext.inClassStaticInit = savedInClassStaticInit;
+            parserContext.exitFunctionContext(isAsync, isGenerator);
+        }
+    }
+
+    /**
+     * Parse export default async function declaration with optional name.
+     */
+    Statement parseExportDefaultAsyncFunctionDeclaration() {
+        SourceLocation asyncLocation = parserContext.getLocation();
+        parserContext.advance(); // consume 'async'
+        return parseExportDefaultFunctionDeclaration(true);
+    }
+
     FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
         return parseFunctionDeclaration(isAsync, isGenerator, null);
     }

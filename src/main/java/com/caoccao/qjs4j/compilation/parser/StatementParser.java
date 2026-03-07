@@ -169,14 +169,21 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 && "with".equals(parserContext.currentToken.value())) {
             parserContext.advance(); // consume 'with'
             parserContext.expect(TokenType.LBRACE);
+            Set<String> attributeKeys = new HashSet<>();
             while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 // Parse key: either identifier or string
+                String key;
                 if (parserContext.match(TokenType.STRING)) {
+                    key = parserContext.currentToken.value();
                     parserContext.advance();
                 } else if (parserContext.match(TokenType.IDENTIFIER)) {
+                    key = parserContext.currentToken.value();
                     parserContext.advance();
                 } else {
                     throw new JSSyntaxErrorException("identifier expected");
+                }
+                if (!attributeKeys.add(key)) {
+                    throw new JSSyntaxErrorException("Duplicate attribute key '" + key + "'");
                 }
                 parserContext.expect(TokenType.COLON);
                 parserContext.expect(TokenType.STRING);
@@ -266,11 +273,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.currentToken.escaped()) {
                 throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
             }
+            parserContext.addModuleExportedName("default");
             parserContext.advance();
 
             if (parserContext.match(TokenType.CLASS)) {
                 // export default class { ... } — infer name "default" per spec
                 ClassExpression classExpr = delegates.functions.parseClassExpression();
+                String className = classExpr.id() != null ? classExpr.id().name() : null;
                 if (classExpr.id() == null) {
                     classExpr = new ClassExpression(
                             new Identifier(JSKeyword.DEFAULT, classExpr.location()),
@@ -278,12 +287,16 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                             classExpr.body(),
                             classExpr.location());
                 }
+                // Named class in export default creates a lexical binding
+                if (className != null) {
+                    parserContext.addModuleLexicalName(className);
+                }
                 return new ExpressionStatement(classExpr, location);
             } else if (parserContext.match(TokenType.FUNCTION)) {
-                return delegates.functions.parseFunctionDeclaration(false, false);
+                return delegates.functions.parseExportDefaultFunctionDeclaration(false);
             } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
                     && parserContext.peek().type() == TokenType.FUNCTION) {
-                return parseAsyncDeclaration();
+                return delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
             } else {
                 // export default <expression>;
                 Expression expr = delegates.expressions.parseAssignmentExpression();
@@ -292,52 +305,196 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
         }
 
-        // export var/let/const/function/class ...
-        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)) {
-            return parseVariableDeclaration();
-        }
-        if (parserContext.match(TokenType.FUNCTION)) {
-            return delegates.functions.parseFunctionDeclaration(false, false);
-        }
-        if (parserContext.match(TokenType.CLASS)) {
-            return delegates.functions.parseClassDeclaration();
-        }
-        if (parserContext.match(TokenType.LBRACE)) {
+        // export * from 'module';
+        // export * as name from 'module';
+        // export * as "string" from 'module';
+        if (parserContext.match(TokenType.MUL)) {
             parserContext.advance();
-            while (!parserContext.match(TokenType.RBRACE)) {
-                if (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
-                    continue;
-                }
-                parserContext.parseIdentifier();
-                if (parserContext.match(TokenType.IDENTIFIER)
-                        && JSKeyword.AS.equals(parserContext.currentToken.value())) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
-                if (parserContext.match(TokenType.AS)) {
-                    if (parserContext.currentToken.escaped()) {
-                        throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                    }
-                    parserContext.advance();
-                    parserContext.parseIdentifier();
-                }
-                if (parserContext.match(TokenType.COMMA)) {
-                    parserContext.advance();
-                }
-            }
-            parserContext.expect(TokenType.RBRACE);
-            if (parserContext.match(TokenType.FROM)) {
+            if (parserContext.match(TokenType.AS)) {
                 if (parserContext.currentToken.escaped()) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
                 parserContext.advance();
-                parserContext.expect(TokenType.STRING);
+                // export name can be identifier or string literal
+                String exportedName = parseModuleExportNameAndReturn();
+                parserContext.addModuleExportedName(exportedName);
             }
+            expectContextualKeyword(TokenType.FROM, "from");
+            parserContext.expect(TokenType.STRING);
+            parseWithClause();
+            parserContext.consumeSemicolon();
+            return new BlockStatement(List.of(), location);
+        }
+
+        // export var/let/const/function/class ...
+        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)) {
+            boolean isVar = parserContext.match(TokenType.VAR);
+            Statement decl = parseVariableDeclaration();
+            // Track exported names from declaration
+            collectDeclaredNames(decl, isVar);
+            return decl;
+        }
+        if (parserContext.match(TokenType.FUNCTION)) {
+            Statement decl = delegates.functions.parseFunctionDeclaration(false, false);
+            collectDeclaredNames(decl, false);
+            return decl;
+        }
+        if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
+                && parserContext.peek().type() == TokenType.FUNCTION) {
+            Statement decl = parseAsyncDeclaration();
+            collectDeclaredNames(decl, false);
+            return decl;
+        }
+        if (parserContext.match(TokenType.CLASS)) {
+            Statement decl = delegates.functions.parseClassDeclaration();
+            collectDeclaredNames(decl, false);
+            return decl;
+        }
+        if (parserContext.match(TokenType.LBRACE)) {
+            parseExportNamedSpecifiers();
             parserContext.consumeSemicolon();
             return new BlockStatement(List.of(), location);
         }
 
         throw new JSSyntaxErrorException("Unexpected export syntax");
+    }
+
+    /**
+     * Collect declared names from an exported declaration and register them as exported names.
+     */
+    private void collectDeclaredNames(Statement decl, boolean isVar) {
+        if (decl instanceof VariableDeclaration varDecl) {
+            for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                collectPatternNames(declarator.id(), name -> {
+                    parserContext.addModuleExportedName(name);
+                });
+            }
+        } else if (decl instanceof FunctionDeclaration funcDecl) {
+            if (funcDecl.id() != null) {
+                parserContext.addModuleExportedName(funcDecl.id().name());
+            }
+        } else if (decl instanceof ClassDeclaration classDecl) {
+            if (classDecl.id() != null) {
+                parserContext.addModuleExportedName(classDecl.id().name());
+            }
+        }
+    }
+
+    /**
+     * Collect binding names from a pattern (identifier, array, object destructuring).
+     */
+    private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
+        if (pattern instanceof Identifier id) {
+            consumer.accept(id.name());
+        } else if (pattern instanceof ObjectPattern objPat) {
+            for (ObjectPattern.Property prop : objPat.properties()) {
+                collectPatternNames(prop.value(), consumer);
+            }
+            if (objPat.restElement() != null) {
+                collectPatternNames(objPat.restElement(), consumer);
+            }
+        } else if (pattern instanceof ArrayPattern arrayPat) {
+            for (Pattern elem : arrayPat.elements()) {
+                if (elem != null) {
+                    collectPatternNames(elem, consumer);
+                }
+            }
+        } else if (pattern instanceof RestElement rest) {
+            collectPatternNames(rest.argument(), consumer);
+        } else if (pattern instanceof AssignmentPattern assign) {
+            collectPatternNames(assign.left(), consumer);
+        }
+    }
+
+    /**
+     * Parse a module export name: either an identifier name or a string literal.
+     * ModuleExportName :: IdentifierName | StringLiteral
+     * Returns the parsed name for tracking purposes.
+     */
+    private String parseModuleExportNameAndReturn() {
+        if (parserContext.match(TokenType.STRING)) {
+            String name = parserContext.currentToken.value();
+            // ES2024: ModuleExportName string must not contain unpaired surrogates
+            if (ParserContext.hasUnpairedSurrogate(name)) {
+                throw new JSSyntaxErrorException(
+                        "Invalid module export name: unpaired surrogate");
+            }
+            parserContext.advance();
+            return name;
+        } else {
+            // Any IdentifierName including keywords is allowed as export name
+            String name = parseImportIdentifierName();
+            return name;
+        }
+    }
+
+    /**
+     * Parse a module export name without returning value (backward compat).
+     */
+    private void parseModuleExportName() {
+        parseModuleExportNameAndReturn();
+    }
+
+    /**
+     * Parse export { specifiers } and optional 'from' clause.
+     * Handles string export/import names per ES2024 ModuleExportName.
+     */
+    private void parseExportNamedSpecifiers() {
+        parserContext.advance(); // consume '{'
+        boolean hasStringLocalName = false;
+        List<String[]> specifiers = new ArrayList<>(); // [localName, exportedName]
+        while (!parserContext.match(TokenType.RBRACE)) {
+            if (parserContext.match(TokenType.COMMA)) {
+                parserContext.advance();
+                continue;
+            }
+            // The local name in export { local as exported }
+            boolean localIsString = parserContext.match(TokenType.STRING);
+            if (localIsString) {
+                hasStringLocalName = true;
+            }
+            String localName = parseModuleExportNameAndReturn();
+            String exportedName = localName;
+            if (parserContext.match(TokenType.IDENTIFIER)
+                    && JSKeyword.AS.equals(parserContext.currentToken.value())) {
+                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+            }
+            if (parserContext.match(TokenType.AS)) {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+                }
+                parserContext.advance();
+                // The exported name can also be identifier or string
+                exportedName = parseModuleExportNameAndReturn();
+            }
+            specifiers.add(new String[]{localName, exportedName});
+            if (parserContext.match(TokenType.COMMA)) {
+                parserContext.advance();
+            }
+        }
+        parserContext.expect(TokenType.RBRACE);
+        boolean hasFrom = false;
+        if (parserContext.match(TokenType.FROM)) {
+            if (parserContext.currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
+            }
+            hasFrom = true;
+            parserContext.advance();
+            parserContext.expect(TokenType.STRING);
+            parseWithClause();
+        } else if (hasStringLocalName) {
+            // String local names require a 'from' clause per spec
+            throw new JSSyntaxErrorException(
+                    "Expected 'from' but got '" + parserContext.currentToken.value() + "'");
+        }
+        // Register exported names and track local bindings
+        for (String[] spec : specifiers) {
+            parserContext.addModuleExportedName(spec[1]);
+            if (!hasFrom) {
+                // Without 'from', the local names must be bound locally
+                parserContext.pendingExportBindings.add(spec[0]);
+            }
+        }
     }
 
     Statement parseExpressionStatement() {
@@ -565,7 +722,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.advance(); // consume 'defer'
             parserContext.advance(); // consume '*'
             expectContextualKeyword(TokenType.AS, "as");
-            parserContext.parseIdentifier();
+            Identifier nsBinding = parserContext.parseIdentifier();
+            parserContext.addModuleLexicalName(nsBinding.name());
             expectContextualKeyword(TokenType.FROM, "from");
             parserContext.expect(TokenType.STRING);
             parseWithClause();
@@ -577,7 +735,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (parserContext.match(TokenType.MUL)) {
             parserContext.advance();
             expectContextualKeyword(TokenType.AS, "as");
-            parserContext.parseIdentifier();
+            Identifier nsBinding = parserContext.parseIdentifier();
+            parserContext.addModuleLexicalName(nsBinding.name());
             expectContextualKeyword(TokenType.FROM, "from");
             parserContext.expect(TokenType.STRING);
             parseWithClause();
@@ -598,6 +757,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // Default import, possibly with named/namespace: import foo from 'module';
         if (parserContext.match(TokenType.IDENTIFIER)) {
             Identifier defaultBinding = parserContext.parseIdentifier();
+            parserContext.addModuleLexicalName(defaultBinding.name());
             Set<String> boundNames = new HashSet<>();
             boundNames.add(defaultBinding.name());
             if (parserContext.match(TokenType.COMMA)) {
@@ -606,6 +766,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.advance();
                     expectContextualKeyword(TokenType.AS, "as");
                     Identifier nsBinding = parserContext.parseIdentifier();
+                    parserContext.addModuleLexicalName(nsBinding.name());
                     if (boundNames.contains(nsBinding.name())) {
                         throw new JSSyntaxErrorException("duplicate import binding");
                     }
@@ -634,6 +795,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             case STRING -> {
                 String name = parserContext.currentToken.value();
+                // ES2024: ModuleExportName string must not contain unpaired surrogates
+                if (ParserContext.hasUnpairedSurrogate(name)) {
+                    throw new JSSyntaxErrorException(
+                            "Invalid module export name: unpaired surrogate");
+                }
                 parserContext.advance();
                 return name;
             }
@@ -650,9 +816,23 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     Statement parseLabeledStatement() {
         SourceLocation location = parserContext.getLocation();
         Identifier label = parserContext.parseIdentifier();
+        // ES2024 14.13.1: It is a Syntax Error if any source text is matched by
+        // this production that also matches the LabelIdentifier of an enclosing LabelledStatement.
+        for (Set<String> labels : parserContext.labelStack) {
+            if (labels.contains(label.name())) {
+                throw new JSSyntaxErrorException("Label '" + label.name() + "' has already been declared");
+            }
+        }
         parserContext.expect(TokenType.COLON);
-        Statement body = parseStatement();
-        return new LabeledStatement(label, body, location);
+        Set<String> currentLabels = new HashSet<>();
+        currentLabels.add(label.name());
+        parserContext.labelStack.push(currentLabels);
+        try {
+            Statement body = parseStatement();
+            return new LabeledStatement(label, body, location);
+        } finally {
+            parserContext.labelStack.pop();
+        }
     }
 
     private void parseNamedImportSpecifiers() {
@@ -671,6 +851,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 } else {
                     localName = importName;
                 }
+                // In strict mode (modules are always strict), eval/arguments are forbidden
+                if (parserContext.strictMode
+                        && (JSKeyword.EVAL.equals(localName) || JSKeyword.ARGUMENTS.equals(localName))) {
+                    throw new JSSyntaxErrorException(
+                            "Unexpected eval or arguments in strict mode");
+                }
+                parserContext.addModuleLexicalName(localName);
                 if (!boundNames.add(localName)) {
                     throw new JSSyntaxErrorException("duplicate import binding");
                 }

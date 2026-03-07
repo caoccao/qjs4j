@@ -25,7 +25,8 @@ public record Token(
         int line,
         int column,
         int offset,
-        boolean escaped
+        boolean escaped,
+        boolean hasOctalEscape
 ) {
     public Token(
             TokenType type,
@@ -33,6 +34,16 @@ public record Token(
             int line,
             int column,
             int offset) {
-        this(type, value, line, column, offset, false);
+        this(type, value, line, column, offset, false, false);
+    }
+
+    public Token(
+            TokenType type,
+            String value,
+            int line,
+            int column,
+            int offset,
+            boolean escaped) {
+        this(type, value, line, column, offset, escaped, false);
     }
 }

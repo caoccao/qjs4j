@@ -3195,6 +3195,25 @@ public final class OpcodeHandler {
         throw new JSVirtualMachineException("Invalid opcode at PC " + executionContext.pc);
     }
 
+    static void handleRegexp(Opcode op, ExecutionContext executionContext) {
+        // Read constant index from instruction argument
+        int pc = executionContext.pc;
+        int constIndex = ((executionContext.instructions[pc + 1] & 0xFF) << 24)
+                | ((executionContext.instructions[pc + 2] & 0xFF) << 16)
+                | ((executionContext.instructions[pc + 3] & 0xFF) << 8)
+                | (executionContext.instructions[pc + 4] & 0xFF);
+        JSValue template = executionContext.bytecode.getConstants()[constIndex];
+        if (template instanceof JSRegExp templateRegExp) {
+            // Create a new JSRegExp from the template's pattern and flags
+            JSRegExp newRegExp = new JSRegExp(templateRegExp.getPattern(), templateRegExp.getFlags());
+            executionContext.virtualMachine.initializeConstantValueIfNeeded(newRegExp);
+            executionContext.stack[executionContext.sp++] = newRegExp;
+        } else {
+            throw new JSVirtualMachineException("REGEXP constant is not a JSRegExp");
+        }
+        executionContext.pc = pc + op.getSize();
+    }
+
     static void handleIsNull(Opcode op, ExecutionContext executionContext) {
         int sp = executionContext.sp;
         JSStackValue[] stack = executionContext.stack;

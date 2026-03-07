@@ -16,16 +16,17 @@
 
 package com.caoccao.qjs4j.compilation.parser;
 
-import com.caoccao.qjs4j.compilation.ast.Expression;
-import com.caoccao.qjs4j.compilation.ast.Program;
-import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.compilation.ast.Statement;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Recursive descent parser for JavaScript.
@@ -117,6 +118,10 @@ public final class Parser {
             }
         }
 
+        if (parserContext.moduleMode) {
+            validateModuleEarlyErrors(body);
+        }
+
         return new Program(body, parserContext.moduleMode,
                 strict || parserContext.moduleMode || parserContext.inheritedStrictMode, location);
     }
@@ -129,6 +134,106 @@ public final class Parser {
     public void setClassFieldEval(boolean classFieldEval) {
         if (classFieldEval) {
             parserContext.inClassFieldInitializer = true;
+        }
+    }
+
+    /**
+     * Validate module-level early errors per ES2024 16.2.1.1.
+     * In modules, top-level function declarations are lexical (not var-hoisted),
+     * so duplicate function names are errors. Also checks for lex/var conflicts,
+     * duplicate lexical declarations, and unresolvable export bindings.
+     */
+    private void validateModuleEarlyErrors(List<Statement> body) {
+        // Collect all top-level bound names (lex + var + import bindings)
+        Set<String> allBoundNames = new HashSet<>();
+        Set<String> lexicalNames = new HashSet<>();
+        Set<String> varNames = new HashSet<>();
+
+        for (Statement stmt : body) {
+            if (stmt instanceof VariableDeclaration varDecl) {
+                boolean isVar = varDecl.kind() == VariableKind.VAR;
+                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                    collectModulePatternNames(declarator.id(), name -> {
+                        allBoundNames.add(name);
+                        if (isVar) {
+                            if (lexicalNames.contains(name)) {
+                                throw new JSSyntaxErrorException(
+                                        "Identifier '" + name + "' has already been declared");
+                            }
+                            varNames.add(name);
+                        } else {
+                            if (varNames.contains(name) || !lexicalNames.add(name)) {
+                                throw new JSSyntaxErrorException(
+                                        "Identifier '" + name + "' has already been declared");
+                            }
+                        }
+                    });
+                }
+            } else if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
+                String name = funcDecl.id().name();
+                allBoundNames.add(name);
+                // In modules (always strict), all functions are lexical
+                if (varNames.contains(name) || !lexicalNames.add(name)) {
+                    throw new JSSyntaxErrorException(
+                            "Identifier '" + name + "' has already been declared");
+                }
+            } else if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
+                String name = classDecl.id().name();
+                allBoundNames.add(name);
+                if (varNames.contains(name) || !lexicalNames.add(name)) {
+                    throw new JSSyntaxErrorException(
+                            "Identifier '" + name + "' has already been declared");
+                }
+            } else if (stmt instanceof ExpressionStatement exprStmt
+                    && exprStmt.expression() instanceof ClassExpression classExpr
+                    && classExpr.id() != null
+                    && !"default".equals(classExpr.id().name())) {
+                // export default class with explicit name
+                String name = classExpr.id().name();
+                allBoundNames.add(name);
+                if (varNames.contains(name) || !lexicalNames.add(name)) {
+                    throw new JSSyntaxErrorException(
+                            "Identifier '" + name + "' has already been declared");
+                }
+            }
+            // Note: import bindings are tracked via pendingExportBindings check only
+        }
+
+        // Also add import bindings to allBoundNames
+        // Import local names are always lexical bindings
+        allBoundNames.addAll(parserContext.moduleLexicalNames);
+        allBoundNames.addAll(parserContext.moduleVarNames);
+
+        // ES2024 16.2.1.1: For each name in ExportedBindings,
+        // it must be in the module's BoundNames.
+        for (String exportBinding : parserContext.pendingExportBindings) {
+            if (!allBoundNames.contains(exportBinding)) {
+                throw new JSSyntaxErrorException(
+                        "Export '" + exportBinding + "' is not defined");
+            }
+        }
+    }
+
+    private void collectModulePatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
+        if (pattern instanceof Identifier id) {
+            consumer.accept(id.name());
+        } else if (pattern instanceof ObjectPattern objPat) {
+            for (ObjectPattern.Property prop : objPat.properties()) {
+                collectModulePatternNames(prop.value(), consumer);
+            }
+            if (objPat.restElement() != null) {
+                collectModulePatternNames(objPat.restElement(), consumer);
+            }
+        } else if (pattern instanceof ArrayPattern arrayPat) {
+            for (Pattern elem : arrayPat.elements()) {
+                if (elem != null) {
+                    collectModulePatternNames(elem, consumer);
+                }
+            }
+        } else if (pattern instanceof RestElement rest) {
+            collectModulePatternNames(rest.argument(), consumer);
+        } else if (pattern instanceof AssignmentPattern assign) {
+            collectModulePatternNames(assign.left(), consumer);
         }
     }
 }

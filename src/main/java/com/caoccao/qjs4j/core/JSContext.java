@@ -1476,7 +1476,10 @@ public final class JSContext implements AutoCloseable {
             // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
             // In strict mode functions called without receiver, 'this' is undefined, and
             // eval('this') must see that same undefined value, not the global object.
-            JSValue evalThisArg = jsGlobalObject.getGlobalObject();
+            // ES2024 16.2.1.6.4: Module top-level 'this' is undefined.
+            JSValue evalThisArg = isModule && !isDirectEval
+                    ? JSUndefined.INSTANCE
+                    : jsGlobalObject.getGlobalObject();
             JSValue evalNewTarget = JSUndefined.INSTANCE;
             if (isDirectEval && directEvalCallerFrame != null) {
                 evalThisArg = directEvalCallerFrame.getThisArg();

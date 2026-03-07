@@ -43,6 +43,7 @@ public final class Lexer {
     int position;
     private TokenType lastTokenType;
     private Token lookahead;
+    private boolean moduleMode;
     private boolean strictMode;
 
     public Lexer(String source) {
@@ -53,6 +54,7 @@ public final class Lexer {
         this.column = 1;
         this.lookahead = null;
         this.lastTokenType = null;
+        this.moduleMode = false;
         this.strictMode = false;
     }
 
@@ -743,6 +745,7 @@ public final class Lexer {
 
     private Token scanString(char quote, int startPos, int startLine, int startColumn) {
         StringBuilder value = new StringBuilder();
+        boolean hasOctalEscape = false;
 
         while (!isAtEnd() && peek() != quote) {
             if (peek() == '\n' || peek() == '\r') {
@@ -766,11 +769,17 @@ public final class Lexer {
                     case 'f' -> value.append('\f');
                     case 'v' -> value.append('\u000B');
                     case '0' -> {
-                        if (!isAtEnd() && peek() >= '0' && peek() <= '7') {
+                        if (!isAtEnd() && peek() >= '0' && peek() <= '9') {
                             if (strictMode) {
                                 throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
                             }
-                            value.append(parseLegacyOctalEscape(escaped));
+                            hasOctalEscape = true;
+                            if (peek() <= '7') {
+                                value.append(parseLegacyOctalEscape(escaped));
+                            } else {
+                                // \08, \09 in non-strict: \0 = null char, 8/9 is next literal
+                                value.append('\0');
+                            }
                         } else {
                             value.append('\0');
                         }
@@ -806,14 +815,24 @@ public final class Lexer {
                         line++;
                         column = 1;
                     }
+                    case '\u2028', '\u2029' -> {
+                        // Line continuation with Unicode line/paragraph separator
+                        line++;
+                        column = 1;
+                    }
                     default -> {
                         if (escaped >= '1' && escaped <= '7') {
                             if (strictMode) {
                                 throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
                             }
+                            hasOctalEscape = true;
                             value.append(parseLegacyOctalEscape(escaped));
-                        } else if (strictMode && (escaped == '8' || escaped == '9')) {
-                            throw new JSSyntaxErrorException("\\8 and \\9 are not allowed in strict mode");
+                        } else if (escaped == '8' || escaped == '9') {
+                            if (strictMode) {
+                                throw new JSSyntaxErrorException("\\8 and \\9 are not allowed in strict mode");
+                            }
+                            hasOctalEscape = true;
+                            value.append(escaped);
                         } else {
                             value.append(escaped);
                         }
@@ -829,7 +848,8 @@ public final class Lexer {
         }
         advance(); // consume closing quote
 
-        return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos);
+        return new Token(TokenType.STRING, value.toString(), startLine, startColumn, startPos,
+                false, hasOctalEscape);
     }
 
     private Token scanTemplate(int startPos, int startLine, int startColumn) {
@@ -1004,6 +1024,10 @@ public final class Lexer {
         return token;
     }
 
+    public void setModuleMode(boolean moduleMode) {
+        this.moduleMode = moduleMode;
+    }
+
     public void setStrictMode(boolean strictMode) {
         this.strictMode = strictMode;
     }
@@ -1098,10 +1122,14 @@ public final class Lexer {
             }
 
             // Annex B: HTML-like comment <!-- (treated as single-line comment)
+            // Not allowed in module code per ES spec B.1.1
             if (c == '<' && position + 3 < source.length()
                     && source.charAt(position + 1) == '!'
                     && source.charAt(position + 2) == '-'
                     && source.charAt(position + 3) == '-') {
+                if (moduleMode) {
+                    throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
+                }
                 advance(); // <
                 advance(); // !
                 advance(); // -
@@ -1114,10 +1142,14 @@ public final class Lexer {
 
             // Annex B: HTML-like close comment --> (treated as single-line comment
             // only when preceded by a line terminator per ES spec)
+            // Not allowed in module code per ES spec B.1.1
             if (seenLineTerminator
                     && c == '-' && position + 2 < source.length()
                     && source.charAt(position + 1) == '-'
                     && source.charAt(position + 2) == '>') {
+                if (moduleMode) {
+                    throw new JSSyntaxErrorException("HTML comments are not allowed in modules");
+                }
                 advance(); // -
                 advance(); // -
                 advance(); // >

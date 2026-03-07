@@ -78,7 +78,7 @@ public enum Opcode {
     THROW_ERROR(49, 6, 0, 0, OpcodeHandler::handleThrowError),                 // throw error by atom name and u8 type
     EVAL(50, 5, -1, 1, OpcodeHandler::handleEval),                             // func args... -> ret_val
     APPLY_EVAL(51, 3, 2, 1, OpcodeHandler::handleApplyEval),                   // func array -> ret_eval
-    REGEXP(52, 1, 0, 1, OpcodeHandler::handleInvalid),                         // create RegExp from pattern and bytecode string
+    REGEXP(52, 5, 0, 1, OpcodeHandler::handleRegexp),                          // create new RegExp from constant template
     GET_SUPER(53, 1, 1, 1, OpcodeHandler::handleGetSuper),                     // obj -> super
     IMPORT(54, 1, 2, 1, OpcodeHandler::handleImport),                           // specifier options -> promise (dynamic module import)
     GET_VAR_UNDEF(55, 5, 0, 1, OpcodeHandler::handleGetVarUndef),              // push undefined if variable does not exist -> val

@@ -25,7 +25,9 @@ import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -95,6 +97,12 @@ final class ParserContext {
     int previousTokenLine;
     boolean strictMode;
     boolean superPropertyAllowed;
+    // Module-level early error tracking (ES2024 16.2.1.1)
+    final Set<String> moduleExportedNames = new HashSet<>();
+    final Set<String> moduleLexicalNames = new HashSet<>();
+    final Set<String> moduleVarNames = new HashSet<>();
+    final List<String> pendingExportBindings = new ArrayList<>();
+    final Deque<Set<String>> labelStack = new ArrayDeque<>();
 
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
                   int functionNesting, int asyncFunctionNesting,
@@ -112,8 +120,65 @@ final class ParserContext {
         this.generatorFunctionNesting = generatorFunctionNesting;
         this.newTargetNesting = newTargetNesting;
         this.superPropertyAllowed = initialSuperPropertyAllowed;
+        lexer.setModuleMode(moduleMode);
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
+    }
+
+    /**
+     * Register a module exported name, checking for duplicates (ES2024 16.2.1.1 Early Errors).
+     */
+    void addModuleExportedName(String name) {
+        if (moduleMode && !moduleExportedNames.add(name)) {
+            throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
+        }
+    }
+
+    /**
+     * Register a module-level lexical declaration name (let/const/class/function in modules).
+     */
+    void addModuleLexicalName(String name) {
+        if (moduleMode && functionNesting == 0) {
+            if (moduleVarNames.contains(name)) {
+                throw new JSSyntaxErrorException(
+                        "Identifier '" + name + "' has already been declared");
+            }
+            if (!moduleLexicalNames.add(name)) {
+                throw new JSSyntaxErrorException(
+                        "Identifier '" + name + "' has already been declared");
+            }
+        }
+    }
+
+    /**
+     * Register a module-level var declaration name.
+     */
+    void addModuleVarName(String name) {
+        if (moduleMode && functionNesting == 0) {
+            if (moduleLexicalNames.contains(name)) {
+                throw new JSSyntaxErrorException(
+                        "Identifier '" + name + "' has already been declared");
+            }
+            moduleVarNames.add(name);
+        }
+    }
+
+    /**
+     * Check if a string contains unpaired surrogates.
+     */
+    static boolean hasUnpairedSurrogate(String str) {
+        for (int i = 0; i < str.length(); i++) {
+            char c = str.charAt(i);
+            if (Character.isHighSurrogate(c)) {
+                if (i + 1 >= str.length() || !Character.isLowSurrogate(str.charAt(i + 1))) {
+                    return true;
+                }
+                i++; // skip low surrogate
+            } else if (Character.isLowSurrogate(c)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- Token utilities ----
@@ -393,6 +458,7 @@ final class ParserContext {
      */
     boolean parseDirectives(List<Statement> body) {
         boolean hasUseStrict = false;
+        List<Token> prologueTokens = new ArrayList<>();
 
         while (match(TokenType.STRING)) {
             Token directiveToken = currentToken;
@@ -427,6 +493,7 @@ final class ParserContext {
                 break;
             }
 
+            prologueTokens.add(directiveToken);
             advance();
             if (match(TokenType.SEMICOLON)) {
                 advance();
@@ -441,6 +508,16 @@ final class ParserContext {
 
             if (isRawUseStrictDirective(directiveToken)) {
                 hasUseStrict = true;
+            }
+        }
+
+        // Retroactively check: if "use strict" was found, any preceding directive
+        // string with legacy octal/non-octal escapes is a SyntaxError.
+        if (hasUseStrict) {
+            for (Token token : prologueTokens) {
+                if (token.hasOctalEscape()) {
+                    throw new JSSyntaxErrorException("Octal escape sequences are not allowed in strict mode");
+                }
             }
         }
 
