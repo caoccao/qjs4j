@@ -259,6 +259,33 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testLegacyOctalValues() {
+        assertIntegerWithJavet(
+                "070",
+                "07",
+                "00",
+                "077",
+                "001");
+    }
+
+    @Test
+    public void testNumericSeparatorInLegacyOctal() {
+        assertErrorWithJavet(
+                "00_0",
+                "01_0",
+                "07_0",
+                "08_0",
+                "09_0");
+    }
+
+    @Test
+    public void testRegexBackslashLineTerminator() {
+        assertErrorWithJavet(
+                "eval('/' + String.fromCharCode(92, 10) + '/')",
+                "eval('/' + String.fromCharCode(92, 13) + '/')");
+    }
+
+    @Test
     public void testStrictModeOctalLiterals() {
         assertErrorWithJavet(
                 "'use strict'; 010",

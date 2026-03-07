@@ -400,6 +400,16 @@ public final class Lexer {
         boolean hasExponent = false;
         scanDigitsWithNumericSeparators(10, true, source.charAt(startPos) == '0');
 
+        // Numeric separators are not allowed in legacy-octal-like or non-octal decimal
+        // literals (e.g. 00_0, 01_0, 08_0, 09_0). These start with 0 followed by digits.
+        if (source.charAt(startPos) == '0' && position > startPos + 1) {
+            for (int i = startPos + 1; i < position; i++) {
+                if (source.charAt(i) == '_') {
+                    throw new JSSyntaxErrorException("Invalid or unexpected token");
+                }
+            }
+        }
+
         // Check for decimal point. Match QuickJS behavior: for decimal literals that already
         // have an integer part, '.' is part of the numeric token even without following digits.
         if (!isAtEnd() && peek() == '.') {
@@ -699,20 +709,25 @@ public final class Lexer {
                 if (isAtEnd()) {
                     throw new JSSyntaxErrorException("Invalid or unexpected token");
                 }
+                // RegularExpressionBackslashSequence requires a RegularExpressionNonTerminator
+                // after the backslash — line terminators are not allowed.
+                if (isLineTerminator(peek())) {
+                    break;
+                }
                 pattern.append(advance()); // append escaped character
                 continue;
             }
 
             // Newlines and Unicode line terminators (LS \u2028, PS \u2029) terminate regex
             if (isLineTerminator(c)) {
-                throw new JSSyntaxErrorException("Invalid or unexpected token");
+                break;
             }
 
             pattern.append(advance());
         }
 
         if (!terminated) {
-            throw new JSSyntaxErrorException("Invalid or unexpected token");
+            throw new JSSyntaxErrorException("Invalid regular expression: missing /");
         }
 
         // Scan flags (g, i, m, s, u, y)
