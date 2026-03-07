@@ -1156,6 +1156,15 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+            if (!object.isExtensible()) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot define private field on a non-extensible object");
+                stack[sp++] = objectValue;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             object.set(PropertyKey.fromSymbol(symbol), value);
         }
 
@@ -2827,14 +2836,16 @@ public final class OpcodeHandler {
                     moduleNamespace = context.loadDynamicImportModuleDeferred(
                             specifierString,
                             referrerFilename,
-                            importAttributes);
+                            importAttributes,
+                            promise,
+                            resolveState);
                 } else {
                     moduleNamespace = context.loadDynamicImportModule(
                             specifierString,
                             referrerFilename,
                             importAttributes);
                 }
-                if (!resolveState.alreadyResolved) {
+                if (moduleNamespace != null && !resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
                     promise.resolve(context, moduleNamespace);
                 }

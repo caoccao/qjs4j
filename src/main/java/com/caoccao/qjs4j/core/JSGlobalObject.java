@@ -2802,7 +2802,7 @@ public final class JSGlobalObject {
                     }
                 }
 
-                JSContext.EvalOverlaySnapshot suspendedOverlaySnapshot = null;
+                EvalOverlaySnapshot suspendedOverlaySnapshot = null;
                 if (!isDirectEvalCall) {
                     suspendedOverlaySnapshot = realmContext.suspendEvalOverlays();
                 }
@@ -3326,5 +3326,8 @@ public final class JSGlobalObject {
 
         private record WithObjectCandidate(int depth, JSObject object) {
         }
+    }
+
+    public record EvalOverlaySnapshot(Map<String, JSValue> values, Set<String> absentKeys) {
     }
 }

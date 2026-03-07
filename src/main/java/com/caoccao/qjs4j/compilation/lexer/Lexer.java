@@ -123,8 +123,11 @@ public final class Lexer {
     }
 
     boolean isIdentifierPart(char c) {
-        return Character.isLetterOrDigit(c) || c == '_' || c == '$' ||
-                UnicodeData.isIdentifierPart(c);
+        if (c < 128) {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') || c == '_' || c == '$';
+        }
+        return UnicodeData.isIdentifierPart(c);
     }
 
     // Core scanning logic
@@ -134,8 +137,10 @@ public final class Lexer {
     }
 
     boolean isIdentifierStart(char c) {
-        return Character.isLetter(c) || c == '_' || c == '$' ||
-                UnicodeData.isIdentifierStart(c);
+        if (c < 128) {
+            return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '$';
+        }
+        return UnicodeData.isIdentifierStart(c);
     }
 
     private boolean isIdentifierStartCodePoint(int codePoint) {

@@ -154,6 +154,41 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 && JSKeyword.WITH.equals(parserContext.currentToken.value());
     }
 
+    private void expectContextualKeyword(TokenType type, String keyword) {
+        if (!parserContext.match(type) || parserContext.currentToken.escaped()) {
+            throw new JSSyntaxErrorException(
+                    "Expected '" + keyword + "' but got '" + parserContext.currentToken.value() +
+                            "' at line " + parserContext.currentToken.line() +
+                            ", column " + parserContext.currentToken.column());
+        }
+        parserContext.advance();
+    }
+
+    private void parseWithClause() {
+        if (parserContext.currentToken.type() == TokenType.IDENTIFIER
+                && "with".equals(parserContext.currentToken.value())) {
+            parserContext.advance(); // consume 'with'
+            parserContext.expect(TokenType.LBRACE);
+            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                // Parse key: either identifier or string
+                if (parserContext.match(TokenType.STRING)) {
+                    parserContext.advance();
+                } else if (parserContext.match(TokenType.IDENTIFIER)) {
+                    parserContext.advance();
+                } else {
+                    throw new JSSyntaxErrorException("identifier expected");
+                }
+                parserContext.expect(TokenType.COLON);
+                parserContext.expect(TokenType.STRING);
+                if (!parserContext.match(TokenType.COMMA)) {
+                    break;
+                }
+                parserContext.advance();
+            }
+            parserContext.expect(TokenType.RBRACE);
+        }
+    }
+
     Statement parseAsyncDeclaration() {
         if (parserContext.nextToken.type() == TokenType.FUNCTION) {
             SourceLocation asyncLocation = parserContext.getLocation();
@@ -514,46 +549,75 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         parserContext.expect(TokenType.IMPORT);
 
+        // Side-effect-only import: import 'module';
         if (parserContext.match(TokenType.STRING)) {
             parserContext.advance(); // module specifier
-            parserContext.consumeSemicolon();
-            return null; // Side-effect-only import; ignored until full module linking is implemented.
-        }
-
-        if (parserContext.match(TokenType.MUL)) {
-            parserContext.advance();
-            parserContext.expect(TokenType.AS);
-            parserContext.parseIdentifier();
-            parserContext.expect(TokenType.FROM);
-            parserContext.expect(TokenType.STRING);
-            parserContext.consumeSemicolon();
-            return null; // Resolved by module pre-evaluation import binding setup.
-        }
-
-        if (parserContext.match(TokenType.LBRACE)) {
-            parseNamedImportSpecifiers();
-            parserContext.expect(TokenType.FROM);
-            parserContext.expect(TokenType.STRING);
+            parseWithClause();
             parserContext.consumeSemicolon();
             return null;
         }
 
+        // import defer * as ns from 'module';
+        if (parserContext.match(TokenType.IDENTIFIER)
+                && "defer".equals(parserContext.currentToken.value())
+                && parserContext.peek() != null
+                && parserContext.peek().type() == TokenType.MUL) {
+            parserContext.advance(); // consume 'defer'
+            parserContext.advance(); // consume '*'
+            expectContextualKeyword(TokenType.AS, "as");
+            parserContext.parseIdentifier();
+            expectContextualKeyword(TokenType.FROM, "from");
+            parserContext.expect(TokenType.STRING);
+            parseWithClause();
+            parserContext.consumeSemicolon();
+            return null;
+        }
+
+        // Namespace import: import * as ns from 'module';
+        if (parserContext.match(TokenType.MUL)) {
+            parserContext.advance();
+            expectContextualKeyword(TokenType.AS, "as");
+            parserContext.parseIdentifier();
+            expectContextualKeyword(TokenType.FROM, "from");
+            parserContext.expect(TokenType.STRING);
+            parseWithClause();
+            parserContext.consumeSemicolon();
+            return null;
+        }
+
+        // Named imports: import { x, y as z } from 'module';
+        if (parserContext.match(TokenType.LBRACE)) {
+            parseNamedImportSpecifiers();
+            expectContextualKeyword(TokenType.FROM, "from");
+            parserContext.expect(TokenType.STRING);
+            parseWithClause();
+            parserContext.consumeSemicolon();
+            return null;
+        }
+
+        // Default import, possibly with named/namespace: import foo from 'module';
         if (parserContext.match(TokenType.IDENTIFIER)) {
-            parserContext.parseIdentifier(); // default import binding
+            Identifier defaultBinding = parserContext.parseIdentifier();
+            Set<String> boundNames = new HashSet<>();
+            boundNames.add(defaultBinding.name());
             if (parserContext.match(TokenType.COMMA)) {
                 parserContext.advance();
                 if (parserContext.match(TokenType.MUL)) {
                     parserContext.advance();
-                    parserContext.expect(TokenType.AS);
-                    parserContext.parseIdentifier();
+                    expectContextualKeyword(TokenType.AS, "as");
+                    Identifier nsBinding = parserContext.parseIdentifier();
+                    if (boundNames.contains(nsBinding.name())) {
+                        throw new JSSyntaxErrorException("duplicate import binding");
+                    }
                 } else if (parserContext.match(TokenType.LBRACE)) {
-                    parseNamedImportSpecifiers();
+                    parseNamedImportSpecifiers(boundNames);
                 } else {
                     throw new JSSyntaxErrorException("Unsupported import declaration");
                 }
             }
-            parserContext.expect(TokenType.FROM);
+            expectContextualKeyword(TokenType.FROM, "from");
             parserContext.expect(TokenType.STRING);
+            parseWithClause();
             parserContext.consumeSemicolon();
             return null;
         }
@@ -561,9 +625,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         throw new JSSyntaxErrorException("Unsupported import declaration");
     }
 
-    private void parseImportIdentifierName() {
+    private String parseImportIdentifierName() {
         switch (parserContext.currentToken.type()) {
-            case IDENTIFIER, ASYNC, AWAIT, FROM, OF, YIELD, DEFAULT -> parserContext.advance();
+            case IDENTIFIER, ASYNC, AWAIT, FROM, OF, YIELD, DEFAULT, LET -> {
+                String name = parserContext.currentToken.value();
+                parserContext.advance();
+                return name;
+            }
+            case STRING -> {
+                String name = parserContext.currentToken.value();
+                parserContext.advance();
+                return name;
+            }
             default ->
                     throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
         }
@@ -583,13 +656,23 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private void parseNamedImportSpecifiers() {
+        parseNamedImportSpecifiers(new HashSet<>());
+    }
+
+    private void parseNamedImportSpecifiers(Set<String> boundNames) {
         parserContext.expect(TokenType.LBRACE);
         if (!parserContext.match(TokenType.RBRACE)) {
             while (true) {
-                parseImportIdentifierName();
-                if (parserContext.match(TokenType.AS)) {
+                String importName = parseImportIdentifierName();
+                String localName;
+                if (parserContext.match(TokenType.AS) && !parserContext.currentToken.escaped()) {
                     parserContext.advance();
-                    parserContext.parseIdentifier();
+                    localName = parserContext.parseIdentifier().name();
+                } else {
+                    localName = importName;
+                }
+                if (!boundNames.add(localName)) {
+                    throw new JSSyntaxErrorException("duplicate import binding");
                 }
                 if (!parserContext.match(TokenType.COMMA)) {
                     break;
