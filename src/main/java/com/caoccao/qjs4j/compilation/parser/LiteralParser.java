@@ -366,6 +366,10 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
                 // Following QuickJS: the shorthand value is an IdentifierReference,
                 // so yield/await must be valid identifiers in the current context.
+                // Always-reserved words (e.g. this, break, if) can never be IdentifierReferences.
+                if (parserContext.isAlwaysReservedIdentifier(keyId.name())) {
+                    throw new JSSyntaxErrorException("Unexpected reserved word");
+                }
                 if (parserContext.strictMode && parserContext.isStrictReservedIdentifier(keyId.name())) {
                     throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
                 }

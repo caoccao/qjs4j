@@ -316,6 +316,10 @@ final class ParserContext {
         return false;
     }
 
+    boolean isAlwaysReservedIdentifier(String name) {
+        return isAlwaysReservedIdentifierName(name);
+    }
+
     boolean isStrictReservedIdentifier(String name) {
         return isStrictReservedIdentifierName(name);
     }

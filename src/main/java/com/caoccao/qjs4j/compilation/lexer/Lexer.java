@@ -437,6 +437,12 @@ public final class Lexer {
             if (hasDecimalPoint || hasExponent) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
+            // Decimal BigInt with a leading zero followed by more digits is invalid.
+            // This covers legacy-octal-like (00n, 01n, 07n) and non-octal decimal (08n, 0008n, 08_0n).
+            // The only valid single-zero decimal BigInt is 0n.
+            if (source.charAt(startPos) == '0' && position > startPos + 1) {
+                throw new JSSyntaxErrorException("Invalid or unexpected token");
+            }
             advance(); // consume 'n'
             if (!isAtEnd() && (isIdentifierStart(peek()) || Character.isDigit(peek()))) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
@@ -697,8 +703,8 @@ public final class Lexer {
                 continue;
             }
 
-            // Newlines terminate regex
-            if (c == '\n' || c == '\r') {
+            // Newlines and Unicode line terminators (LS \u2028, PS \u2029) terminate regex
+            if (isLineTerminator(c)) {
                 throw new JSSyntaxErrorException("Invalid or unexpected token");
             }
 
