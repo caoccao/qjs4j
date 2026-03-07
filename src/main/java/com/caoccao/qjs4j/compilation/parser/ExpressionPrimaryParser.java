@@ -448,6 +448,14 @@ final class ExpressionPrimaryParser {
         return switch (parserContext.currentToken.type()) {
             case NUMBER -> {
                 String value = parserContext.currentToken.value();
+                // In strict mode, legacy octal (010, 07) and non-octal decimal (08, 09)
+                // literals are forbidden. These start with '0' followed by a digit.
+                if (parserContext.strictMode && value.length() > 1 && value.charAt(0) == '0') {
+                    char second = value.charAt(1);
+                    if (second >= '0' && second <= '9') {
+                        throw new JSSyntaxErrorException("Octal literals are not allowed in strict mode.");
+                    }
+                }
                 parserContext.advance();
                 String normalizedValue = value.replace("_", "");
                 Object numValue;
@@ -502,14 +510,23 @@ final class ExpressionPrimaryParser {
             }
             case TEMPLATE -> delegates.literals.parseTemplateLiteral(false);
             case TRUE -> {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 parserContext.advance();
                 yield new Literal(true, location);
             }
             case FALSE -> {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 parserContext.advance();
                 yield new Literal(false, location);
             }
             case NULL -> {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 parserContext.advance();
                 yield new Literal(null, location);
             }

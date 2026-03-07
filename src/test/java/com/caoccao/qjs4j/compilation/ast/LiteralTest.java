@@ -259,6 +259,29 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testStrictModeOctalLiterals() {
+        assertErrorWithJavet(
+                "'use strict'; 010",
+                "'use strict'; 01",
+                "'use strict'; 07");
+    }
+
+    @Test
+    public void testStrictModeOctalLiteralsInEval() {
+        assertErrorWithJavet(
+                "'use strict'; eval('010')",
+                "'use strict'; eval('01')");
+    }
+
+    @Test
+    public void testUnicodeEscapedReservedWords() {
+        assertErrorWithJavet(
+                "tru\\u{65}",
+                "f\\u{61}lse",
+                "n\\u{75}ll");
+    }
+
+    @Test
     public void testZeroVariants() {
         assertIntegerWithJavet(
                 "0",
