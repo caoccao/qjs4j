@@ -588,7 +588,11 @@ public final class ObjectPrototype {
             }
         }
 
-        return JSBoolean.valueOf(obj.hasOwnProperty(key));
+        PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSBoolean.valueOf(descriptor != null);
     }
 
     /**

@@ -947,7 +947,7 @@ final class ExpressionCompiler {
                 } else {
                     Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
                     if (capturedIndex != null) {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+                        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                     } else {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR_UNDEF, name);
                     }
@@ -997,7 +997,7 @@ final class ExpressionCompiler {
     private void emitCapturedOrGlobalIdentifierLookup(String name) {
         Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
         } else {
             // Not found in local scopes, use global variable
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);

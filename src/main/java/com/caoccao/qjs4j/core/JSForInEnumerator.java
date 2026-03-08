@@ -35,24 +35,37 @@ public class JSForInEnumerator {
 
         // Collect all enumerable property keys
         if (obj instanceof JSObject jsObj) {
-            collectKeys(jsObj, new HashSet<>());
+            collectKeys(jsObj, new HashSet<>(), new HashSet<>());
         }
     }
 
-    private void collectKeys(JSObject obj, Set<JSObject> visited) {
-        // Get own enumerable property keys using the enumerableKeys() method
-        var ownKeys = obj.enumerableKeys();
+    private void collectKeys(JSObject obj, Set<JSObject> visitedObjects, Set<String> seenPropertyNames) {
+        if (!visitedObjects.add(obj)) {
+            return;
+        }
+
+        // EnumerateObjectProperties uses [[OwnPropertyKeys]] and then [[GetOwnProperty]].
+        // getOwnPropertyKeys() is the object-internal implementation point for exotics.
+        List<PropertyKey> ownKeys = obj.getOwnPropertyKeys();
         for (PropertyKey key : ownKeys) {
             // For-in includes string keys (array index keys are emitted as strings), but not symbols.
-            if (!key.isSymbol()) {
-                keys.add(key.toPropertyString());
+            if (key.isSymbol()) {
+                continue;
+            }
+            PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+            if (descriptor == null || !descriptor.isEnumerable()) {
+                continue;
+            }
+            String propertyName = key.toPropertyString();
+            if (seenPropertyNames.add(propertyName)) {
+                keys.add(propertyName);
             }
         }
 
         // Walk up the prototype chain
-        JSObject proto = obj.getPrototype();
-        if (proto != null && visited.add(proto)) {
-            collectKeys(proto, visited);
+        JSObject prototype = obj.getPrototype();
+        if (prototype != null) {
+            collectKeys(prototype, visitedObjects, seenPropertyNames);
         }
     }
 

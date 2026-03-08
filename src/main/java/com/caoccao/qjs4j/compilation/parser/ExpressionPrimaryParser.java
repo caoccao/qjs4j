@@ -524,12 +524,7 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 yield new Literal(null, location);
             }
-            case IDENTIFIER -> parserContext.parseIdentifier();
-            case ASYNC -> parserContext.parseIdentifier();
-            case AWAIT -> parserContext.parseIdentifier();
-            case YIELD -> parserContext.parseIdentifier();
-            case FROM -> parserContext.parseIdentifier();
-            case OF -> parserContext.parseIdentifier();
+            case IDENTIFIER, AS, ASYNC, AWAIT, YIELD, FROM, OF -> parserContext.parseIdentifier();
             case PRIVATE_NAME -> {
                 String name = parserContext.currentToken.value();
                 String fieldName = name.substring(1);

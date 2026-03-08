@@ -84,12 +84,25 @@ final class StatementCompiler {
                     Set<String> names = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(d.id(), names);
                     for (String name : names) {
-                        compilerContext.currentScope().declareLocal(name);
+                        Integer localIndex = compilerContext.currentScope().getLocal(name);
+                        if (localIndex == null) {
+                            localIndex = compilerContext.currentScope().declareLocal(name);
+                        }
                         if (vd.kind() == VariableKind.CONST) {
                             compilerContext.currentScope().markConstLocal(name);
                         }
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.tdzLocals.add(name);
                     }
                 }
+            } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.id() != null) {
+                String className = classDeclaration.id().name();
+                Integer localIndex = compilerContext.currentScope().getLocal(className);
+                if (localIndex == null) {
+                    localIndex = compilerContext.currentScope().declareLocal(className);
+                }
+                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                compilerContext.tdzLocals.add(className);
             } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 delegates.functions.compileFunctionDeclaration(funcDecl);
             }

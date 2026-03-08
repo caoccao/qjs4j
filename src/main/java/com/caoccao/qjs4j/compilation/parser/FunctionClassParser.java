@@ -32,6 +32,46 @@ import java.util.Set;
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext parserContext, ParserDelegates delegates) {
+    private void enterFunctionContext(boolean asyncFunction) {
+        parserContext.functionNesting++;
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting++;
+        }
+    }
+
+    private void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        parserContext.savedFunctionNestingStack.push(new int[]{
+                parserContext.generatorFunctionNesting,
+                parserContext.asyncFunctionNesting,
+                parserContext.newTargetNesting,
+                parserContext.inClassFieldInitializer ? 1 : 0,
+                parserContext.inClassStaticInit ? 1 : 0
+        });
+        parserContext.functionNesting++;
+        parserContext.generatorFunctionNesting = generatorFunction ? 1 : 0;
+        parserContext.asyncFunctionNesting = asyncFunction ? 1 : 0;
+        parserContext.newTargetNesting = 1;
+        parserContext.inClassFieldInitializer = false;
+        parserContext.inClassStaticInit = false;
+    }
+
+    private void exitFunctionContext(boolean asyncFunction) {
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting--;
+        }
+        parserContext.functionNesting--;
+    }
+
+    private void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        int[] saved = parserContext.savedFunctionNestingStack.pop();
+        parserContext.generatorFunctionNesting = saved[0];
+        parserContext.asyncFunctionNesting = saved[1];
+        parserContext.newTargetNesting = saved[2];
+        parserContext.inClassFieldInitializer = saved[3] != 0;
+        parserContext.inClassStaticInit = saved[4] != 0;
+        parserContext.functionNesting--;
+    }
+
     /**
      * Extract all bound identifier names from a pattern.
      * Used for strict mode parameter validation.
@@ -541,11 +581,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
             parserContext.inClassFieldInitializer = true;
             parserContext.superPropertyAllowed = true;
-            parserContext.enterFunctionContext(false);
+            enterFunctionContext(false);
             try {
                 value = delegates.expressions.parseAssignmentExpression();
             } finally {
-                parserContext.exitFunctionContext(false);
+                exitFunctionContext(false);
                 parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                 parserContext.inClassFieldInitializer = savedInClassFieldInitializer;
             }
@@ -638,8 +678,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
             Identifier id = parserContext.parseIdentifier();
             // Named function in export default creates a lexical binding for the name
-            parserContext.addModuleLexicalName(id.name());
-            parserContext.enterFunctionContext(isAsync, isGenerator);
+            if (parserContext.moduleMode && parserContext.functionNesting == 0) {
+                String name = id.name();
+                if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
+                    throw new JSSyntaxErrorException(
+                            "Identifier '" + name + "' has already been declared");
+                }
+            }
+            enterFunctionContext(isAsync, isGenerator);
             boolean savedInClassStaticInit = parserContext.inClassStaticInit;
             parserContext.inClassStaticInit = false;
             try {
@@ -658,13 +704,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                         funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
             } finally {
                 parserContext.inClassStaticInit = savedInClassStaticInit;
-                parserContext.exitFunctionContext(isAsync, isGenerator);
+                exitFunctionContext(isAsync, isGenerator);
             }
         }
 
         // Anonymous: parse as function expression with inferred name "default"
         Identifier defaultId = new Identifier(JSKeyword.DEFAULT, location);
-        parserContext.enterFunctionContext(isAsync, isGenerator);
+        enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         try {
@@ -683,7 +729,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(isAsync, isGenerator);
+            exitFunctionContext(isAsync, isGenerator);
         }
     }
 
@@ -719,7 +765,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // at global scope while rejecting `function await() {}` inside async functions.
         Identifier id = parserContext.parseIdentifier();
 
-        parserContext.enterFunctionContext(isAsync, isGenerator);
+        enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         try {
@@ -750,7 +796,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(isAsync, isGenerator);
+            exitFunctionContext(isAsync, isGenerator);
         }
     }
 
@@ -770,7 +816,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             isGenerator = true;
         }
 
-        parserContext.enterFunctionContext(isAsync, isGenerator);
+        enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
         try {
@@ -807,7 +853,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(isAsync, isGenerator);
+            exitFunctionContext(isAsync, isGenerator);
         }
     }
 
@@ -898,7 +944,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      */
     FunctionExpression parseMethod(String kind, SourceLocation methodStartLocation,
                                    boolean isAsync, boolean isGenerator) {
-        parserContext.enterFunctionContext(isAsync, isGenerator);
+        enterFunctionContext(isAsync, isGenerator);
         boolean savedInFunctionBody = parserContext.inFunctionBody;
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
@@ -928,7 +974,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(isAsync, isGenerator);
+            exitFunctionContext(isAsync, isGenerator);
         }
 
         // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
@@ -986,7 +1032,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.expect(TokenType.LBRACE);
         List<Statement> statements = new ArrayList<>();
 
-        parserContext.enterFunctionContext(false);
+        enterFunctionContext(false);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         parserContext.inClassStaticInit = true;
@@ -1001,7 +1047,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         } finally {
             parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            parserContext.exitFunctionContext(false);
+            exitFunctionContext(false);
         }
 
         parserContext.expect(TokenType.RBRACE);

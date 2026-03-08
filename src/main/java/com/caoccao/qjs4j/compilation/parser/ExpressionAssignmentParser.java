@@ -50,6 +50,57 @@ final class ExpressionAssignmentParser {
         this.expressions = expressions;
     }
 
+    private void enterArrowFunctionContext(boolean asyncFunction) {
+        parserContext.functionNesting++;
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting++;
+        }
+    }
+
+    private void exitArrowFunctionContext(boolean asyncFunction) {
+        exitFunctionContext(asyncFunction);
+    }
+
+    private void exitFunctionContext(boolean asyncFunction) {
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting--;
+        }
+        parserContext.functionNesting--;
+    }
+
+    private boolean peekPastParensIsArrow() {
+        Token savedCurrent = parserContext.currentToken;
+        Token savedNext = parserContext.nextToken;
+        int savedPrevLine = parserContext.previousTokenLine;
+        int savedPrevEndOffset = parserContext.previousTokenEndOffset;
+        LexerState savedLexer = parserContext.lexer.saveState();
+        try {
+            parserContext.advance();
+            int depth = 1;
+            while (depth > 0 && !parserContext.match(TokenType.EOF)) {
+                if (parserContext.match(TokenType.LPAREN)) {
+                    depth++;
+                } else if (parserContext.match(TokenType.RPAREN)) {
+                    depth--;
+                }
+                if (depth > 0) {
+                    parserContext.advance();
+                }
+            }
+            if (depth == 0) {
+                parserContext.advance();
+                return parserContext.match(TokenType.ARROW);
+            }
+            return false;
+        } finally {
+            parserContext.currentToken = savedCurrent;
+            parserContext.nextToken = savedNext;
+            parserContext.previousTokenLine = savedPrevLine;
+            parserContext.previousTokenEndOffset = savedPrevEndOffset;
+            parserContext.lexer.restoreState(savedLexer);
+        }
+    }
+
     /**
      * Checks whether an expression tree contains a YieldExpression.
      * Does not descend into nested function/arrow/class bodies (they create new scope boundaries).
@@ -445,7 +496,7 @@ final class ExpressionAssignmentParser {
                                 && parserContext.nextToken.type() == TokenType.ARROW) {
                             throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                         }
-                        if (nextType == TokenType.LPAREN && parserContext.peekPastParensIsArrow()) {
+                        if (nextType == TokenType.LPAREN && peekPastParensIsArrow()) {
                             throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                         }
                     } finally {
@@ -477,7 +528,7 @@ final class ExpressionAssignmentParser {
                     parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
-                    parserContext.enterArrowFunctionContext(true);
+                    enterArrowFunctionContext(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
@@ -488,7 +539,7 @@ final class ExpressionAssignmentParser {
                         }
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
-                        parserContext.exitArrowFunctionContext(true);
+                        exitArrowFunctionContext(true);
                     }
 
                     // Async arrows have the same early errors as regular arrows (spec 15.8.1)
@@ -506,8 +557,8 @@ final class ExpressionAssignmentParser {
                     return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
                 }
 
-                if (parserContext.match(TokenType.LPAREN) && parserContext.peekPastParensIsArrow()) {
-                    parserContext.enterArrowFunctionContext(true);
+                if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
+                    enterArrowFunctionContext(true);
                     boolean savedInClassStaticInit = parserContext.inClassStaticInit;
                     parserContext.inClassStaticInit = false;
                     try {
@@ -542,7 +593,7 @@ final class ExpressionAssignmentParser {
                                 fullLocation);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
-                        parserContext.exitArrowFunctionContext(true);
+                        exitArrowFunctionContext(true);
                     }
                 }
             }
@@ -646,7 +697,7 @@ final class ExpressionAssignmentParser {
             parserContext.advance();
 
             ASTNode body;
-            parserContext.enterArrowFunctionContext(false);
+            enterArrowFunctionContext(false);
             boolean savedInClassStaticInit = parserContext.inClassStaticInit;
             parserContext.inClassStaticInit = false;
             try {
@@ -657,7 +708,7 @@ final class ExpressionAssignmentParser {
                 }
             } finally {
                 parserContext.inClassStaticInit = savedInClassStaticInit;
-                parserContext.exitArrowFunctionContext(false);
+                exitArrowFunctionContext(false);
             }
             validateArrowParameters(params, defaults, restParameter, body);
 

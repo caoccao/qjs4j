@@ -162,6 +162,8 @@ final class CompilerAnalysis {
      */
     void hoistAllDeclarationsAsLocals(List<Statement> body) {
         Set<String> varNames = new HashSet<>();
+        Set<String> lexicalNames = new HashSet<>();
+        Set<String> constLexicalNames = new HashSet<>();
         for (Statement stmt : body) {
             if (stmt instanceof FunctionDeclaration functionDeclaration) {
                 if (functionDeclaration.id() != null) {
@@ -176,15 +178,33 @@ final class CompilerAnalysis {
             collectVarNamesFromStatement(stmt, varNames);
             // Collect top-level let/const names (don't recurse — they're block-scoped)
             if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+                Set<String> declarationNames = new HashSet<>();
                 for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
+                    collectPatternBindingNames(d.id(), declarationNames);
                 }
+                lexicalNames.addAll(declarationNames);
+                if (vd.kind() == VariableKind.CONST) {
+                    constLexicalNames.addAll(declarationNames);
+                }
+            } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.id() != null) {
+                lexicalNames.add(classDeclaration.id().name());
             }
         }
         for (String varName : varNames) {
             if (compilerContext.currentScope().getLocal(varName) == null) {
                 compilerContext.currentScope().declareLocal(varName);
             }
+        }
+        for (String lexicalName : lexicalNames) {
+            Integer localIndex = compilerContext.currentScope().getLocal(lexicalName);
+            if (localIndex == null) {
+                localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+            }
+            if (constLexicalNames.contains(lexicalName)) {
+                compilerContext.currentScope().markConstLocal(lexicalName);
+            }
+            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+            compilerContext.tdzLocals.add(lexicalName);
         }
     }
 

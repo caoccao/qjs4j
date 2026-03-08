@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+
 import java.util.*;
 
 /**
@@ -32,7 +34,10 @@ public final class JSImportNamespaceObject extends JSObject {
         this.context = context;
         this.exportNames = new HashSet<>();
         this.finalized = false;
-        setPrototype(null);
+        super.defineProperty(
+                PropertyKey.SYMBOL_TO_STRING_TAG,
+                new JSString("Module"),
+                PropertyDescriptor.DataState.None);
     }
 
     private static boolean sameValue(JSValue leftValue, JSValue rightValue) {
@@ -74,15 +79,42 @@ public final class JSImportNamespaceObject extends JSObject {
 
     @Override
     public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
-        if (finalized && isExportProperty(key)) {
-            return validateExportDefine(key, descriptor);
+        if (isExportProperty(key)) {
+            if (super.hasOwnProperty(key)) {
+                return validateExportDefine(key, descriptor);
+            }
+            if (finalized) {
+                return false;
+            }
+            return super.defineProperty(context, key, descriptor);
+        }
+        if (PropertyKey.SYMBOL_TO_STRING_TAG.equals(key)) {
+            return super.defineProperty(context, key, descriptor);
+        }
+        if (!hasOwnProperty(key)) {
+            return false;
         }
         return super.defineProperty(context, key, descriptor);
     }
 
+    public boolean defineExportBinding(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+        if (finalized || key == null || !key.isString()) {
+            return false;
+        }
+        boolean defined = super.defineProperty(context, key, descriptor);
+        if (defined) {
+            registerExportName(key.asString());
+        }
+        return defined;
+    }
+
+    public boolean defineExportBinding(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        return defineExportBinding(context, key, PropertyDescriptor.dataDescriptor(value, state));
+    }
+
     @Override
     public boolean delete(JSContext context, PropertyKey key) {
-        if (finalized && isExportProperty(key)) {
+        if (isExportProperty(key)) {
             if (context != null && context.isStrictMode()) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
             }
@@ -108,9 +140,14 @@ public final class JSImportNamespaceObject extends JSObject {
 
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        if (finalized && isExportProperty(key)) {
+        if (hasDefinedExportProperty(key)) {
+            JSContext effectiveContext = context != null ? context : this.context;
+            JSValue value = get(effectiveContext, key);
+            if (effectiveContext != null && effectiveContext.hasPendingException()) {
+                throw new JSException(effectiveContext.getPendingException());
+            }
             PropertyDescriptor descriptor = new PropertyDescriptor();
-            descriptor.setValue(get(context, key));
+            descriptor.setValue(value);
             descriptor.setWritable(true);
             descriptor.setEnumerable(true);
             descriptor.setConfigurable(false);
@@ -122,20 +159,32 @@ public final class JSImportNamespaceObject extends JSObject {
     @Override
     public List<PropertyKey> getOwnPropertyKeys() {
         List<PropertyKey> keys = super.getOwnPropertyKeys();
-        if (!finalized) {
-            return keys;
-        }
         List<PropertyKey> stringKeys = new ArrayList<>();
         List<PropertyKey> symbolKeys = new ArrayList<>();
+        Set<String> seenStringKeys = new HashSet<>();
+        for (String exportName : exportNames) {
+            if (exportName == null || exportName.isEmpty()) {
+                continue;
+            }
+            PropertyKey exportKey = PropertyKey.fromString(exportName);
+            if (super.hasOwnProperty(exportKey) && seenStringKeys.add(exportName)) {
+                stringKeys.add(exportKey);
+            }
+        }
         for (PropertyKey key : keys) {
+            if (key.isString()) {
+                String keyName = key.asString();
+                if (seenStringKeys.add(keyName)) {
+                    stringKeys.add(key);
+                }
+                continue;
+            }
             if (key.isSymbol()) {
                 symbolKeys.add(key);
-            } else {
-                stringKeys.add(key);
             }
         }
         stringKeys.sort(Comparator.comparing(PropertyKey::asString));
-        List<PropertyKey> orderedKeys = new ArrayList<>(keys.size());
+        List<PropertyKey> orderedKeys = new ArrayList<>(stringKeys.size() + symbolKeys.size());
         orderedKeys.addAll(stringKeys);
         orderedKeys.addAll(symbolKeys);
         return orderedKeys;
@@ -145,9 +194,25 @@ public final class JSImportNamespaceObject extends JSObject {
         return key != null && key.isString() && exportNames.contains(key.asString());
     }
 
+    private boolean hasDefinedExportProperty(PropertyKey key) {
+        if (!isExportProperty(key)) {
+            return false;
+        }
+        return super.hasOwnProperty(key);
+    }
+
     @Override
     public PropertyKey[] ownPropertyKeys() {
         return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    }
+
+    @Override
+    public boolean hasOwnProperty(PropertyKey key) {
+        return super.hasOwnProperty(key);
+    }
+
+    public boolean hasDefinedOwnProperty(PropertyKey key) {
+        return super.hasOwnProperty(key);
     }
 
     public void registerExportName(String exportName) {
@@ -162,9 +227,17 @@ public final class JSImportNamespaceObject extends JSObject {
         }
     }
 
+    public void removeExportBinding(String exportName) {
+        if (exportName == null || exportName.isEmpty()) {
+            return;
+        }
+        super.delete(null, PropertyKey.fromString(exportName));
+        exportNames.remove(exportName);
+    }
+
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        if (finalized) {
+        if (isExportProperty(key) || finalized) {
             if (context != null && context.isStrictMode()) {
                 context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
             }
@@ -175,7 +248,7 @@ public final class JSImportNamespaceObject extends JSObject {
 
     @Override
     public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        if (finalized) {
+        if (isExportProperty(key) || finalized) {
             return false;
         }
         return super.setWithResult(context, key, value, receiver);

@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.lexer.LexerState;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
@@ -80,7 +79,7 @@ final class ParserContext {
     final boolean isEval;
     final Lexer lexer;
     final boolean moduleMode;
-    private final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
+    final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int asyncFunctionNesting;
     Token currentToken;
     int functionNesting;
@@ -125,62 +124,6 @@ final class ParserContext {
         this.nextToken = lexer.nextToken();
     }
 
-    /**
-     * Register a module exported name, checking for duplicates (ES2024 16.2.1.1 Early Errors).
-     */
-    void addModuleExportedName(String name) {
-        if (moduleMode && !moduleExportedNames.add(name)) {
-            throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
-        }
-    }
-
-    /**
-     * Register a module-level lexical declaration name (let/const/class/function in modules).
-     */
-    void addModuleLexicalName(String name) {
-        if (moduleMode && functionNesting == 0) {
-            if (moduleVarNames.contains(name)) {
-                throw new JSSyntaxErrorException(
-                        "Identifier '" + name + "' has already been declared");
-            }
-            if (!moduleLexicalNames.add(name)) {
-                throw new JSSyntaxErrorException(
-                        "Identifier '" + name + "' has already been declared");
-            }
-        }
-    }
-
-    /**
-     * Register a module-level var declaration name.
-     */
-    void addModuleVarName(String name) {
-        if (moduleMode && functionNesting == 0) {
-            if (moduleLexicalNames.contains(name)) {
-                throw new JSSyntaxErrorException(
-                        "Identifier '" + name + "' has already been declared");
-            }
-            moduleVarNames.add(name);
-        }
-    }
-
-    /**
-     * Check if a string contains unpaired surrogates.
-     */
-    static boolean hasUnpairedSurrogate(String str) {
-        for (int i = 0; i < str.length(); i++) {
-            char c = str.charAt(i);
-            if (Character.isHighSurrogate(c)) {
-                if (i + 1 >= str.length() || !Character.isLowSurrogate(str.charAt(i + 1))) {
-                    return true;
-                }
-                i++; // skip low surrogate
-            } else if (Character.isLowSurrogate(c)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     // ---- Token utilities ----
 
     void advance() {
@@ -199,60 +142,6 @@ final class ParserContext {
             return;
         }
         throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
-    }
-
-    void enterArrowFunctionContext(boolean asyncFunction) {
-        enterFunctionContext(asyncFunction);
-    }
-
-    /**
-     * Enter an arrow function or class field/static block context.
-     * Arrow functions inherit generator/async nesting from their enclosing context.
-     */
-    void enterFunctionContext(boolean asyncFunction) {
-        functionNesting++;
-        if (asyncFunction) {
-            asyncFunctionNesting++;
-        }
-    }
-
-    /**
-     * Enter a regular (non-arrow) function, method, or generator context.
-     * Per ES2024, yield/await are only keywords in the immediately enclosing
-     * generator/async function, NOT in nested non-generator/non-async functions.
-     * Save and reset the nesting counters so that yield/await can be used as
-     * identifiers in nested non-generator/non-async functions.
-     */
-    void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        savedFunctionNestingStack.push(new int[]{generatorFunctionNesting, asyncFunctionNesting, newTargetNesting,
-                inClassFieldInitializer ? 1 : 0, inClassStaticInit ? 1 : 0});
-        functionNesting++;
-        generatorFunctionNesting = generatorFunction ? 1 : 0;
-        asyncFunctionNesting = asyncFunction ? 1 : 0;
-        newTargetNesting = 1;
-        inClassFieldInitializer = false;
-        inClassStaticInit = false;
-    }
-
-    void exitArrowFunctionContext(boolean asyncFunction) {
-        exitFunctionContext(asyncFunction);
-    }
-
-    void exitFunctionContext(boolean asyncFunction) {
-        if (asyncFunction) {
-            asyncFunctionNesting--;
-        }
-        functionNesting--;
-    }
-
-    void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        int[] saved = savedFunctionNestingStack.pop();
-        generatorFunctionNesting = saved[0];
-        asyncFunctionNesting = saved[1];
-        newTargetNesting = saved[2];
-        inClassFieldInitializer = saved[3] != 0;
-        inClassStaticInit = saved[4] != 0;
-        functionNesting--;
     }
 
     Token expect(TokenType type) {
@@ -580,6 +469,11 @@ final class ParserContext {
             advance();
             return new Identifier(name, location);
         }
+        if (match(TokenType.AS)) {
+            String name = currentToken.value();
+            advance();
+            return new Identifier(name, location);
+        }
         if (match(TokenType.LET)) {
             String name = currentToken.value();
             if (strictMode && isStrictReservedIdentifierName(name)) {
@@ -598,36 +492,4 @@ final class ParserContext {
         return nextToken;
     }
 
-    boolean peekPastParensIsArrow() {
-        Token savedCurrent = currentToken;
-        Token savedNext = nextToken;
-        int savedPrevLine = previousTokenLine;
-        int savedPrevEndOffset = previousTokenEndOffset;
-        LexerState savedLexer = lexer.saveState();
-        try {
-            advance(); // consume '('
-            int depth = 1;
-            while (depth > 0 && !match(TokenType.EOF)) {
-                if (match(TokenType.LPAREN)) {
-                    depth++;
-                } else if (match(TokenType.RPAREN)) {
-                    depth--;
-                }
-                if (depth > 0) {
-                    advance();
-                }
-            }
-            if (depth == 0) {
-                advance(); // consume closing ')'
-                return match(TokenType.ARROW);
-            }
-            return false;
-        } finally {
-            currentToken = savedCurrent;
-            nextToken = savedNext;
-            previousTokenLine = savedPrevLine;
-            previousTokenEndOffset = savedPrevEndOffset;
-            lexer.restoreState(savedLexer);
-        }
-    }
 }
