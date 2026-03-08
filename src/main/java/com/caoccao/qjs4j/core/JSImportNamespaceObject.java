@@ -156,6 +156,12 @@ public final class JSImportNamespaceObject extends JSObject {
         }
     }
 
+    public void unregisterExportName(String exportName) {
+        if (exportName != null && !exportName.isEmpty()) {
+            exportNames.remove(exportName);
+        }
+    }
+
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
         if (finalized) {
