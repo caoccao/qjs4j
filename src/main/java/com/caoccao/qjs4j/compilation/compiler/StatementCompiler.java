@@ -276,7 +276,8 @@ final class StatementCompiler {
                     int localIndex = compilerContext.currentScope().declareLocal(className);
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 }
-                compilerContext.currentScope().markConstLocal(className);
+                // ES2024: Class declarations in modules create let-like bindings (mutable),
+                // not const-like. Do NOT call markConstLocal here.
                 compilerContext.tdzLocals.add(className);
                 continue;
             }

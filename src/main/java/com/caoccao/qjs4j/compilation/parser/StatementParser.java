@@ -787,25 +787,36 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private String parseImportIdentifierName() {
-        switch (parserContext.currentToken.type()) {
-            case IDENTIFIER, ASYNC, AWAIT, FROM, OF, YIELD, DEFAULT, LET -> {
-                String name = parserContext.currentToken.value();
-                parserContext.advance();
-                return name;
+        TokenType type = parserContext.currentToken.type();
+        if (type == TokenType.STRING) {
+            String name = parserContext.currentToken.value();
+            // ES2024: ModuleExportName string must not contain unpaired surrogates
+            if (ParserContext.hasUnpairedSurrogate(name)) {
+                throw new JSSyntaxErrorException(
+                        "Invalid module export name: unpaired surrogate");
             }
-            case STRING -> {
-                String name = parserContext.currentToken.value();
-                // ES2024: ModuleExportName string must not contain unpaired surrogates
-                if (ParserContext.hasUnpairedSurrogate(name)) {
-                    throw new JSSyntaxErrorException(
-                            "Invalid module export name: unpaired surrogate");
-                }
-                parserContext.advance();
-                return name;
-            }
-            default ->
-                    throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+            parserContext.advance();
+            return name;
         }
+        // Any IdentifierName including reserved keywords is allowed as
+        // import/export specifier names (ES2024 ModuleExportName).
+        if (isIdentifierNameToken(type)) {
+            String name = parserContext.currentToken.value();
+            parserContext.advance();
+            return name;
+        }
+        throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
+    }
+
+    private static boolean isIdentifierNameToken(TokenType type) {
+        return switch (type) {
+            case IDENTIFIER, AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST,
+                 CONTINUE, DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE,
+                 FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET,
+                 NEW, NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
+                 TYPEOF, VAR, VOID, WHILE, YIELD -> true;
+            default -> false;
+        };
     }
 
     /**

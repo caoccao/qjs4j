@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.test262;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.test262.harness.HarnessLoader;
 
 import java.util.ArrayList;
@@ -271,6 +271,22 @@ public class Test262Executor {
     }
 
     private String extractErrorType(Exception e) {
+        // Handle typed Java exceptions that correspond to JS error types
+        if (e instanceof JSSyntaxErrorException) {
+            return "SyntaxError";
+        }
+        if (e instanceof JSTypeErrorException) {
+            return "TypeError";
+        }
+        if (e instanceof JSRangeErrorException) {
+            return "RangeError";
+        }
+        if (e instanceof JSCompilerException) {
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("SyntaxError")) {
+                return "SyntaxError";
+            }
+        }
         if (e instanceof JSException jsException) {
             JSValue error = jsException.getErrorValue();
 

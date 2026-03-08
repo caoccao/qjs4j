@@ -1836,7 +1836,8 @@ public final class RegExpCompiler {
                     if (!closedBrace) {
                         throw new RegExpSyntaxException("Invalid unicode escape");
                     }
-                    yield value;
+                    // In unicode mode, combine surrogate pairs in character classes
+                    yield combineTrailingLowSurrogateEscapeIfPresent(context, value);
                 }
                 boolean validUnicode = context.pos + 3 < context.codePoints.length
                         && hexValue(context.codePoints[context.pos]) != -1
@@ -1849,7 +1850,8 @@ public final class RegExpCompiler {
                         value = (value << 4) | hexValue(context.codePoints[context.pos + i]);
                     }
                     context.pos += 4;
-                    yield value;
+                    // In unicode mode, combine surrogate pairs in character classes
+                    yield combineTrailingLowSurrogateEscapeIfPresent(context, value);
                 } else if (!context.isUnicodeMode()) {
                     yield 'u';
                 } else {

@@ -91,6 +91,10 @@ public final class JSImportNamespaceObject extends JSObject {
         return super.delete(context, key);
     }
 
+    public boolean isFinalized() {
+        return finalized;
+    }
+
     public void finalizeNamespace() {
         if (!hasOwnProperty(PropertyKey.SYMBOL_TO_STRING_TAG)) {
             defineProperty(
