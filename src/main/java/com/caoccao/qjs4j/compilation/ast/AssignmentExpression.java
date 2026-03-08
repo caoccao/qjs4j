@@ -22,20 +22,65 @@ package com.caoccao.qjs4j.compilation.ast;
  * @param lhsIsIdentifierRef true when the left-hand side is a direct IdentifierReference (not parenthesized).
  *                           Used for function name inference per spec 13.15.2 step 1.c.
  */
-public record AssignmentExpression(
-        Expression left,
-        AssignmentOperator operator,
-        Expression right,
-        boolean lhsIsIdentifierRef,
-        SourceLocation location
-) implements Expression {
+public final class AssignmentExpression extends Expression {
+    private final Expression left;
+    private final AssignmentOperator operator;
+    private final Expression right;
+    private final boolean lhsIsIdentifierRef;
+
     public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right, SourceLocation location) {
         this(left, operator, right, false, location);
     }
 
+    public AssignmentExpression(
+            Expression left,
+            AssignmentOperator operator,
+            Expression right,
+            boolean lhsIsIdentifierRef,
+            SourceLocation location) {
+        super(location);
+        this.left = left;
+        this.operator = operator;
+        this.right = right;
+        this.lhsIsIdentifierRef = lhsIsIdentifierRef;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean leftContainsAwait = left != null && left.containsAwait();
+        boolean rightContainsAwait = right != null && right.containsAwait();
+        awaitInside = leftContainsAwait || rightContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean leftContainsYield = left != null && left.containsYield();
+        boolean rightContainsYield = right != null && right.containsYield();
+        yieldInside = leftContainsYield || rightContainsYield;
+        return yieldInside;
+    }
+
+    public boolean lhsIsIdentifierRef() {
+        return lhsIsIdentifierRef;
+    }
+
+    public Expression left() {
+        return left;
+    }
+
+    public AssignmentOperator operator() {
+        return operator;
+    }
+
+    public Expression right() {
+        return right;
     }
 
     public enum AssignmentOperator {

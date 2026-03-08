@@ -21,14 +21,67 @@ import java.util.List;
 /**
  * Represents a function call expression.
  */
-public record CallExpression(
-        Expression callee,
-        List<Expression> arguments,
-        boolean optional,
-        SourceLocation location
-) implements Expression {
+public final class CallExpression extends Expression {
+    private final List<Expression> arguments;
+    private final Expression callee;
+    private final boolean optional;
+
+    public CallExpression(
+            Expression callee,
+            List<Expression> arguments,
+            boolean optional,
+            SourceLocation location) {
+        super(location);
+        this.callee = callee;
+        this.arguments = arguments;
+        this.optional = optional;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean hasAwait = callee != null && callee.containsAwait();
+        if (!hasAwait && arguments != null) {
+            for (Expression argument : arguments) {
+                if (argument != null && argument.containsAwait()) {
+                    hasAwait = true;
+                    break;
+                }
+            }
+        }
+        awaitInside = hasAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean hasYield = callee != null && callee.containsYield();
+        if (!hasYield && arguments != null) {
+            for (Expression argument : arguments) {
+                if (argument != null && argument.containsYield()) {
+                    hasYield = true;
+                    break;
+                }
+            }
+        }
+        yieldInside = hasYield;
+        return yieldInside;
+    }
+
+    public List<Expression> arguments() {
+        return arguments;
+    }
+
+    public Expression callee() {
+        return callee;
+    }
+
+    public boolean optional() {
+        return optional;
     }
 }

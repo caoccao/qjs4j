@@ -21,16 +21,63 @@ import java.util.List;
 /**
  * Represents an arrow function expression.
  */
-public record ArrowFunctionExpression(
-        List<Pattern> params,
-        List<Expression> defaults,  // Default values for params (null entries = no default)
-        RestParameter restParameter,  // Optional rest parameter (...args)
-        ASTNode body,
-        boolean isAsync,
-        SourceLocation location
-) implements Expression {
+public final class ArrowFunctionExpression extends Expression {
+    private final ASTNode body;
+    private final List<Expression> defaults;
+    private final boolean isAsync;
+    private final List<Pattern> params;
+    private final RestParameter restParameter;
+
+    public ArrowFunctionExpression(
+            List<Pattern> params,
+            List<Expression> defaults,
+            RestParameter restParameter,
+            ASTNode body,
+            boolean isAsync,
+            SourceLocation location) {
+        super(location);
+        this.params = params;
+        this.defaults = defaults;
+        this.restParameter = restParameter;
+        this.body = body;
+        this.isAsync = isAsync;
+    }
+
+    public ASTNode body() {
+        return body;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = false;
+        return false;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = false;
+        return false;
+    }
+
+    public List<Expression> defaults() {
+        return defaults;
+    }
+
+    public boolean isAsync() {
+        return isAsync;
+    }
+
+    public List<Pattern> params() {
+        return params;
+    }
+
+    public RestParameter restParameter() {
+        return restParameter;
     }
 }

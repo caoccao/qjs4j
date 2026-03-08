@@ -19,12 +19,31 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a private identifier in a class (#name).
  */
-public record PrivateIdentifier(
-        String name,  // name without the # prefix
-        SourceLocation location
-) implements Expression {
+public final class PrivateIdentifier extends Expression {
+    private final String name;
+
+    public PrivateIdentifier(String name, SourceLocation location) {
+        super(location);
+        this.name = name;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+        }
+        return yieldInside;
+    }
+
+    public String name() {
+        return name;
     }
 }

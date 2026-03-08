@@ -20,9 +20,33 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents a spread element in an array literal or function call.
  * Example: [...array] or func(...args)
  */
-public record SpreadElement(Expression argument, SourceLocation location) implements Expression {
+public final class SpreadElement extends Expression {
+    private final Expression argument;
+
+    public SpreadElement(Expression argument, SourceLocation location) {
+        super(location);
+        this.argument = argument;
+    }
+
+    public Expression argument() {
+        return argument;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = argument != null && argument.containsAwait();
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = argument != null && argument.containsYield();
+        return yieldInside;
     }
 }

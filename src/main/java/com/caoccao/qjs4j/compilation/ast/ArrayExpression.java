@@ -21,12 +21,51 @@ import java.util.List;
 /**
  * Represents an array literal expression.
  */
-public record ArrayExpression(
-        List<Expression> elements,
-        SourceLocation location
-) implements Expression {
+public final class ArrayExpression extends Expression {
+    private final List<Expression> elements;
+
+    public ArrayExpression(List<Expression> elements, SourceLocation location) {
+        super(location);
+        this.elements = elements;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean hasAwait = false;
+        if (elements != null) {
+            for (Expression element : elements) {
+                if (element != null && element.containsAwait()) {
+                    hasAwait = true;
+                    break;
+                }
+            }
+        }
+        awaitInside = hasAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean hasYield = false;
+        if (elements != null) {
+            for (Expression element : elements) {
+                if (element != null && element.containsYield()) {
+                    hasYield = true;
+                    break;
+                }
+            }
+        }
+        yieldInside = hasYield;
+        return yieldInside;
+    }
+
+    public List<Expression> elements() {
+        return elements;
     }
 }

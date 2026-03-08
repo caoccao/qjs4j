@@ -24,13 +24,39 @@ package com.caoccao.qjs4j.compilation.ast;
  * yield value;
  * yield* iterable;
  */
-public record YieldExpression(
-        Expression argument,
-        boolean delegate,
-        SourceLocation location
-) implements Expression {
+public final class YieldExpression extends Expression {
+    private final Expression argument;
+    private final boolean delegate;
+
+    public YieldExpression(Expression argument, boolean delegate, SourceLocation location) {
+        super(location);
+        this.argument = argument;
+        this.delegate = delegate;
+    }
+
+    public Expression argument() {
+        return argument;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = argument != null && argument.containsAwait();
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = true;
+        return yieldInside;
+    }
+
+    public boolean delegate() {
+        return delegate;
     }
 }

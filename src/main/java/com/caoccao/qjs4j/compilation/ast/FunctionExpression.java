@@ -21,18 +21,77 @@ import java.util.List;
 /**
  * Represents a function expression.
  */
-public record FunctionExpression(
-        Identifier id,
-        List<Pattern> params,
-        List<Expression> defaults,  // Default values for params (null entries = no default)
-        RestParameter restParameter,  // Optional rest parameter (...args)
-        BlockStatement body,
-        boolean isAsync,
-        boolean isGenerator,
-        SourceLocation location
-) implements Expression {
+public final class FunctionExpression extends Expression {
+    private final BlockStatement body;
+    private final List<Expression> defaults;
+    private final Identifier id;
+    private final boolean isAsync;
+    private final boolean isGenerator;
+    private final List<Pattern> params;
+    private final RestParameter restParameter;
+
+    public FunctionExpression(
+            Identifier id,
+            List<Pattern> params,
+            List<Expression> defaults,
+            RestParameter restParameter,
+            BlockStatement body,
+            boolean isAsync,
+            boolean isGenerator,
+            SourceLocation location) {
+        super(location);
+        this.id = id;
+        this.params = params;
+        this.defaults = defaults;
+        this.restParameter = restParameter;
+        this.body = body;
+        this.isAsync = isAsync;
+        this.isGenerator = isGenerator;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = false;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = false;
+        return yieldInside;
+    }
+
+    public BlockStatement body() {
+        return body;
+    }
+
+    public List<Expression> defaults() {
+        return defaults;
+    }
+
+    public Identifier id() {
+        return id;
+    }
+
+    public boolean isAsync() {
+        return isAsync;
+    }
+
+    public boolean isGenerator() {
+        return isGenerator;
+    }
+
+    public List<Pattern> params() {
+        return params;
+    }
+
+    public RestParameter restParameter() {
+        return restParameter;
     }
 }

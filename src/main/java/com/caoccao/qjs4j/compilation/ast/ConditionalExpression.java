@@ -19,14 +19,55 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a conditional (ternary) expression.
  */
-public record ConditionalExpression(
-        Expression test,
-        Expression consequent,
-        Expression alternate,
-        SourceLocation location
-) implements Expression {
+public final class ConditionalExpression extends Expression {
+    private final Expression alternate;
+    private final Expression consequent;
+    private final Expression test;
+
+    public ConditionalExpression(
+            Expression test,
+            Expression consequent,
+            Expression alternate,
+            SourceLocation location) {
+        super(location);
+        this.test = test;
+        this.consequent = consequent;
+        this.alternate = alternate;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean testContainsAwait = test != null && test.containsAwait();
+        boolean consequentContainsAwait = consequent != null && consequent.containsAwait();
+        boolean alternateContainsAwait = alternate != null && alternate.containsAwait();
+        awaitInside = testContainsAwait || consequentContainsAwait || alternateContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean testContainsYield = test != null && test.containsYield();
+        boolean consequentContainsYield = consequent != null && consequent.containsYield();
+        boolean alternateContainsYield = alternate != null && alternate.containsYield();
+        yieldInside = testContainsYield || consequentContainsYield || alternateContainsYield;
+        return yieldInside;
+    }
+
+    public Expression alternate() {
+        return alternate;
+    }
+
+    public Expression consequent() {
+        return consequent;
+    }
+
+    public Expression test() {
+        return test;
     }
 }

@@ -19,15 +19,54 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a binary expression.
  */
-public record BinaryExpression(
-        BinaryOperator operator,
-        Expression left,
-        Expression right,
-        SourceLocation location
-) implements Expression {
+public final class BinaryExpression extends Expression {
+    private final Expression left;
+    private final BinaryOperator operator;
+    private final Expression right;
+
+    public BinaryExpression(
+            BinaryOperator operator,
+            Expression left,
+            Expression right,
+            SourceLocation location) {
+        super(location);
+        this.operator = operator;
+        this.left = left;
+        this.right = right;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean leftContainsAwait = left != null && left.containsAwait();
+        boolean rightContainsAwait = right != null && right.containsAwait();
+        awaitInside = leftContainsAwait || rightContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean leftContainsYield = left != null && left.containsYield();
+        boolean rightContainsYield = right != null && right.containsYield();
+        yieldInside = leftContainsYield || rightContainsYield;
+        return yieldInside;
+    }
+
+    public Expression left() {
+        return left;
+    }
+
+    public BinaryOperator operator() {
+        return operator;
+    }
+
+    public Expression right() {
+        return right;
     }
 
     public enum BinaryOperator {

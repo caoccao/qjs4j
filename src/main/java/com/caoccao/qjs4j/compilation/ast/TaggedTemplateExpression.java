@@ -24,13 +24,46 @@ package com.caoccao.qjs4j.compilation.ast;
  * @param quasi    The template literal
  * @param location Source location
  */
-public record TaggedTemplateExpression(
-        Expression tag,
-        TemplateLiteral quasi,
-        SourceLocation location
-) implements Expression {
+public final class TaggedTemplateExpression extends Expression {
+    private final TemplateLiteral quasi;
+    private final Expression tag;
+
+    public TaggedTemplateExpression(
+            Expression tag,
+            TemplateLiteral quasi,
+            SourceLocation location) {
+        super(location);
+        this.tag = tag;
+        this.quasi = quasi;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean tagContainsAwait = tag != null && tag.containsAwait();
+        boolean quasiContainsAwait = quasi != null && quasi.containsAwait();
+        awaitInside = tagContainsAwait || quasiContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean tagContainsYield = tag != null && tag.containsYield();
+        boolean quasiContainsYield = quasi != null && quasi.containsYield();
+        yieldInside = tagContainsYield || quasiContainsYield;
+        return yieldInside;
+    }
+
+    public TemplateLiteral quasi() {
+        return quasi;
+    }
+
+    public Expression tag() {
+        return tag;
     }
 }

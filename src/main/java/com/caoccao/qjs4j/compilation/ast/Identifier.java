@@ -20,12 +20,31 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents an identifier.
  * Identifiers can be used as expressions and as patterns in destructuring.
  */
-public record Identifier(
-        String name,
-        SourceLocation location
-) implements Expression, Pattern {
+public final class Identifier extends Expression implements Pattern {
+    private final String name;
+
+    public Identifier(String name, SourceLocation location) {
+        super(location);
+        this.name = name;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+        }
+        return yieldInside;
+    }
+
+    public String name() {
+        return name;
     }
 }

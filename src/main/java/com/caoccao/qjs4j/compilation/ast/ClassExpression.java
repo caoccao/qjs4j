@@ -22,14 +22,49 @@ import java.util.List;
  * Represents a class expression (class used as an expression, not a declaration).
  * Example: const MyClass = class { ... } or new (class extends Base {})()
  */
-public record ClassExpression(
-        Identifier id,  // Optional - class expressions can be anonymous
-        Expression superClass,
-        List<ClassDeclaration.ClassElement> body,
-        SourceLocation location
-) implements Expression {
+public final class ClassExpression extends Expression {
+    private final List<ClassDeclaration.ClassElement> body;
+    private final Identifier id;
+    private final Expression superClass;
+
+    public ClassExpression(
+            Identifier id,
+            Expression superClass,
+            List<ClassDeclaration.ClassElement> body,
+            SourceLocation location) {
+        super(location);
+        this.id = id;
+        this.superClass = superClass;
+        this.body = body;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = false;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = false;
+        return yieldInside;
+    }
+
+    public List<ClassDeclaration.ClassElement> body() {
+        return body;
+    }
+
+    public Identifier id() {
+        return id;
+    }
+
+    public Expression superClass() {
+        return superClass;
     }
 }

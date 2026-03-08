@@ -21,13 +21,56 @@ import java.util.List;
 /**
  * Represents an object literal expression.
  */
-public record ObjectExpression(
-        List<Property> properties,
-        SourceLocation location
-) implements Expression {
+public final class ObjectExpression extends Expression {
+    private final List<Property> properties;
+
+    public ObjectExpression(List<Property> properties, SourceLocation location) {
+        super(location);
+        this.properties = properties;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean hasAwait = false;
+        if (properties != null) {
+            for (Property property : properties) {
+                if (property != null
+                        && ((property.key() != null && property.key().containsAwait())
+                        || (property.value() != null && property.value().containsAwait()))) {
+                    hasAwait = true;
+                    break;
+                }
+            }
+        }
+        awaitInside = hasAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean hasYield = false;
+        if (properties != null) {
+            for (Property property : properties) {
+                if (property != null
+                        && ((property.key() != null && property.key().containsYield())
+                        || (property.value() != null && property.value().containsYield()))) {
+                    hasYield = true;
+                    break;
+                }
+            }
+        }
+        yieldInside = hasYield;
+        return yieldInside;
+    }
+
+    public List<Property> properties() {
+        return properties;
     }
 
     public record Property(

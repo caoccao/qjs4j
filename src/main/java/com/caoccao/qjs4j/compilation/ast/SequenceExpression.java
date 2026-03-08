@@ -23,12 +23,51 @@ import java.util.List;
  * Evaluates each expression in order and returns the value of the last one.
  * Example: (a = 1, b = 2, a + b)
  */
-public record SequenceExpression(
-        List<Expression> expressions,
-        SourceLocation location
-) implements Expression {
+public final class SequenceExpression extends Expression {
+    private final List<Expression> expressions;
+
+    public SequenceExpression(List<Expression> expressions, SourceLocation location) {
+        super(location);
+        this.expressions = expressions;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean hasAwait = false;
+        if (expressions != null) {
+            for (Expression expression : expressions) {
+                if (expression != null && expression.containsAwait()) {
+                    hasAwait = true;
+                    break;
+                }
+            }
+        }
+        awaitInside = hasAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean hasYield = false;
+        if (expressions != null) {
+            for (Expression expression : expressions) {
+                if (expression != null && expression.containsYield()) {
+                    hasYield = true;
+                    break;
+                }
+            }
+        }
+        yieldInside = hasYield;
+        return yieldInside;
+    }
+
+    public List<Expression> expressions() {
+        return expressions;
     }
 }

@@ -21,12 +21,22 @@ package com.caoccao.qjs4j.compilation.ast;
  * <p>
  * import(source) or import(source, options)
  */
-public record ImportExpression(
-        Expression source,
-        Expression options,
-        boolean defer,
-        SourceLocation location
-) implements Expression {
+public final class ImportExpression extends Expression {
+    private final boolean defer;
+    private final Expression options;
+    private final Expression source;
+
+    public ImportExpression(
+            Expression source,
+            Expression options,
+            boolean defer,
+            SourceLocation location) {
+        super(location);
+        this.source = source;
+        this.options = options;
+        this.defer = defer;
+    }
+
     public ImportExpression(
             Expression source,
             Expression options,
@@ -35,7 +45,36 @@ public record ImportExpression(
     }
 
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean sourceContainsAwait = source != null && source.containsAwait();
+        boolean optionsContainsAwait = options != null && options.containsAwait();
+        awaitInside = sourceContainsAwait || optionsContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean sourceContainsYield = source != null && source.containsYield();
+        boolean optionsContainsYield = options != null && options.containsYield();
+        yieldInside = sourceContainsYield || optionsContainsYield;
+        return yieldInside;
+    }
+
+    public boolean defer() {
+        return defer;
+    }
+
+    public Expression options() {
+        return options;
+    }
+
+    public Expression source() {
+        return source;
     }
 }

@@ -19,15 +19,50 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a unary expression.
  */
-public record UnaryExpression(
-        UnaryOperator operator,
-        Expression operand,
-        boolean prefix,
-        SourceLocation location
-) implements Expression {
+public final class UnaryExpression extends Expression {
+    private final UnaryOperator operator;
+    private final Expression operand;
+    private final boolean prefix;
+
+    public UnaryExpression(
+            UnaryOperator operator,
+            Expression operand,
+            boolean prefix,
+            SourceLocation location) {
+        super(location);
+        this.operator = operator;
+        this.operand = operand;
+        this.prefix = prefix;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = operand != null && operand.containsAwait();
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = operand != null && operand.containsYield();
+        return yieldInside;
+    }
+
+    public Expression operand() {
+        return operand;
+    }
+
+    public UnaryOperator operator() {
+        return operator;
+    }
+
+    public boolean prefix() {
+        return prefix;
     }
 
     public enum UnaryOperator {

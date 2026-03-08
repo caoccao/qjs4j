@@ -23,12 +23,33 @@ package com.caoccao.qjs4j.compilation.ast;
  * <p>
  * Can only be used inside async functions.
  */
-public record AwaitExpression(
-        Expression argument,
-        SourceLocation location
-) implements Expression {
+public final class AwaitExpression extends Expression {
+    private final Expression argument;
+
+    public AwaitExpression(Expression argument, SourceLocation location) {
+        super(location);
+        this.argument = argument;
+    }
+
+    public Expression argument() {
+        return argument;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        awaitInside = true;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        yieldInside = argument != null && argument.containsYield();
+        return yieldInside;
     }
 }

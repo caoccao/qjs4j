@@ -28,14 +28,67 @@ import java.util.List;
  * @param expressions List of expressions to be interpolated
  * @param location    Source location
  */
-public record TemplateLiteral(
-        List<String> quasis,
-        List<String> rawQuasis,
-        List<Expression> expressions,
-        SourceLocation location
-) implements Expression {
+public final class TemplateLiteral extends Expression {
+    private final List<Expression> expressions;
+    private final List<String> quasis;
+    private final List<String> rawQuasis;
+
+    public TemplateLiteral(
+            List<String> quasis,
+            List<String> rawQuasis,
+            List<Expression> expressions,
+            SourceLocation location) {
+        super(location);
+        this.quasis = quasis;
+        this.rawQuasis = rawQuasis;
+        this.expressions = expressions;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean hasAwait = false;
+        if (expressions != null) {
+            for (Expression expression : expressions) {
+                if (expression != null && expression.containsAwait()) {
+                    hasAwait = true;
+                    break;
+                }
+            }
+        }
+        awaitInside = hasAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean hasYield = false;
+        if (expressions != null) {
+            for (Expression expression : expressions) {
+                if (expression != null && expression.containsYield()) {
+                    hasYield = true;
+                    break;
+                }
+            }
+        }
+        yieldInside = hasYield;
+        return yieldInside;
+    }
+
+    public List<Expression> expressions() {
+        return expressions;
+    }
+
+    public List<String> quasis() {
+        return quasis;
+    }
+
+    public List<String> rawQuasis() {
+        return rawQuasis;
     }
 }

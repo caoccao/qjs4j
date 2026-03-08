@@ -19,15 +19,60 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a member access expression.
  */
-public record MemberExpression(
-        Expression object,
-        Expression property,
-        boolean computed,
-        boolean optional,
-        SourceLocation location
-) implements Expression {
+public final class MemberExpression extends Expression {
+    private final boolean computed;
+    private final Expression object;
+    private final boolean optional;
+    private final Expression property;
+
+    public MemberExpression(
+            Expression object,
+            Expression property,
+            boolean computed,
+            boolean optional,
+            SourceLocation location) {
+        super(location);
+        this.object = object;
+        this.property = property;
+        this.computed = computed;
+        this.optional = optional;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside != null) {
+            return awaitInside;
+        }
+        boolean objectContainsAwait = object != null && object.containsAwait();
+        boolean propertyContainsAwait = property != null && property.containsAwait();
+        awaitInside = objectContainsAwait || propertyContainsAwait;
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside != null) {
+            return yieldInside;
+        }
+        boolean objectContainsYield = object != null && object.containsYield();
+        boolean propertyContainsYield = property != null && property.containsYield();
+        yieldInside = objectContainsYield || propertyContainsYield;
+        return yieldInside;
+    }
+
+    public boolean computed() {
+        return computed;
+    }
+
+    public Expression object() {
+        return object;
+    }
+
+    public boolean optional() {
+        return optional;
+    }
+
+    public Expression property() {
+        return property;
     }
 }

@@ -19,12 +19,31 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a literal value.
  */
-public record Literal(
-        Object value,
-        SourceLocation location
-) implements Expression {
+public final class Literal extends Expression {
+    private final Object value;
+
+    public Literal(Object value, SourceLocation location) {
+        super(location);
+        this.value = value;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+        }
+        return yieldInside;
+    }
+
+    public Object value() {
+        return value;
     }
 }
