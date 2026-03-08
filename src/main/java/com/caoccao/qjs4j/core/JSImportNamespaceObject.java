@@ -235,23 +235,34 @@ public final class JSImportNamespaceObject extends JSObject {
         exportNames.remove(exportName);
     }
 
+    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        if (isExportProperty(key) || finalized) {
-            if (context != null && context.isStrictMode()) {
-                context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
-            }
-            return;
+        if (context != null && context.isStrictMode()) {
+            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
         }
-        super.set(context, key, value, receiver);
     }
 
+    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
     public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        if (isExportProperty(key) || finalized) {
-            return false;
+        return false;
+    }
+
+    // ES2024 10.4.6.1 [[SetPrototypeOf]]: Uses SetImmutablePrototype semantics.
+    @Override
+    public SetPrototypeResult setPrototypeChecked(JSObject proto) {
+        JSObject currentProto = getPrototype();
+        if (proto == currentProto) {
+            return SetPrototypeResult.SUCCESS;
         }
-        return super.setWithResult(context, key, value, receiver);
+        return SetPrototypeResult.NOT_EXTENSIBLE;
+    }
+
+    // ES2024 10.4.6.3 [[IsExtensible]]: Always returns false.
+    @Override
+    public boolean isExtensible() {
+        return false;
     }
 
     private boolean validateExportDefine(PropertyKey key, PropertyDescriptor descriptor) {

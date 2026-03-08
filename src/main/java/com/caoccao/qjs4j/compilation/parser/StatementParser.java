@@ -924,60 +924,69 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     Statement parseStatement() {
-        if (parserContext.isAwaitUsingDeclarationStart()) {
-            return parseUsingDeclaration(true);
-        }
-        if (parserContext.isUsingDeclarationStart()) {
-            return parseUsingDeclaration(false);
-        }
-        if (isWithKeyword()) {
-            return parseWithStatement();
-        }
-        // Check for labeled statement: identifier followed by ':'
-        // Following QuickJS is_label() check
-        if (parserContext.currentToken.type() == TokenType.IDENTIFIER && parserContext.peek() != null && parserContext.peek().type() == TokenType.COLON) {
-            return parseLabeledStatement();
-        }
-        return switch (parserContext.currentToken.type()) {
-            case IF -> parseIfStatement();
-            case DO -> parseDoWhileStatement();
-            case WHILE -> parseWhileStatement();
-            case FOR -> parseForStatement();
-            case RETURN -> parseReturnStatement();
-            case BREAK -> parseBreakStatement();
-            case CONTINUE -> parseContinueStatement();
-            case THROW -> parseThrowStatement();
-            case TRY -> parseTryStatement();
-            case SWITCH -> parseSwitchStatement();
-            case LBRACE -> parseBlockStatement();
-            case VAR, LET, CONST -> parseVariableDeclaration();
-            case ASYNC -> // Async function declaration: async function f() {}
-                    parseAsyncDeclaration();
-            case FUNCTION -> // Function declarations are treated as statements in JavaScript
-                    delegates.functions.parseFunctionDeclaration(false, false);
-            case CLASS -> // Class declarations are treated as statements in JavaScript
-                    delegates.functions.parseClassDeclaration();
-            case EXPORT -> {
-                if (!parserContext.moduleMode) {
-                    throw new JSSyntaxErrorException("Unexpected token 'export'");
+        parserContext.statementNesting++;
+        try {
+            if (parserContext.isAwaitUsingDeclarationStart()) {
+                return parseUsingDeclaration(true);
+            }
+            if (parserContext.isUsingDeclarationStart()) {
+                return parseUsingDeclaration(false);
+            }
+            if (isWithKeyword()) {
+                return parseWithStatement();
+            }
+            // Check for labeled statement: identifier followed by ':'
+            // Following QuickJS is_label() check
+            if (parserContext.currentToken.type() == TokenType.IDENTIFIER && parserContext.peek() != null && parserContext.peek().type() == TokenType.COLON) {
+                return parseLabeledStatement();
+            }
+            return switch (parserContext.currentToken.type()) {
+                case IF -> parseIfStatement();
+                case DO -> parseDoWhileStatement();
+                case WHILE -> parseWhileStatement();
+                case FOR -> parseForStatement();
+                case RETURN -> parseReturnStatement();
+                case BREAK -> parseBreakStatement();
+                case CONTINUE -> parseContinueStatement();
+                case THROW -> parseThrowStatement();
+                case TRY -> parseTryStatement();
+                case SWITCH -> parseSwitchStatement();
+                case LBRACE -> parseBlockStatement();
+                case VAR, LET, CONST -> parseVariableDeclaration();
+                case ASYNC -> // Async function declaration: async function f() {}
+                        parseAsyncDeclaration();
+                case FUNCTION -> // Function declarations are treated as statements in JavaScript
+                        delegates.functions.parseFunctionDeclaration(false, false);
+                case CLASS -> // Class declarations are treated as statements in JavaScript
+                        delegates.functions.parseClassDeclaration();
+                case EXPORT -> {
+                    if (!parserContext.moduleMode || parserContext.statementNesting > 1) {
+                        throw new JSSyntaxErrorException("Unexpected token 'export'");
+                    }
+                    yield parseExportDeclaration();
                 }
-                yield parseExportDeclaration();
-            }
-            case IMPORT -> {
-                Token nextToken = parserContext.peek();
-                boolean isDynamicImportExpression = nextToken != null
-                        && (nextToken.type() == TokenType.LPAREN || nextToken.type() == TokenType.DOT);
-                if (parserContext.moduleMode && parserContext.functionNesting == 0 && !isDynamicImportExpression) {
-                    yield parseImportDeclarationStatement();
+                case IMPORT -> {
+                    Token nextToken = parserContext.peek();
+                    boolean isDynamicImportExpression = nextToken != null
+                            && (nextToken.type() == TokenType.LPAREN || nextToken.type() == TokenType.DOT);
+                    if (!isDynamicImportExpression) {
+                        if (parserContext.moduleMode && parserContext.functionNesting == 0
+                                && parserContext.statementNesting <= 1) {
+                            yield parseImportDeclarationStatement();
+                        }
+                        throw new JSSyntaxErrorException("Cannot use import statement outside a module");
+                    }
+                    yield parseExpressionStatement();
                 }
-                yield parseExpressionStatement();
-            }
-            case SEMICOLON -> {
-                parserContext.advance(); // consume semicolon
-                yield null; // empty statement
-            }
-            default -> parseExpressionStatement();
-        };
+                case SEMICOLON -> {
+                    parserContext.advance(); // consume semicolon
+                    yield null; // empty statement
+                }
+                default -> parseExpressionStatement();
+            };
+        } finally {
+            parserContext.statementNesting--;
+        }
     }
 
     Statement parseSwitchStatement() {
