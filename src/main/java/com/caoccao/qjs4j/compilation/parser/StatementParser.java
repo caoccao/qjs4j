@@ -309,10 +309,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 }
                 return new ExpressionStatement(classExpr, location);
             } else if (parserContext.match(TokenType.FUNCTION)) {
-                return delegates.functions.parseExportDefaultFunctionDeclaration(false);
+                Statement funcDecl = delegates.functions.parseExportDefaultFunctionDeclaration(false);
+                if (parserContext.match(TokenType.LPAREN)) {
+                    throw new JSSyntaxErrorException("Unexpected token '('");
+                }
+                return funcDecl;
             } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
                     && parserContext.peek().type() == TokenType.FUNCTION) {
-                return delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
+                Statement asyncDecl = delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
+                if (parserContext.match(TokenType.LPAREN)) {
+                    throw new JSSyntaxErrorException("Unexpected token '('");
+                }
+                return asyncDecl;
             } else {
                 // export default <expression>;
                 Expression expr = delegates.expressions.parseAssignmentExpression();

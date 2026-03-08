@@ -30,6 +30,8 @@ final class JSDynamicImportModule {
     private final List<JSDynamicImportModule> pendingDependents;
     private final List<ReExportBinding> reExportBindings;
     private final String resolvedSpecifier;
+    private int asyncEvaluationOrder;
+    private JSDynamicImportModule cycleRoot;
     private JSObject deferredNamespace;
     private boolean deferredPreload;
     private JSValue evaluationError;
@@ -37,21 +39,25 @@ final class JSDynamicImportModule {
     private boolean hasExportSyntax;
     private JSPromise asyncEvaluationPromise;
     private boolean hasTLA;
+    private int pendingAsyncDependencyCount;
     private String rawSource;
     private Status status;
     private String transformedSource;
 
     JSDynamicImportModule(String resolvedSpecifier, JSImportNamespaceObject namespace) {
         this.ambiguousExportNames = new HashSet<>();
+        this.asyncEvaluationOrder = -1;
         this.explicitExportNames = new HashSet<>();
         this.exportOrigins = new HashMap<>();
         this.namespace = namespace;
         this.localExportBindings = new ArrayList<>();
+        this.pendingAsyncDependencyCount = 0;
         this.pendingDependents = new ArrayList<>();
         this.reExportBindings = new ArrayList<>();
         this.resolvedSpecifier = resolvedSpecifier;
         this.status = Status.LOADING;
         this.asyncEvaluationPromise = null;
+        this.cycleRoot = null;
         this.deferredNamespace = null;
         this.deferredPreload = false;
         this.evaluationError = null;
@@ -74,8 +80,16 @@ final class JSDynamicImportModule {
         return ambiguousExportNames;
     }
 
+    int asyncEvaluationOrder() {
+        return asyncEvaluationOrder;
+    }
+
     JSPromise asyncEvaluationPromise() {
         return asyncEvaluationPromise;
+    }
+
+    JSDynamicImportModule cycleRoot() {
+        return cycleRoot;
     }
 
     JSObject deferredNamespace() {
@@ -106,6 +120,10 @@ final class JSDynamicImportModule {
         return hasTLA;
     }
 
+    int pendingAsyncDependencyCount() {
+        return pendingAsyncDependencyCount;
+    }
+
     List<JSDynamicImportModule> pendingDependents() {
         return pendingDependents;
     }
@@ -130,8 +148,16 @@ final class JSDynamicImportModule {
         return resolvedSpecifier;
     }
 
+    void setAsyncEvaluationOrder(int order) {
+        this.asyncEvaluationOrder = order;
+    }
+
     void setAsyncEvaluationPromise(JSPromise promise) {
         this.asyncEvaluationPromise = promise;
+    }
+
+    void setCycleRoot(JSDynamicImportModule cycleRoot) {
+        this.cycleRoot = cycleRoot;
     }
 
     void setDeferredNamespace(JSObject deferredNamespace) {
@@ -152,6 +178,14 @@ final class JSDynamicImportModule {
 
     void setHasTLA(boolean hasTLA) {
         this.hasTLA = hasTLA;
+    }
+
+    void setPendingAsyncDependencyCount(int count) {
+        this.pendingAsyncDependencyCount = count;
+    }
+
+    void decrementPendingAsyncDependencyCount() {
+        this.pendingAsyncDependencyCount--;
     }
 
     void setRawSource(String rawSource) {

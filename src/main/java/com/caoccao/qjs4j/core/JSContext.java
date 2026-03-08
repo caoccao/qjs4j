@@ -113,6 +113,12 @@ public final class JSContext implements AutoCloseable {
     // Execution state
     private boolean strictMode;
     private boolean suppressEvalMicrotaskProcessing;
+    // Counter for tracking the order modules have their async evaluation set
+    private int asyncEvaluationOrderCounter;
+    // Flag set by the VM's PUT_VAR handler before calling globalObject.set()
+    // so that import overlay setters can distinguish bare variable assignment
+    // (which should throw TypeError) from property-based writes (which should succeed).
+    private boolean inBareVariableAssignment;
     // The %ThrowTypeError% intrinsic (shared across Function.prototype and strict arguments)
     private JSNativeFunction throwTypeErrorIntrinsic;
     private boolean waitable;
@@ -141,6 +147,8 @@ public final class JSContext implements AutoCloseable {
         this.moduleCache = new HashMap<>();
         this.pendingException = null;
         this.runtime = runtime;
+        this.asyncEvaluationOrderCounter = 0;
+        this.inBareVariableAssignment = false;
         this.pendingDirectEvalCalls = 0;
         this.stackDepth = 0;
         this.strictMode = false;
@@ -284,8 +292,24 @@ public final class JSContext implements AutoCloseable {
                     return val != null ? val : JSUndefined.INSTANCE;
                 });
         getter.initializePrototypeChain(this);
+        // Setter distinguishes bare variable assignment (PUT_VAR, e.g., check = true)
+        // from property-based writes (PUT_FIELD, e.g., globalThis.check = true).
+        // Bare variable assignment to an import binding throws TypeError (ES2024 immutable binding).
+        // Property-based writes update savedGlobals for correct value restoration.
+        JSNativeFunction setter = new JSNativeFunction("set " + bindingName, 1,
+                (ctx, thisArg, args) -> {
+                    if (ctx != null && ctx.isInBareVariableAssignment()) {
+                        ctx.throwTypeError("Assignment to constant variable.");
+                        return JSUndefined.INSTANCE;
+                    }
+                    JSValue val = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    savedGlobals.put(bindingName, val);
+                    return JSUndefined.INSTANCE;
+                });
+        setter.initializePrototypeChain(this);
         PropertyDescriptor descriptor = new PropertyDescriptor();
         descriptor.setGetter(getter);
+        descriptor.setSetter(setter);
         descriptor.setConfigurable(true);
         descriptor.setEnumerable(true);
         globalObject.defineProperty(this, key, descriptor);
@@ -2061,6 +2085,57 @@ public final class JSContext implements AutoCloseable {
             processMicrotasks();
         }
 
+        // ES2024: If any imported module's evaluation failed (e.g., TLA rejection),
+        // propagate the error to the importing module before its body runs.
+        // Skip deferred imports — their errors are deferred until namespace access.
+        for (int[] pos : importPositions) {
+            int type = pos[1];
+            int start = pos[0];
+            String specifier = null;
+            if (type == 0) {
+                sideEffectMatcher.reset(scanCode);
+                if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
+                    specifier = sideEffectMatcher.group(2);
+                }
+            } else if (type == 1) {
+                namespaceMatcher.reset(scanCode);
+                if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
+                    // Skip deferred namespace imports — evaluation errors are deferred
+                    // until the namespace is accessed (EnsureDeferredNamespaceEvaluation).
+                    String deferKeyword = namespaceMatcher.group(1);
+                    if ("defer".equals(deferKeyword)) {
+                        continue;
+                    }
+                    specifier = namespaceMatcher.group(4);
+                }
+            } else {
+                bindingMatcher.reset(scanCode);
+                if (bindingMatcher.find(start) && bindingMatcher.start() == start) {
+                    // Skip deferred namespace imports that also match the binding pattern.
+                    // These are handled by the namespace (type==1) branch above.
+                    String importClause = bindingMatcher.group(1).trim();
+                    if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
+                        continue;
+                    }
+                    specifier = bindingMatcher.group(3);
+                }
+            }
+            if (specifier != null) {
+                try {
+                    String resolvedSpec = resolveDynamicImportSpecifier(specifier, filename, specifier);
+                    JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpec);
+                    if (moduleRecord != null
+                            && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+                        throw new JSException(moduleRecord.evaluationError());
+                    }
+                } catch (JSException e) {
+                    throw e;
+                } catch (Exception ignored) {
+                    // Specifier resolution failure is handled elsewhere
+                }
+            }
+        }
+
         if (savedGlobals.isEmpty() && absentKeys.isEmpty()) {
             return null;
         }
@@ -2235,15 +2310,97 @@ public final class JSContext implements AutoCloseable {
         List<String> declarationNames = new ArrayList<>(declarators.size());
         for (String declarator : declarators) {
             String declaratorText = declarator.trim();
-            int assignmentIndex = declaratorText.indexOf('=');
+            int assignmentIndex = findTopLevelAssignment(declaratorText);
             if (assignmentIndex >= 0) {
                 declaratorText = declaratorText.substring(0, assignmentIndex).trim();
             }
             if (!declaratorText.isEmpty()) {
-                declarationNames.add(declaratorText);
+                if (declaratorText.startsWith("{") && declaratorText.endsWith("}")) {
+                    // Object destructuring pattern: { a, b, c: d } → extract bound names
+                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1), declarationNames);
+                } else if (declaratorText.startsWith("[") && declaratorText.endsWith("]")) {
+                    // Array destructuring pattern: [a, b, c] → extract bound names
+                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1), declarationNames);
+                } else {
+                    declarationNames.add(declaratorText);
+                }
             }
         }
         return declarationNames;
+    }
+
+    private int findTopLevelAssignment(String text) {
+        int depth = 0;
+        boolean inString = false;
+        char stringChar = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char ch = text.charAt(i);
+            if (inString) {
+                if (ch == stringChar && (i == 0 || text.charAt(i - 1) != '\\')) {
+                    inString = false;
+                }
+            } else if (ch == '\'' || ch == '"' || ch == '`') {
+                inString = true;
+                stringChar = ch;
+            } else if (ch == '(' || ch == '[' || ch == '{') {
+                depth++;
+            } else if (ch == ')' || ch == ']' || ch == '}') {
+                depth--;
+            } else if (ch == '=' && depth == 0 && i + 1 < text.length() && text.charAt(i + 1) != '=') {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void extractDestructuringNames(String innerText, List<String> names) {
+        // Split on top-level commas and extract bound names
+        String trimmed = innerText.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < trimmed.length(); i++) {
+            char ch = trimmed.charAt(i);
+            if (ch == '(' || ch == '[' || ch == '{') {
+                depth++;
+            } else if (ch == ')' || ch == ']' || ch == '}') {
+                depth--;
+            } else if (ch == ',' && depth == 0) {
+                extractSingleDestructuringName(trimmed.substring(start, i).trim(), names);
+                start = i + 1;
+            }
+        }
+        extractSingleDestructuringName(trimmed.substring(start).trim(), names);
+    }
+
+    private void extractSingleDestructuringName(String element, List<String> names) {
+        if (element.isEmpty() || element.equals("...")) {
+            return;
+        }
+        // Handle rest element: ...name
+        if (element.startsWith("...")) {
+            element = element.substring(3).trim();
+        }
+        // Handle rename: key: value
+        int colonIndex = element.indexOf(':');
+        if (colonIndex >= 0) {
+            element = element.substring(colonIndex + 1).trim();
+        }
+        // Handle default value: name = defaultVal
+        int eqIndex = findTopLevelAssignment(element);
+        if (eqIndex >= 0) {
+            element = element.substring(0, eqIndex).trim();
+        }
+        // Check for nested destructuring
+        if (element.startsWith("{") && element.endsWith("}")) {
+            extractDestructuringNames(element.substring(1, element.length() - 1), names);
+        } else if (element.startsWith("[") && element.endsWith("]")) {
+            extractDestructuringNames(element.substring(1, element.length() - 1), names);
+        } else if (!element.isEmpty()) {
+            names.add(element);
+        }
     }
 
     private void gatherDeferredAsyncDependencySpecifiers(
@@ -2467,20 +2624,41 @@ public final class JSContext implements AutoCloseable {
     private void registerPendingDependent(JSDynamicImportModule moduleRecord) {
         String scanSource = maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
+        int asyncDepCount = 0;
+        Set<String> registeredOnSpecifiers = new HashSet<>();
+        // Determine this module's effective cycle root for same-cycle detection.
+        JSDynamicImportModule moduleCycleRoot =
+                moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
         while (matcher.find()) {
             String specifier = matcher.group(1);
             try {
                 String resolved = resolveDynamicImportSpecifier(
                         specifier, moduleRecord.resolvedSpecifier(), specifier);
                 JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord != null
-                        && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                    depRecord.pendingDependents().add(moduleRecord);
+                if (depRecord == null) {
+                    continue;
+                }
+                // ES2024 16.2.1.5.2.1 step 11.c.iv.1: Follow CycleRoot pointer only
+                // for dependencies NOT in the same cycle. Modules in the same cycle
+                // (sharing a cycle root) register directly on each other.
+                JSDynamicImportModule effectiveDep = depRecord;
+                if (depRecord.cycleRoot() != null) {
+                    JSDynamicImportModule depCycleRoot = depRecord.cycleRoot();
+                    // Only follow CycleRoot if the dependency is in a DIFFERENT cycle.
+                    if (depCycleRoot != moduleCycleRoot) {
+                        effectiveDep = depCycleRoot;
+                    }
+                }
+                if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
+                        && registeredOnSpecifiers.add(effectiveDep.resolvedSpecifier())) {
+                    effectiveDep.pendingDependents().add(moduleRecord);
+                    asyncDepCount++;
                 }
             } catch (JSException ignored) {
                 // Skip unresolvable specifiers
             }
         }
+        moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
     }
 
     private void registerAsyncModuleCompletion(
@@ -2511,29 +2689,108 @@ public final class JSContext implements AutoCloseable {
     }
 
     private void triggerPendingDependents(JSDynamicImportModule moduleRecord) {
-        List<JSDynamicImportModule> dependents = new ArrayList<>(moduleRecord.pendingDependents());
-        moduleRecord.pendingDependents().clear();
-        for (JSDynamicImportModule dependent : dependents) {
-            if (hasEvaluatingAsyncDependency(dependent)) {
-                continue; // Still has other async deps pending
+        // ES2024 16.2.1.5.2.4 AsyncModuleExecutionFulfilled / 16.2.1.5.2.5 AsyncModuleExecutionRejected
+        // Step 1: Gather all ancestors that are now ready (all async deps resolved)
+        List<JSDynamicImportModule> readyModules = new ArrayList<>();
+        gatherAvailableAncestors(moduleRecord, readyModules);
+
+        // Step 2: Sort by async evaluation order (the order they were deferred during DFS)
+        readyModules.sort(Comparator.comparingInt(JSDynamicImportModule::asyncEvaluationOrder));
+
+        // Step 3: Execute each ready module in order
+        for (JSDynamicImportModule ready : readyModules) {
+            if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+                // Propagate error to dependents
+                ready.setEvaluationError(moduleRecord.evaluationError());
+                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+                continue;
             }
             try {
-                dependent.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                JSValue evalResult = evaluateDynamicImportModule(dependent);
-                if (dependent.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                    dependent.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    dependent.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(dependent, asyncPromise, new HashSet<>());
+                ready.setStatus(JSDynamicImportModule.Status.EVALUATING);
+                JSValue evalResult = evaluateDynamicImportModule(ready);
+                if (ready.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
+                    ready.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
+                    ready.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
+                    ready.setAsyncEvaluationPromise(asyncPromise);
+                    registerAsyncModuleCompletion(ready, asyncPromise, new HashSet<>());
                 } else {
-                    resolveDynamicImportReExports(dependent, new HashSet<>());
-                    dependent.namespace().finalizeNamespace();
-                    dependent.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    triggerPendingDependents(dependent);
+                    resolveDynamicImportReExports(ready, new HashSet<>());
+                    ready.namespace().finalizeNamespace();
+                    ready.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                    triggerPendingDependents(ready);
                 }
             } catch (JSException jsException) {
-                dependent.setEvaluationError(jsException.getErrorValue());
-                dependent.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                triggerPendingDependents(dependent);
+                ready.setEvaluationError(jsException.getErrorValue());
+                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+                triggerPendingDependents(ready);
+            }
+        }
+    }
+
+    /**
+     * ES2024 16.2.1.5.2.4 GatherAvailableAncestors.
+     * Collects all ancestor modules whose pending async dependencies have all resolved.
+     */
+    private void gatherAvailableAncestors(JSDynamicImportModule module,
+                                           List<JSDynamicImportModule> execList) {
+        List<JSDynamicImportModule> dependents = new ArrayList<>(module.pendingDependents());
+        module.pendingDependents().clear();
+        for (JSDynamicImportModule dependent : dependents) {
+            if (execList.contains(dependent)) {
+                continue;
+            }
+            dependent.decrementPendingAsyncDependencyCount();
+            if (dependent.pendingAsyncDependencyCount() <= 0) {
+                execList.add(dependent);
+                if (!dependent.hasTLA()) {
+                    // Non-TLA modules will execute synchronously, so their ancestors
+                    // might also become available immediately.
+                    gatherAvailableAncestors(dependent, execList);
+                }
+            }
+        }
+    }
+
+    /**
+     * Pre-load all static imports of a module so that EVALUATING_ASYNC dependencies
+     * are discovered before we decide whether to defer or evaluate the module.
+     */
+    private void preloadStaticImports(JSDynamicImportModule moduleRecord,
+                                       Set<String> importResolutionStack,
+                                       Map<String, String> importAttributes) {
+        String scanSource = maskModuleComments(moduleRecord.rawSource());
+        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
+        while (matcher.find()) {
+            // Skip import defer statements — deferred modules must not be eagerly evaluated
+            String fullMatch = matcher.group(0).stripLeading();
+            if (fullMatch.startsWith("import") && fullMatch.length() > 6) {
+                String afterImport = fullMatch.substring(6).stripLeading();
+                if (afterImport.startsWith("defer")) {
+                    continue;
+                }
+            }
+            String specifier = matcher.group(1);
+            try {
+                String resolved = resolveDynamicImportSpecifier(
+                        specifier, moduleRecord.resolvedSpecifier(), specifier);
+                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
+                if (depRecord != null) {
+                    // ES2024 16.2.1.5.2.1 step 11.d: If the dependency is still on the
+                    // evaluation stack (LOADING/EVALUATING), we're in a cycle. Set the
+                    // current module's cycleRoot to the dependency's root (or the dependency
+                    // itself if it has no cycle root).
+                    if (depRecord.status() == JSDynamicImportModule.Status.LOADING
+                            || depRecord.status() == JSDynamicImportModule.Status.EVALUATING) {
+                        JSDynamicImportModule root =
+                                depRecord.cycleRoot() != null ? depRecord.cycleRoot() : depRecord;
+                        moduleRecord.setCycleRoot(root);
+                    }
+                } else {
+                    loadJSDynamicImportModule(resolved,
+                            new HashSet<>(importResolutionStack), importAttributes);
+                }
+            } catch (JSException ignored) {
+                // Skip unresolvable specifiers
             }
         }
     }
@@ -2937,6 +3194,14 @@ public final class JSContext implements AutoCloseable {
         return virtualMachine;
     }
 
+    public boolean isInBareVariableAssignment() {
+        return inBareVariableAssignment;
+    }
+
+    public void setInBareVariableAssignment(boolean value) {
+        this.inBareVariableAssignment = value;
+    }
+
     public boolean hasEvalOverlayBinding(String name) {
         for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
             if (evalOverlayFrame.savedGlobals().containsKey(name)
@@ -3115,6 +3380,21 @@ public final class JSContext implements AutoCloseable {
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes) {
+        return loadDynamicImportModule(specifier, referrerFilename, importAttributes, null, null);
+    }
+
+    /**
+     * Load a dynamic import module. When importPromise and resolveState are provided
+     * (from a dynamic import() expression), the method chains the import promise onto
+     * the module's async evaluation promise if the module has TLA.
+     * Returns null when the import promise is handled internally.
+     */
+    public JSObject loadDynamicImportModule(
+            String specifier,
+            String referrerFilename,
+            Map<String, String> importAttributes,
+            JSPromise importPromise,
+            JSPromise.ResolveState resolveState) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
         // Check if the module was pre-loaded (deferred) but not yet evaluated.
         JSDynamicImportModule preloaded = dynamicImportModuleCache.get(resolvedSpecifier);
@@ -3134,7 +3414,48 @@ public final class JSContext implements AutoCloseable {
         }
         JSDynamicImportModule moduleRecord =
                 loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), importAttributes);
+        // If the module is still completing async evaluation, chain the import promise
+        // onto the module's async evaluation promise instead of resolving immediately.
+        if (importPromise != null && resolveState != null
+                && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
+                && moduleRecord.asyncEvaluationPromise() != null) {
+            chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
+            return null;
+        }
+        // If the module evaluation failed, throw so the import() promise gets rejected
+        if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+            throw new JSException(moduleRecord.evaluationError());
+        }
         return moduleRecord.namespace();
+    }
+
+    private void chainImportPromiseOntoAsyncModule(
+            JSDynamicImportModule moduleRecord,
+            JSPromise importPromise,
+            JSPromise.ResolveState resolveState) {
+        JSObject namespace = moduleRecord.namespace();
+        JSNativeFunction onFulfill = new JSNativeFunction("", 0,
+                (ctx, thisArg, args) -> {
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        importPromise.resolve(ctx, namespace);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+        onFulfill.initializePrototypeChain(this);
+        JSNativeFunction onReject = new JSNativeFunction("", 1,
+                (ctx, thisArg, args) -> {
+                    if (!resolveState.alreadyResolved) {
+                        resolveState.alreadyResolved = true;
+                        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                        importPromise.reject(reason);
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+        onReject.initializePrototypeChain(this);
+        moduleRecord.asyncEvaluationPromise().addReactions(
+                new JSPromise.ReactionRecord(onFulfill, this, null, null),
+                new JSPromise.ReactionRecord(onReject, this, null, null));
     }
 
     public JSObject loadDynamicImportModuleDeferred(
@@ -3342,10 +3663,19 @@ public final class JSContext implements AutoCloseable {
             }
             parseDynamicImportModuleSource(moduleRecord);
             resolveDynamicImportReExports(moduleRecord, importResolutionStack);
-            if (suppressEvalMicrotaskProcessing && moduleRecord.hasTLA()
+            // Pre-load all static imports so we can detect EVALUATING_ASYNC dependencies.
+            // Without this, a module's deps aren't loaded until eval() → evaluateModuleImportsInOrder,
+            // which is too late for the hasEvaluatingAsyncDependency check.
+            if (suppressEvalMicrotaskProcessing) {
+                preloadStaticImports(moduleRecord, importResolutionStack, importAttributes);
+            }
+            if (suppressEvalMicrotaskProcessing
                     && hasEvaluatingAsyncDependency(moduleRecord)) {
-                // This TLA module depends on an EVALUATING_ASYNC module.
+                // ES2024 16.2.1.5.2.1: Module depends on an EVALUATING_ASYNC module.
                 // Don't evaluate yet; register as a pending dependent.
+                // Set EVALUATING_ASYNC so transitive dependents also defer.
+                moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
+                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
                 registerPendingDependent(moduleRecord);
                 return moduleRecord;
             }
@@ -3363,6 +3693,7 @@ public final class JSContext implements AutoCloseable {
                     suppressEvalMicrotaskProcessing = prevSuppress;
                 }
                 if (evalResult instanceof JSPromise asyncPromise) {
+                    moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
                     moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
                     moduleRecord.setAsyncEvaluationPromise(asyncPromise);
                     registerAsyncModuleCompletion(moduleRecord, asyncPromise, importResolutionStack);
@@ -3689,13 +4020,38 @@ public final class JSContext implements AutoCloseable {
                 collectImportBindings(importStatementForScan, importedBindingNames, importedBindings);
                 continue;
             }
-            if (!trimmedLine.startsWith("export ")) {
+            if (!trimmedLine.startsWith("export ") && !trimmedLine.startsWith("export{")
+                    && !trimmedLine.startsWith("export*") && !trimmedLine.equals("export")) {
                 transformedSourceBuilder.append(normalizedLine).append('\n');
                 continue;
             }
 
             hasExportSyntax = true;
-            String exportClause = trimmedLine.substring("export ".length()).trim();
+            String exportClause;
+            if (trimmedLine.startsWith("export ")) {
+                exportClause = trimmedLine.substring("export ".length()).trim();
+            } else if (trimmedLine.equals("export") || trimmedLine.startsWith("export") && trimmedLine.substring("export".length()).isBlank()) {
+                exportClause = "";
+            } else {
+                // export{ or export* — no space after 'export'
+                exportClause = trimmedLine.substring("export".length()).trim();
+            }
+            // If the export clause is empty (bare 'export', 'export' with trailing comments/whitespace),
+            // look ahead to subsequent lines for the continuation.
+            if (exportClause.isEmpty()) {
+                StringBuilder exportContinuation = new StringBuilder();
+                while (lineIndex + 1 < lines.length) {
+                    lineIndex++;
+                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
+                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
+                            ? nextScanLine.substring(0, nextScanLine.length() - 1) : nextScanLine;
+                    exportContinuation.append(normalizedNextScanLine.stripLeading());
+                    if (exportContinuation.toString().contains("}") || exportContinuation.toString().contains("*")) {
+                        break;
+                    }
+                }
+                exportClause = exportContinuation.toString().trim();
+            }
             if (exportClause.startsWith("default ")) {
                 String defaultClause = exportClause.substring("default ".length()).trim();
                 if (isDynamicImportDefaultDeclarationClause(defaultClause)) {
@@ -3960,7 +4316,8 @@ public final class JSContext implements AutoCloseable {
             moduleRecord.namespace().registerExportName(reExportBinding.exportedName());
         }
 
-        boolean hasTLA = MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(transformedSourceBuilder).find();
+        boolean hasTLA = MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(transformedSourceBuilder).find()
+                || Pattern.compile("\\bawait\\b").matcher(scanSourceCode).find();
         moduleRecord.setHasTLA(hasTLA);
 
         if (hasExportSyntax) {

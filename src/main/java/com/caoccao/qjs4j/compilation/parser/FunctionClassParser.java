@@ -252,10 +252,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // Parse optional extends clause
+        // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
         Expression superClass = null;
         if (parserContext.match(TokenType.EXTENDS)) {
             parserContext.advance();
-            superClass = delegates.expressions.parseMemberExpression();
+            superClass = delegates.expressions.parseCallExpression();
         }
 
         // Parse class body
@@ -266,6 +267,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.parsingClassWithSuper = superClass != null;
         parserContext.strictMode = true;
         parserContext.lexer.setStrictMode(true);
+        parserContext.classBodyNesting++;
         try {
             while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 // Skip empty semicolons
@@ -281,6 +283,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
             validateClassElements(body);
         } finally {
+            parserContext.classBodyNesting--;
             parserContext.strictMode = savedStrictMode;
             parserContext.lexer.setStrictMode(savedStrictMode);
             parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
@@ -525,10 +528,11 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // Parse optional extends clause
+        // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
         Expression superClass = null;
         if (parserContext.match(TokenType.EXTENDS)) {
             parserContext.advance();
-            superClass = delegates.expressions.parseMemberExpression();
+            superClass = delegates.expressions.parseCallExpression();
         }
 
         // Parse class body
@@ -539,6 +543,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.parsingClassWithSuper = superClass != null;
         parserContext.strictMode = true;
         parserContext.lexer.setStrictMode(true);
+        parserContext.classBodyNesting++;
         try {
             while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                 // Skip empty semicolons
@@ -554,6 +559,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
             validateClassElements(body);
         } finally {
+            parserContext.classBodyNesting--;
             parserContext.strictMode = savedStrictMode;
             parserContext.lexer.setStrictMode(savedStrictMode);
             parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;

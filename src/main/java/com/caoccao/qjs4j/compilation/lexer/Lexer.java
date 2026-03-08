@@ -93,7 +93,7 @@ public final class Lexer {
                  LPAREN, LBRACKET, LBRACE, COMMA, SEMICOLON, COLON, QUESTION,
                  ARROW,
                  // After keywords that start expressions
-                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
+                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW, AWAIT,
                  IF, WHILE, FOR, CASE, YIELD -> true;
             default -> false;
         };

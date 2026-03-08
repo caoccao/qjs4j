@@ -93,6 +93,7 @@ final class ParserContext {
     Token nextToken;
     boolean parsingClassWithSuper;
     int statementNesting;
+    int classBodyNesting;
     int previousTokenEndOffset;
     int previousTokenLine;
     boolean strictMode;

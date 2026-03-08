@@ -208,6 +208,110 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
+    /**
+     * Checks whether an expression tree contains an AwaitExpression.
+     * Used for ES2024 14.2.1: "ArrowParameters Contains AwaitExpression is true" early error.
+     */
+    private boolean containsAwaitExpression(Expression expression) {
+        if (expression == null) {
+            return false;
+        }
+        if (expression instanceof AwaitExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression
+                || expression instanceof ArrowFunctionExpression
+                || expression instanceof ClassExpression) {
+            return false;
+        }
+        if (expression instanceof BinaryExpression binaryExpression) {
+            return containsAwaitExpression(binaryExpression.left())
+                    || containsAwaitExpression(binaryExpression.right());
+        }
+        if (expression instanceof UnaryExpression unaryExpression) {
+            return containsAwaitExpression(unaryExpression.operand());
+        }
+        if (expression instanceof AssignmentExpression assignmentExpression) {
+            return containsAwaitExpression(assignmentExpression.left())
+                    || containsAwaitExpression(assignmentExpression.right());
+        }
+        if (expression instanceof ConditionalExpression conditionalExpression) {
+            return containsAwaitExpression(conditionalExpression.test())
+                    || containsAwaitExpression(conditionalExpression.consequent())
+                    || containsAwaitExpression(conditionalExpression.alternate());
+        }
+        if (expression instanceof CallExpression callExpression) {
+            if (containsAwaitExpression(callExpression.callee())) {
+                return true;
+            }
+            for (Expression arg : callExpression.arguments()) {
+                if (containsAwaitExpression(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof MemberExpression memberExpression) {
+            return containsAwaitExpression(memberExpression.object())
+                    || containsAwaitExpression(memberExpression.property());
+        }
+        if (expression instanceof NewExpression newExpression) {
+            if (containsAwaitExpression(newExpression.callee())) {
+                return true;
+            }
+            for (Expression arg : newExpression.arguments()) {
+                if (containsAwaitExpression(arg)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof ArrayExpression arrayExpression) {
+            for (Expression element : arrayExpression.elements()) {
+                if (containsAwaitExpression(element)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof ObjectExpression objectExpression) {
+            for (ObjectExpression.Property property : objectExpression.properties()) {
+                if (containsAwaitExpression(property.key())
+                        || containsAwaitExpression(property.value())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof SpreadElement spreadElement) {
+            return containsAwaitExpression(spreadElement.argument());
+        }
+        if (expression instanceof SequenceExpression sequenceExpression) {
+            for (Expression expr : sequenceExpression.expressions()) {
+                if (containsAwaitExpression(expr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof TemplateLiteral templateLiteral) {
+            for (Expression expr : templateLiteral.expressions()) {
+                if (containsAwaitExpression(expr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (expression instanceof TaggedTemplateExpression taggedTemplateExpression) {
+            return containsAwaitExpression(taggedTemplateExpression.tag())
+                    || containsAwaitExpression(taggedTemplateExpression.quasi());
+        }
+        if (expression instanceof YieldExpression yieldExpression) {
+            return containsAwaitExpression(yieldExpression.argument());
+        }
+        return false;
+    }
+
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
         for (int elementIndex = 0; elementIndex < arrayExpression.elements().size(); elementIndex++) {
@@ -874,10 +978,14 @@ final class ExpressionAssignmentParser {
         // ES2024 14.2.1 Static Semantics: Early Errors
         // ArrowFunction : ArrowParameters => ConciseBody
         // It is a Syntax Error if ArrowParameters Contains YieldExpression is true.
+        // It is a Syntax Error if ArrowParameters Contains AwaitExpression is true.
         if (defaults != null) {
             for (Expression defaultExpression : defaults) {
                 if (containsYieldExpression(defaultExpression)) {
                     throw new JSSyntaxErrorException("Yield expression not allowed in arrow function parameters");
+                }
+                if (containsAwaitExpression(defaultExpression)) {
+                    throw new JSSyntaxErrorException("Await expression not allowed in arrow function parameters");
                 }
             }
         }

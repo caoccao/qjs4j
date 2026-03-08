@@ -265,6 +265,11 @@ final class ExpressionPrimaryParser {
                 yield new Identifier(name, location);
             }
             case PRIVATE_NAME -> {
+                if (parserContext.classBodyNesting == 0) {
+                    throw new JSSyntaxErrorException("Private field '#"
+                            + parserContext.currentToken.value().substring(1)
+                            + "' must be declared in an enclosing class");
+                }
                 String name = parserContext.currentToken.value();
                 parserContext.advance();
                 yield new PrivateIdentifier(name.substring(1), location);
@@ -862,6 +867,9 @@ final class ExpressionPrimaryParser {
 
     Expression parseUnaryExpression() {
         if (parserContext.match(TokenType.AWAIT)) {
+            if (parserContext.currentToken.escaped() && parserContext.isAwaitExpressionAllowed()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
             if (!parserContext.inFunctionBody && parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("'await' expression not allowed in formal parameters of an async function");
             }

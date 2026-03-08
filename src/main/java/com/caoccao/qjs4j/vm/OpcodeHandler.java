@@ -661,10 +661,10 @@ public final class OpcodeHandler {
         if (executionContext.virtualMachine.awaitSuspensionEnabled && executionContext.virtualMachine.activeGeneratorState != null) {
             executionContext.virtualMachine.awaitSuspensionPromise = promise;
         } else {
-            // Fallback for non-suspension mode: if the promise is pending, process microtasks
-            if (promise.getState() == JSPromise.PromiseState.PENDING) {
-                executionContext.virtualMachine.context.processMicrotasks();
-            }
+            // Fallback for non-suspension mode: always process microtasks to ensure
+            // pending reactions (e.g., Promise.resolve().then(cb)) run before code after await.
+            // ES2024 25.5.5.3: await always takes at least 1 microtask tick.
+            executionContext.virtualMachine.context.processMicrotasks();
 
             // Now the promise should be settled, push the resolved value
             if (promise.getState() == JSPromise.PromiseState.FULFILLED) {
@@ -2843,7 +2843,9 @@ public final class OpcodeHandler {
                     moduleNamespace = context.loadDynamicImportModule(
                             specifierString,
                             referrerFilename,
-                            importAttributes);
+                            importAttributes,
+                            promise,
+                            resolveState);
                 }
                 if (moduleNamespace != null && !resolveState.alreadyResolved) {
                     resolveState.alreadyResolved = true;
@@ -4203,7 +4205,16 @@ public final class OpcodeHandler {
             return;
         }
 
-        targetObject.set(executionContext.virtualMachine.context, key, setValue);
+        // Set flag so import overlay setters can detect bare variable assignment
+        // and throw TypeError (ES2024: import bindings are immutable).
+        if (targetObject == context.getGlobalObject()) {
+            context.setInBareVariableAssignment(true);
+        }
+        try {
+            targetObject.set(executionContext.virtualMachine.context, key, setValue);
+        } finally {
+            context.setInBareVariableAssignment(false);
+        }
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
@@ -4280,7 +4291,14 @@ public final class OpcodeHandler {
         PropertyKey variableKey = PropertyKey.fromString(variableName);
         JSObject globalObject = context.getGlobalObject();
         if (context.hasEvalOverlayBinding(variableName) && globalObject.has(variableKey)) {
-            globalObject.set(context, variableKey, value);
+            // Set flag so import overlay setters can detect bare variable assignment
+            // and throw TypeError (ES2024: import bindings are immutable).
+            context.setInBareVariableAssignment(true);
+            try {
+                globalObject.set(context, variableKey, value);
+            } finally {
+                context.setInBareVariableAssignment(false);
+            }
             if (context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = context.getPendingException();
                 context.clearPendingException();
@@ -4323,7 +4341,13 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-        globalObject.set(context, variableKey, value);
+        // Set flag so import overlay setters can detect bare variable assignment
+        context.setInBareVariableAssignment(true);
+        try {
+            globalObject.set(context, variableKey, value);
+        } finally {
+            context.setInBareVariableAssignment(false);
+        }
         if (context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = context.getPendingException();
             context.clearPendingException();
