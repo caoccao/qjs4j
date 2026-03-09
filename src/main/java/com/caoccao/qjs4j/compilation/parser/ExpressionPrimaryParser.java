@@ -55,6 +55,33 @@ final class ExpressionPrimaryParser {
         return false;
     }
 
+    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
+        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
+        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0'
+                && normalizedValue.charAt(1) >= '0' && normalizedValue.charAt(1) <= '9'
+                && normalizedValue.indexOf('.') == -1
+                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
+            boolean allOctalDigits = true;
+            for (int i = 1; i < normalizedValue.length(); i++) {
+                if (normalizedValue.charAt(i) > '7') {
+                    allOctalDigits = false;
+                    break;
+                }
+            }
+            if (allOctalDigits) {
+                long longVal = Long.parseLong(normalizedValue, 8);
+                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
+                        ? (int) longVal : (double) longVal;
+            }
+        }
+        double doubleVal = Double.parseDouble(normalizedValue);
+        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal)
+                && doubleVal >= Integer.MIN_VALUE && doubleVal <= Integer.MAX_VALUE) {
+            return (int) doubleVal;
+        }
+        return doubleVal;
+    }
+
     Expression parseCallExpression() {
         Expression expr = expressions.parseMemberExpression();
 
@@ -751,33 +778,6 @@ final class ExpressionPrimaryParser {
                     "Unexpected token " + parserContext.currentToken.type() + " at line "
                             + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
         };
-    }
-
-    private static Object parseDecimalOrLegacyOctal(String normalizedValue) {
-        // Check for legacy octal: starts with 0, followed by digits, all digits 0-7
-        if (normalizedValue.length() > 1 && normalizedValue.charAt(0) == '0'
-                && normalizedValue.charAt(1) >= '0' && normalizedValue.charAt(1) <= '9'
-                && normalizedValue.indexOf('.') == -1
-                && normalizedValue.indexOf('e') == -1 && normalizedValue.indexOf('E') == -1) {
-            boolean allOctalDigits = true;
-            for (int i = 1; i < normalizedValue.length(); i++) {
-                if (normalizedValue.charAt(i) > '7') {
-                    allOctalDigits = false;
-                    break;
-                }
-            }
-            if (allOctalDigits) {
-                long longVal = Long.parseLong(normalizedValue, 8);
-                return (longVal >= Integer.MIN_VALUE && longVal <= Integer.MAX_VALUE)
-                        ? (int) longVal : (double) longVal;
-            }
-        }
-        double doubleVal = Double.parseDouble(normalizedValue);
-        if (doubleVal == Math.floor(doubleVal) && !Double.isInfinite(doubleVal)
-                && doubleVal >= Integer.MIN_VALUE && doubleVal <= Integer.MAX_VALUE) {
-            return (int) doubleVal;
-        }
-        return doubleVal;
     }
 
     Expression parsePropertyName() {

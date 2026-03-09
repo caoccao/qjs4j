@@ -20,8 +20,8 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents a unary expression.
  */
 public final class UnaryExpression extends Expression {
-    private final UnaryOperator operator;
     private final Expression operand;
+    private final UnaryOperator operator;
     private final boolean prefix;
 
     public UnaryExpression(

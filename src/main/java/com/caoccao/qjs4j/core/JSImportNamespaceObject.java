@@ -77,6 +77,21 @@ public final class JSImportNamespaceObject extends JSObject {
         };
     }
 
+    public boolean defineExportBinding(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+        if (finalized || key == null || !key.isString()) {
+            return false;
+        }
+        boolean defined = super.defineProperty(context, key, descriptor);
+        if (defined) {
+            registerExportName(key.asString());
+        }
+        return defined;
+    }
+
+    public boolean defineExportBinding(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        return defineExportBinding(context, key, PropertyDescriptor.dataDescriptor(value, state));
+    }
+
     @Override
     public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
         if (isExportProperty(key)) {
@@ -97,21 +112,6 @@ public final class JSImportNamespaceObject extends JSObject {
         return super.defineProperty(context, key, descriptor);
     }
 
-    public boolean defineExportBinding(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
-        if (finalized || key == null || !key.isString()) {
-            return false;
-        }
-        boolean defined = super.defineProperty(context, key, descriptor);
-        if (defined) {
-            registerExportName(key.asString());
-        }
-        return defined;
-    }
-
-    public boolean defineExportBinding(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
-        return defineExportBinding(context, key, PropertyDescriptor.dataDescriptor(value, state));
-    }
-
     @Override
     public boolean delete(JSContext context, PropertyKey key) {
         if (isExportProperty(key)) {
@@ -121,10 +121,6 @@ public final class JSImportNamespaceObject extends JSObject {
             return false;
         }
         return super.delete(context, key);
-    }
-
-    public boolean isFinalized() {
-        return finalized;
     }
 
     public void finalizeNamespace() {
@@ -141,7 +137,7 @@ public final class JSImportNamespaceObject extends JSObject {
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         if (hasDefinedExportProperty(key)) {
-            JSContext effectiveContext = context != null ? context : this.context;
+            JSContext effectiveContext = context;
             JSValue value = get(effectiveContext, key);
             if (effectiveContext != null && effectiveContext.hasPendingException()) {
                 throw new JSException(effectiveContext.getPendingException());
@@ -190,10 +186,6 @@ public final class JSImportNamespaceObject extends JSObject {
         return orderedKeys;
     }
 
-    private boolean isExportProperty(PropertyKey key) {
-        return key != null && key.isString() && exportNames.contains(key.asString());
-    }
-
     private boolean hasDefinedExportProperty(PropertyKey key) {
         if (!isExportProperty(key)) {
             return false;
@@ -201,9 +193,8 @@ public final class JSImportNamespaceObject extends JSObject {
         return super.hasOwnProperty(key);
     }
 
-    @Override
-    public PropertyKey[] ownPropertyKeys() {
-        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    public boolean hasDefinedOwnProperty(PropertyKey key) {
+        return super.hasOwnProperty(key);
     }
 
     @Override
@@ -211,19 +202,28 @@ public final class JSImportNamespaceObject extends JSObject {
         return super.hasOwnProperty(key);
     }
 
-    public boolean hasDefinedOwnProperty(PropertyKey key) {
-        return super.hasOwnProperty(key);
+    private boolean isExportProperty(PropertyKey key) {
+        return key != null && key.isString() && exportNames.contains(key.asString());
+    }
+
+    // ES2024 10.4.6.3 [[IsExtensible]]: Always returns false.
+    @Override
+    public boolean isExtensible() {
+        return false;
+    }
+
+    public boolean isFinalized() {
+        return finalized;
+    }
+
+    @Override
+    public PropertyKey[] ownPropertyKeys() {
+        return getOwnPropertyKeys().toArray(new PropertyKey[0]);
     }
 
     public void registerExportName(String exportName) {
         if (exportName != null && !exportName.isEmpty()) {
             exportNames.add(exportName);
-        }
-    }
-
-    public void unregisterExportName(String exportName) {
-        if (exportName != null && !exportName.isEmpty()) {
-            exportNames.remove(exportName);
         }
     }
 
@@ -243,12 +243,6 @@ public final class JSImportNamespaceObject extends JSObject {
         }
     }
 
-    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
-    @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        return false;
-    }
-
     // ES2024 10.4.6.1 [[SetPrototypeOf]]: Uses SetImmutablePrototype semantics.
     @Override
     public SetPrototypeResult setPrototypeChecked(JSObject proto) {
@@ -259,10 +253,16 @@ public final class JSImportNamespaceObject extends JSObject {
         return SetPrototypeResult.NOT_EXTENSIBLE;
     }
 
-    // ES2024 10.4.6.3 [[IsExtensible]]: Always returns false.
+    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
-    public boolean isExtensible() {
+    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
         return false;
+    }
+
+    public void unregisterExportName(String exportName) {
+        if (exportName != null && !exportName.isEmpty()) {
+            exportNames.remove(exportName);
+        }
     }
 
     private boolean validateExportDefine(PropertyKey key, PropertyDescriptor descriptor) {

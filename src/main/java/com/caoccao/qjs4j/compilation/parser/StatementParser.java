@@ -34,6 +34,56 @@ import java.util.Set;
  * and statement-level constructs (block, labeled, return, break, continue, throw).
  */
 record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
+    private static boolean isIdentifierNameToken(TokenType type) {
+        return switch (type) {
+            case IDENTIFIER, AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST,
+                 CONTINUE, DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE,
+                 FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET,
+                 NEW, NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
+                 TYPEOF, VAR, VOID, WHILE, YIELD -> true;
+            default -> false;
+        };
+    }
+
+    private void addModuleExportedName(String name) {
+        if (parserContext.moduleMode && !parserContext.moduleExportedNames.add(name)) {
+            throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
+        }
+    }
+
+    private void addModuleLexicalName(String name) {
+        if (parserContext.moduleMode && parserContext.functionNesting == 0) {
+            if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
+                throw new JSSyntaxErrorException(
+                        "Identifier '" + name + "' has already been declared");
+            }
+        }
+    }
+
+    /**
+     * Collect declared names from an exported declaration and register them as exported names.
+     */
+    private void collectDeclaredNames(Statement decl, boolean isVar) {
+        if (!parserContext.moduleMode) {
+            return;
+        }
+        if (decl instanceof VariableDeclaration varDecl) {
+            for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
+                collectPatternNames(declarator.id(), name -> {
+                    addModuleExportedName(name);
+                });
+            }
+        } else if (decl instanceof FunctionDeclaration funcDecl) {
+            if (funcDecl.id() != null) {
+                addModuleExportedName(funcDecl.id().name());
+            }
+        } else if (decl instanceof ClassDeclaration classDecl) {
+            if (classDecl.id() != null) {
+                addModuleExportedName(classDecl.id().name());
+            }
+        }
+    }
+
     private void collectPatternBoundNames(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier identifier) {
             names.add(identifier.name());
@@ -58,6 +108,32 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         if (pattern instanceof RestElement restElement) {
             collectPatternBoundNames(restElement.argument(), names);
+        }
+    }
+
+    /**
+     * Collect binding names from a pattern (identifier, array, object destructuring).
+     */
+    private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
+        if (pattern instanceof Identifier id) {
+            consumer.accept(id.name());
+        } else if (pattern instanceof ObjectPattern objPat) {
+            for (ObjectPattern.Property prop : objPat.properties()) {
+                collectPatternNames(prop.value(), consumer);
+            }
+            if (objPat.restElement() != null) {
+                collectPatternNames(objPat.restElement(), consumer);
+            }
+        } else if (pattern instanceof ArrayPattern arrayPat) {
+            for (Pattern elem : arrayPat.elements()) {
+                if (elem != null) {
+                    collectPatternNames(elem, consumer);
+                }
+            }
+        } else if (pattern instanceof RestElement rest) {
+            collectPatternNames(rest.argument(), consumer);
+        } else if (pattern instanceof AssignmentPattern assign) {
+            collectPatternNames(assign.left(), consumer);
         }
     }
 
@@ -150,11 +226,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return false;
     }
 
-    private boolean isWithKeyword() {
-        return parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && JSKeyword.WITH.equals(parserContext.currentToken.value());
-    }
-
     private void expectContextualKeyword(TokenType type, String keyword) {
         if (!parserContext.match(type) || parserContext.currentToken.escaped()) {
             throw new JSSyntaxErrorException(
@@ -165,51 +236,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.advance();
     }
 
-    private void addModuleExportedName(String name) {
-        if (parserContext.moduleMode && !parserContext.moduleExportedNames.add(name)) {
-            throw new JSSyntaxErrorException("Duplicate export of '" + name + "'");
-        }
-    }
-
-    private void addModuleLexicalName(String name) {
-        if (parserContext.moduleMode && parserContext.functionNesting == 0) {
-            if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
-                throw new JSSyntaxErrorException(
-                        "Identifier '" + name + "' has already been declared");
-            }
-        }
-    }
-
-    private void parseWithClause() {
-        if (parserContext.currentToken.type() == TokenType.IDENTIFIER
-                && "with".equals(parserContext.currentToken.value())) {
-            parserContext.advance(); // consume 'with'
-            parserContext.expect(TokenType.LBRACE);
-            Set<String> attributeKeys = new HashSet<>();
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                // Parse key: either identifier or string
-                String key;
-                if (parserContext.match(TokenType.STRING)) {
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
-                } else if (parserContext.match(TokenType.IDENTIFIER)) {
-                    key = parserContext.currentToken.value();
-                    parserContext.advance();
-                } else {
-                    throw new JSSyntaxErrorException("identifier expected");
-                }
-                if (!attributeKeys.add(key)) {
-                    throw new JSSyntaxErrorException("Duplicate attribute key '" + key + "'");
-                }
-                parserContext.expect(TokenType.COLON);
-                parserContext.expect(TokenType.STRING);
-                if (!parserContext.match(TokenType.COMMA)) {
-                    break;
-                }
-                parserContext.advance();
-            }
-            parserContext.expect(TokenType.RBRACE);
-        }
+    private boolean isWithKeyword() {
+        return parserContext.currentToken.type() == TokenType.IDENTIFIER
+                && JSKeyword.WITH.equals(parserContext.currentToken.value());
     }
 
     Statement parseAsyncDeclaration() {
@@ -384,85 +413,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     /**
-     * Collect declared names from an exported declaration and register them as exported names.
-     */
-    private void collectDeclaredNames(Statement decl, boolean isVar) {
-        if (!parserContext.moduleMode) {
-            return;
-        }
-        if (decl instanceof VariableDeclaration varDecl) {
-            for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                collectPatternNames(declarator.id(), name -> {
-                    addModuleExportedName(name);
-                });
-            }
-        } else if (decl instanceof FunctionDeclaration funcDecl) {
-            if (funcDecl.id() != null) {
-                addModuleExportedName(funcDecl.id().name());
-            }
-        } else if (decl instanceof ClassDeclaration classDecl) {
-            if (classDecl.id() != null) {
-                addModuleExportedName(classDecl.id().name());
-            }
-        }
-    }
-
-    /**
-     * Collect binding names from a pattern (identifier, array, object destructuring).
-     */
-    private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
-        if (pattern instanceof Identifier id) {
-            consumer.accept(id.name());
-        } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPattern.Property prop : objPat.properties()) {
-                collectPatternNames(prop.value(), consumer);
-            }
-            if (objPat.restElement() != null) {
-                collectPatternNames(objPat.restElement(), consumer);
-            }
-        } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.elements()) {
-                if (elem != null) {
-                    collectPatternNames(elem, consumer);
-                }
-            }
-        } else if (pattern instanceof RestElement rest) {
-            collectPatternNames(rest.argument(), consumer);
-        } else if (pattern instanceof AssignmentPattern assign) {
-            collectPatternNames(assign.left(), consumer);
-        }
-    }
-
-    /**
-     * Parse a module export name: either an identifier name or a string literal.
-     * ModuleExportName :: IdentifierName | StringLiteral
-     * Returns the parsed name for tracking purposes.
-     */
-    private String parseModuleExportNameAndReturn() {
-        if (parserContext.match(TokenType.STRING)) {
-            String name = parserContext.currentToken.value();
-            // ES2024: ModuleExportName string must not contain unpaired surrogates
-            if (UnicodeStringUtils.hasUnpairedSurrogate(name)) {
-                throw new JSSyntaxErrorException(
-                        "Invalid module export name: unpaired surrogate");
-            }
-            parserContext.advance();
-            return name;
-        } else {
-            // Any IdentifierName including keywords is allowed as export name
-            String name = parseImportIdentifierName();
-            return name;
-        }
-    }
-
-    /**
-     * Parse a module export name without returning value (backward compat).
-     */
-    private void parseModuleExportName() {
-        parseModuleExportNameAndReturn();
-    }
-
-    /**
      * Parse export { specifiers } and optional 'from' clause.
      * Handles string export/import names per ES2024 ModuleExportName.
      */
@@ -608,6 +558,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         if (isForIn) {
+            if (isAwait) {
+                throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+            }
             // This is a for-in loop: for (var x in obj)
             parserContext.expect(TokenType.IN);
             Expression object = delegates.expressions.parseExpression();
@@ -622,14 +575,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return new ForInStatement(varDecl, object, body, location);
         }
 
-        if (isAwait) {
-            throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
-        }
-
         // Not a for-of loop, parse as traditional for loop
         // Reset if we parsed a var declaration but it's not for-of
         Statement init = null;
         if (parsedDecl != null) {
+            if (isAwait) {
+                throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+            }
             init = parsedDecl;
             parserContext.expect(TokenType.SEMICOLON); // consume ; after init declaration
         } else if (!parserContext.match(TokenType.SEMICOLON)) {
@@ -651,6 +603,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 Expression expr = delegates.expressions.parseAssignmentExpression();
                 parserContext.inOperatorAllowed = savedInOperatorAllowed;
                 if (parserContext.match(TokenType.IN)) {
+                    if (isAwait) {
+                        throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+                    }
                     // for (expr in obj) -- expression-based for-in
                     // Validate: left side must be a valid LeftHandSideExpression
                     if (!parserContext.isValidForInOfTarget(expr)) {
@@ -672,6 +627,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     Statement body = parseStatement();
                     return new ForOfStatement(expr, iterable, body, isAwait, location);
                 }
+                if (isAwait) {
+                    throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+                }
                 // Traditional for loop init -- handle comma expressions
                 while (parserContext.match(TokenType.COMMA)) {
                     parserContext.advance();
@@ -682,6 +640,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.consumeSemicolon();
             }
         } else {
+            if (isAwait) {
+                throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+            }
             parserContext.advance(); // consume semicolon
         }
 
@@ -835,17 +796,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
     }
 
-    private static boolean isIdentifierNameToken(TokenType type) {
-        return switch (type) {
-            case IDENTIFIER, AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST,
-                 CONTINUE, DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE,
-                 FINALLY, FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET,
-                 NEW, NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
-                 TYPEOF, VAR, VOID, WHILE, YIELD -> true;
-            default -> false;
-        };
-    }
-
     /**
      * Parse a labeled statement: label: statement
      * Following QuickJS js_parse_statement_or_decl label handling.
@@ -870,6 +820,35 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return new LabeledStatement(label, body, location);
         } finally {
             parserContext.labelStack.pop();
+        }
+    }
+
+    /**
+     * Parse a module export name without returning value (backward compat).
+     */
+    private void parseModuleExportName() {
+        parseModuleExportNameAndReturn();
+    }
+
+    /**
+     * Parse a module export name: either an identifier name or a string literal.
+     * ModuleExportName :: IdentifierName | StringLiteral
+     * Returns the parsed name for tracking purposes.
+     */
+    private String parseModuleExportNameAndReturn() {
+        if (parserContext.match(TokenType.STRING)) {
+            String name = parserContext.currentToken.value();
+            // ES2024: ModuleExportName string must not contain unpaired surrogates
+            if (UnicodeStringUtils.hasUnpairedSurrogate(name)) {
+                throw new JSSyntaxErrorException(
+                        "Invalid module export name: unpaired surrogate");
+            }
+            parserContext.advance();
+            return name;
+        } else {
+            // Any IdentifierName including keywords is allowed as export name
+            String name = parseImportIdentifierName();
+            return name;
         }
     }
 
@@ -1155,6 +1134,38 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
 
         return new WhileStatement(test, body, location);
+    }
+
+    private void parseWithClause() {
+        if (parserContext.currentToken.type() == TokenType.IDENTIFIER
+                && "with".equals(parserContext.currentToken.value())) {
+            parserContext.advance(); // consume 'with'
+            parserContext.expect(TokenType.LBRACE);
+            Set<String> attributeKeys = new HashSet<>();
+            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                // Parse key: either identifier or string
+                String key;
+                if (parserContext.match(TokenType.STRING)) {
+                    key = parserContext.currentToken.value();
+                    parserContext.advance();
+                } else if (parserContext.match(TokenType.IDENTIFIER)) {
+                    key = parserContext.currentToken.value();
+                    parserContext.advance();
+                } else {
+                    throw new JSSyntaxErrorException("identifier expected");
+                }
+                if (!attributeKeys.add(key)) {
+                    throw new JSSyntaxErrorException("Duplicate attribute key '" + key + "'");
+                }
+                parserContext.expect(TokenType.COLON);
+                parserContext.expect(TokenType.STRING);
+                if (!parserContext.match(TokenType.COMMA)) {
+                    break;
+                }
+                parserContext.advance();
+            }
+            parserContext.expect(TokenType.RBRACE);
+        }
     }
 
     Statement parseWithStatement() {

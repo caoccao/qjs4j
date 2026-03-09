@@ -38,6 +38,10 @@ public final class ClassExpression extends Expression {
         this.body = body;
     }
 
+    public List<ClassDeclaration.ClassElement> body() {
+        return body;
+    }
+
     @Override
     public boolean containsAwait() {
         if (awaitInside != null) {
@@ -54,10 +58,6 @@ public final class ClassExpression extends Expression {
         }
         yieldInside = false;
         return yieldInside;
-    }
-
-    public List<ClassDeclaration.ClassElement> body() {
-        return body;
     }
 
     public Identifier id() {

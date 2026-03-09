@@ -50,57 +50,6 @@ final class ExpressionAssignmentParser {
         this.expressions = expressions;
     }
 
-    private void enterArrowFunctionContext(boolean asyncFunction) {
-        parserContext.functionNesting++;
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting++;
-        }
-    }
-
-    private void exitArrowFunctionContext(boolean asyncFunction) {
-        exitFunctionContext(asyncFunction);
-    }
-
-    private void exitFunctionContext(boolean asyncFunction) {
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting--;
-        }
-        parserContext.functionNesting--;
-    }
-
-    private boolean peekPastParensIsArrow() {
-        Token savedCurrent = parserContext.currentToken;
-        Token savedNext = parserContext.nextToken;
-        int savedPrevLine = parserContext.previousTokenLine;
-        int savedPrevEndOffset = parserContext.previousTokenEndOffset;
-        LexerState savedLexer = parserContext.lexer.saveState();
-        try {
-            parserContext.advance();
-            int depth = 1;
-            while (depth > 0 && !parserContext.match(TokenType.EOF)) {
-                if (parserContext.match(TokenType.LPAREN)) {
-                    depth++;
-                } else if (parserContext.match(TokenType.RPAREN)) {
-                    depth--;
-                }
-                if (depth > 0) {
-                    parserContext.advance();
-                }
-            }
-            if (depth == 0) {
-                parserContext.advance();
-                return parserContext.match(TokenType.ARROW);
-            }
-            return false;
-        } finally {
-            parserContext.currentToken = savedCurrent;
-            parserContext.nextToken = savedNext;
-            parserContext.previousTokenLine = savedPrevLine;
-            parserContext.previousTokenEndOffset = savedPrevEndOffset;
-            parserContext.lexer.restoreState(savedLexer);
-        }
-    }
-
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
         for (int elementIndex = 0; elementIndex < arrayExpression.elements().size(); elementIndex++) {
@@ -180,6 +129,24 @@ final class ExpressionAssignmentParser {
             properties.add(new ObjectPattern.Property(propertyKey, valuePattern, property.computed(), property.shorthand()));
         }
         return new ObjectPattern(properties, restElement, objectExpression.getLocation());
+    }
+
+    private void enterArrowFunctionContext(boolean asyncFunction) {
+        parserContext.functionNesting++;
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting++;
+        }
+    }
+
+    private void exitArrowFunctionContext(boolean asyncFunction) {
+        exitFunctionContext(asyncFunction);
+    }
+
+    private void exitFunctionContext(boolean asyncFunction) {
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting--;
+        }
+        parserContext.functionNesting--;
     }
 
     private Expression extractAssignmentTarget(Expression expression) {
@@ -725,6 +692,39 @@ final class ExpressionAssignmentParser {
         }
 
         return new SequenceExpression(expressionsList, location);
+    }
+
+    private boolean peekPastParensIsArrow() {
+        Token savedCurrent = parserContext.currentToken;
+        Token savedNext = parserContext.nextToken;
+        int savedPrevLine = parserContext.previousTokenLine;
+        int savedPrevEndOffset = parserContext.previousTokenEndOffset;
+        LexerState savedLexer = parserContext.lexer.saveState();
+        try {
+            parserContext.advance();
+            int depth = 1;
+            while (depth > 0 && !parserContext.match(TokenType.EOF)) {
+                if (parserContext.match(TokenType.LPAREN)) {
+                    depth++;
+                } else if (parserContext.match(TokenType.RPAREN)) {
+                    depth--;
+                }
+                if (depth > 0) {
+                    parserContext.advance();
+                }
+            }
+            if (depth == 0) {
+                parserContext.advance();
+                return parserContext.match(TokenType.ARROW);
+            }
+            return false;
+        } finally {
+            parserContext.currentToken = savedCurrent;
+            parserContext.nextToken = savedNext;
+            parserContext.previousTokenLine = savedPrevLine;
+            parserContext.previousTokenEndOffset = savedPrevEndOffset;
+            parserContext.lexer.restoreState(savedLexer);
+        }
     }
 
     private void validateArrayAssignmentPatternTarget(ArrayExpression arrayExpression, int assignmentOperatorOffset) {

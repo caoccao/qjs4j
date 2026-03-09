@@ -125,6 +125,16 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testLegacyOctalValues() {
+        assertIntegerWithJavet(
+                "070",
+                "07",
+                "00",
+                "077",
+                "001");
+    }
+
+    @Test
     public void testLexerBigInt() {
         Lexer lexer = new Lexer("123n");
         Token token = lexer.nextToken();
@@ -207,6 +217,16 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testNumericSeparatorInLegacyOctal() {
+        assertErrorWithJavet(
+                "00_0",
+                "01_0",
+                "07_0",
+                "08_0",
+                "09_0");
+    }
+
+    @Test
     public void testOctalNumbers() {
         assertIntegerWithJavet(
                 "0o0",
@@ -248,37 +268,6 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
-    public void testValidBigIntLiterals() {
-        assertLongWithJavet(
-                "0n",
-                "0b1111111111111111111111111111111n");
-        assertBigIntegerWithJavet(
-                "999999999999999999999999999999n",
-                "0o777777777777777777777777777n",
-                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFn");
-    }
-
-    @Test
-    public void testLegacyOctalValues() {
-        assertIntegerWithJavet(
-                "070",
-                "07",
-                "00",
-                "077",
-                "001");
-    }
-
-    @Test
-    public void testNumericSeparatorInLegacyOctal() {
-        assertErrorWithJavet(
-                "00_0",
-                "01_0",
-                "07_0",
-                "08_0",
-                "09_0");
-    }
-
-    @Test
     public void testRegexBackslashLineTerminator() {
         assertErrorWithJavet(
                 "eval('/' + String.fromCharCode(92, 10) + '/')",
@@ -306,6 +295,17 @@ public class LiteralTest extends BaseJavetTest {
                 "tru\\u{65}",
                 "f\\u{61}lse",
                 "n\\u{75}ll");
+    }
+
+    @Test
+    public void testValidBigIntLiterals() {
+        assertLongWithJavet(
+                "0n",
+                "0b1111111111111111111111111111111n");
+        assertBigIntegerWithJavet(
+                "999999999999999999999999999999n",
+                "0o777777777777777777777777777n",
+                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFn");
     }
 
     @Test

@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
-import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -90,6 +89,29 @@ public final class Parser {
                 newTargetNesting,
                 initialSuperPropertyAllowed, allowNewTargetInEval);
         this.delegates = new ParserDelegates(parserContext);
+    }
+
+    private void collectModulePatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
+        if (pattern instanceof Identifier id) {
+            consumer.accept(id.name());
+        } else if (pattern instanceof ObjectPattern objPat) {
+            for (ObjectPattern.Property prop : objPat.properties()) {
+                collectModulePatternNames(prop.value(), consumer);
+            }
+            if (objPat.restElement() != null) {
+                collectModulePatternNames(objPat.restElement(), consumer);
+            }
+        } else if (pattern instanceof ArrayPattern arrayPat) {
+            for (Pattern elem : arrayPat.elements()) {
+                if (elem != null) {
+                    collectModulePatternNames(elem, consumer);
+                }
+            }
+        } else if (pattern instanceof RestElement rest) {
+            collectModulePatternNames(rest.argument(), consumer);
+        } else if (pattern instanceof AssignmentPattern assign) {
+            collectModulePatternNames(assign.left(), consumer);
+        }
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
@@ -211,29 +233,6 @@ public final class Parser {
                 throw new JSSyntaxErrorException(
                         "Export '" + exportBinding + "' is not defined");
             }
-        }
-    }
-
-    private void collectModulePatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
-        if (pattern instanceof Identifier id) {
-            consumer.accept(id.name());
-        } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPattern.Property prop : objPat.properties()) {
-                collectModulePatternNames(prop.value(), consumer);
-            }
-            if (objPat.restElement() != null) {
-                collectModulePatternNames(objPat.restElement(), consumer);
-            }
-        } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.elements()) {
-                if (elem != null) {
-                    collectModulePatternNames(elem, consumer);
-                }
-            }
-        } else if (pattern instanceof RestElement rest) {
-            collectModulePatternNames(rest.argument(), consumer);
-        } else if (pattern instanceof AssignmentPattern assign) {
-            collectModulePatternNames(assign.left(), consumer);
         }
     }
 }

@@ -35,6 +35,14 @@ public final class ConditionalExpression extends Expression {
         this.alternate = alternate;
     }
 
+    public Expression alternate() {
+        return alternate;
+    }
+
+    public Expression consequent() {
+        return consequent;
+    }
+
     @Override
     public boolean containsAwait() {
         if (awaitInside != null) {
@@ -57,14 +65,6 @@ public final class ConditionalExpression extends Expression {
         boolean alternateContainsYield = alternate != null && alternate.containsYield();
         yieldInside = testContainsYield || consequentContainsYield || alternateContainsYield;
         return yieldInside;
-    }
-
-    public Expression alternate() {
-        return alternate;
-    }
-
-    public Expression consequent() {
-        return consequent;
     }
 
     public Expression test() {

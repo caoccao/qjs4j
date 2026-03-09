@@ -38,6 +38,10 @@ public final class MemberExpression extends Expression {
         this.optional = optional;
     }
 
+    public boolean computed() {
+        return computed;
+    }
+
     @Override
     public boolean containsAwait() {
         if (awaitInside != null) {
@@ -58,10 +62,6 @@ public final class MemberExpression extends Expression {
         boolean propertyContainsYield = property != null && property.containsYield();
         yieldInside = objectContainsYield || propertyContainsYield;
         return yieldInside;
-    }
-
-    public boolean computed() {
-        return computed;
     }
 
     public Expression object() {

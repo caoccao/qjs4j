@@ -24,9 +24,9 @@ package com.caoccao.qjs4j.compilation.ast;
  */
 public final class AssignmentExpression extends Expression {
     private final Expression left;
+    private final boolean lhsIsIdentifierRef;
     private final AssignmentOperator operator;
     private final Expression right;
-    private final boolean lhsIsIdentifierRef;
 
     public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right, SourceLocation location) {
         this(left, operator, right, false, location);
@@ -67,12 +67,12 @@ public final class AssignmentExpression extends Expression {
         return yieldInside;
     }
 
-    public boolean lhsIsIdentifierRef() {
-        return lhsIsIdentifierRef;
-    }
-
     public Expression left() {
         return left;
+    }
+
+    public boolean lhsIsIdentifierRef() {
+        return lhsIsIdentifierRef;
     }
 
     public AssignmentOperator operator() {

@@ -49,6 +49,10 @@ public final class FunctionExpression extends Expression {
         this.isGenerator = isGenerator;
     }
 
+    public BlockStatement body() {
+        return body;
+    }
+
     @Override
     public boolean containsAwait() {
         if (awaitInside != null) {
@@ -65,10 +69,6 @@ public final class FunctionExpression extends Expression {
         }
         yieldInside = false;
         return yieldInside;
-    }
-
-    public BlockStatement body() {
-        return body;
     }
 
     public List<Expression> defaults() {

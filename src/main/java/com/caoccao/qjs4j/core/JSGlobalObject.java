@@ -2077,6 +2077,9 @@ public final class JSGlobalObject {
         globalObject.defineProperty(PropertyKey.fromString(JSWeakSet.NAME), weakSetConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
+    public record EvalOverlaySnapshot(Map<String, JSValue> values, Set<String> absentKeys) {
+    }
+
     public static class GlobalFunction {
 
         /**
@@ -3326,8 +3329,5 @@ public final class JSGlobalObject {
 
         private record WithObjectCandidate(int depth, JSObject object) {
         }
-    }
-
-    public record EvalOverlaySnapshot(Map<String, JSValue> values, Set<String> absentKeys) {
     }
 }

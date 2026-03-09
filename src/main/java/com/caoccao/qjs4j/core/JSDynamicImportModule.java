@@ -31,13 +31,13 @@ final class JSDynamicImportModule {
     private final List<ReExportBinding> reExportBindings;
     private final String resolvedSpecifier;
     private int asyncEvaluationOrder;
+    private JSPromise asyncEvaluationPromise;
     private JSDynamicImportModule cycleRoot;
     private JSObject deferredNamespace;
     private boolean deferredPreload;
     private JSValue evaluationError;
     private String exportBindingName;
     private boolean hasExportSyntax;
-    private JSPromise asyncEvaluationPromise;
     private boolean hasTLA;
     private int pendingAsyncDependencyCount;
     private String rawSource;
@@ -68,14 +68,6 @@ final class JSDynamicImportModule {
         this.transformedSource = "";
     }
 
-    boolean deferredPreload() {
-        return deferredPreload;
-    }
-
-    void setDeferredPreload(boolean deferredPreload) {
-        this.deferredPreload = deferredPreload;
-    }
-
     Set<String> ambiguousExportNames() {
         return ambiguousExportNames;
     }
@@ -92,8 +84,16 @@ final class JSDynamicImportModule {
         return cycleRoot;
     }
 
+    void decrementPendingAsyncDependencyCount() {
+        this.pendingAsyncDependencyCount--;
+    }
+
     JSObject deferredNamespace() {
         return deferredNamespace;
+    }
+
+    boolean deferredPreload() {
+        return deferredPreload;
     }
 
     JSValue evaluationError() {
@@ -120,20 +120,20 @@ final class JSDynamicImportModule {
         return hasTLA;
     }
 
-    int pendingAsyncDependencyCount() {
-        return pendingAsyncDependencyCount;
-    }
-
-    List<JSDynamicImportModule> pendingDependents() {
-        return pendingDependents;
-    }
-
     List<LocalExportBinding> localExportBindings() {
         return localExportBindings;
     }
 
     JSImportNamespaceObject namespace() {
         return namespace;
+    }
+
+    int pendingAsyncDependencyCount() {
+        return pendingAsyncDependencyCount;
+    }
+
+    List<JSDynamicImportModule> pendingDependents() {
+        return pendingDependents;
     }
 
     String rawSource() {
@@ -164,6 +164,10 @@ final class JSDynamicImportModule {
         this.deferredNamespace = deferredNamespace;
     }
 
+    void setDeferredPreload(boolean deferredPreload) {
+        this.deferredPreload = deferredPreload;
+    }
+
     void setEvaluationError(JSValue evaluationError) {
         this.evaluationError = evaluationError;
     }
@@ -182,10 +186,6 @@ final class JSDynamicImportModule {
 
     void setPendingAsyncDependencyCount(int count) {
         this.pendingAsyncDependencyCount = count;
-    }
-
-    void decrementPendingAsyncDependencyCount() {
-        this.pendingAsyncDependencyCount--;
     }
 
     void setRawSource(String rawSource) {

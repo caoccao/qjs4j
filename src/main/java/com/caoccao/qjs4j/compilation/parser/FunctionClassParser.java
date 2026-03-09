@@ -32,46 +32,6 @@ import java.util.Set;
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext parserContext, ParserDelegates delegates) {
-    private void enterFunctionContext(boolean asyncFunction) {
-        parserContext.functionNesting++;
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting++;
-        }
-    }
-
-    private void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        parserContext.savedFunctionNestingStack.push(new int[]{
-                parserContext.generatorFunctionNesting,
-                parserContext.asyncFunctionNesting,
-                parserContext.newTargetNesting,
-                parserContext.inClassFieldInitializer ? 1 : 0,
-                parserContext.inClassStaticInit ? 1 : 0
-        });
-        parserContext.functionNesting++;
-        parserContext.generatorFunctionNesting = generatorFunction ? 1 : 0;
-        parserContext.asyncFunctionNesting = asyncFunction ? 1 : 0;
-        parserContext.newTargetNesting = 1;
-        parserContext.inClassFieldInitializer = false;
-        parserContext.inClassStaticInit = false;
-    }
-
-    private void exitFunctionContext(boolean asyncFunction) {
-        if (asyncFunction) {
-            parserContext.asyncFunctionNesting--;
-        }
-        parserContext.functionNesting--;
-    }
-
-    private void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
-        int[] saved = parserContext.savedFunctionNestingStack.pop();
-        parserContext.generatorFunctionNesting = saved[0];
-        parserContext.asyncFunctionNesting = saved[1];
-        parserContext.newTargetNesting = saved[2];
-        parserContext.inClassFieldInitializer = saved[3] != 0;
-        parserContext.inClassStaticInit = saved[4] != 0;
-        parserContext.functionNesting--;
-    }
-
     /**
      * Extract all bound identifier names from a pattern.
      * Used for strict mode parameter validation.
@@ -190,6 +150,46 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Check for duplicates (strict mode always rejects duplicates)
         checkDuplicateParameters(funcParams);
+    }
+
+    private void enterFunctionContext(boolean asyncFunction) {
+        parserContext.functionNesting++;
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting++;
+        }
+    }
+
+    private void enterFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        parserContext.savedFunctionNestingStack.push(new int[]{
+                parserContext.generatorFunctionNesting,
+                parserContext.asyncFunctionNesting,
+                parserContext.newTargetNesting,
+                parserContext.inClassFieldInitializer ? 1 : 0,
+                parserContext.inClassStaticInit ? 1 : 0
+        });
+        parserContext.functionNesting++;
+        parserContext.generatorFunctionNesting = generatorFunction ? 1 : 0;
+        parserContext.asyncFunctionNesting = asyncFunction ? 1 : 0;
+        parserContext.newTargetNesting = 1;
+        parserContext.inClassFieldInitializer = false;
+        parserContext.inClassStaticInit = false;
+    }
+
+    private void exitFunctionContext(boolean asyncFunction) {
+        if (asyncFunction) {
+            parserContext.asyncFunctionNesting--;
+        }
+        parserContext.functionNesting--;
+    }
+
+    private void exitFunctionContext(boolean asyncFunction, boolean generatorFunction) {
+        int[] saved = parserContext.savedFunctionNestingStack.pop();
+        parserContext.generatorFunctionNesting = saved[0];
+        parserContext.asyncFunctionNesting = saved[1];
+        parserContext.newTargetNesting = saved[2];
+        parserContext.inClassFieldInitializer = saved[3] != 0;
+        parserContext.inClassStaticInit = saved[4] != 0;
+        parserContext.functionNesting--;
     }
 
     /**
@@ -600,69 +600,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     /**
-     * Parse a function body with "use strict" directive detection and parameter validation.
-     * Following QuickJS: after parsing '{', check for directives, then validate parameters
-     * if strict mode was detected (js_parse_function_check_names).
-     *
-     * @param funcParams The already-parsed function parameters
-     * @param funcName   The function name (or null for anonymous)
-     * @return The parsed BlockStatement
+     * Parse export default async function declaration with optional name.
      */
-    BlockStatement parseFunctionBody(FunctionParams funcParams, Identifier funcName) {
-        SourceLocation location = parserContext.getLocation();
-        parserContext.expect(TokenType.LBRACE);
-
-        List<Statement> body = new ArrayList<>();
-
-        // Save outer strict mode so we can restore it after parsing the function body
-        boolean savedStrictMode = parserContext.strictMode;
-
-        // Parse directives (like "use strict") at the beginning of the function body
-        boolean hasUseStrict = parserContext.parseDirectives(body);
-
-        // If "use strict" directive found, retroactively validate parameters
-        // Following QuickJS js_parse_function_check_names
-        if (hasUseStrict) {
-            parserContext.strictMode = true;
-            parserContext.lexer.setStrictMode(true);
-        }
-
-        // Validate parameters when in strict mode (either from outer context or "use strict" directive)
-        if (hasUseStrict || savedStrictMode) {
-            checkStrictModeParameters(funcParams, funcName);
-        } else if (!isSimpleParameterList(funcParams)) {
-            // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
-            // and BoundNames contains any duplicate elements.
-            // Following QuickJS js_parse_function_check_names: duplicates are always
-            // rejected for non-simple parameter lists regardless of strict mode.
-            checkDuplicateParameters(funcParams);
-        }
-
-        // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
-        if (hasUseStrict && !isSimpleParameterList(funcParams)) {
-            throw new JSSyntaxErrorException(
-                    "Illegal 'use strict' directive in function with non-simple parameter list");
-        }
-
-        // Parse remaining body statements
-        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-            Statement stmt = delegates.statements.parseStatement();
-            if (stmt != null) {
-                body.add(stmt);
-            }
-        }
-
-        // Check that parameter names don't conflict with lexical declarations in body
-        // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
-        // in the LexicallyDeclaredNames of FunctionBody"
-        validateFormalsBodyDuplicate(funcParams, body);
-
-        // Restore outer strict mode
-        parserContext.strictMode = savedStrictMode;
-        parserContext.lexer.setStrictMode(savedStrictMode);
-
-        parserContext.expect(TokenType.RBRACE);
-        return new BlockStatement(body, location);
+    Statement parseExportDefaultAsyncFunctionDeclaration() {
+        SourceLocation asyncLocation = parserContext.getLocation();
+        parserContext.advance(); // consume 'async'
+        return parseExportDefaultFunctionDeclaration(true);
     }
 
     /**
@@ -740,12 +683,69 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     }
 
     /**
-     * Parse export default async function declaration with optional name.
+     * Parse a function body with "use strict" directive detection and parameter validation.
+     * Following QuickJS: after parsing '{', check for directives, then validate parameters
+     * if strict mode was detected (js_parse_function_check_names).
+     *
+     * @param funcParams The already-parsed function parameters
+     * @param funcName   The function name (or null for anonymous)
+     * @return The parsed BlockStatement
      */
-    Statement parseExportDefaultAsyncFunctionDeclaration() {
-        SourceLocation asyncLocation = parserContext.getLocation();
-        parserContext.advance(); // consume 'async'
-        return parseExportDefaultFunctionDeclaration(true);
+    BlockStatement parseFunctionBody(FunctionParams funcParams, Identifier funcName) {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.LBRACE);
+
+        List<Statement> body = new ArrayList<>();
+
+        // Save outer strict mode so we can restore it after parsing the function body
+        boolean savedStrictMode = parserContext.strictMode;
+
+        // Parse directives (like "use strict") at the beginning of the function body
+        boolean hasUseStrict = parserContext.parseDirectives(body);
+
+        // If "use strict" directive found, retroactively validate parameters
+        // Following QuickJS js_parse_function_check_names
+        if (hasUseStrict) {
+            parserContext.strictMode = true;
+            parserContext.lexer.setStrictMode(true);
+        }
+
+        // Validate parameters when in strict mode (either from outer context or "use strict" directive)
+        if (hasUseStrict || savedStrictMode) {
+            checkStrictModeParameters(funcParams, funcName);
+        } else if (!isSimpleParameterList(funcParams)) {
+            // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
+            // and BoundNames contains any duplicate elements.
+            // Following QuickJS js_parse_function_check_names: duplicates are always
+            // rejected for non-simple parameter lists regardless of strict mode.
+            checkDuplicateParameters(funcParams);
+        }
+
+        // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
+        if (hasUseStrict && !isSimpleParameterList(funcParams)) {
+            throw new JSSyntaxErrorException(
+                    "Illegal 'use strict' directive in function with non-simple parameter list");
+        }
+
+        // Parse remaining body statements
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            Statement stmt = delegates.statements.parseStatement();
+            if (stmt != null) {
+                body.add(stmt);
+            }
+        }
+
+        // Check that parameter names don't conflict with lexical declarations in body
+        // Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs
+        // in the LexicallyDeclaredNames of FunctionBody"
+        validateFormalsBodyDuplicate(funcParams, body);
+
+        // Restore outer strict mode
+        parserContext.strictMode = savedStrictMode;
+        parserContext.lexer.setStrictMode(savedStrictMode);
+
+        parserContext.expect(TokenType.RBRACE);
+        return new BlockStatement(body, location);
     }
 
     FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {

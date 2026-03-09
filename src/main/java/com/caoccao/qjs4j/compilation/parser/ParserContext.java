@@ -23,12 +23,7 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Shared mutable state for the parser.
@@ -77,10 +72,17 @@ final class ParserContext {
     final boolean allowNewTargetInEval;
     final boolean inheritedStrictMode;
     final boolean isEval;
+    final Deque<Set<String>> labelStack = new ArrayDeque<>();
     final Lexer lexer;
+    // Module-level early error tracking (ES2024 16.2.1.1)
+    final Set<String> moduleExportedNames = new HashSet<>();
+    final Set<String> moduleLexicalNames = new HashSet<>();
     final boolean moduleMode;
+    final Set<String> moduleVarNames = new HashSet<>();
+    final List<String> pendingExportBindings = new ArrayList<>();
     final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int asyncFunctionNesting;
+    int classBodyNesting;
     Token currentToken;
     int functionNesting;
     int generatorFunctionNesting;
@@ -92,18 +94,11 @@ final class ParserContext {
     int newTargetNesting;
     Token nextToken;
     boolean parsingClassWithSuper;
-    int statementNesting;
-    int classBodyNesting;
     int previousTokenEndOffset;
     int previousTokenLine;
+    int statementNesting;
     boolean strictMode;
     boolean superPropertyAllowed;
-    // Module-level early error tracking (ES2024 16.2.1.1)
-    final Set<String> moduleExportedNames = new HashSet<>();
-    final Set<String> moduleLexicalNames = new HashSet<>();
-    final Set<String> moduleVarNames = new HashSet<>();
-    final List<String> pendingExportBindings = new ArrayList<>();
-    final Deque<Set<String>> labelStack = new ArrayDeque<>();
 
     ParserContext(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
                   int functionNesting, int asyncFunctionNesting,
@@ -177,6 +172,10 @@ final class ParserContext {
     }
 
     // ---- Validation methods ----
+
+    boolean isAlwaysReservedIdentifier(String name) {
+        return isAlwaysReservedIdentifierName(name);
+    }
 
     private boolean isAlwaysReservedIdentifierName(String name) {
         return ALWAYS_RESERVED_IDENTIFIER_NAMES.contains(name);
@@ -270,10 +269,6 @@ final class ParserContext {
         }
 
         return false;
-    }
-
-    boolean isAlwaysReservedIdentifier(String name) {
-        return isAlwaysReservedIdentifierName(name);
     }
 
     boolean isStrictReservedIdentifier(String name) {

@@ -34,6 +34,14 @@ public final class NewExpression extends Expression {
         this.arguments = arguments;
     }
 
+    public List<Expression> arguments() {
+        return arguments;
+    }
+
+    public Expression callee() {
+        return callee;
+    }
+
     @Override
     public boolean containsAwait() {
         if (awaitInside != null) {
@@ -68,13 +76,5 @@ public final class NewExpression extends Expression {
         }
         yieldInside = hasYield;
         return yieldInside;
-    }
-
-    public List<Expression> arguments() {
-        return arguments;
-    }
-
-    public Expression callee() {
-        return callee;
     }
 }
