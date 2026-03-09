@@ -464,43 +464,68 @@ final class StatementCompiler {
         // nested inside blocks, if-statements, catch clauses, etc.
         delegates.analysis.scanAnnexBFunctions(body, declaredFuncVarNames);
 
-        // Phase 2: Compile all non-FunctionDeclaration statements in source order.
-        // Find effective last index inline (last non-FunctionDeclaration).
-        int effectiveLastIndex = -1;
-        for (int i = body.size() - 1; i >= 0; i--) {
-            if (!(body.get(i) instanceof FunctionDeclaration)) {
-                effectiveLastIndex = i;
-                break;
-            }
-        }
-        boolean lastProducesValue = false;
-
-        for (int i = 0; i < body.size(); i++) {
-            Statement stmt = body.get(i);
-            if (stmt instanceof FunctionDeclaration) {
-                continue; // Already hoisted in Phase 1
-            }
-
-            boolean isLast = (i == effectiveLastIndex);
-
-            if (isLast && stmt instanceof ExpressionStatement) {
-                lastProducesValue = true;
-            } else if (isLast && stmt instanceof TryStatement) {
-                lastProducesValue = true;
-            }
-
-            compileStatement(stmt, isLast);
-        }
-
-        // If last statement didn't produce a value, push undefined
-        if (!lastProducesValue) {
+        if (compilerContext.evalMode) {
+            // Eval mode: allocate a hidden local to track the eval completion value.
+            // Every expression statement stores its result here (like QuickJS's eval_ret_idx).
+            int evalRetLocalIndex = compilerContext.currentScope().declareLocal("$eval_ret");
+            compilerContext.evalReturnLocalIndex = evalRetLocalIndex;
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-        }
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, evalRetLocalIndex);
 
-        int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
-        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
+            // Phase 2: Compile all non-FunctionDeclaration statements in source order.
+            for (int i = 0; i < body.size(); i++) {
+                Statement stmt = body.get(i);
+                if (stmt instanceof FunctionDeclaration) {
+                    continue; // Already hoisted in Phase 1
+                }
+                compileStatement(stmt);
+            }
+
+            compilerContext.evalReturnLocalIndex = -1;
+
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, evalRetLocalIndex);
+            int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
+            delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
+        } else {
+            // Script mode: preserve value of the last expression/try statement.
+            int effectiveLastIndex = -1;
+            for (int i = body.size() - 1; i >= 0; i--) {
+                if (!(body.get(i) instanceof FunctionDeclaration)) {
+                    effectiveLastIndex = i;
+                    break;
+                }
+            }
+            boolean lastProducesValue = false;
+
+            for (int i = 0; i < body.size(); i++) {
+                Statement stmt = body.get(i);
+                if (stmt instanceof FunctionDeclaration) {
+                    continue; // Already hoisted in Phase 1
+                }
+
+                boolean isLast = (i == effectiveLastIndex);
+
+                if (isLast && stmt instanceof ExpressionStatement) {
+                    lastProducesValue = true;
+                } else if (isLast && stmt instanceof TryStatement) {
+                    lastProducesValue = true;
+                }
+
+                compileStatement(stmt, isLast);
+            }
+
+            // If last statement didn't produce a value, push undefined
+            if (!lastProducesValue) {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+
+            int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
+            delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
+        }
 
         // Return the value on top of stack
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
@@ -585,8 +610,10 @@ final class StatementCompiler {
     void compileStatement(Statement stmt, boolean isLastInProgram) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             delegates.expressions.compileExpression(exprStmt.getExpression());
-            // Only drop the result if this is not the last statement in the program
-            if (!isLastInProgram) {
+            if (compilerContext.evalReturnLocalIndex >= 0) {
+                // Store expression value to eval return local (like QuickJS's eval_ret_idx)
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+            } else if (!isLastInProgram) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (stmt instanceof BlockStatement block) {
@@ -614,8 +641,11 @@ final class StatementCompiler {
         } else if (stmt instanceof TryStatement tryStmt) {
             compileTryStatement(tryStmt);
             // Try statements produce a value on the stack (the try/catch result).
-            // Drop it when not the last statement in a program.
-            if (!isLastInProgram) {
+            // Always drop it — when eval_ret_idx is active, expression statements
+            // inside the try/catch already store to eval_ret_idx.
+            if (compilerContext.evalReturnLocalIndex >= 0) {
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+            } else if (!isLastInProgram) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
@@ -784,27 +814,35 @@ final class StatementCompiler {
 
                 // Compile catch body in the SAME scope as the parameter
                 List<Statement> body = handler.getBody().getBody();
-                for (int i = 0; i < body.size(); i++) {
-                    boolean isLast = (i == body.size() - 1);
-                    Statement stmt = body.get(i);
+                if (compilerContext.evalReturnLocalIndex >= 0) {
+                    // When eval_ret_idx is active, use compileStatement for proper handling
+                    for (Statement stmt : body) {
+                        compileStatement(stmt);
+                    }
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                } else {
+                    for (int i = 0; i < body.size(); i++) {
+                        boolean isLast = (i == body.size() - 1);
+                        Statement stmt = body.get(i);
 
-                    if (stmt instanceof ExpressionStatement exprStmt) {
-                        delegates.expressions.compileExpression(exprStmt.getExpression());
-                        // Keep the value on stack for the last expression, drop otherwise
-                        if (!isLast) {
-                            compilerContext.emitter.emitOpcode(Opcode.DROP);
-                        }
-                    } else {
-                        compileStatement(stmt, false);
-                        // If last statement is not an expression, push undefined
-                        if (isLast) {
-                            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                        if (stmt instanceof ExpressionStatement exprStmt) {
+                            delegates.expressions.compileExpression(exprStmt.getExpression());
+                            // Keep the value on stack for the last expression, drop otherwise
+                            if (!isLast) {
+                                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                            }
+                        } else {
+                            compileStatement(stmt, false);
+                            // If last statement is not an expression, push undefined
+                            if (isLast) {
+                                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                            }
                         }
                     }
-                }
-                // If block is empty, push undefined
-                if (body.isEmpty()) {
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    // If block is empty, push undefined
+                    if (body.isEmpty()) {
+                        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    }
                 }
 
                 compilerContext.inGlobalScope = savedGlobalScope;
@@ -828,27 +866,36 @@ final class StatementCompiler {
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
         List<Statement> body = block.getBody();
-        for (int i = 0; i < body.size(); i++) {
-            boolean isLast = (i == body.size() - 1);
-            Statement stmt = body.get(i);
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            // When eval_ret_idx is active, expression statements store to it.
+            // The try block still needs to leave a value on the stack for NIP_CATCH.
+            for (Statement stmt : body) {
+                compileStatement(stmt);
+            }
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        } else {
+            for (int i = 0; i < body.size(); i++) {
+                boolean isLast = (i == body.size() - 1);
+                Statement stmt = body.get(i);
 
-            if (stmt instanceof ExpressionStatement exprStmt) {
-                delegates.expressions.compileExpression(exprStmt.getExpression());
-                // Keep the value on stack for the last expression, drop otherwise
-                if (!isLast) {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                }
-            } else {
-                compileStatement(stmt, false);
-                // If last statement is not an expression, push undefined
-                if (isLast) {
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                if (stmt instanceof ExpressionStatement exprStmt) {
+                    delegates.expressions.compileExpression(exprStmt.getExpression());
+                    // Keep the value on stack for the last expression, drop otherwise
+                    if (!isLast) {
+                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+                    }
+                } else {
+                    compileStatement(stmt, false);
+                    // If last statement is not an expression, push undefined
+                    if (isLast) {
+                        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    }
                 }
             }
-        }
-        // If block is empty, push undefined
-        if (body.isEmpty()) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            // If block is empty, push undefined
+            if (body.isEmpty()) {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
         }
         compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();

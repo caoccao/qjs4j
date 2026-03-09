@@ -65,6 +65,9 @@ public final class Compiler {
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setSourceCode(source);
             compiler.setPredeclareProgramLexicalsAsLocals(predeclareProgramLexicalsAsLocals);
+            if (isEval) {
+                compiler.setEvalMode(true);
+            }
             if (classFieldEval) {
                 compiler.setClassFieldEvalContext(true);
             }

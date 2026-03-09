@@ -93,6 +93,10 @@ public final class BytecodeCompiler {
         compilerContext.classFieldEvalContext = classFieldEvalContext;
     }
 
+    public void setEvalMode(boolean evalMode) {
+        compilerContext.evalMode = evalMode;
+    }
+
     public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
         compilerContext.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
     }

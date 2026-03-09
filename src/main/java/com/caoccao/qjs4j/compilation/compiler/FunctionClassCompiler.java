@@ -963,7 +963,7 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            emitRestParameterBinding(funcDecl.getRestParameter(), functionContext, delegates);
+            emitRestParameterBinding(funcDecl.getRestParameter(), functionContext, funcDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest

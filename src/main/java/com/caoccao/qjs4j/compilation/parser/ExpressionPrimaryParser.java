@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.ast.UnaryExpression.UnaryOperator;
+import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
@@ -304,7 +305,7 @@ final class ExpressionPrimaryParser {
             case AS, ASYNC, AWAIT, BREAK, CASE, CATCH, CLASS, CONST, CONTINUE,
                  DEFAULT, DELETE, DO, ELSE, EXPORT, EXTENDS, FALSE, FINALLY,
                  FOR, FROM, FUNCTION, IF, IMPORT, IN, INSTANCEOF, LET, NEW,
-                 OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
+                 NULL, OF, RETURN, SUPER, SWITCH, THIS, THROW, TRUE, TRY,
                  TYPEOF, VAR, VOID, WHILE, YIELD -> {
                 String name = parserContext.currentToken.value();
                 parserContext.advance();
@@ -658,6 +659,17 @@ final class ExpressionPrimaryParser {
                     parserContext.expect(TokenType.RPAREN);
                     yield expr;
                 }
+            }
+            case DIV, DIV_ASSIGN -> {
+                // When '/' or '/=' appears in expression position (e.g. after a block's '}'),
+                // the lexer may have incorrectly tokenized it as division. Re-scan as regex.
+                // This mirrors QuickJS's js_parse_unary() TOK_DIV_ASSIGN / '/' handling.
+                Token regexToken = parserContext.lexer.rescanAsRegex(parserContext.currentToken);
+                parserContext.currentToken = regexToken;
+                parserContext.nextToken = parserContext.lexer.nextToken();
+                String value = regexToken.value();
+                parserContext.advance();
+                yield new Literal(new RegExpLiteralValue(value), location);
             }
             case LBRACKET -> delegates.literals.parseArrayExpression();
             case LBRACE -> delegates.literals.parseObjectExpression();

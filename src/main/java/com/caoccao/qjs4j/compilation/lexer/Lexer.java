@@ -132,11 +132,11 @@ public final class Lexer {
         return UnicodeData.isIdentifierPart(c);
     }
 
-    // Core scanning logic
-
     private boolean isIdentifierPartCodePoint(int codePoint) {
         return UnicodeData.isIdentifierPart(codePoint);
     }
+
+    // Core scanning logic
 
     boolean isIdentifierStart(char c) {
         if (c < 128) {
@@ -242,8 +242,6 @@ public final class Lexer {
         return source.charAt(position);
     }
 
-    // Character utilities
-
     /**
      * Peek at the next token without consuming it.
      */
@@ -252,6 +250,27 @@ public final class Lexer {
             lookahead = scanToken();
         }
         return lookahead;
+    }
+
+    // Character utilities
+
+    /**
+     * Re-scan a DIV or DIV_ASSIGN token as a regex literal.
+     * Called by the parser when it encounters '/' or '/=' in expression position
+     * (e.g. after a block statement's closing brace) where the lexer incorrectly
+     * tokenized it as division. Mirrors QuickJS's js_parse_regexp() re-scan.
+     */
+    public Token rescanAsRegex(Token divToken) {
+        int startPos = divToken.offset();
+        int startLine = divToken.line();
+        int startColumn = divToken.column();
+        // Back up to the '/' character — for DIV_ASSIGN the token is '/=' (2 chars)
+        position = startPos;
+        line = startLine;
+        column = startColumn;
+        Token regexToken = scanRegex(startPos, startLine, startColumn);
+        lastTokenType = regexToken.type();
+        return regexToken;
     }
 
     /**

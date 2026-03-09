@@ -42,6 +42,8 @@ final class CompilerContext {
     final Deque<Integer> withObjectLocalStack;
     boolean classFieldEvalContext;
     boolean emitTailCalls;
+    boolean evalMode;
+    int evalReturnLocalIndex;
     boolean hasEnclosingArgumentsBinding;
     boolean inClassFieldInitializer;
     boolean inGlobalScope;
@@ -73,6 +75,8 @@ final class CompilerContext {
         this.annexBFunctionNames = new HashSet<>();
         this.annexBFunctionScopeLocals = new HashMap<>();
         this.emitter = new BytecodeEmitter();
+        this.evalMode = false;
+        this.evalReturnLocalIndex = -1;
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
         this.withObjectLocalStack = new ArrayDeque<>();
