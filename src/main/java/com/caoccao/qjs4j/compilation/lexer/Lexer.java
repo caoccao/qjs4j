@@ -392,10 +392,17 @@ public final class Lexer {
 
         String value = valueBuilder.toString();
 
-        // Resolve keyword type from the KEYWORDS map.
-        // Escaped IdentifierName whose StringValue matches a keyword still tokenizes
-        // as that keyword in order to preserve parser behavior and V8 parity.
-        TokenType type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
+        // ES2024 12.7.1: An IdentifierName containing Unicode escape sequences cannot be
+        // a keyword. Following QuickJS update_token_ident(): when has_escape is true, keep
+        // the token as TOK_IDENT (IDENTIFIER) so the parser never matches it as a keyword.
+        // The escaped flag allows the parser to report errors for escaped reserved words
+        // used as binding identifiers.
+        TokenType type;
+        if (hasEscape) {
+            type = TokenType.IDENTIFIER;
+        } else {
+            type = KEYWORDS.getOrDefault(value, TokenType.IDENTIFIER);
+        }
 
         return new Token(type, value, startLine, startColumn, startPos, hasEscape);
     }

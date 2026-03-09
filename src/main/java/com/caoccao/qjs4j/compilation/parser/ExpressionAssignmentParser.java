@@ -336,38 +336,17 @@ final class ExpressionAssignmentParser {
                 || startTokenType == TokenType.YIELD || startTokenType == TokenType.FROM
                 || startTokenType == TokenType.OF;
 
+        // ES2024 12.7.1: Escaped contextual keywords (e.g. \u0061sync) are IDENTIFIER tokens.
+        // When escaped `async` precedes `function` on the same line, V8 gives
+        // "Keyword must not contain escaped characters" rather than a generic parse error.
+        if (parserContext.match(TokenType.IDENTIFIER)
+                && parserContext.currentToken.escaped()
+                && JSKeyword.ASYNC.equals(parserContext.currentToken.value())
+                && parserContext.nextToken.type() == TokenType.FUNCTION
+                && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+            throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+        }
         if (parserContext.match(TokenType.ASYNC)) {
-            if (parserContext.currentToken.escaped()
-                    && parserContext.nextToken.line() == parserContext.currentToken.line()) {
-                TokenType nextType = parserContext.nextToken.type();
-                if (nextType == TokenType.FUNCTION) {
-                    throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                }
-                if (nextType == TokenType.IDENTIFIER || nextType == TokenType.LPAREN) {
-                    Token lookAheadCurrent = parserContext.currentToken;
-                    Token lookAheadNext = parserContext.nextToken;
-                    int lookAheadPrevLine = parserContext.previousTokenLine;
-                    int lookAheadPrevEndOffset = parserContext.previousTokenEndOffset;
-                    LexerState lookAheadLexer = parserContext.lexer.saveState();
-                    try {
-                        parserContext.advance(); // consume escaped async
-                        if (nextType == TokenType.IDENTIFIER
-                                && parserContext.match(TokenType.IDENTIFIER)
-                                && parserContext.nextToken.type() == TokenType.ARROW) {
-                            throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                        }
-                        if (nextType == TokenType.LPAREN && peekPastParensIsArrow()) {
-                            throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
-                        }
-                    } finally {
-                        parserContext.currentToken = lookAheadCurrent;
-                        parserContext.nextToken = lookAheadNext;
-                        parserContext.previousTokenLine = lookAheadPrevLine;
-                        parserContext.previousTokenEndOffset = lookAheadPrevEndOffset;
-                        parserContext.lexer.restoreState(lookAheadLexer);
-                    }
-                }
-            }
             SourceLocation asyncLocation = location;
             Token savedCurrent = parserContext.currentToken;
             Token savedNext = parserContext.nextToken;

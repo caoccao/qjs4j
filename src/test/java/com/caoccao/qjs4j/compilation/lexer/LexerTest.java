@@ -29,9 +29,12 @@ class LexerTest {
         assertThat(identifierToken.type()).isEqualTo(TokenType.IDENTIFIER);
         assertThat(identifierToken.value()).isEqualTo("a");
 
-        Token keywordToken = new Lexer("ret\\u0075rn").nextToken();
-        assertThat(keywordToken.type()).isEqualTo(TokenType.RETURN);
-        assertThat(keywordToken.value()).isEqualTo("return");
+        // ES2024 12.7.1: An IdentifierName containing Unicode escape sequences
+        // cannot be a keyword — it is always tokenized as IDENTIFIER.
+        Token escapedKeywordToken = new Lexer("ret\\u0075rn").nextToken();
+        assertThat(escapedKeywordToken.type()).isEqualTo(TokenType.IDENTIFIER);
+        assertThat(escapedKeywordToken.value()).isEqualTo("return");
+        assertThat(escapedKeywordToken.escaped()).isTrue();
     }
 
     @Test

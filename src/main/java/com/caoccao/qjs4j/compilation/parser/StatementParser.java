@@ -242,12 +242,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     Statement parseAsyncDeclaration() {
-        if (parserContext.nextToken.type() == TokenType.FUNCTION) {
+        // ES2024: [no LineTerminator here] between `async` and `function`.
+        // If there's a line terminator, `async` is an identifier expression statement.
+        if (parserContext.nextToken.type() == TokenType.FUNCTION
+                && parserContext.nextToken.line() == parserContext.currentToken.line()) {
             SourceLocation asyncLocation = parserContext.getLocation();
             parserContext.advance(); // consume async
             return delegates.functions.parseFunctionDeclaration(true, false, asyncLocation);
         } else {
-            // Otherwise parse as an expression statement (e.g. async () => 1).
             return parseExpressionStatement();
         }
     }
@@ -343,8 +345,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 return funcDecl;
-            } else if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                    && parserContext.peek().type() == TokenType.FUNCTION) {
+            } else if (parserContext.match(TokenType.ASYNC)
+                    && parserContext.peek() != null
+                    && parserContext.peek().type() == TokenType.FUNCTION
+                    && parserContext.peek().line() == parserContext.currentToken.line()) {
                 Statement asyncDecl = delegates.functions.parseExportDefaultAsyncFunctionDeclaration();
                 if (parserContext.match(TokenType.LPAREN)) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
@@ -392,8 +396,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             collectDeclaredNames(decl, false);
             return decl;
         }
-        if (parserContext.match(TokenType.ASYNC) && parserContext.peek() != null
-                && parserContext.peek().type() == TokenType.FUNCTION) {
+        if (parserContext.match(TokenType.ASYNC)
+                && parserContext.peek() != null
+                && parserContext.peek().type() == TokenType.FUNCTION
+                && parserContext.peek().line() == parserContext.currentToken.line()) {
             Statement decl = parseAsyncDeclaration();
             collectDeclaredNames(decl, false);
             return decl;

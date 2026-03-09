@@ -415,16 +415,30 @@ final class ParserContext {
         if (match(TokenType.IDENTIFIER)) {
             String name = currentToken.value();
             if (isAlwaysReservedIdentifierName(name)) {
+                // ES2024 12.7.1: Escaped keywords are tokenized as IDENTIFIER but
+                // their StringValue still matches a reserved word — use V8's message.
+                if (currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 throw new JSSyntaxErrorException("Unexpected reserved word");
             }
             if (strictMode && isStrictReservedIdentifierName(name)) {
+                if (currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
-            // Contextual keywords via unicode escapes still have their StringValue checked
+            // Contextual keywords via unicode escapes: use V8's escaped keyword message.
             if (JSKeyword.AWAIT.equals(name) && !isAwaitIdentifierAllowed()) {
+                if (currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
+                if (currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 throw new JSSyntaxErrorException("Unexpected token 'yield'");
             }
             // ES2024 14.7.1 Static Semantics: ContainsArguments

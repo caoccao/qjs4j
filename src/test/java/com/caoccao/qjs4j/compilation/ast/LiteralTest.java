@@ -298,6 +298,36 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testUnicodeEscapedKeywordsAsStatements() {
+        // ES2024 12.7.1: Keywords with Unicode escapes are identifiers, not keywords.
+        // \u0061sync = async, \u0066or = for, \u0069f = if, \u0072eturn = return
+        assertErrorWithJavet(
+                "\\u0061sync function f(){}",
+                "\\u0066or (;;) {}",
+                "\\u0069f (true) {}",
+                "\\u0077hile (false) {}",
+                "\\u0072eturn",
+                "\\u0074hrow 1");
+    }
+
+    @Test
+    public void testUnicodeEscapedKeywordsInExpressions() {
+        // Escaped contextual keywords become plain identifiers in expressions
+        assertErrorWithJavet(
+                "var \\u{69}f = 1",
+                "var \\u{66}or = 1",
+                "var \\u0074rue = 1",
+                "var \\u006eull = 1");
+    }
+
+    @Test
+    public void testUnicodeEscapedAsyncNotKeyword() {
+        // \u0061sync is not the async keyword — it's just an identifier "async"
+        assertIntegerWithJavet(
+                "var \\u0061sync = 42; \\u0061sync");
+    }
+
+    @Test
     public void testValidBigIntLiterals() {
         assertLongWithJavet(
                 "0n",
