@@ -19,13 +19,38 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a labeled statement: label: statement
  */
-public record LabeledStatement(
-        Identifier label,
-        Statement body,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class LabeledStatement extends Statement {
+    private final Statement body;
+    private final Identifier label;
+
+    public LabeledStatement(Identifier label, Statement body, SourceLocation location) {
+        super(location);
+        this.label = label;
+        this.body = body;
     }
+
+    public Statement body() {
+        return body;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = body != null && body.containsAwait();
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = body != null && body.containsYield();
+        }
+        return yieldInside;
+    }
+
+    public Identifier label() {
+        return label;
+    }
+
 }

@@ -37,19 +37,17 @@ public final class UnaryExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = operand != null && operand.containsAwait();
         }
-        awaitInside = operand != null && operand.containsAwait();
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = operand != null && operand.containsYield();
         }
-        yieldInside = operand != null && operand.containsYield();
         return yieldInside;
     }
 

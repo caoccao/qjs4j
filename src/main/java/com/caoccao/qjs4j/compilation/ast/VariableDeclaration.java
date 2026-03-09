@@ -21,19 +21,101 @@ import java.util.List;
 /**
  * Represents a variable declaration statement.
  */
-public record VariableDeclaration(
-        List<VariableDeclarator> declarations,
-        VariableKind kind,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class VariableDeclaration extends Statement {
+    private final List<VariableDeclarator> declarations;
+    private final VariableKind kind;
+
+    public VariableDeclaration(List<VariableDeclarator> declarations, VariableKind kind, SourceLocation location) {
+        super(location);
+        this.declarations = declarations;
+        this.kind = kind;
     }
 
-    public record VariableDeclarator(
-            Pattern id,
-            Expression init
-    ) {
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (declarations != null) {
+                for (VariableDeclarator declarator : declarations) {
+                    if (declarator != null && declarator.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return awaitInside;
     }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (declarations != null) {
+                for (VariableDeclarator declarator : declarations) {
+                    if (declarator != null && declarator.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return yieldInside;
+    }
+
+    public List<VariableDeclarator> declarations() {
+        return declarations;
+    }
+
+    public VariableKind kind() {
+        return kind;
+    }
+
+    public static final class VariableDeclarator extends ASTNode {
+        private final Pattern id;
+        private final Expression init;
+
+        public VariableDeclarator(Pattern id, Expression init) {
+            super(id != null ? id.location() : (init != null ? init.location() : new SourceLocation(0, 0, 0, 0)));
+            this.id = id;
+            this.init = init;
+        }
+
+        @Override
+        public boolean containsAwait() {
+            if (awaitInside == null) {
+                awaitInside = false;
+                if (id != null && id.containsAwait()) {
+                    awaitInside = true;
+                }
+                if (!awaitInside && init != null && init.containsAwait()) {
+                    awaitInside = true;
+                }
+            }
+            return awaitInside;
+        }
+
+        @Override
+        public boolean containsYield() {
+            if (yieldInside == null) {
+                yieldInside = false;
+                if (id != null && id.containsYield()) {
+                    yieldInside = true;
+                }
+                if (!yieldInside && init != null && init.containsYield()) {
+                    yieldInside = true;
+                }
+            }
+            return yieldInside;
+        }
+
+        public Pattern id() {
+            return id;
+        }
+
+        public Expression init() {
+            return init;
+        }
+    }
+
 }

@@ -98,7 +98,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         if (pattern instanceof ObjectPattern objectPattern) {
-            for (ObjectPattern.Property property : objectPattern.properties()) {
+            for (ObjectPatternProperty property : objectPattern.properties()) {
                 collectPatternBoundNames(property.value(), names);
             }
             if (objectPattern.restElement() != null) {
@@ -118,7 +118,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (pattern instanceof Identifier id) {
             consumer.accept(id.name());
         } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPattern.Property prop : objPat.properties()) {
+            for (ObjectPatternProperty prop : objPat.properties()) {
                 collectPatternNames(prop.value(), consumer);
             }
             if (objPat.restElement() != null) {
@@ -214,12 +214,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private boolean containsCoverInitializedName(ObjectExpression objectExpression) {
-        for (ObjectExpression.Property property : objectExpression.properties()) {
+        for (ObjectExpressionProperty property : objectExpression.properties()) {
             if (!property.shorthand()) {
                 continue;
             }
             if (property.value() instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                    && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
                 return true;
             }
         }

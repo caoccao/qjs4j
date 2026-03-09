@@ -57,7 +57,7 @@ final class CompilerAnalysis {
                 }
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
-            for (ObjectPattern.Property prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.properties()) {
                 collectPatternBindingNames(prop.value(), names);
             }
             if (objPattern.restElement() != null) {

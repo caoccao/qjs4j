@@ -123,7 +123,7 @@ final class FunctionClassCompiler {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                ObjectPattern.Property prop = objPattern.properties().get(i);
+                ObjectPatternProperty prop = objPattern.properties().get(i);
                 if (prop.shorthand()) {
                     sb.append(patternToString(prop.value()));
                 } else {
@@ -387,18 +387,18 @@ final class FunctionClassCompiler {
         // Stack: superClass
 
         // Separate class elements by type and collect private symbols in a single pass
-        List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
-        List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
-        List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
-        List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
-        IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
-        ClassDeclaration.MethodDefinition constructor = null;
+        List<MethodDefinition> methods = new ArrayList<>();
+        List<MethodDefinition> privateInstanceMethods = new ArrayList<>();
+        List<MethodDefinition> privateStaticMethods = new ArrayList<>();
+        List<PropertyDefinition> instanceFields = new ArrayList<>();
+        List<ClassElement> staticInitializers = new ArrayList<>();
+        List<PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
+        IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
+        MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
-        for (ClassDeclaration.ClassElement element : classDecl.body()) {
-            if (element instanceof ClassDeclaration.MethodDefinition method) {
+        for (ClassElement element : classDecl.body()) {
+            if (element instanceof MethodDefinition method) {
                 // Check if it's a constructor
                 if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
                     constructor = method;
@@ -414,7 +414,7 @@ final class FunctionClassCompiler {
                 } else {
                     methods.add(method);
                 }
-            } else if (element instanceof ClassDeclaration.PropertyDefinition field) {
+            } else if (element instanceof PropertyDefinition field) {
                 if (field.isStatic()) {
                     staticInitializers.add(field);
                 } else {
@@ -432,7 +432,7 @@ final class FunctionClassCompiler {
                             new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size())
                     );
                 }
-            } else if (element instanceof ClassDeclaration.StaticBlock block) {
+            } else if (element instanceof StaticBlock block) {
                 staticInitializers.add(block);
             }
         }
@@ -501,7 +501,7 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
 
-        for (ClassDeclaration.MethodDefinition method : methods) {
+        for (MethodDefinition method : methods) {
             // Stack before each iteration: constructor proto
 
             if (method.isStatic()) {
@@ -556,7 +556,7 @@ final class FunctionClassCompiler {
 
         // Evaluate all computed field names once at class definition time.
         // This matches QuickJS behavior and avoids re-evaluating key side effects per instance.
-        for (ClassDeclaration.PropertyDefinition field : computedFieldsInDefinitionOrder) {
+        for (PropertyDefinition field : computedFieldsInDefinitionOrder) {
             compileComputedFieldNameCache(field, computedFieldSymbols);
         }
 
@@ -566,12 +566,12 @@ final class FunctionClassCompiler {
 
         // Execute static initializers (static fields and static blocks) in source order.
         // Each initializer runs with class constructor as `this`.
-        for (ClassDeclaration.ClassElement staticInitializer : staticInitializers) {
+        for (ClassElement staticInitializer : staticInitializers) {
             JSBytecodeFunction staticInitializerFunc;
-            if (staticInitializer instanceof ClassDeclaration.PropertyDefinition staticField) {
+            if (staticInitializer instanceof PropertyDefinition staticField) {
                 staticInitializerFunc = compileStaticFieldInitializer(
                         staticField, computedFieldSymbols, privateSymbols, className);
-            } else if (staticInitializer instanceof ClassDeclaration.StaticBlock staticBlock) {
+            } else if (staticInitializer instanceof StaticBlock staticBlock) {
                 staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
             } else {
                 continue;
@@ -662,18 +662,18 @@ final class FunctionClassCompiler {
         // Stack: superClass
 
         // Separate class elements by type and collect private symbols in a single pass
-        List<ClassDeclaration.MethodDefinition> methods = new ArrayList<>();
-        List<ClassDeclaration.MethodDefinition> privateInstanceMethods = new ArrayList<>();
-        List<ClassDeclaration.MethodDefinition> privateStaticMethods = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> instanceFields = new ArrayList<>();
-        List<ClassDeclaration.ClassElement> staticInitializers = new ArrayList<>();
-        List<ClassDeclaration.PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
-        IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
-        ClassDeclaration.MethodDefinition constructor = null;
+        List<MethodDefinition> methods = new ArrayList<>();
+        List<MethodDefinition> privateInstanceMethods = new ArrayList<>();
+        List<MethodDefinition> privateStaticMethods = new ArrayList<>();
+        List<PropertyDefinition> instanceFields = new ArrayList<>();
+        List<ClassElement> staticInitializers = new ArrayList<>();
+        List<PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
+        IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
+        MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
-        for (ClassDeclaration.ClassElement element : classExpr.body()) {
-            if (element instanceof ClassDeclaration.MethodDefinition method) {
+        for (ClassElement element : classExpr.body()) {
+            if (element instanceof MethodDefinition method) {
                 // Check if it's a constructor
                 if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
                     constructor = method;
@@ -689,7 +689,7 @@ final class FunctionClassCompiler {
                 } else {
                     methods.add(method);
                 }
-            } else if (element instanceof ClassDeclaration.PropertyDefinition field) {
+            } else if (element instanceof PropertyDefinition field) {
                 if (field.isStatic()) {
                     staticInitializers.add(field);
                 } else {
@@ -707,7 +707,7 @@ final class FunctionClassCompiler {
                             new JSSymbol("__computed_field_" + computedFieldsInDefinitionOrder.size())
                     );
                 }
-            } else if (element instanceof ClassDeclaration.StaticBlock block) {
+            } else if (element instanceof StaticBlock block) {
                 staticInitializers.add(block);
             }
         }
@@ -779,7 +779,7 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
 
-        for (ClassDeclaration.MethodDefinition method : methods) {
+        for (MethodDefinition method : methods) {
             if (method.isStatic()) {
                 // For static methods, constructor is the target object
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -824,7 +824,7 @@ final class FunctionClassCompiler {
         installPrivateStaticMethods(privateStaticMethodFunctions, privateSymbols);
 
         // Evaluate all computed field names once at class definition time.
-        for (ClassDeclaration.PropertyDefinition field : computedFieldsInDefinitionOrder) {
+        for (PropertyDefinition field : computedFieldsInDefinitionOrder) {
             compileComputedFieldNameCache(field, computedFieldSymbols);
         }
 
@@ -833,12 +833,12 @@ final class FunctionClassCompiler {
         // Stack: proto constructor
 
         // Execute static initializers (static fields and static blocks) in source order.
-        for (ClassDeclaration.ClassElement staticInitializer : staticInitializers) {
+        for (ClassElement staticInitializer : staticInitializers) {
             JSBytecodeFunction staticInitializerFunc;
-            if (staticInitializer instanceof ClassDeclaration.PropertyDefinition staticField) {
+            if (staticInitializer instanceof PropertyDefinition staticField) {
                 staticInitializerFunc = compileStaticFieldInitializer(
                         staticField, computedFieldSymbols, privateSymbols, className);
-            } else if (staticInitializer instanceof ClassDeclaration.StaticBlock staticBlock) {
+            } else if (staticInitializer instanceof StaticBlock staticBlock) {
                 staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
             } else {
                 continue;
@@ -884,8 +884,8 @@ final class FunctionClassCompiler {
      * Expects stack before/after to be: constructor proto.
      */
     void compileComputedFieldNameCache(
-            ClassDeclaration.PropertyDefinition field,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+            PropertyDefinition field,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
         fieldCompiler.compileComputedFieldNameCache(field, computedFieldSymbols);
     }
 
@@ -894,9 +894,9 @@ final class FunctionClassCompiler {
      * Emits code to set each field on 'this' with its initializer value.
      * For private fields, uses the symbol from privateSymbols map.
      */
-    void compileFieldInitialization(List<ClassDeclaration.PropertyDefinition> fields,
+    void compileFieldInitialization(List<PropertyDefinition> fields,
                                     Map<String, JSSymbol> privateSymbols,
-                                    IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
         fieldCompiler.compileFieldInitialization(fields, privateSymbols, computedFieldSymbols);
     }
 
@@ -1327,12 +1327,12 @@ final class FunctionClassCompiler {
      * privateSymbols contains JSSymbol instances for private fields (passed as closure variables).
      */
     JSBytecodeFunction compileMethodAsFunction(
-            ClassDeclaration.MethodDefinition method,
+            MethodDefinition method,
             String methodName,
             boolean isDerivedConstructor,
-            List<ClassDeclaration.PropertyDefinition> instanceFields,
+            List<PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions,
             boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
@@ -1462,11 +1462,11 @@ final class FunctionClassCompiler {
     }
 
     List<PrivateMethodEntry> compilePrivateMethodFunctions(
-            List<ClassDeclaration.MethodDefinition> privateMethods,
+            List<MethodDefinition> privateMethods,
             Map<String, JSSymbol> privateSymbols,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
         List<PrivateMethodEntry> privateMethodEntries = new ArrayList<>();
-        for (ClassDeclaration.MethodDefinition method : privateMethods) {
+        for (MethodDefinition method : privateMethods) {
             String methodName = compilerContext.getMethodName(method);
             JSBytecodeFunction methodFunc = compileMethodAsFunction(
                     method,
@@ -1518,7 +1518,7 @@ final class FunctionClassCompiler {
      * Static blocks are executed immediately after class definition with the class constructor as 'this'.
      */
     JSBytecodeFunction compileStaticBlock(
-            ClassDeclaration.StaticBlock staticBlock,
+            StaticBlock staticBlock,
             String className,
             Map<String, JSSymbol> privateSymbols) {
         // Pass parent captureResolver so static blocks can capture outer scope variables
@@ -1575,8 +1575,8 @@ final class FunctionClassCompiler {
      * The function is called with class constructor as `this`.
      */
     JSBytecodeFunction compileStaticFieldInitializer(
-            ClassDeclaration.PropertyDefinition field,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            PropertyDefinition field,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSSymbol> privateSymbols,
             String className) {
         // Pass parent captureResolver so static field initializers can capture outer scope variables
@@ -1675,9 +1675,9 @@ final class FunctionClassCompiler {
     JSBytecodeFunction createDefaultConstructor(
             String className,
             boolean hasSuper,
-            List<ClassDeclaration.PropertyDefinition> instanceFields,
+            List<PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions) {
         // Pass parent captureResolver so default constructors can capture outer scope variables
         BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);

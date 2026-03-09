@@ -17,8 +17,11 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base interface for destructuring patterns.
- * Patterns can be used in variable declarations and assignment expressions.
+ * Base class for destructuring patterns.
  */
-public sealed interface Pattern permits Identifier, ObjectPattern, ArrayPattern, RestElement, AssignmentPattern {
+public abstract sealed class Pattern extends ASTNode permits
+        Expression, ObjectPattern, ArrayPattern, RestElement, AssignmentPattern {
+    protected Pattern(SourceLocation location) {
+        super(location);
+    }
 }

@@ -20,25 +20,62 @@ import java.util.List;
 
 /**
  * Represents an object destructuring pattern.
- * Example: { proxy, revoke } or { x: a, y: b }
+ * Example: { proxy, revoke } or { x: a, y: b }.
  */
-public record ObjectPattern(
-        List<Property> properties,
-        RestElement restElement,
-        SourceLocation location
-) implements Pattern {
+public final class ObjectPattern extends Pattern {
+    private final List<ObjectPatternProperty> properties;
+    private final RestElement restElement;
 
-    /**
-     * Represents a property in an object pattern.
-     * key: the property name
-     * value: the pattern to bind to (can be Identifier or nested pattern)
-     * shorthand: true for { x } (equivalent to { x: x })
-     */
-    public record Property(
-            Expression key,
-            Pattern value,
-            boolean computed,
-            boolean shorthand
-    ) {
+    public ObjectPattern(List<ObjectPatternProperty> properties, RestElement restElement, SourceLocation location) {
+        super(location);
+        this.properties = properties;
+        this.restElement = restElement;
     }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (properties != null) {
+                for (ObjectPatternProperty property : properties) {
+                    if (property != null && property.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!awaitInside && restElement != null && restElement.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (properties != null) {
+                for (ObjectPatternProperty property : properties) {
+                    if (property != null && property.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!yieldInside && restElement != null && restElement.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public List<ObjectPatternProperty> properties() {
+        return properties;
+    }
+
+    public RestElement restElement() {
+        return restElement;
+    }
+
 }

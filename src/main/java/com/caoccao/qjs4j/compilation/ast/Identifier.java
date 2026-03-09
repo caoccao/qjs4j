@@ -20,7 +20,7 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents an identifier.
  * Identifiers can be used as expressions and as patterns in destructuring.
  */
-public final class Identifier extends Expression implements Pattern {
+public final class Identifier extends Expression {
     private final String name;
 
     public Identifier(String name, SourceLocation location) {
@@ -31,7 +31,9 @@ public final class Identifier extends Expression implements Pattern {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
+            if (awaitInside == null) {
+                awaitInside = false;
+            }
         }
         return awaitInside;
     }
@@ -39,7 +41,9 @@ public final class Identifier extends Expression implements Pattern {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
+            if (yieldInside == null) {
+                yieldInside = false;
+            }
         }
         return yieldInside;
     }

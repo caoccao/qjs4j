@@ -38,11 +38,11 @@ final class ExpressionAssignmentCompiler {
 
     void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
-        AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+        AssignmentOperator operator = assignExpr.operator();
 
-        if (operator == AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN ||
-                operator == AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN ||
-                operator == AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN) {
+        if (operator == AssignmentOperator.LOGICAL_AND_ASSIGN ||
+                operator == AssignmentOperator.LOGICAL_OR_ASSIGN ||
+                operator == AssignmentOperator.NULLISH_ASSIGN) {
             compileLogicalAssignment(assignExpr);
             return;
         }
@@ -60,7 +60,7 @@ final class ExpressionAssignmentCompiler {
             return;
         }
 
-        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+        if (operator != AssignmentOperator.ASSIGN) {
             if (left instanceof MemberExpression memberExpr) {
                 if (compilerContext.isSuperMemberExpression(memberExpr)) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -139,7 +139,7 @@ final class ExpressionAssignmentCompiler {
         }
 
         if (left instanceof MemberExpression memberExpr) {
-            if (operator == AssignmentExpression.AssignmentOperator.ASSIGN) {
+            if (operator == AssignmentOperator.ASSIGN) {
                 // Non-computed regular member expression (computed and super handled above)
                 owner.compileExpression(memberExpr.object());
                 if (memberExpr.property() instanceof PrivateIdentifier privateId) {
@@ -188,7 +188,7 @@ final class ExpressionAssignmentCompiler {
 
     private void compileIdentifierAssignmentExpression(AssignmentExpression assignExpr, Identifier identifier) {
         String name = identifier.name();
-        AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+        AssignmentOperator operator = assignExpr.operator();
         Integer localIndex = compilerContext.findLocalInScopes(name);
         Integer capturedIndex = localIndex == null ? compilerContext.resolveCapturedBindingIndex(name) : null;
         boolean isConstLocalBinding = localIndex != null && compilerContext.isLocalBindingConst(name);
@@ -200,7 +200,7 @@ final class ExpressionAssignmentCompiler {
         boolean isFunctionNameLocal = localIndex != null && compilerContext.isLocalBindingFunctionName(name);
         boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.isCapturedBindingFunctionName(name);
         if (isFunctionNameLocal || isFunctionNameCaptured) {
-            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            if (operator != AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                 } else {
@@ -208,7 +208,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
             owner.compileExpression(assignExpr.right());
-            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            if (operator != AssignmentOperator.ASSIGN) {
                 switch (operator) {
                     case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
                     case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
@@ -230,7 +230,7 @@ final class ExpressionAssignmentCompiler {
         }
 
         if (isConstLocalBinding || isConstCapturedBinding) {
-            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            if (operator != AssignmentOperator.ASSIGN) {
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
                 } else {
@@ -240,7 +240,7 @@ final class ExpressionAssignmentCompiler {
 
             owner.compileExpression(assignExpr.right());
 
-            if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+            if (operator != AssignmentOperator.ASSIGN) {
                 switch (operator) {
                     case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
                     case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
@@ -267,12 +267,12 @@ final class ExpressionAssignmentCompiler {
         }
 
         emitIdentifierReference(name);
-        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+        if (operator != AssignmentOperator.ASSIGN) {
             compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
         // Pass inferred name to anonymous class expressions for NamedEvaluation
-        if (operator == AssignmentExpression.AssignmentOperator.ASSIGN
+        if (operator == AssignmentOperator.ASSIGN
                 && assignExpr.right() instanceof ClassExpression classExpr
                 && classExpr.id() == null) {
             compilerContext.inferredClassName = name;
@@ -280,13 +280,13 @@ final class ExpressionAssignmentCompiler {
         owner.compileExpression(assignExpr.right());
         compilerContext.inferredClassName = null;
 
-        if (operator == AssignmentExpression.AssignmentOperator.ASSIGN
+        if (operator == AssignmentOperator.ASSIGN
                 && assignExpr.lhsIsIdentifierRef()
                 && isAnonymousFunctionDefinition(assignExpr.right())) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
         }
 
-        if (operator != AssignmentExpression.AssignmentOperator.ASSIGN) {
+        if (operator != AssignmentOperator.ASSIGN) {
             switch (operator) {
                 case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
                 case MINUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.SUB);
@@ -310,7 +310,7 @@ final class ExpressionAssignmentCompiler {
 
     void compileLogicalAssignment(AssignmentExpression assignExpr) {
         Expression left = assignExpr.left();
-        AssignmentExpression.AssignmentOperator operator = assignExpr.operator();
+        AssignmentOperator operator = assignExpr.operator();
         boolean privateMemberAssignment = false;
 
         int depthLvalue;
@@ -382,10 +382,10 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
 
         int jumpToCleanup;
-        if (operator == AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN) {
+        if (operator == AssignmentOperator.NULLISH_ASSIGN) {
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
             jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-        } else if (operator == AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN) {
+        } else if (operator == AssignmentOperator.LOGICAL_OR_ASSIGN) {
             jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
         } else {
             jumpToCleanup = compilerContext.emitter.emitJump(Opcode.IF_FALSE);

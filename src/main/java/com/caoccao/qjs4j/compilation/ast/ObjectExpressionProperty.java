@@ -17,39 +17,40 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Represents a member access expression.
+ * Represents a property in an object expression.
  */
-public final class MemberExpression extends Expression {
+public final class ObjectExpressionProperty extends ASTNode {
     private final boolean computed;
-    private final Expression object;
-    private final boolean optional;
-    private final Expression property;
+    private final String kind;
+    private final Expression key;
+    private final boolean method;
+    private final boolean shorthand;
+    private final Expression value;
 
-    public MemberExpression(
-            Expression object,
-            Expression property,
+    public ObjectExpressionProperty(
+            Expression key,
+            Expression value,
+            String kind,
             boolean computed,
-            boolean optional,
-            SourceLocation location) {
-        super(location);
-        this.object = object;
-        this.property = property;
+            boolean shorthand,
+            boolean method) {
+        super(key != null ? key.location() : (value != null ? value.location() : new SourceLocation(0, 0, 0, 0)));
+        this.key = key;
+        this.value = value;
+        this.kind = kind;
         this.computed = computed;
-        this.optional = optional;
-    }
-
-    public boolean computed() {
-        return computed;
+        this.shorthand = shorthand;
+        this.method = method;
     }
 
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (object != null && object.containsAwait()) {
+            if (key != null && key.containsAwait()) {
                 awaitInside = true;
             }
-            if (!awaitInside && property != null && property.containsAwait()) {
+            if (!awaitInside && value != null && value.containsAwait()) {
                 awaitInside = true;
             }
         }
@@ -60,25 +61,37 @@ public final class MemberExpression extends Expression {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (object != null && object.containsYield()) {
+            if (key != null && key.containsYield()) {
                 yieldInside = true;
             }
-            if (!yieldInside && property != null && property.containsYield()) {
+            if (!yieldInside && value != null && value.containsYield()) {
                 yieldInside = true;
             }
         }
         return yieldInside;
     }
 
-    public Expression object() {
-        return object;
+    public boolean computed() {
+        return computed;
     }
 
-    public boolean optional() {
-        return optional;
+    public String kind() {
+        return kind;
     }
 
-    public Expression property() {
-        return property;
+    public Expression key() {
+        return key;
+    }
+
+    public boolean method() {
+        return method;
+    }
+
+    public boolean shorthand() {
+        return shorthand;
+    }
+
+    public Expression value() {
+        return value;
     }
 }

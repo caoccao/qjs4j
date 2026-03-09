@@ -18,18 +18,66 @@ package com.caoccao.qjs4j.compilation.ast;
 
 /**
  * Represents a for-in statement: for (variable in object) { ... }
- * <p>
- * Based on ES5 for-in loops.
- * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x, obj.prop).
+ * * <p>
+ * * Based on ES5 for-in loops.
+ * * left can be a VariableDeclaration (e.g., var x) or a Pattern/Expression (e.g., x, obj.prop).
  */
-public record ForInStatement(
-        ASTNode left,                 // VariableDeclaration or Pattern (Identifier, MemberExpression, etc.)
-        Expression right,             // Object expression
-        Statement body,               // Loop body
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class ForInStatement extends Statement {
+    private final Statement body;
+    private final ASTNode left;
+    private final Expression right;
+
+    public ForInStatement(ASTNode left, Expression right, Statement body, SourceLocation location) {
+        super(location);
+        this.left = left;
+        this.right = right;
+        this.body = body;
     }
+
+    public Statement body() {
+        return body;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (left != null && left.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && right != null && right.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null && body.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (left != null && left.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && right != null && right.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null && body.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public ASTNode left() {
+        return left;
+    }
+
+    public Expression right() {
+        return right;
+    }
+
 }

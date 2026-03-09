@@ -21,19 +21,131 @@ import java.util.List;
 /**
  * Represents a switch statement.
  */
-public record SwitchStatement(
-        Expression discriminant,
-        List<SwitchCase> cases,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class SwitchStatement extends Statement {
+    private final List<SwitchCase> cases;
+    private final Expression discriminant;
+
+    public SwitchStatement(Expression discriminant, List<SwitchCase> cases, SourceLocation location) {
+        super(location);
+        this.discriminant = discriminant;
+        this.cases = cases;
     }
 
-    public record SwitchCase(
-            Expression test,
-            List<Statement> consequent
-    ) {
+    public List<SwitchCase> cases() {
+        return cases;
     }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (discriminant != null && discriminant.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && cases != null) {
+                for (SwitchCase switchCase : cases) {
+                    if (switchCase != null && switchCase.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (discriminant != null && discriminant.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && cases != null) {
+                for (SwitchCase switchCase : cases) {
+                    if (switchCase != null && switchCase.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return yieldInside;
+    }
+
+    public Expression discriminant() {
+        return discriminant;
+    }
+
+    public static final class SwitchCase extends ASTNode {
+        private final List<Statement> consequent;
+        private final Expression test;
+
+        public SwitchCase(Expression test, List<Statement> consequent) {
+            super(resolveLocation(test, consequent));
+            this.test = test;
+            this.consequent = consequent;
+        }
+
+        @Override
+        public boolean containsAwait() {
+            if (awaitInside == null) {
+                awaitInside = false;
+                if (test != null && test.containsAwait()) {
+                    awaitInside = true;
+                }
+                if (!awaitInside && consequent != null) {
+                    for (Statement statement : consequent) {
+                        if (statement != null && statement.containsAwait()) {
+                            awaitInside = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            return awaitInside;
+        }
+
+        @Override
+        public boolean containsYield() {
+            if (yieldInside == null) {
+                yieldInside = false;
+                if (test != null && test.containsYield()) {
+                    yieldInside = true;
+                }
+                if (!yieldInside && consequent != null) {
+                    for (Statement statement : consequent) {
+                        if (statement != null && statement.containsYield()) {
+                            yieldInside = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            return yieldInside;
+        }
+
+        public List<Statement> consequent() {
+            return consequent;
+        }
+
+        public Expression test() {
+            return test;
+        }
+
+        private static SourceLocation resolveLocation(Expression test, List<Statement> consequent) {
+            if (test != null) {
+                return test.location();
+            }
+            if (consequent != null) {
+                for (Statement statement : consequent) {
+                    if (statement != null) {
+                        return statement.location();
+                    }
+                }
+            }
+            return new SourceLocation(0, 0, 0, 0);
+        }
+    }
+
 }

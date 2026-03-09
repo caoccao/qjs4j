@@ -211,7 +211,7 @@ final class PatternCompiler {
     private void compileDestructuringAssignmentElement(Expression element) {
         // Stack: [value]
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
             // Default value: check if value is undefined
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
@@ -320,9 +320,9 @@ final class PatternCompiler {
         // Stack: [source]
         // Separate regular properties from spread (rest) property.
         // In ObjectExpression, spread is represented as kind="spread".
-        java.util.List<ObjectExpression.Property> regularProperties = new java.util.ArrayList<>();
+        java.util.List<ObjectExpressionProperty> regularProperties = new java.util.ArrayList<>();
         Expression restTarget = null;
-        for (ObjectExpression.Property prop : objExpr.properties()) {
+        for (ObjectExpressionProperty prop : objExpr.properties()) {
             if ("spread".equals(prop.kind())) {
                 restTarget = prop.value();
             } else {
@@ -359,7 +359,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, excludeListLocalIndex);
         }
 
-        for (ObjectExpression.Property property : regularProperties) {
+        for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.computed()) {
                 delegates.expressions.compileExpression(property.key());
@@ -531,7 +531,7 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             }
 
-            for (ObjectPattern.Property prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.properties()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 Expression propertyKey = prop.key();
                 if (!prop.computed() && propertyKey instanceof Identifier identifier) {
@@ -819,7 +819,7 @@ final class PatternCompiler {
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: declare all property variables
-            for (ObjectPattern.Property prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.properties()) {
                 declarePatternVariables(prop.value());
             }
             if (objPattern.restElement() != null) {
@@ -848,7 +848,7 @@ final class PatternCompiler {
         // Handle default values first
         Expression target;
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
             // Default value: check if value is undefined
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
@@ -938,7 +938,7 @@ final class PatternCompiler {
             return null;
         }
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
             return assignExpr.left();
         }
         return element;

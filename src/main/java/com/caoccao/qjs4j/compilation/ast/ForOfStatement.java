@@ -18,20 +18,76 @@ package com.caoccao.qjs4j.compilation.ast;
 
 /**
  * Represents a for-of statement: for (variable of iterable) { ... }
- * or async for-of: for await (variable of iterable) { ... }
- * <p>
- * Based on ES2015 for-of loops and ES2018 async iteration.
- * left can be a VariableDeclaration (e.g., let x) or a Pattern/Expression (e.g., x, obj.prop).
+ * * or async for-of: for await (variable of iterable) { ... }
+ * * <p>
+ * * Based on ES2015 for-of loops and ES2018 async iteration.
+ * * left can be a VariableDeclaration (e.g., let x) or a Pattern/Expression (e.g., x, obj.prop).
  */
-public record ForOfStatement(
-        ASTNode left,                 // VariableDeclaration or Pattern (Identifier, MemberExpression, etc.)
-        Expression right,             // Iterable expression
-        Statement body,               // Loop body
-        boolean isAsync,              // true for 'for await', false for 'for'
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class ForOfStatement extends Statement {
+    private final Statement body;
+    private final boolean isAsync;
+    private final ASTNode left;
+    private final Expression right;
+
+    public ForOfStatement(ASTNode left, Expression right, Statement body, boolean isAsync, SourceLocation location) {
+        super(location);
+        this.left = left;
+        this.right = right;
+        this.body = body;
+        this.isAsync = isAsync;
     }
+
+    public Statement body() {
+        return body;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (isAsync) {
+                awaitInside = true;
+            }
+            if (!awaitInside && left != null && left.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && right != null && right.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null && body.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (left != null && left.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && right != null && right.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null && body.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public boolean isAsync() {
+        return isAsync;
+    }
+
+    public ASTNode left() {
+        return left;
+    }
+
+    public Expression right() {
+        return right;
+    }
+
 }

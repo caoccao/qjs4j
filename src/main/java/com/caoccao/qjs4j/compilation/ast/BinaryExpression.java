@@ -37,23 +37,29 @@ public final class BinaryExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (left != null && left.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && right != null && right.containsAwait()) {
+                awaitInside = true;
+            }
         }
-        boolean leftContainsAwait = left != null && left.containsAwait();
-        boolean rightContainsAwait = right != null && right.containsAwait();
-        awaitInside = leftContainsAwait || rightContainsAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (left != null && left.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && right != null && right.containsYield()) {
+                yieldInside = true;
+            }
         }
-        boolean leftContainsYield = left != null && left.containsYield();
-        boolean rightContainsYield = right != null && right.containsYield();
-        yieldInside = leftContainsYield || rightContainsYield;
         return yieldInside;
     }
 
@@ -69,14 +75,4 @@ public final class BinaryExpression extends Expression {
         return right;
     }
 
-    public enum BinaryOperator {
-        ADD, SUB, MUL, DIV, MOD, EXP,
-        EQ, NE, STRICT_EQ, STRICT_NE,
-        LT, LE, GT, GE,
-        BIT_AND, BIT_OR, BIT_XOR,
-        LSHIFT, RSHIFT, URSHIFT,
-        LOGICAL_AND, LOGICAL_OR,
-        NULLISH_COALESCING,
-        IN, INSTANCEOF
-    }
 }

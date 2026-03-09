@@ -16,27 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
-
-/**
- * Represents an import declaration.
- */
-public final class ImportDeclaration extends ModuleItem {
-    private final Literal source;
-    private final List<ImportSpecifier> specifiers;
-
-    public ImportDeclaration(List<ImportSpecifier> specifiers, Literal source, SourceLocation location) {
-        super(location);
-        this.specifiers = specifiers;
-        this.source = source;
-    }
-
-    public Literal source() {
-        return source;
-    }
-
-    public List<ImportSpecifier> specifiers() {
-        return specifiers;
-    }
-
+public enum AssignmentOperator {
+    ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN, MUL_ASSIGN, DIV_ASSIGN,
+    MOD_ASSIGN, EXP_ASSIGN, LSHIFT_ASSIGN, RSHIFT_ASSIGN,
+    URSHIFT_ASSIGN, AND_ASSIGN, OR_ASSIGN, XOR_ASSIGN,
+    LOGICAL_AND_ASSIGN, LOGICAL_OR_ASSIGN, NULLISH_ASSIGN
 }

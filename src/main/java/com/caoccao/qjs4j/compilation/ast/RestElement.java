@@ -17,12 +17,33 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Represents a rest element in array destructuring (...rest).
- * ES2015 rest elements collect remaining array elements.
- * Example: const [a, ...rest] = [1, 2, 3] // rest = [2, 3]
+ * Represents a rest element in array/object destructuring (...rest).
  */
-public record RestElement(
-        Pattern argument,
-        SourceLocation location
-) implements Pattern {
+public final class RestElement extends Pattern {
+    private final Pattern argument;
+
+    public RestElement(Pattern argument, SourceLocation location) {
+        super(location);
+        this.argument = argument;
+    }
+
+    public Pattern argument() {
+        return argument;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = argument != null && argument.containsAwait();
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = argument != null && argument.containsYield();
+        }
+        return yieldInside;
+    }
 }

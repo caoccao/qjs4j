@@ -69,7 +69,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
     ObjectPattern parseObjectPattern() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
-        List<ObjectPattern.Property> properties = new ArrayList<>();
+        List<ObjectPatternProperty> properties = new ArrayList<>();
         RestElement restElement = null;
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             if (!properties.isEmpty() || restElement != null) {
@@ -114,7 +114,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                 throw new JSSyntaxErrorException("Expected ':' in object binding pattern at line "
                         + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
-            properties.add(new ObjectPattern.Property(key, value, computed, shorthand));
+            properties.add(new ObjectPatternProperty(key, value, computed, shorthand));
         }
         parserContext.expect(TokenType.RBRACE);
         return new ObjectPattern(properties, restElement, location);

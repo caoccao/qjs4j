@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.ClassDeclaration;
 import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
+import com.caoccao.qjs4j.compilation.ast.PropertyDefinition;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -36,8 +36,8 @@ final class FunctionClassFieldCompiler {
     }
 
     void compileComputedFieldNameCache(
-            ClassDeclaration.PropertyDefinition field,
-            IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
+            PropertyDefinition field,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
         JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
         if (computedFieldSymbol == null) {
             throw new JSCompilerException("Computed field key symbol not found");
@@ -52,10 +52,10 @@ final class FunctionClassFieldCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
     }
 
-    void compileFieldInitialization(List<ClassDeclaration.PropertyDefinition> fields,
+    void compileFieldInitialization(List<PropertyDefinition> fields,
                                     Map<String, JSSymbol> privateSymbols,
-                                    IdentityHashMap<ClassDeclaration.PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        for (ClassDeclaration.PropertyDefinition field : fields) {
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
+        for (PropertyDefinition field : fields) {
             boolean isPrivate = field.isPrivate();
 
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);

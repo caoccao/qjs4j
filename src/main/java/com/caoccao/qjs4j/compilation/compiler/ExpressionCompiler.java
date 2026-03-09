@@ -154,7 +154,7 @@ final class ExpressionCompiler {
     }
 
     void compileBinaryExpression(BinaryExpression binExpr) {
-        if (binExpr.operator() == BinaryExpression.BinaryOperator.IN &&
+        if (binExpr.operator() == BinaryOperator.IN &&
                 binExpr.left() instanceof PrivateIdentifier privateIdentifier) {
             compilePrivateInExpression(privateIdentifier, binExpr.right());
             return;
@@ -460,7 +460,7 @@ final class ExpressionCompiler {
 
     void compileObjectExpression(ObjectExpression objExpr) {
         int protoDataPropertyCount = 0;
-        for (ObjectExpression.Property property : objExpr.properties()) {
+        for (ObjectExpressionProperty property : objExpr.properties()) {
             if (isProtoDataProperty(property)) {
                 protoDataPropertyCount++;
                 if (protoDataPropertyCount > 1) {
@@ -471,7 +471,7 @@ final class ExpressionCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.OBJECT);
 
-        for (ObjectExpression.Property prop : objExpr.properties()) {
+        for (ObjectExpressionProperty prop : objExpr.properties()) {
             String kind = prop.kind();
 
             if ("spread".equals(kind)) {
@@ -1277,7 +1277,7 @@ final class ExpressionCompiler {
         return false;
     }
 
-    private boolean isProtoDataProperty(ObjectExpression.Property property) {
+    private boolean isProtoDataProperty(ObjectExpressionProperty property) {
         if (property.computed() || property.shorthand() || property.method() || !"init".equals(property.kind())) {
             return false;
         }

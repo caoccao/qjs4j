@@ -21,53 +21,66 @@ import java.util.List;
 /**
  * Represents a class declaration.
  */
-public record ClassDeclaration(
-        Identifier id,
-        Expression superClass,
-        List<ClassElement> body,
-        SourceLocation location
-) implements Declaration {
+public final class ClassDeclaration extends Declaration {
+    private final List<ClassElement> body;
+    private final Identifier id;
+    private final Expression superClass;
+
+    public ClassDeclaration(Identifier id, Expression superClass, List<ClassElement> body, SourceLocation location) {
+        super(location);
+        this.id = id;
+        this.superClass = superClass;
+        this.body = body;
+    }
+
+    public List<ClassElement> body() {
+        return body;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (superClass != null && superClass.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null) {
+                for (ClassElement classElement : body) {
+                    if (classElement != null && classElement.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return awaitInside;
     }
 
-    /**
-     * Base interface for class elements (methods, fields, static blocks)
-     */
-    public sealed interface ClassElement permits MethodDefinition, PropertyDefinition, StaticBlock {
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (superClass != null && superClass.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null) {
+                for (ClassElement classElement : body) {
+                    if (classElement != null && classElement.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return yieldInside;
     }
 
-    /**
-     * Represents a method in a class
-     */
-    public record MethodDefinition(
-            Expression key,
-            FunctionExpression value,
-            String kind,
-            boolean computed,
-            boolean isStatic,
-            boolean isPrivate
-    ) implements ClassElement {
+    public Identifier id() {
+        return id;
     }
 
-    /**
-     * Represents a field in a class (public or private)
-     */
-    public record PropertyDefinition(
-            Expression key,
-            Expression value,  // initializer expression, can be null
-            boolean computed,
-            boolean isStatic,
-            boolean isPrivate
-    ) implements ClassElement {
+    public Expression superClass() {
+        return superClass;
     }
 
-    /**
-     * Represents a static initialization block
-     */
-    public record StaticBlock(
-            List<Statement> body
-    ) implements ClassElement {
-    }
 }

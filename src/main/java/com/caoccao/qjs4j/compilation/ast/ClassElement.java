@@ -16,27 +16,12 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
-
 /**
- * Represents an import declaration.
+ * Base class for class elements (methods, fields, static blocks).
  */
-public final class ImportDeclaration extends ModuleItem {
-    private final Literal source;
-    private final List<ImportSpecifier> specifiers;
-
-    public ImportDeclaration(List<ImportSpecifier> specifiers, Literal source, SourceLocation location) {
+public abstract sealed class ClassElement extends ASTNode
+        permits MethodDefinition, PropertyDefinition, StaticBlock {
+    protected ClassElement(SourceLocation location) {
         super(location);
-        this.specifiers = specifiers;
-        this.source = source;
     }
-
-    public Literal source() {
-        return source;
-    }
-
-    public List<ImportSpecifier> specifiers() {
-        return specifiers;
-    }
-
 }

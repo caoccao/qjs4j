@@ -19,13 +19,50 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a with statement.
  */
-public record WithStatement(
-        Expression object,
-        Statement body,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class WithStatement extends Statement {
+    private final Statement body;
+    private final Expression object;
+
+    public WithStatement(Expression object, Statement body, SourceLocation location) {
+        super(location);
+        this.object = object;
+        this.body = body;
     }
+
+    public Statement body() {
+        return body;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (object != null && object.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null && body.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (object != null && object.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null && body.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public Expression object() {
+        return object;
+    }
+
 }

@@ -50,10 +50,10 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(1);
 
-        ClassDeclaration.ClassElement element = classDecl.body().get(0);
-        assertThat(element).isInstanceOf(ClassDeclaration.MethodDefinition.class);
+        ClassElement element = classDecl.body().get(0);
+        assertThat(element).isInstanceOf(MethodDefinition.class);
 
-        ClassDeclaration.MethodDefinition method = (ClassDeclaration.MethodDefinition) element;
+        MethodDefinition method = (MethodDefinition) element;
         assertThat(method.key()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) method.key()).name()).isEqualTo("increment");
         assertThat(method.isStatic()).isFalse();
@@ -86,13 +86,13 @@ public class ClassParserTest {
         assertThat(classDecl.body()).hasSize(7);
 
         // Verify types
-        assertThat(classDecl.body().get(0)).isInstanceOf(ClassDeclaration.PropertyDefinition.class);
-        assertThat(classDecl.body().get(1)).isInstanceOf(ClassDeclaration.PropertyDefinition.class);
-        assertThat(classDecl.body().get(2)).isInstanceOf(ClassDeclaration.PropertyDefinition.class);
-        assertThat(classDecl.body().get(3)).isInstanceOf(ClassDeclaration.MethodDefinition.class);
-        assertThat(classDecl.body().get(4)).isInstanceOf(ClassDeclaration.MethodDefinition.class);
-        assertThat(classDecl.body().get(5)).isInstanceOf(ClassDeclaration.MethodDefinition.class);
-        assertThat(classDecl.body().get(6)).isInstanceOf(ClassDeclaration.StaticBlock.class);
+        assertThat(classDecl.body().get(0)).isInstanceOf(PropertyDefinition.class);
+        assertThat(classDecl.body().get(1)).isInstanceOf(PropertyDefinition.class);
+        assertThat(classDecl.body().get(2)).isInstanceOf(PropertyDefinition.class);
+        assertThat(classDecl.body().get(3)).isInstanceOf(MethodDefinition.class);
+        assertThat(classDecl.body().get(4)).isInstanceOf(MethodDefinition.class);
+        assertThat(classDecl.body().get(5)).isInstanceOf(MethodDefinition.class);
+        assertThat(classDecl.body().get(6)).isInstanceOf(StaticBlock.class);
     }
 
     @Test
@@ -104,10 +104,10 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(1);
 
-        ClassDeclaration.ClassElement element = classDecl.body().get(0);
-        assertThat(element).isInstanceOf(ClassDeclaration.PropertyDefinition.class);
+        ClassElement element = classDecl.body().get(0);
+        assertThat(element).isInstanceOf(PropertyDefinition.class);
 
-        ClassDeclaration.PropertyDefinition field = (ClassDeclaration.PropertyDefinition) element;
+        PropertyDefinition field = (PropertyDefinition) element;
         assertThat(field.key()).isInstanceOf(PrivateIdentifier.class);
         assertThat(((PrivateIdentifier) field.key()).name()).isEqualTo("count");
         assertThat(field.value()).isNotNull();
@@ -124,11 +124,11 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(2);
 
-        ClassDeclaration.MethodDefinition method = (ClassDeclaration.MethodDefinition) classDecl.body().get(1);
+        MethodDefinition method = (MethodDefinition) classDecl.body().get(1);
         ReturnStatement returnStatement = (ReturnStatement) method.value().body().body().get(0);
         BinaryExpression binaryExpression = (BinaryExpression) returnStatement.argument();
 
-        assertThat(binaryExpression.operator()).isEqualTo(BinaryExpression.BinaryOperator.IN);
+        assertThat(binaryExpression.operator()).isEqualTo(BinaryOperator.IN);
         assertThat(binaryExpression.left()).isInstanceOf(PrivateIdentifier.class);
         assertThat(((PrivateIdentifier) binaryExpression.left()).name()).isEqualTo("count");
         assertThat(binaryExpression.right()).isInstanceOf(Identifier.class);
@@ -144,13 +144,13 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(2);
 
-        ClassDeclaration.MethodDefinition instanceMethod = (ClassDeclaration.MethodDefinition) classDecl.body().get(0);
+        MethodDefinition instanceMethod = (MethodDefinition) classDecl.body().get(0);
         assertThat(instanceMethod.key()).isInstanceOf(PrivateIdentifier.class);
         assertThat(((PrivateIdentifier) instanceMethod.key()).name()).isEqualTo("inc");
         assertThat(instanceMethod.isPrivate()).isTrue();
         assertThat(instanceMethod.isStatic()).isFalse();
 
-        ClassDeclaration.MethodDefinition staticMethod = (ClassDeclaration.MethodDefinition) classDecl.body().get(1);
+        MethodDefinition staticMethod = (MethodDefinition) classDecl.body().get(1);
         assertThat(staticMethod.key()).isInstanceOf(PrivateIdentifier.class);
         assertThat(((PrivateIdentifier) staticMethod.key()).name()).isEqualTo("version");
         assertThat(staticMethod.isPrivate()).isTrue();
@@ -166,10 +166,10 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(1);
 
-        ClassDeclaration.ClassElement element = classDecl.body().get(0);
-        assertThat(element).isInstanceOf(ClassDeclaration.PropertyDefinition.class);
+        ClassElement element = classDecl.body().get(0);
+        assertThat(element).isInstanceOf(PropertyDefinition.class);
 
-        ClassDeclaration.PropertyDefinition field = (ClassDeclaration.PropertyDefinition) element;
+        PropertyDefinition field = (PropertyDefinition) element;
         assertThat(field.key()).isInstanceOf(Identifier.class);
         assertThat(((Identifier) field.key()).name()).isEqualTo("count");
         assertThat(field.value()).isNotNull();
@@ -186,10 +186,10 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(1);
 
-        ClassDeclaration.ClassElement element = classDecl.body().get(0);
-        assertThat(element).isInstanceOf(ClassDeclaration.StaticBlock.class);
+        ClassElement element = classDecl.body().get(0);
+        assertThat(element).isInstanceOf(StaticBlock.class);
 
-        ClassDeclaration.StaticBlock staticBlock = (ClassDeclaration.StaticBlock) element;
+        StaticBlock staticBlock = (StaticBlock) element;
         assertThat(staticBlock.body()).isNotEmpty();
     }
 
@@ -202,7 +202,7 @@ public class ClassParserTest {
         ClassDeclaration classDecl = (ClassDeclaration) program.body().get(0);
         assertThat(classDecl.body()).hasSize(1);
 
-        ClassDeclaration.PropertyDefinition field = (ClassDeclaration.PropertyDefinition) classDecl.body().get(0);
+        PropertyDefinition field = (PropertyDefinition) classDecl.body().get(0);
         assertThat(((Identifier) field.key()).name()).isEqualTo("version");
         assertThat(field.isStatic()).isTrue();
     }

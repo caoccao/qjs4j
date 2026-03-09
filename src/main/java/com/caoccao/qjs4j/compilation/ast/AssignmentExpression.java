@@ -47,23 +47,29 @@ public final class AssignmentExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (left != null && left.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && right != null && right.containsAwait()) {
+                awaitInside = true;
+            }
         }
-        boolean leftContainsAwait = left != null && left.containsAwait();
-        boolean rightContainsAwait = right != null && right.containsAwait();
-        awaitInside = leftContainsAwait || rightContainsAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (left != null && left.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && right != null && right.containsYield()) {
+                yieldInside = true;
+            }
         }
-        boolean leftContainsYield = left != null && left.containsYield();
-        boolean rightContainsYield = right != null && right.containsYield();
-        yieldInside = leftContainsYield || rightContainsYield;
         return yieldInside;
     }
 
@@ -83,10 +89,4 @@ public final class AssignmentExpression extends Expression {
         return right;
     }
 
-    public enum AssignmentOperator {
-        ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN, MUL_ASSIGN, DIV_ASSIGN,
-        MOD_ASSIGN, EXP_ASSIGN, LSHIFT_ASSIGN, RSHIFT_ASSIGN,
-        URSHIFT_ASSIGN, AND_ASSIGN, OR_ASSIGN, XOR_ASSIGN,
-        LOGICAL_AND_ASSIGN, LOGICAL_OR_ASSIGN, NULLISH_ASSIGN
-    }
 }

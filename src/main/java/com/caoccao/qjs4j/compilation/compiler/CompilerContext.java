@@ -156,7 +156,7 @@ final class CompilerContext {
             return List.of(id.name());
         } else if (pattern instanceof ObjectPattern objPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPattern.Property prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.properties()) {
                 names.addAll(extractBoundNames(prop.value()));
             }
             if (objPattern.restElement() != null) {
@@ -410,7 +410,7 @@ final class CompilerContext {
         return new ArrayList<>(withObjectLocalStack);
     }
 
-    String getMethodName(ClassDeclaration.MethodDefinition method) {
+    String getMethodName(MethodDefinition method) {
         Expression key = method.key();
         if (key instanceof Identifier id) {
             return id.name();

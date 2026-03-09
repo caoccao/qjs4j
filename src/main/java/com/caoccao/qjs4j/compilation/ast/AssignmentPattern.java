@@ -18,15 +18,51 @@ package com.caoccao.qjs4j.compilation.ast;
 
 /**
  * Represents a destructuring pattern with a default value.
- * Example: [x = defaultVal] or { y = defaultVal }
- * <p>
- * In the ES spec, this corresponds to SingleNameBinding with Initializer:
- * BindingElement : SingleNameBinding
- * SingleNameBinding : BindingIdentifier Initializer[opt]
+ * Example: [x = defaultVal] or { y = defaultVal }.
  */
-public record AssignmentPattern(
-        Pattern left,
-        Expression right,
-        SourceLocation location
-) implements Pattern {
+public final class AssignmentPattern extends Pattern {
+    private final Pattern left;
+    private final Expression right;
+
+    public AssignmentPattern(Pattern left, Expression right, SourceLocation location) {
+        super(location);
+        this.left = left;
+        this.right = right;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (left != null && left.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && right != null && right.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (left != null && left.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && right != null && right.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public Pattern left() {
+        return left;
+    }
+
+    public Expression right() {
+        return right;
+    }
 }

@@ -19,10 +19,6 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Tagged template expression.
  * Represents tagged template literals like String.raw`hello`.
- *
- * @param tag      The tag function expression
- * @param quasi    The template literal
- * @param location Source location
  */
 public final class TaggedTemplateExpression extends Expression {
     private final TemplateLiteral quasi;
@@ -39,23 +35,29 @@ public final class TaggedTemplateExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (tag != null && tag.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && quasi != null && quasi.containsAwait()) {
+                awaitInside = true;
+            }
         }
-        boolean tagContainsAwait = tag != null && tag.containsAwait();
-        boolean quasiContainsAwait = quasi != null && quasi.containsAwait();
-        awaitInside = tagContainsAwait || quasiContainsAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (tag != null && tag.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && quasi != null && quasi.containsYield()) {
+                yieldInside = true;
+            }
         }
-        boolean tagContainsYield = tag != null && tag.containsYield();
-        boolean quasiContainsYield = quasi != null && quasi.containsYield();
-        yieldInside = tagContainsYield || quasiContainsYield;
         return yieldInside;
     }
 

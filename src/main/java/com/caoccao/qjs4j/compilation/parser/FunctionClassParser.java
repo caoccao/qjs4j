@@ -41,7 +41,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return List.of(id.name());
         } else if (pattern instanceof ObjectPattern objPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPattern.Property prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.properties()) {
                 names.addAll(extractBoundNames(prop.value()));
             }
             if (objPattern.restElement() != null) {
@@ -261,7 +261,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Parse class body
         parserContext.expect(TokenType.LBRACE);
-        List<ClassDeclaration.ClassElement> body = new ArrayList<>();
+        List<ClassElement> body = new ArrayList<>();
         boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
         boolean savedStrictMode = parserContext.strictMode;
         parserContext.parsingClassWithSuper = superClass != null;
@@ -276,7 +276,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     continue;
                 }
 
-                ClassDeclaration.ClassElement element = parseClassElement();
+                ClassElement element = parseClassElement();
                 if (element != null) {
                     body.add(element);
                 }
@@ -306,7 +306,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     /**
      * Parse a single class element (method, field, or static block).
      */
-    ClassDeclaration.ClassElement parseClassElement() {
+    ClassElement parseClassElement() {
         boolean isStatic = false;
         boolean isPrivate = false;
         SourceLocation location = parserContext.getLocation();
@@ -380,7 +380,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 validateClassFieldName(key, computed, isPrivate);
                 Expression value = parseClassFieldInitializer();
                 parserContext.consumeSemicolon();
-                return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
+                return new PropertyDefinition(key, value, computed, isStatic, isPrivate);
             }
         }
 
@@ -422,7 +422,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
 
             FunctionExpression method = parseMethod("method", methodStartLocation, true, isGenerator);
-            return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
+            return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
         // Check for generator method: *name() {}
@@ -442,7 +442,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
 
             FunctionExpression method = parseMethod("method", methodStartLocation, false, true);
-            return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
+            return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
         // Check for computed property name [expr]
@@ -492,7 +492,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 }
 
                 FunctionExpression method = parseMethod(kind, methodStartLocation, false, false);
-                return new ClassDeclaration.MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
+                return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
             }
         }
 
@@ -537,7 +537,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Parse class body
         parserContext.expect(TokenType.LBRACE);
-        List<ClassDeclaration.ClassElement> body = new ArrayList<>();
+        List<ClassElement> body = new ArrayList<>();
         boolean savedParsingClassWithSuper2 = parserContext.parsingClassWithSuper;
         boolean savedStrictMode = parserContext.strictMode;
         parserContext.parsingClassWithSuper = superClass != null;
@@ -552,7 +552,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     continue;
                 }
 
-                ClassDeclaration.ClassElement element = parseClassElement();
+                ClassElement element = parseClassElement();
                 if (element != null) {
                     body.add(element);
                 }
@@ -1005,15 +1005,15 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     /**
      * Parse method or field after the property name.
      */
-    ClassDeclaration.ClassElement parseMethodOrField(Expression key, boolean isStatic,
-                                                     boolean isPrivate, boolean computed,
-                                                     SourceLocation location) {
+    ClassElement parseMethodOrField(Expression key, boolean isStatic,
+                                    boolean isPrivate, boolean computed,
+                                    SourceLocation location) {
         // If next token is LPAREN, it's a method; otherwise it's a field
         if (!parserContext.match(TokenType.LPAREN)) {
             validateClassFieldName(key, computed, isPrivate);
             Expression value = parseClassFieldInitializer();
             parserContext.consumeSemicolon();
-            return new ClassDeclaration.PropertyDefinition(key, value, computed, isStatic, isPrivate);
+            return new PropertyDefinition(key, value, computed, isStatic, isPrivate);
         }
 
         // It's a method
@@ -1028,13 +1028,13 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         FunctionExpression method = parseMethod("method", location, false, false);
         parserContext.inDerivedConstructor = savedInDerivedConstructor;
         parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
-        return new ClassDeclaration.MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
+        return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 
     /**
      * Parse a static initialization block: static { statements }
      */
-    ClassDeclaration.StaticBlock parseStaticBlock() {
+    StaticBlock parseStaticBlock() {
         parserContext.expect(TokenType.LBRACE);
         List<Statement> statements = new ArrayList<>();
 
@@ -1057,17 +1057,17 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         parserContext.expect(TokenType.RBRACE);
-        return new ClassDeclaration.StaticBlock(statements);
+        return new StaticBlock(statements);
     }
 
-    private void validateClassElements(List<ClassDeclaration.ClassElement> classElements) {
+    private void validateClassElements(List<ClassElement> classElements) {
         int constructorMethodCount = 0;
-        for (ClassDeclaration.ClassElement classElement : classElements) {
-            if (classElement instanceof ClassDeclaration.PropertyDefinition field) {
+        for (ClassElement classElement : classElements) {
+            if (classElement instanceof PropertyDefinition field) {
                 validateClassFieldName(field.key(), field.computed(), field.isPrivate());
                 continue;
             }
-            if (classElement instanceof ClassDeclaration.MethodDefinition method) {
+            if (classElement instanceof MethodDefinition method) {
                 if (isPrivateConstructorName(method.key(), method.isPrivate())) {
                     throw new JSSyntaxErrorException("invalid method name");
                 }

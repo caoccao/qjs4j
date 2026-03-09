@@ -19,12 +19,31 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a continue statement.
  */
-public record ContinueStatement(
-        Identifier label,
-        SourceLocation location
-) implements Statement {
+public final class ContinueStatement extends Statement {
+    private final Identifier label;
+
+    public ContinueStatement(Identifier label, SourceLocation location) {
+        super(location);
+        this.label = label;
+    }
+
+    public Identifier label() {
+        return label;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = label != null && label.containsAwait();
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = label != null && label.containsYield();
+        }
+        return yieldInside;
     }
 }

@@ -17,30 +17,34 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Represents a do-while statement.
+ * Represents a property in an object pattern.
  */
-public final class DoWhileStatement extends Statement {
-    private final Statement body;
-    private final Expression test;
+public final class ObjectPatternProperty extends ASTNode {
+    private final boolean computed;
+    private final Expression key;
+    private final boolean shorthand;
+    private final Pattern value;
 
-    public DoWhileStatement(Statement body, Expression test, SourceLocation location) {
-        super(location);
-        this.body = body;
-        this.test = test;
-    }
-
-    public Statement body() {
-        return body;
+    public ObjectPatternProperty(
+            Expression key,
+            Pattern value,
+            boolean computed,
+            boolean shorthand) {
+        super(key != null ? key.location() : (value != null ? value.location() : new SourceLocation(0, 0, 0, 0)));
+        this.key = key;
+        this.value = value;
+        this.computed = computed;
+        this.shorthand = shorthand;
     }
 
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (body != null && body.containsAwait()) {
+            if (key != null && key.containsAwait()) {
                 awaitInside = true;
             }
-            if (!awaitInside && test != null && test.containsAwait()) {
+            if (!awaitInside && value != null && value.containsAwait()) {
                 awaitInside = true;
             }
         }
@@ -51,18 +55,29 @@ public final class DoWhileStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (body != null && body.containsYield()) {
+            if (key != null && key.containsYield()) {
                 yieldInside = true;
             }
-            if (!yieldInside && test != null && test.containsYield()) {
+            if (!yieldInside && value != null && value.containsYield()) {
                 yieldInside = true;
             }
         }
         return yieldInside;
     }
 
-    public Expression test() {
-        return test;
+    public boolean computed() {
+        return computed;
     }
 
+    public Expression key() {
+        return key;
+    }
+
+    public boolean shorthand() {
+        return shorthand;
+    }
+
+    public Pattern value() {
+        return value;
+    }
 }

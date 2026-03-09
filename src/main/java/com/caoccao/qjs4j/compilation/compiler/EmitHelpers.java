@@ -125,7 +125,7 @@ final class EmitHelpers {
      * Stack before: ... obj
      * Stack after:  ... obj (method added to obj)
      */
-    void emitClassMethodDefinition(ClassDeclaration.MethodDefinition method,
+    void emitClassMethodDefinition(MethodDefinition method,
                                    JSBytecodeFunction methodFunc, String methodName) {
         String kind = method.kind();
         boolean isComputedKey = method.computed() && !(method.key() instanceof Literal);

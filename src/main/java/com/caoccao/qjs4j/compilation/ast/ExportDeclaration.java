@@ -21,20 +21,44 @@ import java.util.List;
 /**
  * Represents an export declaration.
  */
-public record ExportDeclaration(
-        Declaration declaration,
-        List<ExportSpecifier> specifiers,
-        Literal source,
-        SourceLocation location
-) implements ModuleItem {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class ExportDeclaration extends ModuleItem {
+    private final Declaration declaration;
+    private final Literal source;
+    private final List<ExportSpecifier> specifiers;
+
+    public ExportDeclaration(Declaration declaration, List<ExportSpecifier> specifiers, Literal source, SourceLocation location) {
+        super(location);
+        this.declaration = declaration;
+        this.specifiers = specifiers;
+        this.source = source;
     }
 
-    public record ExportSpecifier(
-            Identifier local,
-            Identifier exported
-    ) {
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = declaration != null && declaration.containsAwait();
+        }
+        return awaitInside;
     }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = declaration != null && declaration.containsYield();
+        }
+        return yieldInside;
+    }
+
+    public Declaration declaration() {
+        return declaration;
+    }
+
+    public Literal source() {
+        return source;
+    }
+
+    public List<ExportSpecifier> specifiers() {
+        return specifiers;
+    }
+
 }

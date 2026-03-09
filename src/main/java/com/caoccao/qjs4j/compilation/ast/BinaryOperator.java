@@ -16,27 +16,13 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
-
-/**
- * Represents an import declaration.
- */
-public final class ImportDeclaration extends ModuleItem {
-    private final Literal source;
-    private final List<ImportSpecifier> specifiers;
-
-    public ImportDeclaration(List<ImportSpecifier> specifiers, Literal source, SourceLocation location) {
-        super(location);
-        this.specifiers = specifiers;
-        this.source = source;
-    }
-
-    public Literal source() {
-        return source;
-    }
-
-    public List<ImportSpecifier> specifiers() {
-        return specifiers;
-    }
-
+public enum BinaryOperator {
+    ADD, SUB, MUL, DIV, MOD, EXP,
+    EQ, NE, STRICT_EQ, STRICT_NE,
+    LT, LE, GT, GE,
+    BIT_AND, BIT_OR, BIT_XOR,
+    LSHIFT, RSHIFT, URSHIFT,
+    LOGICAL_AND, LOGICAL_OR,
+    NULLISH_COALESCING,
+    IN, INSTANCEOF
 }

@@ -19,22 +19,20 @@ package com.caoccao.qjs4j.compilation.ast;
 import java.util.List;
 
 /**
- * Represents a complete program (script or module).
+ * Represents a static initialization block.
  */
-public final class Program extends ASTNode {
+public final class StaticBlock extends ClassElement {
     private final List<Statement> body;
-    private final boolean isModule;
-    private final boolean strict;
 
-    public Program(List<Statement> body, boolean isModule, boolean strict, SourceLocation location) {
-        super(location);
+    public StaticBlock(List<Statement> body) {
+        super(body != null
+                ? body.stream()
+                .filter(statement -> statement != null)
+                .map(Statement::location)
+                .findFirst()
+                .orElse(new SourceLocation(0, 0, 0, 0))
+                : new SourceLocation(0, 0, 0, 0));
         this.body = body;
-        this.isModule = isModule;
-        this.strict = strict;
-    }
-
-    public List<Statement> body() {
-        return body;
     }
 
     @Override
@@ -42,8 +40,8 @@ public final class Program extends ASTNode {
         if (awaitInside == null) {
             awaitInside = false;
             if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsAwait()) {
+                for (Statement statement : body) {
+                    if (statement != null && statement.containsAwait()) {
                         awaitInside = true;
                         break;
                     }
@@ -58,8 +56,8 @@ public final class Program extends ASTNode {
         if (yieldInside == null) {
             yieldInside = false;
             if (body != null) {
-                for (Statement item : body) {
-                    if (item != null && item.containsYield()) {
+                for (Statement statement : body) {
+                    if (statement != null && statement.containsYield()) {
                         yieldInside = true;
                         break;
                     }
@@ -69,12 +67,7 @@ public final class Program extends ASTNode {
         return yieldInside;
     }
 
-    public boolean isModule() {
-        return isModule;
+    public List<Statement> body() {
+        return body;
     }
-
-    public boolean strict() {
-        return strict;
-    }
-
 }

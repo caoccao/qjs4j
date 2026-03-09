@@ -22,8 +22,47 @@ import java.util.List;
  * Represents an array destructuring pattern.
  * Example: [a, b] or [x, , z]
  */
-public record ArrayPattern(
-        List<Pattern> elements,
-        SourceLocation location
-) implements Pattern {
+public final class ArrayPattern extends Pattern {
+    private final List<Pattern> elements;
+
+    public ArrayPattern(List<Pattern> elements, SourceLocation location) {
+        super(location);
+        this.elements = elements;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (elements != null) {
+                for (Pattern element : elements) {
+                    if (element != null && element.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (elements != null) {
+                for (Pattern element : elements) {
+                    if (element != null && element.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return yieldInside;
+    }
+
+    public List<Pattern> elements() {
+        return elements;
+    }
 }

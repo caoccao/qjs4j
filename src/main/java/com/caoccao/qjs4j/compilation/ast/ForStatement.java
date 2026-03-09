@@ -19,15 +19,74 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a for statement.
  */
-public record ForStatement(
-        ASTNode init,
-        Expression test,
-        Expression update,
-        Statement body,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class ForStatement extends Statement {
+    private final Statement body;
+    private final ASTNode init;
+    private final Expression test;
+    private final Expression update;
+
+    public ForStatement(ASTNode init, Expression test, Expression update, Statement body, SourceLocation location) {
+        super(location);
+        this.init = init;
+        this.test = test;
+        this.update = update;
+        this.body = body;
     }
+
+    public Statement body() {
+        return body;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (init != null && init.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && test != null && test.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && update != null && update.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null && body.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (init != null && init.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && test != null && test.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && update != null && update.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null && body.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public ASTNode init() {
+        return init;
+    }
+
+    public Expression test() {
+        return test;
+    }
+
+    public Expression update() {
+        return update;
+    }
+
 }

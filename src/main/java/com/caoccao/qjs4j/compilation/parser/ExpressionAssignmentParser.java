@@ -84,7 +84,7 @@ final class ExpressionAssignmentParser {
             return convertArrowArrayExpressionToPattern(arrayExpression);
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
             Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.left());
             return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
         }
@@ -93,11 +93,11 @@ final class ExpressionAssignmentParser {
     }
 
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
-        List<ObjectPattern.Property> properties = new ArrayList<>();
+        List<ObjectPatternProperty> properties = new ArrayList<>();
         RestElement restElement = null;
-        List<ObjectExpression.Property> objProperties = objectExpression.properties();
+        List<ObjectExpressionProperty> objProperties = objectExpression.properties();
         for (int i = 0; i < objProperties.size(); i++) {
-            ObjectExpression.Property property = objProperties.get(i);
+            ObjectExpressionProperty property = objProperties.get(i);
             if ("spread".equals(property.kind())) {
                 if (i != objProperties.size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
@@ -126,7 +126,7 @@ final class ExpressionAssignmentParser {
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
             Pattern valuePattern = convertArrowExpressionToPattern(property.value());
-            properties.add(new ObjectPattern.Property(propertyKey, valuePattern, property.computed(), property.shorthand()));
+            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.computed(), property.shorthand()));
         }
         return new ObjectPattern(properties, restElement, objectExpression.getLocation());
     }
@@ -151,7 +151,7 @@ final class ExpressionAssignmentParser {
 
     private Expression extractAssignmentTarget(Expression expression) {
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
             return assignmentExpression.left();
         }
         return expression;
@@ -163,7 +163,7 @@ final class ExpressionAssignmentParser {
         }
         if (pattern instanceof ObjectPattern objectPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPattern.Property property : objectPattern.properties()) {
+            for (ObjectPatternProperty property : objectPattern.properties()) {
                 names.addAll(extractBoundNames(property.value()));
             }
             if (objectPattern.restElement() != null) {
@@ -269,7 +269,7 @@ final class ExpressionAssignmentParser {
             return true;
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
             return assignmentExpression.left() instanceof ObjectExpression
                     || assignmentExpression.left() instanceof ArrayExpression;
         }
@@ -313,7 +313,7 @@ final class ExpressionAssignmentParser {
             return;
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                && assignmentExpression.operator() == AssignmentOperator.ASSIGN
                 && assignmentExpression.left() instanceof Identifier parameterIdentifier) {
             params.add(parameterIdentifier);
             defaults.add(assignmentExpression.right());
@@ -516,13 +516,13 @@ final class ExpressionAssignmentParser {
                 params.add(identifier);
                 defaults.add(null);
             } else if (left instanceof AssignmentExpression assignExpr
-                    && assignExpr.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                    && assignExpr.operator() == AssignmentOperator.ASSIGN
                     && assignExpr.left() instanceof Identifier paramId) {
                 params.add(paramId);
                 defaults.add(assignExpr.right());
             } else if (left instanceof ObjectExpression
                     || (left instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN
+                    && assignmentExpression.operator() == AssignmentOperator.ASSIGN
                     && (assignmentExpression.left() instanceof ObjectExpression
                     || assignmentExpression.left() instanceof ArrayExpression))) {
                 parseDestructuringArrowParameter(left, params, defaults);
@@ -632,24 +632,24 @@ final class ExpressionAssignmentParser {
                 validateAssignmentPatternTarget(left, assignmentOperatorOffset);
             }
 
-            AssignmentExpression.AssignmentOperator operator = switch (op) {
-                case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
-                case AND_ASSIGN -> AssignmentExpression.AssignmentOperator.AND_ASSIGN;
-                case DIV_ASSIGN -> AssignmentExpression.AssignmentOperator.DIV_ASSIGN;
-                case EXP_ASSIGN -> AssignmentExpression.AssignmentOperator.EXP_ASSIGN;
-                case LOGICAL_AND_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN;
-                case LOGICAL_OR_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN;
-                case LSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.LSHIFT_ASSIGN;
-                case MINUS_ASSIGN -> AssignmentExpression.AssignmentOperator.MINUS_ASSIGN;
-                case MOD_ASSIGN -> AssignmentExpression.AssignmentOperator.MOD_ASSIGN;
-                case MUL_ASSIGN -> AssignmentExpression.AssignmentOperator.MUL_ASSIGN;
-                case NULLISH_ASSIGN -> AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN;
-                case OR_ASSIGN -> AssignmentExpression.AssignmentOperator.OR_ASSIGN;
-                case PLUS_ASSIGN -> AssignmentExpression.AssignmentOperator.PLUS_ASSIGN;
-                case RSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.RSHIFT_ASSIGN;
-                case URSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.URSHIFT_ASSIGN;
-                case XOR_ASSIGN -> AssignmentExpression.AssignmentOperator.XOR_ASSIGN;
-                default -> AssignmentExpression.AssignmentOperator.ASSIGN;
+            AssignmentOperator operator = switch (op) {
+                case ASSIGN -> AssignmentOperator.ASSIGN;
+                case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
+                case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
+                case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
+                case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
+                case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
+                case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
+                case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
+                case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
+                case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
+                case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
+                case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
+                case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
+                case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
+                case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
+                case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
+                default -> AssignmentOperator.ASSIGN;
             };
 
             boolean isIdentifierRef = lhsStartsWithIdentifier && left instanceof Identifier;
@@ -666,7 +666,7 @@ final class ExpressionAssignmentParser {
         Pattern parameterPattern;
         Expression defaultExpression = null;
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
             parameterPattern = convertArrowExpressionToPattern(assignmentExpression.left());
             defaultExpression = assignmentExpression.right();
         } else {
@@ -743,7 +743,7 @@ final class ExpressionAssignmentParser {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
                 if (spreadElement.argument() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                        && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
                 validateAssignmentPatternTarget(spreadElement.argument(), assignmentOperatorOffset);
@@ -882,16 +882,16 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression, int assignmentOperatorOffset) {
-        List<ObjectExpression.Property> properties = objectExpression.properties();
+        List<ObjectExpressionProperty> properties = objectExpression.properties();
         boolean seenRestElement = false;
         for (int propertyIndex = 0; propertyIndex < properties.size(); propertyIndex++) {
-            ObjectExpression.Property property = properties.get(propertyIndex);
+            ObjectExpressionProperty property = properties.get(propertyIndex);
             if ("spread".equals(property.kind())) {
                 if (seenRestElement || propertyIndex != properties.size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
                 if (property.value() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.operator() == AssignmentExpression.AssignmentOperator.ASSIGN) {
+                        && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
                 validateAssignmentPatternTarget(property.value(), assignmentOperatorOffset);

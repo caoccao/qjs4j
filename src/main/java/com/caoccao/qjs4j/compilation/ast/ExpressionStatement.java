@@ -19,12 +19,32 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents an expression statement.
  */
-public record ExpressionStatement(
-        Expression expression,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class ExpressionStatement extends Statement {
+    private final Expression expression;
+
+    public ExpressionStatement(Expression expression, SourceLocation location) {
+        super(location);
+        this.expression = expression;
     }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = (expression != null && expression.containsAwait());
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = (expression != null && expression.containsYield());
+        }
+        return yieldInside;
+    }
+
+    public Expression expression() {
+        return expression;
+    }
+
 }

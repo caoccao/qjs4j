@@ -16,31 +16,26 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-/**
- * Represents a do-while statement.
- */
-public final class DoWhileStatement extends Statement {
-    private final Statement body;
-    private final Expression test;
+public final class ImportSpecifier extends ASTNode {
+    private final Identifier imported;
+    private final Identifier local;
 
-    public DoWhileStatement(Statement body, Expression test, SourceLocation location) {
-        super(location);
-        this.body = body;
-        this.test = test;
-    }
-
-    public Statement body() {
-        return body;
+    public ImportSpecifier(Identifier imported, Identifier local) {
+        super(imported != null
+                ? imported.location()
+                : (local != null ? local.location() : new SourceLocation(0, 0, 0, 0)));
+        this.imported = imported;
+        this.local = local;
     }
 
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
             awaitInside = false;
-            if (body != null && body.containsAwait()) {
+            if (imported != null && imported.containsAwait()) {
                 awaitInside = true;
             }
-            if (!awaitInside && test != null && test.containsAwait()) {
+            if (!awaitInside && local != null && local.containsAwait()) {
                 awaitInside = true;
             }
         }
@@ -51,18 +46,21 @@ public final class DoWhileStatement extends Statement {
     public boolean containsYield() {
         if (yieldInside == null) {
             yieldInside = false;
-            if (body != null && body.containsYield()) {
+            if (imported != null && imported.containsYield()) {
                 yieldInside = true;
             }
-            if (!yieldInside && test != null && test.containsYield()) {
+            if (!yieldInside && local != null && local.containsYield()) {
                 yieldInside = true;
             }
         }
         return yieldInside;
     }
 
-    public Expression test() {
-        return test;
+    public Identifier imported() {
+        return imported;
     }
 
+    public Identifier local() {
+        return local;
+    }
 }

@@ -17,8 +17,28 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed interface for module-level items.
+ * Base sealed class for module-level items.
  */
-public sealed interface ModuleItem extends ASTNode permits
+public abstract sealed class ModuleItem extends ASTNode permits
         ImportDeclaration, ExportDeclaration {
+
+    protected ModuleItem(SourceLocation location) {
+        super(location);
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+        }
+        return yieldInside;
+    }
 }

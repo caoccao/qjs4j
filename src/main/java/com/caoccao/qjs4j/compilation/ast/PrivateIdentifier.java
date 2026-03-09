@@ -30,7 +30,9 @@ public final class PrivateIdentifier extends Expression {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
+            if (awaitInside == null) {
+                awaitInside = false;
+            }
         }
         return awaitInside;
     }
@@ -38,7 +40,9 @@ public final class PrivateIdentifier extends Expression {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
+            if (yieldInside == null) {
+                yieldInside = false;
+            }
         }
         return yieldInside;
     }

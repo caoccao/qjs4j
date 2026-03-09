@@ -19,14 +19,62 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents an if statement.
  */
-public record IfStatement(
-        Expression test,
-        Statement consequent,
-        Statement alternate,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class IfStatement extends Statement {
+    private final Statement alternate;
+    private final Statement consequent;
+    private final Expression test;
+
+    public IfStatement(Expression test, Statement consequent, Statement alternate, SourceLocation location) {
+        super(location);
+        this.test = test;
+        this.consequent = consequent;
+        this.alternate = alternate;
     }
+
+    public Statement alternate() {
+        return alternate;
+    }
+
+    public Statement consequent() {
+        return consequent;
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (test != null && test.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && consequent != null && consequent.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && alternate != null && alternate.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (test != null && test.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && consequent != null && consequent.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && alternate != null && alternate.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public Expression test() {
+        return test;
+    }
+
 }

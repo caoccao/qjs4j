@@ -17,10 +17,32 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed interface for all AST nodes.
+ * Base sealed class for all AST nodes.
  */
-public sealed interface ASTNode permits
-        Expression, Statement, ModuleItem, Program, RestParameter {
+public abstract sealed class ASTNode permits
+        Pattern, Statement, ModuleItem, Program, RestParameter,
+        VariableDeclaration.VariableDeclarator, TryStatement.CatchClause,
+        SwitchStatement.SwitchCase, ClassElement, ObjectPatternProperty,
+        ObjectExpressionProperty, ImportSpecifier, ExportSpecifier {
+    private final SourceLocation location;
+    protected Boolean awaitInside;
+    protected Boolean yieldInside;
 
-    SourceLocation getLocation();
+    protected ASTNode(SourceLocation location) {
+        this.location = location;
+        this.awaitInside = null;
+        this.yieldInside = null;
+    }
+
+    public abstract boolean containsAwait();
+
+    public abstract boolean containsYield();
+
+    public final SourceLocation getLocation() {
+        return location;
+    }
+
+    public final SourceLocation location() {
+        return location;
+    }
 }

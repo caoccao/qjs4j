@@ -50,7 +50,7 @@ final class StatementCompiler {
             return true;
         }
         if (expr instanceof BinaryExpression binExpr
-                && binExpr.operator() == BinaryExpression.BinaryOperator.NULLISH_COALESCING) {
+                && binExpr.operator() == BinaryOperator.NULLISH_COALESCING) {
             return hasTailCallInTailPosition(binExpr.right());
         }
         if (expr instanceof ConditionalExpression condExpr) {
@@ -58,8 +58,8 @@ final class StatementCompiler {
                     || hasTailCallInTailPosition(condExpr.alternate());
         }
         if (expr instanceof BinaryExpression binExpr
-                && (binExpr.operator() == BinaryExpression.BinaryOperator.LOGICAL_AND
-                || binExpr.operator() == BinaryExpression.BinaryOperator.LOGICAL_OR)) {
+                && (binExpr.operator() == BinaryOperator.LOGICAL_AND
+                || binExpr.operator() == BinaryOperator.LOGICAL_OR)) {
             return hasTailCallInTailPosition(binExpr.right());
         }
         if (expr instanceof SequenceExpression seqExpr && !seqExpr.expressions().isEmpty()) {

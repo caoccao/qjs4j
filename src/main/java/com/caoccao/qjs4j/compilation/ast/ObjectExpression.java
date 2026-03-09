@@ -22,64 +22,46 @@ import java.util.List;
  * Represents an object literal expression.
  */
 public final class ObjectExpression extends Expression {
-    private final List<Property> properties;
+    private final List<ObjectExpressionProperty> properties;
 
-    public ObjectExpression(List<Property> properties, SourceLocation location) {
+    public ObjectExpression(List<ObjectExpressionProperty> properties, SourceLocation location) {
         super(location);
         this.properties = properties;
     }
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
-        }
-        boolean hasAwait = false;
-        if (properties != null) {
-            for (Property property : properties) {
-                if (property != null
-                        && ((property.key() != null && property.key().containsAwait())
-                        || (property.value() != null && property.value().containsAwait()))) {
-                    hasAwait = true;
-                    break;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (properties != null) {
+                for (ObjectExpressionProperty property : properties) {
+                    if (property != null && property.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
                 }
             }
         }
-        awaitInside = hasAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
-        }
-        boolean hasYield = false;
-        if (properties != null) {
-            for (Property property : properties) {
-                if (property != null
-                        && ((property.key() != null && property.key().containsYield())
-                        || (property.value() != null && property.value().containsYield()))) {
-                    hasYield = true;
-                    break;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (properties != null) {
+                for (ObjectExpressionProperty property : properties) {
+                    if (property != null && property.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
                 }
             }
         }
-        yieldInside = hasYield;
         return yieldInside;
     }
 
-    public List<Property> properties() {
+    public List<ObjectExpressionProperty> properties() {
         return properties;
-    }
-
-    public record Property(
-            Expression key,
-            Expression value,
-            String kind,
-            boolean computed,
-            boolean shorthand,
-            boolean method
-    ) {
     }
 }

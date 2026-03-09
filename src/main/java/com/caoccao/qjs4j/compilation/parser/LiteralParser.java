@@ -243,7 +243,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
 
-        List<ObjectExpression.Property> properties = new ArrayList<>();
+        List<ObjectExpressionProperty> properties = new ArrayList<>();
 
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             // Spread property: {...expr}
@@ -251,7 +251,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 SourceLocation spreadLocation = parserContext.getLocation();
                 parserContext.advance(); // consume ELLIPSIS
                 Expression argument = delegates.expressions.parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(null, argument, "spread", false, false, false));
+                properties.add(new ObjectExpressionProperty(null, argument, "spread", false, false, false));
                 if (parserContext.match(TokenType.COMMA)) {
                     parserContext.advance();
                 } else {
@@ -321,7 +321,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     } finally {
                         parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                     }
-                    properties.add(new ObjectExpression.Property(key, value, kind, computed, false, false));
+                    properties.add(new ObjectExpressionProperty(key, value, kind, computed, false, false));
 
                     if (parserContext.match(TokenType.COMMA)) {
                         parserContext.advance();
@@ -355,12 +355,12 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 } finally {
                     parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
                 }
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, true));
+                properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, true));
             } else if (parserContext.match(TokenType.COLON)) {
                 // Regular property: key: value
                 parserContext.advance();
                 Expression value = delegates.expressions.parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, false));
+                properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             } else if (!computed && key instanceof Identifier keyId
                     && (parserContext.match(TokenType.COMMA) || parserContext.match(TokenType.RBRACE) || parserContext.match(TokenType.ASSIGN))) {
                 // Shorthand property: {x} or CoverInitializedName: {x = defaultExpr}
@@ -386,17 +386,17 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.advance();
                     Expression defaultValue = delegates.expressions.parseAssignmentExpression();
                     value = new AssignmentExpression(keyId,
-                            AssignmentExpression.AssignmentOperator.ASSIGN,
+                            AssignmentOperator.ASSIGN,
                             defaultValue, keyId.getLocation());
                 } else {
                     value = keyId;
                 }
-                properties.add(new ObjectExpression.Property(key, value, "init", false, true, false));
+                properties.add(new ObjectExpressionProperty(key, value, "init", false, true, false));
             } else {
                 // Fallback: expect colon
                 parserContext.expect(TokenType.COLON);
                 Expression value = delegates.expressions.parseAssignmentExpression();
-                properties.add(new ObjectExpression.Property(key, value, "init", computed, false, false));
+                properties.add(new ObjectExpressionProperty(key, value, "init", computed, false, false));
             }
 
             if (parserContext.match(TokenType.COMMA)) {

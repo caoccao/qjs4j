@@ -160,7 +160,7 @@ public final class AstUtils {
                 }
             }
         } else if (pattern instanceof ObjectPattern obj) {
-            for (ObjectPattern.Property prop : obj.properties()) {
+            for (ObjectPatternProperty prop : obj.properties()) {
                 collectPatternNames(prop.value(), primary, secondary);
             }
         } else if (pattern instanceof RestElement rest) {

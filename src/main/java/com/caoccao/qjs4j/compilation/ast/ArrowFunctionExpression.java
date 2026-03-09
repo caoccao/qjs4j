@@ -49,20 +49,62 @@ public final class ArrowFunctionExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (params != null) {
+                for (Pattern pattern : params) {
+                    if (pattern != null && pattern.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!awaitInside && defaults != null) {
+                for (Expression defaultValue : defaults) {
+                    if (defaultValue != null && defaultValue.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!awaitInside && restParameter != null && restParameter.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && body != null && body.containsAwait()) {
+                awaitInside = true;
+            }
         }
-        awaitInside = false;
-        return false;
+        return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (params != null) {
+                for (Pattern pattern : params) {
+                    if (pattern != null && pattern.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!yieldInside && defaults != null) {
+                for (Expression defaultValue : defaults) {
+                    if (defaultValue != null && defaultValue.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
+                }
+            }
+            if (!yieldInside && restParameter != null && restParameter.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && body != null && body.containsYield()) {
+                yieldInside = true;
+            }
         }
-        yieldInside = false;
-        return false;
+        return yieldInside;
     }
 
     public List<Expression> defaults() {

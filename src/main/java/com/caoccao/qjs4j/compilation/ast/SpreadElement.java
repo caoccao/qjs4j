@@ -34,19 +34,17 @@ public final class SpreadElement extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = argument != null && argument.containsAwait();
         }
-        awaitInside = argument != null && argument.containsAwait();
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = argument != null && argument.containsYield();
         }
-        yieldInside = argument != null && argument.containsYield();
         return yieldInside;
     }
 }

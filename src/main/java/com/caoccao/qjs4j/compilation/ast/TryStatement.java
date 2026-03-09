@@ -19,20 +19,109 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Represents a try statement.
  */
-public record TryStatement(
-        BlockStatement block,
-        CatchClause handler,
-        BlockStatement finalizer,
-        SourceLocation location
-) implements Statement {
-    @Override
-    public SourceLocation getLocation() {
-        return location;
+public final class TryStatement extends Statement {
+    private final BlockStatement block;
+    private final BlockStatement finalizer;
+    private final CatchClause handler;
+
+    public TryStatement(BlockStatement block, CatchClause handler, BlockStatement finalizer, SourceLocation location) {
+        super(location);
+        this.block = block;
+        this.handler = handler;
+        this.finalizer = finalizer;
     }
 
-    public record CatchClause(
-            Pattern param,
-            BlockStatement body
-    ) {
+    public BlockStatement block() {
+        return block;
     }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (block != null && block.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && handler != null && handler.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && finalizer != null && finalizer.containsAwait()) {
+                awaitInside = true;
+            }
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (block != null && block.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && handler != null && handler.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && finalizer != null && finalizer.containsYield()) {
+                yieldInside = true;
+            }
+        }
+        return yieldInside;
+    }
+
+    public BlockStatement finalizer() {
+        return finalizer;
+    }
+
+    public CatchClause handler() {
+        return handler;
+    }
+
+    public static final class CatchClause extends ASTNode {
+        private final BlockStatement body;
+        private final Pattern param;
+
+        public CatchClause(Pattern param, BlockStatement body) {
+            super(param != null ? param.location() : (body != null ? body.location() : new SourceLocation(0, 0, 0, 0)));
+            this.param = param;
+            this.body = body;
+        }
+
+        public BlockStatement body() {
+            return body;
+        }
+
+        @Override
+        public boolean containsAwait() {
+            if (awaitInside == null) {
+                awaitInside = false;
+                if (param != null && param.containsAwait()) {
+                    awaitInside = true;
+                }
+                if (!awaitInside && body != null && body.containsAwait()) {
+                    awaitInside = true;
+                }
+            }
+            return awaitInside;
+        }
+
+        @Override
+        public boolean containsYield() {
+            if (yieldInside == null) {
+                yieldInside = false;
+                if (param != null && param.containsYield()) {
+                    yieldInside = true;
+                }
+                if (!yieldInside && body != null && body.containsYield()) {
+                    yieldInside = true;
+                }
+            }
+            return yieldInside;
+        }
+
+        public Pattern param() {
+            return param;
+        }
+    }
+
 }

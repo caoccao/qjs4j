@@ -18,15 +18,34 @@ package com.caoccao.qjs4j.compilation.ast;
 
 /**
  * Represents a rest parameter in a function declaration (...args).
- * ES2015 rest parameters collect remaining arguments into an array.
- * Per ES spec, the argument can be a BindingIdentifier or BindingPattern.
+ * * ES2015 rest parameters collect remaining arguments into an array.
+ * * Per ES spec, the argument can be a BindingIdentifier or BindingPattern.
  */
-public record RestParameter(
-        Pattern argument,
-        SourceLocation location
-) implements ASTNode {
+public final class RestParameter extends ASTNode {
+    private final Pattern argument;
+
+    public RestParameter(Pattern argument, SourceLocation location) {
+        super(location);
+        this.argument = argument;
+    }
+
+    public Pattern argument() {
+        return argument;
+    }
+
     @Override
-    public SourceLocation getLocation() {
-        return location;
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = argument != null && argument.containsAwait();
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = argument != null && argument.containsYield();
+        }
+        return yieldInside;
     }
 }

@@ -95,7 +95,7 @@ public final class Parser {
         if (pattern instanceof Identifier id) {
             consumer.accept(id.name());
         } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPattern.Property prop : objPat.properties()) {
+            for (ObjectPatternProperty prop : objPat.properties()) {
                 collectModulePatternNames(prop.value(), consumer);
             }
             if (objPat.restElement() != null) {

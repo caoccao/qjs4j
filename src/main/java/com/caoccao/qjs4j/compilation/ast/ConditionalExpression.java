@@ -45,25 +45,35 @@ public final class ConditionalExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (test != null && test.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && consequent != null && consequent.containsAwait()) {
+                awaitInside = true;
+            }
+            if (!awaitInside && alternate != null && alternate.containsAwait()) {
+                awaitInside = true;
+            }
         }
-        boolean testContainsAwait = test != null && test.containsAwait();
-        boolean consequentContainsAwait = consequent != null && consequent.containsAwait();
-        boolean alternateContainsAwait = alternate != null && alternate.containsAwait();
-        awaitInside = testContainsAwait || consequentContainsAwait || alternateContainsAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (test != null && test.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && consequent != null && consequent.containsYield()) {
+                yieldInside = true;
+            }
+            if (!yieldInside && alternate != null && alternate.containsYield()) {
+                yieldInside = true;
+            }
         }
-        boolean testContainsYield = test != null && test.containsYield();
-        boolean consequentContainsYield = consequent != null && consequent.containsYield();
-        boolean alternateContainsYield = alternate != null && alternate.containsYield();
-        yieldInside = testContainsYield || consequentContainsYield || alternateContainsYield;
         return yieldInside;
     }
 

@@ -46,37 +46,33 @@ public final class TemplateLiteral extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
-        }
-        boolean hasAwait = false;
-        if (expressions != null) {
-            for (Expression expression : expressions) {
-                if (expression != null && expression.containsAwait()) {
-                    hasAwait = true;
-                    break;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (expressions != null) {
+                for (Expression expression : expressions) {
+                    if (expression != null && expression.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
                 }
             }
         }
-        awaitInside = hasAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
-        }
-        boolean hasYield = false;
-        if (expressions != null) {
-            for (Expression expression : expressions) {
-                if (expression != null && expression.containsYield()) {
-                    hasYield = true;
-                    break;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (expressions != null) {
+                for (Expression expression : expressions) {
+                    if (expression != null && expression.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
                 }
             }
         }
-        yieldInside = hasYield;
         return yieldInside;
     }
 

@@ -417,24 +417,24 @@ final class ExpressionPrimaryParser {
             }
             parserContext.advance();
             Expression right = expressions.parseAssignmentExpression();
-            AssignmentExpression.AssignmentOperator operator = switch (op) {
-                case ASSIGN -> AssignmentExpression.AssignmentOperator.ASSIGN;
-                case AND_ASSIGN -> AssignmentExpression.AssignmentOperator.AND_ASSIGN;
-                case DIV_ASSIGN -> AssignmentExpression.AssignmentOperator.DIV_ASSIGN;
-                case EXP_ASSIGN -> AssignmentExpression.AssignmentOperator.EXP_ASSIGN;
-                case LOGICAL_AND_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_AND_ASSIGN;
-                case LOGICAL_OR_ASSIGN -> AssignmentExpression.AssignmentOperator.LOGICAL_OR_ASSIGN;
-                case LSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.LSHIFT_ASSIGN;
-                case MINUS_ASSIGN -> AssignmentExpression.AssignmentOperator.MINUS_ASSIGN;
-                case MOD_ASSIGN -> AssignmentExpression.AssignmentOperator.MOD_ASSIGN;
-                case MUL_ASSIGN -> AssignmentExpression.AssignmentOperator.MUL_ASSIGN;
-                case NULLISH_ASSIGN -> AssignmentExpression.AssignmentOperator.NULLISH_ASSIGN;
-                case OR_ASSIGN -> AssignmentExpression.AssignmentOperator.OR_ASSIGN;
-                case PLUS_ASSIGN -> AssignmentExpression.AssignmentOperator.PLUS_ASSIGN;
-                case RSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.RSHIFT_ASSIGN;
-                case URSHIFT_ASSIGN -> AssignmentExpression.AssignmentOperator.URSHIFT_ASSIGN;
-                case XOR_ASSIGN -> AssignmentExpression.AssignmentOperator.XOR_ASSIGN;
-                default -> AssignmentExpression.AssignmentOperator.ASSIGN;
+            AssignmentOperator operator = switch (op) {
+                case ASSIGN -> AssignmentOperator.ASSIGN;
+                case AND_ASSIGN -> AssignmentOperator.AND_ASSIGN;
+                case DIV_ASSIGN -> AssignmentOperator.DIV_ASSIGN;
+                case EXP_ASSIGN -> AssignmentOperator.EXP_ASSIGN;
+                case LOGICAL_AND_ASSIGN -> AssignmentOperator.LOGICAL_AND_ASSIGN;
+                case LOGICAL_OR_ASSIGN -> AssignmentOperator.LOGICAL_OR_ASSIGN;
+                case LSHIFT_ASSIGN -> AssignmentOperator.LSHIFT_ASSIGN;
+                case MINUS_ASSIGN -> AssignmentOperator.MINUS_ASSIGN;
+                case MOD_ASSIGN -> AssignmentOperator.MOD_ASSIGN;
+                case MUL_ASSIGN -> AssignmentOperator.MUL_ASSIGN;
+                case NULLISH_ASSIGN -> AssignmentOperator.NULLISH_ASSIGN;
+                case OR_ASSIGN -> AssignmentOperator.OR_ASSIGN;
+                case PLUS_ASSIGN -> AssignmentOperator.PLUS_ASSIGN;
+                case RSHIFT_ASSIGN -> AssignmentOperator.RSHIFT_ASSIGN;
+                case URSHIFT_ASSIGN -> AssignmentOperator.URSHIFT_ASSIGN;
+                case XOR_ASSIGN -> AssignmentOperator.XOR_ASSIGN;
+                default -> AssignmentOperator.ASSIGN;
             };
             return new AssignmentExpression(expr, operator, right, loc);
         }

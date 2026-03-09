@@ -2154,7 +2154,7 @@ public final class JSGlobalObject {
                     }
                 }
             } else if (pattern instanceof ObjectPattern objectPattern) {
-                for (ObjectPattern.Property property : objectPattern.properties()) {
+                for (ObjectPatternProperty property : objectPattern.properties()) {
                     collectPatternNames(property.value(), names);
                 }
                 if (objectPattern.restElement() != null) {
@@ -2988,7 +2988,7 @@ public final class JSGlobalObject {
                     || objectExpression.properties().isEmpty()) {
                 return null;
             }
-            ObjectExpression.Property firstProperty = objectExpression.properties().get(0);
+            ObjectExpressionProperty firstProperty = objectExpression.properties().get(0);
             if (firstProperty.value() instanceof FunctionExpression functionExpression) {
                 return functionExpression;
             }

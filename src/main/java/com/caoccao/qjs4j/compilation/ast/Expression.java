@@ -19,33 +19,16 @@ package com.caoccao.qjs4j.compilation.ast;
 /**
  * Base sealed class for all expression nodes.
  */
-public abstract sealed class Expression implements ASTNode permits
+public abstract sealed class Expression extends Pattern permits
         Literal, Identifier, PrivateIdentifier, BinaryExpression, UnaryExpression,
         AssignmentExpression, ConditionalExpression, CallExpression,
         MemberExpression, NewExpression, FunctionExpression,
         ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
         YieldExpression, TemplateLiteral, TaggedTemplateExpression, ClassExpression,
         SpreadElement, SequenceExpression, ImportExpression {
-    private final SourceLocation location;
-    protected Boolean awaitInside;
-    protected Boolean yieldInside;
 
     protected Expression(SourceLocation location) {
-        this.location = location;
-        awaitInside = null;
-        yieldInside = null;
+        super(location);
     }
 
-    public abstract boolean containsAwait();
-
-    public abstract boolean containsYield();
-
-    @Override
-    public final SourceLocation getLocation() {
-        return location;
-    }
-
-    public final SourceLocation location() {
-        return location;
-    }
 }

@@ -47,37 +47,35 @@ public final class CallExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
-        }
-        boolean hasAwait = callee != null && callee.containsAwait();
-        if (!hasAwait && arguments != null) {
-            for (Expression argument : arguments) {
-                if (argument != null && argument.containsAwait()) {
-                    hasAwait = true;
-                    break;
+        if (awaitInside == null) {
+            boolean hasAwait = callee != null && callee.containsAwait();
+            if (!hasAwait && arguments != null) {
+                for (Expression argument : arguments) {
+                    if (argument != null && argument.containsAwait()) {
+                        hasAwait = true;
+                        break;
+                    }
                 }
             }
+            awaitInside = hasAwait;
         }
-        awaitInside = hasAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
-        }
-        boolean hasYield = callee != null && callee.containsYield();
-        if (!hasYield && arguments != null) {
-            for (Expression argument : arguments) {
-                if (argument != null && argument.containsYield()) {
-                    hasYield = true;
-                    break;
+        if (yieldInside == null) {
+            boolean hasYield = callee != null && callee.containsYield();
+            if (!hasYield && arguments != null) {
+                for (Expression argument : arguments) {
+                    if (argument != null && argument.containsYield()) {
+                        hasYield = true;
+                        break;
+                    }
                 }
             }
+            yieldInside = hasYield;
         }
-        yieldInside = hasYield;
         return yieldInside;
     }
 

@@ -37,19 +37,17 @@ public final class AwaitExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
+        if (awaitInside == null) {
+            awaitInside = true;
         }
-        awaitInside = true;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
+        if (yieldInside == null) {
+            yieldInside = argument != null && argument.containsYield();
         }
-        yieldInside = argument != null && argument.containsYield();
         return yieldInside;
     }
 }

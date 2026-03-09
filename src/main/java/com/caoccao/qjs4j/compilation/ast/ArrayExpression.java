@@ -31,37 +31,33 @@ public final class ArrayExpression extends Expression {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside != null) {
-            return awaitInside;
-        }
-        boolean hasAwait = false;
-        if (elements != null) {
-            for (Expression element : elements) {
-                if (element != null && element.containsAwait()) {
-                    hasAwait = true;
-                    break;
+        if (awaitInside == null) {
+            awaitInside = false;
+            if (elements != null) {
+                for (Expression element : elements) {
+                    if (element != null && element.containsAwait()) {
+                        awaitInside = true;
+                        break;
+                    }
                 }
             }
         }
-        awaitInside = hasAwait;
         return awaitInside;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside != null) {
-            return yieldInside;
-        }
-        boolean hasYield = false;
-        if (elements != null) {
-            for (Expression element : elements) {
-                if (element != null && element.containsYield()) {
-                    hasYield = true;
-                    break;
+        if (yieldInside == null) {
+            yieldInside = false;
+            if (elements != null) {
+                for (Expression element : elements) {
+                    if (element != null && element.containsYield()) {
+                        yieldInside = true;
+                        break;
+                    }
                 }
             }
         }
-        yieldInside = hasYield;
         return yieldInside;
     }
 
