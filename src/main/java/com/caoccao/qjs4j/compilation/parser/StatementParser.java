@@ -567,6 +567,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (isAwait) {
                 throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
             }
+            // ES2024: using/await using not allowed in for-in loops
+            if (parsedDecl instanceof VariableDeclaration varDeclCheck
+                    && (varDeclCheck.getKind() == VariableKind.USING || varDeclCheck.getKind() == VariableKind.AWAIT_USING)) {
+                throw new JSSyntaxErrorException("The left-hand side of a for-in loop may not be a using declaration");
+            }
             // This is a for-in loop: for (var x in obj)
             parserContext.expect(TokenType.IN);
             Expression object = delegates.expressions.parseExpression();
@@ -575,7 +580,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
             // parsedDecl should be a VariableDeclaration
             if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
-                throw new RuntimeException("Expected VariableDeclaration in for-in loop");
+                throw new JSSyntaxErrorException("Expected VariableDeclaration in for-in loop");
             }
 
             return new ForInStatement(varDecl, object, body, location);
@@ -945,7 +950,24 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 case TRY -> parseTryStatement();
                 case SWITCH -> parseSwitchStatement();
                 case LBRACE -> parseBlockStatement();
-                case VAR, LET, CONST -> parseVariableDeclaration();
+                case LET -> {
+                    // In sloppy mode, 'let' can be an identifier (not a declaration keyword)
+                    // when NOT followed by an identifier, '[', or '{'
+                    if (!parserContext.strictMode) {
+                        Token nextTok = parserContext.peek();
+                        if (nextTok == null || (nextTok.type() != TokenType.IDENTIFIER
+                                && nextTok.type() != TokenType.LBRACKET
+                                && nextTok.type() != TokenType.LBRACE
+                                && nextTok.type() != TokenType.ASYNC
+                                && nextTok.type() != TokenType.AWAIT
+                                && nextTok.type() != TokenType.YIELD
+                                && nextTok.type() != TokenType.LET)) {
+                            yield parseExpressionStatement();
+                        }
+                    }
+                    yield parseVariableDeclaration();
+                }
+                case VAR, CONST -> parseVariableDeclaration();
                 case ASYNC -> // Async function declaration: async function f() {}
                         parseAsyncDeclaration();
                 case FUNCTION -> // Function declarations are treated as statements in JavaScript
@@ -1104,12 +1126,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     VariableDeclaration parseVariableDeclarationBody(VariableKind kind, SourceLocation location, boolean consumeSemi) {
+        boolean isUsingKind = kind == VariableKind.USING || kind == VariableKind.AWAIT_USING;
         List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
 
         do {
             if (parserContext.match(TokenType.COMMA)) {
                 parserContext.advance();
             }
+
 
             Pattern id = delegates.patterns.parsePattern();
             Expression init = null;

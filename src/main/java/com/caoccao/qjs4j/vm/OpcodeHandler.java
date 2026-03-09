@@ -462,6 +462,7 @@ public final class OpcodeHandler {
         checkPendingException(context);
 
         JSObject asyncYieldStarIteratorObj;
+        boolean isNativeAsyncIterator;
 
         if (!asyncIteratorMethod.isNullOrUndefined()) {
             // Symbol.asyncIterator exists -- must be callable (GetMethod step 3)
@@ -476,6 +477,7 @@ public final class OpcodeHandler {
                         context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
             }
             asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
+            isNativeAsyncIterator = true;
         } else {
             // Step 2: Fall back to Symbol.iterator
             JSValue iteratorMethod = asyncYieldStarIterableObj.get(context, PropertyKey.SYMBOL_ITERATOR);
@@ -495,6 +497,7 @@ public final class OpcodeHandler {
                         context.throwTypeError("Result of the Symbol.iterator method is not an object"));
             }
             asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
+            isNativeAsyncIterator = false;
         }
 
         // Check for RETURN/THROW resume records (yield* delegation protocol per ES2024 27.5.3.3)
@@ -526,15 +529,17 @@ public final class OpcodeHandler {
                             context.throwTypeError("iterator must return an object"));
                 }
 
-                JSValue doneValue = ((JSObject) result).get(context, PropertyKey.DONE);
+                JSObject returnResultObj = (JSObject) result;
+                JSValue doneValue = returnResultObj.get(context, PropertyKey.DONE);
                 checkPendingException(context);
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
-                    JSValue value = ((JSObject) result).get(context, PropertyKey.VALUE);
+                    JSValue value = returnResultObj.get(context, PropertyKey.VALUE);
                     checkPendingException(context);
                     executionContext.virtualMachine.valueStack.push(value);
                 } else {
                     executionContext.virtualMachine.yieldResult =
-                            new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj);
+                            new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj,
+                                    null, isNativeAsyncIterator);
                     executionContext.virtualMachine.valueStack.push(result);
                 }
             }
@@ -575,7 +580,8 @@ public final class OpcodeHandler {
                 executionContext.virtualMachine.valueStack.push(value);
             } else {
                 executionContext.virtualMachine.yieldResult =
-                        new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj);
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj,
+                                null, isNativeAsyncIterator);
                 executionContext.virtualMachine.valueStack.push(result);
             }
         } else {
@@ -615,13 +621,14 @@ public final class OpcodeHandler {
                 JSValue result = nextFunc.call(context, asyncYieldStarIteratorObj, nextArgs);
                 checkPendingException(context);
 
-                if (!(result instanceof JSObject)) {
+                if (!(result instanceof JSObject resultObj)) {
                     throw new JSVirtualMachineException(
                             context.throwTypeError("Iterator result must be an object"));
                 }
 
                 executionContext.virtualMachine.yieldResult =
-                        new YieldResult(YieldResult.Type.YIELD_STAR, result, asyncYieldStarIteratorObj, nextMethod);
+                        new YieldResult(YieldResult.Type.YIELD_STAR, result,
+                                asyncYieldStarIteratorObj, nextMethod, isNativeAsyncIterator);
                 executionContext.virtualMachine.valueStack.push(result);
             }
         }

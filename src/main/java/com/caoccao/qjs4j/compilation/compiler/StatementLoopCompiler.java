@@ -321,6 +321,13 @@ final class StatementLoopCompiler {
 
         if (!isExpressionBased && (!isVar || compilerContext.inGlobalScope)) {
             delegates.patterns.declarePatternVariables(pattern);
+            // Mark using/await-using bindings as immutable (const-like)
+            if (varDecl != null && (varDecl.getKind() == VariableKind.USING
+                    || varDecl.getKind() == VariableKind.AWAIT_USING)) {
+                if (pattern instanceof Identifier id) {
+                    compilerContext.currentScope().markConstLocal(id.getName());
+                }
+            }
         }
 
         boolean savedInGlobalScope = compilerContext.inGlobalScope;

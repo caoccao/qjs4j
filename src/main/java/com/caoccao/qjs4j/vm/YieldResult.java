@@ -31,23 +31,35 @@ import com.caoccao.qjs4j.core.JSValue;
  * @param delegateIterator         The delegated iterator for yield* (optional)
  * @param cachedNextMethod         The cached next method from GetIterator for yield* (optional)
  * @param delegationProgramCounter The opcode program counter for yield* delegation (optional)
+ * @param nativeAsyncIterator      True if the delegate iterator was obtained via Symbol.asyncIterator
  */
 public record YieldResult(
         Type type,
         JSValue value,
         JSObject delegateIterator,
         JSValue cachedNextMethod,
-        int delegationProgramCounter) {
+        int delegationProgramCounter,
+        boolean nativeAsyncIterator) {
     public YieldResult(Type type, JSValue value) {
-        this(type, value, null, null, -1);
+        this(type, value, null, null, -1, false);
     }
 
     public YieldResult(Type type, JSValue value, JSObject delegateIterator) {
-        this(type, value, delegateIterator, null, -1);
+        this(type, value, delegateIterator, null, -1, false);
     }
 
     public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod) {
-        this(type, value, delegateIterator, cachedNextMethod, -1);
+        this(type, value, delegateIterator, cachedNextMethod, -1, false);
+    }
+
+    public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod,
+                       int delegationProgramCounter) {
+        this(type, value, delegateIterator, cachedNextMethod, delegationProgramCounter, false);
+    }
+
+    public YieldResult(Type type, JSValue value, JSObject delegateIterator, JSValue cachedNextMethod,
+                       boolean nativeAsyncIterator) {
+        this(type, value, delegateIterator, cachedNextMethod, -1, nativeAsyncIterator);
     }
 
     public boolean isInitialYield() {

@@ -51,6 +51,7 @@ final class CompilerContext {
     boolean isGlobalProgram;
     boolean isInArrowFunction;
     boolean isInAsyncFunction;
+    boolean isInGeneratorFunction;
     int maxLocalCount;
     String pendingLoopLabel;
     Runnable pendingPostSuperInitialization;

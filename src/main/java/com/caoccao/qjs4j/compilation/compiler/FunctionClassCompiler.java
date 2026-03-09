@@ -179,6 +179,7 @@ final class FunctionClassCompiler {
         functionContext.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
+        functionContext.isInGeneratorFunction = false;  // Arrow functions cannot be generators
         functionContext.isInArrowFunction = true;  // Arrow functions don't have their own arguments
         // Arrow functions inherit class field eval context (new.target resolves to undefined,
         // eval('arguments') should throw SyntaxError)
@@ -928,6 +929,7 @@ final class FunctionClassCompiler {
         functionContext.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
+        functionContext.isInGeneratorFunction = funcDecl.isGenerator();
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -1155,6 +1157,7 @@ final class FunctionClassCompiler {
         functionContext.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = functionExpression.isAsync();
+        functionContext.isInGeneratorFunction = functionExpression.isGenerator();
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -1350,6 +1353,7 @@ final class FunctionClassCompiler {
         methodCtx.enterScope();
         methodCtx.inGlobalScope = false;
         methodCtx.isInAsyncFunction = functionExpression.isAsync();
+        methodCtx.isInGeneratorFunction = functionExpression.isGenerator();
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> methodDestructuringParams = declareParameters(

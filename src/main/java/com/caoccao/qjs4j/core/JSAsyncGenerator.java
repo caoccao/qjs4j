@@ -36,6 +36,7 @@ public final class JSAsyncGenerator extends JSObject {
     private final AsyncGeneratorFunction generatorFunction;
     private final Queue<AsyncGeneratorRequest> requestQueue;
     private boolean drainScheduled;
+    private JSPromise pendingRequestPromise;
     private JSValue returnValue;
     private AsyncGeneratorState state;
     private JSValue thrownValue;
@@ -234,28 +235,49 @@ public final class JSAsyncGenerator extends JSObject {
         }
 
         try {
+            // Store the request promise so the lambda's await handler can fulfill it directly,
+            // bypassing the intermediate promise layer to avoid extra microtask ticks.
+            pendingRequestPromise = request.promise();
             JSPromise resultPromise = generatorFunction.executeNext(request.value(), request.kind());
             if (resultPromise.getState() == JSPromise.PromiseState.FULFILLED) {
+                pendingRequestPromise = null;
                 JSValue result = resultPromise.getResult();
                 processResult(result);
-                // Per ES spec: async generator yield first awaits the value
-                // (1 microtask tick) before resolving the .next() promise.
-                // Schedule a single microtask to provide this await delay.
-                context.enqueueMicrotask(() -> {
+                if (state == AsyncGeneratorState.COMPLETED) {
+                    // Generator completed — per spec, no extra Await tick for completion.
+                    // Resolve the request promise synchronously.
                     request.promise().fulfill(result);
                     scheduleDrainRequestQueue();
-                });
+                } else {
+                    // Generator yielded — per AsyncGeneratorYield step 5, the yielded value
+                    // goes through Await which takes 1 microtask tick. Prevent immediate
+                    // draining so that requests enqueued before this tick (e.g., .return())
+                    // are processed AFTER the yield's Await resolves, matching QuickJS behavior.
+                    drainScheduled = true;
+                    context.enqueueMicrotask(() -> {
+                        request.promise().fulfill(result);
+                        drainScheduled = false;
+                        drainRequestQueue();
+                    });
+                }
                 return;
             }
             if (resultPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                pendingRequestPromise = null;
                 state = AsyncGeneratorState.COMPLETED;
                 request.promise().reject(resultPromise.getResult());
                 scheduleDrainRequestQueue();
                 return;
             }
+            // Result is PENDING (e.g., await suspension, yield* delegation, thenable yield value).
+            // Add fallback reactions that guard against double-fulfillment since the lambda's
+            // await handler may directly fulfill request.promise() via completeCurrentRequest.
             resultPromise.addReactions(
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
+                                if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                                    return JSUndefined.INSTANCE;
+                                }
                                 JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 processResult(result);
                                 request.promise().fulfill(result);
@@ -267,6 +289,9 @@ public final class JSAsyncGenerator extends JSObject {
                     ),
                     new JSPromise.ReactionRecord(
                             new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
+                                if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
+                                    return JSUndefined.INSTANCE;
+                                }
                                 state = AsyncGeneratorState.COMPLETED;
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 request.promise().reject(error);
@@ -289,6 +314,21 @@ public final class JSAsyncGenerator extends JSObject {
                 String message = e.getMessage();
                 request.promise().reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
             }
+            scheduleDrainRequestQueue();
+        }
+    }
+
+    /**
+     * Directly complete the current pending request with a result, bypassing the intermediate
+     * promise layer. Used by the async generator's await-resume handler to avoid extra microtask ticks.
+     * Per QuickJS, resolving the request's promise is synchronous within the reaction callback.
+     */
+    public void completeCurrentRequest(JSValue result) {
+        if (pendingRequestPromise != null) {
+            JSPromise reqPromise = pendingRequestPromise;
+            pendingRequestPromise = null;
+            processResult(result);
+            reqPromise.fulfill(result);
             scheduleDrainRequestQueue();
         }
     }

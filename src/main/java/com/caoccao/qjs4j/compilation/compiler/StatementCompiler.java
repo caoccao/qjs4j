@@ -88,7 +88,9 @@ final class StatementCompiler {
                         if (localIndex == null) {
                             localIndex = compilerContext.currentScope().declareLocal(name);
                         }
-                        if (vd.getKind() == VariableKind.CONST) {
+                        if (vd.getKind() == VariableKind.CONST
+                                || vd.getKind() == VariableKind.USING
+                                || vd.getKind() == VariableKind.AWAIT_USING) {
                             compilerContext.currentScope().markConstLocal(name);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
@@ -309,7 +311,9 @@ final class StatementCompiler {
                             int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
                             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         }
-                        if (variableDeclaration.getKind() == VariableKind.CONST) {
+                        if (variableDeclaration.getKind() == VariableKind.CONST
+                                || variableDeclaration.getKind() == VariableKind.USING
+                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
                             compilerContext.currentScope().markConstLocal(lexicalName);
                         }
                         compilerContext.tdzLocals.add(lexicalName);
@@ -411,7 +415,9 @@ final class StatementCompiler {
                     }
                     for (String lexicalName : lexicalNames) {
                         int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
-                        if (variableDeclaration.getKind() == VariableKind.CONST) {
+                        if (variableDeclaration.getKind() == VariableKind.CONST
+                                || variableDeclaration.getKind() == VariableKind.USING
+                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
                             compilerContext.currentScope().markConstLocal(lexicalName);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
@@ -599,6 +605,11 @@ final class StatementCompiler {
         }
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
+        // ES2024 ReturnStatement step 3: If GetGeneratorKind() is async, set exprValue to Await(exprValue)
+        // This only applies to explicit return expressions in async generators, not implicit returns
+        if (compilerContext.isInAsyncFunction && compilerContext.isInGeneratorFunction && retStmt.getArgument() != null) {
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+        }
         // Emit RETURN_ASYNC for async functions, RETURN for sync functions
         compilerContext.emitter.emitOpcode(compilerContext.isInAsyncFunction ? Opcode.RETURN_ASYNC : Opcode.RETURN);
     }
@@ -956,7 +967,7 @@ final class StatementCompiler {
     void compileVariableDeclaration(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;
-        if (varDecl.getKind() == VariableKind.CONST
+        if ((varDecl.getKind() == VariableKind.CONST || isUsingDeclaration)
                 && !compilerContext.inGlobalScope
                 && !compilerContext.varInGlobalProgram) {
             for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {

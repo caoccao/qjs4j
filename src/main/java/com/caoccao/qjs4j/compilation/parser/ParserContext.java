@@ -201,8 +201,18 @@ final class ParserContext {
     }
 
     boolean isAwaitUsingDeclarationStart() {
-        return match(TokenType.AWAIT)
-                && isUsingIdentifierToken(nextToken);
+        if (!match(TokenType.AWAIT) || !isUsingIdentifierToken(nextToken)) {
+            return false;
+        }
+        // [no LineTerminator here] between 'await' and 'using'
+        if (nextToken.line() != currentToken.line()) {
+            return false;
+        }
+        // [no LineTerminator here] between 'using' and BindingIdentifier
+        // Also verify the next token is a valid BindingIdentifier (not '[', '{', etc.)
+        Token afterUsing = lexer.peekToken();
+        return afterUsing.type() == TokenType.IDENTIFIER
+                && afterUsing.line() == nextToken.line();
     }
 
     boolean isExpressionStartToken(TokenType tokenType) {

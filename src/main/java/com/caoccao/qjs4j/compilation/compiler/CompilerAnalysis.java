@@ -183,7 +183,9 @@ final class CompilerAnalysis {
                     collectPatternBindingNames(d.getId(), declarationNames);
                 }
                 lexicalNames.addAll(declarationNames);
-                if (vd.getKind() == VariableKind.CONST) {
+                if (vd.getKind() == VariableKind.CONST
+                        || vd.getKind() == VariableKind.USING
+                        || vd.getKind() == VariableKind.AWAIT_USING) {
                     constLexicalNames.addAll(declarationNames);
                 }
             } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
