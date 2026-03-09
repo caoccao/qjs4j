@@ -47,10 +47,7 @@ public final class ImportExpression extends Expression {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (source != null && source.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = source != null && source.containsAwait();
             if (!awaitInside && options != null && options.containsAwait()) {
                 awaitInside = true;
             }
@@ -61,10 +58,7 @@ public final class ImportExpression extends Expression {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (source != null && source.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = source != null && source.containsYield();
             if (!yieldInside && options != null && options.containsYield()) {
                 yieldInside = true;
             }
@@ -72,15 +66,15 @@ public final class ImportExpression extends Expression {
         return yieldInside;
     }
 
-    public boolean defer() {
-        return defer;
-    }
-
-    public Expression options() {
+    public Expression getOptions() {
         return options;
     }
 
-    public Expression source() {
+    public Expression getSource() {
         return source;
+    }
+
+    public boolean isDefer() {
+        return defer;
     }
 }

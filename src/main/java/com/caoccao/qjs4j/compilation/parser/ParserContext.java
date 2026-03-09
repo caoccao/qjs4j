@@ -309,7 +309,7 @@ final class ParserContext {
 
     boolean isValidForInOfTarget(Expression expr) {
         if (expr instanceof Identifier identifier) {
-            String name = identifier.name();
+            String name = identifier.getName();
             return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
         }
         if (expr instanceof MemberExpression) {

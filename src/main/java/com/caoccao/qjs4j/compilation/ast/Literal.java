@@ -43,7 +43,7 @@ public final class Literal extends Expression {
         return yieldInside;
     }
 
-    public Object value() {
+    public Object getValue() {
         return value;
     }
 }

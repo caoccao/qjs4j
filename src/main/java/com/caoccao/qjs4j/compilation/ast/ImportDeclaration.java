@@ -31,11 +31,11 @@ public final class ImportDeclaration extends ModuleItem {
         this.source = source;
     }
 
-    public Literal source() {
+    public Literal getSource() {
         return source;
     }
 
-    public List<ImportSpecifier> specifiers() {
+    public List<ImportSpecifier> getSpecifiers() {
         return specifiers;
     }
 

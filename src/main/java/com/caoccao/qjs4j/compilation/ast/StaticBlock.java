@@ -28,7 +28,7 @@ public final class StaticBlock extends ClassElement {
         super(body != null
                 ? body.stream()
                 .filter(statement -> statement != null)
-                .map(Statement::location)
+                .map(Statement::getLocation)
                 .findFirst()
                 .orElse(new SourceLocation(0, 0, 0, 0))
                 : new SourceLocation(0, 0, 0, 0));
@@ -67,7 +67,7 @@ public final class StaticBlock extends ClassElement {
         return yieldInside;
     }
 
-    public List<Statement> body() {
+    public List<Statement> getBody() {
         return body;
     }
 }

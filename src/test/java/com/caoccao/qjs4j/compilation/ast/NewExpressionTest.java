@@ -81,15 +81,15 @@ public class NewExpressionTest extends BaseJavetTest {
     @Test
     public void testParserParsesSpreadInNewExpression() {
         Program program = new Parser(new Lexer("new Foo(...args, 1,);")).parse();
-        assertThat(program.body()).hasSize(1);
-        assertThat(program.body().get(0)).isInstanceOf(ExpressionStatement.class);
+        assertThat(program.getBody()).hasSize(1);
+        assertThat(program.getBody().get(0)).isInstanceOf(ExpressionStatement.class);
 
-        Expression expression = ((ExpressionStatement) program.body().get(0)).expression();
+        Expression expression = ((ExpressionStatement) program.getBody().get(0)).getExpression();
         assertThat(expression).isInstanceOf(NewExpression.class);
 
         NewExpression newExpression = (NewExpression) expression;
-        assertThat(newExpression.arguments()).hasSize(2);
-        assertThat(newExpression.arguments().get(0)).isInstanceOf(SpreadElement.class);
-        assertThat(newExpression.arguments().get(1)).isInstanceOf(Literal.class);
+        assertThat(newExpression.getArguments()).hasSize(2);
+        assertThat(newExpression.getArguments().get(0)).isInstanceOf(SpreadElement.class);
+        assertThat(newExpression.getArguments().get(1)).isInstanceOf(Literal.class);
     }
 }

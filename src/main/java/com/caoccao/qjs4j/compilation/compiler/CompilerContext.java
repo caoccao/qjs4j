@@ -105,9 +105,9 @@ final class CompilerContext {
         if (!paramNames.contains(JSKeyword.ARGUMENTS)) {
             boolean hasVarArguments = false;
             for (Statement stmt : body) {
-                if (stmt instanceof VariableDeclaration vd && vd.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                        if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
+                if (stmt instanceof VariableDeclaration vd && vd.getKind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                        if (d.getId() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.getName())) {
                             hasVarArguments = true;
                             break;
                         }
@@ -153,28 +153,28 @@ final class CompilerContext {
      */
     static List<String> extractBoundNames(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            return List.of(id.name());
+            return List.of(id.getName());
         } else if (pattern instanceof ObjectPattern objPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPatternProperty prop : objPattern.properties()) {
-                names.addAll(extractBoundNames(prop.value()));
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
+                names.addAll(extractBoundNames(prop.getValue()));
             }
-            if (objPattern.restElement() != null) {
-                names.addAll(extractBoundNames(objPattern.restElement().argument()));
+            if (objPattern.getRestElement() != null) {
+                names.addAll(extractBoundNames(objPattern.getRestElement().getArgument()));
             }
             return names;
         } else if (pattern instanceof ArrayPattern arrPattern) {
             List<String> names = new ArrayList<>();
-            for (Pattern element : arrPattern.elements()) {
+            for (Pattern element : arrPattern.getElements()) {
                 if (element != null) {
                     names.addAll(extractBoundNames(element));
                 }
             }
             return names;
         } else if (pattern instanceof AssignmentPattern assignPattern) {
-            return extractBoundNames(assignPattern.left());
+            return extractBoundNames(assignPattern.getLeft());
         } else if (pattern instanceof RestElement restElement) {
-            return extractBoundNames(restElement.argument());
+            return extractBoundNames(restElement.getArgument());
         }
         return List.of();
     }
@@ -237,70 +237,70 @@ final class CompilerContext {
     // ---- Capture resolver delegates ----
 
     static boolean statementContainsVarArguments(Statement stmt) {
-        if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-            for (var d : varDecl.declarations()) {
-                if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
+        if (stmt instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+            for (var d : varDecl.getDeclarations()) {
+                if (d.getId() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.getName())) {
                     return true;
                 }
             }
         }
         if (stmt instanceof BlockStatement block) {
-            return containsVarArgumentsDeclaration(block.body());
+            return containsVarArgumentsDeclaration(block.getBody());
         }
         if (stmt instanceof IfStatement ifStmt) {
-            if (statementContainsVarArguments(ifStmt.consequent())) {
+            if (statementContainsVarArguments(ifStmt.getConsequent())) {
                 return true;
             }
-            if (ifStmt.alternate() != null) {
-                return statementContainsVarArguments(ifStmt.alternate());
+            if (ifStmt.getAlternate() != null) {
+                return statementContainsVarArguments(ifStmt.getAlternate());
             }
         }
         if (stmt instanceof ForStatement forStmt) {
-            if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-                for (var d : varDecl.declarations()) {
-                    if (d.id() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.name())) {
+            if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+                for (var d : varDecl.getDeclarations()) {
+                    if (d.getId() instanceof Identifier id && JSKeyword.ARGUMENTS.equals(id.getName())) {
                         return true;
                     }
                 }
             }
-            return statementContainsVarArguments(forStmt.body());
+            return statementContainsVarArguments(forStmt.getBody());
         }
         if (stmt instanceof WhileStatement whileStmt) {
-            return statementContainsVarArguments(whileStmt.body());
+            return statementContainsVarArguments(whileStmt.getBody());
         }
         if (stmt instanceof DoWhileStatement doWhileStmt) {
-            return statementContainsVarArguments(doWhileStmt.body());
+            return statementContainsVarArguments(doWhileStmt.getBody());
         }
         if (stmt instanceof ForInStatement forInStmt) {
-            return statementContainsVarArguments(forInStmt.body());
+            return statementContainsVarArguments(forInStmt.getBody());
         }
         if (stmt instanceof ForOfStatement forOfStmt) {
-            return statementContainsVarArguments(forOfStmt.body());
+            return statementContainsVarArguments(forOfStmt.getBody());
         }
         if (stmt instanceof SwitchStatement switchStmt) {
-            for (var c : switchStmt.cases()) {
-                if (containsVarArgumentsDeclaration(c.consequent())) {
+            for (var c : switchStmt.getCases()) {
+                if (containsVarArgumentsDeclaration(c.getConsequent())) {
                     return true;
                 }
             }
         }
         if (stmt instanceof TryStatement tryStmt) {
-            if (containsVarArgumentsDeclaration(tryStmt.block().body())) {
+            if (containsVarArgumentsDeclaration(tryStmt.getBlock().getBody())) {
                 return true;
             }
-            if (tryStmt.handler() != null) {
-                if (containsVarArgumentsDeclaration(tryStmt.handler().body().body())) {
+            if (tryStmt.getHandler() != null) {
+                if (containsVarArgumentsDeclaration(tryStmt.getHandler().getBody().getBody())) {
                     return true;
                 }
             }
-            if (tryStmt.finalizer() != null) {
-                if (containsVarArgumentsDeclaration(tryStmt.finalizer().body())) {
+            if (tryStmt.getFinalizer() != null) {
+                if (containsVarArgumentsDeclaration(tryStmt.getFinalizer().getBody())) {
                     return true;
                 }
             }
         }
         if (stmt instanceof LabeledStatement labeledStmt) {
-            return statementContainsVarArguments(labeledStmt.body());
+            return statementContainsVarArguments(labeledStmt.getBody());
         }
         return false;
     }
@@ -411,13 +411,13 @@ final class CompilerContext {
     }
 
     String getMethodName(MethodDefinition method) {
-        Expression key = method.key();
+        Expression key = method.getKey();
         if (key instanceof Identifier id) {
-            return id.name();
+            return id.getName();
         } else if (key instanceof Literal literal) {
-            return literal.value() != null ? literal.value().toString() : "null";
+            return literal.getValue() != null ? literal.getValue().toString() : "null";
         } else if (key instanceof PrivateIdentifier privateId) {
-            return privateId.name();
+            return privateId.getName();
         } else {
             return "[computed]";
         }
@@ -472,22 +472,22 @@ final class CompilerContext {
     // ---- Static utility methods ----
 
     boolean hasUseStrictDirective(BlockStatement block) {
-        if (block == null || block.body().isEmpty()) {
+        if (block == null || block.getBody().isEmpty()) {
             return false;
         }
 
-        for (int statementIndex = 0; statementIndex < block.body().size(); statementIndex++) {
-            Statement statement = block.body().get(statementIndex);
+        for (int statementIndex = 0; statementIndex < block.getBody().size(); statementIndex++) {
+            Statement statement = block.getBody().get(statementIndex);
             if (!(statement instanceof ExpressionStatement expressionStatement)) {
                 break;
             }
-            if (!(expressionStatement.expression() instanceof Literal literal)) {
+            if (!(expressionStatement.getExpression() instanceof Literal literal)) {
                 break;
             }
-            if (!(literal.value() instanceof String)) {
+            if (!(literal.getValue() instanceof String)) {
                 break;
             }
-            if (!JSKeyword.USE_STRICT.equals(literal.value())) {
+            if (!JSKeyword.USE_STRICT.equals(literal.getValue())) {
                 continue;
             }
             if (statementIndex == 0 && !isDirectiveStartAtBlockStart(block, literal)) {
@@ -618,11 +618,11 @@ final class CompilerContext {
     }
 
     boolean isSuperIdentifier(Expression expression) {
-        return expression instanceof Identifier id && JSKeyword.SUPER.equals(id.name());
+        return expression instanceof Identifier id && JSKeyword.SUPER.equals(id.getName());
     }
 
     boolean isSuperMemberExpression(MemberExpression memberExpr) {
-        return isSuperIdentifier(memberExpr.object());
+        return isSuperIdentifier(memberExpr.getObject());
     }
 
     void popWithObjectLocal() {

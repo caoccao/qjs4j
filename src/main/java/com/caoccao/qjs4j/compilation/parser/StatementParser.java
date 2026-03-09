@@ -68,29 +68,29 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         if (decl instanceof VariableDeclaration varDecl) {
-            for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                collectPatternNames(declarator.id(), name -> {
+            for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+                collectPatternNames(declarator.getId(), name -> {
                     addModuleExportedName(name);
                 });
             }
         } else if (decl instanceof FunctionDeclaration funcDecl) {
-            if (funcDecl.id() != null) {
-                addModuleExportedName(funcDecl.id().name());
+            if (funcDecl.getId() != null) {
+                addModuleExportedName(funcDecl.getId().getName());
             }
         } else if (decl instanceof ClassDeclaration classDecl) {
-            if (classDecl.id() != null) {
-                addModuleExportedName(classDecl.id().name());
+            if (classDecl.getId() != null) {
+                addModuleExportedName(classDecl.getId().getName());
             }
         }
     }
 
     private void collectPatternBoundNames(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier identifier) {
-            names.add(identifier.name());
+            names.add(identifier.getName());
             return;
         }
         if (pattern instanceof ArrayPattern arrayPattern) {
-            for (Pattern element : arrayPattern.elements()) {
+            for (Pattern element : arrayPattern.getElements()) {
                 if (element != null) {
                     collectPatternBoundNames(element, names);
                 }
@@ -98,16 +98,16 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         if (pattern instanceof ObjectPattern objectPattern) {
-            for (ObjectPatternProperty property : objectPattern.properties()) {
-                collectPatternBoundNames(property.value(), names);
+            for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                collectPatternBoundNames(property.getValue(), names);
             }
-            if (objectPattern.restElement() != null) {
-                collectPatternBoundNames(objectPattern.restElement().argument(), names);
+            if (objectPattern.getRestElement() != null) {
+                collectPatternBoundNames(objectPattern.getRestElement().getArgument(), names);
             }
             return;
         }
         if (pattern instanceof RestElement restElement) {
-            collectPatternBoundNames(restElement.argument(), names);
+            collectPatternBoundNames(restElement.getArgument(), names);
         }
     }
 
@@ -116,110 +116,110 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
      */
     private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
         if (pattern instanceof Identifier id) {
-            consumer.accept(id.name());
+            consumer.accept(id.getName());
         } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPatternProperty prop : objPat.properties()) {
-                collectPatternNames(prop.value(), consumer);
+            for (ObjectPatternProperty prop : objPat.getProperties()) {
+                collectPatternNames(prop.getValue(), consumer);
             }
-            if (objPat.restElement() != null) {
-                collectPatternNames(objPat.restElement(), consumer);
+            if (objPat.getRestElement() != null) {
+                collectPatternNames(objPat.getRestElement(), consumer);
             }
         } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.elements()) {
+            for (Pattern elem : arrayPat.getElements()) {
                 if (elem != null) {
                     collectPatternNames(elem, consumer);
                 }
             }
         } else if (pattern instanceof RestElement rest) {
-            collectPatternNames(rest.argument(), consumer);
+            collectPatternNames(rest.getArgument(), consumer);
         } else if (pattern instanceof AssignmentPattern assign) {
-            collectPatternNames(assign.left(), consumer);
+            collectPatternNames(assign.getLeft(), consumer);
         }
     }
 
     private void collectVarDeclaredNames(Statement statement, Set<String> varNames) {
         if (statement instanceof VariableDeclaration variableDeclaration) {
-            if (variableDeclaration.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    collectPatternBoundNames(declarator.id(), varNames);
+            if (variableDeclaration.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
             return;
         }
         if (statement instanceof BlockStatement blockStatement) {
-            for (Statement blockItem : blockStatement.body()) {
+            for (Statement blockItem : blockStatement.getBody()) {
                 collectVarDeclaredNames(blockItem, varNames);
             }
             return;
         }
         if (statement instanceof IfStatement ifStatement) {
-            collectVarDeclaredNames(ifStatement.consequent(), varNames);
-            if (ifStatement.alternate() != null) {
-                collectVarDeclaredNames(ifStatement.alternate(), varNames);
+            collectVarDeclaredNames(ifStatement.getConsequent(), varNames);
+            if (ifStatement.getAlternate() != null) {
+                collectVarDeclaredNames(ifStatement.getAlternate(), varNames);
             }
             return;
         }
         if (statement instanceof ForStatement forStatement) {
-            if (forStatement.init() instanceof Statement initStatement) {
+            if (forStatement.getInit() instanceof Statement initStatement) {
                 collectVarDeclaredNames(initStatement, varNames);
             }
-            collectVarDeclaredNames(forStatement.body(), varNames);
+            collectVarDeclaredNames(forStatement.getBody(), varNames);
             return;
         }
         if (statement instanceof ForInStatement forInStatement) {
-            if (forInStatement.left() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    collectPatternBoundNames(declarator.id(), varNames);
+            if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
-            collectVarDeclaredNames(forInStatement.body(), varNames);
+            collectVarDeclaredNames(forInStatement.getBody(), varNames);
             return;
         }
         if (statement instanceof ForOfStatement forOfStatement) {
-            if (forOfStatement.left() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    collectPatternBoundNames(declarator.id(), varNames);
+            if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
-            collectVarDeclaredNames(forOfStatement.body(), varNames);
+            collectVarDeclaredNames(forOfStatement.getBody(), varNames);
             return;
         }
         if (statement instanceof WhileStatement whileStatement) {
-            collectVarDeclaredNames(whileStatement.body(), varNames);
+            collectVarDeclaredNames(whileStatement.getBody(), varNames);
             return;
         }
         if (statement instanceof DoWhileStatement doWhileStatement) {
-            collectVarDeclaredNames(doWhileStatement.body(), varNames);
+            collectVarDeclaredNames(doWhileStatement.getBody(), varNames);
             return;
         }
         if (statement instanceof SwitchStatement switchStatement) {
-            for (SwitchStatement.SwitchCase switchCase : switchStatement.cases()) {
-                for (Statement consequentStatement : switchCase.consequent()) {
+            for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
+                for (Statement consequentStatement : switchCase.getConsequent()) {
                     collectVarDeclaredNames(consequentStatement, varNames);
                 }
             }
             return;
         }
         if (statement instanceof TryStatement tryStatement) {
-            collectVarDeclaredNames(tryStatement.block(), varNames);
-            if (tryStatement.handler() != null) {
-                collectVarDeclaredNames(tryStatement.handler().body(), varNames);
+            collectVarDeclaredNames(tryStatement.getBlock(), varNames);
+            if (tryStatement.getHandler() != null) {
+                collectVarDeclaredNames(tryStatement.getHandler().getBody(), varNames);
             }
-            if (tryStatement.finalizer() != null) {
-                collectVarDeclaredNames(tryStatement.finalizer(), varNames);
+            if (tryStatement.getFinalizer() != null) {
+                collectVarDeclaredNames(tryStatement.getFinalizer(), varNames);
             }
         }
     }
 
     private boolean containsCoverInitializedName(ObjectExpression objectExpression) {
-        for (ObjectExpressionProperty property : objectExpression.properties()) {
-            if (!property.shorthand()) {
+        for (ObjectExpressionProperty property : objectExpression.getProperties()) {
+            if (!property.isShorthand()) {
                 continue;
             }
-            if (property.value() instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
+            if (property.getValue() instanceof AssignmentExpression assignmentExpression
+                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
                 return true;
             }
         }
@@ -324,13 +324,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.match(TokenType.CLASS)) {
                 // export default class { ... } — infer name "default" per spec
                 ClassExpression classExpr = delegates.functions.parseClassExpression();
-                String className = classExpr.id() != null ? classExpr.id().name() : null;
-                if (classExpr.id() == null) {
+                String className = classExpr.getId() != null ? classExpr.getId().getName() : null;
+                if (classExpr.getId() == null) {
                     classExpr = new ClassExpression(
-                            new Identifier(JSKeyword.DEFAULT, classExpr.location()),
-                            classExpr.superClass(),
-                            classExpr.body(),
-                            classExpr.location());
+                            new Identifier(JSKeyword.DEFAULT, classExpr.getLocation()),
+                            classExpr.getSuperClass(),
+                            classExpr.getBody(),
+                            classExpr.getLocation());
                 }
                 // Named class in export default creates a lexical binding
                 if (className != null) {
@@ -711,7 +711,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.advance(); // consume '*'
             expectContextualKeyword(TokenType.AS, "as");
             Identifier nsBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(nsBinding.name());
+            addModuleLexicalName(nsBinding.getName());
             expectContextualKeyword(TokenType.FROM, "from");
             parserContext.expect(TokenType.STRING);
             parseWithClause();
@@ -724,7 +724,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.advance();
             expectContextualKeyword(TokenType.AS, "as");
             Identifier nsBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(nsBinding.name());
+            addModuleLexicalName(nsBinding.getName());
             expectContextualKeyword(TokenType.FROM, "from");
             parserContext.expect(TokenType.STRING);
             parseWithClause();
@@ -745,17 +745,17 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // Default import, possibly with named/namespace: import foo from 'module';
         if (parserContext.match(TokenType.IDENTIFIER)) {
             Identifier defaultBinding = parserContext.parseIdentifier();
-            addModuleLexicalName(defaultBinding.name());
+            addModuleLexicalName(defaultBinding.getName());
             Set<String> boundNames = new HashSet<>();
-            boundNames.add(defaultBinding.name());
+            boundNames.add(defaultBinding.getName());
             if (parserContext.match(TokenType.COMMA)) {
                 parserContext.advance();
                 if (parserContext.match(TokenType.MUL)) {
                     parserContext.advance();
                     expectContextualKeyword(TokenType.AS, "as");
                     Identifier nsBinding = parserContext.parseIdentifier();
-                    addModuleLexicalName(nsBinding.name());
-                    if (boundNames.contains(nsBinding.name())) {
+                    addModuleLexicalName(nsBinding.getName());
+                    if (boundNames.contains(nsBinding.getName())) {
                         throw new JSSyntaxErrorException("duplicate import binding");
                     }
                 } else if (parserContext.match(TokenType.LBRACE)) {
@@ -807,13 +807,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         // ES2024 14.13.1: It is a Syntax Error if any source text is matched by
         // this production that also matches the LabelIdentifier of an enclosing LabelledStatement.
         for (Set<String> labels : parserContext.labelStack) {
-            if (labels.contains(label.name())) {
-                throw new JSSyntaxErrorException("Label '" + label.name() + "' has already been declared");
+            if (labels.contains(label.getName())) {
+                throw new JSSyntaxErrorException("Label '" + label.getName() + "' has already been declared");
             }
         }
         parserContext.expect(TokenType.COLON);
         Set<String> currentLabels = new HashSet<>();
-        currentLabels.add(label.name());
+        currentLabels.add(label.getName());
         parserContext.labelStack.push(currentLabels);
         try {
             Statement body = parseStatement();
@@ -864,7 +864,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 String localName;
                 if (parserContext.match(TokenType.AS) && !parserContext.currentToken.escaped()) {
                     parserContext.advance();
-                    localName = parserContext.parseIdentifier().name();
+                    localName = parserContext.parseIdentifier().getName();
                 } else {
                     localName = importName;
                 }
@@ -1191,18 +1191,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
+                    && variableDeclaration.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     Set<String> names = new HashSet<>();
-                    collectPatternBoundNames(declarator.id(), names);
+                    collectPatternBoundNames(declarator.getId(), names);
                     for (String name : names) {
                         if (!lexicalNames.add(name)) {
                             throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                         }
                     }
                 }
-            } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
-                String name = functionDeclaration.id().name();
+            } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+                String name = functionDeclaration.getId().getName();
                 boolean isSimpleFunction = !functionDeclaration.isAsync() && !functionDeclaration.isGenerator();
                 if (lexicalNames.contains(name)) {
                     boolean duplicatedSimpleFunctionDeclaration = simpleFunctionLexicalNames.contains(name) && isSimpleFunction;
@@ -1215,8 +1215,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 if (isSimpleFunction) {
                     simpleFunctionLexicalNames.add(name);
                 }
-            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.id() != null) {
-                String name = classDeclaration.id().name();
+            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                String name = classDeclaration.getId().getName();
                 if (lexicalNames.contains(name)) {
                     throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
                 }

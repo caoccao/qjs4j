@@ -29,10 +29,6 @@ public final class LabeledStatement extends Statement {
         this.body = body;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -49,7 +45,11 @@ public final class LabeledStatement extends Statement {
         return yieldInside;
     }
 
-    public Identifier label() {
+    public Statement getBody() {
+        return body;
+    }
+
+    public Identifier getLabel() {
         return label;
     }
 

@@ -51,15 +51,15 @@ public final class UnaryExpression extends Expression {
         return yieldInside;
     }
 
-    public Expression operand() {
+    public Expression getOperand() {
         return operand;
     }
 
-    public UnaryOperator operator() {
+    public UnaryOperator getOperator() {
         return operator;
     }
 
-    public boolean prefix() {
+    public boolean isPrefix() {
         return prefix;
     }
 

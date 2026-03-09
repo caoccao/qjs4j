@@ -22,8 +22,8 @@ public final class ImportSpecifier extends ASTNode {
 
     public ImportSpecifier(Identifier imported, Identifier local) {
         super(imported != null
-                ? imported.location()
-                : (local != null ? local.location() : new SourceLocation(0, 0, 0, 0)));
+                ? imported.getLocation()
+                : (local != null ? local.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.imported = imported;
         this.local = local;
     }
@@ -31,10 +31,7 @@ public final class ImportSpecifier extends ASTNode {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (imported != null && imported.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = imported != null && imported.containsAwait();
             if (!awaitInside && local != null && local.containsAwait()) {
                 awaitInside = true;
             }
@@ -45,10 +42,7 @@ public final class ImportSpecifier extends ASTNode {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (imported != null && imported.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = imported != null && imported.containsYield();
             if (!yieldInside && local != null && local.containsYield()) {
                 yieldInside = true;
             }
@@ -56,11 +50,11 @@ public final class ImportSpecifier extends ASTNode {
         return yieldInside;
     }
 
-    public Identifier imported() {
+    public Identifier getImported() {
         return imported;
     }
 
-    public Identifier local() {
+    public Identifier getLocal() {
         return local;
     }
 }

@@ -34,10 +34,6 @@ public final class YieldExpression extends Expression {
         this.delegate = delegate;
     }
 
-    public Expression argument() {
-        return argument;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -54,7 +50,11 @@ public final class YieldExpression extends Expression {
         return yieldInside;
     }
 
-    public boolean delegate() {
+    public Expression getArgument() {
+        return argument;
+    }
+
+    public boolean isDelegate() {
         return delegate;
     }
 }

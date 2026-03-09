@@ -37,14 +37,6 @@ public final class CallExpression extends Expression {
         this.optional = optional;
     }
 
-    public List<Expression> arguments() {
-        return arguments;
-    }
-
-    public Expression callee() {
-        return callee;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -79,7 +71,15 @@ public final class CallExpression extends Expression {
         return yieldInside;
     }
 
-    public boolean optional() {
+    public List<Expression> getArguments() {
+        return arguments;
+    }
+
+    public Expression getCallee() {
+        return callee;
+    }
+
+    public boolean isOptional() {
         return optional;
     }
 }

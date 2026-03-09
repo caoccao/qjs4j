@@ -245,11 +245,11 @@ public class LiteralTest extends BaseJavetTest {
         Parser parser = new Parser(lexer);
         Program program = parser.parse();
 
-        assertThat(program.body()).hasSize(1);
-        assertThat(program.body().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
-            assertThat(exprStmt.expression()).isInstanceOfSatisfying(Literal.class, literal -> {
-                assertThat(literal.value()).isInstanceOf(BigInteger.class);
-                assertThat(literal.value()).isEqualTo(BigInteger.valueOf(123));
+        assertThat(program.getBody()).hasSize(1);
+        assertThat(program.getBody().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
+            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class, literal -> {
+                assertThat(literal.getValue()).isInstanceOf(BigInteger.class);
+                assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(123));
             });
         });
     }
@@ -260,10 +260,10 @@ public class LiteralTest extends BaseJavetTest {
         Parser parser = new Parser(lexer);
         Program program = parser.parse();
 
-        assertThat(program.body()).hasSize(1);
-        assertThat(program.body().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
-            assertThat(exprStmt.expression()).isInstanceOfSatisfying(Literal.class, literal ->
-                    assertThat(literal.value()).isEqualTo(BigInteger.valueOf(255)));
+        assertThat(program.getBody()).hasSize(1);
+        assertThat(program.getBody().get(0)).isInstanceOfSatisfying(ExpressionStatement.class, exprStmt -> {
+            assertThat(exprStmt.getExpression()).isInstanceOfSatisfying(Literal.class, literal ->
+                    assertThat(literal.getValue()).isEqualTo(BigInteger.valueOf(255)));
         });
     }
 

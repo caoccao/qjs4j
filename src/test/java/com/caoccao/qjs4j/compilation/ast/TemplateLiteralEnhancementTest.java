@@ -29,31 +29,31 @@ public class TemplateLiteralEnhancementTest extends BaseJavetTest {
     @Test
     public void testParseTaggedTemplateInvalidEscape() {
         Program program = new Parser(new Lexer("tag`bad\\u{110000}`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.body().get(0)).expression();
-        TemplateLiteral templateLiteral = taggedTemplateExpression.quasi();
-        assertThat(templateLiteral.rawQuasis()).containsExactly("bad\\u{110000}");
-        assertThat(templateLiteral.quasis()).containsExactly((String) null);
+        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.getBody().get(0)).getExpression();
+        TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
+        assertThat(templateLiteral.getRawQuasis()).containsExactly("bad\\u{110000}");
+        assertThat(templateLiteral.getQuasis()).containsExactly((String) null);
     }
 
     @Test
     public void testParseTaggedTemplateLiteral() {
         Program program = new Parser(new Lexer("tag`a${x}b`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.body().get(0)).expression();
-        TemplateLiteral templateLiteral = taggedTemplateExpression.quasi();
-        assertThat(templateLiteral.rawQuasis()).containsExactly("a", "b");
-        assertThat(templateLiteral.quasis()).containsExactly("a", "b");
-        assertThat(templateLiteral.expressions()).hasSize(1);
-        assertThat(templateLiteral.expressions().get(0)).isInstanceOf(Identifier.class);
-        assertThat(((Identifier) templateLiteral.expressions().get(0)).name()).isEqualTo("x");
+        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.getBody().get(0)).getExpression();
+        TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
+        assertThat(templateLiteral.getRawQuasis()).containsExactly("a", "b");
+        assertThat(templateLiteral.getQuasis()).containsExactly("a", "b");
+        assertThat(templateLiteral.getExpressions()).hasSize(1);
+        assertThat(templateLiteral.getExpressions().get(0)).isInstanceOf(Identifier.class);
+        assertThat(((Identifier) templateLiteral.getExpressions().get(0)).getName()).isEqualTo("x");
     }
 
     @Test
     public void testParseTaggedTemplateLiteralEscapes() {
         Program program = new Parser(new Lexer("tag`line\\n${x}\\u{41}`;")).parse();
-        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.body().get(0)).expression();
-        TemplateLiteral templateLiteral = taggedTemplateExpression.quasi();
-        assertThat(templateLiteral.rawQuasis()).containsExactly("line\\n", "\\u{41}");
-        assertThat(templateLiteral.quasis()).containsExactly("line\n", "A");
+        TaggedTemplateExpression taggedTemplateExpression = (TaggedTemplateExpression) ((ExpressionStatement) program.getBody().get(0)).getExpression();
+        TemplateLiteral templateLiteral = taggedTemplateExpression.getQuasi();
+        assertThat(templateLiteral.getRawQuasis()).containsExactly("line\\n", "\\u{41}");
+        assertThat(templateLiteral.getQuasis()).containsExactly("line\n", "A");
     }
 
     @Test

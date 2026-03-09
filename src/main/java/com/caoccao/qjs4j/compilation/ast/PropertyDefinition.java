@@ -32,7 +32,7 @@ public final class PropertyDefinition extends ClassElement {
             boolean computed,
             boolean isStatic,
             boolean isPrivate) {
-        super(key != null ? key.location() : (value != null ? value.location() : new SourceLocation(0, 0, 0, 0)));
+        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
         this.value = value;
         this.computed = computed;
@@ -43,10 +43,7 @@ public final class PropertyDefinition extends ClassElement {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (key != null && key.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = key != null && key.containsAwait();
             if (!awaitInside && value != null && value.containsAwait()) {
                 awaitInside = true;
             }
@@ -57,10 +54,7 @@ public final class PropertyDefinition extends ClassElement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (key != null && key.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = key != null && key.containsYield();
             if (!yieldInside && value != null && value.containsYield()) {
                 yieldInside = true;
             }
@@ -68,7 +62,15 @@ public final class PropertyDefinition extends ClassElement {
         return yieldInside;
     }
 
-    public boolean computed() {
+    public Expression getKey() {
+        return key;
+    }
+
+    public Expression getValue() {
+        return value;
+    }
+
+    public boolean isComputed() {
         return computed;
     }
 
@@ -78,13 +80,5 @@ public final class PropertyDefinition extends ClassElement {
 
     public boolean isStatic() {
         return isStatic;
-    }
-
-    public Expression key() {
-        return key;
-    }
-
-    public Expression value() {
-        return value;
     }
 }

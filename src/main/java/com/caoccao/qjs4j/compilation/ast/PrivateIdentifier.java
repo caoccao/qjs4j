@@ -47,7 +47,7 @@ public final class PrivateIdentifier extends Expression {
         return yieldInside;
     }
 
-    public String name() {
+    public String getName() {
         return name;
     }
 }

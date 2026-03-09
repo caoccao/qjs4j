@@ -29,10 +29,6 @@ public final class BlockStatement extends Statement {
         this.body = body;
     }
 
-    public List<Statement> body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -63,6 +59,10 @@ public final class BlockStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    public List<Statement> getBody() {
+        return body;
     }
 
 }

@@ -79,7 +79,7 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
-                delegates.expressions.compileExpression(spreadElement.argument());
+                delegates.expressions.compileExpression(spreadElement.getArgument());
                 compilerContext.emitter.emitOpcode(Opcode.APPEND);
             } else {
                 delegates.expressions.compileExpression(arg);
@@ -127,18 +127,18 @@ final class EmitHelpers {
      */
     void emitClassMethodDefinition(MethodDefinition method,
                                    JSBytecodeFunction methodFunc, String methodName) {
-        String kind = method.kind();
-        boolean isComputedKey = method.computed() && !(method.key() instanceof Literal);
+        String kind = method.getKind();
+        boolean isComputedKey = method.isComputed() && !(method.getKey() instanceof Literal);
         // Class definitions must create fresh function objects per evaluation.
 
         if (isComputedKey) {
-            delegates.expressions.compileExpression(method.key());
-        } else if (method.key() instanceof Identifier) {
+            delegates.expressions.compileExpression(method.getKey());
+        } else if (method.getKey() instanceof Identifier) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
         } else {
             // For Literal keys (numeric, null, string), compile the expression directly
             // to preserve the correct type (e.g., JSNumber for numeric property names)
-            delegates.expressions.compileExpression(method.key());
+            delegates.expressions.compileExpression(method.getKey());
         }
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
@@ -160,8 +160,8 @@ final class EmitHelpers {
      * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
      */
     void emitCloseLocForPattern(VariableDeclaration varDecl) {
-        for (VariableDeclaration.VariableDeclarator decl : varDecl.declarations()) {
-            emitCloseLocForPattern(decl.id());
+        for (VariableDeclaration.VariableDeclarator decl : varDecl.getDeclarations()) {
+            emitCloseLocForPattern(decl.getId());
         }
     }
 
@@ -171,7 +171,7 @@ final class EmitHelpers {
      */
     void emitCloseLocForPattern(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            Integer localIdx = compilerContext.findLocalInScopes(id.name());
+            Integer localIdx = compilerContext.findLocalInScopes(id.getName());
             if (localIdx != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
             }
@@ -321,11 +321,11 @@ final class EmitHelpers {
 
     void emitNonComputedPublicFieldKey(Expression key) {
         if (key instanceof Identifier id) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
             return;
         }
         if (key instanceof Literal literal) {
-            Object value = literal.value();
+            Object value = literal.getValue();
             if (value == null) {
                 compilerContext.emitter.emitOpcode(Opcode.NULL);
             } else if (value instanceof Boolean bool) {
@@ -361,14 +361,14 @@ final class EmitHelpers {
     }
 
     void emitSuperPropertyKey(MemberExpression memberExpr) {
-        if (memberExpr.computed()) {
-            delegates.expressions.compileExpression(memberExpr.property());
-        } else if (memberExpr.property() instanceof Identifier propId) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
-        } else if (memberExpr.property() instanceof PrivateIdentifier) {
+        if (memberExpr.isComputed()) {
+            delegates.expressions.compileExpression(memberExpr.getProperty());
+        } else if (memberExpr.getProperty() instanceof Identifier propId) {
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
+        } else if (memberExpr.getProperty() instanceof PrivateIdentifier) {
             throw new JSCompilerException("super private fields are not supported");
         } else {
-            delegates.expressions.compileExpression(memberExpr.property());
+            delegates.expressions.compileExpression(memberExpr.getProperty());
         }
     }
 

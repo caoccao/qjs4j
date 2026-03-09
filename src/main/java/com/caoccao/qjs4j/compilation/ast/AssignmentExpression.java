@@ -48,10 +48,7 @@ public final class AssignmentExpression extends Expression {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (left != null && left.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = left != null && left.containsAwait();
             if (!awaitInside && right != null && right.containsAwait()) {
                 awaitInside = true;
             }
@@ -62,10 +59,7 @@ public final class AssignmentExpression extends Expression {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (left != null && left.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = left != null && left.containsYield();
             if (!yieldInside && right != null && right.containsYield()) {
                 yieldInside = true;
             }
@@ -73,20 +67,20 @@ public final class AssignmentExpression extends Expression {
         return yieldInside;
     }
 
-    public Expression left() {
+    public Expression getLeft() {
         return left;
     }
 
-    public boolean lhsIsIdentifierRef() {
-        return lhsIsIdentifierRef;
-    }
-
-    public AssignmentOperator operator() {
+    public AssignmentOperator getOperator() {
         return operator;
     }
 
-    public Expression right() {
+    public Expression getRight() {
         return right;
+    }
+
+    public boolean isLhsIdentifierRef() {
+        return lhsIsIdentifierRef;
     }
 
 }

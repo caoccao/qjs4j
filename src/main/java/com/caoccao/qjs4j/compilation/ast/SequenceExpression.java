@@ -63,7 +63,7 @@ public final class SequenceExpression extends Expression {
         return yieldInside;
     }
 
-    public List<Expression> expressions() {
+    public List<Expression> getExpressions() {
         return expressions;
     }
 }

@@ -22,8 +22,8 @@ public final class ExportSpecifier extends ASTNode {
 
     public ExportSpecifier(Identifier local, Identifier exported) {
         super(local != null
-                ? local.location()
-                : (exported != null ? exported.location() : new SourceLocation(0, 0, 0, 0)));
+                ? local.getLocation()
+                : (exported != null ? exported.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.local = local;
         this.exported = exported;
     }
@@ -31,10 +31,7 @@ public final class ExportSpecifier extends ASTNode {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (local != null && local.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = local != null && local.containsAwait();
             if (!awaitInside && exported != null && exported.containsAwait()) {
                 awaitInside = true;
             }
@@ -45,10 +42,7 @@ public final class ExportSpecifier extends ASTNode {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (local != null && local.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = local != null && local.containsYield();
             if (!yieldInside && exported != null && exported.containsYield()) {
                 yieldInside = true;
             }
@@ -56,11 +50,11 @@ public final class ExportSpecifier extends ASTNode {
         return yieldInside;
     }
 
-    public Identifier exported() {
+    public Identifier getExported() {
         return exported;
     }
 
-    public Identifier local() {
+    public Identifier getLocal() {
         return local;
     }
 }

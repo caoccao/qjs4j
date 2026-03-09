@@ -29,17 +29,10 @@ public final class WithStatement extends Statement {
         this.body = body;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (object != null && object.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = object != null && object.containsAwait();
             if (!awaitInside && body != null && body.containsAwait()) {
                 awaitInside = true;
             }
@@ -50,10 +43,7 @@ public final class WithStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (object != null && object.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = object != null && object.containsYield();
             if (!yieldInside && body != null && body.containsYield()) {
                 yieldInside = true;
             }
@@ -61,7 +51,11 @@ public final class WithStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression object() {
+    public Statement getBody() {
+        return body;
+    }
+
+    public Expression getObject() {
         return object;
     }
 

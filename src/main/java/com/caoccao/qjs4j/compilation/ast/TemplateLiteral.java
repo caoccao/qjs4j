@@ -76,15 +76,15 @@ public final class TemplateLiteral extends Expression {
         return yieldInside;
     }
 
-    public List<Expression> expressions() {
+    public List<Expression> getExpressions() {
         return expressions;
     }
 
-    public List<String> quasis() {
+    public List<String> getQuasis() {
         return quasis;
     }
 
-    public List<String> rawQuasis() {
+    public List<String> getRawQuasis() {
         return rawQuasis;
     }
 }

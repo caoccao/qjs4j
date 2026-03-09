@@ -70,7 +70,7 @@ public final class Compiler {
             }
             Bytecode bytecode = compiler.compile(ast);
             String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
-            boolean strict = isModule || ast.strict();
+            boolean strict = isModule || ast.isStrict();
             JSBytecodeFunction func = new JSBytecodeFunction(bytecode, name, 0, strict, null);
             return new CompileResult(func, ast);
         } catch (JSCompilerException | JSErrorException e) {

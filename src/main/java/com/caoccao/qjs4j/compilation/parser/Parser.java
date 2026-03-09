@@ -93,24 +93,24 @@ public final class Parser {
 
     private void collectModulePatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
         if (pattern instanceof Identifier id) {
-            consumer.accept(id.name());
+            consumer.accept(id.getName());
         } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPatternProperty prop : objPat.properties()) {
-                collectModulePatternNames(prop.value(), consumer);
+            for (ObjectPatternProperty prop : objPat.getProperties()) {
+                collectModulePatternNames(prop.getValue(), consumer);
             }
-            if (objPat.restElement() != null) {
-                collectModulePatternNames(objPat.restElement(), consumer);
+            if (objPat.getRestElement() != null) {
+                collectModulePatternNames(objPat.getRestElement(), consumer);
             }
         } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.elements()) {
+            for (Pattern elem : arrayPat.getElements()) {
                 if (elem != null) {
                     collectModulePatternNames(elem, consumer);
                 }
             }
         } else if (pattern instanceof RestElement rest) {
-            collectModulePatternNames(rest.argument(), consumer);
+            collectModulePatternNames(rest.getArgument(), consumer);
         } else if (pattern instanceof AssignmentPattern assign) {
-            collectModulePatternNames(assign.left(), consumer);
+            collectModulePatternNames(assign.getLeft(), consumer);
         }
     }
 
@@ -173,9 +173,9 @@ public final class Parser {
 
         for (Statement stmt : body) {
             if (stmt instanceof VariableDeclaration varDecl) {
-                boolean isVar = varDecl.kind() == VariableKind.VAR;
-                for (VariableDeclaration.VariableDeclarator declarator : varDecl.declarations()) {
-                    collectModulePatternNames(declarator.id(), name -> {
+                boolean isVar = varDecl.getKind() == VariableKind.VAR;
+                for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+                    collectModulePatternNames(declarator.getId(), name -> {
                         allBoundNames.add(name);
                         if (isVar) {
                             if (lexicalNames.contains(name)) {
@@ -191,27 +191,27 @@ public final class Parser {
                         }
                     });
                 }
-            } else if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.id() != null) {
-                String name = funcDecl.id().name();
+            } else if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.getId() != null) {
+                String name = funcDecl.getId().getName();
                 allBoundNames.add(name);
                 // In modules (always strict), all functions are lexical
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
                     throw new JSSyntaxErrorException(
                             "Identifier '" + name + "' has already been declared");
                 }
-            } else if (stmt instanceof ClassDeclaration classDecl && classDecl.id() != null) {
-                String name = classDecl.id().name();
+            } else if (stmt instanceof ClassDeclaration classDecl && classDecl.getId() != null) {
+                String name = classDecl.getId().getName();
                 allBoundNames.add(name);
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
                     throw new JSSyntaxErrorException(
                             "Identifier '" + name + "' has already been declared");
                 }
             } else if (stmt instanceof ExpressionStatement exprStmt
-                    && exprStmt.expression() instanceof ClassExpression classExpr
-                    && classExpr.id() != null
-                    && !"default".equals(classExpr.id().name())) {
+                    && exprStmt.getExpression() instanceof ClassExpression classExpr
+                    && classExpr.getId() != null
+                    && !"default".equals(classExpr.getId().getName())) {
                 // export default class with explicit name
-                String name = classExpr.id().name();
+                String name = classExpr.getId().getName();
                 allBoundNames.add(name);
                 if (varNames.contains(name) || !lexicalNames.add(name)) {
                     throw new JSSyntaxErrorException(

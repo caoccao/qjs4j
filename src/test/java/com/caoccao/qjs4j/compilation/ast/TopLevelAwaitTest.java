@@ -76,10 +76,10 @@ public class TopLevelAwaitTest extends BaseJavetTest {
     public void testModuleProgramFlagsAndTopLevelAwaitAst() {
         Program program = new Parser(new Lexer("await 1;"), true).parse();
         assertThat(program.isModule()).isTrue();
-        assertThat(program.strict()).isTrue();
-        assertThat(program.body()).hasSize(1);
-        ExpressionStatement expressionStatement = (ExpressionStatement) program.body().get(0);
-        assertThat(expressionStatement.expression()).isInstanceOf(AwaitExpression.class);
+        assertThat(program.isStrict()).isTrue();
+        assertThat(program.getBody()).hasSize(1);
+        ExpressionStatement expressionStatement = (ExpressionStatement) program.getBody().get(0);
+        assertThat(expressionStatement.getExpression()).isInstanceOf(AwaitExpression.class);
     }
 
     @Test

@@ -43,10 +43,6 @@ public final class ArrowFunctionExpression extends Expression {
         this.isAsync = isAsync;
     }
 
-    public ASTNode body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -107,19 +103,23 @@ public final class ArrowFunctionExpression extends Expression {
         return yieldInside;
     }
 
-    public List<Expression> defaults() {
+    public ASTNode getBody() {
+        return body;
+    }
+
+    public List<Expression> getDefaults() {
         return defaults;
+    }
+
+    public List<Pattern> getParams() {
+        return params;
+    }
+
+    public RestParameter getRestParameter() {
+        return restParameter;
     }
 
     public boolean isAsync() {
         return isAsync;
-    }
-
-    public List<Pattern> params() {
-        return params;
-    }
-
-    public RestParameter restParameter() {
-        return restParameter;
     }
 }

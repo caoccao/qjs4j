@@ -34,17 +34,10 @@ public final class ForInStatement extends Statement {
         this.body = body;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (left != null && left.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = left != null && left.containsAwait();
             if (!awaitInside && right != null && right.containsAwait()) {
                 awaitInside = true;
             }
@@ -58,10 +51,7 @@ public final class ForInStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (left != null && left.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = left != null && left.containsYield();
             if (!yieldInside && right != null && right.containsYield()) {
                 yieldInside = true;
             }
@@ -72,11 +62,15 @@ public final class ForInStatement extends Statement {
         return yieldInside;
     }
 
-    public ASTNode left() {
+    public Statement getBody() {
+        return body;
+    }
+
+    public ASTNode getLeft() {
         return left;
     }
 
-    public Expression right() {
+    public Expression getRight() {
         return right;
     }
 

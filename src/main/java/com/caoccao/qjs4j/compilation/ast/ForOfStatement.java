@@ -37,17 +37,10 @@ public final class ForOfStatement extends Statement {
         this.isAsync = isAsync;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (isAsync) {
-                awaitInside = true;
-            }
+            awaitInside = isAsync;
             if (!awaitInside && left != null && left.containsAwait()) {
                 awaitInside = true;
             }
@@ -64,10 +57,7 @@ public final class ForOfStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (left != null && left.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = left != null && left.containsYield();
             if (!yieldInside && right != null && right.containsYield()) {
                 yieldInside = true;
             }
@@ -78,16 +68,20 @@ public final class ForOfStatement extends Statement {
         return yieldInside;
     }
 
-    public boolean isAsync() {
-        return isAsync;
+    public Statement getBody() {
+        return body;
     }
 
-    public ASTNode left() {
+    public ASTNode getLeft() {
         return left;
     }
 
-    public Expression right() {
+    public Expression getRight() {
         return right;
+    }
+
+    public boolean isAsync() {
+        return isAsync;
     }
 
 }

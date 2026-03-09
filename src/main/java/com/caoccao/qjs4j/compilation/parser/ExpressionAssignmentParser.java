@@ -52,18 +52,18 @@ final class ExpressionAssignmentParser {
 
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
-        for (int elementIndex = 0; elementIndex < arrayExpression.elements().size(); elementIndex++) {
-            Expression elementExpression = arrayExpression.elements().get(elementIndex);
+        for (int elementIndex = 0; elementIndex < arrayExpression.getElements().size(); elementIndex++) {
+            Expression elementExpression = arrayExpression.getElements().get(elementIndex);
             if (elementExpression == null) {
                 elements.add(null);
             } else if (elementExpression instanceof SpreadElement spreadElement) {
-                if (elementIndex != arrayExpression.elements().size() - 1) {
+                if (elementIndex != arrayExpression.getElements().size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
-                if (spreadElement.argument() instanceof AssignmentExpression) {
+                if (spreadElement.getArgument() instanceof AssignmentExpression) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.argument());
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(spreadElement.getArgument());
                 elements.add(new RestElement(restArgumentPattern, spreadElement.getLocation()));
             } else {
                 elements.add(convertArrowExpressionToPattern(elementExpression));
@@ -74,7 +74,7 @@ final class ExpressionAssignmentParser {
 
     private Pattern convertArrowExpressionToPattern(Expression expression) {
         if (expression instanceof Identifier identifier) {
-            validateBindingIdentifier(identifier.name());
+            validateBindingIdentifier(identifier.getName());
             return identifier;
         }
         if (expression instanceof ObjectExpression objectExpression) {
@@ -84,9 +84,9 @@ final class ExpressionAssignmentParser {
             return convertArrowArrayExpressionToPattern(arrayExpression);
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
-            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.left());
-            return new AssignmentPattern(leftPattern, assignmentExpression.right(), assignmentExpression.getLocation());
+                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+            Pattern leftPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
+            return new AssignmentPattern(leftPattern, assignmentExpression.getRight(), assignmentExpression.getLocation());
         }
         throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                 parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
@@ -95,38 +95,38 @@ final class ExpressionAssignmentParser {
     private ObjectPattern convertArrowObjectExpressionToPattern(ObjectExpression objectExpression) {
         List<ObjectPatternProperty> properties = new ArrayList<>();
         RestElement restElement = null;
-        List<ObjectExpressionProperty> objProperties = objectExpression.properties();
+        List<ObjectExpressionProperty> objProperties = objectExpression.getProperties();
         for (int i = 0; i < objProperties.size(); i++) {
             ObjectExpressionProperty property = objProperties.get(i);
-            if ("spread".equals(property.kind())) {
+            if ("spread".equals(property.getKind())) {
                 if (i != objProperties.size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
-                if (property.value() instanceof AssignmentExpression) {
+                if (property.getValue() instanceof AssignmentExpression) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
-                Pattern restArgumentPattern = convertArrowExpressionToPattern(property.value());
-                restElement = new RestElement(restArgumentPattern, property.value().getLocation());
+                Pattern restArgumentPattern = convertArrowExpressionToPattern(property.getValue());
+                restElement = new RestElement(restArgumentPattern, property.getValue().getLocation());
                 continue;
             }
-            if (!"init".equals(property.kind())) {
+            if (!"init".equals(property.getKind())) {
                 throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
-            Expression propertyKey = property.key();
+            Expression propertyKey = property.getKey();
             boolean validNonComputedKey = propertyKey instanceof Identifier
                     || (propertyKey instanceof Literal literal
-                    && (literal.value() instanceof String
-                    || literal.value() instanceof Integer
-                    || literal.value() instanceof Long
-                    || literal.value() instanceof Double
-                    || literal.value() instanceof Float));
-            if (!property.computed() && !validNonComputedKey) {
+                    && (literal.getValue() instanceof String
+                    || literal.getValue() instanceof Integer
+                    || literal.getValue() instanceof Long
+                    || literal.getValue() instanceof Double
+                    || literal.getValue() instanceof Float));
+            if (!property.isComputed() && !validNonComputedKey) {
                 throw new JSSyntaxErrorException("Invalid arrow function parameter at line " +
                         parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
             }
-            Pattern valuePattern = convertArrowExpressionToPattern(property.value());
-            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.computed(), property.shorthand()));
+            Pattern valuePattern = convertArrowExpressionToPattern(property.getValue());
+            properties.add(new ObjectPatternProperty(propertyKey, valuePattern, property.isComputed(), property.isShorthand()));
         }
         return new ObjectPattern(properties, restElement, objectExpression.getLocation());
     }
@@ -151,29 +151,29 @@ final class ExpressionAssignmentParser {
 
     private Expression extractAssignmentTarget(Expression expression) {
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
-            return assignmentExpression.left();
+                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+            return assignmentExpression.getLeft();
         }
         return expression;
     }
 
     private List<String> extractBoundNames(Pattern pattern) {
         if (pattern instanceof Identifier identifier) {
-            return List.of(identifier.name());
+            return List.of(identifier.getName());
         }
         if (pattern instanceof ObjectPattern objectPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPatternProperty property : objectPattern.properties()) {
-                names.addAll(extractBoundNames(property.value()));
+            for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                names.addAll(extractBoundNames(property.getValue()));
             }
-            if (objectPattern.restElement() != null) {
-                names.addAll(extractBoundNames(objectPattern.restElement().argument()));
+            if (objectPattern.getRestElement() != null) {
+                names.addAll(extractBoundNames(objectPattern.getRestElement().getArgument()));
             }
             return names;
         }
         if (pattern instanceof ArrayPattern arrayPattern) {
             List<String> names = new ArrayList<>();
-            for (Pattern element : arrayPattern.elements()) {
+            for (Pattern element : arrayPattern.getElements()) {
                 if (element != null) {
                     names.addAll(extractBoundNames(element));
                 }
@@ -181,10 +181,10 @@ final class ExpressionAssignmentParser {
             return names;
         }
         if (pattern instanceof AssignmentPattern assignmentPattern) {
-            return extractBoundNames(assignmentPattern.left());
+            return extractBoundNames(assignmentPattern.getLeft());
         }
         if (pattern instanceof RestElement restElement) {
-            return extractBoundNames(restElement.argument());
+            return extractBoundNames(restElement.getArgument());
         }
         return List.of();
     }
@@ -250,10 +250,10 @@ final class ExpressionAssignmentParser {
         if (!(body instanceof BlockStatement blockStatement)) {
             return false;
         }
-        for (Statement statement : blockStatement.body()) {
+        for (Statement statement : blockStatement.getBody()) {
             if (statement instanceof ExpressionStatement expressionStatement
-                    && expressionStatement.expression() instanceof Literal literal
-                    && literal.value() instanceof String literalString) {
+                    && expressionStatement.getExpression() instanceof Literal literal
+                    && literal.getValue() instanceof String literalString) {
                 if (JSKeyword.USE_STRICT.equals(literalString)) {
                     return true;
                 }
@@ -269,19 +269,19 @@ final class ExpressionAssignmentParser {
             return true;
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
-            return assignmentExpression.left() instanceof ObjectExpression
-                    || assignmentExpression.left() instanceof ArrayExpression;
+                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+            return assignmentExpression.getLeft() instanceof ObjectExpression
+                    || assignmentExpression.getLeft() instanceof ArrayExpression;
         }
         return false;
     }
 
     private boolean isOptionalChainExpression(Expression expression) {
         if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
+            return memberExpression.isOptional() || isOptionalChainExpression(memberExpression.getObject());
         }
         if (expression instanceof CallExpression callExpression) {
-            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
+            return callExpression.isOptional() || isOptionalChainExpression(callExpression.getCallee());
         }
         return false;
     }
@@ -313,10 +313,10 @@ final class ExpressionAssignmentParser {
             return;
         }
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentOperator.ASSIGN
-                && assignmentExpression.left() instanceof Identifier parameterIdentifier) {
+                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
+                && assignmentExpression.getLeft() instanceof Identifier parameterIdentifier) {
             params.add(parameterIdentifier);
-            defaults.add(assignmentExpression.right());
+            defaults.add(assignmentExpression.getRight());
             return;
         }
         if (isArrowDestructuringParameterExpression(expression)) {
@@ -384,7 +384,7 @@ final class ExpressionAssignmentParser {
 
                 if (parserContext.match(TokenType.IDENTIFIER) && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
-                    validateBindingIdentifier(param.name());
+                    validateBindingIdentifier(param.getName());
                     parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
@@ -512,37 +512,37 @@ final class ExpressionAssignmentParser {
             RestParameter restParameter = null;
 
             if (left instanceof Identifier identifier) {
-                validateBindingIdentifier(identifier.name());
+                validateBindingIdentifier(identifier.getName());
                 params.add(identifier);
                 defaults.add(null);
             } else if (left instanceof AssignmentExpression assignExpr
-                    && assignExpr.operator() == AssignmentOperator.ASSIGN
-                    && assignExpr.left() instanceof Identifier paramId) {
+                    && assignExpr.getOperator() == AssignmentOperator.ASSIGN
+                    && assignExpr.getLeft() instanceof Identifier paramId) {
                 params.add(paramId);
-                defaults.add(assignExpr.right());
+                defaults.add(assignExpr.getRight());
             } else if (left instanceof ObjectExpression
                     || (left instanceof AssignmentExpression assignmentExpression
-                    && assignmentExpression.operator() == AssignmentOperator.ASSIGN
-                    && (assignmentExpression.left() instanceof ObjectExpression
-                    || assignmentExpression.left() instanceof ArrayExpression))) {
+                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN
+                    && (assignmentExpression.getLeft() instanceof ObjectExpression
+                    || assignmentExpression.getLeft() instanceof ArrayExpression))) {
                 parseDestructuringArrowParameter(left, params, defaults);
             } else if (left instanceof SequenceExpression seqExpr) {
-                for (Expression expr : seqExpr.expressions()) {
+                for (Expression expr : seqExpr.getExpressions()) {
                     parseArrowParameterExpression(expr, params, defaults);
                 }
             } else if (left instanceof ArrayExpression arrayExpr) {
                 boolean isParenthesizedParameterList = arrayExpr.getLocation().offset() == location.offset();
                 if (!isParenthesizedParameterList) {
                     parseDestructuringArrowParameter(left, params, defaults);
-                } else if (!arrayExpr.elements().isEmpty()) {
-                    for (int i = 0; i < arrayExpr.elements().size(); i++) {
-                        Expression expr = arrayExpr.elements().get(i);
+                } else if (!arrayExpr.getElements().isEmpty()) {
+                    for (int i = 0; i < arrayExpr.getElements().size(); i++) {
+                        Expression expr = arrayExpr.getElements().get(i);
 
                         if (expr instanceof SpreadElement spreadElem) {
-                            if (i != arrayExpr.elements().size() - 1) {
+                            if (i != arrayExpr.getElements().size() - 1) {
                                 throw new JSSyntaxErrorException("Rest parameter must be last formal parameter");
                             }
-                            Pattern restArgPattern = convertArrowExpressionToPattern(spreadElem.argument());
+                            Pattern restArgPattern = convertArrowExpressionToPattern(spreadElem.getArgument());
                             restParameter = new RestParameter(restArgPattern, spreadElem.getLocation());
                         } else {
                             parseArrowParameterExpression(expr, params, defaults);
@@ -595,14 +595,14 @@ final class ExpressionAssignmentParser {
                     && (left instanceof ObjectExpression || left instanceof ArrayExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
-            if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.name())) {
+            if (left instanceof Identifier newTargetId && "new.target".equals(newTargetId.getName())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
-            if (left instanceof Identifier importMetaId && "import.meta".equals(importMetaId.name())) {
+            if (left instanceof Identifier importMetaId && "import.meta".equals(importMetaId.getName())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             // PrimaryExpression: this — AssignmentTargetType is "invalid" (spec 13.2.1)
-            if (left instanceof Identifier thisId && JSKeyword.THIS.equals(thisId.name())) {
+            if (left instanceof Identifier thisId && JSKeyword.THIS.equals(thisId.getName())) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             // In strict mode, CallExpression as assignment LHS is an early SyntaxError
@@ -615,7 +615,7 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             if (parserContext.strictMode && left instanceof Identifier identifier) {
-                String identifierName = identifier.name();
+                String identifierName = identifier.getName();
                 if (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
@@ -666,9 +666,9 @@ final class ExpressionAssignmentParser {
         Pattern parameterPattern;
         Expression defaultExpression = null;
         if (expression instanceof AssignmentExpression assignmentExpression
-                && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
-            parameterPattern = convertArrowExpressionToPattern(assignmentExpression.left());
-            defaultExpression = assignmentExpression.right();
+                && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+            parameterPattern = convertArrowExpressionToPattern(assignmentExpression.getLeft());
+            defaultExpression = assignmentExpression.getRight();
         } else {
             parameterPattern = convertArrowExpressionToPattern(expression);
         }
@@ -728,7 +728,7 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateArrayAssignmentPatternTarget(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
-        List<Expression> elements = arrayExpression.elements();
+        List<Expression> elements = arrayExpression.getElements();
         boolean seenRestElement = false;
         for (int elementIndex = 0; elementIndex < elements.size(); elementIndex++) {
             Expression elementExpression = elements.get(elementIndex);
@@ -742,11 +742,11 @@ final class ExpressionAssignmentParser {
                 if (seenRestElement || elementIndex != elements.size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
-                if (spreadElement.argument() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
+                if (spreadElement.getArgument() instanceof AssignmentExpression assignmentExpression
+                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
-                validateAssignmentPatternTarget(spreadElement.argument(), assignmentOperatorOffset);
+                validateAssignmentPatternTarget(spreadElement.getArgument(), assignmentOperatorOffset);
                 seenRestElement = true;
                 continue;
             }
@@ -791,7 +791,7 @@ final class ExpressionAssignmentParser {
             }
         }
         if (restParameter != null) {
-            for (String restName : extractBoundNames(restParameter.argument())) {
+            for (String restName : extractBoundNames(restParameter.getArgument())) {
                 if (!seen.add(restName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
@@ -807,22 +807,22 @@ final class ExpressionAssignmentParser {
 
     private void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
         if (expression instanceof Identifier identifier) {
-            if ("import.meta".equals(identifier.name())
-                    || "new.target".equals(identifier.name())
-                    || JSKeyword.THIS.equals(identifier.name())) {
+            if ("import.meta".equals(identifier.getName())
+                    || "new.target".equals(identifier.getName())
+                    || JSKeyword.THIS.equals(identifier.getName())) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             // Per spec: IdentifierReference cannot be a ReservedWord.
             // This catches shorthand properties like { break } or { def\u0061ult } in destructuring.
-            validateBindingIdentifier(identifier.name());
+            validateBindingIdentifier(identifier.getName());
             if (parserContext.strictMode
-                    && (JSKeyword.EVAL.equals(identifier.name()) || JSKeyword.ARGUMENTS.equals(identifier.name()))) {
+                    && (JSKeyword.EVAL.equals(identifier.getName()) || JSKeyword.ARGUMENTS.equals(identifier.getName()))) {
                 throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
             }
             return;
         }
         if (expression instanceof MemberExpression memberExpression) {
-            if (memberExpression.optional()) {
+            if (memberExpression.isOptional()) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             return;
@@ -861,17 +861,17 @@ final class ExpressionAssignmentParser {
             paramNames.addAll(extractBoundNames(pattern));
         }
         if (restParameter != null) {
-            paramNames.addAll(extractBoundNames(restParameter.argument()));
+            paramNames.addAll(extractBoundNames(restParameter.getArgument()));
         }
         if (paramNames.isEmpty()) {
             return;
         }
-        for (Statement statement : blockStatement.body()) {
+        for (Statement statement : blockStatement.getBody()) {
             if (statement instanceof VariableDeclaration variableDeclaration
-                    && (variableDeclaration.kind() == VariableKind.LET
-                    || variableDeclaration.kind() == VariableKind.CONST)) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    for (String declaredName : extractBoundNames(declarator.id())) {
+                    && (variableDeclaration.getKind() == VariableKind.LET
+                    || variableDeclaration.getKind() == VariableKind.CONST)) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (String declaredName : extractBoundNames(declarator.getId())) {
                         if (paramNames.contains(declaredName)) {
                             throw new JSSyntaxErrorException("invalid redefinition of parameter name");
                         }
@@ -882,29 +882,29 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression, int assignmentOperatorOffset) {
-        List<ObjectExpressionProperty> properties = objectExpression.properties();
+        List<ObjectExpressionProperty> properties = objectExpression.getProperties();
         boolean seenRestElement = false;
         for (int propertyIndex = 0; propertyIndex < properties.size(); propertyIndex++) {
             ObjectExpressionProperty property = properties.get(propertyIndex);
-            if ("spread".equals(property.kind())) {
+            if ("spread".equals(property.getKind())) {
                 if (seenRestElement || propertyIndex != properties.size() - 1) {
                     throw new JSSyntaxErrorException("Rest element must be last element");
                 }
-                if (property.value() instanceof AssignmentExpression assignmentExpression
-                        && assignmentExpression.operator() == AssignmentOperator.ASSIGN) {
+                if (property.getValue() instanceof AssignmentExpression assignmentExpression
+                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
                     throw new JSSyntaxErrorException("Rest element cannot have a default initializer");
                 }
-                validateAssignmentPatternTarget(property.value(), assignmentOperatorOffset);
+                validateAssignmentPatternTarget(property.getValue(), assignmentOperatorOffset);
                 seenRestElement = true;
                 continue;
             }
-            if (!"init".equals(property.kind())) {
+            if (!"init".equals(property.getKind())) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             if (seenRestElement) {
                 throw new JSSyntaxErrorException("Rest element must be last element");
             }
-            validateAssignmentPatternTarget(extractAssignmentTarget(property.value()), assignmentOperatorOffset);
+            validateAssignmentPatternTarget(extractAssignmentTarget(property.getValue()), assignmentOperatorOffset);
         }
     }
 }

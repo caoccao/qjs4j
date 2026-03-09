@@ -38,37 +38,37 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      */
     private static List<String> extractBoundNames(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            return List.of(id.name());
+            return List.of(id.getName());
         } else if (pattern instanceof ObjectPattern objPattern) {
             List<String> names = new ArrayList<>();
-            for (ObjectPatternProperty prop : objPattern.properties()) {
-                names.addAll(extractBoundNames(prop.value()));
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
+                names.addAll(extractBoundNames(prop.getValue()));
             }
-            if (objPattern.restElement() != null) {
-                names.addAll(extractBoundNames(objPattern.restElement().argument()));
+            if (objPattern.getRestElement() != null) {
+                names.addAll(extractBoundNames(objPattern.getRestElement().getArgument()));
             }
             return names;
         } else if (pattern instanceof ArrayPattern arrPattern) {
             List<String> names = new ArrayList<>();
-            for (Pattern element : arrPattern.elements()) {
+            for (Pattern element : arrPattern.getElements()) {
                 if (element != null) {
                     names.addAll(extractBoundNames(element));
                 }
             }
             return names;
         } else if (pattern instanceof AssignmentPattern assignPattern) {
-            return extractBoundNames(assignPattern.left());
+            return extractBoundNames(assignPattern.getLeft());
         } else if (pattern instanceof RestElement restElement) {
-            return extractBoundNames(restElement.argument());
+            return extractBoundNames(restElement.getArgument());
         }
         return List.of();
     }
 
     private static String getSimpleClassElementName(Expression key) {
         if (key instanceof Identifier identifier) {
-            return identifier.name();
+            return identifier.getName();
         }
-        if (key instanceof Literal literal && literal.value() instanceof String literalString) {
+        if (key instanceof Literal literal && literal.getValue() instanceof String literalString) {
             return literalString;
         }
         return null;
@@ -79,7 +79,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return false;
         }
         if (key instanceof PrivateIdentifier privateIdentifier) {
-            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.name());
+            return JSKeyword.CONSTRUCTOR.equals(privateIdentifier.getName());
         }
         return false;
     }
@@ -103,7 +103,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
         if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
+            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().getArgument());
             for (String restName : restBoundNames) {
                 if (!seen.add(restName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
@@ -124,7 +124,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     private void checkStrictModeParameters(FunctionParams funcParams, Identifier funcName) {
         // Check function name
         if (funcName != null) {
-            String name = funcName.name();
+            String name = funcName.getName();
             if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
                 throw new JSSyntaxErrorException("invalid function name in strict code");
             }
@@ -140,7 +140,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
         if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().argument());
+            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().getArgument());
             for (String restName : restBoundNames) {
                 if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
                     throw new JSSyntaxErrorException("invalid argument name in strict code");
@@ -196,10 +196,10 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      * Check if a parameter list is simple (no defaults, no destructuring, no rest).
      */
     private boolean hasUseStrictDirective(BlockStatement blockStatement) {
-        for (Statement statement : blockStatement.body()) {
+        for (Statement statement : blockStatement.getBody()) {
             if (statement instanceof ExpressionStatement expressionStatement
-                    && expressionStatement.expression() instanceof Literal literal
-                    && literal.value() instanceof String literalString) {
+                    && expressionStatement.getExpression() instanceof Literal literal
+                    && literal.getValue() instanceof String literalString) {
                 if (JSKeyword.USE_STRICT.equals(literalString)) {
                     return true;
                 }
@@ -628,7 +628,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             Identifier id = parserContext.parseIdentifier();
             // Named function in export default creates a lexical binding for the name
             if (parserContext.moduleMode && parserContext.functionNesting == 0) {
-                String name = id.name();
+                String name = id.getName();
                 if (parserContext.moduleVarNames.contains(name) || !parserContext.moduleLexicalNames.add(name)) {
                     throw new JSSyntaxErrorException(
                             "Identifier '" + name + "' has already been declared");
@@ -1018,7 +1018,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // It's a method
         // If this is a constructor in a derived class, enable super() calls
-        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && JSKeyword.CONSTRUCTOR.equals(keyId.name());
+        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && JSKeyword.CONSTRUCTOR.equals(keyId.getName());
         boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         if (isConstructorMethod && parserContext.parsingClassWithSuper) {
@@ -1064,17 +1064,17 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         int constructorMethodCount = 0;
         for (ClassElement classElement : classElements) {
             if (classElement instanceof PropertyDefinition field) {
-                validateClassFieldName(field.key(), field.computed(), field.isPrivate());
+                validateClassFieldName(field.getKey(), field.isComputed(), field.isPrivate());
                 continue;
             }
             if (classElement instanceof MethodDefinition method) {
-                if (isPrivateConstructorName(method.key(), method.isPrivate())) {
+                if (isPrivateConstructorName(method.getKey(), method.isPrivate())) {
                     throw new JSSyntaxErrorException("invalid method name");
                 }
-                if (method.computed() || method.isPrivate()) {
+                if (method.isComputed() || method.isPrivate()) {
                     continue;
                 }
-                String methodName = getSimpleClassElementName(method.key());
+                String methodName = getSimpleClassElementName(method.getKey());
                 if (methodName == null) {
                     continue;
                 }
@@ -1082,9 +1082,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     throw new JSSyntaxErrorException("invalid method name");
                 }
                 if (!method.isStatic() && JSKeyword.CONSTRUCTOR.equals(methodName)) {
-                    boolean isSpecialMethod = !"method".equals(method.kind())
-                            || method.value().isAsync()
-                            || method.value().isGenerator();
+                    boolean isSpecialMethod = !"method".equals(method.getKind())
+                            || method.getValue().isAsync()
+                            || method.getValue().isGenerator();
                     if (isSpecialMethod) {
                         throw new JSSyntaxErrorException("invalid method name");
                     }
@@ -1121,17 +1121,17 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             paramNames.addAll(extractBoundNames(param));
         }
         if (funcParams.restParameter() != null) {
-            paramNames.addAll(extractBoundNames(funcParams.restParameter().argument()));
+            paramNames.addAll(extractBoundNames(funcParams.restParameter().getArgument()));
         }
         if (paramNames.isEmpty()) {
             return;
         }
         for (Statement statement : body) {
             if (statement instanceof VariableDeclaration variableDeclaration
-                    && (variableDeclaration.kind() == VariableKind.LET
-                    || variableDeclaration.kind() == VariableKind.CONST)) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.declarations()) {
-                    for (String declaredName : extractBoundNames(declarator.id())) {
+                    && (variableDeclaration.getKind() == VariableKind.LET
+                    || variableDeclaration.getKind() == VariableKind.CONST)) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (String declaredName : extractBoundNames(declarator.getId())) {
                         if (paramNames.contains(declaredName)) {
                             throw new JSSyntaxErrorException("invalid redefinition of parameter name");
                         }

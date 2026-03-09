@@ -41,8 +41,4 @@ public abstract sealed class ASTNode permits
     public final SourceLocation getLocation() {
         return location;
     }
-
-    public final SourceLocation location() {
-        return location;
-    }
 }

@@ -27,10 +27,6 @@ public final class ContinueStatement extends Statement {
         this.label = label;
     }
 
-    public Identifier label() {
-        return label;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -45,5 +41,9 @@ public final class ContinueStatement extends Statement {
             yieldInside = label != null && label.containsYield();
         }
         return yieldInside;
+    }
+
+    public Identifier getLabel() {
+        return label;
     }
 }

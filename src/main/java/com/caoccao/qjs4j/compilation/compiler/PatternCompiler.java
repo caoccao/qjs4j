@@ -42,7 +42,7 @@ final class PatternCompiler {
         // Following QuickJS: pre-evaluate LHS references before calling next(),
         // and the VM auto-closes iterators on exception via the JSCatchOffset(0) marker.
 
-        List<Expression> elements = arrayExpr.elements();
+        List<Expression> elements = arrayExpr.getElements();
         boolean hasRest = false;
         int restIndex = -1;
         for (int i = 0; i < elements.size(); i++) {
@@ -74,7 +74,7 @@ final class PatternCompiler {
             }
 
             SpreadElement spreadElem = (SpreadElement) elements.get(restIndex);
-            Expression restTarget = spreadElem.argument();
+            Expression restTarget = spreadElem.getArgument();
             int restTargetDepth = preEvaluateAssignmentTarget(restTarget);
 
             // Collect remaining elements into array for rest
@@ -144,7 +144,7 @@ final class PatternCompiler {
         // Stack: [value]
         // Assign value to target and pop value from stack
         if (target instanceof Identifier id) {
-            String name = id.name();
+            String name = id.getName();
             Integer localIndex = compilerContext.findLocalInScopes(name);
             if (localIndex != null) {
                 if (compilerContext.isLocalBindingConst(name)) {
@@ -171,7 +171,7 @@ final class PatternCompiler {
                 }
             }
         } else if (target instanceof MemberExpression memberExpr) {
-            if (memberExpr.optional()) {
+            if (memberExpr.isOptional()) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
@@ -186,15 +186,15 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else {
                 // Stack: [value]
-                delegates.expressions.compileExpression(memberExpr.object());
+                delegates.expressions.compileExpression(memberExpr.getObject());
                 // Stack: [value, obj]
-                if (memberExpr.computed()) {
-                    delegates.expressions.compileExpression(memberExpr.property());
+                if (memberExpr.isComputed()) {
+                    delegates.expressions.compileExpression(memberExpr.getProperty());
                     // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
                     compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
-                } else if (memberExpr.property() instanceof Identifier propId) {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                } else if (memberExpr.getProperty() instanceof Identifier propId) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 }
             }
             // PUT_* leaves value on stack; drop it
@@ -211,20 +211,20 @@ final class PatternCompiler {
     private void compileDestructuringAssignmentElement(Expression element) {
         // Stack: [value]
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
+                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
             // Default value: check if value is undefined
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignExpr.right());
+            delegates.expressions.compileExpression(assignExpr.getRight());
             // Set function name for anonymous function definitions
-            if (assignExpr.left() instanceof Identifier targetId
-                    && isAnonymousFunctionDefinition(assignExpr.right())) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.name());
+            if (assignExpr.getLeft() instanceof Identifier targetId
+                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
-            compileAssignmentTarget(assignExpr.left());
+            compileAssignmentTarget(assignExpr.getLeft());
         } else {
             compileAssignmentTarget(element);
         }
@@ -238,13 +238,13 @@ final class PatternCompiler {
      */
     void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
         if (isVar && pattern instanceof Identifier id) {
-            Integer localIndex = compilerContext.findLocalInScopes(id.name());
+            Integer localIndex = compilerContext.findLocalInScopes(id.getName());
             if (localIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             } else if (compilerContext.inGlobalScope) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
             } else {
-                int idx = compilerContext.currentScope().declareLocal(id.name());
+                int idx = compilerContext.currentScope().declareLocal(id.getName());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, idx);
             }
         } else {
@@ -264,7 +264,7 @@ final class PatternCompiler {
         compilerContext.enterScope();
 
         // Compile the iterable expression
-        delegates.expressions.compileExpression(forOfStmt.right());
+        delegates.expressions.compileExpression(forOfStmt.getRight());
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
@@ -322,9 +322,9 @@ final class PatternCompiler {
         // In ObjectExpression, spread is represented as kind="spread".
         java.util.List<ObjectExpressionProperty> regularProperties = new java.util.ArrayList<>();
         Expression restTarget = null;
-        for (ObjectExpressionProperty prop : objExpr.properties()) {
-            if ("spread".equals(prop.kind())) {
-                restTarget = prop.value();
+        for (ObjectExpressionProperty prop : objExpr.getProperties()) {
+            if ("spread".equals(prop.getKind())) {
+                restTarget = prop.getValue();
             } else {
                 regularProperties.add(prop);
             }
@@ -361,27 +361,27 @@ final class PatternCompiler {
 
         for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
-            if (property.computed()) {
-                delegates.expressions.compileExpression(property.key());
+            if (property.isComputed()) {
+                delegates.expressions.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 propertyKeyLocalIndex = compilerContext.currentScope().declareLocal(
                         "$objectAssignKey" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
             }
 
-            int targetDepth = preEvaluateAssignmentTarget(property.value());
+            int targetDepth = preEvaluateAssignmentTarget(property.getValue());
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
-            if (property.computed()) {
+            if (property.isComputed()) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, propertyKeyLocalIndex);
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (property.key() instanceof Identifier identifier) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.name());
-            } else if (property.key() instanceof Literal literal && literal.value() instanceof String propertyName) {
+            } else if (property.getKey() instanceof Identifier identifier) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
+            } else if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String propertyName) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
-            } else if (property.key() instanceof Literal literal
-                    && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
-                long propertyIndex = ((Number) literal.value()).longValue();
+            } else if (property.getKey() instanceof Literal literal
+                    && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
+                long propertyIndex = ((Number) literal.getValue()).longValue();
                 if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
                     compilerContext.emitter.emitI32((int) propertyIndex);
@@ -390,16 +390,16 @@ final class PatternCompiler {
                 }
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else {
-                delegates.expressions.compileExpression(property.key());
+                delegates.expressions.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             }
 
-            emitAssignmentFromPreEvaluated(property.value(), targetDepth);
+            emitAssignmentFromPreEvaluated(property.getValue(), targetDepth);
 
             // If rest, add property key to exclude list
             if (restTarget != null) {
-                if (property.computed()) {
+                if (property.isComputed()) {
                     // Computed property: use PUT_ARRAY_EL which works with objects.
                     // Stack: [] → [excludeList, key, null] → PUT_ARRAY_EL → [null] → DROP → []
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
@@ -412,14 +412,14 @@ final class PatternCompiler {
                     // Stack: [] → [excludeList, null] → DEFINE_FIELD → [excludeList] → DROP → []
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, excludeListLocalIndex);
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
-                    if (property.key() instanceof Identifier identifier) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
-                    } else if (property.key() instanceof Literal literal && literal.value() instanceof String propertyName) {
+                    if (property.getKey() instanceof Identifier identifier) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
+                    } else if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String propertyName) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
-                    } else if (property.key() instanceof Literal literal
-                            && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
+                    } else if (property.getKey() instanceof Literal literal
+                            && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
-                                String.valueOf(((Number) literal.value()).longValue()));
+                                String.valueOf(((Number) literal.getValue()).longValue()));
                     }
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
                 }
@@ -470,7 +470,7 @@ final class PatternCompiler {
     private void compilePatternAssignment(Pattern pattern, boolean useExistingBindingInParentScopes) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: value is on stack, just assign it
-            String varName = id.name();
+            String varName = id.getName();
             if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: let/const was pre-declared as a local for TDZ enforcement
                 Integer tdzLocal = compilerContext.findLocalInScopes(varName);
@@ -517,47 +517,47 @@ final class PatternCompiler {
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: { proxy, revoke } = value
             // Stack: [object]
-            boolean hasRest = objPattern.restElement() != null;
+            boolean hasRest = objPattern.getRestElement() != null;
 
             // RequireObjectCoercible(value) even for empty patterns.
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
 
-            if (hasRest && !objPattern.properties().isEmpty()) {
+            if (hasRest && !objPattern.getProperties().isEmpty()) {
                 // Create exclude list object and put it under source on stack
                 // Stack: [source] -> [excludeList, source]
                 compilerContext.emitter.emitOpcode(Opcode.OBJECT);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             }
 
-            for (ObjectPatternProperty prop : objPattern.properties()) {
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                Expression propertyKey = prop.key();
-                if (!prop.computed() && propertyKey instanceof Identifier identifier) {
-                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                Expression propertyKey = prop.getKey();
+                if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     if (useExistingBindingInParentScopes && bindingIdentifier != null) {
                         delegates.expressions.compileIdentifier(bindingIdentifier);
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.name());
-                } else if (!prop.computed() && propertyKey instanceof Literal literal && literal.value() instanceof String propertyName) {
-                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
+                } else if (!prop.isComputed() && propertyKey instanceof Literal literal && literal.getValue() instanceof String propertyName) {
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     if (useExistingBindingInParentScopes && bindingIdentifier != null) {
                         delegates.expressions.compileIdentifier(bindingIdentifier);
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
-                } else if (!prop.computed() && propertyKey instanceof Literal literal
-                        && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
-                    long propertyIndex = ((Number) literal.value()).longValue();
+                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                        && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
+                    long propertyIndex = ((Number) literal.getValue()).longValue();
                     if (propertyIndex >= Integer.MIN_VALUE && propertyIndex <= Integer.MAX_VALUE) {
                         compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
                         compilerContext.emitter.emitI32((int) propertyIndex);
                     } else {
                         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
                     }
-                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     if (useExistingBindingInParentScopes && bindingIdentifier != null) {
                         delegates.expressions.compileIdentifier(bindingIdentifier);
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -566,7 +566,7 @@ final class PatternCompiler {
                 } else {
                     delegates.expressions.compileExpression(propertyKey);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.value());
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     if (useExistingBindingInParentScopes && bindingIdentifier != null) {
                         delegates.expressions.compileIdentifier(bindingIdentifier);
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -574,7 +574,7 @@ final class PatternCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 }
                 // Assign to the pattern (could be nested)
-                compilePatternAssignment(prop.value(), useExistingBindingInParentScopes);
+                compilePatternAssignment(prop.getValue(), useExistingBindingInParentScopes);
 
                 if (hasRest) {
                     // Add the property key to the exclude list
@@ -585,15 +585,15 @@ final class PatternCompiler {
                     // Stack: [source, excludeList, excludeList]
                     compilerContext.emitter.emitOpcode(Opcode.NULL);
                     // Stack: [source, excludeList, excludeList, null]
-                    if (!prop.computed() && propertyKey instanceof Identifier identifier) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.name());
+                    if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, identifier.getName());
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                    } else if (!prop.computed() && propertyKey instanceof Literal literal && literal.value() instanceof String propertyName) {
+                    } else if (!prop.isComputed() && propertyKey instanceof Literal literal && literal.getValue() instanceof String propertyName) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, propertyName);
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
-                    } else if (!prop.computed() && propertyKey instanceof Literal literal
-                            && (literal.value() instanceof Integer || literal.value() instanceof Long)) {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.value()).longValue()));
+                    } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                            && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.getValue()).longValue()));
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                     } else {
                         // Computed property key: re-evaluate expression to get the key name
@@ -612,7 +612,7 @@ final class PatternCompiler {
 
             if (hasRest) {
                 // Compile rest element: {...rest} = source
-                if (objPattern.properties().isEmpty()) {
+                if (objPattern.getProperties().isEmpty()) {
                     // No properties to exclude, just copy all
                     // Stack: [source]
                     compilerContext.emitter.emitOpcode(Opcode.OBJECT);
@@ -640,8 +640,8 @@ final class PatternCompiler {
                     // Stack: [excludeList, source, target]
                 }
                 // Assign target (TOS) to the rest pattern
-                compilePatternAssignment(objPattern.restElement().argument(), useExistingBindingInParentScopes);
-                if (!objPattern.properties().isEmpty()) {
+                compilePatternAssignment(objPattern.getRestElement().getArgument(), useExistingBindingInParentScopes);
+                if (!objPattern.getProperties().isEmpty()) {
                     // Stack: [excludeList, source]
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
@@ -657,8 +657,8 @@ final class PatternCompiler {
             // Check if there's a rest element
             boolean hasRest = false;
             int restIndex = -1;
-            for (int i = 0; i < arrPattern.elements().size(); i++) {
-                if (arrPattern.elements().get(i) instanceof RestElement) {
+            for (int i = 0; i < arrPattern.getElements().size(); i++) {
+                if (arrPattern.getElements().get(i) instanceof RestElement) {
                     hasRest = true;
                     restIndex = i;
                     break;
@@ -674,7 +674,7 @@ final class PatternCompiler {
 
                 // Process elements before rest
                 for (int i = 0; i < restIndex; i++) {
-                    Pattern element = arrPattern.elements().get(i);
+                    Pattern element = arrPattern.getElements().get(i);
                     if (element != null) {
                         // Get next value: iter next -> iter next catch_offset value done
                         compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
@@ -732,8 +732,8 @@ final class PatternCompiler {
                 // Stack: iter next catch_offset array
 
                 // Assign array to rest pattern
-                RestElement restElement = (RestElement) arrPattern.elements().get(restIndex);
-                compilePatternAssignment(restElement.argument(), useExistingBindingInParentScopes);
+                RestElement restElement = (RestElement) arrPattern.getElements().get(restIndex);
+                compilePatternAssignment(restElement.getArgument(), useExistingBindingInParentScopes);
 
                 // Clean up iterator state: drop catch_offset, next, iter
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -746,7 +746,7 @@ final class PatternCompiler {
                         "$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
-                for (Pattern element : arrPattern.elements()) {
+                for (Pattern element : arrPattern.getElements()) {
                     compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
@@ -777,15 +777,15 @@ final class PatternCompiler {
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             // Value is undefined: drop it and use default
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignPattern.right());
-            if (assignPattern.left() instanceof Identifier identifier
-                    && isAnonymousFunctionDefinition(assignPattern.right())) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.name());
+            delegates.expressions.compileExpression(assignPattern.getRight());
+            if (assignPattern.getLeft() instanceof Identifier identifier
+                    && isAnonymousFunctionDefinition(assignPattern.getRight())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
             }
             // Patch jump target
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
             // Now the stack has the resolved value; assign to the inner pattern
-            compilePatternAssignment(assignPattern.left(), useExistingBindingInParentScopes);
+            compilePatternAssignment(assignPattern.getLeft(), useExistingBindingInParentScopes);
         } else if (pattern instanceof RestElement) {
             // RestElement should only appear inside ArrayPattern or ObjectPattern, shouldn't reach here
             throw new RuntimeException("RestElement can only appear inside ArrayPattern or ObjectPattern");
@@ -803,14 +803,14 @@ final class PatternCompiler {
     void declarePatternVariables(Pattern pattern) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: declare it as a local variable
-            compilerContext.currentScope().declareLocal(id.name());
+            compilerContext.currentScope().declareLocal(id.getName());
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: declare all element variables
-            for (Pattern element : arrPattern.elements()) {
+            for (Pattern element : arrPattern.getElements()) {
                 if (element != null) {
                     if (element instanceof RestElement restElement) {
                         // Rest element: declare the argument pattern
-                        declarePatternVariables(restElement.argument());
+                        declarePatternVariables(restElement.getArgument());
                     } else {
                         // Regular element: recursively declare
                         declarePatternVariables(element);
@@ -819,18 +819,18 @@ final class PatternCompiler {
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
             // Object destructuring: declare all property variables
-            for (ObjectPatternProperty prop : objPattern.properties()) {
-                declarePatternVariables(prop.value());
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
+                declarePatternVariables(prop.getValue());
             }
-            if (objPattern.restElement() != null) {
-                declarePatternVariables(objPattern.restElement().argument());
+            if (objPattern.getRestElement() != null) {
+                declarePatternVariables(objPattern.getRestElement().getArgument());
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
             // Default value pattern: declare the left-hand side
-            declarePatternVariables(assignPattern.left());
+            declarePatternVariables(assignPattern.getLeft());
         } else if (pattern instanceof RestElement restElement) {
             // Rest element at top level (shouldn't normally happen, but handle it)
-            declarePatternVariables(restElement.argument());
+            declarePatternVariables(restElement.getArgument());
         }
     }
 
@@ -848,19 +848,19 @@ final class PatternCompiler {
         // Handle default values first
         Expression target;
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
+                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
             // Default value: check if value is undefined
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignExpr.right());
-            if (assignExpr.left() instanceof Identifier targetId
-                    && isAnonymousFunctionDefinition(assignExpr.right())) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.name());
+            delegates.expressions.compileExpression(assignExpr.getRight());
+            if (assignExpr.getLeft() instanceof Identifier targetId
+                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
-            target = assignExpr.left();
+            target = assignExpr.getLeft();
         } else {
             target = element;
         }
@@ -871,14 +871,14 @@ final class PatternCompiler {
                 // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_SUPER_VALUE leaves value
-            } else if (memberExpr.computed()) {
+            } else if (memberExpr.isComputed()) {
                 // Stack: [obj, key, value] — already correct for PUT_ARRAY_EL
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_ARRAY_EL leaves value
-            } else if (memberExpr.property() instanceof Identifier propId) {
+            } else if (memberExpr.getProperty() instanceof Identifier propId) {
                 // Stack: [obj, value] → PUT_FIELD expects [value, obj]
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_FIELD leaves value
             }
         }
@@ -938,8 +938,8 @@ final class PatternCompiler {
             return null;
         }
         if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.operator() == AssignmentOperator.ASSIGN) {
-            return assignExpr.left();
+                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
+            return assignExpr.getLeft();
         }
         return element;
     }
@@ -949,7 +949,7 @@ final class PatternCompiler {
             return identifier;
         }
         if (pattern instanceof AssignmentPattern assignmentPattern
-                && assignmentPattern.left() instanceof Identifier identifier) {
+                && assignmentPattern.getLeft() instanceof Identifier identifier) {
             return identifier;
         }
         return null;
@@ -960,10 +960,10 @@ final class PatternCompiler {
             return true;
         }
         if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.id() == null;
+            return functionExpression.getId() == null;
         }
         if (expression instanceof ClassExpression classExpression) {
-            return classExpression.id() == null;
+            return classExpression.getId() == null;
         }
         return false;
     }
@@ -979,7 +979,7 @@ final class PatternCompiler {
         if (target == null) {
             return 0; // hole
         }
-        if (target instanceof MemberExpression memberExpr && !memberExpr.optional()) {
+        if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
             if (compilerContext.isSuperMemberExpression(memberExpr)) {
                 // Pre-evaluate super reference: this, superObj, key
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -990,10 +990,10 @@ final class PatternCompiler {
                 return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object
-            delegates.expressions.compileExpression(memberExpr.object());
-            if (memberExpr.computed()) {
+            delegates.expressions.compileExpression(memberExpr.getObject());
+            if (memberExpr.isComputed()) {
                 // Pre-evaluate the computed key
-                delegates.expressions.compileExpression(memberExpr.property());
+                delegates.expressions.compileExpression(memberExpr.getProperty());
                 return 2; // obj + key on stack
             }
             return 1; // obj on stack

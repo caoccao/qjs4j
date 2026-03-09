@@ -45,34 +45,34 @@ final class FunctionClassCompiler {
             return false;
         }
         if (expression instanceof CallExpression callExpression
-                && callExpression.callee() instanceof Identifier calleeIdentifier
-                && JSKeyword.EVAL.equals(calleeIdentifier.name())
-                && !callExpression.arguments().isEmpty()
-                && callExpression.arguments().get(0) instanceof Literal firstArgumentLiteral
-                && firstArgumentLiteral.value() instanceof String evalSourceString
+                && callExpression.getCallee() instanceof Identifier calleeIdentifier
+                && JSKeyword.EVAL.equals(calleeIdentifier.getName())
+                && !callExpression.getArguments().isEmpty()
+                && callExpression.getArguments().get(0) instanceof Literal firstArgumentLiteral
+                && firstArgumentLiteral.getValue() instanceof String evalSourceString
                 && evalSourceString.contains("var arguments")) {
             return true;
         }
         if (expression instanceof AssignmentExpression assignmentExpression) {
-            return containsDirectEvalVarArguments(assignmentExpression.right());
+            return containsDirectEvalVarArguments(assignmentExpression.getRight());
         }
         if (expression instanceof BinaryExpression binaryExpression) {
-            if (containsDirectEvalVarArguments(binaryExpression.left())) {
+            if (containsDirectEvalVarArguments(binaryExpression.getLeft())) {
                 return true;
             }
-            return containsDirectEvalVarArguments(binaryExpression.right());
+            return containsDirectEvalVarArguments(binaryExpression.getRight());
         }
         if (expression instanceof ConditionalExpression conditionalExpression) {
-            if (containsDirectEvalVarArguments(conditionalExpression.test())) {
+            if (containsDirectEvalVarArguments(conditionalExpression.getTest())) {
                 return true;
             }
-            if (containsDirectEvalVarArguments(conditionalExpression.consequent())) {
+            if (containsDirectEvalVarArguments(conditionalExpression.getConsequent())) {
                 return true;
             }
-            return containsDirectEvalVarArguments(conditionalExpression.alternate());
+            return containsDirectEvalVarArguments(conditionalExpression.getAlternate());
         }
         if (expression instanceof SequenceExpression sequenceExpression) {
-            for (Expression sequenceItem : sequenceExpression.expressions()) {
+            for (Expression sequenceItem : sequenceExpression.getExpressions()) {
                 if (containsDirectEvalVarArguments(sequenceItem)) {
                     return true;
                 }
@@ -80,7 +80,7 @@ final class FunctionClassCompiler {
             return false;
         }
         if (expression instanceof UnaryExpression unaryExpression) {
-            return containsDirectEvalVarArguments(unaryExpression.operand());
+            return containsDirectEvalVarArguments(unaryExpression.getOperand());
         }
         return false;
     }
@@ -102,10 +102,10 @@ final class FunctionClassCompiler {
             return true;
         }
         if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.id() == null;
+            return functionExpression.getId() == null;
         }
         if (expression instanceof ClassExpression classExpression) {
-            return classExpression.id() == null;
+            return classExpression.getId() == null;
         }
         return false;
     }
@@ -116,40 +116,40 @@ final class FunctionClassCompiler {
      */
     private static String patternToString(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            return id.name();
+            return id.getName();
         } else if (pattern instanceof ObjectPattern objPattern) {
             StringBuilder sb = new StringBuilder("{");
-            for (int i = 0; i < objPattern.properties().size(); i++) {
+            for (int i = 0; i < objPattern.getProperties().size(); i++) {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                ObjectPatternProperty prop = objPattern.properties().get(i);
-                if (prop.shorthand()) {
-                    sb.append(patternToString(prop.value()));
+                ObjectPatternProperty prop = objPattern.getProperties().get(i);
+                if (prop.isShorthand()) {
+                    sb.append(patternToString(prop.getValue()));
                 } else {
-                    if (prop.key() instanceof Identifier keyId) {
-                        sb.append(keyId.name());
+                    if (prop.getKey() instanceof Identifier keyId) {
+                        sb.append(keyId.getName());
                     } else {
                         sb.append("?");
                     }
-                    sb.append(": ").append(patternToString(prop.value()));
+                    sb.append(": ").append(patternToString(prop.getValue()));
                 }
             }
-            if (objPattern.restElement() != null) {
-                if (!objPattern.properties().isEmpty()) {
+            if (objPattern.getRestElement() != null) {
+                if (!objPattern.getProperties().isEmpty()) {
                     sb.append(", ");
                 }
-                sb.append("...").append(patternToString(objPattern.restElement().argument()));
+                sb.append("...").append(patternToString(objPattern.getRestElement().getArgument()));
             }
             sb.append("}");
             return sb.toString();
         } else if (pattern instanceof ArrayPattern arrPattern) {
             StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < arrPattern.elements().size(); i++) {
+            for (int i = 0; i < arrPattern.getElements().size(); i++) {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                Pattern element = arrPattern.elements().get(i);
+                Pattern element = arrPattern.getElements().get(i);
                 if (element != null) {
                     sb.append(patternToString(element));
                 }
@@ -157,9 +157,9 @@ final class FunctionClassCompiler {
             sb.append("]");
             return sb.toString();
         } else if (pattern instanceof AssignmentPattern assignPattern) {
-            return patternToString(assignPattern.left()) + " = ...";
+            return patternToString(assignPattern.getLeft()) + " = ...";
         } else if (pattern instanceof RestElement restElement) {
-            return "..." + patternToString(restElement.argument());
+            return "..." + patternToString(restElement.getArgument());
         }
         return "?";
     }
@@ -195,32 +195,32 @@ final class FunctionClassCompiler {
         }
 
         // Check for "use strict" directive if body is a block statement
-        if (arrowExpr.body() instanceof BlockStatement block && compilerContext.hasUseStrictDirective(block)) {
+        if (arrowExpr.getBody() instanceof BlockStatement block && compilerContext.hasUseStrictDirective(block)) {
             functionContext.strictMode = true;
         }
 
         boolean hasNonSimpleParameters = CompilerContext.hasNonSimpleParameters(
-                arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter());
+                arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter());
         boolean hasArgumentsParameterBinding = false;
-        for (Pattern parameter : arrowExpr.params()) {
+        for (Pattern parameter : arrowExpr.getParams()) {
             if (CompilerContext.extractBoundNames(parameter).contains(JSArguments.NAME)) {
                 hasArgumentsParameterBinding = true;
                 break;
             }
         }
-        if (!hasArgumentsParameterBinding && arrowExpr.restParameter() != null) {
-            hasArgumentsParameterBinding = CompilerContext.extractBoundNames(arrowExpr.restParameter().argument())
+        if (!hasArgumentsParameterBinding && arrowExpr.getRestParameter() != null) {
+            hasArgumentsParameterBinding = CompilerContext.extractBoundNames(arrowExpr.getRestParameter().getArgument())
                     .contains(JSArguments.NAME);
         }
-        boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.defaults());
+        boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.getDefaults());
         boolean needsSyntheticEvalArgumentsBinding = hasDirectEvalVarArgumentsInDefaults
-                && arrowExpr.defaults() != null
+                && arrowExpr.getDefaults() != null
                 && !functionContext.hasEnclosingArgumentsBinding
                 && !hasArgumentsParameterBinding;
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> destructuringParams = declareParameters(
-                arrowExpr.params(),
+                arrowExpr.getParams(),
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
@@ -236,30 +236,30 @@ final class FunctionClassCompiler {
 
         // Emit default parameter initialization following QuickJS pattern:
         // GET_ARG idx, DUP, UNDEFINED, STRICT_EQ, IF_FALSE label, DROP, <default>, DUP, PUT_ARG idx, label:
-        if (arrowExpr.defaults() != null) {
+        if (arrowExpr.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    arrowExpr.params(),
-                    arrowExpr.defaults(),
-                    arrowExpr.restParameter(),
+                    arrowExpr.getParams(),
+                    arrowExpr.getDefaults(),
+                    arrowExpr.getRestParameter(),
                     parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
-        if (arrowExpr.restParameter() != null) {
+        if (arrowExpr.getRestParameter() != null) {
             // Calculate the index where rest arguments start
-            int firstRestIndex = arrowExpr.params().size();
+            int firstRestIndex = arrowExpr.getParams().size();
 
             // Emit REST opcode with the starting index
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            emitRestParameterBinding(arrowExpr.restParameter(), functionContext, funcDelegates);
+            emitRestParameterBinding(arrowExpr.getRestParameter(), functionContext, funcDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        emitParameterDestructuring(arrowExpr.params(), destructuringParams, functionContext, funcDelegates);
+        emitParameterDestructuring(arrowExpr.getParams(), destructuringParams, functionContext, funcDelegates);
 
         boolean enteredBodyScope = false;
         CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
@@ -268,7 +268,7 @@ final class FunctionClassCompiler {
         {
             // Compile function body
             // Arrow functions can have expression body or block statement body
-            if (arrowExpr.body() instanceof BlockStatement block) {
+            if (arrowExpr.getBody() instanceof BlockStatement block) {
                 if (needsSyntheticEvalArgumentsBinding) {
                     functionContext.enterScope();
                     enteredBodyScope = true;
@@ -278,10 +278,10 @@ final class FunctionClassCompiler {
                 try {
                     // Phase 0: Pre-declare var and top-level function names as locals so nested
                     // closures resolve captures to VarRef slots consistently with function bodies.
-                    funcDelegates.analysis.hoistAllDeclarationsAsLocals(block.body());
+                    funcDelegates.analysis.hoistAllDeclarationsAsLocals(block.getBody());
 
                     // Phase 1: Hoist top-level function declarations before executing body statements.
-                    for (Statement statement : block.body()) {
+                    for (Statement statement : block.getBody()) {
                         if (statement instanceof FunctionDeclaration functionDeclaration) {
                             funcDelegates.functions.compileFunctionDeclaration(functionDeclaration);
                         }
@@ -290,12 +290,12 @@ final class FunctionClassCompiler {
                     // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
                     // into function var bindings when allowed.
                     Set<String> declarationParameterNames =
-                            CompilerContext.buildParameterNames(arrowExpr.params(), block.body());
+                            CompilerContext.buildParameterNames(arrowExpr.getParams(), block.getBody());
                     funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(
-                            block.body(), declarationParameterNames);
+                            block.getBody(), declarationParameterNames);
 
                     // Compile block body statements.
-                    for (Statement stmt : block.body()) {
+                    for (Statement stmt : block.getBody()) {
                         if (stmt instanceof FunctionDeclaration) {
                             continue;
                         }
@@ -303,7 +303,7 @@ final class FunctionClassCompiler {
                     }
 
                     // If body doesn't end with return, add implicit return undefined
-                    List<Statement> bodyStatements = block.body();
+                    List<Statement> bodyStatements = block.getBody();
                     if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                         functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
                         int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
@@ -318,7 +318,7 @@ final class FunctionClassCompiler {
                         functionContext.varDeclarationScopeOverride = savedVarDeclarationScopeOverride;
                     }
                 }
-            } else if (arrowExpr.body() instanceof Expression expr) {
+            } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
                 funcDelegates.expressions.compileExpression(expr);
                 int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
@@ -348,7 +348,7 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
-        int definedArgCount = CompilerContext.computeDefinedArgCount(arrowExpr.params(), arrowExpr.defaults(), arrowExpr.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
                 functionBytecode,
                 functionName,
@@ -376,11 +376,11 @@ final class FunctionClassCompiler {
     void compileClassDeclaration(ClassDeclaration classDecl) {
         // Following QuickJS implementation in quickjs.c:24700-25200
 
-        String className = classDecl.id() != null ? classDecl.id().name() : "";
+        String className = classDecl.getId() != null ? classDecl.getId().getName() : "";
 
         // Compile superclass expression or emit undefined
-        if (classDecl.superClass() != null) {
-            delegates.expressions.compileExpression(classDecl.superClass());
+        if (classDecl.getSuperClass() != null) {
+            delegates.expressions.compileExpression(classDecl.getSuperClass());
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
@@ -397,10 +397,10 @@ final class FunctionClassCompiler {
         MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
-        for (ClassElement element : classDecl.body()) {
+        for (ClassElement element : classDecl.getBody()) {
             if (element instanceof MethodDefinition method) {
                 // Check if it's a constructor
-                if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
+                if (method.getKey() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.getName()) && !method.isStatic()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {
@@ -408,8 +408,8 @@ final class FunctionClassCompiler {
                     } else {
                         privateInstanceMethods.add(method);
                     }
-                    if (method.key() instanceof PrivateIdentifier privateId) {
-                        registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                    if (method.getKey() instanceof PrivateIdentifier privateId) {
+                        registerPrivateName(privateNameKinds, privateId.getName(), method.getKind());
                     }
                 } else {
                     methods.add(method);
@@ -421,11 +421,11 @@ final class FunctionClassCompiler {
                     instanceFields.add(field);
                 }
 
-                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), "field");
+                if (field.isPrivate() && field.getKey() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.getName(), "field");
                 }
 
-                if (field.computed() && !field.isPrivate()) {
+                if (field.isComputed() && !field.isPrivate()) {
                     computedFieldsInDefinitionOrder.add(field);
                     computedFieldSymbols.put(
                             field,
@@ -456,7 +456,7 @@ final class FunctionClassCompiler {
             constructorFunc = compileMethodAsFunction(
                     constructor,
                     className,
-                    classDecl.superClass() != null,
+                    classDecl.getSuperClass() != null,
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
@@ -467,7 +467,7 @@ final class FunctionClassCompiler {
             // Create default constructor with field initialization
             constructorFunc = createDefaultConstructor(
                     className,
-                    classDecl.superClass() != null,
+                    classDecl.getSuperClass() != null,
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
@@ -477,9 +477,9 @@ final class FunctionClassCompiler {
 
         // Set the source code for the constructor to be the entire class definition
         // This matches JavaScript behavior where class.toString() returns the class source
-        if (compilerContext.sourceCode != null && classDecl.location() != null) {
-            int startPos = classDecl.location().offset();
-            int endPos = classDecl.location().endOffset();
+        if (compilerContext.sourceCode != null && classDecl.getLocation() != null) {
+            int startPos = classDecl.getLocation().offset();
+            int endPos = classDecl.getLocation().endOffset();
             if (startPos >= 0 && endPos <= compilerContext.sourceCode.length()) {
                 String classSource = compilerContext.sourceCode.substring(startPos, endPos);
                 constructorFunc.setSourceCode(classSource);
@@ -604,8 +604,8 @@ final class FunctionClassCompiler {
         // Stack: constructor
 
         // Store the class constructor in a variable
-        if (classDecl.id() != null) {
-            String varName = classDecl.id().name();
+        if (classDecl.getId() != null) {
+            String varName = classDecl.getId().getName();
             if (!compilerContext.inGlobalScope) {
                 compilerContext.currentScope().declareLocal(varName);
                 Integer localIndex = compilerContext.currentScope().getLocal(varName);
@@ -641,21 +641,21 @@ final class FunctionClassCompiler {
         // Class expressions are almost identical to class declarations,
         // but they leave the constructor on the stack instead of binding it to a variable
 
-        String className = classExpr.id() != null ? classExpr.id().name()
+        String className = classExpr.getId() != null ? classExpr.getId().getName()
                 : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");
 
         // Per ES2024 ClassDefinitionEvaluation: create a new lexical scope for the class name
         // binding so that methods and heritage closures can capture it.
         int classNameLocalIndex = -1;
-        boolean hasClassNameScope = classExpr.id() != null;
+        boolean hasClassNameScope = classExpr.getId() != null;
         if (hasClassNameScope) {
             compilerContext.enterScope();
             classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
         }
 
         // Compile superclass expression or emit undefined
-        if (classExpr.superClass() != null) {
-            delegates.expressions.compileExpression(classExpr.superClass());
+        if (classExpr.getSuperClass() != null) {
+            delegates.expressions.compileExpression(classExpr.getSuperClass());
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
@@ -672,10 +672,10 @@ final class FunctionClassCompiler {
         MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
-        for (ClassElement element : classExpr.body()) {
+        for (ClassElement element : classExpr.getBody()) {
             if (element instanceof MethodDefinition method) {
                 // Check if it's a constructor
-                if (method.key() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.name()) && !method.isStatic()) {
+                if (method.getKey() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.getName()) && !method.isStatic()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {
@@ -683,8 +683,8 @@ final class FunctionClassCompiler {
                     } else {
                         privateInstanceMethods.add(method);
                     }
-                    if (method.key() instanceof PrivateIdentifier privateId) {
-                        registerPrivateName(privateNameKinds, privateId.name(), method.kind());
+                    if (method.getKey() instanceof PrivateIdentifier privateId) {
+                        registerPrivateName(privateNameKinds, privateId.getName(), method.getKind());
                     }
                 } else {
                     methods.add(method);
@@ -696,11 +696,11 @@ final class FunctionClassCompiler {
                     instanceFields.add(field);
                 }
 
-                if (field.isPrivate() && field.key() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.name(), "field");
+                if (field.isPrivate() && field.getKey() instanceof PrivateIdentifier privateId) {
+                    registerPrivateName(privateNameKinds, privateId.getName(), "field");
                 }
 
-                if (field.computed() && !field.isPrivate()) {
+                if (field.isComputed() && !field.isPrivate()) {
                     computedFieldsInDefinitionOrder.add(field);
                     computedFieldSymbols.put(
                             field,
@@ -731,7 +731,7 @@ final class FunctionClassCompiler {
             constructorFunc = compileMethodAsFunction(
                     constructor,
                     className,
-                    classExpr.superClass() != null,
+                    classExpr.getSuperClass() != null,
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
@@ -741,7 +741,7 @@ final class FunctionClassCompiler {
         } else {
             constructorFunc = createDefaultConstructor(
                     className,
-                    classExpr.superClass() != null,
+                    classExpr.getSuperClass() != null,
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
@@ -751,9 +751,9 @@ final class FunctionClassCompiler {
 
         // Set the source code for the constructor to be the entire class definition
         // This matches JavaScript behavior where class.toString() returns the class source
-        if (compilerContext.sourceCode != null && classExpr.location() != null) {
-            int startPos = classExpr.location().offset();
-            int endPos = classExpr.location().endOffset();
+        if (compilerContext.sourceCode != null && classExpr.getLocation() != null) {
+            int startPos = classExpr.getLocation().offset();
+            int endPos = classExpr.getLocation().endOffset();
             if (startPos >= 0 && endPos <= compilerContext.sourceCode.length()) {
                 String classSource = compilerContext.sourceCode.substring(startPos, endPos);
                 constructorFunc.setSourceCode(classSource);
@@ -907,7 +907,7 @@ final class FunctionClassCompiler {
         // Per QuickJS: function declarations inside blocks/switch cases create a lexical
         // binding in the current scope, even if a parent scope has the same name (e.g.,
         // a parameter). This prevents the function object from overwriting the parent binding.
-        String functionName = funcDecl.id().name();
+        String functionName = funcDecl.getId().getName();
         if (!compilerContext.inGlobalScope) {
             if (compilerContext.currentScope().getLocal(functionName) == null) {
                 compilerContext.currentScope().declareLocal(functionName);
@@ -931,43 +931,43 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (compilerContext.hasUseStrictDirective(funcDecl.body())) {
+        if (compilerContext.hasUseStrictDirective(funcDecl.getBody())) {
             functionContext.strictMode = true;
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> destructuringParams = declareParameters(
-                funcDecl.params(),
+                funcDecl.getParams(),
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(functionContext);
 
         // Emit default parameter initialization following QuickJS pattern
-        if (funcDecl.defaults() != null) {
+        if (funcDecl.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    funcDecl.params(),
-                    funcDecl.defaults(),
-                    funcDecl.restParameter(),
+                    funcDecl.getParams(),
+                    funcDecl.getDefaults(),
+                    funcDecl.getRestParameter(),
                     parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
-        if (funcDecl.restParameter() != null) {
+        if (funcDecl.getRestParameter() != null) {
             // Calculate the index where rest arguments start
-            int firstRestIndex = funcDecl.params().size();
+            int firstRestIndex = funcDecl.getParams().size();
 
             // Emit REST opcode with the starting index
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            emitRestParameterBinding(funcDecl.restParameter(), functionContext, delegates);
+            emitRestParameterBinding(funcDecl.getRestParameter(), functionContext, delegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        emitParameterDestructuring(funcDecl.params(), destructuringParams, functionContext, funcDelegates);
+        emitParameterDestructuring(funcDecl.getParams(), destructuringParams, functionContext, funcDelegates);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (funcDecl.isGenerator()) {
@@ -979,11 +979,11 @@ final class FunctionClassCompiler {
         // declarations that may capture them. Without this, Phase 1 function hoisting
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        funcDelegates.analysis.hoistAllDeclarationsAsLocals(funcDecl.body().body());
+        funcDelegates.analysis.hoistAllDeclarationsAsLocals(funcDecl.getBody().getBody());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
-        for (Statement stmt : funcDecl.body().body()) {
+        for (Statement stmt : funcDecl.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration innerFuncDecl) {
                 funcDelegates.functions.compileFunctionDeclaration(innerFuncDecl);
             }
@@ -991,11 +991,11 @@ final class FunctionClassCompiler {
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        Set<String> declParamNames = CompilerContext.buildParameterNames(funcDecl.params(), funcDecl.body().body());
-        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.body().body(), declParamNames);
+        Set<String> declParamNames = CompilerContext.buildParameterNames(funcDecl.getParams(), funcDecl.getBody().getBody());
+        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(), declParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
-        for (Statement stmt : funcDecl.body().body()) {
+        for (Statement stmt : funcDecl.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted in Phase 1
             }
@@ -1003,7 +1003,7 @@ final class FunctionClassCompiler {
         }
 
         // If body doesn't end with return, add implicit return undefined
-        List<Statement> bodyStatements = funcDecl.body().body();
+        List<Statement> bodyStatements = funcDecl.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
@@ -1025,7 +1025,7 @@ final class FunctionClassCompiler {
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(funcDecl.body());
+        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(funcDecl.getBody());
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(funcDecl.getLocation());
@@ -1047,17 +1047,17 @@ final class FunctionClassCompiler {
                 funcSource.append("*");
             }
             funcSource.append(" ").append(functionName).append("(");
-            for (int i = 0; i < funcDecl.params().size(); i++) {
+            for (int i = 0; i < funcDecl.getParams().size(); i++) {
                 if (i > 0) {
                     funcSource.append(", ");
                 }
-                funcSource.append(patternToString(funcDecl.params().get(i)));
+                funcSource.append(patternToString(funcDecl.getParams().get(i)));
             }
-            if (funcDecl.restParameter() != null) {
-                if (!funcDecl.params().isEmpty()) {
+            if (funcDecl.getRestParameter() != null) {
+                if (!funcDecl.getParams().isEmpty()) {
                     funcSource.append(", ");
                 }
-                funcSource.append("...").append(patternToString(funcDecl.restParameter().argument()));
+                funcSource.append("...").append(patternToString(funcDecl.getRestParameter().getArgument()));
             }
             funcSource.append(") { [function body] }");
             functionSource = funcSource.toString();
@@ -1072,7 +1072,7 @@ final class FunctionClassCompiler {
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
-        int definedArgCount = CompilerContext.computeDefinedArgCount(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter() != null);
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators are NOT constructable
         boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
@@ -1090,7 +1090,7 @@ final class FunctionClassCompiler {
                 functionSource,  // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcDecl.params(), funcDecl.defaults(), funcDecl.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter()));
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
@@ -1158,68 +1158,68 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (compilerContext.hasUseStrictDirective(functionExpression.body())) {
+        if (compilerContext.hasUseStrictDirective(functionExpression.getBody())) {
             functionContext.strictMode = true;
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> destructuringParams = declareParameters(
-                functionExpression.params(),
+                functionExpression.getParams(),
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(functionContext);
 
-        if (functionExpression.id() != null) {
+        if (functionExpression.getId() != null) {
             boolean conflictsWithParameter = false;
             Set<String> allParamNames = new HashSet<>();
-            for (Pattern param : functionExpression.params()) {
+            for (Pattern param : functionExpression.getParams()) {
                 allParamNames.addAll(CompilerContext.extractBoundNames(param));
             }
-            conflictsWithParameter = allParamNames.contains(functionExpression.id().name());
-            if (!conflictsWithParameter && functionExpression.restParameter() != null) {
-                List<String> restBoundNames = CompilerContext.extractBoundNames(functionExpression.restParameter().argument());
-                conflictsWithParameter = restBoundNames.contains(functionExpression.id().name());
+            conflictsWithParameter = allParamNames.contains(functionExpression.getId().getName());
+            if (!conflictsWithParameter && functionExpression.getRestParameter() != null) {
+                List<String> restBoundNames = CompilerContext.extractBoundNames(functionExpression.getRestParameter().getArgument());
+                conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
             }
             if (!conflictsWithParameter) {
-                functionContext.currentScope().declareLocal(functionExpression.id().name());
+                functionContext.currentScope().declareLocal(functionExpression.getId().getName());
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
                 // - In strict mode: mark as const so assignment throws TypeError
                 // - In non-strict mode: mark as function name so assignment is silently ignored
                 if (functionContext.strictMode) {
-                    functionContext.currentScope().markConstLocal(functionExpression.id().name());
+                    functionContext.currentScope().markConstLocal(functionExpression.getId().getName());
                 } else {
-                    functionContext.currentScope().markFunctionNameLocal(functionExpression.id().name());
+                    functionContext.currentScope().markFunctionNameLocal(functionExpression.getId().getName());
                 }
             }
         }
 
         // Emit default parameter initialization following QuickJS pattern
-        if (functionExpression.defaults() != null) {
+        if (functionExpression.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    functionExpression.params(),
-                    functionExpression.defaults(),
-                    functionExpression.restParameter(),
+                    functionExpression.getParams(),
+                    functionExpression.getDefaults(),
+                    functionExpression.getRestParameter(),
                     parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
         // The REST opcode must be emitted early in the function to initialize the rest array
-        if (functionExpression.restParameter() != null) {
+        if (functionExpression.getRestParameter() != null) {
             // Calculate the index where rest arguments start
-            int firstRestIndex = functionExpression.params().size();
+            int firstRestIndex = functionExpression.getParams().size();
 
             // Emit REST opcode with the starting index
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            emitRestParameterBinding(functionExpression.restParameter(), functionContext, funcDelegates);
+            emitRestParameterBinding(functionExpression.getRestParameter(), functionContext, funcDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        emitParameterDestructuring(functionExpression.params(), destructuringParams, functionContext, funcDelegates);
+        emitParameterDestructuring(functionExpression.getParams(), destructuringParams, functionContext, funcDelegates);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
@@ -1231,11 +1231,11 @@ final class FunctionClassCompiler {
         // declarations that may capture them. Without this, Phase 1 function hoisting
         // would fail to resolve captured var references (e.g., inner functions referencing
         // outer var variables would emit GET_VAR instead of GET_VAR_REF).
-        funcDelegates.analysis.hoistAllDeclarationsAsLocals(functionExpression.body().body());
+        funcDelegates.analysis.hoistAllDeclarationsAsLocals(functionExpression.getBody().getBody());
 
         // Phase 1: Hoist top-level function declarations (ES spec requires function
         // declarations to be initialized before any code executes).
-        for (Statement stmt : functionExpression.body().body()) {
+        for (Statement stmt : functionExpression.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
                 funcDelegates.functions.compileFunctionDeclaration(funcDecl);
             }
@@ -1244,11 +1244,11 @@ final class FunctionClassCompiler {
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
-        Set<String> exprParamNames = CompilerContext.buildParameterNames(functionExpression.params(), functionExpression.body().body());
-        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.body().body(), exprParamNames);
+        Set<String> exprParamNames = CompilerContext.buildParameterNames(functionExpression.getParams(), functionExpression.getBody().getBody());
+        funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
-        for (Statement stmt : functionExpression.body().body()) {
+        for (Statement stmt : functionExpression.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted in Phase 1
             }
@@ -1257,7 +1257,7 @@ final class FunctionClassCompiler {
 
         // If body doesn't end with return, add implicit return undefined
         // Check if last statement is a return statement
-        List<Statement> bodyStatements = functionExpression.body().body();
+        List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
@@ -1268,8 +1268,8 @@ final class FunctionClassCompiler {
         }
 
         Integer functionExpressionSelfLocalIndex = null;
-        if (functionExpression.id() != null) {
-            functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.id().name());
+        if (functionExpression.getId() != null) {
+            functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.getId().getName());
         }
         int localCount = functionContext.currentScope().getLocalCount();
         String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
@@ -1279,17 +1279,17 @@ final class FunctionClassCompiler {
         Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
 
         // Get function name (empty string for anonymous)
-        String functionName = functionExpression.id() != null ? functionExpression.id().name() : "";
+        String functionName = functionExpression.getId() != null ? functionExpression.getId().getName() : "";
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(functionExpression.body());
+        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(functionExpression.getBody());
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         // Create JSBytecodeFunction
-        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators, and getter/setter methods are NOT constructable
         boolean isFuncConstructor = !forceNonConstructor
@@ -1308,7 +1308,7 @@ final class FunctionClassCompiler {
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter()));
+        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
         if (functionExpressionSelfLocalIndex != null) {
             function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
         }
@@ -1344,7 +1344,7 @@ final class FunctionClassCompiler {
         methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
         inheritVisibleWithObjectBindings(methodCtx);
 
-        FunctionExpression functionExpression = method.value();
+        FunctionExpression functionExpression = method.getValue();
 
         // Enter function scope and add parameters as locals
         methodCtx.enterScope();
@@ -1353,32 +1353,32 @@ final class FunctionClassCompiler {
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> methodDestructuringParams = declareParameters(
-                functionExpression.params(),
+                functionExpression.getParams(),
                 methodCtx,
                 methodDelegates,
                 parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(methodCtx);
 
         // Emit default parameter initialization following QuickJS pattern
-        if (functionExpression.defaults() != null) {
+        if (functionExpression.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     methodCompiler,
-                    functionExpression.params(),
-                    functionExpression.defaults(),
-                    functionExpression.restParameter(),
+                    functionExpression.getParams(),
+                    functionExpression.getDefaults(),
+                    functionExpression.getRestParameter(),
                     parameterSlotIndexes);
         }
 
         // Handle rest parameter if present
-        if (functionExpression.restParameter() != null) {
-            int firstRestIndex = functionExpression.params().size();
+        if (functionExpression.getRestParameter() != null) {
+            int firstRestIndex = functionExpression.getParams().size();
             methodCtx.emitter.emitOpcode(Opcode.REST);
             methodCtx.emitter.emitU16(firstRestIndex);
-            emitRestParameterBinding(functionExpression.restParameter(), methodCtx, methodDelegates);
+            emitRestParameterBinding(functionExpression.getRestParameter(), methodCtx, methodDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        emitParameterDestructuring(functionExpression.params(), methodDestructuringParams, methodCtx, methodDelegates);
+        emitParameterDestructuring(functionExpression.getParams(), methodDestructuringParams, methodCtx, methodDelegates);
 
         // If this is a generator method, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
@@ -1408,12 +1408,12 @@ final class FunctionClassCompiler {
         }
 
         // Compile method body statements
-        for (Statement stmt : functionExpression.body().body()) {
+        for (Statement stmt : functionExpression.getBody().getBody()) {
             methodDelegates.statements.compileStatement(stmt);
         }
 
         // If body doesn't end with return, add implicit return undefined
-        List<Statement> bodyStatements = functionExpression.body().body();
+        List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             methodCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = methodCtx.currentScope().declareLocal("$method_return_" + methodCtx.emitter.currentOffset());
@@ -1431,13 +1431,13 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
-        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter() != null);
+        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
 
         // Extract method source code from original source for Function.prototype.toString
         String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         // Private methods have a # prefix in their .name property (ES2024 spec)
-        String functionName = (method.key() instanceof PrivateIdentifier)
+        String functionName = (method.getKey() instanceof PrivateIdentifier)
                 ? "#" + methodName
                 : methodName;
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
@@ -1453,7 +1453,7 @@ final class FunctionClassCompiler {
                 true,            // strict - classes are always strict mode
                 methodSource     // source code for toString()
         );
-        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.params(), functionExpression.defaults(), functionExpression.restParameter()));
+        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
 
         // Set up capture source infos for outer variable closure capture
         delegates.emitHelpers.emitCapturedValues(methodCompiler, methodFunc);
@@ -1478,7 +1478,7 @@ final class FunctionClassCompiler {
                     List.of(),
                     false
             );
-            privateMethodEntries.add(new PrivateMethodEntry(methodName, methodFunc, method.kind()));
+            privateMethodEntries.add(new PrivateMethodEntry(methodName, methodFunc, method.getKind()));
         }
         return privateMethodEntries;
     }
@@ -1533,7 +1533,7 @@ final class FunctionClassCompiler {
         blockCtx.inGlobalScope = false;
 
         // Compile all statements in the static block
-        for (Statement stmt : staticBlock.body()) {
+        for (Statement stmt : staticBlock.getBody()) {
             blockDelegates.statements.compileStatement(stmt);
         }
 
@@ -1594,17 +1594,17 @@ final class FunctionClassCompiler {
         initCtx.emitter.emitOpcode(Opcode.PUSH_THIS);
 
         if (field.isPrivate()) {
-            if (!(field.key() instanceof PrivateIdentifier privateId)) {
+            if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
                 throw new JSCompilerException("Invalid static private field key");
             }
 
-            JSSymbol symbol = privateSymbols.get(privateId.name());
+            JSSymbol symbol = privateSymbols.get(privateId.getName());
             if (symbol == null) {
-                throw new JSCompilerException("Static private field symbol not found: #" + privateId.name());
+                throw new JSCompilerException("Static private field symbol not found: #" + privateId.getName());
             }
 
-            if (field.value() != null) {
-                initDelegates.expressions.compileExpression(field.value());
+            if (field.getValue() != null) {
+                initDelegates.expressions.compileExpression(field.getValue());
             } else {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -1613,12 +1613,12 @@ final class FunctionClassCompiler {
             initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             initCtx.emitter.emitOpcode(Opcode.SWAP);
             // Set function name from private symbol (e.g., "#field") for anonymous functions
-            if (field.value() != null && isAnonymousFunctionDefinition(field.value())) {
+            if (field.getValue() != null && isAnonymousFunctionDefinition(field.getValue())) {
                 initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
             }
             initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
         } else {
-            if (field.computed()) {
+            if (field.isComputed()) {
                 JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
                 if (computedFieldSymbol == null) {
                     throw new JSCompilerException("Computed static field key not found");
@@ -1629,11 +1629,11 @@ final class FunctionClassCompiler {
                 initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
                 initCtx.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else {
-                initDelegates.emitHelpers.emitNonComputedPublicFieldKey(field.key());
+                initDelegates.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
             }
 
-            if (field.value() != null) {
-                initDelegates.expressions.compileExpression(field.value());
+            if (field.getValue() != null) {
+                initDelegates.expressions.compileExpression(field.getValue());
             } else {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -1736,8 +1736,8 @@ final class FunctionClassCompiler {
     }
 
     JSArray createTaggedTemplateObject(TemplateLiteral template) {
-        List<String> cookedQuasis = template.quasis();
-        List<String> rawQuasis = template.rawQuasis();
+        List<String> cookedQuasis = template.getQuasis();
+        List<String> rawQuasis = template.getRawQuasis();
         int segmentCount = rawQuasis.size();
 
         JSArray templateObject = new JSArray();
@@ -1801,7 +1801,7 @@ final class FunctionClassCompiler {
         for (int i = 0; i < params.size(); i++) {
             Pattern param = params.get(i);
             if (param instanceof Identifier id) {
-                int slotIndex = functionContext.currentScope().declareParameter(id.name());
+                int slotIndex = functionContext.currentScope().declareParameter(id.getName());
                 parameterSlotIndexes.add(slotIndex);
             } else {
                 // Destructuring parameter: declare a synthetic slot for the argument
@@ -1836,15 +1836,15 @@ final class FunctionClassCompiler {
     private void emitRestParameterBinding(RestParameter restParameter,
                                           CompilerContext functionContext,
                                           CompilerDelegates funcDelegates) {
-        if (restParameter.argument() instanceof Identifier restId) {
+        if (restParameter.getArgument() instanceof Identifier restId) {
             // Simple rest: ...args → declare local and store
-            String restParamName = restId.name();
+            String restParamName = restId.getName();
             int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
             functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
             functionContext.emitter.emitU16(restLocalIndex);
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
-            funcDelegates.patterns.compilePatternAssignment(restParameter.argument());
+            funcDelegates.patterns.compilePatternAssignment(restParameter.getArgument());
         }
     }
 

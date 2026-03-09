@@ -2099,25 +2099,25 @@ public final class JSGlobalObject {
             Set<String> bodyVarNames = new HashSet<>();
             Set<String> functionVarEnvironmentNames = new HashSet<>();
             if (functionLikeExpression instanceof FunctionExpression functionExpression) {
-                for (Pattern parameter : functionExpression.params()) {
+                for (Pattern parameter : functionExpression.getParams()) {
                     collectPatternNames(parameter, functionVarEnvironmentNames);
                 }
-                if (functionExpression.restParameter() != null) {
-                    collectPatternNames(functionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                if (functionExpression.getRestParameter() != null) {
+                    collectPatternNames(functionExpression.getRestParameter().getArgument(), functionVarEnvironmentNames);
                 }
-                collectVarEnvironmentNamesFromStatements(functionExpression.body().body(), bodyVarNames);
+                collectVarEnvironmentNamesFromStatements(functionExpression.getBody().getBody(), bodyVarNames);
                 functionVarEnvironmentNames.addAll(bodyVarNames);
                 return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
             }
             if (functionLikeExpression instanceof ArrowFunctionExpression arrowFunctionExpression) {
-                for (Pattern parameter : arrowFunctionExpression.params()) {
+                for (Pattern parameter : arrowFunctionExpression.getParams()) {
                     collectPatternNames(parameter, functionVarEnvironmentNames);
                 }
-                if (arrowFunctionExpression.restParameter() != null) {
-                    collectPatternNames(arrowFunctionExpression.restParameter().argument(), functionVarEnvironmentNames);
+                if (arrowFunctionExpression.getRestParameter() != null) {
+                    collectPatternNames(arrowFunctionExpression.getRestParameter().getArgument(), functionVarEnvironmentNames);
                 }
-                if (arrowFunctionExpression.body() instanceof BlockStatement blockStatement) {
-                    collectVarEnvironmentNamesFromStatements(blockStatement.body(), bodyVarNames);
+                if (arrowFunctionExpression.getBody() instanceof BlockStatement blockStatement) {
+                    collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), bodyVarNames);
                 }
                 functionVarEnvironmentNames.addAll(bodyVarNames);
                 return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
@@ -2146,109 +2146,109 @@ public final class JSGlobalObject {
 
         private static void collectPatternNames(Pattern pattern, Set<String> names) {
             if (pattern instanceof Identifier identifier) {
-                names.add(identifier.name());
+                names.add(identifier.getName());
             } else if (pattern instanceof ArrayPattern arrayPattern) {
-                for (Pattern element : arrayPattern.elements()) {
+                for (Pattern element : arrayPattern.getElements()) {
                     if (element != null) {
                         collectPatternNames(element, names);
                     }
                 }
             } else if (pattern instanceof ObjectPattern objectPattern) {
-                for (ObjectPatternProperty property : objectPattern.properties()) {
-                    collectPatternNames(property.value(), names);
+                for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                    collectPatternNames(property.getValue(), names);
                 }
-                if (objectPattern.restElement() != null) {
-                    collectPatternNames(objectPattern.restElement().argument(), names);
+                if (objectPattern.getRestElement() != null) {
+                    collectPatternNames(objectPattern.getRestElement().getArgument(), names);
                 }
             } else if (pattern instanceof RestElement restElement) {
-                collectPatternNames(restElement.argument(), names);
+                collectPatternNames(restElement.getArgument(), names);
             } else if (pattern instanceof AssignmentPattern assignmentPattern) {
-                collectPatternNames(assignmentPattern.left(), names);
+                collectPatternNames(assignmentPattern.getLeft(), names);
             }
         }
 
         private static void collectVarEnvironmentNamesFromStatement(Statement statement, Set<String> names) {
-            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.id() != null) {
-                names.add(functionDeclaration.id().name());
+            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+                names.add(functionDeclaration.getId().getName());
                 return;
             }
             if (statement instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
-                    collectPatternNames(declaration.id(), names);
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                    collectPatternNames(declaration.getId(), names);
                 }
                 return;
             }
             if (statement instanceof BlockStatement blockStatement) {
-                collectVarEnvironmentNamesFromStatements(blockStatement.body(), names);
+                collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), names);
                 return;
             }
             if (statement instanceof IfStatement ifStatement) {
-                collectVarEnvironmentNamesFromStatement(ifStatement.consequent(), names);
-                if (ifStatement.alternate() != null) {
-                    collectVarEnvironmentNamesFromStatement(ifStatement.alternate(), names);
+                collectVarEnvironmentNamesFromStatement(ifStatement.getConsequent(), names);
+                if (ifStatement.getAlternate() != null) {
+                    collectVarEnvironmentNamesFromStatement(ifStatement.getAlternate(), names);
                 }
                 return;
             }
             if (statement instanceof ForStatement forStatement) {
-                if (forStatement.init() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
-                        collectPatternNames(declaration.id(), names);
+                if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        collectPatternNames(declaration.getId(), names);
                     }
                 }
-                collectVarEnvironmentNamesFromStatement(forStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(forStatement.getBody(), names);
                 return;
             }
             if (statement instanceof ForInStatement forInStatement) {
-                if (forInStatement.left() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
-                        collectPatternNames(declaration.id(), names);
+                if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        collectPatternNames(declaration.getId(), names);
                     }
                 }
-                collectVarEnvironmentNamesFromStatement(forInStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(forInStatement.getBody(), names);
                 return;
             }
             if (statement instanceof ForOfStatement forOfStatement) {
-                if (forOfStatement.left() instanceof VariableDeclaration variableDeclaration
-                        && variableDeclaration.kind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.declarations()) {
-                        collectPatternNames(declaration.id(), names);
+                if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        collectPatternNames(declaration.getId(), names);
                     }
                 }
-                collectVarEnvironmentNamesFromStatement(forOfStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(forOfStatement.getBody(), names);
                 return;
             }
             if (statement instanceof WhileStatement whileStatement) {
-                collectVarEnvironmentNamesFromStatement(whileStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(whileStatement.getBody(), names);
                 return;
             }
             if (statement instanceof DoWhileStatement doWhileStatement) {
-                collectVarEnvironmentNamesFromStatement(doWhileStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(doWhileStatement.getBody(), names);
                 return;
             }
             if (statement instanceof SwitchStatement switchStatement) {
-                for (SwitchStatement.SwitchCase switchCase : switchStatement.cases()) {
-                    collectVarEnvironmentNamesFromStatements(switchCase.consequent(), names);
+                for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
+                    collectVarEnvironmentNamesFromStatements(switchCase.getConsequent(), names);
                 }
                 return;
             }
             if (statement instanceof TryStatement tryStatement) {
-                collectVarEnvironmentNamesFromStatements(tryStatement.block().body(), names);
-                if (tryStatement.handler() != null) {
-                    if (tryStatement.handler().param() != null) {
-                        collectPatternNames(tryStatement.handler().param(), names);
+                collectVarEnvironmentNamesFromStatements(tryStatement.getBlock().getBody(), names);
+                if (tryStatement.getHandler() != null) {
+                    if (tryStatement.getHandler().getParam() != null) {
+                        collectPatternNames(tryStatement.getHandler().getParam(), names);
                     }
-                    collectVarEnvironmentNamesFromStatements(tryStatement.handler().body().body(), names);
+                    collectVarEnvironmentNamesFromStatements(tryStatement.getHandler().getBody().getBody(), names);
                 }
-                if (tryStatement.finalizer() != null) {
-                    collectVarEnvironmentNamesFromStatements(tryStatement.finalizer().body(), names);
+                if (tryStatement.getFinalizer() != null) {
+                    collectVarEnvironmentNamesFromStatements(tryStatement.getFinalizer().getBody(), names);
                 }
                 return;
             }
             if (statement instanceof LabeledStatement labeledStatement) {
-                collectVarEnvironmentNamesFromStatement(labeledStatement.body(), names);
+                collectVarEnvironmentNamesFromStatement(labeledStatement.getBody(), names);
             }
         }
 
@@ -2642,7 +2642,7 @@ public final class JSGlobalObject {
                                 null,
                                 evalFunctionDeclarations);
                         parsedEvalDeclarations = true;
-                        evalCodeStrict = evalCodeStrict || evalAst.strict();
+                        evalCodeStrict = evalCodeStrict || evalAst.isStrict();
                     } catch (Exception ignored) {
                         // Parse error in eval code - let the normal eval path report it.
                     }
@@ -2985,11 +2985,11 @@ public final class JSGlobalObject {
 
             Expression objectLiteralExpression = parseTopLevelExpression("({" + source + "})");
             if (!(objectLiteralExpression instanceof ObjectExpression objectExpression)
-                    || objectExpression.properties().isEmpty()) {
+                    || objectExpression.getProperties().isEmpty()) {
                 return null;
             }
-            ObjectExpressionProperty firstProperty = objectExpression.properties().get(0);
-            if (firstProperty.value() instanceof FunctionExpression functionExpression) {
+            ObjectExpressionProperty firstProperty = objectExpression.getProperties().get(0);
+            if (firstProperty.getValue() instanceof FunctionExpression functionExpression) {
                 return functionExpression;
             }
             return null;
@@ -3242,11 +3242,11 @@ public final class JSGlobalObject {
         private static Expression parseTopLevelExpression(String wrappedSource) {
             try {
                 Program parsedProgram = new Compiler(wrappedSource, "<eval-caller>").parse(false);
-                if (parsedProgram.body().isEmpty()
-                        || !(parsedProgram.body().get(0) instanceof ExpressionStatement expressionStatement)) {
+                if (parsedProgram.getBody().isEmpty()
+                        || !(parsedProgram.getBody().get(0) instanceof ExpressionStatement expressionStatement)) {
                     return null;
                 }
-                return expressionStatement.expression();
+                return expressionStatement.getExpression();
             } catch (Exception ignored) {
                 return null;
             }

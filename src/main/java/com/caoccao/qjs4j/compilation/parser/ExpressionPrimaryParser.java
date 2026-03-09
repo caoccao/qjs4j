@@ -40,17 +40,17 @@ final class ExpressionPrimaryParser {
 
     private static boolean isOptionalChainExpression(Expression expression) {
         if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.optional() || isOptionalChainExpression(memberExpression.object());
+            return memberExpression.isOptional() || isOptionalChainExpression(memberExpression.getObject());
         }
         if (expression instanceof CallExpression callExpression) {
-            return callExpression.optional() || isOptionalChainExpression(callExpression.callee());
+            return callExpression.isOptional() || isOptionalChainExpression(callExpression.getCallee());
         }
         return false;
     }
 
     private static boolean isPrivateDeleteTarget(Expression expression) {
         if (expression instanceof MemberExpression memberExpression) {
-            return memberExpression.property() instanceof PrivateIdentifier;
+            return memberExpression.getProperty() instanceof PrivateIdentifier;
         }
         return false;
     }
@@ -94,7 +94,7 @@ final class ExpressionPrimaryParser {
                 TemplateLiteral template = delegates.literals.parseTemplateLiteral(true);
                 expr = new TaggedTemplateExpression(expr, template, location);
             } else if (parserContext.match(TokenType.LPAREN)) {
-                if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.name())) {
+                if (expr instanceof Identifier identifier && JSKeyword.IMPORT.equals(identifier.getName())) {
                     throw new JSSyntaxErrorException("Unexpected token '('");
                 }
                 SourceLocation location = parserContext.getLocation();
@@ -409,7 +409,7 @@ final class ExpressionPrimaryParser {
             TokenType op = parserContext.currentToken.type();
             SourceLocation loc = parserContext.getLocation();
             if (parserContext.strictMode && expr instanceof Identifier identifier) {
-                String identifierName = identifier.name();
+                String identifierName = identifier.getName();
                 if (JSKeyword.EVAL.equals(identifierName) || JSKeyword.ARGUMENTS.equals(identifierName)) {
                     throw new JSSyntaxErrorException(
                             "Unexpected eval or arguments in strict mode");
@@ -447,7 +447,7 @@ final class ExpressionPrimaryParser {
 
         if (!parserContext.hasNewlineBefore() && (parserContext.match(TokenType.INC) || parserContext.match(TokenType.DEC))) {
             if (expr instanceof Identifier identifier) {
-                String identifierName = identifier.name();
+                String identifierName = identifier.getName();
                 if ("import.meta".equals(identifierName)
                         || "new.target".equals(identifierName)
                         || JSKeyword.THIS.equals(identifierName)) {
@@ -905,7 +905,7 @@ final class ExpressionPrimaryParser {
             parserContext.advance();
             Expression operand = parseUnaryExpression();
             if (operand instanceof Identifier identifier) {
-                String identifierName = identifier.name();
+                String identifierName = identifier.getName();
                 if ("import.meta".equals(identifierName)
                         || "new.target".equals(identifierName)
                         || JSKeyword.THIS.equals(identifierName)) {

@@ -32,8 +32,8 @@ final class StatementLoopCompiler {
     }
 
     void compileBreakStatement(BreakStatement breakStmt) {
-        if (breakStmt.label() != null) {
-            String labelName = breakStmt.label().name();
+        if (breakStmt.getLabel() != null) {
+            String labelName = breakStmt.getLabel().getName();
             LoopContext target = null;
             for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (labelName.equals(loopCtx.label)) {
@@ -69,8 +69,8 @@ final class StatementLoopCompiler {
     }
 
     void compileContinueStatement(ContinueStatement contStmt) {
-        if (contStmt.label() != null) {
-            String labelName = contStmt.label().name();
+        if (contStmt.getLabel() != null) {
+            String labelName = contStmt.getLabel().getName();
             LoopContext target = null;
             for (LoopContext loopCtx : compilerContext.loopStack) {
                 if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt) {
@@ -107,10 +107,10 @@ final class StatementLoopCompiler {
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);
 
-        owner.compileStatement(doWhileStmt.body());
+        owner.compileStatement(doWhileStmt.getBody());
 
         int testStart = compilerContext.emitter.currentOffset();
-        delegates.expressions.compileExpression(doWhileStmt.test());
+        delegates.expressions.compileExpression(doWhileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
@@ -131,22 +131,22 @@ final class StatementLoopCompiler {
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
-        boolean isExpressionBased = forInStmt.left() instanceof Expression;
+        boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;
         String varName = null;
         VariableDeclaration varDecl = null;
 
         if (!isExpressionBased) {
-            varDecl = (VariableDeclaration) forInStmt.left();
-            if (varDecl.declarations().size() != 1) {
+            varDecl = (VariableDeclaration) forInStmt.getLeft();
+            if (varDecl.getDeclarations().size() != 1) {
                 throw new JSCompilerException("for-in loop must have exactly one variable");
             }
-            Pattern pattern = varDecl.declarations().get(0).id();
+            Pattern pattern = varDecl.getDeclarations().get(0).getId();
             if (!(pattern instanceof Identifier id)) {
                 throw new JSCompilerException("for-in loop variable must be an identifier");
             }
-            varName = id.name();
+            varName = id.getName();
 
-            if (varDecl.kind() == VariableKind.VAR) {
+            if (varDecl.getKind() == VariableKind.VAR) {
                 compilerContext.currentScope().declareLocal(varName);
             }
         }
@@ -155,14 +155,14 @@ final class StatementLoopCompiler {
 
         Integer varIndex = null;
         if (!isExpressionBased) {
-            if (varDecl.kind() != VariableKind.VAR) {
+            if (varDecl.getKind() != VariableKind.VAR) {
                 compilerContext.currentScope().declareLocal(varName);
             }
             varIndex = compilerContext.findLocalInScopes(varName);
         }
 
-        if (!isExpressionBased && varDecl != null && varDecl.declarations().get(0).init() != null) {
-            delegates.expressions.compileExpression(varDecl.declarations().get(0).init());
+        if (!isExpressionBased && varDecl != null && varDecl.getDeclarations().get(0).getInit() != null) {
+            delegates.expressions.compileExpression(varDecl.getDeclarations().get(0).getInit());
             if (varIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, varIndex);
             } else {
@@ -170,7 +170,7 @@ final class StatementLoopCompiler {
             }
         }
 
-        delegates.expressions.compileExpression(forInStmt.right());
+        delegates.expressions.compileExpression(forInStmt.getRight());
         compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -183,21 +183,21 @@ final class StatementLoopCompiler {
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         if (isExpressionBased) {
-            Expression leftExpr = (Expression) forInStmt.left();
+            Expression leftExpr = (Expression) forInStmt.getLeft();
             if (leftExpr instanceof Identifier id) {
-                Integer localIdx = compilerContext.findLocalInScopes(id.name());
+                Integer localIdx = compilerContext.findLocalInScopes(id.getName());
                 if (localIdx != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIdx);
                 } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
                 }
             } else if (leftExpr instanceof MemberExpression memberExpr) {
-                delegates.expressions.compileExpression(memberExpr.object());
-                if (memberExpr.computed()) {
-                    delegates.expressions.compileExpression(memberExpr.property());
+                delegates.expressions.compileExpression(memberExpr.getObject());
+                if (memberExpr.isComputed()) {
+                    delegates.expressions.compileExpression(memberExpr.getProperty());
                     throw new JSCompilerException("Computed member expression in for-in not yet supported");
                 } else {
-                    String propName = ((Identifier) memberExpr.property()).name();
+                    String propName = ((Identifier) memberExpr.getProperty()).getName();
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propName);
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -217,9 +217,9 @@ final class StatementLoopCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        owner.compileStatement(forInStmt.body());
+        owner.compileStatement(forInStmt.getBody());
 
-        if (!isExpressionBased && varDecl != null && varDecl.kind() != VariableKind.VAR && varIndex != null) {
+        if (!isExpressionBased && varDecl != null && varDecl.getKind() != VariableKind.VAR && varIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, varIndex);
         }
 
@@ -246,30 +246,30 @@ final class StatementLoopCompiler {
 
     private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
         if (leftExpression instanceof Identifier id) {
-            Integer localIndex = compilerContext.findLocalInScopes(id.name());
+            Integer localIndex = compilerContext.findLocalInScopes(id.getName());
             if (localIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
+                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.getName());
                 if (capturedIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
                 } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.name());
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
                 }
             }
             return;
         }
 
         if (leftExpression instanceof MemberExpression memberExpression) {
-            if (memberExpression.computed()) {
+            if (memberExpression.isComputed()) {
                 throw new JSCompilerException("Computed member expression in for-of not yet supported");
             }
-            if (!(memberExpression.property() instanceof Identifier propertyIdentifier)) {
+            if (!(memberExpression.getProperty() instanceof Identifier propertyIdentifier)) {
                 throw new JSCompilerException("Invalid for-of assignment target");
             }
-            delegates.expressions.compileExpression(memberExpression.object());
+            delegates.expressions.compileExpression(memberExpression.getObject());
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.name());
+            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.getName());
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
         }
@@ -287,23 +287,23 @@ final class StatementLoopCompiler {
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
-        boolean isExpressionBased = !(forOfStmt.left() instanceof VariableDeclaration);
+        boolean isExpressionBased = !(forOfStmt.getLeft() instanceof VariableDeclaration);
         VariableDeclaration varDecl = null;
         Pattern pattern = null;
         boolean isVar = false;
 
         if (isExpressionBased) {
-            if (forOfStmt.left() instanceof CallExpression callExpr) {
+            if (forOfStmt.getLeft() instanceof CallExpression callExpr) {
                 delegates.patterns.compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
                 return;
             }
         } else {
-            varDecl = (VariableDeclaration) forOfStmt.left();
-            if (varDecl.declarations().size() != 1) {
+            varDecl = (VariableDeclaration) forOfStmt.getLeft();
+            if (varDecl.getDeclarations().size() != 1) {
                 throw new JSCompilerException("for-of loop must have exactly one variable");
             }
-            pattern = varDecl.declarations().get(0).id();
-            isVar = varDecl.kind() == VariableKind.VAR;
+            pattern = varDecl.getDeclarations().get(0).getId();
+            isVar = varDecl.getKind() == VariableKind.VAR;
 
             if (isVar && !compilerContext.inGlobalScope) {
                 delegates.patterns.declarePatternVariables(pattern);
@@ -311,7 +311,7 @@ final class StatementLoopCompiler {
         }
 
         compilerContext.enterScope();
-        delegates.expressions.compileExpression(forOfStmt.right());
+        delegates.expressions.compileExpression(forOfStmt.getRight());
 
         if (forOfStmt.isAsync()) {
             compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
@@ -340,7 +340,7 @@ final class StatementLoopCompiler {
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             if (isExpressionBased) {
-                compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
+                compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
             } else {
                 delegates.patterns.compileForOfValueAssignment(pattern, isVar);
             }
@@ -348,13 +348,13 @@ final class StatementLoopCompiler {
             compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             if (isExpressionBased) {
-                compileForOfExpressionTargetAssignment((Expression) forOfStmt.left());
+                compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
             } else {
                 delegates.patterns.compileForOfValueAssignment(pattern, isVar);
             }
         }
 
-        owner.compileStatement(forOfStmt.body());
+        owner.compileStatement(forOfStmt.getBody());
 
         if (!isExpressionBased && !isVar) {
             delegates.emitHelpers.emitCloseLocForPattern(pattern);
@@ -392,26 +392,26 @@ final class StatementLoopCompiler {
 
     void compileForStatement(ForStatement forStmt) {
         boolean initCompiled = false;
-        if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
+        if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
             owner.compileVariableDeclaration(varDecl);
             initCompiled = true;
         }
 
         compilerContext.enterScope();
 
-        if (!initCompiled && forStmt.init() != null) {
-            if (forStmt.init() instanceof VariableDeclaration varDecl) {
+        if (!initCompiled && forStmt.getInit() != null) {
+            if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
                 boolean savedInGlobalScope = compilerContext.inGlobalScope;
-                if (compilerContext.inGlobalScope && varDecl.kind() != VariableKind.VAR) {
+                if (compilerContext.inGlobalScope && varDecl.getKind() != VariableKind.VAR) {
                     compilerContext.inGlobalScope = false;
                 }
                 owner.compileVariableDeclaration(varDecl);
                 compilerContext.inGlobalScope = savedInGlobalScope;
-            } else if (forStmt.init() instanceof Expression expr) {
+            } else if (forStmt.getInit() instanceof Expression expr) {
                 delegates.expressions.compileExpression(expr);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else if (forStmt.init() instanceof ExpressionStatement exprStmt) {
-                delegates.expressions.compileExpression(exprStmt.expression());
+            } else if (forStmt.getInit() instanceof ExpressionStatement exprStmt) {
+                delegates.expressions.compileExpression(exprStmt.getExpression());
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         }
@@ -421,22 +421,22 @@ final class StatementLoopCompiler {
         compilerContext.loopStack.push(loop);
 
         int jumpToEnd = -1;
-        if (forStmt.test() != null) {
-            delegates.expressions.compileExpression(forStmt.test());
+        if (forStmt.getTest() != null) {
+            delegates.expressions.compileExpression(forStmt.getTest());
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         }
 
-        owner.compileStatement(forStmt.body());
+        owner.compileStatement(forStmt.getBody());
 
-        if (forStmt.init() instanceof VariableDeclaration varDeclForClose
-                && varDeclForClose.kind() != VariableKind.VAR) {
+        if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
+                && varDeclForClose.getKind() != VariableKind.VAR) {
             delegates.emitHelpers.emitCloseLocForPattern(varDeclForClose);
         }
 
         int updateStart = compilerContext.emitter.currentOffset();
 
-        if (forStmt.update() != null) {
-            delegates.expressions.compileExpression(forStmt.update());
+        if (forStmt.getUpdate() != null) {
+            delegates.expressions.compileExpression(forStmt.getUpdate());
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
@@ -467,10 +467,10 @@ final class StatementLoopCompiler {
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);
 
-        delegates.expressions.compileExpression(whileStmt.test());
+        delegates.expressions.compileExpression(whileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
-        owner.compileStatement(whileStmt.body());
+        owner.compileStatement(whileStmt.getBody());
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
         int backJumpPos = compilerContext.emitter.currentOffset();

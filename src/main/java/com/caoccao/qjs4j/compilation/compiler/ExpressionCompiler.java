@@ -48,15 +48,15 @@ final class ExpressionCompiler {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes
-        boolean hasSpread = arrayExpr.elements().stream()
+        boolean hasSpread = arrayExpr.getElements().stream()
                 .anyMatch(e -> e instanceof SpreadElement);
-        boolean hasHoles = arrayExpr.elements().stream()
+        boolean hasHoles = arrayExpr.getElements().stream()
                 .anyMatch(e -> e == null);
 
         if (!hasSpread && !hasHoles) {
             // Simple case: no spread elements, no holes
             compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
-            for (Expression element : arrayExpr.elements()) {
+            for (Expression element : arrayExpr.getElements()) {
                 compileExpression(element);
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.INC);
@@ -70,7 +70,7 @@ final class ExpressionCompiler {
             boolean needsIndex = false;
             boolean needsLength = false;
 
-            for (Expression element : arrayExpr.elements()) {
+            for (Expression element : arrayExpr.getElements()) {
                 if (element instanceof SpreadElement spreadElement) {
                     // Emit index if not already on stack
                     if (!needsIndex) {
@@ -78,7 +78,7 @@ final class ExpressionCompiler {
                         needsIndex = true;
                     }
                     // Compile the iterable expression
-                    compileExpression(spreadElement.argument());
+                    compileExpression(spreadElement.getArgument());
                     // Emit APPEND to spread elements into the array
                     // Stack: array pos iterable -> array pos
                     compilerContext.emitter.emitOpcode(Opcode.APPEND);
@@ -145,7 +145,7 @@ final class ExpressionCompiler {
 
     void compileAwaitExpression(AwaitExpression awaitExpr) {
         // Compile the argument expression
-        compileExpression(awaitExpr.argument());
+        compileExpression(awaitExpr.getArgument());
 
         // Emit the AWAIT opcode
         // This will convert the value to a promise (if it isn't already)
@@ -154,24 +154,24 @@ final class ExpressionCompiler {
     }
 
     void compileBinaryExpression(BinaryExpression binExpr) {
-        if (binExpr.operator() == BinaryOperator.IN &&
-                binExpr.left() instanceof PrivateIdentifier privateIdentifier) {
-            compilePrivateInExpression(privateIdentifier, binExpr.right());
+        if (binExpr.getOperator() == BinaryOperator.IN &&
+                binExpr.getLeft() instanceof PrivateIdentifier privateIdentifier) {
+            compilePrivateInExpression(privateIdentifier, binExpr.getRight());
             return;
         }
 
         // Short-circuit operators: must NOT evaluate right operand eagerly
-        switch (binExpr.operator()) {
+        switch (binExpr.getOperator()) {
             case LOGICAL_AND -> {
                 // left && right: if left is falsy, return left; otherwise evaluate and return right
                 boolean savedTailCalls = compilerContext.emitTailCalls;
                 compilerContext.emitTailCalls = false;
-                compileExpression(binExpr.left());
+                compileExpression(binExpr.getLeft());
                 compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compileExpression(binExpr.right());
+                compileExpression(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -179,12 +179,12 @@ final class ExpressionCompiler {
                 // left || right: if left is truthy, return left; otherwise evaluate and return right
                 boolean savedTailCalls = compilerContext.emitTailCalls;
                 compilerContext.emitTailCalls = false;
-                compileExpression(binExpr.left());
+                compileExpression(binExpr.getLeft());
                 compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compileExpression(binExpr.right());
+                compileExpression(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -192,13 +192,13 @@ final class ExpressionCompiler {
                 // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
                 boolean savedTailCalls = compilerContext.emitTailCalls;
                 compilerContext.emitTailCalls = false;
-                compileExpression(binExpr.left());
+                compileExpression(binExpr.getLeft());
                 compilerContext.emitTailCalls = savedTailCalls;
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compileExpression(binExpr.right());
+                compileExpression(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -208,11 +208,11 @@ final class ExpressionCompiler {
         }
 
         // Compile operands
-        compileExpression(binExpr.left());
-        compileExpression(binExpr.right());
+        compileExpression(binExpr.getLeft());
+        compileExpression(binExpr.getRight());
 
         // Emit operation
-        Opcode op = switch (binExpr.operator()) {
+        Opcode op = switch (binExpr.getOperator()) {
             case ADD -> Opcode.ADD;
             case BIT_AND -> Opcode.AND;
             case BIT_OR -> Opcode.OR;
@@ -236,7 +236,7 @@ final class ExpressionCompiler {
             case SUB -> Opcode.SUB;
             case URSHIFT -> Opcode.SHR;
             // LOGICAL_AND, LOGICAL_OR, NULLISH_COALESCING handled above with short-circuit evaluation
-            default -> throw new JSCompilerException("Unknown binary operator: " + binExpr.operator());
+            default -> throw new JSCompilerException("Unknown binary operator: " + binExpr.getOperator());
         };
 
         compilerContext.emitter.emitOpcode(op);
@@ -258,14 +258,14 @@ final class ExpressionCompiler {
         // Compile test (not in tail position)
         boolean savedTailCalls = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
-        compileExpression(condExpr.test());
+        compileExpression(condExpr.getTest());
         compilerContext.emitTailCalls = savedTailCalls;
 
         // Jump to alternate if false
         int jumpToAlternate = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
         // Compile consequent (in tail position)
-        compileExpression(condExpr.consequent());
+        compileExpression(condExpr.getConsequent());
 
         // Jump over alternate
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
@@ -275,7 +275,7 @@ final class ExpressionCompiler {
 
         // Compile alternate (in tail position)
         compilerContext.emitTailCalls = savedTailCalls;
-        compileExpression(condExpr.alternate());
+        compileExpression(condExpr.getAlternate());
 
         // Patch jump to end
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
@@ -287,7 +287,7 @@ final class ExpressionCompiler {
         } else if (expr instanceof Identifier id) {
             compileIdentifier(id);
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
-            throw new JSCompilerException("undefined private field '#" + privateIdentifier.name() + "'");
+            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
         } else if (expr instanceof BinaryExpression binExpr) {
             compileBinaryExpression(binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {
@@ -328,7 +328,7 @@ final class ExpressionCompiler {
     }
 
     void compileIdentifier(Identifier id) {
-        String name = id.name();
+        String name = id.getName();
 
         // Handle 'this' keyword
         if (JSKeyword.THIS.equals(name)) {
@@ -363,10 +363,10 @@ final class ExpressionCompiler {
 
     void compileImportExpression(ImportExpression importExpr) {
         // Stack: -> specifier options
-        compileExpression(importExpr.source());
-        if (importExpr.options() != null) {
-            compileExpression(importExpr.options());
-        } else if (importExpr.defer()) {
+        compileExpression(importExpr.getSource());
+        if (importExpr.getOptions() != null) {
+            compileExpression(importExpr.getOptions());
+        } else if (importExpr.isDefer()) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.INSTANCE);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -376,7 +376,7 @@ final class ExpressionCompiler {
     }
 
     void compileLiteral(Literal literal) {
-        Object value = literal.value();
+        Object value = literal.getValue();
 
         if (value == null) {
             compilerContext.emitter.emitOpcode(Opcode.NULL);
@@ -460,7 +460,7 @@ final class ExpressionCompiler {
 
     void compileObjectExpression(ObjectExpression objExpr) {
         int protoDataPropertyCount = 0;
-        for (ObjectExpressionProperty property : objExpr.properties()) {
+        for (ObjectExpressionProperty property : objExpr.getProperties()) {
             if (isProtoDataProperty(property)) {
                 protoDataPropertyCount++;
                 if (protoDataPropertyCount > 1) {
@@ -471,13 +471,13 @@ final class ExpressionCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.OBJECT);
 
-        for (ObjectExpressionProperty prop : objExpr.properties()) {
-            String kind = prop.kind();
+        for (ObjectExpressionProperty prop : objExpr.getProperties()) {
+            String kind = prop.getKind();
 
             if ("spread".equals(kind)) {
                 // Object spread: {...expr}
                 // Stack: obj -> obj expr null -> obj (via COPY_DATA_PROPERTIES)
-                compileExpression(prop.value());
+                compileExpression(prop.getValue());
                 compilerContext.emitter.emitOpcode(Opcode.NULL);
                 // mask=6: target@sp[-3](offset 2), source@sp[-2](offset 1), exclude@sp[-1](offset 0)
                 compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
@@ -490,18 +490,18 @@ final class ExpressionCompiler {
                 // Getter/setter property: use DEFINE_METHOD_COMPUTED
                 // Stack: obj -> obj key method -> obj
                 // Push key
-                if (prop.computed()) {
-                    compileExpression(prop.key());
+                if (prop.isComputed()) {
+                    compileExpression(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                } else if (prop.key() instanceof Identifier id) {
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                } else if (prop.getKey() instanceof Identifier id) {
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
                 } else {
-                    compileExpression(prop.key());
+                    compileExpression(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 }
 
                 // Compile the getter/setter function (not constructable per ES spec)
-                delegates.functions.compileFunctionExpression((FunctionExpression) prop.value(), true);
+                delegates.functions.compileFunctionExpression((FunctionExpression) prop.getValue(), true);
 
                 // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
                 int methodKind = JSKeyword.GET.equals(kind) ? 1 : 2;
@@ -510,40 +510,40 @@ final class ExpressionCompiler {
             } else {
                 // Regular property: key: value
                 // ES2015 B.3.1: __proto__ in object literal sets prototype
-                if (!prop.computed() && !prop.shorthand()
-                        && prop.key() instanceof Identifier id
-                        && "__proto__".equals(id.name())) {
+                if (!prop.isComputed() && !prop.isShorthand()
+                        && prop.getKey() instanceof Identifier id
+                        && "__proto__".equals(id.getName())) {
                     // Stack: obj -> obj proto -> obj
-                    compileExpression(prop.value());
+                    compileExpression(prop.getValue());
                     compilerContext.emitter.emitOpcode(Opcode.SET_PROTO);
                 } else {
                     // Push value
-                    if (prop.method() && prop.value() instanceof FunctionExpression methodFunc) {
+                    if (prop.isMethod() && prop.getValue() instanceof FunctionExpression methodFunc) {
                         // Push key for DEFINE_METHOD_COMPUTED
-                        if (prop.key() instanceof Identifier id && !prop.computed()) {
-                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.name()));
+                        if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
+                            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
                         } else {
-                            compileExpression(prop.key());
+                            compileExpression(prop.getKey());
                             compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         }
                         // Concise methods are not constructors per ES spec
                         delegates.functions.compileFunctionExpression(methodFunc, true);
                         // Object literal methods are enumerable.
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-                    } else if (prop.key() instanceof Identifier id && !prop.computed()) {
+                    } else if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
                         // Non-computed identifier key: use DEFINE_FIELD with atom
-                        compileExpression(prop.value());
-                        if (isAnonymousFunctionDefinition(prop.value())) {
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.name());
+                        compileExpression(prop.getValue());
+                        if (isAnonymousFunctionDefinition(prop.getValue())) {
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
                         }
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, id.name());
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, id.getName());
                     } else {
                         // Computed or non-identifier key: define own data property directly.
                         // Stack: [obj] -> [obj, key, value] -> [obj]
-                        compileExpression(prop.key());
+                        compileExpression(prop.getKey());
                         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                        compileExpression(prop.value());
-                        if (isAnonymousFunctionDefinition(prop.value())) {
+                        compileExpression(prop.getValue());
+                        if (isAnonymousFunctionDefinition(prop.getValue())) {
                             compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
                         }
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
@@ -556,9 +556,9 @@ final class ExpressionCompiler {
     void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
         compileExpression(right);
 
-        JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.name()) : null;
+        JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.getName()) : null;
         if (symbol == null) {
-            throw new JSCompilerException("undefined private field '#" + privateIdentifier.name() + "'");
+            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
         }
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
@@ -568,7 +568,7 @@ final class ExpressionCompiler {
     void compileSequenceExpression(SequenceExpression seqExpr) {
         // Following QuickJS: evaluate each expression in order,
         // dropping all but the last one's value
-        List<Expression> expressions = seqExpr.expressions();
+        List<Expression> expressions = seqExpr.getExpressions();
 
         for (int i = 0; i < expressions.size(); i++) {
             if (i < expressions.size() - 1) {
@@ -595,24 +595,24 @@ final class ExpressionCompiler {
         // 1. A template object (array-like) with cooked strings and a 'raw' property
         // 2. The values of the substitutions as additional arguments
 
-        TemplateLiteral template = taggedTemplate.quasi();
-        List<Expression> expressions = template.expressions();
+        TemplateLiteral template = taggedTemplate.getQuasi();
+        List<Expression> expressions = template.getExpressions();
 
         // Check if this is a method call (tag is a member expression)
-        if (taggedTemplate.tag() instanceof MemberExpression memberExpr) {
+        if (taggedTemplate.getTag() instanceof MemberExpression memberExpr) {
             // For method calls: obj.method`template`
             // We need to preserve obj as the 'this' value
 
             // Push object (receiver)
-            compileExpression(memberExpr.object());
+            compileExpression(memberExpr.getObject());
 
             // Get the method while keeping the object on the stack
-            if (memberExpr.computed()) {
+            if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compileExpression(memberExpr.property());
+                compileExpression(memberExpr.getProperty());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-            } else if (memberExpr.property() instanceof Identifier propId) {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
+            } else if (memberExpr.getProperty() instanceof Identifier propId) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
             }
 
             // SWAP converts obj/func to func/obj for internalHandleCall and locks property chain
@@ -620,7 +620,7 @@ final class ExpressionCompiler {
         } else {
             // Regular function call: func`template`
             // Compile the tag function first (will be the callee)
-            compileExpression(taggedTemplate.tag());
+            compileExpression(taggedTemplate.getTag());
 
             // Add undefined as receiver/thisArg
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -638,7 +638,7 @@ final class ExpressionCompiler {
         // Call the tag function
         // argCount = 1 (template array) + number of expressions
         int argCount = 1 + expressions.size();
-        boolean isMethodCall = taggedTemplate.tag() instanceof MemberExpression;
+        boolean isMethodCall = taggedTemplate.getTag() instanceof MemberExpression;
         if (isMethodCall) {
             compilerContext.emitter.emitOpcodeU16(
                     isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD,
@@ -654,8 +654,8 @@ final class ExpressionCompiler {
         // For untagged template literals, concatenate strings and expressions
         // Example: `Hello ${name}!` becomes "Hello " + name + "!"
 
-        List<String> quasis = templateLiteral.quasis();
-        List<Expression> expressions = templateLiteral.expressions();
+        List<String> quasis = templateLiteral.getQuasis();
+        List<Expression> expressions = templateLiteral.getExpressions();
 
         if (quasis.isEmpty()) {
             // Empty template literal
@@ -699,19 +699,19 @@ final class ExpressionCompiler {
     void compileUnaryExpression(UnaryExpression unaryExpr) {
         // DELETE operator needs special handling - it doesn't evaluate the operand,
         // but instead emits object and property separately
-        if (unaryExpr.operator() == UnaryExpression.UnaryOperator.DELETE) {
-            Expression operand = unaryExpr.operand();
+        if (unaryExpr.getOperator() == UnaryExpression.UnaryOperator.DELETE) {
+            Expression operand = unaryExpr.getOperand();
 
             if (operand instanceof MemberExpression memberExpr) {
                 // delete obj.prop or delete obj[expr]
-                compileExpression(memberExpr.object());
+                compileExpression(memberExpr.getObject());
 
-                if (memberExpr.computed()) {
+                if (memberExpr.isComputed()) {
                     // obj[expr]
-                    compileExpression(memberExpr.property());
-                } else if (memberExpr.property() instanceof Identifier propId) {
+                    compileExpression(memberExpr.getProperty());
+                } else if (memberExpr.getProperty() instanceof Identifier propId) {
                     // obj.prop
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.name()));
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
                 }
 
                 compilerContext.emitter.emitOpcode(Opcode.DELETE);
@@ -719,18 +719,18 @@ final class ExpressionCompiler {
                 // Match QuickJS scope_delete_var lowering:
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
-                boolean isLocalBinding = compilerContext.findLocalInScopes(id.name()) != null
-                        || compilerContext.resolveCapturedBindingIndex(id.name()) != null
-                        || (JSArguments.NAME.equals(id.name()) && !compilerContext.inGlobalScope)
-                        || compilerContext.nonDeletableGlobalBindings.contains(id.name());
+                boolean isLocalBinding = compilerContext.findLocalInScopes(id.getName()) != null
+                        || compilerContext.resolveCapturedBindingIndex(id.getName()) != null
+                        || (JSArguments.NAME.equals(id.getName()) && !compilerContext.inGlobalScope)
+                        || compilerContext.nonDeletableGlobalBindings.contains(id.getName());
                 if (isLocalBinding) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 } else {
                     List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
                     if (!withObjectLocals.isEmpty()) {
-                        emitWithAwareDeleteIdentifier(id.name(), withObjectLocals, 0);
+                        emitWithAwareDeleteIdentifier(id.getName(), withObjectLocals, 0);
                     } else {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.name());
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.getName());
                     }
                 }
             } else {
@@ -746,16 +746,16 @@ final class ExpressionCompiler {
         // 1. Compile get_lvalue (loads current value)
         // 2. Apply INC/DEC (prefix) or POST_INC/POST_DEC (postfix)
         // 3. Apply put_lvalue (stores with appropriate stack manipulation)
-        if (unaryExpr.operator() == UnaryExpression.UnaryOperator.INC ||
-                unaryExpr.operator() == UnaryExpression.UnaryOperator.DEC) {
-            Expression operand = unaryExpr.operand();
-            boolean isInc = unaryExpr.operator() == UnaryExpression.UnaryOperator.INC;
-            boolean isPrefix = unaryExpr.prefix();
+        if (unaryExpr.getOperator() == UnaryExpression.UnaryOperator.INC ||
+                unaryExpr.getOperator() == UnaryExpression.UnaryOperator.DEC) {
+            Expression operand = unaryExpr.getOperand();
+            boolean isInc = unaryExpr.getOperator() == UnaryExpression.UnaryOperator.INC;
+            boolean isPrefix = unaryExpr.isPrefix();
 
             if (operand instanceof Identifier id) {
                 if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
                     // Use reference semantics so with-scope resolution happens before local/captured fallback.
-                    assignmentCompiler.emitIdentifierReference(id.name());
+                    assignmentCompiler.emitIdentifierReference(id.getName());
                     compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
@@ -771,7 +771,7 @@ final class ExpressionCompiler {
                     return;
                 }
 
-                Integer localIndex = compilerContext.findLocalInScopes(id.name());
+                Integer localIndex = compilerContext.findLocalInScopes(id.getName());
                 if (localIndex != null) {
                     // Local binding.
                     compileExpression(operand);
@@ -781,7 +781,7 @@ final class ExpressionCompiler {
                     return;
                 }
 
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.name());
+                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.getName());
                 if (capturedIndex != null) {
                     // Captured binding.
                     compileExpression(operand);
@@ -792,7 +792,7 @@ final class ExpressionCompiler {
                 }
 
                 // Unresolved identifier: use reference semantics so strict errors and with-scopes are handled correctly.
-                assignmentCompiler.emitIdentifierReference(id.name());
+                assignmentCompiler.emitIdentifierReference(id.getName());
                 compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
                 compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                         : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
@@ -829,10 +829,10 @@ final class ExpressionCompiler {
                     }
                     return;
                 }
-                if (memberExpr.computed()) {
+                if (memberExpr.isComputed()) {
                     // Array element: obj[prop]
-                    compileExpression(memberExpr.object());
-                    compileExpression(memberExpr.property());
+                    compileExpression(memberExpr.getObject());
+                    compileExpression(memberExpr.getProperty());
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
 
                     if (isPrefix) {
@@ -851,37 +851,37 @@ final class ExpressionCompiler {
                     }
                 } else {
                     // Object property: obj.prop or obj.#field
-                    if (memberExpr.property() instanceof Identifier propId) {
-                        compileExpression(memberExpr.object());
+                    if (memberExpr.getProperty() instanceof Identifier propId) {
+                        compileExpression(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name());
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
                             compilerContext.emitter.emitOpcode(isInc ? Opcode.INC : Opcode.DEC);
                             // Stack: [obj, new_val] -> need [new_val, obj] for PUT_FIELD
                             compilerContext.emitter.emitOpcode(Opcode.SWAP);
                             // PUT_FIELD pops obj, peeks new_val, leaves [new_val]
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name());
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                         } else {
                             // Postfix: obj.prop++ - returns old value
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.name()); // obj old_val
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName()); // obj old_val
                             compilerContext.emitter.emitOpcode(isInc ? Opcode.POST_INC : Opcode.POST_DEC); // obj old_val new_val
                             // Stack: [obj, old_val, new_val] - need [old_val, new_val, obj] for PUT_FIELD
                             // ROT3L: [old_val, new_val, obj]
                             compilerContext.emitter.emitOpcode(Opcode.ROT3L); // old_val new_val obj
                             // PUT_FIELD pops obj, peeks new_val, leaves [old_val, new_val]
-                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.name()); // old_val new_val
+                            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName()); // old_val new_val
                             compilerContext.emitter.emitOpcode(Opcode.DROP); // old_val
                         }
-                    } else if (memberExpr.property() instanceof PrivateIdentifier privateId) {
+                    } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                         // Private field: obj.#field
-                        String fieldName = privateId.name();
+                        String fieldName = privateId.getName();
                         JSSymbol symbol = compilerContext.privateSymbols.get(fieldName);
                         if (symbol == null) {
                             throw new JSCompilerException("Private field not found: #" + fieldName);
                         }
 
-                        compileExpression(memberExpr.object());
+                        compileExpression(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
@@ -919,11 +919,11 @@ final class ExpressionCompiler {
             return;
         }
 
-        if (unaryExpr.operator() == UnaryExpression.UnaryOperator.TYPEOF
-                && unaryExpr.operand() instanceof Identifier id) {
-            String name = id.name();
+        if (unaryExpr.getOperator() == UnaryExpression.UnaryOperator.TYPEOF
+                && unaryExpr.getOperand() instanceof Identifier id) {
+            String name = id.getName();
             if ("import.meta".equals(name) || "new.target".equals(name)) {
-                compileExpression(unaryExpr.operand());
+                compileExpression(unaryExpr.getOperand());
                 compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
                 return;
             }
@@ -957,9 +957,9 @@ final class ExpressionCompiler {
             return;
         }
 
-        compileExpression(unaryExpr.operand());
+        compileExpression(unaryExpr.getOperand());
 
-        Opcode op = switch (unaryExpr.operator()) {
+        Opcode op = switch (unaryExpr.getOperator()) {
             case BIT_NOT -> Opcode.NOT;
             case MINUS -> Opcode.NEG;
             case NOT -> Opcode.LNOT;
@@ -969,7 +969,7 @@ final class ExpressionCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 yield Opcode.UNDEFINED;
             }
-            default -> throw new JSCompilerException("Unknown unary operator: " + unaryExpr.operator());
+            default -> throw new JSCompilerException("Unknown unary operator: " + unaryExpr.getOperator());
         };
 
         compilerContext.emitter.emitOpcode(op);
@@ -977,15 +977,15 @@ final class ExpressionCompiler {
 
     void compileYieldExpression(YieldExpression yieldExpr) {
         // Compile the argument expression (if present)
-        if (yieldExpr.argument() != null) {
-            compileExpression(yieldExpr.argument());
+        if (yieldExpr.getArgument() != null) {
+            compileExpression(yieldExpr.getArgument());
         } else {
             // No argument means yield undefined
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
         // Emit the appropriate yield opcode
-        if (yieldExpr.delegate()) {
+        if (yieldExpr.isDelegate()) {
             // yield* delegates to another generator/iterable
             compilerContext.emitter.emitOpcode(compilerContext.isInAsyncFunction ? Opcode.ASYNC_YIELD_STAR : Opcode.YIELD_STAR);
         } else {
@@ -1269,22 +1269,22 @@ final class ExpressionCompiler {
             return true;
         }
         if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.id() == null;
+            return functionExpression.getId() == null;
         }
         if (expression instanceof ClassExpression classExpression) {
-            return classExpression.id() == null;
+            return classExpression.getId() == null;
         }
         return false;
     }
 
     private boolean isProtoDataProperty(ObjectExpressionProperty property) {
-        if (property.computed() || property.shorthand() || property.method() || !"init".equals(property.kind())) {
+        if (property.isComputed() || property.isShorthand() || property.isMethod() || !"init".equals(property.getKind())) {
             return false;
         }
-        if (property.key() instanceof Identifier identifier) {
-            return "__proto__".equals(identifier.name());
+        if (property.getKey() instanceof Identifier identifier) {
+            return "__proto__".equals(identifier.getName());
         }
-        if (property.key() instanceof Literal literal && literal.value() instanceof String stringValue) {
+        if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String stringValue) {
             return "__proto__".equals(stringValue);
         }
         return false;

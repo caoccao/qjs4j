@@ -29,10 +29,6 @@ public final class RestParameter extends ASTNode {
         this.argument = argument;
     }
 
-    public Pattern argument() {
-        return argument;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -47,5 +43,9 @@ public final class RestParameter extends ASTNode {
             yieldInside = argument != null && argument.containsYield();
         }
         return yieldInside;
+    }
+
+    public Pattern getArgument() {
+        return argument;
     }
 }

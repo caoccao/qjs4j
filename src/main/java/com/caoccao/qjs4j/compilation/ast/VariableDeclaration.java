@@ -63,11 +63,11 @@ public final class VariableDeclaration extends Statement {
         return yieldInside;
     }
 
-    public List<VariableDeclarator> declarations() {
+    public List<VariableDeclarator> getDeclarations() {
         return declarations;
     }
 
-    public VariableKind kind() {
+    public VariableKind getKind() {
         return kind;
     }
 
@@ -76,7 +76,7 @@ public final class VariableDeclaration extends Statement {
         private final Expression init;
 
         public VariableDeclarator(Pattern id, Expression init) {
-            super(id != null ? id.location() : (init != null ? init.location() : new SourceLocation(0, 0, 0, 0)));
+            super(id != null ? id.getLocation() : (init != null ? init.getLocation() : new SourceLocation(0, 0, 0, 0)));
             this.id = id;
             this.init = init;
         }
@@ -84,10 +84,7 @@ public final class VariableDeclaration extends Statement {
         @Override
         public boolean containsAwait() {
             if (awaitInside == null) {
-                awaitInside = false;
-                if (id != null && id.containsAwait()) {
-                    awaitInside = true;
-                }
+                awaitInside = id != null && id.containsAwait();
                 if (!awaitInside && init != null && init.containsAwait()) {
                     awaitInside = true;
                 }
@@ -98,10 +95,7 @@ public final class VariableDeclaration extends Statement {
         @Override
         public boolean containsYield() {
             if (yieldInside == null) {
-                yieldInside = false;
-                if (id != null && id.containsYield()) {
-                    yieldInside = true;
-                }
+                yieldInside = id != null && id.containsYield();
                 if (!yieldInside && init != null && init.containsYield()) {
                     yieldInside = true;
                 }
@@ -109,11 +103,11 @@ public final class VariableDeclaration extends Statement {
             return yieldInside;
         }
 
-        public Pattern id() {
+        public Pattern getId() {
             return id;
         }
 
-        public Expression init() {
+        public Expression getInit() {
             return init;
         }
     }

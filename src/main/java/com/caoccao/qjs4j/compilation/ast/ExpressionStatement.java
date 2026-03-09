@@ -43,7 +43,7 @@ public final class ExpressionStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression expression() {
+    public Expression getExpression() {
         return expression;
     }
 

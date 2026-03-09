@@ -31,21 +31,10 @@ public final class IfStatement extends Statement {
         this.alternate = alternate;
     }
 
-    public Statement alternate() {
-        return alternate;
-    }
-
-    public Statement consequent() {
-        return consequent;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (test != null && test.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = test != null && test.containsAwait();
             if (!awaitInside && consequent != null && consequent.containsAwait()) {
                 awaitInside = true;
             }
@@ -59,10 +48,7 @@ public final class IfStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (test != null && test.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = test != null && test.containsYield();
             if (!yieldInside && consequent != null && consequent.containsYield()) {
                 yieldInside = true;
             }
@@ -73,7 +59,15 @@ public final class IfStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression test() {
+    public Statement getAlternate() {
+        return alternate;
+    }
+
+    public Statement getConsequent() {
+        return consequent;
+    }
+
+    public Expression getTest() {
         return test;
     }
 

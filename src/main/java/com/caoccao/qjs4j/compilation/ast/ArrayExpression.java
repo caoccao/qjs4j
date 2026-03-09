@@ -61,7 +61,7 @@ public final class ArrayExpression extends Expression {
         return yieldInside;
     }
 
-    public List<Expression> elements() {
+    public List<Expression> getElements() {
         return elements;
     }
 }

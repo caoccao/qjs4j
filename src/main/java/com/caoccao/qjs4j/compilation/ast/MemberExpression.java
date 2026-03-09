@@ -38,17 +38,10 @@ public final class MemberExpression extends Expression {
         this.optional = optional;
     }
 
-    public boolean computed() {
-        return computed;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (object != null && object.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = object != null && object.containsAwait();
             if (!awaitInside && property != null && property.containsAwait()) {
                 awaitInside = true;
             }
@@ -59,10 +52,7 @@ public final class MemberExpression extends Expression {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (object != null && object.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = object != null && object.containsYield();
             if (!yieldInside && property != null && property.containsYield()) {
                 yieldInside = true;
             }
@@ -70,15 +60,19 @@ public final class MemberExpression extends Expression {
         return yieldInside;
     }
 
-    public Expression object() {
+    public Expression getObject() {
         return object;
     }
 
-    public boolean optional() {
-        return optional;
+    public Expression getProperty() {
+        return property;
     }
 
-    public Expression property() {
-        return property;
+    public boolean isComputed() {
+        return computed;
+    }
+
+    public boolean isOptional() {
+        return optional;
     }
 }

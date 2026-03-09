@@ -31,17 +31,10 @@ public final class TryStatement extends Statement {
         this.finalizer = finalizer;
     }
 
-    public BlockStatement block() {
-        return block;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (block != null && block.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = block != null && block.containsAwait();
             if (!awaitInside && handler != null && handler.containsAwait()) {
                 awaitInside = true;
             }
@@ -55,10 +48,7 @@ public final class TryStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (block != null && block.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = block != null && block.containsYield();
             if (!yieldInside && handler != null && handler.containsYield()) {
                 yieldInside = true;
             }
@@ -69,11 +59,15 @@ public final class TryStatement extends Statement {
         return yieldInside;
     }
 
-    public BlockStatement finalizer() {
+    public BlockStatement getBlock() {
+        return block;
+    }
+
+    public BlockStatement getFinalizer() {
         return finalizer;
     }
 
-    public CatchClause handler() {
+    public CatchClause getHandler() {
         return handler;
     }
 
@@ -82,22 +76,15 @@ public final class TryStatement extends Statement {
         private final Pattern param;
 
         public CatchClause(Pattern param, BlockStatement body) {
-            super(param != null ? param.location() : (body != null ? body.location() : new SourceLocation(0, 0, 0, 0)));
+            super(param != null ? param.getLocation() : (body != null ? body.getLocation() : new SourceLocation(0, 0, 0, 0)));
             this.param = param;
             this.body = body;
-        }
-
-        public BlockStatement body() {
-            return body;
         }
 
         @Override
         public boolean containsAwait() {
             if (awaitInside == null) {
-                awaitInside = false;
-                if (param != null && param.containsAwait()) {
-                    awaitInside = true;
-                }
+                awaitInside = param != null && param.containsAwait();
                 if (!awaitInside && body != null && body.containsAwait()) {
                     awaitInside = true;
                 }
@@ -108,10 +95,7 @@ public final class TryStatement extends Statement {
         @Override
         public boolean containsYield() {
             if (yieldInside == null) {
-                yieldInside = false;
-                if (param != null && param.containsYield()) {
-                    yieldInside = true;
-                }
+                yieldInside = param != null && param.containsYield();
                 if (!yieldInside && body != null && body.containsYield()) {
                     yieldInside = true;
                 }
@@ -119,7 +103,11 @@ public final class TryStatement extends Statement {
             return yieldInside;
         }
 
-        public Pattern param() {
+        public BlockStatement getBody() {
+            return body;
+        }
+
+        public Pattern getParam() {
             return param;
         }
     }

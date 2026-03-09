@@ -67,41 +67,6 @@ public class ExpressionContainsAwaitYieldTest {
     }
 
     @Test
-    public void testFunctionAndArrowExpressionContainmentFromDefaultsAndRest() {
-        FunctionExpression functionExpression = new FunctionExpression(
-                null,
-                List.of(),
-                List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
-                new RestParameter(
-                        new AssignmentPattern(
-                                new Identifier("a", LOCATION),
-                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                                LOCATION),
-                        LOCATION),
-                new BlockStatement(List.of(), LOCATION),
-                false,
-                false,
-                LOCATION);
-        ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
-                List.of(),
-                List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
-                new RestParameter(
-                        new AssignmentPattern(
-                                new Identifier("a", LOCATION),
-                                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                                LOCATION),
-                        LOCATION),
-                new Identifier("body", LOCATION),
-                false,
-                LOCATION);
-
-        assertThat(functionExpression.containsAwait()).isTrue();
-        assertThat(functionExpression.containsYield()).isTrue();
-        assertThat(arrowFunctionExpression.containsAwait()).isTrue();
-        assertThat(arrowFunctionExpression.containsYield()).isTrue();
-    }
-
-    @Test
     public void testFunctionAndArrowExpressionContainmentFromBody() {
         FunctionExpression functionExpression = new FunctionExpression(
                 null,
@@ -127,6 +92,41 @@ public class ExpressionContainsAwaitYieldTest {
                         new AwaitExpression(new Literal(1, LOCATION), LOCATION),
                         new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
                         LOCATION),
+                false,
+                LOCATION);
+
+        assertThat(functionExpression.containsAwait()).isTrue();
+        assertThat(functionExpression.containsYield()).isTrue();
+        assertThat(arrowFunctionExpression.containsAwait()).isTrue();
+        assertThat(arrowFunctionExpression.containsYield()).isTrue();
+    }
+
+    @Test
+    public void testFunctionAndArrowExpressionContainmentFromDefaultsAndRest() {
+        FunctionExpression functionExpression = new FunctionExpression(
+                null,
+                List.of(),
+                List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
+                new RestParameter(
+                        new AssignmentPattern(
+                                new Identifier("a", LOCATION),
+                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
+                                LOCATION),
+                        LOCATION),
+                new BlockStatement(List.of(), LOCATION),
+                false,
+                false,
+                LOCATION);
+        ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
+                List.of(),
+                List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
+                new RestParameter(
+                        new AssignmentPattern(
+                                new Identifier("a", LOCATION),
+                                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
+                                LOCATION),
+                        LOCATION),
+                new Identifier("body", LOCATION),
                 false,
                 LOCATION);
 

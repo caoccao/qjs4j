@@ -46,7 +46,7 @@ final class FunctionClassFieldCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-        delegates.expressions.compileExpression(field.key());
+        delegates.expressions.compileExpression(field.getKey());
         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -65,13 +65,13 @@ final class FunctionClassFieldCompiler {
             compilerContext.inClassFieldInitializer = true;
 
             if (isPrivate) {
-                if (!(field.key() instanceof PrivateIdentifier privateId)) {
+                if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
                     throw new JSCompilerException("Invalid private field key");
                 }
-                String fieldName = privateId.name();
+                String fieldName = privateId.getName();
 
-                if (field.value() != null) {
-                    delegates.expressions.compileExpression(field.value());
+                if (field.getValue() != null) {
+                    delegates.expressions.compileExpression(field.getValue());
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
@@ -87,7 +87,7 @@ final class FunctionClassFieldCompiler {
                     continue;
                 }
             } else {
-                if (field.computed()) {
+                if (field.isComputed()) {
                     JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
                     if (computedFieldSymbol == null) {
                         throw new JSCompilerException("Computed field key not found");
@@ -97,11 +97,11 @@ final class FunctionClassFieldCompiler {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else {
-                    delegates.emitHelpers.emitNonComputedPublicFieldKey(field.key());
+                    delegates.emitHelpers.emitNonComputedPublicFieldKey(field.getKey());
                 }
 
-                if (field.value() != null) {
-                    delegates.expressions.compileExpression(field.value());
+                if (field.getValue() != null) {
+                    delegates.expressions.compileExpression(field.getValue());
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }

@@ -49,15 +49,15 @@ public final class ExportDeclaration extends ModuleItem {
         return yieldInside;
     }
 
-    public Declaration declaration() {
+    public Declaration getDeclaration() {
         return declaration;
     }
 
-    public Literal source() {
+    public Literal getSource() {
         return source;
     }
 
-    public List<ExportSpecifier> specifiers() {
+    public List<ExportSpecifier> getSpecifiers() {
         return specifiers;
     }
 

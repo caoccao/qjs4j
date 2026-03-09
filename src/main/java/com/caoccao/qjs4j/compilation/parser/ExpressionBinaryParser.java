@@ -16,11 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.parser;
 
-import com.caoccao.qjs4j.compilation.ast.BinaryExpression;
-import com.caoccao.qjs4j.compilation.ast.BinaryOperator;
-import com.caoccao.qjs4j.compilation.ast.ConditionalExpression;
-import com.caoccao.qjs4j.compilation.ast.Expression;
-import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 

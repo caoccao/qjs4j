@@ -61,7 +61,7 @@ public final class ObjectExpression extends Expression {
         return yieldInside;
     }
 
-    public List<ObjectExpressionProperty> properties() {
+    public List<ObjectExpressionProperty> getProperties() {
         return properties;
     }
 }

@@ -33,17 +33,10 @@ public final class ClassDeclaration extends Declaration {
         this.body = body;
     }
 
-    public List<ClassElement> body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (superClass != null && superClass.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = superClass != null && superClass.containsAwait();
             if (!awaitInside && body != null) {
                 for (ClassElement classElement : body) {
                     if (classElement != null && classElement.containsAwait()) {
@@ -59,10 +52,7 @@ public final class ClassDeclaration extends Declaration {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (superClass != null && superClass.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = superClass != null && superClass.containsYield();
             if (!yieldInside && body != null) {
                 for (ClassElement classElement : body) {
                     if (classElement != null && classElement.containsYield()) {
@@ -75,11 +65,15 @@ public final class ClassDeclaration extends Declaration {
         return yieldInside;
     }
 
-    public Identifier id() {
+    public List<ClassElement> getBody() {
+        return body;
+    }
+
+    public Identifier getId() {
         return id;
     }
 
-    public Expression superClass() {
+    public Expression getSuperClass() {
         return superClass;
     }
 

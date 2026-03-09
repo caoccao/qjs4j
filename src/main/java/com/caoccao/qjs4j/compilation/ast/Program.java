@@ -33,10 +33,6 @@ public final class Program extends ASTNode {
         this.strict = strict;
     }
 
-    public List<Statement> body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -69,11 +65,15 @@ public final class Program extends ASTNode {
         return yieldInside;
     }
 
+    public List<Statement> getBody() {
+        return body;
+    }
+
     public boolean isModule() {
         return isModule;
     }
 
-    public boolean strict() {
+    public boolean isStrict() {
         return strict;
     }
 

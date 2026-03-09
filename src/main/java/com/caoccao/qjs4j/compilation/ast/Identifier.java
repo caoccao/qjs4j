@@ -48,7 +48,7 @@ public final class Identifier extends Expression {
         return yieldInside;
     }
 
-    public String name() {
+    public String getName() {
         return name;
     }
 }

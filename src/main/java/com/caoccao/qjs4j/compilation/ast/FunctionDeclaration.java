@@ -41,10 +41,6 @@ public final class FunctionDeclaration extends Declaration {
         this.isGenerator = isGenerator;
     }
 
-    public BlockStatement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
@@ -105,12 +101,24 @@ public final class FunctionDeclaration extends Declaration {
         return yieldInside;
     }
 
-    public List<Expression> defaults() {
+    public BlockStatement getBody() {
+        return body;
+    }
+
+    public List<Expression> getDefaults() {
         return defaults;
     }
 
-    public Identifier id() {
+    public Identifier getId() {
         return id;
+    }
+
+    public List<Pattern> getParams() {
+        return params;
+    }
+
+    public RestParameter getRestParameter() {
+        return restParameter;
     }
 
     public boolean isAsync() {
@@ -119,13 +127,5 @@ public final class FunctionDeclaration extends Declaration {
 
     public boolean isGenerator() {
         return isGenerator;
-    }
-
-    public List<Pattern> params() {
-        return params;
-    }
-
-    public RestParameter restParameter() {
-        return restParameter;
     }
 }

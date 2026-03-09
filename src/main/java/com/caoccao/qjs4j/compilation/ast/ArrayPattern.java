@@ -62,7 +62,7 @@ public final class ArrayPattern extends Pattern {
         return yieldInside;
     }
 
-    public List<Pattern> elements() {
+    public List<Pattern> getElements() {
         return elements;
     }
 }

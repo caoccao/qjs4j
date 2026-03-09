@@ -21,8 +21,8 @@ package com.caoccao.qjs4j.compilation.ast;
  */
 public final class ObjectExpressionProperty extends ASTNode {
     private final boolean computed;
-    private final String kind;
     private final Expression key;
+    private final String kind;
     private final boolean method;
     private final boolean shorthand;
     private final Expression value;
@@ -34,7 +34,7 @@ public final class ObjectExpressionProperty extends ASTNode {
             boolean computed,
             boolean shorthand,
             boolean method) {
-        super(key != null ? key.location() : (value != null ? value.location() : new SourceLocation(0, 0, 0, 0)));
+        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
         this.value = value;
         this.kind = kind;
@@ -46,10 +46,7 @@ public final class ObjectExpressionProperty extends ASTNode {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (key != null && key.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = key != null && key.containsAwait();
             if (!awaitInside && value != null && value.containsAwait()) {
                 awaitInside = true;
             }
@@ -60,10 +57,7 @@ public final class ObjectExpressionProperty extends ASTNode {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (key != null && key.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = key != null && key.containsYield();
             if (!yieldInside && value != null && value.containsYield()) {
                 yieldInside = true;
             }
@@ -71,27 +65,27 @@ public final class ObjectExpressionProperty extends ASTNode {
         return yieldInside;
     }
 
-    public boolean computed() {
-        return computed;
-    }
-
-    public String kind() {
-        return kind;
-    }
-
-    public Expression key() {
+    public Expression getKey() {
         return key;
     }
 
-    public boolean method() {
+    public String getKind() {
+        return kind;
+    }
+
+    public Expression getValue() {
+        return value;
+    }
+
+    public boolean isComputed() {
+        return computed;
+    }
+
+    public boolean isMethod() {
         return method;
     }
 
-    public boolean shorthand() {
+    public boolean isShorthand() {
         return shorthand;
-    }
-
-    public Expression value() {
-        return value;
     }
 }

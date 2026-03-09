@@ -20,6 +20,7 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents source code location information.
  */
 public record SourceLocation(int line, int column, int offset, int endOffset) {
+
     /**
      * Constructor for a single-point location (no end offset).
      */

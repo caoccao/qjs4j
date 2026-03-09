@@ -30,7 +30,7 @@ public final class ObjectPatternProperty extends ASTNode {
             Pattern value,
             boolean computed,
             boolean shorthand) {
-        super(key != null ? key.location() : (value != null ? value.location() : new SourceLocation(0, 0, 0, 0)));
+        super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
         this.value = value;
         this.computed = computed;
@@ -40,10 +40,7 @@ public final class ObjectPatternProperty extends ASTNode {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (key != null && key.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = key != null && key.containsAwait();
             if (!awaitInside && value != null && value.containsAwait()) {
                 awaitInside = true;
             }
@@ -54,10 +51,7 @@ public final class ObjectPatternProperty extends ASTNode {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (key != null && key.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = key != null && key.containsYield();
             if (!yieldInside && value != null && value.containsYield()) {
                 yieldInside = true;
             }
@@ -65,19 +59,19 @@ public final class ObjectPatternProperty extends ASTNode {
         return yieldInside;
     }
 
-    public boolean computed() {
-        return computed;
-    }
-
-    public Expression key() {
+    public Expression getKey() {
         return key;
     }
 
-    public boolean shorthand() {
-        return shorthand;
+    public Pattern getValue() {
+        return value;
     }
 
-    public Pattern value() {
-        return value;
+    public boolean isComputed() {
+        return computed;
+    }
+
+    public boolean isShorthand() {
+        return shorthand;
     }
 }

@@ -36,10 +36,7 @@ public final class TaggedTemplateExpression extends Expression {
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (tag != null && tag.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = tag != null && tag.containsAwait();
             if (!awaitInside && quasi != null && quasi.containsAwait()) {
                 awaitInside = true;
             }
@@ -50,10 +47,7 @@ public final class TaggedTemplateExpression extends Expression {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (tag != null && tag.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = tag != null && tag.containsYield();
             if (!yieldInside && quasi != null && quasi.containsYield()) {
                 yieldInside = true;
             }
@@ -61,11 +55,11 @@ public final class TaggedTemplateExpression extends Expression {
         return yieldInside;
     }
 
-    public TemplateLiteral quasi() {
+    public TemplateLiteral getQuasi() {
         return quasi;
     }
 
-    public Expression tag() {
+    public Expression getTag() {
         return tag;
     }
 }

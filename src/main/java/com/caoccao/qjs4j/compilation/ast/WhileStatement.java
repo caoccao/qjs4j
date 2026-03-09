@@ -29,17 +29,10 @@ public final class WhileStatement extends Statement {
         this.body = body;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (test != null && test.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = test != null && test.containsAwait();
             if (!awaitInside && body != null && body.containsAwait()) {
                 awaitInside = true;
             }
@@ -50,10 +43,7 @@ public final class WhileStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (test != null && test.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = test != null && test.containsYield();
             if (!yieldInside && body != null && body.containsYield()) {
                 yieldInside = true;
             }
@@ -61,7 +51,11 @@ public final class WhileStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression test() {
+    public Statement getBody() {
+        return body;
+    }
+
+    public Expression getTest() {
         return test;
     }
 

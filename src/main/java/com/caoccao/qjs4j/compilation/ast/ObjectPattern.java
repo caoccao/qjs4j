@@ -70,11 +70,11 @@ public final class ObjectPattern extends Pattern {
         return yieldInside;
     }
 
-    public List<ObjectPatternProperty> properties() {
+    public List<ObjectPatternProperty> getProperties() {
         return properties;
     }
 
-    public RestElement restElement() {
+    public RestElement getRestElement() {
         return restElement;
     }
 

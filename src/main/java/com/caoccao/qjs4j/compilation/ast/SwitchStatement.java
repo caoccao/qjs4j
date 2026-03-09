@@ -31,17 +31,10 @@ public final class SwitchStatement extends Statement {
         this.cases = cases;
     }
 
-    public List<SwitchCase> cases() {
-        return cases;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (discriminant != null && discriminant.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = discriminant != null && discriminant.containsAwait();
             if (!awaitInside && cases != null) {
                 for (SwitchCase switchCase : cases) {
                     if (switchCase != null && switchCase.containsAwait()) {
@@ -57,10 +50,7 @@ public final class SwitchStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (discriminant != null && discriminant.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = discriminant != null && discriminant.containsYield();
             if (!yieldInside && cases != null) {
                 for (SwitchCase switchCase : cases) {
                     if (switchCase != null && switchCase.containsYield()) {
@@ -73,7 +63,11 @@ public final class SwitchStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression discriminant() {
+    public List<SwitchCase> getCases() {
+        return cases;
+    }
+
+    public Expression getDiscriminant() {
         return discriminant;
     }
 
@@ -87,13 +81,24 @@ public final class SwitchStatement extends Statement {
             this.consequent = consequent;
         }
 
+        private static SourceLocation resolveLocation(Expression test, List<Statement> consequent) {
+            if (test != null) {
+                return test.getLocation();
+            }
+            if (consequent != null) {
+                for (Statement statement : consequent) {
+                    if (statement != null) {
+                        return statement.getLocation();
+                    }
+                }
+            }
+            return new SourceLocation(0, 0, 0, 0);
+        }
+
         @Override
         public boolean containsAwait() {
             if (awaitInside == null) {
-                awaitInside = false;
-                if (test != null && test.containsAwait()) {
-                    awaitInside = true;
-                }
+                awaitInside = test != null && test.containsAwait();
                 if (!awaitInside && consequent != null) {
                     for (Statement statement : consequent) {
                         if (statement != null && statement.containsAwait()) {
@@ -109,10 +114,7 @@ public final class SwitchStatement extends Statement {
         @Override
         public boolean containsYield() {
             if (yieldInside == null) {
-                yieldInside = false;
-                if (test != null && test.containsYield()) {
-                    yieldInside = true;
-                }
+                yieldInside = test != null && test.containsYield();
                 if (!yieldInside && consequent != null) {
                     for (Statement statement : consequent) {
                         if (statement != null && statement.containsYield()) {
@@ -125,26 +127,12 @@ public final class SwitchStatement extends Statement {
             return yieldInside;
         }
 
-        public List<Statement> consequent() {
+        public List<Statement> getConsequent() {
             return consequent;
         }
 
-        public Expression test() {
+        public Expression getTest() {
             return test;
-        }
-
-        private static SourceLocation resolveLocation(Expression test, List<Statement> consequent) {
-            if (test != null) {
-                return test.location();
-            }
-            if (consequent != null) {
-                for (Statement statement : consequent) {
-                    if (statement != null) {
-                        return statement.location();
-                    }
-                }
-            }
-            return new SourceLocation(0, 0, 0, 0);
         }
     }
 

@@ -29,17 +29,10 @@ public final class DoWhileStatement extends Statement {
         this.test = test;
     }
 
-    public Statement body() {
-        return body;
-    }
-
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = false;
-            if (body != null && body.containsAwait()) {
-                awaitInside = true;
-            }
+            awaitInside = body != null && body.containsAwait();
             if (!awaitInside && test != null && test.containsAwait()) {
                 awaitInside = true;
             }
@@ -50,10 +43,7 @@ public final class DoWhileStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = false;
-            if (body != null && body.containsYield()) {
-                yieldInside = true;
-            }
+            yieldInside = body != null && body.containsYield();
             if (!yieldInside && test != null && test.containsYield()) {
                 yieldInside = true;
             }
@@ -61,7 +51,11 @@ public final class DoWhileStatement extends Statement {
         return yieldInside;
     }
 
-    public Expression test() {
+    public Statement getBody() {
+        return body;
+    }
+
+    public Expression getTest() {
         return test;
     }
 

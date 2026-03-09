@@ -39,9 +39,9 @@ final class CompilerAnalysis {
 
     void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
         for (Statement s : body) {
-            if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), lexicals);
+            if (s instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), lexicals);
                 }
             }
         }
@@ -49,24 +49,24 @@ final class CompilerAnalysis {
 
     void collectPatternBindingNames(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier id) {
-            names.add(id.name());
+            names.add(id.getName());
         } else if (pattern instanceof ArrayPattern arrPattern) {
-            for (Pattern element : arrPattern.elements()) {
+            for (Pattern element : arrPattern.getElements()) {
                 if (element != null) {
                     collectPatternBindingNames(element, names);
                 }
             }
         } else if (pattern instanceof ObjectPattern objPattern) {
-            for (ObjectPatternProperty prop : objPattern.properties()) {
-                collectPatternBindingNames(prop.value(), names);
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
+                collectPatternBindingNames(prop.getValue(), names);
             }
-            if (objPattern.restElement() != null) {
-                collectPatternBindingNames(objPattern.restElement().argument(), names);
+            if (objPattern.getRestElement() != null) {
+                collectPatternBindingNames(objPattern.getRestElement().getArgument(), names);
             }
         } else if (pattern instanceof AssignmentPattern assignPattern) {
-            collectPatternBindingNames(assignPattern.left(), names);
+            collectPatternBindingNames(assignPattern.getLeft(), names);
         } else if (pattern instanceof RestElement restElement) {
-            collectPatternBindingNames(restElement.argument(), names);
+            collectPatternBindingNames(restElement.getArgument(), names);
         }
     }
 
@@ -77,72 +77,72 @@ final class CompilerAnalysis {
      * Does NOT recurse into function declarations/expressions (they have their own scope).
      */
     void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
-        if (stmt instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-            for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                collectPatternBindingNames(d.id(), varNames);
+        if (stmt instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+            for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                collectPatternBindingNames(d.getId(), varNames);
             }
         } else if (stmt instanceof ForStatement forStmt) {
-            if (forStmt.init() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
+            if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), varNames);
                 }
             }
-            if (forStmt.body() != null) {
-                collectVarNamesFromStatement(forStmt.body(), varNames);
+            if (forStmt.getBody() != null) {
+                collectVarNamesFromStatement(forStmt.getBody(), varNames);
             }
         } else if (stmt instanceof ForInStatement forInStmt) {
-            if (forInStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
+            if (forInStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), varNames);
                 }
             }
-            if (forInStmt.body() != null) {
-                collectVarNamesFromStatement(forInStmt.body(), varNames);
+            if (forInStmt.getBody() != null) {
+                collectVarNamesFromStatement(forInStmt.getBody(), varNames);
             }
         } else if (stmt instanceof ForOfStatement forOfStmt) {
-            if (forOfStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), varNames);
+            if (forOfStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), varNames);
                 }
             }
-            if (forOfStmt.body() != null) {
-                collectVarNamesFromStatement(forOfStmt.body(), varNames);
+            if (forOfStmt.getBody() != null) {
+                collectVarNamesFromStatement(forOfStmt.getBody(), varNames);
             }
         } else if (stmt instanceof BlockStatement block) {
-            for (Statement s : block.body()) {
+            for (Statement s : block.getBody()) {
                 collectVarNamesFromStatement(s, varNames);
             }
         } else if (stmt instanceof IfStatement ifStmt) {
-            collectVarNamesFromStatement(ifStmt.consequent(), varNames);
-            if (ifStmt.alternate() != null) {
-                collectVarNamesFromStatement(ifStmt.alternate(), varNames);
+            collectVarNamesFromStatement(ifStmt.getConsequent(), varNames);
+            if (ifStmt.getAlternate() != null) {
+                collectVarNamesFromStatement(ifStmt.getAlternate(), varNames);
             }
         } else if (stmt instanceof WhileStatement whileStmt) {
-            collectVarNamesFromStatement(whileStmt.body(), varNames);
+            collectVarNamesFromStatement(whileStmt.getBody(), varNames);
         } else if (stmt instanceof DoWhileStatement doWhileStmt) {
-            collectVarNamesFromStatement(doWhileStmt.body(), varNames);
+            collectVarNamesFromStatement(doWhileStmt.getBody(), varNames);
         } else if (stmt instanceof TryStatement tryStmt) {
-            for (Statement s : tryStmt.block().body()) {
+            for (Statement s : tryStmt.getBlock().getBody()) {
                 collectVarNamesFromStatement(s, varNames);
             }
-            if (tryStmt.handler() != null) {
-                for (Statement s : tryStmt.handler().body().body()) {
+            if (tryStmt.getHandler() != null) {
+                for (Statement s : tryStmt.getHandler().getBody().getBody()) {
                     collectVarNamesFromStatement(s, varNames);
                 }
             }
-            if (tryStmt.finalizer() != null) {
-                for (Statement s : tryStmt.finalizer().body()) {
+            if (tryStmt.getFinalizer() != null) {
+                for (Statement s : tryStmt.getFinalizer().getBody()) {
                     collectVarNamesFromStatement(s, varNames);
                 }
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
-            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
-                for (Statement s : sc.consequent()) {
+            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
+                for (Statement s : sc.getConsequent()) {
                     collectVarNamesFromStatement(s, varNames);
                 }
             }
         } else if (stmt instanceof LabeledStatement labeledStmt) {
-            collectVarNamesFromStatement(labeledStmt.body(), varNames);
+            collectVarNamesFromStatement(labeledStmt.getBody(), varNames);
         }
     }
 
@@ -166,8 +166,8 @@ final class CompilerAnalysis {
         Set<String> constLexicalNames = new HashSet<>();
         for (Statement stmt : body) {
             if (stmt instanceof FunctionDeclaration functionDeclaration) {
-                if (functionDeclaration.id() != null) {
-                    String functionName = functionDeclaration.id().name();
+                if (functionDeclaration.getId() != null) {
+                    String functionName = functionDeclaration.getId().getName();
                     if (compilerContext.currentScope().getLocal(functionName) == null) {
                         compilerContext.currentScope().declareLocal(functionName);
                     }
@@ -177,17 +177,17 @@ final class CompilerAnalysis {
             // Collect var names (recurses into blocks since var is function-scoped)
             collectVarNamesFromStatement(stmt, varNames);
             // Collect top-level let/const names (don't recurse — they're block-scoped)
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
+            if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
                 Set<String> declarationNames = new HashSet<>();
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), declarationNames);
+                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), declarationNames);
                 }
                 lexicalNames.addAll(declarationNames);
-                if (vd.kind() == VariableKind.CONST) {
+                if (vd.getKind() == VariableKind.CONST) {
                     constLexicalNames.addAll(declarationNames);
                 }
-            } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.id() != null) {
-                lexicalNames.add(classDeclaration.id().name());
+            } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                lexicalNames.add(classDeclaration.getId().getName());
             }
         }
         for (String varName : varNames) {
@@ -235,13 +235,13 @@ final class CompilerAnalysis {
         Set<String> candidates = new HashSet<>();
         Set<String> alreadyDeclared = new HashSet<>();
         for (Statement stmt : body) {
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), topLevelLexicals);
+            if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), topLevelLexicals);
                 }
             }
-            if (stmt instanceof FunctionDeclaration fd && fd.id() != null) {
-                alreadyDeclared.add(fd.id().name());
+            if (stmt instanceof FunctionDeclaration fd && fd.getId() != null) {
+                alreadyDeclared.add(fd.getId().getName());
             } else {
                 collectVarNamesFromStatement(stmt, alreadyDeclared);
             }
@@ -280,12 +280,12 @@ final class CompilerAnalysis {
         Set<String> blockLexicals = new HashSet<>(parentLexicals);
         Set<String> blockFuncNames = new HashSet<>();
         for (Statement s : body) {
-            if (s instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), blockLexicals);
+            if (s instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), blockLexicals);
                 }
-            } else if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                blockFuncNames.add(fd.id().name());
+            } else if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
+                blockFuncNames.add(fd.getId().getName());
             }
         }
         // Per B.3.3.1: block-scoped function declarations create lexical bindings.
@@ -293,9 +293,9 @@ final class CompilerAnalysis {
         Set<String> blockLexicalsWithFuncs = new HashSet<>(blockLexicals);
         blockLexicalsWithFuncs.addAll(blockFuncNames);
         for (Statement s : body) {
-            if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                if (!blockLexicals.contains(fd.id().name())) {
-                    result.add(fd.id().name());
+            if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
+                if (!blockLexicals.contains(fd.getId().getName())) {
+                    result.add(fd.getId().getName());
                 }
             }
             scanAnnexBStatement(s, blockLexicalsWithFuncs, result);
@@ -312,9 +312,9 @@ final class CompilerAnalysis {
         Set<String> topLevelLexicals = new HashSet<>();
         Set<String> candidates = new HashSet<>();
         for (Statement stmt : programBody) {
-            if (stmt instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                    collectPatternBindingNames(d.id(), topLevelLexicals);
+            if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), topLevelLexicals);
                 }
             }
             scanAnnexBStatement(stmt, topLevelLexicals, candidates);
@@ -338,90 +338,90 @@ final class CompilerAnalysis {
      */
     void scanAnnexBStatement(Statement stmt, Set<String> lexicalBindings, Set<String> result) {
         if (stmt instanceof BlockStatement block) {
-            scanAnnexBBlock(block.body(), lexicalBindings, result);
+            scanAnnexBBlock(block.getBody(), lexicalBindings, result);
         } else if (stmt instanceof IfStatement ifStmt) {
-            if (ifStmt.consequent() instanceof FunctionDeclaration fd && fd.id() != null) {
-                if (!lexicalBindings.contains(fd.id().name())) {
-                    result.add(fd.id().name());
+            if (ifStmt.getConsequent() instanceof FunctionDeclaration fd && fd.getId() != null) {
+                if (!lexicalBindings.contains(fd.getId().getName())) {
+                    result.add(fd.getId().getName());
                 }
             } else {
-                scanAnnexBStatement(ifStmt.consequent(), lexicalBindings, result);
+                scanAnnexBStatement(ifStmt.getConsequent(), lexicalBindings, result);
             }
-            if (ifStmt.alternate() != null) {
-                if (ifStmt.alternate() instanceof FunctionDeclaration fd && fd.id() != null) {
-                    if (!lexicalBindings.contains(fd.id().name())) {
-                        result.add(fd.id().name());
+            if (ifStmt.getAlternate() != null) {
+                if (ifStmt.getAlternate() instanceof FunctionDeclaration fd && fd.getId() != null) {
+                    if (!lexicalBindings.contains(fd.getId().getName())) {
+                        result.add(fd.getId().getName());
                     }
                 } else {
-                    scanAnnexBStatement(ifStmt.alternate(), lexicalBindings, result);
+                    scanAnnexBStatement(ifStmt.getAlternate(), lexicalBindings, result);
                 }
             }
         } else if (stmt instanceof TryStatement tryStmt) {
-            scanAnnexBBlock(tryStmt.block().body(), lexicalBindings, result);
-            if (tryStmt.handler() != null) {
+            scanAnnexBBlock(tryStmt.getBlock().getBody(), lexicalBindings, result);
+            if (tryStmt.getHandler() != null) {
                 // Per B.3.5, simple catch parameter (catch(e)) does NOT block Annex B var hoisting.
                 // But destructuring catch parameter (catch({ f })) creates let-like bindings
                 // that DO block hoisting (following QuickJS: destructuring uses TOK_LET).
                 Set<String> catchLexicals = new HashSet<>(lexicalBindings);
-                Pattern catchParam = tryStmt.handler().param();
+                Pattern catchParam = tryStmt.getHandler().getParam();
                 if (catchParam != null && !(catchParam instanceof Identifier)) {
                     // Destructuring pattern: collect binding names as lexical blockers
                     collectPatternBindingNames(catchParam, catchLexicals);
                 }
-                scanAnnexBBlock(tryStmt.handler().body().body(), catchLexicals, result);
+                scanAnnexBBlock(tryStmt.getHandler().getBody().getBody(), catchLexicals, result);
             }
-            if (tryStmt.finalizer() != null) {
-                scanAnnexBBlock(tryStmt.finalizer().body(), lexicalBindings, result);
+            if (tryStmt.getFinalizer() != null) {
+                scanAnnexBBlock(tryStmt.getFinalizer().getBody(), lexicalBindings, result);
             }
         } else if (stmt instanceof SwitchStatement switchStmt) {
             // Collect lexical bindings across all cases (switch shares one scope)
             Set<String> switchLexicals = new HashSet<>(lexicalBindings);
-            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
-                collectLexicalBindings(sc.consequent(), switchLexicals);
+            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
+                collectLexicalBindings(sc.getConsequent(), switchLexicals);
             }
-            for (SwitchStatement.SwitchCase sc : switchStmt.cases()) {
-                for (Statement s : sc.consequent()) {
-                    if (s instanceof FunctionDeclaration fd && fd.id() != null) {
-                        if (!switchLexicals.contains(fd.id().name())) {
-                            result.add(fd.id().name());
+            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
+                for (Statement s : sc.getConsequent()) {
+                    if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
+                        if (!switchLexicals.contains(fd.getId().getName())) {
+                            result.add(fd.getId().getName());
                         }
                     }
                     scanAnnexBStatement(s, switchLexicals, result);
                 }
             }
         } else if (stmt instanceof ForStatement forStmt) {
-            if (forStmt.body() != null) {
+            if (forStmt.getBody() != null) {
                 // Collect lexical bindings from the for-loop's init clause (e.g. "let f" in "for (let f; ; )")
                 // Per B.3.3.3 step ii, if replacing the function declaration with "var F" would produce
                 // an early error (conflict with let/const), the Annex B extension is skipped.
                 Set<String> forLexicals = new HashSet<>(lexicalBindings);
-                if (forStmt.init() instanceof VariableDeclaration vd && vd.kind() != VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : vd.declarations()) {
-                        collectPatternBindingNames(d.id(), forLexicals);
+                if (forStmt.getInit() instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                        collectPatternBindingNames(d.getId(), forLexicals);
                     }
                 }
-                scanAnnexBStatement(forStmt.body(), forLexicals, result);
+                scanAnnexBStatement(forStmt.getBody(), forLexicals, result);
             }
         } else if (stmt instanceof WhileStatement whileStmt) {
-            scanAnnexBStatement(whileStmt.body(), lexicalBindings, result);
+            scanAnnexBStatement(whileStmt.getBody(), lexicalBindings, result);
         } else if (stmt instanceof DoWhileStatement doWhileStmt) {
-            scanAnnexBStatement(doWhileStmt.body(), lexicalBindings, result);
+            scanAnnexBStatement(doWhileStmt.getBody(), lexicalBindings, result);
         } else if (stmt instanceof ForInStatement forInStmt) {
             Set<String> forInLexicals = new HashSet<>(lexicalBindings);
-            if (forInStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), forInLexicals);
+            if (forInStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), forInLexicals);
                 }
             }
-            scanAnnexBStatement(forInStmt.body(), forInLexicals, result);
+            scanAnnexBStatement(forInStmt.getBody(), forInLexicals, result);
         } else if (stmt instanceof ForOfStatement forOfStmt) {
             Set<String> forOfLexicals = new HashSet<>(lexicalBindings);
-            if (forOfStmt.left() instanceof VariableDeclaration varDecl && varDecl.kind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.declarations()) {
-                    collectPatternBindingNames(d.id(), forOfLexicals);
+            if (forOfStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    collectPatternBindingNames(d.getId(), forOfLexicals);
                 }
             }
-            scanAnnexBStatement(forOfStmt.body(), forOfLexicals, result);
+            scanAnnexBStatement(forOfStmt.getBody(), forOfLexicals, result);
         }
     }
 }
