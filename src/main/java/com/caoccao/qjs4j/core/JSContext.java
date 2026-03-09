@@ -272,6 +272,12 @@ public final class JSContext implements AutoCloseable {
                         context.clearPendingException();
                         throw new JSException(exception);
                     }
+                    if (val == JSUndefined.INSTANCE && namespaceObject instanceof JSImportNamespaceObject namespace) {
+                        JSValue earlyValue = namespace.getEarlyExportBinding(importedName);
+                        if (earlyValue != null) {
+                            return earlyValue;
+                        }
+                    }
                     return val != null ? val : JSUndefined.INSTANCE;
                 });
         getter.initializePrototypeChain(this);
@@ -1365,9 +1371,15 @@ public final class JSContext implements AutoCloseable {
                 && !filename.startsWith("<")
                 && (code.contains("import(") || code.contains("import.defer(")
                 || hasModuleExportSyntax(code)
-                || hasModuleStaticImportSyntax(code));
+                || hasModuleStaticImportSyntax(code)
+                || hasModuleTopLevelAwaitSyntax(code));
         if (shouldTrackDynamicImportModule) {
-            String resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
+            String resolvedModuleSpecifier;
+            try {
+                resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
+            } catch (JSException jsException) {
+                resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
+            }
             JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
             boolean executingTransformedModuleSource = existingRecord != null
                     && !Objects.equals(existingRecord.rawSource(), code)
@@ -1392,6 +1404,17 @@ public final class JSContext implements AutoCloseable {
         boolean evaluatingRawDynamicImportModule =
                 dynamicImportEvalModuleRecord != null
                         && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
+        boolean shouldEvaluateRawModuleThroughTransformedSource =
+                evaluatingRawDynamicImportModule
+                        && !dynamicImportEvalModuleRecord.hasExportSyntax()
+                        && !dynamicImportEvalModuleRecord.hasTLA()
+                        && hasModuleStaticImportSyntax(code)
+                        && code.contains("import(");
+        boolean shouldEvaluateRawTopLevelAwaitModule =
+                evaluatingRawDynamicImportModule
+                        && !dynamicImportEvalModuleRecord.hasExportSyntax()
+                        && dynamicImportEvalModuleRecord.hasTLA()
+                        && !hasModuleStaticImportSyntax(code);
 
         Compiler compiler = new Compiler(code, filename);
         // Per QuickJS, eval code has is_eval=true which prevents top-level return.
@@ -1430,7 +1453,10 @@ public final class JSContext implements AutoCloseable {
                 return JSUndefined.INSTANCE;
             }
 
-            if (evaluatingRawDynamicImportModule && dynamicImportEvalModuleRecord.hasExportSyntax()) {
+            if (evaluatingRawDynamicImportModule
+                    && (dynamicImportEvalModuleRecord.hasExportSyntax()
+                    || shouldEvaluateRawModuleThroughTransformedSource
+                    || shouldEvaluateRawTopLevelAwaitModule)) {
                 JSValue evalResult = evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
                 if (dynamicImportEvalModuleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
                     dynamicImportEvalModuleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
@@ -1438,12 +1464,17 @@ public final class JSContext implements AutoCloseable {
                     dynamicImportEvalModuleRecord.setAsyncEvaluationPromise(asyncPromise);
                     registerAsyncModuleCompletion(dynamicImportEvalModuleRecord, asyncPromise, new HashSet<>());
                 } else {
-                    resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
-                    dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
+                    if (dynamicImportEvalModuleRecord.hasExportSyntax()) {
+                        resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
+                        dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
+                    }
                     dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
                 }
                 if (!suppressEvalMicrotaskProcessing) {
                     processMicrotasks();
+                }
+                if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+                    throw new JSException(dynamicImportEvalModuleRecord.evaluationError());
                 }
                 return JSUndefined.INSTANCE;
             }
@@ -1627,6 +1658,7 @@ public final class JSContext implements AutoCloseable {
                     dynamicImportModuleCache.put(normalizedFilename, selfModuleRecord);
                     removeSelfModuleRecordAfterEval = true;
                 }
+                initializeHoistedFunctionExportBindings(selfModuleRecord);
                 moduleNamespaceImportOverlay = evaluateModuleImportsInOrder(code, filename);
             }
 
@@ -2943,6 +2975,10 @@ public final class JSContext implements AutoCloseable {
         return MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find();
     }
 
+    private boolean hasModuleTopLevelAwaitSyntax(String code) {
+        return MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(maskModuleComments(code)).find();
+    }
+
     /**
      * Check if an import clause contains named bindings other than 'default'.
      * E.g., {@code {name}} returns true, {@code {default as x}} returns false.
@@ -3000,6 +3036,63 @@ public final class JSContext implements AutoCloseable {
                 this.cachedPromisePrototype = protoObj;
             }
         }
+    }
+
+    private void initializeHoistedFunctionExportBindings(JSDynamicImportModule moduleRecord) {
+        if (moduleRecord == null
+                || moduleRecord.hoistedFunctionExportBindingsInitialized()) {
+            return;
+        }
+        List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedBindings =
+                moduleRecord.hoistedFunctionExportBindings();
+        if (hoistedBindings.isEmpty()) {
+            moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
+            return;
+        }
+
+        StringBuilder sourceBuilder = new StringBuilder();
+        sourceBuilder.append("(function () {\n");
+        for (JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding : hoistedBindings) {
+            sourceBuilder.append(hoistedBinding.functionDeclarationSource()).append('\n');
+        }
+        sourceBuilder.append("return {");
+        for (int bindingIndex = 0; bindingIndex < hoistedBindings.size(); bindingIndex++) {
+            JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding = hoistedBindings.get(bindingIndex);
+            if (bindingIndex > 0) {
+                sourceBuilder.append(", ");
+            }
+            sourceBuilder.append("\"")
+                    .append(escapeJavaScriptString(hoistedBinding.localName()))
+                    .append("\": ")
+                    .append(hoistedBinding.localName());
+        }
+        sourceBuilder.append("};\n})();");
+
+        JSValue bindingsValue = eval(
+                sourceBuilder.toString(),
+                "<hoisted-export-init>",
+                true,
+                false);
+        if (!(bindingsValue instanceof JSObject functionBindingsObject)) {
+            moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
+            return;
+        }
+
+        JSImportNamespaceObject namespaceObject = moduleRecord.namespace();
+        for (JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding : hoistedBindings) {
+            PropertyKey localKey = PropertyKey.fromString(hoistedBinding.localName());
+            JSValue functionValue = functionBindingsObject.get(this, localKey);
+            if (hasPendingException()) {
+                JSValue pendingError = getPendingException();
+                clearPendingException();
+                throw new JSException(pendingError);
+            }
+            if (!(functionValue instanceof JSFunction)) {
+                continue;
+            }
+            namespaceObject.setEarlyExportBinding(hoistedBinding.exportedName(), functionValue);
+        }
+        moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
     }
 
     private <T extends JSTypedArray> T initializeTypedArray(T typedArray, String constructorName) {
@@ -3634,6 +3727,17 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    private String normalizeModuleSpecifier(String specifier) {
+        if (specifier == null || specifier.isEmpty()) {
+            return "";
+        }
+        try {
+            return Paths.get(specifier).normalize().toString();
+        } catch (InvalidPathException invalidPathException) {
+            return specifier;
+        }
+    }
+
     private void parseDynamicImportExportList(
             String exportListText,
             String sourceSpecifier,
@@ -3672,6 +3776,7 @@ public final class JSContext implements AutoCloseable {
         String scanSourceCode = maskModuleComments(sourceCode);
         StringBuilder importPreambleBuilder = new StringBuilder();
         StringBuilder transformedSourceBuilder = new StringBuilder(sourceCode.length() + 128);
+        List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedFunctionExportBindings = new ArrayList<>();
         List<JSDynamicImportModule.LocalExportBinding> localExportBindings = new ArrayList<>();
         List<JSDynamicImportModule.ReExportBinding> reExportBindings = new ArrayList<>();
         Map<String, ImportBinding> importedBindings = new HashMap<>();
@@ -3872,12 +3977,40 @@ public final class JSContext implements AutoCloseable {
                     || exportClause.startsWith("async function ")
                     || exportClause.startsWith("async function*")
                     || exportClause.startsWith("class ")) {
-                transformedSourceBuilder.append(normalizedLine.replaceFirst("export\\s+", "")).append('\n');
+                String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+", "$1");
+                while (findEndOfDeclarationBody(declarationLine) < 0 && lineIndex + 1 < lines.length) {
+                    lineIndex++;
+                    String nextLine = lines[lineIndex];
+                    String normalizedNextLine = nextLine.endsWith("\r")
+                            ? nextLine.substring(0, nextLine.length() - 1)
+                            : nextLine;
+                    declarationLine = declarationLine + "\n" + normalizedNextLine;
+                }
+                int declarationBodyEnd = findEndOfDeclarationBody(declarationLine);
+                String declarationPart = declarationLine;
+                String remainingCode = "";
+                if (declarationBodyEnd >= 0 && declarationBodyEnd < declarationLine.length()) {
+                    declarationPart = declarationLine.substring(0, declarationBodyEnd);
+                    remainingCode = declarationLine.substring(declarationBodyEnd).trim();
+                }
+                transformedSourceBuilder.append(declarationPart).append('\n');
+                if (!remainingCode.isEmpty()) {
+                    transformedSourceBuilder.append(remainingCode).append('\n');
+                }
                 String declarationName = extractExportedFunctionOrClassName(exportClause);
                 if (declarationName == null || declarationName.isEmpty()) {
                     throw new JSException(throwSyntaxError("Invalid export statement"));
                 }
                 localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, declarationName));
+                if (exportClause.startsWith("function ")
+                        || exportClause.startsWith("function*")
+                        || exportClause.startsWith("async function ")
+                        || exportClause.startsWith("async function*")) {
+                    hoistedFunctionExportBindings.add(new JSDynamicImportModule.HoistedFunctionExportBinding(
+                            declarationName,
+                            declarationName,
+                            declarationPart));
+                }
                 continue;
             }
 
@@ -3993,6 +4126,9 @@ public final class JSContext implements AutoCloseable {
         }
 
         moduleRecord.setHasExportSyntax(hasExportSyntax);
+        moduleRecord.hoistedFunctionExportBindings().clear();
+        moduleRecord.hoistedFunctionExportBindings().addAll(hoistedFunctionExportBindings);
+        moduleRecord.setHoistedFunctionExportBindingsInitialized(false);
         moduleRecord.localExportBindings().addAll(localExportBindings);
         moduleRecord.reExportBindings().addAll(reExportBindings);
         for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {

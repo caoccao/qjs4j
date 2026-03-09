@@ -26,12 +26,14 @@ import java.util.*;
  */
 public final class JSImportNamespaceObject extends JSObject {
     private final JSContext context;
+    private final Map<String, JSValue> earlyExportBindings;
     private final Set<String> exportNames;
     private boolean finalized;
 
     public JSImportNamespaceObject(JSContext context) {
         super();
         this.context = context;
+        this.earlyExportBindings = new HashMap<>();
         this.exportNames = new HashSet<>();
         this.finalized = false;
         super.defineProperty(
@@ -132,6 +134,13 @@ public final class JSImportNamespaceObject extends JSObject {
         }
         preventExtensions();
         finalized = true;
+    }
+
+    public JSValue getEarlyExportBinding(String exportName) {
+        if (exportName == null || exportName.isEmpty()) {
+            return null;
+        }
+        return earlyExportBindings.get(exportName);
     }
 
     @Override
@@ -241,6 +250,13 @@ public final class JSImportNamespaceObject extends JSObject {
         if (context != null && context.isStrictMode()) {
             context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
         }
+    }
+
+    public void setEarlyExportBinding(String exportName, JSValue value) {
+        if (exportName == null || exportName.isEmpty() || value == null) {
+            return;
+        }
+        earlyExportBindings.put(exportName, value);
     }
 
     // ES2024 10.4.6.1 [[SetPrototypeOf]]: Uses SetImmutablePrototype semantics.

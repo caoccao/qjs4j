@@ -25,6 +25,7 @@ final class JSDynamicImportModule {
     private final Set<String> ambiguousExportNames;
     private final Set<String> explicitExportNames;
     private final Map<String, String> exportOrigins;
+    private final List<HoistedFunctionExportBinding> hoistedFunctionExportBindings;
     private final List<LocalExportBinding> localExportBindings;
     private final JSImportNamespaceObject namespace;
     private final List<JSDynamicImportModule> pendingDependents;
@@ -39,6 +40,7 @@ final class JSDynamicImportModule {
     private String exportBindingName;
     private boolean hasExportSyntax;
     private boolean hasTLA;
+    private boolean hoistedFunctionExportBindingsInitialized;
     private int pendingAsyncDependencyCount;
     private String rawSource;
     private Status status;
@@ -50,6 +52,7 @@ final class JSDynamicImportModule {
         this.explicitExportNames = new HashSet<>();
         this.exportOrigins = new HashMap<>();
         this.namespace = namespace;
+        this.hoistedFunctionExportBindings = new ArrayList<>();
         this.localExportBindings = new ArrayList<>();
         this.pendingAsyncDependencyCount = 0;
         this.pendingDependents = new ArrayList<>();
@@ -63,6 +66,7 @@ final class JSDynamicImportModule {
         this.evaluationError = null;
         this.exportBindingName = null;
         this.hasExportSyntax = false;
+        this.hoistedFunctionExportBindingsInitialized = false;
         this.hasTLA = false;
         this.rawSource = "";
         this.transformedSource = "";
@@ -118,6 +122,14 @@ final class JSDynamicImportModule {
 
     boolean hasTLA() {
         return hasTLA;
+    }
+
+    List<HoistedFunctionExportBinding> hoistedFunctionExportBindings() {
+        return hoistedFunctionExportBindings;
+    }
+
+    boolean hoistedFunctionExportBindingsInitialized() {
+        return hoistedFunctionExportBindingsInitialized;
     }
 
     List<LocalExportBinding> localExportBindings() {
@@ -184,6 +196,10 @@ final class JSDynamicImportModule {
         this.hasTLA = hasTLA;
     }
 
+    void setHoistedFunctionExportBindingsInitialized(boolean hoistedFunctionExportBindingsInitialized) {
+        this.hoistedFunctionExportBindingsInitialized = hoistedFunctionExportBindingsInitialized;
+    }
+
     void setPendingAsyncDependencyCount(int count) {
         this.pendingAsyncDependencyCount = count;
     }
@@ -214,6 +230,12 @@ final class JSDynamicImportModule {
         EVALUATED,
         EVALUATING_ASYNC,
         EVALUATED_ERROR
+    }
+
+    record HoistedFunctionExportBinding(
+            String localName,
+            String exportedName,
+            String functionDeclarationSource) {
     }
 
     record LocalExportBinding(String localName, String exportedName) {
