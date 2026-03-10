@@ -925,7 +925,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     Statement parseReturnStatement() {
         SourceLocation location = parserContext.getLocation();
         // Return is only valid inside function bodies.
-        if (parserContext.functionNesting == 0) {
+        if (parserContext.inClassStaticInit || parserContext.functionNesting == 0) {
             throw new JSSyntaxErrorException("return not in a function");
         }
         parserContext.expect(TokenType.RETURN);

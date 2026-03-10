@@ -37,19 +37,27 @@ final class FunctionClassFieldCompiler {
 
     void compileComputedFieldNameCache(
             PropertyDefinition field,
-            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            Map<String, JSSymbol> privateSymbols) {
         JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
         if (computedFieldSymbol == null) {
             throw new JSCompilerException("Computed field key symbol not found");
         }
 
+        Map<String, JSSymbol> savedPrivateSymbols = compilerContext.privateSymbols;
+        compilerContext.privateSymbols = privateSymbols;
+
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
-        delegates.expressions.compileExpression(field.getKey());
-        compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-        compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
-        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        try {
+            delegates.expressions.compileExpression(field.getKey());
+            compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
+            compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        } finally {
+            compilerContext.privateSymbols = savedPrivateSymbols;
+        }
     }
 
     void compileFieldInitialization(List<PropertyDefinition> fields,

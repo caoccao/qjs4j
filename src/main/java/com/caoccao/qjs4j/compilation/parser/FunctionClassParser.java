@@ -22,10 +22,7 @@ import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Delegate parser for function declarations/expressions and class declarations/expressions.
@@ -236,71 +233,67 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         int startOffset = parserContext.currentToken.offset();
         parserContext.expect(TokenType.CLASS);
 
-        // Parse optional class name
-        // Per ES spec 14.6: class bodies are strict mode code, so the class name
-        // binding identifier is validated with strict mode rules.
-        Identifier id = null;
-        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                || parserContext.match(TokenType.YIELD)) {
-            boolean savedStrict = parserContext.strictMode;
-            parserContext.strictMode = true;
-            try {
-                id = parserContext.parseIdentifier();
-            } finally {
-                parserContext.strictMode = savedStrict;
-            }
-        }
-
-        // Parse optional extends clause
-        // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
-        Expression superClass = null;
-        if (parserContext.match(TokenType.EXTENDS)) {
-            parserContext.advance();
-            superClass = delegates.expressions.parseCallExpression();
-        }
-
-        // Parse class body
-        parserContext.expect(TokenType.LBRACE);
-        List<ClassElement> body = new ArrayList<>();
-        boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
         boolean savedStrictMode = parserContext.strictMode;
-        parserContext.parsingClassWithSuper = superClass != null;
         parserContext.strictMode = true;
         parserContext.lexer.setStrictMode(true);
-        parserContext.classBodyNesting++;
         try {
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                // Skip empty semicolons
-                if (parserContext.match(TokenType.SEMICOLON)) {
-                    parserContext.advance();
-                    continue;
-                }
-
-                ClassElement element = parseClassElement();
-                if (element != null) {
-                    body.add(element);
-                }
+            // Parse optional class name
+            // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
+            Identifier id = null;
+            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                    || parserContext.match(TokenType.YIELD)) {
+                id = parserContext.parseIdentifier();
             }
-            validateClassElements(body);
+
+            // Parse optional extends clause
+            // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
+            Expression superClass = null;
+            if (parserContext.match(TokenType.EXTENDS)) {
+                parserContext.advance();
+                superClass = delegates.expressions.parseCallExpression();
+            }
+
+            // Parse class body
+            parserContext.expect(TokenType.LBRACE);
+            List<ClassElement> body = new ArrayList<>();
+            boolean savedParsingClassWithSuper = parserContext.parsingClassWithSuper;
+            parserContext.parsingClassWithSuper = superClass != null;
+            parserContext.classBodyNesting++;
+            try {
+                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                    // Skip empty semicolons
+                    if (parserContext.match(TokenType.SEMICOLON)) {
+                        parserContext.advance();
+                        continue;
+                    }
+
+                    ClassElement element = parseClassElement();
+                    if (element != null) {
+                        body.add(element);
+                    }
+                }
+                validateClassElements(body);
+            } finally {
+                parserContext.classBodyNesting--;
+                parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
+            }
+
+            // Capture the end position before advancing past the closing brace
+            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
+            parserContext.expect(TokenType.RBRACE);
+
+            SourceLocation location = new SourceLocation(
+                    startLocation.line(),
+                    startLocation.column(),
+                    startOffset,
+                    endOffset
+            );
+
+            return new ClassDeclaration(id, superClass, body, location);
         } finally {
-            parserContext.classBodyNesting--;
             parserContext.strictMode = savedStrictMode;
             parserContext.lexer.setStrictMode(savedStrictMode);
-            parserContext.parsingClassWithSuper = savedParsingClassWithSuper;
         }
-
-        // Capture the end position before advancing past the closing brace
-        int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
-        parserContext.expect(TokenType.RBRACE);
-
-        SourceLocation location = new SourceLocation(
-                startLocation.line(),
-                startLocation.column(),
-                startOffset,
-                endOffset
-        );
-
-        return new ClassDeclaration(id, superClass, body, location);
     }
 
     /**
@@ -467,7 +460,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         if (parserContext.match(TokenType.IDENTIFIER)) {
             String name = parserContext.currentToken.value();
             Token peekNext = parserContext.nextToken;
+            boolean hasNoLineTerminatorAfterGetSet = peekNext.line() == parserContext.currentToken.line();
             if ((JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) &&
+                    hasNoLineTerminatorAfterGetSet &&
                     peekNext.type() != TokenType.LPAREN &&
                     peekNext.type() != TokenType.ASSIGN &&
                     peekNext.type() != TokenType.SEMICOLON) {
@@ -518,71 +513,67 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         int startOffset = parserContext.currentToken.offset();
         parserContext.expect(TokenType.CLASS);
 
-        // Parse optional class name (class expressions can be anonymous)
-        // Per ES spec 14.6: class bodies are strict mode code, so the class name
-        // binding identifier is validated with strict mode rules.
-        Identifier id = null;
-        if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                || parserContext.match(TokenType.YIELD)) {
-            boolean savedStrict = parserContext.strictMode;
-            parserContext.strictMode = true;
-            try {
-                id = parserContext.parseIdentifier();
-            } finally {
-                parserContext.strictMode = savedStrict;
-            }
-        }
-
-        // Parse optional extends clause
-        // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
-        Expression superClass = null;
-        if (parserContext.match(TokenType.EXTENDS)) {
-            parserContext.advance();
-            superClass = delegates.expressions.parseCallExpression();
-        }
-
-        // Parse class body
-        parserContext.expect(TokenType.LBRACE);
-        List<ClassElement> body = new ArrayList<>();
-        boolean savedParsingClassWithSuper2 = parserContext.parsingClassWithSuper;
         boolean savedStrictMode = parserContext.strictMode;
-        parserContext.parsingClassWithSuper = superClass != null;
         parserContext.strictMode = true;
         parserContext.lexer.setStrictMode(true);
-        parserContext.classBodyNesting++;
         try {
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                // Skip empty semicolons
-                if (parserContext.match(TokenType.SEMICOLON)) {
-                    parserContext.advance();
-                    continue;
-                }
-
-                ClassElement element = parseClassElement();
-                if (element != null) {
-                    body.add(element);
-                }
+            // Parse optional class name (class expressions can be anonymous)
+            // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
+            Identifier id = null;
+            if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
+                    || parserContext.match(TokenType.YIELD)) {
+                id = parserContext.parseIdentifier();
             }
-            validateClassElements(body);
+
+            // Parse optional extends clause
+            // ES2024 ClassHeritage: extends LeftHandSideExpression[?Yield, ?Await]
+            Expression superClass = null;
+            if (parserContext.match(TokenType.EXTENDS)) {
+                parserContext.advance();
+                superClass = delegates.expressions.parseCallExpression();
+            }
+
+            // Parse class body
+            parserContext.expect(TokenType.LBRACE);
+            List<ClassElement> body = new ArrayList<>();
+            boolean savedParsingClassWithSuper2 = parserContext.parsingClassWithSuper;
+            parserContext.parsingClassWithSuper = superClass != null;
+            parserContext.classBodyNesting++;
+            try {
+                while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+                    // Skip empty semicolons
+                    if (parserContext.match(TokenType.SEMICOLON)) {
+                        parserContext.advance();
+                        continue;
+                    }
+
+                    ClassElement element = parseClassElement();
+                    if (element != null) {
+                        body.add(element);
+                    }
+                }
+                validateClassElements(body);
+            } finally {
+                parserContext.classBodyNesting--;
+                parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
+            }
+
+            // Capture the end position before advancing past the closing brace
+            int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
+            parserContext.expect(TokenType.RBRACE);
+
+            SourceLocation location = new SourceLocation(
+                    startLocation.line(),
+                    startLocation.column(),
+                    startOffset,
+                    endOffset
+            );
+
+            return new ClassExpression(id, superClass, body, location);
         } finally {
-            parserContext.classBodyNesting--;
             parserContext.strictMode = savedStrictMode;
             parserContext.lexer.setStrictMode(savedStrictMode);
-            parserContext.parsingClassWithSuper = savedParsingClassWithSuper2;
         }
-
-        // Capture the end position before advancing past the closing brace
-        int endOffset = parserContext.currentToken.offset() + parserContext.currentToken.value().length();
-        parserContext.expect(TokenType.RBRACE);
-
-        SourceLocation location = new SourceLocation(
-                startLocation.line(),
-                startLocation.column(),
-                startOffset,
-                endOffset
-        );
-
-        return new ClassExpression(id, superClass, body, location);
     }
 
     private Expression parseClassFieldInitializer() {
@@ -1093,39 +1084,54 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
      * Parse a static initialization block: static { statements }
      */
     StaticBlock parseStaticBlock() {
-        parserContext.expect(TokenType.LBRACE);
-        List<Statement> statements = new ArrayList<>();
-
-        enterFunctionContext(false);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+        int savedAsyncFunctionNesting = parserContext.asyncFunctionNesting;
+        int savedGeneratorFunctionNesting = parserContext.generatorFunctionNesting;
         parserContext.inClassStaticInit = true;
         parserContext.superPropertyAllowed = true;
+        parserContext.asyncFunctionNesting = 0;
+        parserContext.generatorFunctionNesting = 0;
         try {
-            while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
-                Statement stmt = delegates.statements.parseStatement();
-                if (stmt != null) {
-                    statements.add(stmt);
-                }
-            }
+            BlockStatement blockStatement = delegates.statements.parseBlockStatement();
+            return new StaticBlock(blockStatement.getBody());
         } finally {
+            parserContext.generatorFunctionNesting = savedGeneratorFunctionNesting;
+            parserContext.asyncFunctionNesting = savedAsyncFunctionNesting;
             parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
             parserContext.inClassStaticInit = savedInClassStaticInit;
-            exitFunctionContext(false);
         }
-
-        parserContext.expect(TokenType.RBRACE);
-        return new StaticBlock(statements);
     }
 
     private void validateClassElements(List<ClassElement> classElements) {
         int constructorMethodCount = 0;
+        Map<String, Boolean> privateGetterStaticByName = new HashMap<>();
+        Map<String, Boolean> privateSetterStaticByName = new HashMap<>();
         for (ClassElement classElement : classElements) {
             if (classElement instanceof PropertyDefinition field) {
                 validateClassFieldName(field.getKey(), field.isComputed(), field.isPrivate());
                 continue;
             }
             if (classElement instanceof MethodDefinition method) {
+                if (method.isPrivate()
+                        && method.getKey() instanceof PrivateIdentifier privateIdentifier
+                        && (JSKeyword.GET.equals(method.getKind()) || JSKeyword.SET.equals(method.getKind()))) {
+                    String privateName = privateIdentifier.getName();
+                    boolean isStatic = method.isStatic();
+                    if (JSKeyword.GET.equals(method.getKind())) {
+                        Boolean setterIsStatic = privateSetterStaticByName.get(privateName);
+                        if (setterIsStatic != null && setterIsStatic != isStatic) {
+                            throw new JSSyntaxErrorException("Invalid private accessor pairing");
+                        }
+                        privateGetterStaticByName.putIfAbsent(privateName, isStatic);
+                    } else {
+                        Boolean getterIsStatic = privateGetterStaticByName.get(privateName);
+                        if (getterIsStatic != null && getterIsStatic != isStatic) {
+                            throw new JSSyntaxErrorException("Invalid private accessor pairing");
+                        }
+                        privateSetterStaticByName.putIfAbsent(privateName, isStatic);
+                    }
+                }
                 if (isPrivateConstructorName(method.getKey(), method.isPrivate())) {
                     throw new JSSyntaxErrorException("invalid method name");
                 }

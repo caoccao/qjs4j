@@ -378,12 +378,27 @@ final class FunctionClassCompiler {
         // Following QuickJS implementation in quickjs.c:24700-25200
 
         String className = classDecl.getId() != null ? classDecl.getId().getName() : "";
+        int classNameLocalIndex = -1;
+        boolean hasClassNameScope = classDecl.getId() != null;
+        boolean classNameWasTDZ = hasClassNameScope && compilerContext.tdzLocals.contains(className);
+        if (hasClassNameScope) {
+            compilerContext.enterScope();
+            classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
+            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
+            compilerContext.tdzLocals.add(className);
+        }
 
         // Compile superclass expression or emit undefined
-        if (classDecl.getSuperClass() != null) {
-            delegates.expressions.compileExpression(classDecl.getSuperClass());
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        boolean savedStrictModeForHeritage = compilerContext.strictMode;
+        compilerContext.strictMode = true;
+        try {
+            if (classDecl.getSuperClass() != null) {
+                delegates.expressions.compileExpression(classDecl.getSuperClass());
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+        } finally {
+            compilerContext.strictMode = savedStrictModeForHeritage;
         }
         // Stack: superClass
 
@@ -496,6 +511,12 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
+        // Initialize inner immutable class-name binding used by class body/heritage closures.
+        if (hasClassNameScope) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
+        }
+
         // Now compile methods and add them to the prototype
         // After DEFINE_CLASS: Stack is proto constructor (constructor on TOP)
         // For simplicity, swap so proto is on top: constructor proto
@@ -558,7 +579,7 @@ final class FunctionClassCompiler {
         // Evaluate all computed field names once at class definition time.
         // This matches QuickJS behavior and avoids re-evaluating key side effects per instance.
         for (PropertyDefinition field : computedFieldsInDefinitionOrder) {
-            compileComputedFieldNameCache(field, computedFieldSymbols);
+            compileComputedFieldNameCache(field, computedFieldSymbols, privateSymbols);
         }
 
         // Swap back to original order: proto constructor
@@ -603,6 +624,13 @@ final class FunctionClassCompiler {
         // Drop prototype, keep constructor
         compilerContext.emitter.emitOpcode(Opcode.NIP);
         // Stack: constructor
+
+        if (hasClassNameScope) {
+            compilerContext.exitScope();
+            if (!classNameWasTDZ) {
+                compilerContext.tdzLocals.remove(className);
+            }
+        }
 
         // Store the class constructor in a variable
         if (classDecl.getId() != null) {
@@ -649,16 +677,25 @@ final class FunctionClassCompiler {
         // binding so that methods and heritage closures can capture it.
         int classNameLocalIndex = -1;
         boolean hasClassNameScope = classExpr.getId() != null;
+        boolean classNameWasTDZ = hasClassNameScope && compilerContext.tdzLocals.contains(className);
         if (hasClassNameScope) {
             compilerContext.enterScope();
             classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
+            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
+            compilerContext.tdzLocals.add(className);
         }
 
         // Compile superclass expression or emit undefined
-        if (classExpr.getSuperClass() != null) {
-            delegates.expressions.compileExpression(classExpr.getSuperClass());
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        boolean savedStrictModeForHeritage = compilerContext.strictMode;
+        compilerContext.strictMode = true;
+        try {
+            if (classExpr.getSuperClass() != null) {
+                delegates.expressions.compileExpression(classExpr.getSuperClass());
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+        } finally {
+            compilerContext.strictMode = savedStrictModeForHeritage;
         }
         // Stack: superClass
 
@@ -826,7 +863,7 @@ final class FunctionClassCompiler {
 
         // Evaluate all computed field names once at class definition time.
         for (PropertyDefinition field : computedFieldsInDefinitionOrder) {
-            compileComputedFieldNameCache(field, computedFieldSymbols);
+            compileComputedFieldNameCache(field, computedFieldSymbols, privateSymbols);
         }
 
         // Swap back to: proto constructor
@@ -874,6 +911,9 @@ final class FunctionClassCompiler {
         // Exit the class name scope
         if (hasClassNameScope) {
             compilerContext.exitScope();
+            if (!classNameWasTDZ) {
+                compilerContext.tdzLocals.remove(className);
+            }
         }
 
         // For class expressions, we leave the constructor on the stack
@@ -886,8 +926,9 @@ final class FunctionClassCompiler {
      */
     void compileComputedFieldNameCache(
             PropertyDefinition field,
-            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        fieldCompiler.compileComputedFieldNameCache(field, computedFieldSymbols);
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            Map<String, JSSymbol> privateSymbols) {
+        fieldCompiler.compileComputedFieldNameCache(field, computedFieldSymbols, privateSymbols);
     }
 
     /**
@@ -1438,10 +1479,11 @@ final class FunctionClassCompiler {
         }
 
         int localCount = methodCtx.currentScope().getLocalCount();
+        String[] localVarNames = CompilerContext.extractLocalVarNames(methodCtx.scopes, localCount);
         methodCtx.exitScope();
 
         // Build the method bytecode
-        Bytecode methodBytecode = methodCtx.emitter.build(localCount);
+        Bytecode methodBytecode = methodCtx.emitter.build(localCount, localVarNames);
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars

@@ -195,7 +195,10 @@ final class ExpressionPrimaryParser {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
                 if ((parserContext.isEval && !parserContext.allowNewTargetInEval)
-                        || (!parserContext.isEval && parserContext.newTargetNesting == 0)) {
+                        || (!parserContext.isEval
+                        && parserContext.newTargetNesting == 0
+                        && !parserContext.inClassFieldInitializer
+                        && !parserContext.inClassStaticInit)) {
                     throw new JSSyntaxErrorException("'new.target' keyword unexpected here");
                 }
                 parserContext.advance(); // consume '.'
@@ -293,10 +296,9 @@ final class ExpressionPrimaryParser {
                 yield new Identifier(name, location);
             }
             case PRIVATE_NAME -> {
-                if (parserContext.classBodyNesting == 0) {
-                    throw new JSSyntaxErrorException("Private field '#"
-                            + parserContext.currentToken.value().substring(1)
-                            + "' must be declared in an enclosing class");
+                String privateName = parserContext.currentToken.value().substring(1);
+                if (!parserContext.isPrivateNameAccessible(privateName)) {
+                    throw new JSSyntaxErrorException("undefined private field '#" + privateName + "'");
                 }
                 String name = parserContext.currentToken.value();
                 parserContext.advance();
@@ -561,6 +563,9 @@ final class ExpressionPrimaryParser {
             case PRIVATE_NAME -> {
                 String name = parserContext.currentToken.value();
                 String fieldName = name.substring(1);
+                if (!parserContext.isPrivateNameAccessible(fieldName)) {
+                    throw new JSSyntaxErrorException("undefined private field '#" + fieldName + "'");
+                }
                 parserContext.advance();
                 yield new PrivateIdentifier(fieldName, location);
             }
@@ -803,6 +808,9 @@ final class ExpressionPrimaryParser {
             case PRIVATE_NAME -> {
                 String name = parserContext.currentToken.value();
                 String fieldName = name.substring(1);
+                if (!parserContext.isPrivateNameAccessible(fieldName)) {
+                    throw new JSSyntaxErrorException("undefined private field '#" + fieldName + "'");
+                }
                 parserContext.advance();
                 yield new PrivateIdentifier(fieldName, location);
             }

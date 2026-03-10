@@ -1138,6 +1138,11 @@ public final class OpcodeHandler {
             JSValue propertyKeyValue = executionContext.virtualMachine.toPropertyKeyValue(propertyValue);
             PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyKeyValue);
             JSString computedName = executionContext.virtualMachine.getComputedNameString(propertyKeyValue);
+            boolean isPrivateSymbolKey = key != null
+                    && key.isSymbol()
+                    && key.asSymbol().getDescription() != null
+                    && key.asSymbol().getDescription().startsWith("#");
+            boolean isProxyPrivateTarget = isPrivateSymbolKey && object instanceof JSProxy;
             if (methodValue instanceof JSFunction methodFunction) {
                 methodFunction.setHomeObject(object);
                 String namePrefix;
@@ -1154,6 +1159,17 @@ public final class OpcodeHandler {
 
             boolean defineSucceeded;
             if (methodKind == 0) {
+                if (isPrivateSymbolKey && isProxyPrivateTarget
+                        && ((JSProxy) object).hasOwnPrivatePropertyDirect(key)) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError(
+                                    "Cannot initialize the same private elements twice on an object"));
+                }
+                if (isPrivateSymbolKey && !isProxyPrivateTarget && object.hasOwnProperty(key)) {
+                    throw new JSVirtualMachineException(
+                            executionContext.virtualMachine.context.throwTypeError(
+                                    "Cannot initialize the same private elements twice on an object"));
+                }
                 PropertyDescriptor.DataState dataState;
                 if (nonWritable) {
                     dataState = enumerable
@@ -1164,42 +1180,90 @@ public final class OpcodeHandler {
                             ? PropertyDescriptor.DataState.All
                             : PropertyDescriptor.DataState.ConfigurableWritable;
                 }
-                defineSucceeded = object.defineProperty(
-                        executionContext.virtualMachine.context,
-                        key,
-                        PropertyDescriptor.dataDescriptor(methodValue, dataState));
+                if (isProxyPrivateTarget) {
+                    ((JSProxy) object).definePrivatePropertyDirect(
+                            key, PropertyDescriptor.dataDescriptor(methodValue, dataState));
+                    defineSucceeded = true;
+                } else {
+                    defineSucceeded = object.defineProperty(
+                            executionContext.virtualMachine.context,
+                            key,
+                            PropertyDescriptor.dataDescriptor(methodValue, dataState));
+                }
             } else if (methodKind == 1) {
                 JSFunction getter = methodValue instanceof JSFunction function ? function : null;
                 JSFunction setter = null;
-                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+                PropertyDescriptor descriptor = isProxyPrivateTarget
+                        ? ((JSProxy) object).getOwnPrivatePropertyDescriptorDirect(key)
+                        : object.getOwnPropertyDescriptor(key);
+                if (isPrivateSymbolKey && descriptor != null) {
+                    if (descriptor.isDataDescriptor() || descriptor.getGetter() != null) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.throwTypeError(
+                                        "Cannot initialize the same private elements twice on an object"));
+                    }
+                }
                 if (descriptor != null && descriptor.hasSetter()) {
                     setter = descriptor.getSetter();
                 }
-                defineSucceeded = object.defineProperty(
-                        executionContext.virtualMachine.context,
-                        key,
-                        PropertyDescriptor.accessorDescriptor(
-                                getter,
-                                setter,
-                                enumerable
-                                        ? PropertyDescriptor.AccessorState.All
-                                        : PropertyDescriptor.AccessorState.Configurable));
+                if (isProxyPrivateTarget) {
+                    ((JSProxy) object).definePrivatePropertyDirect(
+                            key,
+                            PropertyDescriptor.accessorDescriptor(
+                                    getter,
+                                    setter,
+                                    enumerable
+                                            ? PropertyDescriptor.AccessorState.All
+                                            : PropertyDescriptor.AccessorState.Configurable));
+                    defineSucceeded = true;
+                } else {
+                    defineSucceeded = object.defineProperty(
+                            executionContext.virtualMachine.context,
+                            key,
+                            PropertyDescriptor.accessorDescriptor(
+                                    getter,
+                                    setter,
+                                    enumerable
+                                            ? PropertyDescriptor.AccessorState.All
+                                            : PropertyDescriptor.AccessorState.Configurable));
+                }
             } else if (methodKind == 2) {
                 JSFunction setter = methodValue instanceof JSFunction function ? function : null;
                 JSFunction getter = null;
-                PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
+                PropertyDescriptor descriptor = isProxyPrivateTarget
+                        ? ((JSProxy) object).getOwnPrivatePropertyDescriptorDirect(key)
+                        : object.getOwnPropertyDescriptor(key);
+                if (isPrivateSymbolKey && descriptor != null) {
+                    if (descriptor.isDataDescriptor() || descriptor.getSetter() != null) {
+                        throw new JSVirtualMachineException(
+                                executionContext.virtualMachine.context.throwTypeError(
+                                        "Cannot initialize the same private elements twice on an object"));
+                    }
+                }
                 if (descriptor != null && descriptor.hasGetter()) {
                     getter = descriptor.getGetter();
                 }
-                defineSucceeded = object.defineProperty(
-                        executionContext.virtualMachine.context,
-                        key,
-                        PropertyDescriptor.accessorDescriptor(
-                                getter,
-                                setter,
-                                enumerable
-                                        ? PropertyDescriptor.AccessorState.All
-                                        : PropertyDescriptor.AccessorState.Configurable));
+                if (isProxyPrivateTarget) {
+                    ((JSProxy) object).definePrivatePropertyDirect(
+                            key,
+                            PropertyDescriptor.accessorDescriptor(
+                                    getter,
+                                    setter,
+                                    enumerable
+                                            ? PropertyDescriptor.AccessorState.All
+                                            : PropertyDescriptor.AccessorState.Configurable));
+                    defineSucceeded = true;
+                } else {
+                    defineSucceeded = object.defineProperty(
+                            executionContext.virtualMachine.context,
+                            key,
+                            PropertyDescriptor.accessorDescriptor(
+                                    getter,
+                                    setter,
+                                    enumerable
+                                            ? PropertyDescriptor.AccessorState.All
+                                            : PropertyDescriptor.AccessorState.Configurable));
+                }
             } else {
                 throw new JSVirtualMachineException("DEFINE_METHOD_COMPUTED: unsupported method flags " + methodFlags);
             }
@@ -1224,6 +1288,7 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+            PropertyKey privateKey = PropertyKey.fromSymbol(symbol);
             if (!object.isExtensible()) {
                 executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwTypeError(
@@ -1233,7 +1298,31 @@ public final class OpcodeHandler {
                 executionContext.pc = pc + op.getSize();
                 return;
             }
-            object.set(PropertyKey.fromSymbol(symbol), value);
+            boolean hasPrivateProperty = object instanceof JSProxy proxy
+                    ? proxy.hasOwnPrivatePropertyDirect(privateKey)
+                    : object.hasOwnProperty(privateKey);
+            if (hasPrivateProperty) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot initialize the same private elements twice on an object");
+                stack[sp++] = objectValue;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            if (object instanceof JSProxy proxy) {
+                proxy.definePrivatePropertyDirect(
+                        privateKey,
+                        PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
+            } else {
+                object.defineProperty(
+                        privateKey,
+                        PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.ConfigurableWritable));
+            }
+        } else if (!(objectValue instanceof JSObject)) {
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot define private field on non-object");
         }
 
         stack[sp++] = objectValue;
@@ -2368,30 +2457,55 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         JSValue value = JSUndefined.INSTANCE;
-        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+        if (privateSymbolValue instanceof JSSymbol symbol) {
+            JSObject object;
+            if (objectValue instanceof JSObject objectValueAsObject) {
+                object = objectValueAsObject;
+            } else {
+                object = executionContext.virtualMachine.toObject(objectValue);
+            }
+            if (object == null) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot read private member from a non-object");
+                stack[sp++] = value;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             PropertyKey key = PropertyKey.fromSymbol(symbol);
-            // Private fields are per-object, not accessible through Proxy delegation
-            if (object instanceof JSProxy
-                    || !object.hasOwnProperty(key)) {
-                throw new JSVirtualMachineException(
+            PropertyDescriptor descriptor = object instanceof JSProxy proxy
+                    ? proxy.getOwnPrivatePropertyDescriptorDirect(key)
+                    : object.getOwnPropertyDescriptor(key);
+            if (descriptor == null) {
+                executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwTypeError(
                                 "Cannot read private member " + symbol.getDescription()
-                                        + " from an object whose class did not declare it"));
+                                        + " from an object whose class did not declare it");
+                stack[sp++] = value;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
-            // Check for setter-only accessor (no getter) — spec: PrivateGet step 5
-            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-            if (descriptor != null && descriptor.isAccessorDescriptor()
-                    && !(descriptor.getGetter() instanceof JSFunction)) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError(
-                                "Cannot read private member " + symbol.getDescription()
-                                        + " from an object whose class did not declare it"));
+            if (descriptor.isAccessorDescriptor()) {
+                JSFunction getterFunction = descriptor.getGetter();
+                if (getterFunction == null) {
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.throwTypeError(
+                                    "Cannot read private member " + symbol.getDescription()
+                                            + " from an object whose class did not declare it");
+                    stack[sp++] = value;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                value = getterFunction.call(
+                        executionContext.virtualMachine.context,
+                        object,
+                        JSValue.NO_ARGS);
+            } else {
+                value = descriptor.getValue();
             }
-            value = object.get(executionContext.virtualMachine.context, key);
-        } else if (!(objectValue instanceof JSObject)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError(
-                            "Cannot read private member from a non-object"));
         }
 
         stack[sp++] = value;
@@ -4155,38 +4269,69 @@ public final class OpcodeHandler {
         JSValue value = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
 
-        if (objectValue instanceof JSObject object && privateSymbolValue instanceof JSSymbol symbol) {
+        if (privateSymbolValue instanceof JSSymbol symbol) {
+            JSObject object;
+            if (objectValue instanceof JSObject objectValueAsObject) {
+                object = objectValueAsObject;
+            } else {
+                object = executionContext.virtualMachine.toObject(objectValue);
+            }
+            if (object == null) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot write private member to a non-object");
+                stack[sp++] = value;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             PropertyKey key = PropertyKey.fromSymbol(symbol);
-            // Private fields are per-object, not accessible through Proxy delegation
-            if (object instanceof JSProxy
-                    || !object.hasOwnProperty(key)) {
-                throw new JSVirtualMachineException(
+            PropertyDescriptor descriptor = object instanceof JSProxy proxy
+                    ? proxy.getOwnPrivatePropertyDescriptorDirect(key)
+                    : object.getOwnPropertyDescriptor(key);
+            if (descriptor == null) {
+                executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwTypeError(
                                 "Cannot write private member " + symbol.getDescription()
-                                        + " to an object whose class did not declare it"));
+                                        + " to an object whose class did not declare it");
+                stack[sp++] = value;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
-            // Check for getter-only accessor (no setter) or non-writable method — spec: PrivateSet steps 4-6
-            PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-            if (descriptor != null) {
-                if (descriptor.isAccessorDescriptor()
-                        && !(descriptor.getSetter() instanceof JSFunction)) {
-                    throw new JSVirtualMachineException(
+            if (descriptor.isAccessorDescriptor()) {
+                JSFunction setterFunction = descriptor.getSetter();
+                if (setterFunction == null) {
+                    executionContext.virtualMachine.pendingException =
                             executionContext.virtualMachine.context.throwTypeError(
                                     "Cannot write private member " + symbol.getDescription()
-                                            + " to an object whose class did not declare it"));
+                                            + " to an object whose class did not declare it");
+                    stack[sp++] = value;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
                 }
-                if (descriptor.isDataDescriptor() && !descriptor.isWritable()) {
-                    throw new JSVirtualMachineException(
+                setterFunction.call(
+                        executionContext.virtualMachine.context,
+                        object,
+                        new JSValue[]{value});
+            } else {
+                if (!descriptor.isWritable()) {
+                    executionContext.virtualMachine.pendingException =
                             executionContext.virtualMachine.context.throwTypeError(
                                     "Cannot write private member " + symbol.getDescription()
-                                            + " to an object whose class did not declare it"));
+                                            + " to an object whose class did not declare it");
+                    stack[sp++] = value;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                if (object instanceof JSProxy proxy) {
+                    proxy.setPrivatePropertyDirect(key, value);
+                } else {
+                    object.set(executionContext.virtualMachine.context, key, value);
                 }
             }
-            object.set(executionContext.virtualMachine.context, key, value);
-        } else if (!(objectValue instanceof JSObject)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError(
-                            "Cannot write private member to a non-object"));
         }
 
         stack[sp++] = value;
@@ -5571,6 +5716,16 @@ public final class OpcodeHandler {
         }
 
         if (callee instanceof JSFunction function) {
+            if (function.getHomeObject() == null
+                    && receiver instanceof JSObject receiverObject
+                    && function instanceof JSBytecodeFunction bytecodeFunction) {
+                String functionName = bytecodeFunction.getName();
+                if ("<static initializer>".equals(functionName)
+                        || "<static field initializer>".equals(functionName)) {
+                    bytecodeFunction.setHomeObject(receiverObject);
+                }
+            }
+
             // Per ES spec: If F's [[FunctionKind]] is "classConstructor", throw TypeError
             boolean isClassCtor = function instanceof JSClass;
             if (!isClassCtor && function instanceof JSBytecodeFunction bytecodeFunc) {

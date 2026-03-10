@@ -20,9 +20,13 @@ import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
+import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.vm.Bytecode;
+
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Main compiler interface that integrates the entire compilation pipeline.
@@ -35,6 +39,7 @@ public final class Compiler {
     private boolean classFieldEval;
     private boolean evalAllowNewTarget;
     private boolean evalAllowSuperProperty;
+    private Map<String, JSSymbol> evalPrivateSymbols;
     private boolean inheritedStrictMode;
     private boolean isEval; // true if compiling eval code
     private boolean predeclareProgramLexicalsAsLocals;
@@ -49,6 +54,7 @@ public final class Compiler {
         this.evalAllowSuperProperty = false;
         this.inheritedStrictMode = false;
         this.isEval = false;
+        this.evalPrivateSymbols = Map.of();
         this.predeclareProgramLexicalsAsLocals = false;
     }
 
@@ -67,6 +73,9 @@ public final class Compiler {
             compiler.setPredeclareProgramLexicalsAsLocals(predeclareProgramLexicalsAsLocals);
             if (isEval) {
                 compiler.setEvalMode(true);
+            }
+            if (!evalPrivateSymbols.isEmpty()) {
+                compiler.setPrivateSymbols(evalPrivateSymbols);
             }
             if (classFieldEval) {
                 compiler.setClassFieldEvalContext(true);
@@ -99,7 +108,8 @@ public final class Compiler {
                 isEval,
                 inheritedStrictMode,
                 evalAllowSuperProperty,
-                evalAllowNewTarget);
+                evalAllowNewTarget,
+                evalPrivateSymbols.isEmpty() ? Set.of() : evalPrivateSymbols.keySet());
         if (classFieldEval) {
             parser.setClassFieldEval(true);
         }
@@ -126,6 +136,11 @@ public final class Compiler {
     public Compiler setEvalContextFlags(boolean allowSuperProperty, boolean allowNewTarget) {
         this.evalAllowSuperProperty = allowSuperProperty;
         this.evalAllowNewTarget = allowNewTarget;
+        return this;
+    }
+
+    public Compiler setEvalPrivateSymbols(Map<String, JSSymbol> evalPrivateSymbols) {
+        this.evalPrivateSymbols = evalPrivateSymbols != null ? evalPrivateSymbols : Map.of();
         return this;
     }
 

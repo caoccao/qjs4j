@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.core.JSSymbol;
+import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -193,6 +195,18 @@ final class PatternCompiler {
                     // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
                     compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
+                } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+                    String fieldName = privateIdentifier.getName();
+                    JSSymbol privateSymbol = compilerContext.privateSymbols != null
+                            ? compilerContext.privateSymbols.get(fieldName)
+                            : null;
+                    if (privateSymbol == null) {
+                        throw new JSCompilerException("undefined private field '#" + fieldName + "'");
+                    }
+                    // Stack: [value, obj] -> [obj, value] -> [obj, value, privateSymbol]
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
                 } else if (memberExpr.getProperty() instanceof Identifier propId) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 }
@@ -875,6 +889,18 @@ final class PatternCompiler {
                 // Stack: [obj, key, value] — already correct for PUT_ARRAY_EL
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_ARRAY_EL leaves value
+            } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+                String fieldName = privateIdentifier.getName();
+                JSSymbol privateSymbol = compilerContext.privateSymbols != null
+                        ? compilerContext.privateSymbols.get(fieldName)
+                        : null;
+                if (privateSymbol == null) {
+                    throw new JSCompilerException("undefined private field '#" + fieldName + "'");
+                }
+                // Stack: [obj, value] -> [obj, value, privateSymbol]
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_PRIVATE_FIELD leaves value
             } else if (memberExpr.getProperty() instanceof Identifier propId) {
                 // Stack: [obj, value] → PUT_FIELD expects [value, obj]
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);

@@ -246,7 +246,10 @@ public final class ArrayBufferPrototype {
      * Sets pending exception on error.
      */
     private static JSValue speciesConstructor(JSContext context, JSObject obj) {
-        JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
+        JSValue ctor = obj.get(context, PropertyKey.CONSTRUCTOR);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         if (ctor instanceof JSUndefined) {
             return JSUndefined.INSTANCE;
         }
@@ -254,7 +257,7 @@ public final class ArrayBufferPrototype {
             context.throwTypeError("constructor is not an object");
             return JSUndefined.INSTANCE;
         }
-        JSValue species = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
+        JSValue species = ctorObj.get(context, PropertyKey.SYMBOL_SPECIES);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

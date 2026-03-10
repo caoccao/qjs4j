@@ -18,8 +18,11 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.ASTNode;
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Bytecode;
+
+import java.util.Map;
 
 /**
  * Compiles AST into bytecode.
@@ -99,6 +102,10 @@ public final class BytecodeCompiler {
 
     public void setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
         compilerContext.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
+    }
+
+    public void setPrivateSymbols(Map<String, JSSymbol> privateSymbols) {
+        compilerContext.privateSymbols = privateSymbols != null ? privateSymbols : Map.of();
     }
 
     /**

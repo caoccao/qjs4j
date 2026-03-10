@@ -377,8 +377,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
                 if (JSKeyword.AWAIT.equals(keyId.getName())
-                        && (parserContext.isAwaitExpressionAllowed()
-                        || (parserContext.inClassStaticInit && parserContext.functionNesting == 1))) {
+                        && (parserContext.isAwaitExpressionAllowed() || parserContext.inClassStaticInit)) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
                 Expression value;
@@ -427,7 +426,8 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.generatorFunctionNesting,
                 parserContext.newTargetNesting,
                 parserContext.superPropertyAllowed,
-                parserContext.allowNewTargetInEval);
+                parserContext.allowNewTargetInEval,
+                parserContext.evalPrivateNames);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken().type() != TokenType.EOF) {
             throw new JSSyntaxErrorException("Invalid template expression");

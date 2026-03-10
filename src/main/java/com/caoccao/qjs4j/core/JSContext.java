@@ -517,6 +517,47 @@ public final class JSContext implements AutoCloseable {
         runtime.destroyContext(this);
     }
 
+    private Map<String, JSSymbol> collectEvalPrivateSymbols(JSBytecodeFunction callerFunction) {
+        if (callerFunction == null) {
+            return Map.of();
+        }
+        LinkedHashMap<String, JSSymbol> privateSymbolsByName = new LinkedHashMap<>();
+        IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = callerFunction.getClassPrivateSymbolRemap();
+        if (symbolRemap != null && !symbolRemap.isEmpty()) {
+            for (Map.Entry<JSSymbol, JSSymbol> entry : symbolRemap.entrySet()) {
+                JSSymbol templateSymbol = entry.getKey();
+                if (templateSymbol == null) {
+                    continue;
+                }
+                String description = templateSymbol.getDescription();
+                if (description == null || description.length() < 2 || description.charAt(0) != '#') {
+                    continue;
+                }
+                String privateName = description.substring(1);
+                JSSymbol activeSymbol = entry.getValue() != null ? entry.getValue() : templateSymbol;
+                privateSymbolsByName.putIfAbsent(privateName, activeSymbol);
+            }
+        }
+        if (!privateSymbolsByName.isEmpty()) {
+            return privateSymbolsByName;
+        }
+        Set<JSSymbol> classPrivateSymbols = callerFunction.getClassPrivateSymbols();
+        if (classPrivateSymbols == null || classPrivateSymbols.isEmpty()) {
+            return Map.of();
+        }
+        for (JSSymbol symbol : classPrivateSymbols) {
+            if (symbol == null) {
+                continue;
+            }
+            String description = symbol.getDescription();
+            if (description == null || description.length() < 2 || description.charAt(0) != '#') {
+                continue;
+            }
+            privateSymbolsByName.putIfAbsent(description.substring(1), symbol);
+        }
+        return privateSymbolsByName;
+    }
+
     private void collectImportBindings(
             String importLine,
             Set<String> bindingNames,
@@ -1424,6 +1465,7 @@ public final class JSContext implements AutoCloseable {
                 : null;
         boolean allowNewTargetInEval = false;
         boolean allowSuperPropertyInEval = false;
+        Map<String, JSSymbol> evalPrivateSymbols = Map.of();
         boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
         if (isDirectEval) {
             compiler.setEval(true);
@@ -1432,12 +1474,14 @@ public final class JSContext implements AutoCloseable {
                 allowNewTargetInEval = !callerBytecodeFunction.isArrow() && directEvalCallerFrame.getCaller() != null;
                 allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
                         && callerBytecodeFunction.getHomeObject() != null;
+                evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
             }
             // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
             if (isClassFieldEval) {
                 compiler.setClassFieldEval(true);
             }
             compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval);
+            compiler.setEvalPrivateSymbols(evalPrivateSymbols);
             // Direct eval creates a fresh lexical environment whose bindings do not leak.
             compiler.setPredeclareProgramLexicalsAsLocals(true);
             if (directEvalCallerFrame != null && (strictMode || inheritedStrictModeForDirectEval)) {

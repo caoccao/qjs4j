@@ -152,6 +152,13 @@ public final class JSProxy extends JSObject {
     }
 
     /**
+     * Private field operations must bypass proxy traps and operate on the proxy object itself.
+     */
+    public void definePrivatePropertyDirect(PropertyKey key, PropertyDescriptor descriptor) {
+        super.defineProperty(key, descriptor);
+    }
+
+    /**
      * Override defineProperty to route through proxy trap mechanism.
      * ES2020 9.5.6 [[DefineOwnProperty]]
      */
@@ -473,6 +480,13 @@ public final class JSProxy extends JSObject {
             return targetObj.get(executionContext, key, receiver);
         }
         return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Private field operations must bypass proxy traps and operate on the proxy object itself.
+     */
+    public PropertyDescriptor getOwnPrivatePropertyDescriptorDirect(PropertyKey key) {
+        return super.getOwnPropertyDescriptor(key);
     }
 
     /**
@@ -806,6 +820,13 @@ public final class JSProxy extends JSObject {
         return targetObj.has(key);
     }
 
+    /**
+     * Private field operations must bypass proxy traps and operate on the proxy object itself.
+     */
+    public boolean hasOwnPrivatePropertyDirect(PropertyKey key) {
+        return super.getOwnPropertyDescriptor(key) != null;
+    }
+
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
         return getOwnPropertyDescriptor(key) != null;
@@ -1108,6 +1129,13 @@ public final class JSProxy extends JSObject {
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value) {
         proxySetInternal(key, value, context, this, true);
+    }
+
+    /**
+     * Private field operations must bypass proxy traps and operate on the proxy object itself.
+     */
+    public void setPrivatePropertyDirect(PropertyKey key, JSValue value) {
+        super.set(context, key, value);
     }
 
     /**

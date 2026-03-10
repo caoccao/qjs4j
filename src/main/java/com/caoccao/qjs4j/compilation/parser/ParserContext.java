@@ -70,6 +70,7 @@ final class ParserContext {
             JSKeyword.WITH
     );
     final boolean allowNewTargetInEval;
+    final Set<String> evalPrivateNames;
     final boolean inheritedStrictMode;
     final boolean isEval;
     final Deque<Set<String>> labelStack = new ArrayDeque<>();
@@ -105,7 +106,8 @@ final class ParserContext {
                   int generatorFunctionNesting,
                   int newTargetNesting,
                   boolean initialSuperPropertyAllowed,
-                  boolean allowNewTargetInEval) {
+                  boolean allowNewTargetInEval,
+                  Set<String> evalPrivateNames) {
         this.lexer = lexer;
         this.moduleMode = moduleMode;
         this.isEval = isEval;
@@ -116,12 +118,11 @@ final class ParserContext {
         this.generatorFunctionNesting = generatorFunctionNesting;
         this.newTargetNesting = newTargetNesting;
         this.superPropertyAllowed = initialSuperPropertyAllowed;
+        this.evalPrivateNames = evalPrivateNames != null ? Set.copyOf(evalPrivateNames) : Set.of();
         lexer.setModuleMode(moduleMode);
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
     }
-
-    // ---- Token utilities ----
 
     void advance() {
         previousTokenLine = currentToken.line();
@@ -170,8 +171,6 @@ final class ParserContext {
             default -> false;
         };
     }
-
-    // ---- Validation methods ----
 
     boolean isAlwaysReservedIdentifier(String name) {
         return isAlwaysReservedIdentifierName(name);
@@ -250,6 +249,13 @@ final class ParserContext {
                 || tokenType == TokenType.AWAIT;
     }
 
+    boolean isPrivateNameAccessible(String privateName) {
+        if (classBodyNesting > 0) {
+            return true;
+        }
+        return isEval && evalPrivateNames.contains(privateName);
+    }
+
     private boolean isRawUseStrictDirective(Token directiveToken) {
         if (directiveToken.type() != TokenType.STRING || !JSKeyword.USE_STRICT.equals(directiveToken.value())) {
             return false;
@@ -321,8 +327,6 @@ final class ParserContext {
                 || nextToken.type() == TokenType.LBRACKET
                 || nextToken.type() == TokenType.TEMPLATE;
     }
-
-    // ---- Context management ----
 
     boolean isValidForInOfTarget(Expression expr) {
         if (expr instanceof Identifier identifier) {
@@ -460,7 +464,7 @@ final class ParserContext {
             }
             // ES2024 14.7.1 Static Semantics: ContainsArguments
             // 'arguments' is forbidden in class field initializers (including arrows)
-            if (JSKeyword.ARGUMENTS.equals(name) && inClassFieldInitializer) {
+            if (JSKeyword.ARGUMENTS.equals(name) && (inClassFieldInitializer || inClassStaticInit)) {
                 throw new JSSyntaxErrorException("'arguments' is not allowed in class field initializer or static initialization block");
             }
             advance();
@@ -513,8 +517,6 @@ final class ParserContext {
         throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() +
                 "' at line " + currentToken.line() + ", column " + currentToken.column());
     }
-
-    // ---- Shared parsing utilities ----
 
     Token peek() {
         return nextToken;

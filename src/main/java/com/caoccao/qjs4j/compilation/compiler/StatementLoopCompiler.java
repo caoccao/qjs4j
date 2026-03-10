@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -196,11 +197,21 @@ final class StatementLoopCompiler {
                 if (memberExpr.isComputed()) {
                     delegates.expressions.compileExpression(memberExpr.getProperty());
                     throw new JSCompilerException("Computed member expression in for-in not yet supported");
-                } else {
-                    String propName = ((Identifier) memberExpr.getProperty()).getName();
+                } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+                    JSSymbol privateSymbol = compilerContext.privateSymbols.get(privateIdentifier.getName());
+                    if (privateSymbol == null) {
+                        throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
+                    }
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propName);
+                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
+                    compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
+                } else if (memberExpr.getProperty() instanceof Identifier propertyIdentifier) {
+                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.getName());
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                } else {
+                    throw new JSCompilerException("Invalid for-in assignment target");
                 }
             } else if (leftExpr instanceof CallExpression) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -263,6 +274,18 @@ final class StatementLoopCompiler {
         if (leftExpression instanceof MemberExpression memberExpression) {
             if (memberExpression.isComputed()) {
                 throw new JSCompilerException("Computed member expression in for-of not yet supported");
+            }
+            if (memberExpression.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+                JSSymbol privateSymbol = compilerContext.privateSymbols.get(privateIdentifier.getName());
+                if (privateSymbol == null) {
+                    throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
+                }
+                delegates.expressions.compileExpression(memberExpression.getObject());
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+                return;
             }
             if (!(memberExpression.getProperty() instanceof Identifier propertyIdentifier)) {
                 throw new JSCompilerException("Invalid for-of assignment target");

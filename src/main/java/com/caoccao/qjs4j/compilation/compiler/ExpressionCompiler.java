@@ -338,7 +338,7 @@ final class ExpressionCompiler {
 
         // Handle 'new.target' meta-property
         if ("new.target".equals(name)) {
-            if (compilerContext.classFieldEvalContext) {
+            if (compilerContext.classFieldEvalContext || compilerContext.inClassFieldInitializer) {
                 // ES2024: eval in class field initializer treats new.target as undefined
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             } else {

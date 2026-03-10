@@ -49,11 +49,11 @@ public final class Parser {
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval) {
-        this(lexer, moduleMode, isEval, false, 0, 0, 0, 0, false, false);
+        this(lexer, moduleMode, isEval, false, 0, 0, 0, 0, false, false, Set.of());
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode) {
-        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, false, false);
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, false, false, Set.of());
     }
 
     public Parser(
@@ -73,7 +73,30 @@ public final class Parser {
                 0,
                 0,
                 initialSuperPropertyAllowed,
-                allowNewTargetInEval);
+                allowNewTargetInEval,
+                Set.of());
+    }
+
+    public Parser(
+            Lexer lexer,
+            boolean moduleMode,
+            boolean isEval,
+            boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed,
+            boolean allowNewTargetInEval,
+            Set<String> evalPrivateNames) {
+        this(
+                lexer,
+                moduleMode,
+                isEval,
+                inheritedStrictMode,
+                0,
+                0,
+                0,
+                0,
+                initialSuperPropertyAllowed,
+                allowNewTargetInEval,
+                evalPrivateNames);
     }
 
     // Package-private: used by LiteralParser for nested template expression parsing
@@ -83,11 +106,35 @@ public final class Parser {
            int newTargetNesting,
            boolean initialSuperPropertyAllowed,
            boolean allowNewTargetInEval) {
+        this(
+                lexer,
+                moduleMode,
+                isEval,
+                inheritedStrictMode,
+                functionNesting,
+                asyncFunctionNesting,
+                generatorFunctionNesting,
+                newTargetNesting,
+                initialSuperPropertyAllowed,
+                allowNewTargetInEval,
+                Set.of());
+    }
+
+    // Package-private: used by Compiler / LiteralParser when eval private names are in scope.
+    Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode,
+           int functionNesting, int asyncFunctionNesting,
+           int generatorFunctionNesting,
+           int newTargetNesting,
+           boolean initialSuperPropertyAllowed,
+           boolean allowNewTargetInEval,
+           Set<String> evalPrivateNames) {
         this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode,
                 functionNesting, asyncFunctionNesting,
                 generatorFunctionNesting,
                 newTargetNesting,
-                initialSuperPropertyAllowed, allowNewTargetInEval);
+                initialSuperPropertyAllowed,
+                allowNewTargetInEval,
+                evalPrivateNames);
         this.delegates = new ParserDelegates(parserContext);
     }
 
