@@ -236,6 +236,22 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.advance();
     }
 
+    private boolean hasUsingInitializer(VariableDeclaration variableDeclaration) {
+        if (variableDeclaration == null) {
+            return false;
+        }
+        VariableKind kind = variableDeclaration.getKind();
+        if (kind != VariableKind.USING && kind != VariableKind.AWAIT_USING) {
+            return false;
+        }
+        for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+            if (declarator != null && declarator.getInit() != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private boolean isWithKeyword() {
         return parserContext.currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.WITH.equals(parserContext.currentToken.value());
@@ -1179,34 +1195,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new WhileStatement(test, body, location);
     }
 
-    private boolean hasUsingInitializer(VariableDeclaration variableDeclaration) {
-        if (variableDeclaration == null) {
-            return false;
-        }
-        VariableKind kind = variableDeclaration.getKind();
-        if (kind != VariableKind.USING && kind != VariableKind.AWAIT_USING) {
-            return false;
-        }
-        for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-            if (declarator != null && declarator.getInit() != null) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void validateNoUsingDeclarationWithInitializerInCaseOrDefault(Statement statement) {
-        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
-            throw new JSSyntaxErrorException("using declarations are not allowed directly in case/default clauses");
-        }
-    }
-
-    private void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
-        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
-            throw new JSSyntaxErrorException("using declarations are not allowed in this statement position");
-        }
-    }
-
     private void parseWithClause() {
         if (parserContext.currentToken.type() == TokenType.IDENTIFIER
                 && "with".equals(parserContext.currentToken.value())) {
@@ -1300,6 +1288,18 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (varNames.contains(lexicalName)) {
                 throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
             }
+        }
+    }
+
+    private void validateNoUsingDeclarationWithInitializerInCaseOrDefault(Statement statement) {
+        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
+            throw new JSSyntaxErrorException("using declarations are not allowed directly in case/default clauses");
+        }
+    }
+
+    private void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
+        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
+            throw new JSSyntaxErrorException("using declarations are not allowed in this statement position");
         }
     }
 }

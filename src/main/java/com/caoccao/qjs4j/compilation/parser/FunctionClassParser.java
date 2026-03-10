@@ -312,6 +312,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         SourceLocation location = parserContext.getLocation();
         SourceLocation methodStartLocation = location;
 
+        if (parserContext.match(TokenType.AT)) {
+            parseDecoratorList();
+            location = parserContext.getLocation();
+            methodStartLocation = location;
+        }
+
         // Check for 'static' keyword
         if (parserContext.match(TokenType.IDENTIFIER) && JSKeyword.STATIC.equals(parserContext.currentToken.value())) {
             TokenType nextType = parserContext.nextToken.type();
@@ -421,7 +427,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 key = delegates.expressions.parsePropertyName();
             }
 
-            FunctionExpression method = parseMethod("method", methodStartLocation, true, isGenerator);
+            FunctionExpression method = parseClassMethod("method", methodStartLocation, true, isGenerator, isStatic, key);
             return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
@@ -441,7 +447,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 key = delegates.expressions.parsePropertyName();
             }
 
-            FunctionExpression method = parseMethod("method", methodStartLocation, false, true);
+            FunctionExpression method = parseClassMethod("method", methodStartLocation, false, true, isStatic, key);
             return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
@@ -491,7 +497,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     key = delegates.expressions.parsePropertyName();
                 }
 
-                FunctionExpression method = parseMethod(kind, methodStartLocation, false, false);
+                FunctionExpression method = parseClassMethod(kind, methodStartLocation, false, false, isStatic, key);
                 return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
             }
         }
@@ -597,6 +603,68 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
         return value;
+    }
+
+    private FunctionExpression parseClassMethod(String kind,
+                                                SourceLocation methodStartLocation,
+                                                boolean isAsync,
+                                                boolean isGenerator,
+                                                boolean isStatic,
+                                                Expression key) {
+        boolean isConstructorMethod = !isStatic
+                && "method".equals(kind)
+                && key instanceof Identifier identifier
+                && JSKeyword.CONSTRUCTOR.equals(identifier.getName());
+        boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;
+        boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
+        if (isConstructorMethod && parserContext.parsingClassWithSuper) {
+            parserContext.inDerivedConstructor = true;
+        }
+        parserContext.superPropertyAllowed = true;
+        try {
+            return parseMethod(kind, methodStartLocation, isAsync, isGenerator);
+        } finally {
+            parserContext.inDerivedConstructor = savedInDerivedConstructor;
+            parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+        }
+    }
+
+    private void parseDecoratorList() {
+        while (parserContext.match(TokenType.AT)) {
+            parserContext.advance();
+            if (parserContext.match(TokenType.LPAREN)) {
+                parserContext.advance();
+                boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                parserContext.inOperatorAllowed = true;
+                try {
+                    delegates.expressions.parseExpression();
+                } finally {
+                    parserContext.inOperatorAllowed = savedInOperatorAllowed;
+                }
+                parserContext.expect(TokenType.RPAREN);
+                continue;
+            }
+            parserContext.parseIdentifier();
+            while (parserContext.match(TokenType.DOT)) {
+                parserContext.advance();
+                if (parserContext.match(TokenType.PRIVATE_NAME)) {
+                    parserContext.advance();
+                } else {
+                    delegates.expressions.parsePropertyName();
+                }
+            }
+            if (parserContext.match(TokenType.LPAREN)) {
+                parserContext.advance();
+                if (!parserContext.match(TokenType.RPAREN)) {
+                    delegates.expressions.parseAssignmentExpression();
+                    while (parserContext.match(TokenType.COMMA)) {
+                        parserContext.advance();
+                        delegates.expressions.parseAssignmentExpression();
+                    }
+                }
+                parserContext.expect(TokenType.RPAREN);
+            }
+        }
     }
 
     /**
@@ -1017,17 +1085,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // It's a method
-        // If this is a constructor in a derived class, enable super() calls
-        boolean isConstructorMethod = !isStatic && key instanceof Identifier keyId && JSKeyword.CONSTRUCTOR.equals(keyId.getName());
-        boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;
-        boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
-        if (isConstructorMethod && parserContext.parsingClassWithSuper) {
-            parserContext.inDerivedConstructor = true;
-        }
-        parserContext.superPropertyAllowed = true;
-        FunctionExpression method = parseMethod("method", location, false, false);
-        parserContext.inDerivedConstructor = savedInDerivedConstructor;
-        parserContext.superPropertyAllowed = savedSuperPropertyAllowed;
+        FunctionExpression method = parseClassMethod("method", location, false, false, isStatic, key);
         return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 

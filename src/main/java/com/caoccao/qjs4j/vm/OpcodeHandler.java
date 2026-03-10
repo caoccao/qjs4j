@@ -524,12 +524,11 @@ public final class OpcodeHandler {
 
                 JSValue result = returnFunc.call(context, asyncYieldStarIteratorObj, new JSValue[]{returnValue});
                 checkPendingException(context);
-                if (!(result instanceof JSObject)) {
+                if (!(result instanceof JSObject returnResultObj)) {
                     throw new JSVirtualMachineException(
                             context.throwTypeError("iterator must return an object"));
                 }
 
-                JSObject returnResultObj = (JSObject) result;
                 JSValue doneValue = returnResultObj.get(context, PropertyKey.DONE);
                 checkPendingException(context);
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
@@ -900,7 +899,8 @@ public final class OpcodeHandler {
         if (superClassValue instanceof JSNull) {
             prototypeObject.setPrototype(null);
         } else if (superClassValue != JSUndefined.INSTANCE) {
-            if (!JSTypeChecking.isConstructor(superClassValue)) {
+            if (!(superClassValue instanceof JSObject superClassObject)
+                    || !JSTypeChecking.isConstructor(superClassValue)) {
                 executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 stack[sp++] = JSUndefined.INSTANCE;
@@ -909,10 +909,35 @@ public final class OpcodeHandler {
                 executionContext.pc = pc + op.getSize();
                 return;
             }
-            if (superClassValue instanceof JSFunction superFunction) {
-                executionContext.virtualMachine.context.transferPrototype(prototypeObject, superFunction);
-                constructorFunction.setPrototype(superFunction);
+            JSValue superPrototypeValue = superClassObject.get(
+                    executionContext.virtualMachine.context,
+                    PropertyKey.PROTOTYPE);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
+            if (superPrototypeValue instanceof JSObject superPrototypeObject) {
+                prototypeObject.setPrototype(superPrototypeObject);
+            } else if (superPrototypeValue instanceof JSNull) {
+                prototypeObject.setPrototype(null);
+            } else {
+                executionContext.virtualMachine.context.throwTypeError(
+                        "parent class prototype is not an object or null");
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.getPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            constructorFunction.setPrototype(superClassObject);
         }
 
         JSObject constructorObject = constructorFunction;
@@ -960,12 +985,50 @@ public final class OpcodeHandler {
 
         JSObject prototypeObject = executionContext.virtualMachine.context.createJSObject();
         boolean hasHeritage = (classFlags & 1) != 0;
-        if (hasHeritage && superClassValue != JSUndefined.INSTANCE && superClassValue != JSNull.INSTANCE) {
-            if (superClassValue instanceof JSFunction superFunction) {
-                executionContext.virtualMachine.context.transferPrototype(prototypeObject, superFunction);
-                constructorFunction.setPrototype(superFunction);
+        if (hasHeritage) {
+            if (superClassValue instanceof JSNull) {
+                prototypeObject.setPrototype(null);
             } else {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("parent class must be constructor"));
+                if (!(superClassValue instanceof JSObject superClassObject)
+                        || !JSTypeChecking.isConstructor(superClassValue)) {
+                    executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.getPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                JSValue superPrototypeValue = superClassObject.get(
+                        executionContext.virtualMachine.context,
+                        PropertyKey.PROTOTYPE);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.getPendingException();
+                    executionContext.virtualMachine.context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                if (superPrototypeValue instanceof JSObject superPrototypeObject) {
+                    prototypeObject.setPrototype(superPrototypeObject);
+                } else if (superPrototypeValue instanceof JSNull) {
+                    prototypeObject.setPrototype(null);
+                } else {
+                    executionContext.virtualMachine.context.throwTypeError(
+                            "parent class prototype is not an object or null");
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.getPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    stack[sp++] = JSUndefined.INSTANCE;
+                    executionContext.sp = sp;
+                    executionContext.pc = pc + op.getSize();
+                    return;
+                }
+                constructorFunction.setPrototype(superClassObject);
             }
         }
 
@@ -1086,9 +1149,7 @@ public final class OpcodeHandler {
                     namePrefix = "";
                 }
                 executionContext.virtualMachine.setObjectName(methodFunction, new JSString(namePrefix + computedName.value()));
-                if (methodKind == 1 || methodKind == 2) {
-                    methodFunction.delete(PropertyKey.PROTOTYPE);
-                }
+                methodFunction.delete(PropertyKey.PROTOTYPE);
             }
 
             boolean defineSucceeded;

@@ -290,11 +290,10 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
-    public void testUnicodeEscapedReservedWords() {
-        assertErrorWithJavet(
-                "tru\\u{65}",
-                "f\\u{61}lse",
-                "n\\u{75}ll");
+    public void testUnicodeEscapedAsyncNotKeyword() {
+        // \u0061sync is not the async keyword — it's just an identifier "async"
+        assertIntegerWithJavet(
+                "var \\u0061sync = 42; \\u0061sync");
     }
 
     @Test
@@ -321,10 +320,11 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
-    public void testUnicodeEscapedAsyncNotKeyword() {
-        // \u0061sync is not the async keyword — it's just an identifier "async"
-        assertIntegerWithJavet(
-                "var \\u0061sync = 42; \\u0061sync");
+    public void testUnicodeEscapedReservedWords() {
+        assertErrorWithJavet(
+                "tru\\u{65}",
+                "f\\u{61}lse",
+                "n\\u{75}ll");
     }
 
     @Test

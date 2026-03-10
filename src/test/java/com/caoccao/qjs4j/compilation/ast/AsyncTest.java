@@ -53,6 +53,13 @@ public class AsyncTest extends BaseJavetTest {
     }
 
     @Test
+    void testAsyncEscapedNotKeyword() {
+        // ES2024 12.7.1: `async` with Unicode escapes is an identifier, not a keyword.
+        assertErrorWithJavet(
+                "\\u0061sync function f(){}");
+    }
+
+    @Test
     void testAsyncFunctionErrorHandling() {
         assertUndefinedWithJavet("""
                 async function test() {
@@ -140,6 +147,14 @@ public class AsyncTest extends BaseJavetTest {
                 }
                 const gen = generator();
                 typeof gen;""");
+    }
+
+    @Test
+    void testAsyncLineTerminatorNotAsyncFunction() {
+        // ES2024: [no LineTerminator here] between `async` and `function`.
+        // A line terminator makes `async` an identifier, not a keyword modifier.
+        assertErrorWithJavet(
+                "async\nfunction foo() {}");
     }
 
     @Test
@@ -356,21 +371,6 @@ public class AsyncTest extends BaseJavetTest {
                   return result;
                 }
                 test()""");
-    }
-
-    @Test
-    void testAsyncLineTerminatorNotAsyncFunction() {
-        // ES2024: [no LineTerminator here] between `async` and `function`.
-        // A line terminator makes `async` an identifier, not a keyword modifier.
-        assertErrorWithJavet(
-                "async\nfunction foo() {}");
-    }
-
-    @Test
-    void testAsyncEscapedNotKeyword() {
-        // ES2024 12.7.1: `async` with Unicode escapes is an identifier, not a keyword.
-        assertErrorWithJavet(
-                "\\u0061sync function f(){}");
     }
 
 }

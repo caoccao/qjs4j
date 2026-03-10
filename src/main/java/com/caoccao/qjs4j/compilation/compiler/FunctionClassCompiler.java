@@ -1411,8 +1411,18 @@ final class FunctionClassCompiler {
             }
         }
 
-        // Compile method body statements
+        methodDelegates.analysis.hoistAllDeclarationsAsLocals(functionExpression.getBody().getBody());
+
         for (Statement stmt : functionExpression.getBody().getBody()) {
+            if (stmt instanceof FunctionDeclaration functionDeclaration) {
+                methodDelegates.functions.compileFunctionDeclaration(functionDeclaration);
+            }
+        }
+
+        for (Statement stmt : functionExpression.getBody().getBody()) {
+            if (stmt instanceof FunctionDeclaration) {
+                continue;
+            }
             methodDelegates.statements.compileStatement(stmt);
         }
 
@@ -1440,10 +1450,7 @@ final class FunctionClassCompiler {
         // Extract method source code from original source for Function.prototype.toString
         String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
-        // Private methods have a # prefix in their .name property (ES2024 spec)
-        String functionName = (method.getKey() instanceof PrivateIdentifier)
-                ? "#" + methodName
-                : methodName;
+        String functionName = isConstructor ? methodName : "";
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
                 methodBytecode,
                 functionName,

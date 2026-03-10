@@ -215,6 +215,13 @@ final class ParserContext {
                 && afterUsing.line() == nextToken.line();
     }
 
+    private boolean isBindingIdentifierStartToken(Token token) {
+        return switch (token.type()) {
+            case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET -> true;
+            default -> false;
+        };
+    }
+
     boolean isExpressionStartToken(TokenType tokenType) {
         return switch (tokenType) {
             case ASYNC, AWAIT, BIGINT, CLASS, FALSE, FUNCTION, IDENTIFIER,
@@ -301,13 +308,6 @@ final class ParserContext {
 
     boolean isUsingIdentifierToken(Token token) {
         return token.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(token.value());
-    }
-
-    private boolean isBindingIdentifierStartToken(Token token) {
-        return switch (token.type()) {
-            case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET -> true;
-            default -> false;
-        };
     }
 
     boolean isValidContinuationAfterAwaitIdentifier() {

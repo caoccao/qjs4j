@@ -1016,6 +1016,11 @@ public final class JSBytecodeFunction extends JSFunction {
         // the function should execute in its own realm, not the caller's realm.
         JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
 
+        if (classConstructor) {
+            return executionContext.throwTypeError(
+                    "Class constructor " + getName() + " cannot be invoked without 'new'");
+        }
+
         // Arrow functions use the lexically captured this, ignoring the provided thisArg
         if (isArrow && capturedThisArg != null) {
             thisArg = capturedThisArg;

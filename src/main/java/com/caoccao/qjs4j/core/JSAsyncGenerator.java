@@ -107,6 +107,21 @@ public final class JSAsyncGenerator extends JSObject {
         }, context);
     }
 
+    /**
+     * Directly complete the current pending request with a result, bypassing the intermediate
+     * promise layer. Used by the async generator's await-resume handler to avoid extra microtask ticks.
+     * Per QuickJS, resolving the request's promise is synchronous within the reaction callback.
+     */
+    public void completeCurrentRequest(JSValue result) {
+        if (pendingRequestPromise != null) {
+            JSPromise reqPromise = pendingRequestPromise;
+            pendingRequestPromise = null;
+            processResult(result);
+            reqPromise.fulfill(result);
+            scheduleDrainRequestQueue();
+        }
+    }
+
     private JSPromise createIteratorResultFromResult(JSValue result) {
         JSPromise promise = context.createJSPromise();
         promise.fulfill(result);
@@ -314,21 +329,6 @@ public final class JSAsyncGenerator extends JSObject {
                 String message = e.getMessage();
                 request.promise().reject(new JSString("Async generator error: " + (message != null ? message : e.toString())));
             }
-            scheduleDrainRequestQueue();
-        }
-    }
-
-    /**
-     * Directly complete the current pending request with a result, bypassing the intermediate
-     * promise layer. Used by the async generator's await-resume handler to avoid extra microtask ticks.
-     * Per QuickJS, resolving the request's promise is synchronous within the reaction callback.
-     */
-    public void completeCurrentRequest(JSValue result) {
-        if (pendingRequestPromise != null) {
-            JSPromise reqPromise = pendingRequestPromise;
-            pendingRequestPromise = null;
-            processResult(result);
-            reqPromise.fulfill(result);
             scheduleDrainRequestQueue();
         }
     }
