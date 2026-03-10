@@ -340,60 +340,65 @@ public final class JSBytecodeFunction extends JSFunction {
             JSContext context,
             JSObject delegateIterator,
             JSValue argumentValue) {
-        JSValue returnMethodValue = delegateIterator.get(context, PropertyKey.RETURN);
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        if (returnMethodValue.isNullOrUndefined()) {
-            // Per ES2024 yield* return: "If generatorKind is async, set received.[[Value]] to ? Await(received.[[Value]])"
-            JSPromise returnAwaitPromise = context.createJSPromise();
-            returnAwaitPromise.resolve(context, argumentValue);
+        try {
+            JSValue returnMethodValue = delegateIterator.get(context, PropertyKey.RETURN);
             if (context.hasPendingException()) {
-                JSValue awaitError = context.getPendingException();
+                JSValue exception = context.getPendingException();
                 context.clearAllPendingExceptions();
-                return JSAsyncIterator.createRejectedPromise(context, awaitError);
+                return JSAsyncIterator.createRejectedPromise(context, exception);
             }
-            JSPromise returnResultPromise = context.createJSPromise();
-            returnAwaitPromise.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReturnUndefinedAwaitResolve", 1, (childCtx, thisArg, args) -> {
-                                JSValue awaitedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                JSObject result = context.createJSObject();
-                                result.set(PropertyKey.VALUE, awaitedValue);
-                                result.set(PropertyKey.DONE, JSBoolean.TRUE);
-                                returnResultPromise.fulfill(result);
-                                return JSUndefined.INSTANCE;
-                            }), null, context),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReturnUndefinedAwaitReject", 1, (childCtx, thisArg, args) -> {
-                                JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                returnResultPromise.reject(error);
-                                return JSUndefined.INSTANCE;
-                            }), null, context)
-            );
-            return returnResultPromise;
+            if (returnMethodValue.isNullOrUndefined()) {
+                // Per ES2024 yield* return: "If generatorKind is async, set received.[[Value]] to ? Await(received.[[Value]])"
+                JSPromise returnAwaitPromise = context.createJSPromise();
+                returnAwaitPromise.resolve(context, argumentValue);
+                if (context.hasPendingException()) {
+                    JSValue awaitError = context.getPendingException();
+                    context.clearAllPendingExceptions();
+                    return JSAsyncIterator.createRejectedPromise(context, awaitError);
+                }
+                JSPromise returnResultPromise = context.createJSPromise();
+                returnAwaitPromise.addReactions(
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onReturnUndefinedAwaitResolve", 1, (childCtx, thisArg, args) -> {
+                                    JSValue awaitedValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    JSObject result = context.createJSObject();
+                                    result.set(PropertyKey.VALUE, awaitedValue);
+                                    result.set(PropertyKey.DONE, JSBoolean.TRUE);
+                                    returnResultPromise.fulfill(result);
+                                    return JSUndefined.INSTANCE;
+                                }), null, context),
+                        new JSPromise.ReactionRecord(
+                                new JSNativeFunction("onReturnUndefinedAwaitReject", 1, (childCtx, thisArg, args) -> {
+                                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                                    returnResultPromise.reject(error);
+                                    return JSUndefined.INSTANCE;
+                                }), null, context)
+                );
+                return returnResultPromise;
+            }
+            if (!(returnMethodValue instanceof JSFunction returnFunction)) {
+                JSValue typeError = context.throwTypeError("iterator return is not a function");
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, typeError);
+            }
+            JSValue returnResult = returnFunction.call(context, delegateIterator, new JSValue[]{argumentValue});
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, exception);
+            }
+            if (!(returnResult instanceof JSObject returnResultObject)) {
+                JSValue typeError = context.throwTypeError("iterator must return an object");
+                context.clearAllPendingExceptions();
+                return JSAsyncIterator.createRejectedPromise(context, typeError);
+            }
+            // Per ES2024: "If generatorKind is async, set innerReturnResult to ? Await(innerReturnResult)"
+            // Handle thenable/promise results before reading done/value
+            return awaitAndProcessIteratorResult(context, returnResultObject, delegateIterator);
+        } catch (Exception e) {
+            JSValue error = JSAsyncIterator.consumePendingExceptionOrCreateStringError(context, e);
+            return JSAsyncIterator.createRejectedPromise(context, error);
         }
-        if (!(returnMethodValue instanceof JSFunction returnFunction)) {
-            JSValue typeError = context.throwTypeError("iterator return is not a function");
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, typeError);
-        }
-        JSValue returnResult = returnFunction.call(context, delegateIterator, new JSValue[]{argumentValue});
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, exception);
-        }
-        if (!(returnResult instanceof JSObject returnResultObject)) {
-            JSValue typeError = context.throwTypeError("iterator must return an object");
-            context.clearAllPendingExceptions();
-            return JSAsyncIterator.createRejectedPromise(context, typeError);
-        }
-        // Per ES2024: "If generatorKind is async, set innerReturnResult to ? Await(innerReturnResult)"
-        // Handle thenable/promise results before reading done/value
-        return awaitAndProcessIteratorResult(context, returnResultObject, delegateIterator);
     }
 
     private static JSPromise createAsyncFromSyncDelegatedThrowPromise(

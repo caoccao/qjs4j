@@ -209,9 +209,9 @@ final class ParserContext {
             return false;
         }
         // [no LineTerminator here] between 'using' and BindingIdentifier
-        // Also verify the next token is a valid BindingIdentifier (not '[', '{', etc.)
+        // Also verify the next token is a valid BindingIdentifier start.
         Token afterUsing = lexer.peekToken();
-        return afterUsing.type() == TokenType.IDENTIFIER
+        return isBindingIdentifierStartToken(afterUsing)
                 && afterUsing.line() == nextToken.line();
     }
 
@@ -296,11 +296,18 @@ final class ParserContext {
     boolean isUsingDeclarationStart() {
         return currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.USING.equals(currentToken.value())
-                && isPatternStartToken(nextToken.type());
+                && isBindingIdentifierStartToken(nextToken);
     }
 
     boolean isUsingIdentifierToken(Token token) {
         return token.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(token.value());
+    }
+
+    private boolean isBindingIdentifierStartToken(Token token) {
+        return switch (token.type()) {
+            case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET -> true;
+            default -> false;
+        };
     }
 
     boolean isValidContinuationAfterAwaitIdentifier() {

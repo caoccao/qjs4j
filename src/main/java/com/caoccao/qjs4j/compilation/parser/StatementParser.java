@@ -302,6 +302,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (body instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException("Function declarations are not allowed in do-while statement position");
         }
+        validateNoUsingDeclarationWithInitializerInStatementPosition(body);
         parserContext.expect(TokenType.WHILE);
         parserContext.expect(TokenType.LPAREN);
         Expression test = delegates.expressions.parseExpression();
@@ -675,6 +676,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (body instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException("Function declarations are not allowed in for statement position");
         }
+        validateNoUsingDeclarationWithInitializerInStatementPosition(body);
 
         return new ForStatement(init, test, update, body, location);
     }
@@ -687,11 +689,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.RPAREN);
 
         Statement consequent = parseStatement();
+        validateNoUsingDeclarationWithInitializerInStatementPosition(consequent);
         Statement alternate = null;
 
         if (parserContext.match(TokenType.ELSE)) {
             parserContext.advance();
             alternate = parseStatement();
+            validateNoUsingDeclarationWithInitializerInStatementPosition(alternate);
         }
 
         return new IfStatement(test, consequent, alternate, location);
@@ -828,6 +832,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.labelStack.push(currentLabels);
         try {
             Statement body = parseStatement();
+            validateNoUsingDeclarationWithInitializerInStatementPosition(body);
             return new LabeledStatement(label, body, location);
         } finally {
             parserContext.labelStack.pop();
@@ -1025,6 +1030,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                         !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
+                        validateNoUsingDeclarationWithInitializerInCaseOrDefault(stmt);
                         consequent.add(stmt);
                     }
                 }
@@ -1039,6 +1045,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                         !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
+                        validateNoUsingDeclarationWithInitializerInCaseOrDefault(stmt);
                         consequent.add(stmt);
                     }
                 }
@@ -1100,13 +1107,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             parserContext.expect(TokenType.AWAIT);
             if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
-                throw new RuntimeException("Expected using declaration after await");
+                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
             }
             parserContext.advance();
             kind = VariableKind.AWAIT_USING;
         } else {
             if (!parserContext.isUsingIdentifierToken(parserContext.currentToken)) {
-                throw new RuntimeException("Expected using declaration");
+                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
             }
             parserContext.advance();
             kind = VariableKind.USING;
@@ -1136,11 +1143,16 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
 
             Pattern id = delegates.patterns.parsePattern();
+            if (isUsingKind && !(id instanceof Identifier)) {
+                throw new JSSyntaxErrorException("Invalid using declaration");
+            }
             Expression init = null;
 
             if (parserContext.match(TokenType.ASSIGN)) {
                 parserContext.advance();
                 init = delegates.expressions.parseAssignmentExpression();
+            } else if (isUsingKind && consumeSemi) {
+                throw new JSSyntaxErrorException("Missing initializer in using declaration");
             }
 
             declarations.add(new VariableDeclaration.VariableDeclarator(id, init));
@@ -1162,8 +1174,37 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (body instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException("Function declarations are not allowed in while statement position");
         }
+        validateNoUsingDeclarationWithInitializerInStatementPosition(body);
 
         return new WhileStatement(test, body, location);
+    }
+
+    private boolean hasUsingInitializer(VariableDeclaration variableDeclaration) {
+        if (variableDeclaration == null) {
+            return false;
+        }
+        VariableKind kind = variableDeclaration.getKind();
+        if (kind != VariableKind.USING && kind != VariableKind.AWAIT_USING) {
+            return false;
+        }
+        for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+            if (declarator != null && declarator.getInit() != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void validateNoUsingDeclarationWithInitializerInCaseOrDefault(Statement statement) {
+        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
+            throw new JSSyntaxErrorException("using declarations are not allowed directly in case/default clauses");
+        }
+    }
+
+    private void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
+        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
+            throw new JSSyntaxErrorException("using declarations are not allowed in this statement position");
+        }
     }
 
     private void parseWithClause() {

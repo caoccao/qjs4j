@@ -72,19 +72,17 @@ public class UsingDeclarationTest {
     }
 
     @Test
-    public void testUsingDeclarationWithPatterns() {
-        Program program = new Parser(new Lexer("""
-                using { x } = obj;
-                using [ y ] = arr;""")).parse();
-        assertThat(program.getBody()).hasSize(2);
-
-        VariableDeclaration objectPatternDeclaration = (VariableDeclaration) program.getBody().get(0);
-        assertThat(objectPatternDeclaration.getKind()).isEqualTo(VariableKind.USING);
-        assertThat(objectPatternDeclaration.getDeclarations().get(0).getId()).isInstanceOf(ObjectPattern.class);
-
-        VariableDeclaration arrayPatternDeclaration = (VariableDeclaration) program.getBody().get(1);
-        assertThat(arrayPatternDeclaration.getKind()).isEqualTo(VariableKind.USING);
-        assertThat(arrayPatternDeclaration.getDeclarations().get(0).getId()).isInstanceOf(ArrayPattern.class);
+    public void testUsingDeclarationRejectsPatterns() {
+        assertThatThrownBy(() -> new Parser(new Lexer("using { x } = obj;")).parse())
+                .isInstanceOf(JSSyntaxErrorException.class);
+        Program program = new Parser(new Lexer("using [ y ] = arr;")).parse();
+        assertThat(program.getBody()).hasSize(1);
+        ExpressionStatement expressionStatement = (ExpressionStatement) program.getBody().get(0);
+        assertThat(expressionStatement.getExpression()).isInstanceOf(AssignmentExpression.class);
+        AssignmentExpression assignmentExpression = (AssignmentExpression) expressionStatement.getExpression();
+        assertThat(assignmentExpression.getLeft()).isInstanceOf(MemberExpression.class);
+        assertThatThrownBy(() -> new Parser(new Lexer("using value = obj, { x } = obj;")).parse())
+                .isInstanceOf(JSSyntaxErrorException.class);
     }
 
     @Test
