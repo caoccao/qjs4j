@@ -1917,7 +1917,7 @@ public final class JSContext implements AutoCloseable {
         String exportBindingName = moduleRecord.exportBindingName();
         JSObject globalObject = getGlobalObject();
         JSObject moduleNamespace = moduleRecord.namespace();
-        globalObject.set(this, PropertyKey.fromString(exportBindingName), moduleNamespace);
+        globalObject.set(PropertyKey.fromString(exportBindingName), moduleNamespace);
         try {
             String transformedSource = moduleRecord.transformedSource();
             return eval(transformedSource, moduleRecord.resolvedSpecifier(), true);
@@ -4870,7 +4870,7 @@ public final class JSContext implements AutoCloseable {
         }
         JSObject globalObject = getGlobalObject();
         for (var entry : evalOverlaySnapshot.values().entrySet()) {
-            globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
+            globalObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
         }
         for (String absentKey : evalOverlaySnapshot.absentKeys()) {
             globalObject.delete(PropertyKey.fromString(absentKey));
@@ -5046,7 +5046,7 @@ public final class JSContext implements AutoCloseable {
         while (descendingIterator.hasNext()) {
             EvalOverlayFrame evalOverlayFrame = descendingIterator.next();
             for (var entry : evalOverlayFrame.savedGlobals().entrySet()) {
-                globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
+                globalObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
             }
             for (String absentKey : evalOverlayFrame.absentKeys()) {
                 globalObject.delete(PropertyKey.fromString(absentKey));

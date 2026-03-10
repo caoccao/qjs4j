@@ -1033,35 +1033,10 @@ public non-sealed class JSObject implements JSValue {
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
-        setInternal(context, key, value, this, true);
-    }
-
-    /**
-     * Set a property value by property key with context for setter functions.
-     */
-    public void set(JSContext context, PropertyKey key, JSValue value) {
-        JSContext effectiveContext = resolveContext(context);
-        setInternal(effectiveContext, key, value, this, true);
+        setInternal(key, value, this, true);
     }
 
     // Object integrity levels (ES5)
-
-    /**
-     * Set a property value with an explicit receiver for setter invocation.
-     * Used by Reflect.set to pass a different receiver than the target.
-     */
-    public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        JSContext effectiveContext = resolveContext(context);
-        setInternal(effectiveContext, key, value, receiver, true);
-    }
-
-    public void set(PropertyKey key, JSValue value, JSObject receiver) {
-        setInternal(context, key, value, receiver, true);
-    }
-
-    public void setArrayObject(boolean arrayObject) {
-        this.arrayObject = arrayObject;
-    }
 
     /**
      * Set the constructor type internal slot.
@@ -1088,8 +1063,8 @@ public non-sealed class JSObject implements JSValue {
         this.immutablePrototype = true;
     }
 
-    private boolean setInternal(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
-        JSContext effectiveContext = context;
+    private boolean setInternal(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
+        JSContext effectiveContext = this.context;
         // Check if property already exists
         int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
@@ -1110,7 +1085,7 @@ public non-sealed class JSObject implements JSValue {
             }
 
             if (receiver != this) {
-                return setOnReceiver(effectiveContext, key, value, receiver, throwOnFailure);
+                return setOnReceiver(key, value, receiver, throwOnFailure);
             }
 
             propertyValues[offset] = value;
@@ -1124,11 +1099,11 @@ public non-sealed class JSObject implements JSValue {
         JSObject proto = prototype;
         while (proto != null && !visited.contains(proto)) {
             if (proto instanceof JSProxy proxy) {
-                return proxy.setWithResult(effectiveContext, key, value, receiver);
+                return proxy.setWithResult(key, value, receiver);
             }
             // TypedArray has exotic [[Set]] for canonical numeric index keys
             if (proto instanceof JSTypedArray typedArray) {
-                boolean result = typedArray.setWithResult(effectiveContext, key, value, (JSValue) receiver);
+                boolean result = typedArray.setWithResult(key, value, (JSValue) receiver);
                 if (!result && throwOnFailure && !effectiveContext.hasPendingException()) {
                     return failSet(key, true);
                 }
@@ -1155,11 +1130,11 @@ public non-sealed class JSObject implements JSValue {
             proto = proto.prototype;
         }
 
-        return setOnReceiver(effectiveContext, key, value, receiver, throwOnFailure);
+        return setOnReceiver(key, value, receiver, throwOnFailure);
     }
 
-    private boolean setOnReceiver(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
-        JSContext effectiveContext = context;
+    private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
+        JSContext effectiveContext = this.context;
         // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
         // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
         // methods on the receiver so that proxy traps are correctly invoked when
@@ -1259,22 +1234,16 @@ public non-sealed class JSObject implements JSValue {
         return SetPrototypeResult.SUCCESS;
     }
 
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        JSContext effectiveContext = resolveContext(context);
-        return setInternal(effectiveContext, key, value, this, false);
+    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
+        return setInternal(key, value, receiver, true);
     }
 
     public boolean setWithResult(PropertyKey key, JSValue value) {
-        return setWithResult(key, value, this);
+        return setInternal(key, value, this, false);
     }
 
     public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return setInternal(this.context, key, value, receiver, false);
-    }
-
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        JSContext effectiveContext = resolveContext(context);
-        return setInternal(effectiveContext, key, value, receiver, false);
+        return setInternal(key, value, receiver, false);
     }
 
     /**
@@ -1283,9 +1252,9 @@ public non-sealed class JSObject implements JSValue {
      * When receiver is not an object, OrdinarySet returns false (cannot create properties on non-objects).
      * Subclasses (e.g. TypedArray) may override for spec-specific behavior.
      */
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSValue receiver) {
+    public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
         if (receiver instanceof JSObject objReceiver) {
-            return setWithResult(context, key, value, objReceiver);
+            return setWithResult(key, value, objReceiver);
         }
         // Per QuickJS JS_SetPropertyInternal: when receiver (this_obj) is not an object (p == NULL),
         // after prototype lookup completes without finding a setter, returns error/false.

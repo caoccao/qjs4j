@@ -658,8 +658,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     @Override
-    public void set(JSContext context, PropertyKey key, JSValue value) {
-        JSContext effectiveContext = resolveContext(context);
+    public void set(PropertyKey key, JSValue value) {
+        JSContext effectiveContext = this.context;
         if (isCanonicalNumericIndex(key)) {
             // TypedArray [[Set]] with SameValue(O, Receiver) = true
             // Always call integerIndexedElementSet which performs value conversion
@@ -687,12 +687,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             }
             return;
         }
-        super.set(effectiveContext, key, value);
-    }
-
-    @Override
-    public void set(PropertyKey key, JSValue value) {
-        set(resolveContext(null), key, value);
+        super.set(key, value);
     }
 
     /**
@@ -782,8 +777,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * by generic Array.prototype methods (e.g., copyWithin, fill).
      */
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        return setWithResult(context, key, value, (JSValue) this);
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return setWithResult(key, value, (JSValue) this);
     }
 
     /**
@@ -792,13 +787,13 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * Following QuickJS JS_SetPropertyInternal typed_array_oob handling.
      */
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSValue receiver) {
+    public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
         if (isCanonicalNumericIndex(key)) {
             // Step b.i: If SameValue(O, Receiver) is true
             if (receiver == this) {
                 // Perform TypedArraySetElement(O, numericIndex, V)
-                set(context, key, value);
-                return !context.hasPendingException();
+                set(key, value);
+                return !this.context.hasPendingException();
             }
             // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
             String str = key.toPropertyString();
@@ -823,7 +818,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             // skips prototype chain walk and goes directly to setting on the receiver.
             if (receiver instanceof JSObject receiverObj) {
                 PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
-                if (context.hasPendingException()) {
+                if (this.context.hasPendingException()) {
                     return false;
                 }
                 if (existingDescriptor != null) {
@@ -844,7 +839,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             }
             return false;
         }
-        return super.setWithResult(context, key, value, receiver);
+        return super.setWithResult(key, value, receiver);
     }
 
     /**

@@ -82,7 +82,7 @@ public final class ObjectConstructor {
                 }
 
                 // Step 4c.iii.3: Perform ? Set(to, nextKey, propValue, true)
-                boolean setSuccess = target.setWithResult(context, key, propValue);
+                boolean setSuccess = target.setWithResult(key, propValue);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }

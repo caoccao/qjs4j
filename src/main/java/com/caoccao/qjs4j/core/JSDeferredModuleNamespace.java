@@ -225,13 +225,8 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public void set(JSContext context, PropertyKey key, JSValue value) {
-        // Namespace objects are immutable; no-op without evaluation
-    }
-
-    @Override
     public void set(PropertyKey key, JSValue value) {
-        set(resolveContext(null), key, value);
+        // Namespace objects are immutable; no-op without evaluation
     }
 
     private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {

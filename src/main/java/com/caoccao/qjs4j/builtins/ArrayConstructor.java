@@ -422,7 +422,7 @@ public final class ArrayConstructor {
                 // Per spec: Perform ? Set(A, "length", k, true)
                 // The true Throw flag means always throw TypeError on failure
                 try {
-                    boolean success = target.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(length));
+                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(length));
                     if (context.hasPendingException()) {
                         resultPromise.reject(consumePendingException(context));
                         return;
@@ -621,7 +621,7 @@ public final class ArrayConstructor {
                             if (!isArray) {
                                 // Per spec: Perform ? Set(A, "length", len, true)
                                 try {
-                                    boolean success = target.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(index[0]));
+                                    boolean success = target.setWithResult(PropertyKey.LENGTH, JSNumber.of(index[0]));
                                     if (context.hasPendingException()) {
                                         resultPromise.reject(consumePendingException(context));
                                         return JSUndefined.INSTANCE;
@@ -720,7 +720,7 @@ public final class ArrayConstructor {
         }
 
         // Step 6: Set length with Throw=true semantics.
-        if (!array.setWithResult(context, PropertyKey.LENGTH, JSNumber.of(len))) {
+        if (!array.setWithResult(PropertyKey.LENGTH, JSNumber.of(len))) {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

@@ -705,7 +705,7 @@ public final class RegExpPrototype {
     }
 
     private static JSValue setLastIndexOrThrow(JSContext context, JSObject regexpObject, JSValue value) {
-        boolean success = regexpObject.setWithResult(context, PropertyKey.LAST_INDEX, value);
+        boolean success = regexpObject.setWithResult(PropertyKey.LAST_INDEX, value);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

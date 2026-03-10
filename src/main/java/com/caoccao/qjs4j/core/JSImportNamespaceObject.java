@@ -245,23 +245,9 @@ public final class JSImportNamespaceObject extends JSObject {
         exportNames.remove(exportName);
     }
 
-    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
-    @Override
-    public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        JSContext effectiveContext = resolveContext(context);
-        if (effectiveContext.isStrictMode()) {
-            effectiveContext.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
-        }
-    }
-
     @Override
     public void set(PropertyKey key, JSValue value) {
-        set(resolveContext(null), key, value);
-    }
-
-    @Override
-    public void set(JSContext context, PropertyKey key, JSValue value) {
-        set(context, key, value, this);
+        setWithReceiverAndException(key, value, this);
     }
 
     public void setEarlyExportBinding(String exportName, JSValue value) {
@@ -283,12 +269,16 @@ public final class JSImportNamespaceObject extends JSObject {
 
     // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
+        if (this.context.isStrictMode()) {
+            this.context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+        }
         return false;
     }
 
+    // ES2024 10.4.6.8 [[Set]]: Always returns false for module namespace objects.
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
         return false;
     }
 

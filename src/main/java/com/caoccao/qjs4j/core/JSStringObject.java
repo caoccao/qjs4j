@@ -268,8 +268,8 @@ public final class JSStringObject extends JSObject {
      * non-writable character index own properties, so Set must fail for those keys.
      */
     @Override
-    public void set(JSContext context, PropertyKey key, JSValue val) {
-        JSContext effectiveContext = resolveContext(context);
+    public void set(PropertyKey key, JSValue val) {
+        JSContext effectiveContext = this.context;
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -286,7 +286,7 @@ public final class JSStringObject extends JSObject {
                     + "' of object '[object String]'");
             return;
         }
-        super.set(effectiveContext, key, val);
+        super.set(key, val);
     }
 
     /**
@@ -295,7 +295,7 @@ public final class JSStringObject extends JSObject {
      * own properties, so [[Set]] must return false for those keys.
      */
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
+    public boolean setWithResult(PropertyKey key, JSValue value) {
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -309,7 +309,7 @@ public final class JSStringObject extends JSObject {
         if (charIndex >= 0 && charIndex < this.value.value().length()) {
             return false;
         }
-        return super.setWithResult(context, key, value);
+        return super.setWithResult(key, value);
     }
 
     @Override

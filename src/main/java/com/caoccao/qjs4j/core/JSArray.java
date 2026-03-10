@@ -728,7 +728,7 @@ public final class JSArray extends JSObject {
      * Set element at index.
      */
     public void set(long index, JSValue value) {
-        set(resolveContext(null), index, value);
+        set(context, index, value);
     }
 
     /**
@@ -738,7 +738,7 @@ public final class JSArray extends JSObject {
         JSContext effectiveContext = resolveContext(context);
         if (index < 0 || index > MAX_ARRAY_INDEX) {
             // Negative indices are treated as string properties
-            super.set(effectiveContext, PropertyKey.fromString(Long.toString(index)), value);
+            super.set(PropertyKey.fromString(Long.toString(index)), value);
             return;
         }
 
@@ -780,7 +780,7 @@ public final class JSArray extends JSObject {
         if (!isAddingNewElement && index <= Integer.MAX_VALUE) {
             PropertyKey key = PropertyKey.fromString(Long.toString(index));
             if (super.hasOwnShapeProperty(key)) {
-                super.set(effectiveContext, key, value);
+                super.set(key, value);
                 return;
             }
             // If this index is a hole (not present in own dense/sparse storage),
@@ -788,7 +788,7 @@ public final class JSArray extends JSObject {
             // are correctly invoked per ES2024 OrdinarySet.
             boolean hasOwnElement = hasElement(index);
             if (!hasOwnElement) {
-                super.set(effectiveContext, key, value);
+                super.set(key, value);
                 return;
             }
         }
@@ -810,7 +810,7 @@ public final class JSArray extends JSObject {
             sparseProperties.put((int) index, value);
         } else {
             // Preserve semantics for very large array indices without integer overflow.
-            super.set(effectiveContext, PropertyKey.fromString(Long.toString(index)), value);
+            super.set(PropertyKey.fromString(Long.toString(index)), value);
         }
     }
 
@@ -828,19 +828,14 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        set(resolveContext(null), key, value);
-    }
-
-    @Override
-    public void set(JSContext context, PropertyKey key, JSValue value) {
-        JSContext effectiveContext = resolveContext(context);
+        JSContext effectiveContext = context;
         long index = getArrayIndex(key);
         if (index >= 0) {
             // When adding a new element (index >= length), check if the prototype
             // chain has exotic [[Set]] behavior (e.g., TypedArray) that must be
             // consulted per ES2024 OrdinarySet step 5.c before creating a property.
             if (index >= length && hasExoticSetInPrototypeChain()) {
-                super.set(effectiveContext, key, value);
+                super.set(key, value);
             } else {
                 set(effectiveContext, index, value);
             }
@@ -853,13 +848,13 @@ public final class JSArray extends JSObject {
             }
             if (!isLengthWritable()) {
                 // Delegate to JSObject.set which will handle the non-writable error
-                super.set(effectiveContext, key, JSNumber.of(newLength));
+                super.set(key, JSNumber.of(newLength));
                 return;
             }
             setLength(newLength);
         } else {
             // Otherwise, use the shape-based storage from JSObject
-            super.set(effectiveContext, key, value);
+            super.set(key, value);
         }
     }
 
@@ -898,26 +893,26 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        return setWithResult(context, key, value, this);
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return setWithResult(key, value, this);
     }
 
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
         long index = getArrayIndex(key);
         if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
             // Non-length keys: delegate to JSObject which handles prototype chain
-            return super.setWithResult(context, key, value, receiver);
+            return super.setWithResult(key, value, receiver);
         }
         // When receiver differs from this (e.g. proxy forwarding to target),
         // delegate to JSObject so that setOnReceiver invokes the receiver's
         // [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]] traps.
         if (receiver != this) {
-            return super.setWithResult(context, key, value, receiver);
+            return super.setWithResult(key, value, receiver);
         }
         // Per ES spec ArraySetLength / QuickJS set_array_length:
         // Coerce value BEFORE the read-only test
-        Long newLength = toArrayLengthForLengthProperty(context, value);
+        Long newLength = toArrayLengthForLengthProperty(this.context, value);
         if (newLength == null) {
             return false; // coercion error (pending exception)
         }

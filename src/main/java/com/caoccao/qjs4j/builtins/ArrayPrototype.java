@@ -1588,7 +1588,7 @@ public final class ArrayPrototype {
      * Generates V8-matching error messages based on the failure reason.
      */
     private static boolean setOrThrow(JSContext context, JSObject obj, PropertyKey key, JSValue value) {
-        if (!obj.setWithResult(context, key, value)) {
+        if (!obj.setWithResult(key, value)) {
             if (!context.hasPendingException()) {
                 PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
                 if (desc != null && desc.isDataDescriptor() && !desc.isWritable()) {

@@ -4110,7 +4110,11 @@ public final class OpcodeHandler {
         if (objectValue instanceof JSObject jsObject) {
             try {
                 PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                jsObject.set(executionContext.virtualMachine.context, key, assignedValue);
+                if (jsObject instanceof JSProxy proxy) {
+                    proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue);
+                } else {
+                    jsObject.set(key, assignedValue);
+                }
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -4137,7 +4141,11 @@ public final class OpcodeHandler {
                 if (boxedObject != null) {
                     try {
                         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                        boxedObject.set(executionContext.virtualMachine.context, key, assignedValue);
+                        if (boxedObject instanceof JSProxy proxy) {
+                            proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue);
+                        } else {
+                            boxedObject.set(key, assignedValue);
+                        }
                         if (executionContext.virtualMachine.context.hasPendingException()) {
                             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                             executionContext.virtualMachine.context.clearPendingException();
@@ -4164,7 +4172,11 @@ public final class OpcodeHandler {
 
         if (objectValue instanceof JSObject jsObject) {
             try {
-                jsObject.set(executionContext.virtualMachine.context, propertyKey, fieldValue);
+                if (jsObject instanceof JSProxy proxy) {
+                    proxy.proxySet(executionContext.virtualMachine.context, propertyKey, fieldValue);
+                } else {
+                    jsObject.set(propertyKey, fieldValue);
+                }
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -4188,7 +4200,11 @@ public final class OpcodeHandler {
                 JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
                 if (boxedObject != null) {
                     try {
-                        boxedObject.set(executionContext.virtualMachine.context, propertyKey, fieldValue);
+                        if (boxedObject instanceof JSProxy proxy) {
+                            proxy.proxySet(executionContext.virtualMachine.context, propertyKey, fieldValue);
+                        } else {
+                            boxedObject.set(propertyKey, fieldValue);
+                        }
                         if (executionContext.virtualMachine.context.hasPendingException()) {
                             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                             executionContext.virtualMachine.context.clearPendingException();
@@ -4327,7 +4343,11 @@ public final class OpcodeHandler {
                 if (object instanceof JSProxy proxy) {
                     proxy.setPrivatePropertyDirect(key, value);
                 } else {
-                    object.set(executionContext.virtualMachine.context, key, value);
+                    if (object instanceof JSProxy proxy) {
+                        proxy.proxySet(executionContext.virtualMachine.context, key, value);
+                    } else {
+                        object.set(key, value);
+                    }
                 }
             }
         }
@@ -4403,7 +4423,11 @@ public final class OpcodeHandler {
             context.setInBareVariableAssignment(true);
         }
         try {
-            targetObject.set(executionContext.virtualMachine.context, key, setValue);
+            if (targetObject instanceof JSProxy proxy) {
+                proxy.proxySet(executionContext.virtualMachine.context, key, setValue);
+            } else {
+                targetObject.set(key, setValue);
+            }
         } finally {
             context.setInBareVariableAssignment(false);
         }
@@ -4437,13 +4461,25 @@ public final class OpcodeHandler {
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, keyValue);
         if (receiverValue instanceof JSObject receiverObject) {
-            superObject.set(executionContext.virtualMachine.context, key, assignedValue, receiverObject);
+            if (superObject instanceof JSProxy proxy) {
+                proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue, receiverObject);
+            } else {
+                superObject.setWithReceiverAndException(key, assignedValue, receiverObject);
+            }
         } else {
             JSObject boxedReceiver = executionContext.virtualMachine.toObject(receiverValue);
             if (boxedReceiver != null) {
-                superObject.set(executionContext.virtualMachine.context, key, assignedValue, boxedReceiver);
+                if (superObject instanceof JSProxy proxy) {
+                    proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue, boxedReceiver);
+                } else {
+                    superObject.setWithReceiverAndException(key, assignedValue, boxedReceiver);
+                }
             } else {
-                superObject.set(executionContext.virtualMachine.context, key, assignedValue);
+                if (superObject instanceof JSProxy proxy) {
+                    proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue);
+                } else {
+                    superObject.set(key, assignedValue);
+                }
             }
         }
 

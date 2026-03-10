@@ -38,11 +38,11 @@ public final class JSProxy extends JSObject {
     /**
      * Create a new Proxy.
      *
+     * @param context The execution context
      * @param target  The target object or function to wrap
      * @param handler The handler object with trap functions
-     * @param context The execution context
      */
-    public JSProxy(JSValue target, JSObject handler, JSContext context) {
+    public JSProxy(JSContext context, JSValue target, JSObject handler) {
         super(context);
         this.target = target;
         this.handler = handler;
@@ -65,7 +65,7 @@ public final class JSProxy extends JSObject {
         // Create Proxy object
         // Note: We don't set the proxy's internal prototype from the target.
         // The proxy intercepts prototype operations via getPrototypeOf/setPrototypeOf traps.
-        return new JSProxy(target, handler, context);
+        return new JSProxy(context, target, handler);
     }
 
     /**
@@ -971,6 +971,18 @@ public final class JSProxy extends JSObject {
         return boolResult;
     }
 
+    /**
+     * Context-aware assignment entry point used by VM/Reflect paths that must
+     * preserve current execution realm for TypeError construction.
+     */
+    public void proxySet(JSContext executionContext, PropertyKey key, JSValue value) {
+        proxySetInternal(key, value, resolveContext(executionContext), this, true);
+    }
+
+    public void proxySet(JSContext executionContext, PropertyKey key, JSValue value, JSObject receiver) {
+        proxySetInternal(key, value, resolveContext(executionContext), receiver, true);
+    }
+
     private boolean proxySetInternal(
             PropertyKey key,
             JSValue value,
@@ -1021,12 +1033,16 @@ public final class JSProxy extends JSObject {
             return true;
         }
 
-        boolean success = targetObj.setWithResult(executionContext, key, value, receiver);
+        boolean success = targetObj.setWithResult(key, value, receiver);
         if (!success && throwOnFailure && executionContext.isStrictMode()) {
             throw new JSException(executionContext.throwTypeError(
                     "'set' on proxy: trap returned falsish for property '" + key.toPropertyString() + "'"));
         }
         return success;
+    }
+
+    public boolean proxySetWithReceiver(JSContext executionContext, PropertyKey key, JSValue value, JSValue receiver) {
+        return proxySetInternal(key, value, resolveContext(executionContext), receiver, false);
     }
 
     /**
@@ -1095,14 +1111,6 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        set(context, key, value);
-    }
-
-    /**
-     * Override set with context to intercept property assignment.
-     */
-    @Override
-    public void set(JSContext context, PropertyKey key, JSValue value) {
         proxySetInternal(key, value, context, this, true);
     }
 
@@ -1162,28 +1170,18 @@ public final class JSProxy extends JSObject {
     }
 
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        return proxySetInternal(key, value, context, this, false);
-    }
-
-    @Override
     public boolean setWithResult(PropertyKey key, JSValue value) {
         return proxySetInternal(key, value, resolveContext(null), this, false);
     }
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return proxySetInternal(key, value, resolveContext(null), receiver, false);
+        return proxySetInternal(key, value, this.context, receiver, false);
     }
 
     @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        return proxySetInternal(key, value, context, receiver, false);
-    }
-
-    @Override
-    public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSValue receiver) {
-        return proxySetInternal(key, value, context, receiver, false);
+    public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
+        return proxySetInternal(key, value, this.context, receiver, false);
     }
 
     private JSValue toKeyValue(PropertyKey key) {

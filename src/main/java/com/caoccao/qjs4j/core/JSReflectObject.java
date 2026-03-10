@@ -503,7 +503,9 @@ public final class JSReflectObject {
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
         JSValue receiver = args.length > 3 ? args[3] : target;
 
-        boolean success = target.setWithResult(context, key, value, receiver);
+        boolean success = target instanceof JSProxy proxy
+                ? proxy.proxySetWithReceiver(context, key, value, receiver)
+                : target.setWithResult(key, value, receiver);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

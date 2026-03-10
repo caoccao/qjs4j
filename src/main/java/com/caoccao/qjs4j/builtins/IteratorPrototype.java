@@ -2170,17 +2170,6 @@ public final class IteratorPrototype {
             super.set(key, value);
         }
 
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value) {
-            materialize();
-            super.set(key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-            materialize();
-            super.set(key, value, receiver);
-        }
     }
 
     /**
@@ -2253,16 +2242,5 @@ public final class IteratorPrototype {
             super.set(key, value);
         }
 
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value) {
-            pristine = false;
-            super.set(key, value);
-        }
-
-        @Override
-        public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-            pristine = false;
-            super.set(key, value, receiver);
-        }
     }
 }

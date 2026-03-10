@@ -1175,7 +1175,7 @@ public final class JSGlobalObject {
                     PropertyKey toStringTagKey = PropertyKey.SYMBOL_TO_STRING_TAG;
                     PropertyDescriptor descriptor = thisObject.getOwnPropertyDescriptor(toStringTagKey);
                     if (descriptor != null) {
-                        thisObject.set(childContext, toStringTagKey, value);
+                        thisObject.set(toStringTagKey, value);
                     } else {
                         thisObject.defineProperty(
                                 toStringTagKey,
