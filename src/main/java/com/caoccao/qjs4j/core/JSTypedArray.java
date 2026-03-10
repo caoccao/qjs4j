@@ -300,9 +300,9 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * For non-numeric keys: delegates to ordinary defineProperty.
      */
     @Override
-    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         if (!isCanonicalNumericIndex(key)) {
-            return super.defineProperty(context, key, descriptor);
+            return super.defineProperty(key, descriptor);
         }
         String str = key.toPropertyString();
         // -0 is never a valid integer index
@@ -840,12 +840,12 @@ public sealed abstract class JSTypedArray extends JSObject permits
                     }
                     PropertyDescriptor valueDescriptor = new PropertyDescriptor();
                     valueDescriptor.setValue(value);
-                    return receiverObj.defineProperty(context, key, valueDescriptor);
+                    return receiverObj.defineProperty(key, valueDescriptor);
                 }
                 if (!receiverObj.isExtensible()) {
                     return false;
                 }
-                return receiverObj.defineProperty(context, key, value, PropertyDescriptor.DataState.All);
+                return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
             }
             return false;
         }

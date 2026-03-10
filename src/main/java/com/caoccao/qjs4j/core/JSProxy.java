@@ -163,24 +163,12 @@ public final class JSProxy extends JSObject {
      * ES2020 9.5.6 [[DefineOwnProperty]]
      */
     @Override
-    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         try {
             return definePropertyWithResult(context, key, descriptor);
         } catch (JSException e) {
             // definePropertyWithResult sets pending exception via context.throwTypeError before throwing
             return false;
-        }
-    }
-
-    /**
-     * Override defineProperty to intercept Object.defineProperty().
-     * ES2020 9.5.6 [[DefineOwnProperty]]
-     */
-    @Override
-    public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        boolean success = definePropertyWithResult(context, key, descriptor);
-        if (!success) {
-            throw new JSException(context.throwTypeError("defineProperty returned false"));
         }
     }
 
@@ -204,7 +192,7 @@ public final class JSProxy extends JSObject {
             trap = JSUndefined.INSTANCE;
         }
         if (trap instanceof JSUndefined) {
-            return targetObj.defineProperty(executionContext, key, descriptor);
+            return targetObj.defineProperty(key, descriptor);
         }
 
         if (!(trap instanceof JSFunction trapFunc)) {

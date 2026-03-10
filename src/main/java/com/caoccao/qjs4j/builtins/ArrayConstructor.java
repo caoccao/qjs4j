@@ -153,7 +153,7 @@ public final class ArrayConstructor {
                     }
                 }
                 // Step 6.g.ix: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                if (!target.defineProperty(context, PropertyKey.fromString(Integer.toString(k[0])), mappedValue, PropertyDescriptor.DataState.All)) {
+                if (!target.defineProperty(PropertyKey.fromString(Integer.toString(k[0])), mappedValue, PropertyDescriptor.DataState.All)) {
                     context.throwTypeError("Cannot define property " + k[0] + " on result object");
                     return false;
                 }
@@ -231,7 +231,7 @@ public final class ArrayConstructor {
                 }
             }
             // Step 15.viii: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-            if (!A.defineProperty(context, PropertyKey.fromString(Long.toString(k)), mappedValue, PropertyDescriptor.DataState.All)) {
+            if (!A.defineProperty(PropertyKey.fromString(Long.toString(k)), mappedValue, PropertyDescriptor.DataState.All)) {
                 return context.throwTypeError("Cannot define property " + k + " on result object");
             }
         }
@@ -482,7 +482,7 @@ public final class ArrayConstructor {
                                                 new JSNativeFunction(context, "onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                     // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                                                    target.defineProperty(innerContext, PropertyKey.fromString(Integer.toString(index)), finalValue, PropertyDescriptor.DataState.All);
+                                                    target.defineProperty(PropertyKey.fromString(Integer.toString(index)), finalValue, PropertyDescriptor.DataState.All);
                                                     fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                                                     return JSUndefined.INSTANCE;
                                                 }),
@@ -499,7 +499,7 @@ public final class ArrayConstructor {
                             } else {
                                 // No mapFn: use awaited value directly
                                 // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                                target.defineProperty(context, PropertyKey.fromString(Integer.toString(index)), awaitedValue, PropertyDescriptor.DataState.All);
+                                target.defineProperty(PropertyKey.fromString(Integer.toString(index)), awaitedValue, PropertyDescriptor.DataState.All);
                                 fromAsyncArrayLikeStep(context, resultPromise, target, isArray, arrayLikeObj, index + 1, length, mapFn, mapThisArg);
                             }
                             return JSUndefined.INSTANCE;
@@ -566,7 +566,7 @@ public final class ArrayConstructor {
                                     // CreateDataPropertyOrThrow
                                     if (isArray) {
                                         ((JSArray) target).push(resolved);
-                                    } else if (!target.defineProperty(context, PropertyKey.fromString(Integer.toString(index[0])), resolved, PropertyDescriptor.DataState.All)) {
+                                    } else if (!target.defineProperty(PropertyKey.fromString(Integer.toString(index[0])), resolved, PropertyDescriptor.DataState.All)) {
                                         asyncIterator.close();
                                         context.processMicrotasks();
                                         JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");
@@ -599,7 +599,7 @@ public final class ArrayConstructor {
                 // CreateDataPropertyOrThrow
                 if (isArray) {
                     ((JSArray) target).push(value);
-                } else if (!target.defineProperty(context, PropertyKey.fromString(Integer.toString(index[0])), value, PropertyDescriptor.DataState.All)) {
+                } else if (!target.defineProperty(PropertyKey.fromString(Integer.toString(index[0])), value, PropertyDescriptor.DataState.All)) {
                     asyncIterator.close();
                     context.processMicrotasks();
                     JSValue error = context.throwTypeError("Cannot define property " + index[0] + " on result object");
@@ -708,7 +708,7 @@ public final class ArrayConstructor {
 
         // Step 4-5: CreateDataPropertyOrThrow for each item.
         for (int index = 0; index < len; index++) {
-            if (!array.defineProperty(context, PropertyKey.fromString(Integer.toString(index)), args[index], PropertyDescriptor.DataState.All)) {
+            if (!array.defineProperty(PropertyKey.fromString(Integer.toString(index)), args[index], PropertyDescriptor.DataState.All)) {
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

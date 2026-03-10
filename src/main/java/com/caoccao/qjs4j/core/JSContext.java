@@ -301,7 +301,7 @@ public final class JSContext implements AutoCloseable {
         descriptor.setSetter(setter);
         descriptor.setConfigurable(true);
         descriptor.setEnumerable(true);
-        globalObject.defineProperty(this, key, descriptor);
+        globalObject.defineProperty(key, descriptor);
     }
 
     private void bindImportOverlayValue(
@@ -327,7 +327,7 @@ public final class JSContext implements AutoCloseable {
         descriptor.setWritable(false);
         descriptor.setEnumerable(true);
         descriptor.setConfigurable(true);
-        globalObject.defineProperty(this, key, descriptor);
+        globalObject.defineProperty(key, descriptor);
     }
 
     private void bindNamedImports(

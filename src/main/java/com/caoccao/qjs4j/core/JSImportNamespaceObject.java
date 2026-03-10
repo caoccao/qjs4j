@@ -83,7 +83,7 @@ public final class JSImportNamespaceObject extends JSObject {
         if (finalized || key == null || !key.isString()) {
             return false;
         }
-        boolean defined = super.defineProperty(context, key, descriptor);
+        boolean defined = super.defineProperty(key, descriptor);
         if (defined) {
             registerExportName(key.asString());
         }
@@ -95,7 +95,7 @@ public final class JSImportNamespaceObject extends JSObject {
     }
 
     @Override
-    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         if (isExportProperty(key)) {
             if (super.hasOwnProperty(key)) {
                 return validateExportDefine(key, descriptor);
@@ -103,15 +103,15 @@ public final class JSImportNamespaceObject extends JSObject {
             if (finalized) {
                 return false;
             }
-            return super.defineProperty(context, key, descriptor);
+            return super.defineProperty(key, descriptor);
         }
         if (PropertyKey.SYMBOL_TO_STRING_TAG.equals(key)) {
-            return super.defineProperty(context, key, descriptor);
+            return super.defineProperty(key, descriptor);
         }
         if (!hasOwnProperty(key)) {
             return false;
         }
-        return super.defineProperty(context, key, descriptor);
+        return super.defineProperty(key, descriptor);
     }
 
     @Override

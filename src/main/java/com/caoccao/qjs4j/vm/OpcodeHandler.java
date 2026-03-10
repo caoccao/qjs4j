@@ -1074,7 +1074,6 @@ public final class OpcodeHandler {
         if (objectValue instanceof JSObject object) {
             PropertyKey fieldKey = PropertyKey.fromString(fieldName);
             boolean defineSucceeded = object.defineProperty(
-                    executionContext.virtualMachine.context,
                     fieldKey,
                     PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
             if (!defineSucceeded) {
@@ -1104,7 +1103,6 @@ public final class OpcodeHandler {
             }
             PropertyKey methodKey = PropertyKey.fromString(methodName);
             boolean defineSucceeded = object.defineProperty(
-                    executionContext.virtualMachine.context,
                     methodKey,
                     PropertyDescriptor.dataDescriptor(
                             methodValue,
@@ -1186,7 +1184,6 @@ public final class OpcodeHandler {
                     defineSucceeded = true;
                 } else {
                     defineSucceeded = object.defineProperty(
-                            executionContext.virtualMachine.context,
                             key,
                             PropertyDescriptor.dataDescriptor(methodValue, dataState));
                 }
@@ -1218,7 +1215,6 @@ public final class OpcodeHandler {
                     defineSucceeded = true;
                 } else {
                     defineSucceeded = object.defineProperty(
-                            executionContext.virtualMachine.context,
                             key,
                             PropertyDescriptor.accessorDescriptor(
                                     getter,
@@ -1255,7 +1251,6 @@ public final class OpcodeHandler {
                     defineSucceeded = true;
                 } else {
                     defineSucceeded = object.defineProperty(
-                            executionContext.virtualMachine.context,
                             key,
                             PropertyDescriptor.accessorDescriptor(
                                     getter,

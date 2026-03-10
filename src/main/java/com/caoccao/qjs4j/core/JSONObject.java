@@ -248,7 +248,7 @@ public final class JSONObject {
                             obj.delete(PropertyKey.fromString(Long.toString(i)));
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
-                            obj.defineProperty(context, PropertyKey.fromString(Long.toString(i)),
+                            obj.defineProperty(PropertyKey.fromString(Long.toString(i)),
                                     newElement, PropertyDescriptor.DataState.All);
                         }
                     } catch (JSVirtualMachineException e) {
@@ -284,7 +284,7 @@ public final class JSONObject {
                             obj.delete(PropertyKey.fromString(prop));
                         } else {
                             // Use CreateDataProperty, not [[Set]]
-                            obj.defineProperty(context, PropertyKey.fromString(prop),
+                            obj.defineProperty(PropertyKey.fromString(prop),
                                     newElement, PropertyDescriptor.DataState.All);
                         }
                     } catch (JSVirtualMachineException e) {
@@ -307,7 +307,7 @@ public final class JSONObject {
         JSValue nameValue = new JSString(name);
         JSObject contextObj = context.createJSObject();
         if (sourceText != null) {
-            contextObj.defineProperty(null, PropertyKey.fromString("source"), new JSString(sourceText), PropertyDescriptor.DataState.All);
+            contextObj.defineProperty(PropertyKey.fromString("source"), new JSString(sourceText), PropertyDescriptor.DataState.All);
         }
         JSValue result = callSafe(context, reviver, holder, new JSValue[]{nameValue, val, contextObj});
         return result;
@@ -609,7 +609,7 @@ public final class JSONObject {
         if (args.length > 1 && args[1] instanceof JSFunction reviver) {
             // Create root with CreateDataPropertyOrThrow (not [[Set]])
             JSObject root = context.createJSObject();
-            root.defineProperty(null, PropertyKey.fromString(""), obj, PropertyDescriptor.DataState.All);
+            root.defineProperty(PropertyKey.fromString(""), obj, PropertyDescriptor.DataState.All);
             JSValue result = internalizeJSONProperty(context, root, "", reviver, parseContext);
             if (result == null || context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -764,7 +764,7 @@ public final class JSONObject {
             ParseResult valueResult = parseValue(context, parseContext, i);
             // Use DefineOwnProperty (CreateDataProperty), NOT [[Set]]
             // This ensures __proto__ is treated as a regular property
-            obj.defineProperty(null, PropertyKey.fromString(key),
+            obj.defineProperty(PropertyKey.fromString(key),
                     valueResult.value, PropertyDescriptor.DataState.All);
             // Record source for object properties
             parseContext.recordElementSource(obj, key, valueResult.value, valueResult.sourceStart, valueResult.sourceEnd);
@@ -1001,7 +1001,7 @@ public final class JSONObject {
         obj.setPrototype(null);
 
         // Step 6: Perform CreateDataPropertyOrThrow(obj, "rawJSON", jsonString)
-        obj.defineProperty(null, PropertyKey.fromString("rawJSON"), jsonString, PropertyDescriptor.DataState.All);
+        obj.defineProperty(PropertyKey.fromString("rawJSON"), jsonString, PropertyDescriptor.DataState.All);
 
         // Mark as rawJSON object using Java-level tracking (not visible to JS)
         rawJSONObjects.put(obj, Boolean.TRUE);
@@ -1160,7 +1160,7 @@ public final class JSONObject {
 
         // Create wrapper object using CreateDataProperty (not [[Set]])
         JSObject wrapper = context.createJSObject();
-        wrapper.defineProperty(null, PropertyKey.fromString(""), value, PropertyDescriptor.DataState.All);
+        wrapper.defineProperty(PropertyKey.fromString(""), value, PropertyDescriptor.DataState.All);
 
         // Apply initial check (handles toJSON and replacer)
         JSValue processedValue = jsonCheck(context, ctx, wrapper, value, new JSString(""));

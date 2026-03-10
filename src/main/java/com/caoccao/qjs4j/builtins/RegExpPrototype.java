@@ -200,20 +200,20 @@ public final class RegExpPrototype {
                 String groupName = groupNames[i];
                 if (groupName != null) {
                     if (!(pairValue instanceof JSUndefined) || !groupIndices.hasOwnProperty(groupName)) {
-                        groupIndices.defineProperty(null, PropertyKey.fromString(groupName), pairValue, PropertyDescriptor.DataState.All);
+                        groupIndices.defineProperty(PropertyKey.fromString(groupName), pairValue, PropertyDescriptor.DataState.All);
                     }
                 }
             }
         }
         JSValue groupsValue = groupNames != null ? groupIndices : JSUndefined.INSTANCE;
-        indicesArray.defineProperty(null, PropertyKey.GROUPS, groupsValue, PropertyDescriptor.DataState.All);
+        indicesArray.defineProperty(PropertyKey.GROUPS, groupsValue, PropertyDescriptor.DataState.All);
         return indicesArray;
     }
 
     private static JSObject createIteratorResultObject(JSContext context, JSValue value, boolean done) {
         JSObject resultObject = context.createJSObject();
-        resultObject.defineProperty(null, PropertyKey.VALUE, value, PropertyDescriptor.DataState.All);
-        resultObject.defineProperty(null, PropertyKey.DONE, JSBoolean.valueOf(done), PropertyDescriptor.DataState.All);
+        resultObject.defineProperty(PropertyKey.VALUE, value, PropertyDescriptor.DataState.All);
+        resultObject.defineProperty(PropertyKey.DONE, JSBoolean.valueOf(done), PropertyDescriptor.DataState.All);
         return resultObject;
     }
 
@@ -230,9 +230,9 @@ public final class RegExpPrototype {
             String groupName = groupNames[i];
             if (groupName != null) {
                 if (captures[i] != null) {
-                    groups.defineProperty(null, PropertyKey.fromString(groupName), new JSString(captures[i]), PropertyDescriptor.DataState.All);
+                    groups.defineProperty(PropertyKey.fromString(groupName), new JSString(captures[i]), PropertyDescriptor.DataState.All);
                 } else if (!groups.hasOwnProperty(groupName)) {
-                    groups.defineProperty(null, PropertyKey.fromString(groupName), JSUndefined.INSTANCE, PropertyDescriptor.DataState.All);
+                    groups.defineProperty(PropertyKey.fromString(groupName), JSUndefined.INSTANCE, PropertyDescriptor.DataState.All);
                 }
             }
         }
@@ -315,13 +315,13 @@ public final class RegExpPrototype {
 
             int[][] indices = result.indices();
             if (indices != null && indices.length > 0) {
-                array.defineProperty(null, PropertyKey.INDEX, JSNumber.of(indices[0][0]), PropertyDescriptor.DataState.All);
+                array.defineProperty(PropertyKey.INDEX, JSNumber.of(indices[0][0]), PropertyDescriptor.DataState.All);
             }
-            array.defineProperty(null, PropertyKey.INPUT, new JSString(str), PropertyDescriptor.DataState.All);
-            array.defineProperty(null, PropertyKey.GROUPS,
+            array.defineProperty(PropertyKey.INPUT, new JSString(str), PropertyDescriptor.DataState.All);
+            array.defineProperty(PropertyKey.GROUPS,
                     createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
             if (regexp.hasIndices()) {
-                array.defineProperty(null, PropertyKey.INDICES,
+                array.defineProperty(PropertyKey.INDICES,
                         createIndicesValue(context, indices, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
             }
 

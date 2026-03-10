@@ -144,7 +144,7 @@ public non-sealed class JSObject implements JSValue {
      * Returns true if the property was successfully defined, false if the object
      * is not extensible and the property does not already exist.
      */
-    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         if (!extensible && !hasOwnProperty(key)) {
             return false;
         }
@@ -204,7 +204,7 @@ public non-sealed class JSObject implements JSValue {
             PropertyDescriptor merged = new PropertyDescriptor();
             merged.mergeFrom(current);
             merged.mergeFrom(descriptor);
-            defineProperty(key, merged);
+            definePropertyDirect(key, merged);
         } else {
             // New property: apply default attribute values per ES2024 10.1.6.3 step 5.
             // "If IsGenericDescriptor(Desc) or IsDataDescriptor(Desc), create an own data
@@ -218,45 +218,38 @@ public non-sealed class JSObject implements JSValue {
             } else {
                 completed.completeAsData();
             }
-            defineProperty(key, completed);
+            definePropertyDirect(key, completed);
         }
         return true;
     }
 
     /**
      * [[DefineOwnProperty]] for a data descriptor, delegating to the full spec-compliant overload.
-     * Equivalent to defineProperty(context, key, PropertyDescriptor.dataDescriptor(value, state)).
+     * Equivalent to defineProperty(key, PropertyDescriptor.dataDescriptor(value, state)).
      */
-    public boolean defineProperty(JSContext context, PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
-        return defineProperty(context, key, PropertyDescriptor.dataDescriptor(value, state));
-    }
-
-    /**
-     * Define a data property with the given key, value, and data state.
-     */
-    public void defineProperty(PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
-        defineProperty(key, PropertyDescriptor.dataDescriptor(value, state));
+    public boolean defineProperty(PropertyKey key, JSValue value, PropertyDescriptor.DataState state) {
+        return defineProperty(key, PropertyDescriptor.dataDescriptor(value, state));
     }
 
     /**
      * Define an accessor property with a getter and no setter.
      */
-    public void defineProperty(PropertyKey key, JSFunction getter, PropertyDescriptor.AccessorState state) {
-        defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
+    public boolean defineProperty(PropertyKey key, JSFunction getter, PropertyDescriptor.AccessorState state) {
+        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
     }
 
     /**
      * Define an accessor property with a getter and a setter.
      */
-    public void defineProperty(PropertyKey key, JSFunction getter, JSFunction setter, PropertyDescriptor.AccessorState state) {
-        defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, setter, state));
+    public boolean defineProperty(PropertyKey key, JSFunction getter, JSFunction setter, PropertyDescriptor.AccessorState state) {
+        return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, setter, state));
     }
 
     /**
      * Define a new property with a descriptor.
      * This is the internal method that always succeeds (used by freeze, seal, etc.).
      */
-    public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+    protected void definePropertyDirect(PropertyKey key, PropertyDescriptor descriptor) {
         // When defining a property (especially accessor), remove any sparse entry
         // so the shape-based property takes precedence in get().
         if (sparseProperties != null) {
@@ -1228,7 +1221,7 @@ public non-sealed class JSObject implements JSValue {
             // Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
             PropertyDescriptor valueDescriptor = new PropertyDescriptor();
             valueDescriptor.setValue(value);
-            return receiver.defineProperty(effectiveContext, key, valueDescriptor);
+            return receiver.defineProperty(key, valueDescriptor);
         }
 
         // Step 2e: CreateDataProperty(Receiver, P, V).
@@ -1244,7 +1237,7 @@ public non-sealed class JSObject implements JSValue {
             }
             return false;
         }
-        return receiver.defineProperty(effectiveContext, key, value, PropertyDescriptor.DataState.All);
+        return receiver.defineProperty(key, value, PropertyDescriptor.DataState.All);
     }
 
     /**

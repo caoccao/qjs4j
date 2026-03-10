@@ -2038,15 +2038,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+        public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
             materialize();
-            return super.defineProperty(context, key, descriptor);
-        }
-
-        @Override
-        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-            materialize();
-            super.defineProperty(key, descriptor);
+            return super.defineProperty(key, descriptor);
         }
 
         @Override
@@ -2238,15 +2232,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+        public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
             pristine = false;
-            return super.defineProperty(context, key, descriptor);
-        }
-
-        @Override
-        public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-            pristine = false;
-            super.defineProperty(key, descriptor);
+            return super.defineProperty(key, descriptor);
         }
 
         @Override

@@ -182,7 +182,7 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean defineProperty(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
+    public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         JSContext effectiveContext = resolveContext(context);
         // Per ES spec ArraySetLength (10.4.2.4) / QuickJS set_array_length:
         // When defining "length" with a value, coerce BEFORE descriptor validation
@@ -272,44 +272,33 @@ public final class JSArray extends JSObject {
                 effectiveContext.throwTypeError("Cannot add property " + index + ", array length is not writable");
                 return false;
             }
-            boolean result = super.defineProperty(effectiveContext, key, descriptor);
+            boolean result = super.defineProperty(key, descriptor);
             if (result) {
                 setLength(index + 1);
             }
             return result;
         }
-        return super.defineProperty(effectiveContext, key, descriptor);
+        return super.defineProperty(key, descriptor);
     }
 
     @Override
-    public void defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
+    protected void definePropertyDirect(PropertyKey key, PropertyDescriptor descriptor) {
         long index = getArrayIndex(key);
         if (index >= 0 && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
             // For default data descriptors (writable, enumerable, configurable),
             // store in array storage (denseArray/sparseProperties) rather than shape.
-            // This is the path taken by setOnReceiver when creating a new array element
-            // via the prototype chain [[Set]] algorithm.
-            // Non-default descriptors (from Object.defineProperty with specific attributes)
-            // go through shape storage.
             if (descriptor.isDataDescriptor() && !descriptor.isAccessorDescriptor()
                     && descriptor.isWritable() && descriptor.isEnumerable() && descriptor.isConfigurable()) {
-                // Extend length if necessary
                 if (index >= length) {
                     if (isLengthWritable()) {
                         setLength(index + 1);
                     } else {
-                        // Can't extend length, fall through to shape-based storage
-                        super.defineProperty(key, descriptor);
+                        // Can't extend length, fall through to shape-based storage.
+                        super.definePropertyDirect(key, descriptor);
                         return;
                     }
                 }
-                // Remove any existing shape property for this index, since the
-                // default data descriptor (writable, enumerable, configurable)
-                // is represented by dense/sparse array storage without a shape entry.
-                // This handles the case where a non-default descriptor was previously
-                // defined via Object.defineProperty and is now being overwritten by
-                // CreateDataPropertyOrThrow (e.g., in Array.prototype.filter).
                 PropertyKey shapeKey = getOwnShapeKey(key);
                 if (shapeKey != null) {
                     int shapeOffset = shape.getPropertyOffset(shapeKey);
@@ -321,7 +310,6 @@ public final class JSArray extends JSObject {
                         compactProperties();
                     }
                 }
-                // Store in array storage
                 if (intIndex < MAX_DENSE_SIZE) {
                     ensureDenseCapacity(intIndex + 1);
                     denseArray[intIndex] = descriptor.getValue();
@@ -333,12 +321,12 @@ public final class JSArray extends JSObject {
                 }
                 return;
             }
-            // Non-default descriptor: clear dense array entry so shape-based property takes precedence
+            // Non-default descriptor: clear dense entry so shape storage takes precedence.
             if (intIndex < denseArray.length) {
                 denseArray[intIndex] = null;
             }
         }
-        super.defineProperty(key, descriptor);
+        super.definePropertyDirect(key, descriptor);
     }
 
     @Override

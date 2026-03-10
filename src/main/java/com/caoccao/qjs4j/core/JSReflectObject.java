@@ -315,7 +315,7 @@ public final class JSReflectObject {
         if (target instanceof JSProxy proxy) {
             return JSBoolean.valueOf(proxy.definePropertyWithResult(context, key, descriptor));
         }
-        return JSBoolean.valueOf(target.defineProperty(context, key, descriptor));
+        return JSBoolean.valueOf(target.defineProperty(key, descriptor));
     }
 
     /**
