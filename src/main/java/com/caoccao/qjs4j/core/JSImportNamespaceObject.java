@@ -115,28 +115,15 @@ public final class JSImportNamespaceObject extends JSObject {
     }
 
     @Override
-    public boolean delete(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
+    public boolean delete(PropertyKey key) {
+        JSContext context = resolveContext(null);
         if (isExportProperty(key)) {
-            if (effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
+            if (context.isStrictMode()) {
+                context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
             }
             return false;
         }
-        return super.delete(effectiveContext, key);
-    }
-
-    @Override
-    public boolean delete(PropertyKey key) {
-        return delete(resolveContext(null), key);
-    }
-
-    @Override
-    public boolean deleteNonStrict(PropertyKey key) {
-        if (isExportProperty(key)) {
-            return false;
-        }
-        return super.deleteNonStrict(key);
+        return super.delete(key);
     }
 
     public void finalizeNamespace() {

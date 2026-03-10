@@ -1152,7 +1152,18 @@ public final class OpcodeHandler {
                     namePrefix = "";
                 }
                 executionContext.virtualMachine.setObjectName(methodFunction, new JSString(namePrefix + computedName.value()));
-                methodFunction.deleteNonStrict(PropertyKey.PROTOTYPE);
+                JSContext context = executionContext.virtualMachine.context;
+                boolean wasStrictMode = context.isStrictMode();
+                try {
+                    if (wasStrictMode) {
+                        context.exitStrictMode();
+                    }
+                    methodFunction.delete(PropertyKey.PROTOTYPE);
+                } finally {
+                    if (wasStrictMode) {
+                        context.enterStrictMode();
+                    }
+                }
             }
 
             boolean defineSucceeded;
@@ -1340,7 +1351,7 @@ public final class OpcodeHandler {
             return;
         }
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
-        boolean result = targetObject.delete(executionContext.virtualMachine.context, key);
+                    boolean result = targetObject.delete(key);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
         }

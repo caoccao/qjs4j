@@ -2044,12 +2044,6 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean delete(JSContext context, PropertyKey key) {
-            materialize();
-            return super.delete(key);
-        }
-
-        @Override
         public boolean delete(PropertyKey key) {
             materialize();
             return super.delete(key);
@@ -2235,12 +2229,6 @@ public final class IteratorPrototype {
         public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
             pristine = false;
             return super.defineProperty(key, descriptor);
-        }
-
-        @Override
-        public boolean delete(JSContext context, PropertyKey key) {
-            pristine = false;
-            return super.delete(key);
         }
 
         @Override

@@ -336,7 +336,17 @@ public final class JSReflectObject {
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
-        return JSBoolean.valueOf(target.deleteNonStrict(key));
+        boolean wasStrictMode = context.isStrictMode();
+        try {
+            if (wasStrictMode) {
+                context.exitStrictMode();
+            }
+            return JSBoolean.valueOf(target.delete(key));
+        } finally {
+            if (wasStrictMode) {
+                context.enterStrictMode();
+            }
+        }
     }
 
     private static JSObject fromPropertyDescriptor(JSContext context, PropertyDescriptor descriptor) {

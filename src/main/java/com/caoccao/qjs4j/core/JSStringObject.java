@@ -90,8 +90,8 @@ public final class JSStringObject extends JSObject {
     }
 
     @Override
-    public boolean delete(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
+    public boolean delete(PropertyKey key) {
+        JSContext context = resolveContext(null);
         boolean isCharacterIndex = false;
         if (key.isIndex()) {
             int index = key.asIndex();
@@ -105,18 +105,13 @@ public final class JSStringObject extends JSObject {
             }
         }
         if (isCharacterIndex) {
-            if (effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError(
+            if (context.isStrictMode()) {
+                context.throwTypeError(
                         "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForDelete());
             }
             return false;
         }
-        return super.delete(effectiveContext, key);
-    }
-
-    @Override
-    public boolean delete(PropertyKey key) {
-        return delete(resolveContext(null), key);
+        return super.delete(key);
     }
 
     /**

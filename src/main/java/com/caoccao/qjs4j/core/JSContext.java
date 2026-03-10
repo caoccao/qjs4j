@@ -1923,7 +1923,7 @@ public final class JSContext implements AutoCloseable {
             String transformedSource = moduleRecord.transformedSource();
             return eval(transformedSource, moduleRecord.resolvedSpecifier(), true);
         } finally {
-            globalObject.delete(this, PropertyKey.fromString(exportBindingName));
+            globalObject.delete(PropertyKey.fromString(exportBindingName));
         }
     }
 
@@ -4861,7 +4861,7 @@ public final class JSContext implements AutoCloseable {
             globalObject.defineProperty(key, entry.getValue(), PropertyDescriptor.DataState.All);
         }
         for (String absentKey : evalOverlayFrame.absentKeys()) {
-            globalObject.delete(this, PropertyKey.fromString(absentKey));
+            globalObject.delete(PropertyKey.fromString(absentKey));
         }
     }
 
@@ -4874,7 +4874,7 @@ public final class JSContext implements AutoCloseable {
             globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
         }
         for (String absentKey : evalOverlaySnapshot.absentKeys()) {
-            globalObject.delete(this, PropertyKey.fromString(absentKey));
+            globalObject.delete(PropertyKey.fromString(absentKey));
         }
     }
 
@@ -5050,7 +5050,7 @@ public final class JSContext implements AutoCloseable {
                 globalObject.set(this, PropertyKey.fromString(entry.getKey()), entry.getValue());
             }
             for (String absentKey : evalOverlayFrame.absentKeys()) {
-                globalObject.delete(this, PropertyKey.fromString(absentKey));
+                globalObject.delete(PropertyKey.fromString(absentKey));
             }
         }
         return new JSGlobalObject.EvalOverlaySnapshot(suspendedValues, suspendedAbsentKeys);

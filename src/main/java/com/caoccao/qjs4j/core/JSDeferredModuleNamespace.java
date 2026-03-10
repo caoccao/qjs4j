@@ -37,7 +37,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         this.context = context;
         this.moduleRecord = moduleRecord;
         setPrototype(null);
-        definePropertyDirect(
+        definePropertyInternal(
                 PropertyKey.SYMBOL_TO_STRING_TAG,
             PropertyDescriptor.dataDescriptor(
                 new JSString("Deferred Module"),
@@ -59,7 +59,7 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public boolean delete(JSContext context, PropertyKey key) {
+    public boolean delete(PropertyKey key) {
         if (isSymbolLikeNamespaceKey(key)) {
             return true;
         }
@@ -69,11 +69,6 @@ final class JSDeferredModuleNamespace extends JSObject {
             setEvaluationPendingException(context, jsException);
             return false;
         }
-    }
-
-    @Override
-    public boolean delete(PropertyKey key) {
-        return delete(resolveContext(null), key);
     }
 
     private JSImportNamespaceObject ensureEvaluated() {

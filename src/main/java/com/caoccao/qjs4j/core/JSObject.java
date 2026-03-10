@@ -204,7 +204,7 @@ public non-sealed class JSObject implements JSValue {
             PropertyDescriptor merged = new PropertyDescriptor();
             merged.mergeFrom(current);
             merged.mergeFrom(descriptor);
-            definePropertyDirect(key, merged);
+            definePropertyInternal(key, merged);
         } else {
             // New property: apply default attribute values per ES2024 10.1.6.3 step 5.
             // "If IsGenericDescriptor(Desc) or IsDataDescriptor(Desc), create an own data
@@ -218,7 +218,7 @@ public non-sealed class JSObject implements JSValue {
             } else {
                 completed.completeAsData();
             }
-            definePropertyDirect(key, completed);
+            definePropertyInternal(key, completed);
         }
         return true;
     }
@@ -249,7 +249,7 @@ public non-sealed class JSObject implements JSValue {
      * Define a new property with a descriptor.
      * This is the internal method that always succeeds (used by freeze, seal, etc.).
      */
-    protected void definePropertyDirect(PropertyKey key, PropertyDescriptor descriptor) {
+    protected void definePropertyInternal(PropertyKey key, PropertyDescriptor descriptor) {
         // When defining a property (especially accessor), remove any sparse entry
         // so the shape-based property takes precedence in get().
         if (sparseProperties != null) {
@@ -302,19 +302,7 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() implementation.
      */
     public boolean delete(PropertyKey key) {
-        return deleteInternal(context.isStrictMode(), key);
-    }
-
-    /**
-     * Delete a property by key with context for strict mode checking.
-     * Following QuickJS delete_property() implementation.
-     */
-    public boolean delete(JSContext context, PropertyKey key) {
-        JSContext executionContext = resolveContext(context);
-        return deleteInternal(executionContext.isStrictMode(), key);
-    }
-
-    private boolean deleteInternal(boolean strictMode, PropertyKey key) {
+        boolean strictMode = context.isStrictMode();
         // Check sparse properties first.
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
@@ -378,10 +366,6 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return true;
-    }
-
-    public boolean deleteNonStrict(PropertyKey key) {
-        return deleteInternal(false, key);
     }
 
     /**

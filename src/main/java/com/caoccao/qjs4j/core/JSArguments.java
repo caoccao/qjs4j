@@ -212,7 +212,7 @@ public final class JSArguments extends JSObject {
     }
 
     @Override
-    public boolean delete(JSContext context, PropertyKey key) {
+    public boolean delete(PropertyKey key) {
         boolean deleted = super.delete(key);
         if (deleted) {
             int index = getArgumentIndex(key);
@@ -221,11 +221,6 @@ public final class JSArguments extends JSObject {
             }
         }
         return deleted;
-    }
-
-    @Override
-    public boolean delete(PropertyKey key) {
-        return delete(resolveContext(null), key);
     }
 
     @Override

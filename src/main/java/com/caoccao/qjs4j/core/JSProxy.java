@@ -258,37 +258,27 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public boolean delete(PropertyKey key) {
-        JSContext executionContext = resolveContext(null);
-        return deleteInternal(executionContext, key, executionContext.isStrictMode());
-    }
-
-    @Override
-    public boolean delete(JSContext ctx, PropertyKey key) {
-        JSContext executionContext = resolveContext(ctx);
-        return deleteInternal(executionContext, key, executionContext.isStrictMode());
-    }
-
-    private boolean deleteInternal(JSContext executionContext, PropertyKey key, boolean strictMode) {
+        boolean strictMode = context.isStrictMode();
         if (revoked) {
-            throw new JSException(executionContext.throwTypeError("Cannot perform 'delete' on a proxy that has been revoked"));
+            throw new JSException(context.throwTypeError("Cannot perform 'delete' on a proxy that has been revoked"));
         }
 
         JSObject targetObj = (JSObject) target;
         JSFunction deleteTrapFunc = getTrapFunction("deleteProperty");
         if (deleteTrapFunc != null) {
             JSValue[] args = new JSValue[]{target, toKeyValue(key)};
-            JSValue result = deleteTrapFunc.call(executionContext, handler, args);
+            JSValue result = deleteTrapFunc.call(context, handler, args);
             boolean success = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (success) {
                 PropertyDescriptor targetDesc = targetObj.getOwnPropertyDescriptor(key);
                 if (targetDesc != null) {
                     if (!targetDesc.isConfigurable()) {
-                        throw new JSException(executionContext.throwTypeError(
+                        throw new JSException(context.throwTypeError(
                                 "'deleteProperty' on proxy: trap returned truish for property '" + key.toPropertyString() + "' which is non-configurable in the proxy target"));
                     }
                     if (!targetObj.isExtensible()) {
-                        throw new JSException(executionContext.throwTypeError(
+                        throw new JSException(context.throwTypeError(
                                 "'deleteProperty' on proxy: trap returned truish for property '" +
                                         key.toPropertyString() +
                                         "' but the proxy target is non-extensible"));
@@ -297,23 +287,14 @@ public final class JSProxy extends JSObject {
             }
 
             if (!success && strictMode) {
-                throw new JSException(executionContext.throwTypeError(
+                throw new JSException(context.throwTypeError(
                         "'deleteProperty' on proxy: trap returned falsish for property '" + key.toPropertyString() + "'"));
             }
             return success;
         }
 
-        // No trap, forward to target (pass context for strict mode checking)
-        if (strictMode) {
-            return targetObj.delete(executionContext, key);
-        }
-        return targetObj.deleteNonStrict(key);
-    }
-
-    @Override
-    public boolean deleteNonStrict(PropertyKey key) {
-        JSContext executionContext = resolveContext(null);
-        return deleteInternal(executionContext, key, false);
+        // No trap, forward to target with the target context strictness.
+        return targetObj.delete(key);
     }
 
     @Override

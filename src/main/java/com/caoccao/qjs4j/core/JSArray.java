@@ -282,7 +282,7 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    protected void definePropertyDirect(PropertyKey key, PropertyDescriptor descriptor) {
+    protected void definePropertyInternal(PropertyKey key, PropertyDescriptor descriptor) {
         long index = getArrayIndex(key);
         if (index >= 0 && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
@@ -295,7 +295,7 @@ public final class JSArray extends JSObject {
                         setLength(index + 1);
                     } else {
                         // Can't extend length, fall through to shape-based storage.
-                        super.definePropertyDirect(key, descriptor);
+                        super.definePropertyInternal(key, descriptor);
                         return;
                     }
                 }
@@ -326,51 +326,19 @@ public final class JSArray extends JSObject {
                 denseArray[intIndex] = null;
             }
         }
-        super.definePropertyDirect(key, descriptor);
-    }
-
-    @Override
-    public boolean delete(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
-        long index = getArrayIndex(key);
-        if (index < 0) {
-            return super.delete(effectiveContext, key);
-        }
-
-        if (sealed || frozen) {
-            PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
-            return super.delete(effectiveContext, stringKey);
-        }
-
-        if (index <= Integer.MAX_VALUE) {
-            int intIndex = (int) index;
-            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
-                denseArray[intIndex] = null;
-                return true;
-            }
-            if (sparseProperties != null && sparseProperties.remove(intIndex) != null) {
-                return true;
-            }
-        }
-
-        return super.delete(effectiveContext, key);
+        super.definePropertyInternal(key, descriptor);
     }
 
     @Override
     public boolean delete(PropertyKey key) {
-        return delete(resolveContext(null), key);
-    }
-
-    @Override
-    public boolean deleteNonStrict(PropertyKey key) {
         long index = getArrayIndex(key);
         if (index < 0) {
-            return super.deleteNonStrict(key);
+            return super.delete(key);
         }
 
         if (sealed || frozen) {
             PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
-            return super.deleteNonStrict(stringKey);
+            return super.delete(stringKey);
         }
 
         if (index <= Integer.MAX_VALUE) {
@@ -384,7 +352,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        return super.deleteNonStrict(key);
+        return super.delete(key);
     }
 
     /**
