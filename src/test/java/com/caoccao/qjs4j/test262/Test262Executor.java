@@ -139,7 +139,7 @@ public class Test262Executor {
                             // Error passed to $DONE
                             JSValue doneArg = args[0];
                             if (doneArg instanceof JSObject errorObject) {
-                                JSValue message = errorObject.get(ctx, PropertyKey.MESSAGE);
+                                JSValue message = errorObject.get(PropertyKey.MESSAGE);
                                 if (!ctx.hasPendingException() && message != null && !(message instanceof JSUndefined)) {
                                     doneResult[0] = message.toString();
                                 } else {

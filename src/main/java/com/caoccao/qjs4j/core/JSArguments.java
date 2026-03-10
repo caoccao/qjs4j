@@ -224,17 +224,12 @@ public final class JSArguments extends JSObject {
     }
 
     @Override
-    public JSValue get(JSContext context, PropertyKey key) {
+    public JSValue get(PropertyKey key) {
         int index = getArgumentIndex(key);
         if (isMappedIndex(index, key)) {
             return getMappedValue(index);
         }
         return super.get(key);
-    }
-
-    @Override
-    public JSValue get(PropertyKey key) {
-        return get(resolveContext(null), key);
     }
 
     private int getArgumentIndex(PropertyKey key) {

@@ -39,9 +39,9 @@ final class JSDeferredModuleNamespace extends JSObject {
         setPrototype(null);
         definePropertyInternal(
                 PropertyKey.SYMBOL_TO_STRING_TAG,
-            PropertyDescriptor.dataDescriptor(
-                new JSString("Deferred Module"),
-                PropertyDescriptor.DataState.None));
+                PropertyDescriptor.dataDescriptor(
+                        new JSString("Deferred Module"),
+                        PropertyDescriptor.DataState.None));
         super.preventExtensions();
     }
 
@@ -101,43 +101,30 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public JSValue get(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
-        if (isSymbolLikeNamespaceKey(key)) {
-            return super.get(effectiveContext, key);
-        }
-        try {
-            return ensureEvaluated().get(effectiveContext, key);
-        } catch (JSException jsException) {
-            setEvaluationPendingException(effectiveContext, jsException);
-            return JSUndefined.INSTANCE;
-        }
-    }
-
-    @Override
-    public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
-        JSContext effectiveContext = resolveContext(context);
-        JSValue effectiveReceiver = receiver != null ? receiver : this;
-        if (isSymbolLikeNamespaceKey(key)) {
-            return super.get(effectiveContext, key, effectiveReceiver);
-        }
-        try {
-            return ensureEvaluated().get(effectiveContext, key, effectiveReceiver);
-        } catch (JSException jsException) {
-            setEvaluationPendingException(effectiveContext, jsException);
-            return JSUndefined.INSTANCE;
-        }
-    }
-
-    @Override
     public JSValue get(PropertyKey key) {
+        JSContext effectiveContext = resolveContext(null);
         if (isSymbolLikeNamespaceKey(key)) {
             return super.get(key);
         }
         try {
             return ensureEvaluated().get(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(null, jsException);
+            setEvaluationPendingException(effectiveContext, jsException);
+            return JSUndefined.INSTANCE;
+        }
+    }
+
+    @Override
+    public JSValue get(PropertyKey key, JSValue receiver) {
+        JSContext effectiveContext = resolveContext(null);
+        JSValue effectiveReceiver = receiver != null ? receiver : this;
+        if (isSymbolLikeNamespaceKey(key)) {
+            return super.get(key, effectiveReceiver);
+        }
+        try {
+            return ensureEvaluated().get(key, effectiveReceiver);
+        } catch (JSException jsException) {
+            setEvaluationPendingException(effectiveContext, jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -171,13 +158,13 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
-        JSContext effectiveContext = resolveContext(context);
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+        JSContext effectiveContext = resolveContext(null);
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.getWithReceiver(effectiveContext, key, receiver);
+            return super.getWithReceiver(key, receiver);
         }
         try {
-            return ensureEvaluated().get(effectiveContext, key, receiver);
+            return ensureEvaluated().get(key, receiver);
         } catch (JSException jsException) {
             setEvaluationPendingException(effectiveContext, jsException);
             return JSUndefined.INSTANCE;

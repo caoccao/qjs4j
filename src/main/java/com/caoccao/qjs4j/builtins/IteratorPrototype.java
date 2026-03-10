@@ -273,7 +273,7 @@ public final class IteratorPrototype {
                             return childContext.throwTypeError("not an object");
                         }
                         currentIterator[0] = iteratorObject;
-                        currentNextMethod[0] = iteratorObject.get(childContext, PropertyKey.NEXT);
+                        currentNextMethod[0] = iteratorObject.get(PropertyKey.NEXT);
                         if (childContext.hasPendingException()) {
                             done[0] = true;
                             return childContext.getPendingException();
@@ -310,7 +310,7 @@ public final class IteratorPrototype {
                 if (currentIterator[0] == null) {
                     return iteratorResult(childContext, JSUndefined.INSTANCE, true);
                 }
-                JSValue returnMethod = currentIterator[0].get(childContext, PropertyKey.RETURN);
+                JSValue returnMethod = currentIterator[0].get(PropertyKey.RETURN);
                 currentNextMethod[0] = JSUndefined.INSTANCE;
                 JSObject iter = currentIterator[0];
                 currentIterator[0] = null;
@@ -358,7 +358,7 @@ public final class IteratorPrototype {
                 return iteratorResult(childContext, JSUndefined.INSTANCE, true);
             }
             done[0] = true;
-            JSValue returnMethod = iteratorObject.get(childContext, PropertyKey.RETURN);
+            JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -426,7 +426,7 @@ public final class IteratorPrototype {
 
         JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
             done[0] = true;
-            JSValue returnMethod = wrappedIterator.get(childContext, PropertyKey.RETURN);
+            JSValue returnMethod = wrappedIterator.get(PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -911,7 +911,7 @@ public final class IteratorPrototype {
                         return childContext.throwTypeError("not an object");
                     }
 
-                    JSValue iteratorMethod = mappedObject.get(childContext, PropertyKey.SYMBOL_ITERATOR);
+                    JSValue iteratorMethod = mappedObject.get(PropertyKey.SYMBOL_ITERATOR);
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -940,7 +940,7 @@ public final class IteratorPrototype {
                     }
 
                     innerIterator[0] = mappedIteratorObject;
-                    innerNextMethod[0] = mappedIteratorObject.get(childContext, PropertyKey.NEXT);
+                    innerNextMethod[0] = mappedIteratorObject.get(PropertyKey.NEXT);
                     if (childContext.hasPendingException()) {
                         done[0] = true;
                         closeIteratorIgnoringResult(childContext, iteratorObject);
@@ -965,7 +965,7 @@ public final class IteratorPrototype {
                 innerIterator[0] = null;
                 innerNextMethod[0] = JSUndefined.INSTANCE;
             }
-            JSValue returnMethod = iteratorObject.get(childContext, PropertyKey.RETURN);
+            JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -2064,19 +2064,6 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public JSValue get(JSContext context, PropertyKey key) {
-            if (pristine) {
-                if (PropertyKey.VALUE.equals(key)) {
-                    return valueValue;
-                }
-                if (PropertyKey.DONE.equals(key)) {
-                    return doneValue;
-                }
-            }
-            return super.get(key);
-        }
-
-        @Override
         public JSValue get(PropertyKey key) {
             if (pristine) {
                 if (PropertyKey.VALUE.equals(key)) {
@@ -2087,19 +2074,6 @@ public final class IteratorPrototype {
                 }
             }
             return super.get(key);
-        }
-
-        @Override
-        public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
-            if (pristine) {
-                if (PropertyKey.VALUE.equals(key)) {
-                    return valueValue;
-                }
-                if (PropertyKey.DONE.equals(key)) {
-                    return doneValue;
-                }
-            }
-            return super.get(key, receiver);
         }
 
         @Override

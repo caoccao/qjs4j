@@ -747,7 +747,7 @@ public final class JSBytecodeFunction extends JSFunction {
                                 childContext.clearAllPendingExceptions();
                                 return JSUndefined.INSTANCE;
                             }
-                            JSValue doneValue = resultObject.get(childContext, PropertyKey.DONE);
+                            JSValue doneValue = resultObject.get(PropertyKey.DONE);
                             if (childContext.hasPendingException()) {
                                 delegatedYieldStarIteratorHolder[0] = null;
                                 generatorState.setCompleted(true);
@@ -760,7 +760,7 @@ public final class JSBytecodeFunction extends JSFunction {
                             if (done) {
                                 // Delegation completed — resume the generator past yield*
                                 delegatedYieldStarIteratorHolder[0] = null;
-                                JSValue value = resultObject.get(childContext, PropertyKey.VALUE);
+                                JSValue value = resultObject.get(PropertyKey.VALUE);
                                 if (childContext.hasPendingException()) {
                                     generatorState.setCompleted(true);
                                     JSValue error = childContext.getPendingException();
@@ -890,7 +890,7 @@ public final class JSBytecodeFunction extends JSFunction {
                 new JSPromise.ReactionRecord(
                         new JSNativeFunction(context, "onReject", 1, (childCtx, thisArg, args) -> {
                             JSValue originalError = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            JSValue returnMethodValue = delegateIterator.get(childCtx, PropertyKey.RETURN);
+                            JSValue returnMethodValue = delegateIterator.get(PropertyKey.RETURN);
                             if (childCtx.hasPendingException()) {
                                 childCtx.clearAllPendingExceptions();
                             } else if (returnMethodValue instanceof JSFunction returnFunction) {

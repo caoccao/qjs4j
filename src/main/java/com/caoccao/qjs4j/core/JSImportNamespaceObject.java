@@ -148,7 +148,7 @@ public final class JSImportNamespaceObject extends JSObject {
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         if (hasDefinedExportProperty(key)) {
             JSContext effectiveContext = context;
-            JSValue value = get(effectiveContext, key);
+            JSValue value = get(key);
             if (effectiveContext.hasPendingException()) {
                 throw new JSException(effectiveContext.getPendingException());
             }
@@ -317,7 +317,7 @@ public final class JSImportNamespaceObject extends JSObject {
             return false;
         }
         if (descriptor.hasValue()) {
-            JSValue currentValue = get(context, key);
+            JSValue currentValue = get(key);
             return sameValue(currentValue, descriptor.getValue());
         }
         return true;

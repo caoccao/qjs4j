@@ -50,7 +50,7 @@ public final class ShadowRealmPrototype {
         double wrappedLength = 0;
         try {
             if (targetObject.hasOwnProperty(PropertyKey.LENGTH)) {
-                JSValue targetLength = targetObject.get(targetContext, PropertyKey.LENGTH);
+                JSValue targetLength = targetObject.get(PropertyKey.LENGTH);
                 if (targetContext.hasPendingException()) {
                     targetContext.clearPendingException();
                     throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
@@ -72,7 +72,7 @@ public final class ShadowRealmPrototype {
                 }
             }
 
-            JSValue targetName = targetObject.get(targetContext, PropertyKey.NAME);
+            JSValue targetName = targetObject.get(PropertyKey.NAME);
             if (targetContext.hasPendingException()) {
                 targetContext.clearPendingException();
                 throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
@@ -185,7 +185,7 @@ public final class ShadowRealmPrototype {
             String exportName = exportVarMatcher.group(1);
             String transformedSource = exportVarMatcher.replaceFirst("var " + exportName + " = " + exportVarMatcher.group(2) + ";");
             shadowContext.eval(transformedSource, filename, false);
-            JSValue exportValue = shadowContext.getGlobalObject().get(shadowContext, PropertyKey.fromString(exportName));
+            JSValue exportValue = shadowContext.getGlobalObject().get(PropertyKey.fromString(exportName));
             if (shadowContext.hasPendingException()) {
                 throw new JSException(shadowContext.getPendingException());
             }
@@ -248,7 +248,7 @@ public final class ShadowRealmPrototype {
                 return promise;
             }
 
-            JSValue exportValue = exportsObject.get(callerContext, PropertyKey.fromString(exportName));
+            JSValue exportValue = exportsObject.get(PropertyKey.fromString(exportName));
             JSValue wrappedExportValue = getWrappedValue(callerContext, shadowContext, exportValue);
             if (callerContext.hasPendingException()) {
                 JSValue error = callerContext.getPendingException();

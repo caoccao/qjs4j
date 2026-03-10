@@ -1117,7 +1117,7 @@ public final class JSGlobalObject {
             if (!(thisArg instanceof JSObject thisObject)) {
                 return childContext.throwTypeError("not an object");
             }
-            JSValue returnMethod = thisObject.get(childContext, PropertyKey.RETURN);
+            JSValue returnMethod = thisObject.get(PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
                 return childContext.getPendingException();
             }
@@ -2877,7 +2877,7 @@ public final class JSGlobalObject {
                         && localVarNames != null && functionNameLocalIndex < localVarNames.length
                         && localVarNames[functionNameLocalIndex] != null
                         && savedGlobals.containsKey(localVarNames[functionNameLocalIndex])) {
-                        global.delete(PropertyKey.fromString(localVarNames[functionNameLocalIndex]));
+                    global.delete(PropertyKey.fromString(localVarNames[functionNameLocalIndex]));
                 }
                 // Restore global object state for scope overlay
                 if (savedGlobals != null) {
@@ -2896,7 +2896,7 @@ public final class JSGlobalObject {
                 }
                 if (absentKeys != null) {
                     for (String name : absentKeys) {
-                                    global.delete(PropertyKey.fromString(name));
+                        global.delete(PropertyKey.fromString(name));
                     }
                 }
                 // Clean up eval-created bindings that should be function-scoped (not global).
@@ -2914,7 +2914,7 @@ public final class JSGlobalObject {
                         if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
                             continue;
                         }
-                                    global.delete(PropertyKey.fromString(declarationName));
+                        global.delete(PropertyKey.fromString(declarationName));
                     }
                 }
                 if (globalKeysBefore != null && parsedEvalDeclarations && evalLexDeclarations != null) {
@@ -2922,7 +2922,7 @@ public final class JSGlobalObject {
                         if (globalKeysBefore.contains(declarationName)) {
                             continue;
                         }
-                                    global.delete(PropertyKey.fromString(declarationName));
+                        global.delete(PropertyKey.fromString(declarationName));
                     }
                 }
                 if (overlayStatePushed) {

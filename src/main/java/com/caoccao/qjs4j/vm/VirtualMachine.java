@@ -87,62 +87,61 @@ public final class VirtualMachine {
      * - If isThrowCompletion is false (return completion), close errors propagate and
      * cancel any active generator force return.
      */
-    private static void autoCloseIterator(ExecutionContext executionContext, JSObject iterator,
-                                          boolean isThrowCompletion) {
-        JSContext ctx = executionContext.virtualMachine.context;
+    private static void autoCloseIterator(
+            ExecutionContext executionContext,
+            JSObject iterator,
+            boolean isThrowCompletion) {
+        JSContext currentContext = executionContext.virtualMachine.context;
         boolean savedGeneratorForceReturn = executionContext.virtualMachine.generatorForceReturn;
         JSValue savedGeneratorReturnValue = executionContext.virtualMachine.generatorReturnValue;
-        boolean shouldRestoreGeneratorForceReturn = true;
         if (savedGeneratorForceReturn) {
             executionContext.virtualMachine.generatorForceReturn = false;
         }
         JSValue returnMethodValue;
         try {
-            returnMethodValue = iterator.get(ctx, PropertyKey.RETURN);
+            returnMethodValue = iterator.get(PropertyKey.RETURN);
         } catch (JSVirtualMachineException e) {
             if (!isThrowCompletion) {
                 executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                 executionContext.virtualMachine.generatorForceReturn = false;
-                shouldRestoreGeneratorForceReturn = false;
             } else {
-                ctx.clearPendingException();
+                currentContext.clearPendingException();
             }
             return;
         }
-        if (ctx.hasPendingException()) {
+        if (currentContext.hasPendingException()) {
             if (!isThrowCompletion) {
-                executionContext.virtualMachine.pendingException = ctx.getPendingException();
+                executionContext.virtualMachine.pendingException = currentContext.getPendingException();
                 executionContext.virtualMachine.generatorForceReturn = false;
-                shouldRestoreGeneratorForceReturn = false;
             }
-            ctx.clearPendingException();
+            currentContext.clearPendingException();
             return;
         }
+        boolean shouldRestoreGeneratorForceReturn = true;
         if (returnMethodValue instanceof JSFunction returnMethod) {
             JSValue closeResult;
             try {
-                closeResult = returnMethod.call(ctx, iterator, JSValue.NO_ARGS);
+                closeResult = returnMethod.call(currentContext, iterator, JSValue.NO_ARGS);
             } catch (JSVirtualMachineException e) {
                 if (!isThrowCompletion) {
                     executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     executionContext.virtualMachine.generatorForceReturn = false;
-                    shouldRestoreGeneratorForceReturn = false;
                 } else {
-                    ctx.clearPendingException();
+                    currentContext.clearPendingException();
                 }
                 return;
             }
-            if (ctx.hasPendingException()) {
+            if (currentContext.hasPendingException()) {
                 if (!isThrowCompletion) {
-                    executionContext.virtualMachine.pendingException = ctx.getPendingException();
+                    executionContext.virtualMachine.pendingException = currentContext.getPendingException();
                     executionContext.virtualMachine.generatorForceReturn = false;
                     shouldRestoreGeneratorForceReturn = false;
                 }
-                ctx.clearPendingException();
+                currentContext.clearPendingException();
             } else if (!(closeResult instanceof JSObject)) {
                 if (!isThrowCompletion) {
                     executionContext.virtualMachine.pendingException =
-                            ctx.throwTypeError("iterator result is not an object");
+                            currentContext.throwTypeError("iterator result is not an object");
                     executionContext.virtualMachine.generatorForceReturn = false;
                     shouldRestoreGeneratorForceReturn = false;
                 }
@@ -703,11 +702,11 @@ public final class VirtualMachine {
 
         JSNativeFunction getter = new JSNativeFunction(context, "get " + atomName,
                 0,
-                (ctx, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex),
+                (childContext, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex),
                 false);
         JSNativeFunction setter = new JSNativeFunction(context, "set " + atomName,
                 1,
-                (ctx, thisArg, args) -> {
+                (childContext, thisArg, args) -> {
                     JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                     writeReferenceValue(capturedFrame, makeRefOpcode, refIndex, value);
                     return JSUndefined.INSTANCE;
@@ -1404,7 +1403,7 @@ public final class VirtualMachine {
         // Try to get the message property directly (without calling getters or toString)
         // This avoids calling JavaScript code which might fail in exception state
         try {
-            JSValue messageValue = exceptionObj.get(null, PropertyKey.MESSAGE);
+            JSValue messageValue = exceptionObj.get(PropertyKey.MESSAGE);
             if (messageValue instanceof JSString msgStr) {
                 return msgStr.value();
             } else if (messageValue != null && !(messageValue instanceof JSUndefined)) {
@@ -1416,7 +1415,7 @@ public final class VirtualMachine {
 
         // Try to get the name property
         try {
-            JSValue nameValue = exceptionObj.get(null, PropertyKey.NAME);
+            JSValue nameValue = exceptionObj.get(PropertyKey.NAME);
             if (nameValue instanceof JSString nameStr) {
                 return nameStr.value();
             }

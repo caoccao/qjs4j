@@ -506,16 +506,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public JSValue get(PropertyKey key) {
         resetVisitedObjects();
-        return getWithReceiver(context, key, this);
-    }
-
-    /**
-     * Get a property value by property key with context for getter functions.
-     */
-    public JSValue get(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
-        resetVisitedObjects();
-        return getWithReceiver(effectiveContext, key, this);
+        return getWithReceiver(key, (JSValue) this);
     }
 
     /**
@@ -523,15 +514,9 @@ public non-sealed class JSObject implements JSValue {
      * The receiver is used as 'this' when calling property getters,
      * allowing primitive receivers in strict mode.
      */
-    public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
-        JSContext effectiveContext = resolveContext(context);
-        resetVisitedObjects();
-        return getWithReceiver(effectiveContext, key, receiver);
-    }
-
     public JSValue get(PropertyKey key, JSValue receiver) {
         resetVisitedObjects();
-        return getWithReceiver(context, key, receiver);
+        return getWithReceiver(key, receiver);
     }
 
     protected long getCanonicalArrayIndex(PropertyKey key) {
@@ -777,7 +762,7 @@ public non-sealed class JSObject implements JSValue {
      * Internal get method with receiver tracking for prototype chain getter invocation.
      * Protected to allow JSProxy to override with proper trap handling.
      */
-    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
@@ -856,7 +841,7 @@ public non-sealed class JSObject implements JSValue {
                 added = true;
 
                 // Recurse into prototype chain, passing along the original receiver
-                return prototype.getWithReceiver(this.context, key, receiver);
+                return prototype.getWithReceiver(key, receiver);
             } finally {
                 // Only remove if we added it — early return from cycle detection
                 // must not remove a prototype added by an outer walk
@@ -878,14 +863,9 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value with an explicit receiver for getter invocation.
      * Used by Reflect.get to pass a different receiver than the target.
      */
-    public JSValue getWithReceiver(PropertyKey key, JSContext context, JSObject receiver) {
-        resetVisitedObjects();
-        return getWithReceiver(this.context, key, receiver);
-    }
-
     public JSValue getWithReceiver(PropertyKey key, JSObject receiver) {
         resetVisitedObjects();
-        return getWithReceiver(context, key, receiver);
+        return getWithReceiver(key, (JSValue) receiver);
     }
 
     /**

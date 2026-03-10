@@ -909,9 +909,7 @@ public final class OpcodeHandler {
                 executionContext.pc = pc + op.getSize();
                 return;
             }
-            JSValue superPrototypeValue = superClassObject.get(
-                    executionContext.virtualMachine.context,
-                    PropertyKey.PROTOTYPE);
+            JSValue superPrototypeValue = superClassObject.get(PropertyKey.PROTOTYPE);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.getPendingException();
@@ -1000,9 +998,7 @@ public final class OpcodeHandler {
                     executionContext.pc = pc + op.getSize();
                     return;
                 }
-                JSValue superPrototypeValue = superClassObject.get(
-                        executionContext.virtualMachine.context,
-                        PropertyKey.PROTOTYPE);
+                JSValue superPrototypeValue = superClassObject.get(PropertyKey.PROTOTYPE);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException =
                             executionContext.virtualMachine.context.getPendingException();
@@ -1351,7 +1347,7 @@ public final class OpcodeHandler {
             return;
         }
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, property);
-                    boolean result = targetObject.delete(key);
+        boolean result = targetObject.delete(key);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
         }
@@ -1878,7 +1874,7 @@ public final class OpcodeHandler {
                     return rejectedPromise;
                 }
 
-                JSValue syncValue = syncResultObject.get(childContext, PropertyKey.VALUE);
+                JSValue syncValue = syncResultObject.get(PropertyKey.VALUE);
                 if (childContext.hasPendingException()) {
                     JSValue reason = childContext.getPendingException();
                     childContext.clearAllPendingExceptions();
@@ -1886,7 +1882,7 @@ public final class OpcodeHandler {
                     rejectedPromise.reject(reason);
                     return rejectedPromise;
                 }
-                JSValue doneValue = syncResultObject.get(childContext, PropertyKey.DONE);
+                JSValue doneValue = syncResultObject.get(PropertyKey.DONE);
                 if (childContext.hasPendingException()) {
                     JSValue reason = childContext.getPendingException();
                     childContext.clearAllPendingExceptions();
@@ -1920,7 +1916,7 @@ public final class OpcodeHandler {
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction(executionContext.virtualMachine.context, "onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                     JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    JSValue returnMethodValue = syncIteratorObject.get(callbackContext, PropertyKey.RETURN);
+                                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
                                     if (callbackContext.hasPendingException()) {
                                         callbackContext.clearAllPendingExceptions();
                                     } else if (returnMethodValue instanceof JSFunction returnFunction) {
@@ -2031,7 +2027,7 @@ public final class OpcodeHandler {
         }
 
         // Get the done property
-        JSValue doneValue = resultObj.get(executionContext.virtualMachine.context, PropertyKey.DONE);
+        JSValue doneValue = resultObj.get(PropertyKey.DONE);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
             for (int i = depth - 1; i >= 0; i--) {
@@ -2048,7 +2044,7 @@ public final class OpcodeHandler {
 
         JSValue value = JSUndefined.INSTANCE;
         if (!done) {
-            value = resultObj.get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+            value = resultObj.get(PropertyKey.VALUE);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
                 for (int i = depth - 1; i >= 0; i--) {
@@ -2097,7 +2093,7 @@ public final class OpcodeHandler {
         }
 
         // Get Symbol.iterator method
-        JSValue iteratorMethod = iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -2128,7 +2124,7 @@ public final class OpcodeHandler {
         }
 
         // Get the next() method from the iterator
-        JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
             if (pendingException instanceof JSError jsError) {
@@ -2192,7 +2188,7 @@ public final class OpcodeHandler {
         if (targetObject != null) {
             try {
                 PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                JSValue result = targetObject.get(executionContext.virtualMachine.context, key);
+                JSValue result = targetObject.get(key);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -2240,7 +2236,7 @@ public final class OpcodeHandler {
         if (targetObject != null) {
             try {
                 PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                JSValue result = targetObject.get(executionContext.virtualMachine.context, key);
+                JSValue result = targetObject.get(key);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -2301,7 +2297,7 @@ public final class OpcodeHandler {
         }
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-        JSValue result = targetObject.get(executionContext.virtualMachine.context, key, arrayObjectValue);
+        JSValue result = targetObject.get(key, arrayObjectValue);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
@@ -2321,9 +2317,7 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(
-                    executionContext.virtualMachine.context,
-                    PropertyKey.fromString(fieldName),
+            JSValue result = targetObject.get(PropertyKey.fromString(fieldName),
                     objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
@@ -2356,9 +2350,7 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(
-                    executionContext.virtualMachine.context,
-                    PropertyKey.fromString(fieldName),
+            JSValue result = targetObject.get(PropertyKey.fromString(fieldName),
                     objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
@@ -2387,7 +2379,7 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(executionContext.virtualMachine.context, PropertyKey.LENGTH);
+            JSValue result = targetObject.get(PropertyKey.LENGTH);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 executionContext.virtualMachine.context.clearPendingException();
@@ -2617,12 +2609,12 @@ public final class OpcodeHandler {
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, keyValue);
         JSValue result;
         if (receiverValue instanceof JSObject receiverObject) {
-            result = superObject.getWithReceiver(key, executionContext.virtualMachine.context, receiverObject);
+            result = superObject.getWithReceiver(key, receiverObject);
         } else {
             JSObject boxedReceiver = executionContext.virtualMachine.toObject(receiverValue);
             result = boxedReceiver != null
-                    ? superObject.getWithReceiver(key, executionContext.virtualMachine.context, boxedReceiver)
-                    : superObject.get(executionContext.virtualMachine.context, key);
+                    ? superObject.getWithReceiver(key, boxedReceiver)
+                    : superObject.get(key);
         }
 
         if (executionContext.virtualMachine.context.hasPendingException()) {
@@ -3326,7 +3318,7 @@ public final class OpcodeHandler {
             return;
         }
 
-        JSValue hasInstanceMethod = constructor.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_HAS_INSTANCE);
+        JSValue hasInstanceMethod = constructor.get(PropertyKey.SYMBOL_HAS_INSTANCE);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
@@ -3422,8 +3414,8 @@ public final class OpcodeHandler {
 
         String methodName = (flags & 1) != 0 ? "throw" : "return";
         JSValue methodValue = (flags & 1) != 0
-                ? iteratorObject.get(executionContext.virtualMachine.context, PropertyKey.THROW)
-                : iteratorObject.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+                ? iteratorObject.get(PropertyKey.THROW)
+                : iteratorObject.get(PropertyKey.RETURN);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             throw new JSVirtualMachineException(
                     executionContext.virtualMachine.context.getPendingException().toString(),
@@ -3460,7 +3452,7 @@ public final class OpcodeHandler {
         sp--;
         JSValue iteratorValue = (JSValue) stack[--sp];
         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
-            JSValue returnMethodValue = iteratorObject.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+            JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 if (originalPendingException == null) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
@@ -5349,7 +5341,7 @@ public final class OpcodeHandler {
 
                 // Get Symbol.iterator method
                 JSValue iteratorMethod =
-                        iterableObj.get(executionContext.virtualMachine.context, PropertyKey.SYMBOL_ITERATOR);
+                        iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5374,7 +5366,7 @@ public final class OpcodeHandler {
                 JSValue returnValue = resumeRecord.value();
 
                 // Get "return" method from iterator
-                JSValue returnMethodValue = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+                JSValue returnMethodValue = iteratorObj.get(PropertyKey.RETURN);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5406,14 +5398,14 @@ public final class OpcodeHandler {
                     }
 
                     // Check done flag
-                    JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
                                 executionContext.virtualMachine.context.getPendingException());
                     }
                     if (JSTypeConversions.toBoolean(doneValue).value()) {
-                        JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
                             throw new JSVirtualMachineException(
                                     executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5440,7 +5432,7 @@ public final class OpcodeHandler {
 
                 // Get "throw" method from iterator
                 JSValue throwMethodValue =
-                        iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.THROW);
+                        iteratorObj.get(PropertyKey.THROW);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5450,7 +5442,7 @@ public final class OpcodeHandler {
 
                 if (noThrowMethod) {
                     // No throw method - close iterator and throw TypeError
-                    JSValue closeMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.RETURN);
+                    JSValue closeMethod = iteratorObj.get(PropertyKey.RETURN);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5486,7 +5478,7 @@ public final class OpcodeHandler {
                 }
 
                 // Check done flag
-                JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5494,7 +5486,7 @@ public final class OpcodeHandler {
                 }
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
                     // Done - push value and complete the yield* expression
-                    JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                    JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5513,7 +5505,7 @@ public final class OpcodeHandler {
                 }
             } else {
                 // Default: NEXT protocol - call iterator.next()
-                JSValue nextMethod = iteratorObj.get(executionContext.virtualMachine.context, PropertyKey.NEXT);
+                JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5545,7 +5537,7 @@ public final class OpcodeHandler {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
                     }
-                    JSValue skipDone = ((JSObject) skipResult).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5553,7 +5545,7 @@ public final class OpcodeHandler {
                     }
                     if (JSTypeConversions.toBoolean(skipDone).value()) {
                         // Inner iterator exhausted during skip
-                        JSValue value = ((JSObject) skipResult).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
                             throw new JSVirtualMachineException(
                                     executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5582,7 +5574,7 @@ public final class OpcodeHandler {
                     }
 
                     // Check if the inner iterator is done
-                    JSValue doneValue = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.DONE);
+                    JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
@@ -5593,7 +5585,7 @@ public final class OpcodeHandler {
                             executionContext.virtualMachine.yieldSkipCount--;
                         }
                         // Inner iterator done - yield* expression value is the final value
-                        JSValue value = ((JSObject) result).get(executionContext.virtualMachine.context, PropertyKey.VALUE);
+                        JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
                             throw new JSVirtualMachineException(
                                     executionContext.virtualMachine.context.getPendingException().toString(),

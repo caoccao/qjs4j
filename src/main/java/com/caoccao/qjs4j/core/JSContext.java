@@ -790,7 +790,7 @@ public final class JSContext implements AutoCloseable {
         }
 
         // Step 4: Let C be ? Get(originalArray, "constructor")
-        JSValue ctor = originalArray.get(this, PropertyKey.CONSTRUCTOR);
+        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR);
         if (hasPendingException()) {
             return null;
         }
@@ -814,7 +814,7 @@ public final class JSContext implements AutoCloseable {
 
         // Step 6: If Type(C) is Object, get Symbol.species
         if (ctor instanceof JSObject ctorObj) {
-            ctor = ctorObj.get(this, PropertyKey.SYMBOL_SPECIES);
+            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
             if (hasPendingException()) {
                 return null;
             }
@@ -1292,8 +1292,7 @@ public final class JSContext implements AutoCloseable {
                     }
                     String resolvedImportedName = getDynamicImportModuleExport(
                             targetModuleRecord, importedName, targetSpecifier);
-                    return targetModuleRecord.namespace().get(
-                            this, PropertyKey.fromString(resolvedImportedName));
+                    return targetModuleRecord.namespace().get(PropertyKey.fromString(resolvedImportedName));
                 });
         getter.initializePrototypeChain(this);
         PropertyDescriptor descriptor = new PropertyDescriptor();
@@ -2927,7 +2926,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject getPrototypeFromConstructor(JSObject constructor, String intrinsicDefaultPrototypeName) {
-        JSValue prototype = constructor.get(this, PropertyKey.PROTOTYPE);
+        JSValue prototype = constructor.get(PropertyKey.PROTOTYPE);
         if (hasPendingException()) {
             return null;
         }
@@ -3125,7 +3124,7 @@ public final class JSContext implements AutoCloseable {
         JSImportNamespaceObject namespaceObject = moduleRecord.namespace();
         for (JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding : hoistedBindings) {
             PropertyKey localKey = PropertyKey.fromString(hoistedBinding.localName());
-            JSValue functionValue = functionBindingsObject.get(this, localKey);
+            JSValue functionValue = functionBindingsObject.get(localKey);
             if (hasPendingException()) {
                 JSValue pendingError = getPendingException();
                 clearPendingException();
@@ -4279,7 +4278,7 @@ public final class JSContext implements AutoCloseable {
             throw new JSException(throwTypeError("JSON is not an object"));
         }
 
-        JSValue parseValue = jsonObject.get(this, PropertyKey.fromString("parse"));
+        JSValue parseValue = jsonObject.get(PropertyKey.fromString("parse"));
         if (hasPendingException()) {
             JSValue error = getPendingException();
             clearPendingException();

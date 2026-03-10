@@ -401,7 +401,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        JSValue value = super.get(resolveContext(null), PropertyKey.fromString(Long.toString(index)));
+        JSValue value = super.get(PropertyKey.fromString(Long.toString(index)));
         if (!(value instanceof JSUndefined)) {
             return value;
         }
@@ -419,21 +419,12 @@ public final class JSArray extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
-        return get(resolveContext(null), key);
-    }
-
-    /**
-     * Override get by PropertyKey with context to handle array indices.
-     */
-    @Override
-    public JSValue get(JSContext context, PropertyKey key) {
-        JSContext effectiveContext = resolveContext(context);
         long index = getArrayIndex(key);
         if (index >= 0) {
             // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
             PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
             if (desc != null && desc.hasGetter()) {
-                return super.get(effectiveContext, key);
+                return super.get(key);
             }
             // Try own dense/sparse storage
             if (index < length && index <= Integer.MAX_VALUE) {
@@ -450,11 +441,11 @@ public final class JSArray extends JSObject {
             }
             // Not found in own storage — delegate to JSObject.get with context
             // so prototype chain getters are properly invoked
-            return super.get(effectiveContext, key);
+            return super.get(key);
         }
 
         // Otherwise, use the shape-based storage from JSObject
-        return super.get(effectiveContext, key);
+        return super.get(key);
     }
 
     /**
@@ -572,7 +563,7 @@ public final class JSArray extends JSObject {
      * missing JSArray's dense storage when this array is in a prototype chain.
      */
     @Override
-    protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
         long index = getArrayIndex(key);
         if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
@@ -589,7 +580,7 @@ public final class JSArray extends JSObject {
             }
         }
         // Delegate to JSObject for shape properties, getters, and prototype chain
-        return super.getWithReceiver(context, key, receiver);
+        return super.getWithReceiver(key, receiver);
     }
 
     /**
