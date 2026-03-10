@@ -117,7 +117,7 @@ public final class FunctionConstructor {
 
         try {
             // Compile the function
-            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).compile(false).function();
+            JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).setContext(context).compile(false).function();
 
             // Initialize the function's prototype chain
             func.initializePrototypeChain(context);

@@ -168,8 +168,8 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
     private final String numeric;
     private final String style;
 
-    public JSIntlRelativeTimeFormat(Locale locale, String style, String numeric, String numberingSystem) {
-        super();
+    public JSIntlRelativeTimeFormat(JSContext context, Locale locale, String style, String numeric, String numberingSystem) {
+        super(context);
         this.locale = locale;
         this.style = style;
         this.numeric = numeric;
@@ -251,7 +251,7 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
 
     private String formatNumber(double absoluteValue) {
         String useGroupingMode = locale.getLanguage().equals("pl") ? "min2" : "auto";
-        JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(
+        JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context,
                 locale,
                 "decimal",
                 null,

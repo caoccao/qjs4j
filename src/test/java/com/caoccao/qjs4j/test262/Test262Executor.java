@@ -132,7 +132,7 @@ public class Test262Executor {
             Object[] doneResult = {null};
             boolean[] doneCalled = {false};
 
-            JSNativeFunction doneFunction = new JSNativeFunction("$DONE", 1,
+            JSNativeFunction doneFunction = new JSNativeFunction(context, "$DONE", 1,
                     (ctx, thisArg, args) -> {
                         doneCalled[0] = true;
                         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
@@ -377,13 +377,13 @@ public class Test262Executor {
         JSObject host262 = context.createJSObject();
 
         host262.set("global", global);
-        host262.set("evalScript", new JSNativeFunction("evalScript", 1,
+        host262.set("evalScript", new JSNativeFunction(context, "evalScript", 1,
                 (ctx, thisArg, args) -> {
                     String script = args.length > 0 ? JSTypeConversions.toString(ctx, args[0]).value() : "";
                     return context.eval(script, "<test262-evalScript>", false);
                 }));
 
-        host262.set("detachArrayBuffer", new JSNativeFunction("detachArrayBuffer", 1,
+        host262.set("detachArrayBuffer", new JSNativeFunction(context, "detachArrayBuffer", 1,
                 (ctx, thisArg, args) -> {
                     if (args.length > 0 && args[0] instanceof JSArrayBuffer jsArrayBuffer) {
                         jsArrayBuffer.detach();
@@ -391,7 +391,7 @@ public class Test262Executor {
                     return JSUndefined.INSTANCE;
                 }));
 
-        host262.set("createRealm", new JSNativeFunction("createRealm", 0,
+        host262.set("createRealm", new JSNativeFunction(context, "createRealm", 0,
                 (ctx, thisArg, args) -> {
                     JSRuntime realmRuntime = context.getRuntime();
                     JSContext realmContext = realmRuntime.createContext();
@@ -401,7 +401,7 @@ public class Test262Executor {
                     JSObject realmGlobal = realmContext.getGlobalObject();
                     realm.set("global", realmGlobal);
                     realm.set("globalThis", realmGlobal);
-                    realm.set("evalScript", new JSNativeFunction("evalScript", 1,
+                    realm.set("evalScript", new JSNativeFunction(context, "evalScript", 1,
                             (innerCtx, innerThisArg, innerArgs) -> {
                                 String script = innerArgs.length > 0
                                         ? JSTypeConversions.toString(innerCtx, innerArgs[0]).value()
@@ -415,7 +415,7 @@ public class Test262Executor {
                     return realm;
                 }));
 
-        JSNativeFunction isHTMLDDA = new JSNativeFunction("IsHTMLDDA", 0,
+        JSNativeFunction isHTMLDDA = new JSNativeFunction(context, "IsHTMLDDA", 0,
                 (ctx, thisArg, args) -> JSNull.INSTANCE);
         isHTMLDDA.setHTMLDDA(true);
         host262.set("IsHTMLDDA", isHTMLDDA);
@@ -424,7 +424,7 @@ public class Test262Executor {
             global.set("setTimeout", agentHost.createSetTimeoutFunction(context));
         }
         if (global.get("print") instanceof JSUndefined) {
-            global.set("print", new JSNativeFunction("print", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE));
+            global.set("print", new JSNativeFunction(context, "print", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE));
         }
 
         global.set("$262", host262);

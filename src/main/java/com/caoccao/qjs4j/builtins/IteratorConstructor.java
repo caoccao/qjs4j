@@ -49,7 +49,7 @@ public final class IteratorConstructor {
         // itself, throw "abstract class not constructable". Otherwise allow subclass construction.
         JSValue newTarget = context.getConstructorNewTarget();
         if (newTarget != null) {
-            JSValue iteratorCtor = context.getGlobalObject().get(context, PropertyKey.ITERATOR_CAP);
+            JSValue iteratorCtor = context.getGlobalObject().get(PropertyKey.ITERATOR_CAP);
             if (newTarget == iteratorCtor) {
                 return context.throwTypeError("Abstract class Iterator not directly constructable");
             }

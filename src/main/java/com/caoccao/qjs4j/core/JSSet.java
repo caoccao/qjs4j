@@ -31,8 +31,8 @@ public final class JSSet extends JSObject {
     /**
      * Create an empty Set.
      */
-    public JSSet() {
-        super();
+    public JSSet(JSContext context) {
+        super(context);
         this.data = new LinkedHashMap<>();
         this.entriesById = new HashMap<>();
         this.nextEntryId = 1;
@@ -61,7 +61,7 @@ public final class JSSet extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = setObj.get(context, PropertyKey.fromString("add"));
+            JSValue adder = setObj.get(PropertyKey.fromString("add"));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -98,7 +98,7 @@ public final class JSSet extends JSObject {
                     closeIterator(context, iterator);
                     return context.throwTypeError("Iterator result must be an object");
                 }
-                JSValue done = nextResult.get(context, PropertyKey.DONE);
+                JSValue done = nextResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return null;
@@ -107,7 +107,7 @@ public final class JSSet extends JSObject {
                     break;
                 }
 
-                JSValue value = nextResult.get(context, PropertyKey.VALUE);
+                JSValue value = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return null;

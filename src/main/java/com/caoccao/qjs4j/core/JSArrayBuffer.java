@@ -42,8 +42,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      *
      * @param byteLength The length in bytes
      */
-    public JSArrayBuffer(int byteLength) {
-        this(byteLength, -1);
+    public JSArrayBuffer(JSContext context, int byteLength) {
+        this(context, byteLength, -1);
     }
 
     /**
@@ -52,8 +52,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      * @param byteLength    The initial length in bytes
      * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
      */
-    public JSArrayBuffer(int byteLength, int maxByteLength) {
-        super();
+    public JSArrayBuffer(JSContext context, int byteLength, int maxByteLength) {
+        super(context);
         if (byteLength < 0) {
             throw new IllegalArgumentException("ArrayBuffer byteLength must be non-negative");
         }
@@ -73,8 +73,8 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      *
      * @param bytes The byte array to wrap
      */
-    public JSArrayBuffer(byte[] bytes) {
-        super();
+    public JSArrayBuffer(JSContext context, byte[] bytes) {
+        super(context);
         this.buffer = ByteBuffer.wrap(bytes);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN);
         this.detached = false;
@@ -97,9 +97,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             if (maxByteLengthLong > Integer.MAX_VALUE) {
                 throw new JSException(context.throwRangeError("invalid array buffer max length"));
             }
-            return new JSArrayBuffer(byteLength, (int) maxByteLengthLong);
+            return new JSArrayBuffer(context, byteLength, (int) maxByteLengthLong);
         } else {
-            return new JSArrayBuffer(byteLength);
+            return new JSArrayBuffer(context, byteLength);
         }
     }
 
@@ -167,7 +167,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         // Check for options (maxByteLength for resizable buffers)
         long maxByteLengthLong = -1;
         if (args.length >= 2 && args[1] instanceof JSObject options) {
-            JSValue maxByteLengthValue = options.get(context, PropertyKey.fromString("maxByteLength"));
+            JSValue maxByteLengthValue = options.get(PropertyKey.fromString("maxByteLength"));
             if (context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
             }

@@ -36,6 +36,7 @@ public non-sealed class JSObject implements JSValue {
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     // ThreadLocal to track visited objects during prototype chain traversal
     private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
+    protected final JSContext context;
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
     protected boolean extensible = true;
@@ -54,7 +55,8 @@ public non-sealed class JSObject implements JSValue {
      * Create an empty object with no prototype.
      * Each object gets its own shape copy (not shared).
      */
-    public JSObject() {
+    public JSObject(JSContext context) {
+        this.context = Objects.requireNonNull(context, "context");
         this.shape = new JSShape();  // Each object gets its own shape
         this.propertyValues = JSValue.NO_ARGS;
         this.sparseProperties = null;
@@ -64,8 +66,8 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Create an object with a specific prototype.
      */
-    public JSObject(JSObject prototype) {
-        this();
+    public JSObject(JSContext context, JSObject prototype) {
+        this(context);
         this.prototype = prototype;
     }
 
@@ -299,7 +301,7 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() logic.
      */
     public boolean delete(String propertyName) {
-        return delete(null, PropertyKey.fromString(propertyName));
+        return delete(PropertyKey.fromString(propertyName));
     }
 
     /**
@@ -307,7 +309,7 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() implementation.
      */
     public boolean delete(PropertyKey key) {
-        return delete(null, key);
+        return deleteInternal(context.isStrictMode(), key);
     }
 
     /**
@@ -315,6 +317,11 @@ public non-sealed class JSObject implements JSValue {
      * Following QuickJS delete_property() implementation.
      */
     public boolean delete(JSContext context, PropertyKey key) {
+        JSContext executionContext = resolveContext(context);
+        return deleteInternal(executionContext.isStrictMode(), key);
+    }
+
+    private boolean deleteInternal(boolean strictMode, PropertyKey key) {
         // Check sparse properties first.
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
@@ -325,7 +332,7 @@ public non-sealed class JSObject implements JSValue {
                 return true;
             }
             if (sealed || frozen) {
-                if (context != null && context.isStrictMode()) {
+                if (strictMode) {
                     context.throwTypeError(
                             "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
                 }
@@ -343,7 +350,7 @@ public non-sealed class JSObject implements JSValue {
 
         // Cannot delete an existing own property from sealed or frozen objects.
         if (sealed || frozen) {
-            if (context != null && context.isStrictMode()) {
+            if (strictMode) {
                 context.throwTypeError(
                         "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
             }
@@ -356,7 +363,7 @@ public non-sealed class JSObject implements JSValue {
         PropertyDescriptor desc = shape.getDescriptorAt(offset);
         if (!desc.isConfigurable()) {
             // In strict mode, throw TypeError when trying to delete non-configurable property
-            if (context != null && context.isStrictMode()) {
+            if (strictMode) {
                 context.throwTypeError(
                         "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
             }
@@ -378,6 +385,10 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return true;
+    }
+
+    public boolean deleteNonStrict(PropertyKey key) {
+        return deleteInternal(false, key);
     }
 
     /**
@@ -466,8 +477,8 @@ public non-sealed class JSObject implements JSValue {
         return Arrays.copyOf(values, valueCount);
     }
 
-    private boolean failSet(PropertyKey key, JSContext context, boolean throwOnFailure) {
-        if (throwOnFailure && context != null && context.isStrictMode()) {
+    private boolean failSet(PropertyKey key, boolean throwOnFailure) {
+        if (throwOnFailure && context.isStrictMode()) {
             context.throwTypeError(
                     "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
         }
@@ -517,14 +528,17 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key.
      */
     public JSValue get(PropertyKey key) {
-        return get(null, key);
+        resetVisitedObjects();
+        return getWithReceiver(context, key, this);
     }
 
     /**
      * Get a property value by property key with context for getter functions.
      */
     public JSValue get(JSContext context, PropertyKey key) {
-        return getWithReceiver(context, key, this);  // Pass original receiver
+        JSContext effectiveContext = resolveContext(context);
+        resetVisitedObjects();
+        return getWithReceiver(effectiveContext, key, this);
     }
 
     /**
@@ -533,6 +547,13 @@ public non-sealed class JSObject implements JSValue {
      * allowing primitive receivers in strict mode.
      */
     public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
+        JSContext effectiveContext = resolveContext(context);
+        resetVisitedObjects();
+        return getWithReceiver(effectiveContext, key, receiver);
+    }
+
+    public JSValue get(PropertyKey key, JSValue receiver) {
+        resetVisitedObjects();
         return getWithReceiver(context, key, receiver);
     }
 
@@ -570,12 +591,16 @@ public non-sealed class JSObject implements JSValue {
         return value;
     }
 
+    public JSConstructorType getConstructorType() {
+        return constructorType;
+    }
+
     /**
      * Get the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
      */
-    public JSConstructorType getConstructorType() {
-        return constructorType;
+    public JSContext getContext() {
+        return context;
     }
 
     /**
@@ -798,7 +823,7 @@ public non-sealed class JSObject implements JSValue {
             PropertyDescriptor desc = shape.getDescriptorAt(offset);
             if (desc != null && desc.isAccessorDescriptor()) {
                 JSFunction getter = desc.getGetter();
-                if (getter != null && context != null) {
+                if (getter != null) {
                     // Save and clear the prototype-chain visited set so that
                     // re-entrant property lookups inside the getter start with
                     // a fresh cycle-detection state (prevents false positives).
@@ -809,18 +834,18 @@ public non-sealed class JSObject implements JSValue {
                     }
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(context, receiver, JSValue.NO_ARGS);
+                        JSValue result = getter.call(this.context, receiver, JSValue.NO_ARGS);
                         // Check if getter threw an exception - return the error value or undefined
-                        if (context.hasPendingException()) {
-                            return result != null ? result : context.getPendingException();
+                        if (this.context.hasPendingException()) {
+                            return result != null ? result : this.context.getPendingException();
                         }
                         return result;
                     } catch (JSVirtualMachineException e) {
                         // Getter threw - convert to pending exception so callers can handle it
                         JSValue exception = e.getJsError() != null ? e.getJsError()
                                 : e.getJsValue() != null ? e.getJsValue()
-                                : context.throwError("Error", e.getMessage());
-                        context.setPendingException(exception);
+                                : this.context.throwError("Error", e.getMessage());
+                        this.context.setPendingException(exception);
                         return JSUndefined.INSTANCE;
                     } finally {
                         // Restore the outer visited set for the caller's prototype walk
@@ -854,7 +879,7 @@ public non-sealed class JSObject implements JSValue {
                 added = true;
 
                 // Recurse into prototype chain, passing along the original receiver
-                return prototype.getWithReceiver(context, key, receiver);
+                return prototype.getWithReceiver(this.context, key, receiver);
             } finally {
                 // Only remove if we added it — early return from cycle detection
                 // must not remove a prototype added by an outer walk
@@ -877,7 +902,13 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.get to pass a different receiver than the target.
      */
     public JSValue getWithReceiver(PropertyKey key, JSContext context, JSObject receiver) {
-        return get(context, key, receiver);
+        resetVisitedObjects();
+        return getWithReceiver(this.context, key, receiver);
+    }
+
+    public JSValue getWithReceiver(PropertyKey key, JSObject receiver) {
+        resetVisitedObjects();
+        return getWithReceiver(context, key, receiver);
     }
 
     /**
@@ -995,6 +1026,17 @@ public non-sealed class JSObject implements JSValue {
         this.extensible = false;
     }
 
+    private void resetVisitedObjects() {
+        Set<JSObject> visited = visitedObjects.get();
+        if (!visited.isEmpty()) {
+            visited.clear();
+        }
+    }
+
+    protected JSContext resolveContext(JSContext candidateContext) {
+        return candidateContext != null ? candidateContext : context;
+    }
+
     /**
      * Seal this object.
      * Prevents adding new properties and deleting existing properties.
@@ -1034,14 +1076,15 @@ public non-sealed class JSObject implements JSValue {
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
-        set(null, key, value);
+        setInternal(context, key, value, this, true);
     }
 
     /**
      * Set a property value by property key with context for setter functions.
      */
     public void set(JSContext context, PropertyKey key, JSValue value) {
-        set(context, key, value, this);
+        JSContext effectiveContext = resolveContext(context);
+        setInternal(effectiveContext, key, value, this, true);
     }
 
     // Object integrity levels (ES5)
@@ -1051,6 +1094,11 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.set to pass a different receiver than the target.
      */
     public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
+        JSContext effectiveContext = resolveContext(context);
+        setInternal(effectiveContext, key, value, receiver, true);
+    }
+
+    public void set(PropertyKey key, JSValue value, JSObject receiver) {
         setInternal(context, key, value, receiver, true);
     }
 
@@ -1084,6 +1132,7 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private boolean setInternal(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
+        JSContext effectiveContext = context;
         // Check if property already exists
         int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
@@ -1091,19 +1140,20 @@ public non-sealed class JSObject implements JSValue {
 
             if (descriptor != null && descriptor.isAccessorDescriptor()) {
                 JSFunction setter = descriptor.getSetter();
-                if (setter != null && context != null) {
-                    setter.call(context, receiver, new JSValue[]{value});
-                    return !context.hasPendingException();
+                if (setter != null && effectiveContext != null) {
+                    boolean hadPendingException = effectiveContext.hasPendingException();
+                    setter.call(effectiveContext, receiver, new JSValue[]{value});
+                    return hadPendingException || !effectiveContext.hasPendingException();
                 }
-                return failSet(key, context, throwOnFailure);
+                return failSet(key, throwOnFailure);
             }
 
             if (descriptor == null || !descriptor.isWritable() || frozen) {
-                return failSet(key, context, throwOnFailure);
+                return failSet(key, throwOnFailure);
             }
 
             if (receiver != this) {
-                return setOnReceiver(context, key, value, receiver, throwOnFailure);
+                return setOnReceiver(effectiveContext, key, value, receiver, throwOnFailure);
             }
 
             propertyValues[offset] = value;
@@ -1117,13 +1167,13 @@ public non-sealed class JSObject implements JSValue {
         JSObject proto = prototype;
         while (proto != null && !visited.contains(proto)) {
             if (proto instanceof JSProxy proxy) {
-                return proxy.setWithResult(context, key, value, receiver);
+                return proxy.setWithResult(effectiveContext, key, value, receiver);
             }
             // TypedArray has exotic [[Set]] for canonical numeric index keys
             if (proto instanceof JSTypedArray typedArray) {
-                boolean result = typedArray.setWithResult(context, key, value, (JSValue) receiver);
-                if (!result && throwOnFailure && !context.hasPendingException()) {
-                    return failSet(key, context, true);
+                boolean result = typedArray.setWithResult(effectiveContext, key, value, (JSValue) receiver);
+                if (!result && throwOnFailure && !effectiveContext.hasPendingException()) {
+                    return failSet(key, true);
                 }
                 return result;
             }
@@ -1133,49 +1183,52 @@ public non-sealed class JSObject implements JSValue {
                 PropertyDescriptor protoDescriptor = proto.shape.getDescriptorAt(protoOffset);
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
                     JSFunction setter = protoDescriptor.getSetter();
-                    if (setter != null && context != null) {
-                        setter.call(context, receiver, new JSValue[]{value});
-                        return !context.hasPendingException();
+                    if (setter != null && effectiveContext != null) {
+                        boolean hadPendingException = effectiveContext.hasPendingException();
+                        setter.call(effectiveContext, receiver, new JSValue[]{value});
+                        return hadPendingException || !effectiveContext.hasPendingException();
                     }
-                    return failSet(key, context, throwOnFailure);
+                    return failSet(key, throwOnFailure);
                 }
                 if (protoDescriptor != null && !protoDescriptor.isWritable()) {
-                    return failSet(key, context, throwOnFailure);
+                    return failSet(key, throwOnFailure);
                 }
                 break;
             }
             proto = proto.prototype;
         }
 
-        return setOnReceiver(context, key, value, receiver, throwOnFailure);
+        return setOnReceiver(effectiveContext, key, value, receiver, throwOnFailure);
     }
 
     private boolean setOnReceiver(JSContext context, PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
+        JSContext effectiveContext = context;
         // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
         // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
         // methods on the receiver so that proxy traps are correctly invoked when
         // the receiver is a Proxy object.
 
         // Step 2c: Let existingDescriptor be ? Receiver.[[GetOwnPropertyDescriptor]](P).
+        boolean hadPendingException = effectiveContext != null && effectiveContext.hasPendingException();
         PropertyDescriptor existingDescriptor = receiver.getOwnPropertyDescriptor(key);
-        if (context != null && context.hasPendingException()) {
+        if (effectiveContext != null && !hadPendingException && effectiveContext.hasPendingException()) {
             return false;
         }
 
         if (existingDescriptor != null) {
             // Step 2d.i: If IsAccessorDescriptor(existingDescriptor), return false.
             if (existingDescriptor.isAccessorDescriptor()) {
-                return failSet(key, context, throwOnFailure);
+                return failSet(key, throwOnFailure);
             }
             // Step 2d.ii: If existingDescriptor.[[Writable]] is false, return false.
             if (!existingDescriptor.isWritable()) {
-                return failSet(key, context, throwOnFailure);
+                return failSet(key, throwOnFailure);
             }
             // Step 2d.iii-iv: Let valueDesc be { [[Value]]: V }.
             // Return ? Receiver.[[DefineOwnProperty]](P, valueDesc).
             PropertyDescriptor valueDescriptor = new PropertyDescriptor();
             valueDescriptor.setValue(value);
-            return receiver.defineProperty(context, key, valueDescriptor);
+            return receiver.defineProperty(effectiveContext, key, valueDescriptor);
         }
 
         // Step 2e: CreateDataProperty(Receiver, P, V).
@@ -1186,12 +1239,12 @@ public non-sealed class JSObject implements JSValue {
         // wrapper field is always true so the defineProperty trap handles
         // extensibility validation instead.
         if (!receiver.extensible) {
-            if (throwOnFailure && context != null && context.isStrictMode()) {
-                context.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
+            if (throwOnFailure && effectiveContext.isStrictMode()) {
+                effectiveContext.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
             }
             return false;
         }
-        return receiver.defineProperty(context, key, value, PropertyDescriptor.DataState.All);
+        return receiver.defineProperty(effectiveContext, key, value, PropertyDescriptor.DataState.All);
     }
 
     /**
@@ -1250,11 +1303,21 @@ public non-sealed class JSObject implements JSValue {
     }
 
     public boolean setWithResult(JSContext context, PropertyKey key, JSValue value) {
-        return setWithResult(context, key, value, this);
+        JSContext effectiveContext = resolveContext(context);
+        return setInternal(effectiveContext, key, value, this, false);
+    }
+
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return setWithResult(key, value, this);
+    }
+
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
+        return setInternal(this.context, key, value, receiver, false);
     }
 
     public boolean setWithResult(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
-        return setInternal(context, key, value, receiver, false);
+        JSContext effectiveContext = resolveContext(context);
+        return setInternal(effectiveContext, key, value, receiver, false);
     }
 
     /**

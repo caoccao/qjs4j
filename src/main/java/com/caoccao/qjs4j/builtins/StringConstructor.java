@@ -143,7 +143,7 @@ public final class StringConstructor {
         }
 
         // Get the raw array
-        JSValue rawValue = cooked.get(context, PropertyKey.fromString("raw"));
+        JSValue rawValue = cooked.get(PropertyKey.fromString("raw"));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -160,7 +160,7 @@ public final class StringConstructor {
         }
 
         // Get length of raw array
-        JSValue lengthValue = raw.get(context, PropertyKey.LENGTH);
+        JSValue lengthValue = raw.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -176,7 +176,7 @@ public final class StringConstructor {
         // Process each segment
         for (long i = 0; i < literalSegments; i++) {
             // Get the raw string at index i
-            JSValue nextVal = raw.get(context, PropertyKey.fromIndex((int) i));
+            JSValue nextVal = raw.get(PropertyKey.fromIndex((int) i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

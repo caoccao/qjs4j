@@ -347,7 +347,7 @@ public final class ObjectPrototype {
         }
 
         // Create new object with the specified prototype
-        JSObject newObj = new JSObject(proto);
+        JSObject newObj = new JSObject(context, proto);
 
         // Handle propertiesObject parameter (args[1]) if present
         if (args.length > 1 && !(args[1].isUndefined())) {
@@ -444,31 +444,31 @@ public final class ObjectPrototype {
 
         // Check for enumerable
         if (descObj.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
+            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
             desc.setEnumerable(JSTypeChecking.isTruthy(enumerable));
         }
 
         // Check for configurable
         if (descObj.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
+            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
             desc.setConfigurable(JSTypeChecking.isTruthy(configurable));
         }
 
         // Check for value
         if (descObj.has(PropertyKey.VALUE)) {
-            JSValue value = descObj.get(context, PropertyKey.VALUE);
+            JSValue value = descObj.get(PropertyKey.VALUE);
             desc.setValue(value);
         }
 
         // Check for writable
         if (descObj.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
+            JSValue writable = descObj.get(PropertyKey.WRITABLE);
             desc.setWritable(JSTypeChecking.isTruthy(writable));
         }
 
         // Check for getter
         if (descObj.has(PropertyKey.GET)) {
-            JSValue getter = descObj.get(context, PropertyKey.GET);
+            JSValue getter = descObj.get(PropertyKey.GET);
             if (!(getter instanceof JSUndefined) && !(getter instanceof JSFunction)) {
                 return context.throwTypeError("Getter must be a function");
             }
@@ -477,7 +477,7 @@ public final class ObjectPrototype {
 
         // Check for setter
         if (descObj.has(PropertyKey.SET)) {
-            JSValue setter = descObj.get(context, PropertyKey.SET);
+            JSValue setter = descObj.get(PropertyKey.SET);
             if (!(setter instanceof JSUndefined) && !(setter instanceof JSFunction)) {
                 return context.throwTypeError("Setter must be a function");
             }
@@ -694,7 +694,7 @@ public final class ObjectPrototype {
         }
         JSValue toStringMethod;
         if (thisArg.isObject()) {
-            toStringMethod = obj.get(context, PropertyKey.TO_STRING);
+            toStringMethod = obj.get(PropertyKey.TO_STRING);
         } else {
             toStringMethod = getValueWithReceiver(context, obj, PropertyKey.TO_STRING, thisArg);
         }
@@ -773,7 +773,7 @@ public final class ObjectPrototype {
         }
 
         // Step 15: Let tag be ? Get(O, @@toStringTag)
-        JSValue tag = obj.get(context, PropertyKey.SYMBOL_TO_STRING_TAG);
+        JSValue tag = obj.get(PropertyKey.SYMBOL_TO_STRING_TAG);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }

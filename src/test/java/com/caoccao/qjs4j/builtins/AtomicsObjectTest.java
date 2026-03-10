@@ -39,8 +39,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testAdd() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(16); // 4 int32 values
-        JSInt32Array arr = new JSInt32Array(ab, 0, 4);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 16); // 4 int32 values
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 4);
 
         // Initialize values
         arr.getBuffer().getBuffer().putInt(0, 10);
@@ -70,8 +70,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testAnd() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         // Initialize values: 0b1111 (15) and 0b1010 (10)
         arr.getBuffer().getBuffer().putInt(0, 15);
@@ -91,8 +91,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testCompareExchange() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         arr.getBuffer().getBuffer().putInt(0, 42);
         arr.getBuffer().getBuffer().putInt(4, 100);
@@ -111,8 +111,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testExchange() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         arr.getBuffer().getBuffer().putInt(0, 123);
         arr.getBuffer().getBuffer().putInt(4, 456);
@@ -159,8 +159,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testLoad() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         arr.getBuffer().getBuffer().putInt(0, 111);
         arr.getBuffer().getBuffer().putInt(4, 222);
@@ -176,8 +176,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testNotify() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         // Store initial value
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -209,8 +209,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testNotifyMultipleWaiters() throws InterruptedException {
         // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         // Store initial value
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -262,8 +262,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testNotifyWithInfinity() throws InterruptedException {
         // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
         arr.getBuffer().getBuffer().putInt(0, 300);
@@ -312,8 +312,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testOr() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         // Initialize values: 0b1010 (10) and 0b1100 (12)
         arr.getBuffer().getBuffer().putInt(0, 10);
@@ -340,8 +340,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testStore() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         arr.getBuffer().getBuffer().putInt(0, 0);
         arr.getBuffer().getBuffer().putInt(4, 0);
@@ -359,8 +359,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testSub() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(16);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 4);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 16);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 4);
 
         // Initialize values
         arr.getBuffer().getBuffer().putInt(0, 50);
@@ -380,8 +380,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testWait() {
         // Create ArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         // Store initial value
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -417,8 +417,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testWaitAndNotifyMultithreaded() throws InterruptedException {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         // Store initial value
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -469,8 +469,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testWaitAsync() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(4);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 1);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 4);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 1);
 
         // Store initial value
         assertThat(arr.getBuffer().getBuffer()).isNotNull();
@@ -517,8 +517,8 @@ public class AtomicsObjectTest extends BaseJavetTest {
     @Test
     public void testXor() {
         // Create SharedArrayBuffer and Int32Array
-        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(8);
-        JSInt32Array arr = new JSInt32Array(ab, 0, 2);
+        JSSharedArrayBuffer ab = new JSSharedArrayBuffer(context, 8);
+        JSInt32Array arr = new JSInt32Array(context, ab, 0, 2);
 
         // Initialize values: 0b1111 (15) and 0b1010 (10)
         arr.getBuffer().getBuffer().putInt(0, 15);

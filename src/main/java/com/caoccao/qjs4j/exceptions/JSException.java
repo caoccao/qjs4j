@@ -34,10 +34,7 @@ public class JSException extends RuntimeException {
 
     public JSException(String name, String message, Throwable cause) {
         super(name + ": " + message, cause);
-        JSObject errorObject = new JSObject();
-        errorObject.set(PropertyKey.NAME, new JSString(name));
-        errorObject.set(PropertyKey.MESSAGE, new JSString(message));
-        errorValue = errorObject;
+        errorValue = new JSString(name + ": " + message);
     }
 
     public JSException(JSValue errorValue) {

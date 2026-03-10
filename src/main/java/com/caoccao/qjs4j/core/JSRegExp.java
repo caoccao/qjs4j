@@ -34,8 +34,8 @@ public final class JSRegExp extends JSObject {
     /**
      * Create a RegExp with pattern and flags.
      */
-    public JSRegExp(String pattern, String flags) {
-        super();
+    public JSRegExp(JSContext context, String pattern, String flags) {
+        super(context);
         this.pattern = pattern != null ? pattern : "";
         String rawFlags = flags != null ? flags : "";
 
@@ -67,12 +67,12 @@ public final class JSRegExp extends JSObject {
             if (!(patternArg instanceof JSObject patternObject)) {
                 return context.throwTypeError("Invalid RegExp pattern");
             }
-            patternValue = patternObject.get(context, PropertyKey.fromString("source"));
+            patternValue = patternObject.get(PropertyKey.fromString("source"));
             if (context.hasPendingException()) {
                 return (JSObject) context.getPendingException();
             }
             if (flagsArg instanceof JSUndefined) {
-                flagsValue = patternObject.get(context, PropertyKey.fromString("flags"));
+                flagsValue = patternObject.get(PropertyKey.fromString("flags"));
                 if (context.hasPendingException()) {
                     return (JSObject) context.getPendingException();
                 }
@@ -113,7 +113,7 @@ public final class JSRegExp extends JSObject {
         if (!(value instanceof JSObject objectValue)) {
             return false;
         }
-        JSValue matchValue = objectValue.get(context, PropertyKey.SYMBOL_MATCH);
+        JSValue matchValue = objectValue.get(PropertyKey.SYMBOL_MATCH);
         if (context.hasPendingException()) {
             return false;
         }

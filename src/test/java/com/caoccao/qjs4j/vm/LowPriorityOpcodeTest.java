@@ -32,8 +32,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
             JSValue[] closureVars,
             JSValue thisArg,
             JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                emitter.build(localCount),
+        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount),
                 "test",
                 args.length,
                 closureVars,
@@ -216,7 +215,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
 
     @Test
     public void testShortCallAndTypeCheckOpcodes() {
-        JSNativeFunction sum = new JSNativeFunction("sum", 3, (ctx, thisArg, args) -> {
+        JSNativeFunction sum = new JSNativeFunction(context, "sum", 3, (ctx, thisArg, args) -> {
             double value = 0;
             for (JSValue arg : args) {
                 value += JSTypeConversions.toNumber(ctx, arg).value();
@@ -381,7 +380,7 @@ public class LowPriorityOpcodeTest extends BaseTest {
         assertThat(const8Result).isInstanceOf(JSNumber.class);
         assertThat(((JSNumber) const8Result).value()).isEqualTo(42);
 
-        JSNativeFunction callable = new JSNativeFunction("c", 0, (ctx, thisArg, args) -> new JSNumber(77), false);
+        JSNativeFunction callable = new JSNativeFunction(context, "c", 0, (ctx, thisArg, args) -> new JSNumber(77), false);
         BytecodeEmitter closure8Emitter = new BytecodeEmitter();
         closure8Emitter.emitOpcodeConstant(Opcode.PUSH_CONST, callable);
         closure8Emitter.emitOpcode(Opcode.DROP);

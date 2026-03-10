@@ -62,7 +62,7 @@ public final class SetPrototype {
     }
 
     private static void closeIterator(JSContext context, JSObject iteratorObject) {
-        JSValue returnMethod = iteratorObject.get(context, PropertyKey.RETURN);
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
             return;
         }
@@ -204,7 +204,7 @@ public final class SetPrototype {
             return null;
         }
         // Cache the next method per ES2024 GetIteratorDirect
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return null;
         }
@@ -227,7 +227,7 @@ public final class SetPrototype {
             size = set.size();
         } else {
             JSValue sizeValue = object != null
-                    ? object.get(context, PropertyKey.SIZE)
+                    ? object.get(PropertyKey.SIZE)
                     : JSUndefined.INSTANCE;
             if (context.hasPendingException()) {
                 return null;
@@ -252,7 +252,7 @@ public final class SetPrototype {
         }
 
         JSValue hasValue = object != null
-                ? object.get(context, PropertyKey.HAS)
+                ? object.get(PropertyKey.HAS)
                 : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;
@@ -267,7 +267,7 @@ public final class SetPrototype {
         }
 
         JSValue keysValue = object != null
-                ? object.get(context, PropertyKey.KEYS)
+                ? object.get(PropertyKey.KEYS)
                 : JSUndefined.INSTANCE;
         if (context.hasPendingException()) {
             return null;
@@ -490,14 +490,14 @@ public final class SetPrototype {
             return null;
         }
         // Use context-aware get to trigger getters
-        JSValue done = nextResultObject.get(context, PropertyKey.DONE);
+        JSValue done = nextResultObject.get(PropertyKey.DONE);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
             return new IteratorStep(JSUndefined.INSTANCE, true);
         }
-        JSValue value = nextResultObject.get(context, PropertyKey.VALUE);
+        JSValue value = nextResultObject.get(PropertyKey.VALUE);
         if (context.hasPendingException()) {
             return null;
         }

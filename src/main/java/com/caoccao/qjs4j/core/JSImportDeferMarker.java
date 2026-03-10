@@ -19,10 +19,9 @@ package com.caoccao.qjs4j.core;
 /**
  * Internal sentinel used by bytecode for import.defer().
  */
-public final class JSImportDeferMarker extends JSObject {
-    public static final JSImportDeferMarker INSTANCE = new JSImportDeferMarker();
+public final class JSImportDeferMarker {
+    public static final JSSymbol VALUE = new JSSymbol("ImportDeferMarker");
 
     private JSImportDeferMarker() {
-        super();
     }
 }

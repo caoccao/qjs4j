@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
@@ -41,6 +42,7 @@ final class CompilerContext {
     final Set<String> tdzLocals;
     final Deque<Integer> withObjectLocalStack;
     boolean classFieldEvalContext;
+    JSContext context;
     boolean emitTailCalls;
     boolean evalMode;
     int evalReturnLocalIndex;
@@ -64,18 +66,23 @@ final class CompilerContext {
     boolean varInGlobalProgram;
 
     CompilerContext() {
-        this(false, null);
+        this(false, null, null);
     }
 
     CompilerContext(boolean inheritedStrictMode) {
-        this(inheritedStrictMode, null);
+        this(inheritedStrictMode, null, null);
     }
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
+        this(inheritedStrictMode, parentCaptureResolver, null);
+    }
+
+    CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
         this.activeFinallyGosubPatches = new ArrayDeque<>();
         this.annexBFunctionNames = new HashSet<>();
         this.annexBFunctionScopeLocals = new HashMap<>();
         this.emitter = new BytecodeEmitter();
+        this.context = context;
         this.evalMode = false;
         this.evalReturnLocalIndex = -1;
         this.scopes = new ArrayDeque<>();

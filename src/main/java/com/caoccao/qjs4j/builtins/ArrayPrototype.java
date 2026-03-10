@@ -48,7 +48,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             length = arr.getLength();
         } else {
-            JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
+            JSValue lenVal = obj.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -78,7 +78,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             return arr.get((int) index);
         }
-        return obj.get(context, PropertyKey.fromString(Long.toString(index)));
+        return obj.get(PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -128,7 +128,7 @@ public final class ArrayPrototype {
                 if (elementObj instanceof JSArray eArr) {
                     elementLength = eArr.getLength();
                 } else {
-                    JSValue lenVal = elementObj.get(context, PropertyKey.LENGTH);
+                    JSValue lenVal = elementObj.get(PropertyKey.LENGTH);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -150,7 +150,7 @@ public final class ArrayPrototype {
                         return context.getPendingException();
                     }
                     if (present) {
-                        JSValue val = elementObj.get(context, indexKey);
+                        JSValue val = elementObj.get(indexKey);
                         if (context.hasPendingException()) {
                             return context.getPendingException();
                         }
@@ -179,7 +179,7 @@ public final class ArrayPrototype {
         if (resultArr != null) {
             resultArr.setLength(resultIndex);
         } else {
-            resultObj.set(context, PropertyKey.LENGTH, JSNumber.of(resultIndex));
+            resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -204,7 +204,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             length = arr.getLength();
         } else {
-            JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
+            JSValue lenVal = obj.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -271,7 +271,7 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             if (fromPresent) {
-                JSValue value = obj.get(context, fromKey);
+                JSValue value = obj.get(fromKey);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -325,7 +325,7 @@ public final class ArrayPrototype {
      * ES2024 DeletePropertyOrThrow(O, P) — throws TypeError if delete returns false.
      */
     private static boolean deleteOrThrow(JSContext context, JSObject obj, PropertyKey key) {
-        if (!obj.delete(context, key)) {
+        if (!obj.delete(key)) {
             if (!context.hasPendingException()) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "'");
             }
@@ -370,7 +370,7 @@ public final class ArrayPrototype {
             }
             // Step 7c.i: Let kValue be ? Get(O, key)
             // Use context-aware get so getters are properly invoked
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -495,7 +495,7 @@ public final class ArrayPrototype {
                 continue;
             }
             // Step 7.c.i: Let kValue be ? Get(O, Pk).
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -545,7 +545,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -589,7 +589,7 @@ public final class ArrayPrototype {
 
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -635,7 +635,7 @@ public final class ArrayPrototype {
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -681,7 +681,7 @@ public final class ArrayPrototype {
         // Iterate backwards
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -791,7 +791,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -825,7 +825,7 @@ public final class ArrayPrototype {
                             return context.getPendingException();
                         }
                         if (jPresent) {
-                            JSValue val = mappedObj.get(context, jKey);
+                            JSValue val = mappedObj.get(jKey);
                             if (context.hasPendingException()) {
                                 return context.getPendingException();
                             }
@@ -879,7 +879,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -901,7 +901,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr && index <= Integer.MAX_VALUE) {
             return arr.get((int) index);
         }
-        return obj.get(context, PropertyKey.fromString(Long.toString(index)));
+        return obj.get(PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -958,7 +958,7 @@ public final class ArrayPrototype {
 
         for (long i = fromIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1023,7 +1023,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1044,7 +1044,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = source.get(context, key);
+            JSValue element = source.get(key);
             if (context.hasPendingException()) {
                 return;
             }
@@ -1081,7 +1081,7 @@ public final class ArrayPrototype {
         if (!(val instanceof JSObject obj)) {
             return false;
         }
-        JSValue spreadable = obj.get(context, PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE);
+        JSValue spreadable = obj.get(PropertyKey.SYMBOL_IS_CONCAT_SPREADABLE);
         if (context.hasPendingException()) {
             return false;
         }
@@ -1117,14 +1117,14 @@ public final class ArrayPrototype {
             }
         } else if (thisArg instanceof JSObject jsObject) {
             // Following QuickJS js_array_join: read length first, then coerce separator
-            long length = JSTypeConversions.toLength(context, jsObject.get(context, PropertyKey.fromString("length")));
+            long length = JSTypeConversions.toLength(context, jsObject.get(PropertyKey.fromString("length")));
             String separator = args.length > 0 && !(args[0] instanceof JSUndefined) ?
                     JSTypeConversions.toString(context, args[0]).value() : ",";
             for (long i = 0; i < length; i++) {
                 if (i > 0) {
                     result.append(separator);
                 }
-                JSValue element = jsObject.get(context, PropertyKey.fromString(Long.toString(i)));
+                JSValue element = jsObject.get(PropertyKey.fromString(Long.toString(i)));
                 if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
                     result.append(JSTypeConversions.toString(context, element).value());
                 }
@@ -1176,7 +1176,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1196,7 +1196,7 @@ public final class ArrayPrototype {
         if (obj instanceof JSArray arr) {
             return arr.getLength();
         }
-        JSValue lenVal = obj.get(context, PropertyKey.LENGTH);
+        JSValue lenVal = obj.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return -1;
         }
@@ -1248,7 +1248,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1302,7 +1302,7 @@ public final class ArrayPrototype {
         }
         long newLen = length - 1;
         PropertyKey key = PropertyKey.fromString(Long.toString(newLen));
-        JSValue element = obj.get(context, key);
+        JSValue element = obj.get(key);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1396,7 +1396,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 if (kPresent) {
-                    accumulator = obj.get(context, key);
+                    accumulator = obj.get(key);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -1418,7 +1418,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1473,7 +1473,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 if (kPresent) {
-                    accumulator = obj.get(context, key);
+                    accumulator = obj.get(key);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -1495,7 +1495,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1538,7 +1538,7 @@ public final class ArrayPrototype {
             }
             JSValue lowerVal = JSUndefined.INSTANCE;
             if (lowerExists) {
-                lowerVal = obj.get(context, lowerKey);
+                lowerVal = obj.get(lowerKey);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1550,7 +1550,7 @@ public final class ArrayPrototype {
             }
             JSValue upperVal = JSUndefined.INSTANCE;
             if (upperExists) {
-                upperVal = obj.get(context, upperKey);
+                upperVal = obj.get(upperKey);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1631,7 +1631,7 @@ public final class ArrayPrototype {
             return JSUndefined.INSTANCE;
         }
         PropertyKey firstKey = PropertyKey.fromString("0");
-        JSValue first = obj.get(context, firstKey);
+        JSValue first = obj.get(firstKey);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1644,7 +1644,7 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             if (fromPresent) {
-                JSValue val = obj.get(context, from);
+                JSValue val = obj.get(from);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1730,7 +1730,7 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             if (kPresent) {
-                JSValue element = obj.get(context, key);
+                JSValue element = obj.get(key);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1742,7 +1742,7 @@ public final class ArrayPrototype {
         }
 
         // Step 9: Perform ? Set(A, "length", resultIndex, true).
-        resultObj.set(context, PropertyKey.LENGTH, JSNumber.of(resultIndex));
+        resultObj.set(PropertyKey.LENGTH, JSNumber.of(resultIndex));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1782,7 +1782,7 @@ public final class ArrayPrototype {
                 }
                 continue;
             }
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1839,7 +1839,7 @@ public final class ArrayPrototype {
             if (!present) {
                 continue;
             }
-            JSValue value = obj.get(context, key);
+            JSValue value = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1870,7 +1870,7 @@ public final class ArrayPrototype {
         // Write sorted elements
         for (int i = 0; i < sortableElements.size(); i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(context, key, sortableElements.get(i));
+            obj.set(key, sortableElements.get(i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1880,7 +1880,7 @@ public final class ArrayPrototype {
         // Write undefined values after sorted elements
         for (int i = 0; i < undefinedCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(context, key, JSUndefined.INSTANCE);
+            obj.set(key, JSUndefined.INSTANCE);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1890,7 +1890,7 @@ public final class ArrayPrototype {
         // Delete remaining holes
         for (long i = writeIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            obj.delete(context, key);
+            obj.delete(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1966,7 +1966,7 @@ public final class ArrayPrototype {
                 return context.getPendingException();
             }
             if (kPresent) {
-                JSValue val = obj.get(context, key);
+                JSValue val = obj.get(key);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1977,7 +1977,7 @@ public final class ArrayPrototype {
             }
         }
         // Step 11: Perform ? Set(A, "length", actualDeleteCount, true).
-        deletedObj.set(context, PropertyKey.LENGTH, JSNumber.of(deleteCount));
+        deletedObj.set(PropertyKey.LENGTH, JSNumber.of(deleteCount));
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -2000,7 +2000,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 if (fromPresent) {
-                    JSValue val = obj.get(context, from);
+                    JSValue val = obj.get(from);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -2029,7 +2029,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 if (fromPresent) {
-                    JSValue val = obj.get(context, from);
+                    JSValue val = obj.get(from);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -2084,7 +2084,7 @@ public final class ArrayPrototype {
                 sb.append(",");
             }
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2093,7 +2093,7 @@ public final class ArrayPrototype {
                 if (elementObject == null || context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                JSValue toLocaleStringValue = elementObject.get(context, PropertyKey.fromString("toLocaleString"));
+                JSValue toLocaleStringValue = elementObject.get(PropertyKey.fromString("toLocaleString"));
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -2160,7 +2160,7 @@ public final class ArrayPrototype {
         // Copy elements in reverse order
         for (long i = length - 1; i >= 0; i--) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            JSValue element = obj.get(context, key);
+            JSValue element = obj.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2207,7 +2207,7 @@ public final class ArrayPrototype {
         List<JSValue> elements = new ArrayList<>();
         for (long i = 0; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            elements.add(obj.get(context, key));
+            elements.add(obj.get(key));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2303,7 +2303,7 @@ public final class ArrayPrototype {
         // Copy elements before start
         for (long i = 0; i < start; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            result.push(obj.get(context, key));
+            result.push(obj.get(key));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2317,7 +2317,7 @@ public final class ArrayPrototype {
         // Copy elements after deleted portion
         for (long i = start + deleteCount; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            result.push(obj.get(context, key));
+            result.push(obj.get(key));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2382,7 +2382,7 @@ public final class ArrayPrototype {
                     return context.getPendingException();
                 }
                 if (fromPresent) {
-                    JSValue val = obj.get(context, from);
+                    JSValue val = obj.get(from);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -2463,7 +2463,7 @@ public final class ArrayPrototype {
                 result.push(newValue);
             } else {
                 PropertyKey key = PropertyKey.fromString(Long.toString(i));
-                result.push(obj.get(context, key));
+                result.push(obj.get(key));
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }

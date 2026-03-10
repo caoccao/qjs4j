@@ -85,7 +85,7 @@ public final class FunctionPrototype {
         double computedLength = 0;
         PropertyDescriptor lengthDesc = targetFunc.getOwnPropertyDescriptor(PropertyKey.LENGTH);
         if (lengthDesc != null) {
-            JSValue targetLenValue = targetFunc.get(context, PropertyKey.LENGTH);
+            JSValue targetLenValue = targetFunc.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -108,7 +108,7 @@ public final class FunctionPrototype {
 
         // Step 12-15: Compute name from target's "name" property
         // Per spec, read target's "name" property (not use internal getName())
-        JSValue targetNameValue = targetFunc.get(context, PropertyKey.NAME);
+        JSValue targetNameValue = targetFunc.get(PropertyKey.NAME);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -138,7 +138,7 @@ public final class FunctionPrototype {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
+        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return null;
         }
@@ -154,12 +154,12 @@ public final class FunctionPrototype {
 
         JSValue[] callArgs = new JSValue[(int) length];
         for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(context, PropertyKey.fromString(String.valueOf(i)));
+            JSValue argumentValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)));
             if (context.hasPendingException()) {
                 return null;
             }
             if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(context, PropertyKey.fromString(Integer.toString(i)));
+                argumentValue = arrayLike.get(PropertyKey.fromString(Integer.toString(i)));
                 if (context.hasPendingException()) {
                     return null;
                 }
@@ -282,7 +282,7 @@ public final class FunctionPrototype {
         if (!(constructor instanceof JSObject constructorObj)) {
             return JSBoolean.FALSE;
         }
-        JSValue prototypeValue = constructorObj.get(context, PropertyKey.PROTOTYPE);
+        JSValue prototypeValue = constructorObj.get(PropertyKey.PROTOTYPE);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -300,7 +300,7 @@ public final class FunctionPrototype {
             }
             // Handle proxy getPrototypeOf trap
             if (currentPrototype instanceof JSProxy proxy) {
-                JSValue proxyProto = proxy.get(context, PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG));
+                JSValue proxyProto = proxy.get(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG));
                 // Actually, we need to call [[GetPrototypeOf]] on the proxy
                 // For now, get the prototype from the proxy itself
             }
@@ -358,7 +358,7 @@ public final class FunctionPrototype {
         // Read the JS "name" property (may differ from internal getName())
         String name = "";
         if (thisArg instanceof JSObject funcObj) {
-            JSValue nameValue = funcObj.get(context, PropertyKey.NAME);
+            JSValue nameValue = funcObj.get(PropertyKey.NAME);
             if (nameValue instanceof JSString nameStr) {
                 name = nameStr.value();
             }

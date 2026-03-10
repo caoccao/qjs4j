@@ -76,7 +76,7 @@ public final class ObjectConstructor {
                 }
 
                 // Step 4c.iii.1: Let propValue be Get(from, nextKey)
-                JSValue propValue = sourceObj.get(context, key);
+                JSValue propValue = sourceObj.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -109,7 +109,7 @@ public final class ObjectConstructor {
         if (newTarget != null) {
             JSValue objectConstructor = context.getGlobalObject().get(PropertyKey.fromString(JSObject.NAME));
             if (newTarget != objectConstructor) {
-                JSObject newObject = new JSObject();
+                JSObject newObject = new JSObject(context);
                 if (newTarget instanceof JSObject newTargetObject) {
                     if (!context.transferPrototypeFromConstructor(newObject, newTargetObject)) {
                         if (context.hasPendingException()) {
@@ -141,31 +141,31 @@ public final class ObjectConstructor {
 
         // Wrap primitive values in their respective object wrappers
         if (value instanceof JSNumber num) {
-            JSNumberObject jsNumberObject = new JSNumberObject(num);
+            JSNumberObject jsNumberObject = new JSNumberObject(context, num);
             context.transferPrototype(jsNumberObject, JSNumberObject.NAME);
             return jsNumberObject;
         }
 
         if (value instanceof JSString str) {
-            JSStringObject jsStringObject = new JSStringObject(str);
+            JSStringObject jsStringObject = new JSStringObject(context, str);
             context.transferPrototype(jsStringObject, JSString.NAME);
             return jsStringObject;
         }
 
         if (value instanceof JSBoolean bool) {
-            JSBooleanObject jsBooleanObject = new JSBooleanObject(bool);
+            JSBooleanObject jsBooleanObject = new JSBooleanObject(context, bool);
             context.transferPrototype(jsBooleanObject, JSBoolean.NAME);
             return jsBooleanObject;
         }
 
         if (value instanceof JSSymbol jsSymbol) {
-            JSSymbolObject jsSymbolObject = new JSSymbolObject(jsSymbol);
+            JSSymbolObject jsSymbolObject = new JSSymbolObject(context, jsSymbol);
             context.transferPrototype(jsSymbolObject, JSSymbol.NAME);
             return jsSymbolObject;
         }
 
         if (value instanceof JSBigInt bigInt) {
-            JSBigIntObject jsBigIntObject = new JSBigIntObject(bigInt);
+            JSBigIntObject jsBigIntObject = new JSBigIntObject(context, bigInt);
             context.transferPrototype(jsBigIntObject, JSBigInt.NAME);
             return jsBigIntObject;
         }
@@ -219,7 +219,7 @@ public final class ObjectConstructor {
             }
         }
         // Create new object
-        JSObject newObj = new JSObject();
+        JSObject newObj = new JSObject(context);
         newObj.setPrototype(proto);
         // null prototype is allowed - object stays with null prototype
 
@@ -242,7 +242,7 @@ public final class ObjectConstructor {
                 }
 
                 // Get the descriptor value (triggers getters)
-                JSValue descValue = propsObj.get(context, key);
+                JSValue descValue = propsObj.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -300,7 +300,7 @@ public final class ObjectConstructor {
             // Only process enumerable properties
             PropertyDescriptor keyDesc = props.getOwnPropertyDescriptor(key);
             if (keyDesc != null && keyDesc.isEnumerable()) {
-                JSValue descValue = props.get(context, key);
+                JSValue descValue = props.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -369,7 +369,7 @@ public final class ObjectConstructor {
             }
             // Step 3b: If desc is not undefined and desc.[[Enumerable]] is true
             if (desc != null && desc.isEnumerable()) {
-                JSValue value = obj.get(context, key);
+                JSValue value = obj.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -492,7 +492,7 @@ public final class ObjectConstructor {
                 return context.throwTypeError("Iterator result is not an object");
             }
 
-            JSValue doneValue = iterResult.get(context, PropertyKey.DONE);
+            JSValue doneValue = iterResult.get(PropertyKey.DONE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -501,7 +501,7 @@ public final class ObjectConstructor {
             }
 
             // Step 4c: IteratorValue - errors propagate WITHOUT IteratorClose
-            JSValue nextItem = iterResult.get(context, PropertyKey.VALUE);
+            JSValue nextItem = iterResult.get(PropertyKey.VALUE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -516,13 +516,13 @@ public final class ObjectConstructor {
                 }
 
                 // Step 4e: Get(nextItem, "0") — key. Errors close the iterator.
-                JSValue keyValue = entryObj.get(context, PropertyKey.fromString("0"));
+                JSValue keyValue = entryObj.get(PropertyKey.fromString("0"));
                 if (context.hasPendingException()) {
                     return closeIteratorPreserveError(context, iterator);
                 }
 
                 // Step 4g: Get(nextItem, "1") — value. Errors close the iterator.
-                JSValue entryValue = entryObj.get(context, PropertyKey.fromString("1"));
+                JSValue entryValue = entryObj.get(PropertyKey.fromString("1"));
                 if (context.hasPendingException()) {
                     return closeIteratorPreserveError(context, iterator);
                 }
@@ -793,7 +793,7 @@ public final class ObjectConstructor {
         }
 
         // Result object has null prototype per spec
-        JSObject result = new JSObject();
+        JSObject result = new JSObject(context);
         result.setPrototype(null);
 
         long index = 0;
@@ -806,7 +806,7 @@ public final class ObjectConstructor {
                 return context.throwTypeError("Iterator result is not an object");
             }
 
-            JSValue doneValue = iterResult.get(context, PropertyKey.DONE);
+            JSValue doneValue = iterResult.get(PropertyKey.DONE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -814,7 +814,7 @@ public final class ObjectConstructor {
                 break;
             }
 
-            JSValue element = iterResult.get(context, PropertyKey.VALUE);
+            JSValue element = iterResult.get(PropertyKey.VALUE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1242,7 +1242,7 @@ public final class ObjectConstructor {
 
         // Step 2: If HasProperty(Obj, "enumerable"), set [[Enumerable]] to ToBoolean(Get(Obj, "enumerable"))
         if (descObj.has(PropertyKey.ENUMERABLE)) {
-            JSValue enumerable = descObj.get(context, PropertyKey.ENUMERABLE);
+            JSValue enumerable = descObj.get(PropertyKey.ENUMERABLE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1251,7 +1251,7 @@ public final class ObjectConstructor {
 
         // Step 3: If HasProperty(Obj, "configurable"), set [[Configurable]] to ToBoolean(Get(Obj, "configurable"))
         if (descObj.has(PropertyKey.CONFIGURABLE)) {
-            JSValue configurable = descObj.get(context, PropertyKey.CONFIGURABLE);
+            JSValue configurable = descObj.get(PropertyKey.CONFIGURABLE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1260,7 +1260,7 @@ public final class ObjectConstructor {
 
         // Step 4: If HasProperty(Obj, "value"), set [[Value]] to Get(Obj, "value")
         if (descObj.has(PropertyKey.VALUE)) {
-            JSValue value = descObj.get(context, PropertyKey.VALUE);
+            JSValue value = descObj.get(PropertyKey.VALUE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1270,7 +1270,7 @@ public final class ObjectConstructor {
 
         // Step 5: If HasProperty(Obj, "writable"), set [[Writable]] to ToBoolean(Get(Obj, "writable"))
         if (descObj.has(PropertyKey.WRITABLE)) {
-            JSValue writable = descObj.get(context, PropertyKey.WRITABLE);
+            JSValue writable = descObj.get(PropertyKey.WRITABLE);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1280,7 +1280,7 @@ public final class ObjectConstructor {
 
         // Step 6: If HasProperty(Obj, "get"), validate and set [[Get]]
         if (descObj.has(PropertyKey.GET)) {
-            JSValue getter = descObj.get(context, PropertyKey.GET);
+            JSValue getter = descObj.get(PropertyKey.GET);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1300,7 +1300,7 @@ public final class ObjectConstructor {
 
         // Step 7: If HasProperty(Obj, "set"), validate and set [[Set]]
         if (descObj.has(PropertyKey.SET)) {
-            JSValue setter = descObj.get(context, PropertyKey.SET);
+            JSValue setter = descObj.get(PropertyKey.SET);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -1374,7 +1374,7 @@ public final class ObjectConstructor {
                     return JSUndefined.INSTANCE;
                 }
                 if (descriptor != null && descriptor.isEnumerable()) {
-                    values.add(obj.get(context, key));
+                    values.add(obj.get(key));
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }

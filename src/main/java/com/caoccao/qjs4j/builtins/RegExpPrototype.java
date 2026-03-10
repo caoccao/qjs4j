@@ -48,56 +48,56 @@ public final class RegExpPrototype {
 
     private static String buildFlagsStringFromObject(JSContext context, JSObject regexpObject) {
         StringBuilder flagsBuilder = new StringBuilder(8);
-        JSValue hasIndicesValue = regexpObject.get(context, PROPERTY_HAS_INDICES);
+        JSValue hasIndicesValue = regexpObject.get(PROPERTY_HAS_INDICES);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(hasIndicesValue).value()) {
             flagsBuilder.append('d');
         }
-        JSValue globalValue = regexpObject.get(context, PROPERTY_GLOBAL);
+        JSValue globalValue = regexpObject.get(PROPERTY_GLOBAL);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(globalValue).value()) {
             flagsBuilder.append('g');
         }
-        JSValue ignoreCaseValue = regexpObject.get(context, PROPERTY_IGNORE_CASE);
+        JSValue ignoreCaseValue = regexpObject.get(PROPERTY_IGNORE_CASE);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(ignoreCaseValue).value()) {
             flagsBuilder.append('i');
         }
-        JSValue multilineValue = regexpObject.get(context, PROPERTY_MULTILINE);
+        JSValue multilineValue = regexpObject.get(PROPERTY_MULTILINE);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(multilineValue).value()) {
             flagsBuilder.append('m');
         }
-        JSValue dotAllValue = regexpObject.get(context, PROPERTY_DOT_ALL);
+        JSValue dotAllValue = regexpObject.get(PROPERTY_DOT_ALL);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(dotAllValue).value()) {
             flagsBuilder.append('s');
         }
-        JSValue unicodeValue = regexpObject.get(context, PROPERTY_UNICODE);
+        JSValue unicodeValue = regexpObject.get(PROPERTY_UNICODE);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(unicodeValue).value()) {
             flagsBuilder.append('u');
         }
-        JSValue unicodeSetsValue = regexpObject.get(context, PROPERTY_UNICODE_SETS);
+        JSValue unicodeSetsValue = regexpObject.get(PROPERTY_UNICODE_SETS);
         if (context.hasPendingException()) {
             return null;
         }
         if (JSTypeConversions.toBoolean(unicodeSetsValue).value()) {
             flagsBuilder.append('v');
         }
-        JSValue stickyValue = regexpObject.get(context, PROPERTY_STICKY);
+        JSValue stickyValue = regexpObject.get(PROPERTY_STICKY);
         if (context.hasPendingException()) {
             return null;
         }
@@ -191,7 +191,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
         JSArray indicesArray = context.createJSArray();
-        JSObject groupIndices = new JSObject();
+        JSObject groupIndices = new JSObject(context);
         groupIndices.setPrototype(null);
         for (int i = 0; i < indices.length; i++) {
             JSValue pairValue = createIndexPairValue(context, indices[i]);
@@ -217,12 +217,12 @@ public final class RegExpPrototype {
         return resultObject;
     }
 
-    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
+    private static JSValue createNamedGroupsValue(JSContext context, String[] captures, String[] groupNames) {
         if (groupNames == null || captures == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject groups = new JSObject();
+        JSObject groups = new JSObject(context);
         groups.setPrototype(null);
 
         int maxLength = Math.min(captures.length, groupNames.length);
@@ -277,7 +277,7 @@ public final class RegExpPrototype {
         boolean global = regexp.isGlobal();
         boolean sticky = regexp.isSticky();
 
-        JSValue lastIndexValue = regexp.get(context, PropertyKey.LAST_INDEX);
+        JSValue lastIndexValue = regexp.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -319,7 +319,7 @@ public final class RegExpPrototype {
             }
             array.defineProperty(null, PropertyKey.INPUT, new JSString(str), PropertyDescriptor.DataState.All);
             array.defineProperty(null, PropertyKey.GROUPS,
-                    createNamedGroupsValue(captures, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
+                    createNamedGroupsValue(context, captures, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
             if (regexp.hasIndices()) {
                 array.defineProperty(null, PropertyKey.INDICES,
                         createIndicesValue(context, indices, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
@@ -418,7 +418,7 @@ public final class RegExpPrototype {
     }
 
     private static String getFlagsString(JSContext context, JSObject regexpObject) {
-        JSValue flagsValue = regexpObject.get(context, PROPERTY_FLAGS);
+        JSValue flagsValue = regexpObject.get(PROPERTY_FLAGS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -510,7 +510,7 @@ public final class RegExpPrototype {
         if (!(defaultConstructor instanceof JSFunction)) {
             return context.throwTypeError("RegExp constructor is not available");
         }
-        JSValue constructorValue = regexpObject.get(context, PropertyKey.CONSTRUCTOR);
+        JSValue constructorValue = regexpObject.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -520,7 +520,7 @@ public final class RegExpPrototype {
         if (!(constructorValue instanceof JSObject constructorObject)) {
             return context.throwTypeError("constructor is not an object");
         }
-        JSValue speciesValue = constructorObject.get(context, PropertyKey.SYMBOL_SPECIES);
+        JSValue speciesValue = constructorObject.get(PropertyKey.SYMBOL_SPECIES);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -638,7 +638,7 @@ public final class RegExpPrototype {
     private static JSValue regExpExec(JSContext context, JSObject regexpObject, JSString inputString) {
         // ES2024 22.2.5.2 RegExpExec
         // Step 3: Let exec be ? Get(R, "exec").
-        JSValue execValue = regexpObject.get(context, PROPERTY_EXEC);
+        JSValue execValue = regexpObject.get(PROPERTY_EXEC);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -767,7 +767,7 @@ public final class RegExpPrototype {
             if (!(result instanceof JSObject resultObj)) {
                 return context.throwTypeError("RegExpExec must return an Object or null");
             }
-            JSValue matchValue = resultObj.get(context, PropertyKey.fromIndex(0));
+            JSValue matchValue = resultObj.get(PropertyKey.fromIndex(0));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -779,7 +779,7 @@ public final class RegExpPrototype {
             n++;
 
             if (matchStr.value().isEmpty()) {
-                JSValue lastIndexValue = rxObj.get(context, PropertyKey.LAST_INDEX);
+                JSValue lastIndexValue = rxObj.get(PropertyKey.LAST_INDEX);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -823,7 +823,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue lastIndexValue = regexpObject.get(context, PropertyKey.LAST_INDEX);
+        JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -869,12 +869,12 @@ public final class RegExpPrototype {
             }
         }
 
-        JSValue globalValue = regexpObject.get(context, PROPERTY_GLOBAL);
+        JSValue globalValue = regexpObject.get(PROPERTY_GLOBAL);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         boolean global = JSTypeConversions.toBoolean(globalValue).value();
-        JSValue unicodeValue = regexpObject.get(context, PROPERTY_UNICODE);
+        JSValue unicodeValue = regexpObject.get(PROPERTY_UNICODE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -904,7 +904,7 @@ public final class RegExpPrototype {
                 break;
             }
 
-            JSValue matchedValue = nextObject.get(context, PropertyKey.fromIndex(0));
+            JSValue matchedValue = nextObject.get(PropertyKey.fromIndex(0));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -913,7 +913,7 @@ public final class RegExpPrototype {
                 return JSUndefined.INSTANCE;
             }
             if (matchedString.value().isEmpty()) {
-                JSValue lastIndexValue = regexpObject.get(context, PropertyKey.LAST_INDEX);
+                JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -938,7 +938,7 @@ public final class RegExpPrototype {
         StringBuilder accumulated = new StringBuilder(inputString.length() + 16);
         int nextSourcePosition = 0;
         for (JSObject resultObject : results) {
-            JSValue matchedValue = resultObject.get(context, PropertyKey.fromIndex(0));
+            JSValue matchedValue = resultObject.get(PropertyKey.fromIndex(0));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -947,7 +947,7 @@ public final class RegExpPrototype {
                 return JSUndefined.INSTANCE;
             }
 
-            JSValue positionValue = resultObject.get(context, PropertyKey.INDEX);
+            JSValue positionValue = resultObject.get(PropertyKey.INDEX);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -958,7 +958,7 @@ public final class RegExpPrototype {
             position = Math.max(0, Math.min(position, inputString.length()));
             int tailPosition = Math.max(0, Math.min(position + matched.length(), inputString.length()));
 
-            JSValue lengthValue = resultObject.get(context, PropertyKey.LENGTH);
+            JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -969,7 +969,7 @@ public final class RegExpPrototype {
             String[] captures = new String[Math.max(1, resultLength)];
             captures[0] = matched;
             for (int i = 1; i < resultLength; i++) {
-                JSValue captureValue = resultObject.get(context, PropertyKey.fromIndex(i));
+                JSValue captureValue = resultObject.get(PropertyKey.fromIndex(i));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -983,7 +983,7 @@ public final class RegExpPrototype {
                 }
             }
 
-            JSValue groupsValue = resultObject.get(context, PropertyKey.GROUPS);
+            JSValue groupsValue = resultObject.get(PropertyKey.GROUPS);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1035,7 +1035,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue previousLastIndex = regexpObject.get(context, PropertyKey.LAST_INDEX);
+        JSValue previousLastIndex = regexpObject.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1059,7 +1059,7 @@ public final class RegExpPrototype {
         if (resultValue instanceof JSNull) {
             returnValue = JSNumber.of(-1);
         } else if (resultValue instanceof JSObject resultObject) {
-            JSValue indexValue = resultObject.get(context, PropertyKey.INDEX);
+            JSValue indexValue = resultObject.get(PropertyKey.INDEX);
             if (context.hasPendingException()) {
                 if (restoreRequired) {
                     restoreLastIndex(context, regexpObject, previousLastIndex);
@@ -1082,7 +1082,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue currentLastIndex = regexpObject.get(context, PropertyKey.LAST_INDEX);
+        JSValue currentLastIndex = regexpObject.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             if (restoreRequired) {
                 restoreLastIndex(context, regexpObject, previousLastIndex);
@@ -1178,7 +1178,7 @@ public final class RegExpPrototype {
                 return context.throwTypeError("RegExp exec method returned something other than an Object or null");
             }
 
-            JSValue lastIndexValue = splitter.get(context, PropertyKey.LAST_INDEX);
+            JSValue lastIndexValue = splitter.get(PropertyKey.LAST_INDEX);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1193,7 +1193,7 @@ public final class RegExpPrototype {
                 continue;
             }
 
-            JSValue matchIndexValue = zObject.get(context, PropertyKey.INDEX);
+            JSValue matchIndexValue = zObject.get(PropertyKey.INDEX);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1209,7 +1209,7 @@ public final class RegExpPrototype {
                 return result;
             }
 
-            JSValue lengthValue = zObject.get(context, PropertyKey.LENGTH);
+            JSValue lengthValue = zObject.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1218,7 +1218,7 @@ public final class RegExpPrototype {
                 return JSUndefined.INSTANCE;
             }
             for (int i = 1; i < captureLength; i++) {
-                JSValue captureValue = zObject.get(context, PropertyKey.fromIndex(i));
+                JSValue captureValue = zObject.get(PropertyKey.fromIndex(i));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1287,7 +1287,7 @@ public final class RegExpPrototype {
                 JSString stringValue,
                 boolean global,
                 boolean fullUnicode) {
-            super();
+            super(context);
             this.regexpObject = regexpObject;
             this.stringValue = stringValue;
             this.global = global;
@@ -1326,7 +1326,7 @@ public final class RegExpPrototype {
                 return createIteratorResultObject(context, matchObject, false);
             }
 
-            JSValue matchStringValue = matchObject.get(context, PropertyKey.fromString("0"));
+            JSValue matchStringValue = matchObject.get(PropertyKey.fromString("0"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1336,7 +1336,7 @@ public final class RegExpPrototype {
             }
 
             if (matchString.value().isEmpty()) {
-                JSValue lastIndexValue = regexpObject.get(context, PropertyKey.LAST_INDEX);
+                JSValue lastIndexValue = regexpObject.get(PropertyKey.LAST_INDEX);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }

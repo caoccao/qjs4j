@@ -279,7 +279,7 @@ public class BigIntConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Edge case: unsupported type
-        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject()});
+        result = BigIntConstructor.call(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
         assertTypeError(result);
         assertPendingException(context);
     }

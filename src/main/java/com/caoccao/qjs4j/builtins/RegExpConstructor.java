@@ -112,7 +112,7 @@ public final class RegExpConstructor {
             if (patternIsRegExp) {
                 // Step 3b: Get pattern.constructor
                 if (patternArg instanceof JSObject patternObj) {
-                    JSValue patternConstructor = patternObj.get(context, PropertyKey.CONSTRUCTOR);
+                    JSValue patternConstructor = patternObj.get(PropertyKey.CONSTRUCTOR);
                     if (context.hasPendingException()) {
                         return context.getPendingException();
                     }
@@ -214,7 +214,7 @@ public final class RegExpConstructor {
             return false;
         }
         // Check Symbol.match property
-        JSValue matchProp = obj.get(context, PropertyKey.SYMBOL_MATCH);
+        JSValue matchProp = obj.get(PropertyKey.SYMBOL_MATCH);
         if (context.hasPendingException()) {
             return false;
         }

@@ -83,10 +83,10 @@ public final class JSIntlDurationFormat extends JSObject {
     private final String[] unitDisplays;
     private final String[] unitStyles;
 
-    public JSIntlDurationFormat(Locale locale, String numberingSystem, String style,
+    public JSIntlDurationFormat(JSContext context, Locale locale, String numberingSystem, String style,
                                 String[] unitStyles, String[] unitDisplays,
                                 Integer fractionalDigits) {
-        super();
+        super(context);
         this.locale = locale;
         this.numberingSystem = numberingSystem;
         this.style = style;
@@ -557,7 +557,7 @@ public final class JSIntlDurationFormat extends JSObject {
         boolean anyDefined = false;
 
         for (String unitName : UNIT_NAMES) {
-            JSValue val = inputObj.get(context, PropertyKey.fromString(unitName));
+            JSValue val = inputObj.get(PropertyKey.fromString(unitName));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -721,7 +721,7 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         String listStyle = "digital".equals(style) ? "short" : style;
-        JSIntlListFormat listFormat = new JSIntlListFormat(locale, listStyle, "unit");
+        JSIntlListFormat listFormat = new JSIntlListFormat(context, locale, listStyle, "unit");
         return listFormat.format(result);
     }
 
@@ -897,7 +897,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
         // Join groups using ListFormat
         String listStyle = "digital".equals(style) ? "short" : style;
-        JSIntlListFormat listFormat = new JSIntlListFormat(locale, listStyle, "unit");
+        JSIntlListFormat listFormat = new JSIntlListFormat(context, locale, listStyle, "unit");
 
         // Collect formatted strings from each group
         List<String> strings = new ArrayList<>();

@@ -42,8 +42,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
             JSValue[] closureVars,
             JSValue thisArg,
             JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                emitter.build(localCount),
+        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount),
                 "test",
                 args.length,
                 closureVars,
@@ -107,7 +106,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
     @Test
     public void testDefineClassComputed() {
-        JSNativeFunction constructor = new JSNativeFunction("old", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction constructor = new JSNativeFunction(context, "old", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("DynamicClass"));
@@ -143,9 +142,9 @@ public class MediumPriorityOpcodeTest extends BaseTest {
     @Test
     public void testDefineMethodComputed() {
         JSObject target = context.createJSObject();
-        JSNativeFunction method = new JSNativeFunction("m", 0, (ctx, thisArg, args) -> new JSNumber(1));
-        JSNativeFunction getter = new JSNativeFunction("g", 0, (ctx, thisArg, args) -> new JSNumber(42));
-        JSNativeFunction setter = new JSNativeFunction("s", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> new JSNumber(1));
+        JSNativeFunction getter = new JSNativeFunction(context, "g", 0, (ctx, thisArg, args) -> new JSNumber(42));
+        JSNativeFunction setter = new JSNativeFunction(context, "s", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitOpcodeConstant(Opcode.PUSH_CONST, target);
@@ -406,7 +405,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
     @Test
     public void testSetNameOpcodes() {
-        JSNativeFunction f1 = new JSNativeFunction("oldName", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction f1 = new JSNativeFunction(context, "oldName", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameEmitter = new BytecodeEmitter();
         setNameEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f1);
         setNameEmitter.emitOpcodeAtom(Opcode.SET_NAME, "renamed");
@@ -417,7 +416,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         assertThat(setNameResult).isInstanceOf(JSString.class);
         assertThat(((JSString) setNameResult).value()).isEqualTo("renamed");
 
-        JSNativeFunction f2 = new JSNativeFunction("", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction f2 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameComputedEmitter = new BytecodeEmitter();
         setNameComputedEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("dynamic"));
         setNameComputedEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f2);
@@ -429,7 +428,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
         assertThat(setNameComputedResult).isInstanceOf(JSString.class);
         assertThat(((JSString) setNameComputedResult).value()).isEqualTo("dynamic");
 
-        JSNativeFunction f3 = new JSNativeFunction("", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction f3 = new JSNativeFunction(context, "", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
         BytecodeEmitter setNameSymbolEmitter = new BytecodeEmitter();
         setNameSymbolEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSSymbol("s"));
         setNameSymbolEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, f3);

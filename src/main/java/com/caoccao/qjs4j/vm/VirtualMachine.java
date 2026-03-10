@@ -33,7 +33,7 @@ public final class VirtualMachine {
     static final BigInteger BIGINT_ONE = BigInteger.ONE;
     static final BigInteger BIGINT_ZERO = BigInteger.ZERO;
     static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
-    static final JSObject UNINITIALIZED_MARKER = new JSObject();
+    static final JSValue UNINITIALIZED_MARKER = new JSSymbol("UninitializedMarker");
     final JSContext context;
     final Set<JSObject> initializedConstantObjects;
     final StringBuilder propertyAccessChain;  // Track last property access for better error messages
@@ -313,7 +313,7 @@ public final class VirtualMachine {
             return null;
         }
 
-        JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
+        JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return null;
         }
@@ -329,7 +329,7 @@ public final class VirtualMachine {
 
         JSValue[] args = new JSValue[(int) length];
         for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(context, PropertyKey.fromString(Integer.toString(i)));
+            JSValue argValue = arrayLike.get(PropertyKey.fromString(Integer.toString(i)));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -415,7 +415,7 @@ public final class VirtualMachine {
 
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
-            JSObject thisObject = new JSObject();
+            JSObject thisObject = new JSObject(context);
             String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
             if (newTarget instanceof JSObject newTargetObject) {
                 JSObject resolvedPrototype = context.getPrototypeFromConstructor(
@@ -608,13 +608,13 @@ public final class VirtualMachine {
             if (descriptor == null || !descriptor.isEnumerable()) {
                 continue;
             }
-            JSValue propertyValue = sourceObject.get(context, key);
+            JSValue propertyValue = sourceObject.get(key);
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
                 context.clearPendingException();
                 return;
             }
-            targetObject.set(context, key, propertyValue);
+            targetObject.set(key, propertyValue);
             if (context.hasPendingException()) {
                 pendingException = context.getPendingException();
                 context.clearPendingException();
@@ -698,16 +698,14 @@ public final class VirtualMachine {
 
     JSObject createReferenceObject(Opcode makeRefOpcode, int refIndex, String atomName) {
         StackFrame capturedFrame = currentFrame;
-        JSObject referenceObject = new JSObject();
+        JSObject referenceObject = new JSObject(context);
         PropertyKey key = PropertyKey.fromString(atomName);
 
-        JSNativeFunction getter = new JSNativeFunction(
-                "get " + atomName,
+        JSNativeFunction getter = new JSNativeFunction(context, "get " + atomName,
                 0,
                 (ctx, thisArg, args) -> readReferenceValue(capturedFrame, makeRefOpcode, refIndex),
                 false);
-        JSNativeFunction setter = new JSNativeFunction(
-                "set " + atomName,
+        JSNativeFunction setter = new JSNativeFunction(context, "set " + atomName,
                 1,
                 (ctx, thisArg, args) -> {
                     JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
@@ -782,7 +780,7 @@ public final class VirtualMachine {
                 if (dynamicBindings == null || dynamicBindings.isEmpty()) {
                     return context.getGlobalObject();
                 }
-                JSObject variableObject = new JSObject();
+                JSObject variableObject = new JSObject(context);
                 variableObject.setPrototype(context.getGlobalObject());
                 for (Map.Entry<String, JSValue> entry : dynamicBindings.entrySet()) {
                     variableObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
@@ -1194,7 +1192,7 @@ public final class VirtualMachine {
             return false;
         }
 
-        JSValue prototypeValue = constructorObject.get(context, PropertyKey.PROTOTYPE);
+        JSValue prototypeValue = constructorObject.get(PropertyKey.PROTOTYPE);
         if (context.hasPendingException()) {
             JSValue pendingException = context.getPendingException();
             if (pendingException instanceof JSError jsError) {

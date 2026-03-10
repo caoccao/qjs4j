@@ -367,7 +367,7 @@ final class ExpressionCompiler {
         if (importExpr.getOptions() != null) {
             compileExpression(importExpr.getOptions());
         } else if (importExpr.isDefer()) {
-            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.INSTANCE);
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.VALUE);
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
@@ -411,7 +411,7 @@ final class ExpressionCompiler {
                 String pattern = source.substring(1, lastSlash);
                 String flags = lastSlash < source.length() - 1 ? source.substring(lastSlash + 1) : "";
                 try {
-                    JSRegExp regexp = new JSRegExp(pattern, flags);
+                    JSRegExp regexp = new JSRegExp(compilerContext.context, pattern, flags);
                     compilerContext.emitter.emitOpcodeConstant(Opcode.REGEXP, regexp);
                     return;
                 } catch (Exception e) {

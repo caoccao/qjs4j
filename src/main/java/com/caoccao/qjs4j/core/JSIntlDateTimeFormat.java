@@ -75,14 +75,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final String yearOption;
     private JSFunction boundFormatFunction;
 
-    public JSIntlDateTimeFormat(Locale locale, FormatStyle dateStyle, FormatStyle timeStyle,
+    public JSIntlDateTimeFormat(JSContext context, Locale locale, FormatStyle dateStyle, FormatStyle timeStyle,
                                 String calendar, String numberingSystem, String timeZone,
                                 String hourCycle, String weekdayOption, String eraOption,
                                 String yearOption, String monthOption, String dayOption,
                                 String dayPeriodOption, String hourOption, String minuteOption,
                                 String secondOption, Integer fractionalSecondDigits,
                                 String timeZoneNameOption) {
-        super();
+        super(context);
         this.locale = locale;
         this.dateStyle = dateStyle;
         this.timeStyle = timeStyle;

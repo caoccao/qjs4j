@@ -31,8 +31,8 @@ public final class JSWeakMap extends JSObject {
     /**
      * Create an empty WeakMap.
      */
-    public JSWeakMap() {
-        super();
+    public JSWeakMap(JSContext context) {
+        super(context);
         this.objectData = new WeakHashMap<>();
         this.symbolData = new WeakHashMap<>();
     }
@@ -60,7 +60,7 @@ public final class JSWeakMap extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = weakMapObj.get(context, PropertyKey.SET);
+            JSValue adder = weakMapObj.get(PropertyKey.SET);
             if (context.hasPendingException()) {
                 return weakMapObj;
             }
@@ -98,7 +98,7 @@ public final class JSWeakMap extends JSObject {
                     return context.throwTypeError("Iterator result must be an object");
                 }
 
-                JSValue done = nextResult.get(context, PropertyKey.DONE);
+                JSValue done = nextResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return weakMapObj;
@@ -107,7 +107,7 @@ public final class JSWeakMap extends JSObject {
                     break;
                 }
 
-                JSValue entry = nextResult.get(context, PropertyKey.VALUE);
+                JSValue entry = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return weakMapObj;
@@ -117,12 +117,12 @@ public final class JSWeakMap extends JSObject {
                     return context.throwTypeError("Iterator value must be an object");
                 }
 
-                JSValue key = entryObj.get(context, PropertyKey.ZERO);
+                JSValue key = entryObj.get(PropertyKey.ZERO);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return weakMapObj;
                 }
-                JSValue value = entryObj.get(context, PropertyKey.ONE);
+                JSValue value = entryObj.get(PropertyKey.ONE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     return weakMapObj;

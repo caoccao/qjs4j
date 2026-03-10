@@ -37,8 +37,8 @@ public final class JSPromise extends JSObject {
     /**
      * Create a new Promise in pending state.
      */
-    public JSPromise() {
-        super();
+    public JSPromise(JSContext context) {
+        super(context);
         this.state = PromiseState.PENDING;
         this.result = JSUndefined.INSTANCE;
         this.fulfillReactions = new ArrayList<>();
@@ -64,7 +64,7 @@ public final class JSPromise extends JSObject {
         JSPromise jsPromise = context.createJSPromise();
         final ResolveState resolveState = new ResolveState();
         // Create resolve and reject functions
-        JSNativeFunction resolveFunc = new JSNativeFunction("", 1,
+        JSNativeFunction resolveFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, funcArgs) -> {
                     if (resolveState.alreadyResolved) {
                         return JSUndefined.INSTANCE;
@@ -74,7 +74,7 @@ public final class JSPromise extends JSObject {
                     jsPromise.resolve(childContext, value);
                     return JSUndefined.INSTANCE;
                 });
-        JSNativeFunction rejectFunc = new JSNativeFunction("", 1,
+        JSNativeFunction rejectFunc = new JSNativeFunction(context, "", 1,
                 (childContext, thisArg, funcArgs) -> {
                     if (resolveState.alreadyResolved) {
                         return JSUndefined.INSTANCE;
@@ -272,7 +272,7 @@ public final class JSPromise extends JSObject {
             return;
         }
 
-        JSValue thenValue = resolutionObject.get(context, PropertyKey.THEN);
+        JSValue thenValue = resolutionObject.get(PropertyKey.THEN);
         if (context.hasPendingException()) {
             JSValue error = context.getPendingException();
             context.clearPendingException();
@@ -286,7 +286,7 @@ public final class JSPromise extends JSObject {
 
         ResolveState resolveState = new ResolveState();
         context.enqueueMicrotask(() -> {
-            JSNativeFunction resolveFunc = new JSNativeFunction("", 1,
+            JSNativeFunction resolveFunc = new JSNativeFunction(context, "", 1,
                     (childContext, thisArg, funcArgs) -> {
                         if (resolveState.alreadyResolved) {
                             return JSUndefined.INSTANCE;
@@ -296,7 +296,7 @@ public final class JSPromise extends JSObject {
                         resolve(context, value);
                         return JSUndefined.INSTANCE;
                     });
-            JSNativeFunction rejectFunc = new JSNativeFunction("", 1,
+            JSNativeFunction rejectFunc = new JSNativeFunction(context, "", 1,
                     (childContext, thisArg, funcArgs) -> {
                         if (resolveState.alreadyResolved) {
                             return JSUndefined.INSTANCE;

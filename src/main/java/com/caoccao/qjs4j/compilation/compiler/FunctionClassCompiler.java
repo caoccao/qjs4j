@@ -167,7 +167,7 @@ final class FunctionClassCompiler {
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -351,6 +351,7 @@ final class FunctionClassCompiler {
         // Arrow functions cannot be constructors
         int definedArgCount = CompilerContext.computeDefinedArgCount(arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
+                compilerContext.context,
                 functionBytecode,
                 functionName,
                 definedArgCount,
@@ -958,7 +959,7 @@ final class FunctionClassCompiler {
 
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -1120,6 +1121,7 @@ final class FunctionClassCompiler {
         // async generators are NOT constructable
         boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
         JSBytecodeFunction function = new JSBytecodeFunction(
+                compilerContext.context,
                 functionBytecode,
                 functionName,
                 definedArgCount,
@@ -1186,7 +1188,7 @@ final class FunctionClassCompiler {
     private void compileFunctionExpressionInternal(FunctionExpression functionExpression, boolean forceNonConstructor) {
         // Create a new compiler for the function body
         // Nested functions inherit strict mode from parent (QuickJS behavior)
-        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver);
+        BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);
         CompilerContext functionContext = functionCompiler.context();
         CompilerDelegates funcDelegates = functionCompiler.delegates();
         functionContext.sourceCode = compilerContext.sourceCode;
@@ -1340,6 +1342,7 @@ final class FunctionClassCompiler {
                 && !functionExpression.isAsync()
                 && !functionExpression.isGenerator();
         JSBytecodeFunction function = new JSBytecodeFunction(
+                compilerContext.context,
                 functionBytecode,
                 functionName,
                 definedArgCount,
@@ -1380,7 +1383,7 @@ final class FunctionClassCompiler {
             List<PrivateMethodEntry> privateInstanceMethodFunctions,
             boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
-        BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
+        BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
         CompilerContext methodCtx = methodCompiler.context();
         CompilerDelegates methodDelegates = methodCompiler.delegates();
         methodCtx.sourceCode = compilerContext.sourceCode;
@@ -1494,6 +1497,7 @@ final class FunctionClassCompiler {
 
         String functionName = isConstructor ? methodName : "";
         JSBytecodeFunction methodFunc = new JSBytecodeFunction(
+                compilerContext.context,
                 methodBytecode,
                 functionName,
                 definedArgCount,
@@ -1575,7 +1579,7 @@ final class FunctionClassCompiler {
             String className,
             Map<String, JSSymbol> privateSymbols) {
         // Pass parent captureResolver so static blocks can capture outer scope variables
-        BytecodeCompiler blockCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
+        BytecodeCompiler blockCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
         CompilerContext blockCtx = blockCompiler.context();
         CompilerDelegates blockDelegates = blockCompiler.delegates();
         blockCtx.sourceCode = compilerContext.sourceCode;
@@ -1604,6 +1608,7 @@ final class FunctionClassCompiler {
         Bytecode blockBytecode = blockCtx.emitter.build(localCount);
 
         JSBytecodeFunction blockFunc = new JSBytecodeFunction(
+                compilerContext.context,
                 blockBytecode,
                 "<static initializer>",  // Static blocks are anonymous
                 0,                        // no parameters
@@ -1633,7 +1638,7 @@ final class FunctionClassCompiler {
             Map<String, JSSymbol> privateSymbols,
             String className) {
         // Pass parent captureResolver so static field initializers can capture outer scope variables
-        BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
+        BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
         CompilerContext initCtx = initializerCompiler.context();
         CompilerDelegates initDelegates = initializerCompiler.delegates();
         initCtx.sourceCode = compilerContext.sourceCode;
@@ -1703,6 +1708,7 @@ final class FunctionClassCompiler {
         Bytecode initializerBytecode = initCtx.emitter.build(localCount);
 
         JSBytecodeFunction initFunc = new JSBytecodeFunction(
+                compilerContext.context,
                 initializerBytecode,
                 "<static field initializer>",
                 0,
@@ -1733,7 +1739,7 @@ final class FunctionClassCompiler {
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions) {
         // Pass parent captureResolver so default constructors can capture outer scope variables
-        BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver);
+        BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
         CompilerContext ctorCtx = constructorCompiler.context();
         CompilerDelegates ctorDelegates = constructorCompiler.delegates();
         ctorCtx.sourceCode = compilerContext.sourceCode;
@@ -1769,6 +1775,7 @@ final class FunctionClassCompiler {
         Bytecode constructorBytecode = ctorCtx.emitter.build(localCount);
 
         JSBytecodeFunction ctorFunc = new JSBytecodeFunction(
+                compilerContext.context,
                 constructorBytecode,
                 className,
                 0,               // no parameters
@@ -1793,8 +1800,8 @@ final class FunctionClassCompiler {
         List<String> rawQuasis = template.getRawQuasis();
         int segmentCount = rawQuasis.size();
 
-        JSArray templateObject = new JSArray();
-        JSArray rawArray = new JSArray();
+        JSArray templateObject = new JSArray(compilerContext.context);
+        JSArray rawArray = new JSArray(compilerContext.context);
 
         for (int i = 0; i < segmentCount; i++) {
             JSString rawValue = new JSString(rawQuasis.get(i));

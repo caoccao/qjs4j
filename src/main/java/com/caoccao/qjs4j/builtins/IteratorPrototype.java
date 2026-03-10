@@ -120,8 +120,8 @@ public final class IteratorPrototype {
         if (keyArray != null) {
             // zipKeyed: create null-prototype object with bulk property initialization
             JSObject resultObject = cachedZipKeyStrings != null
-                    ? new JSZipKeyedResultObject(keyArray, cachedZipKeyStrings)
-                    : new JSObject();
+                    ? new JSZipKeyedResultObject(context, keyArray, cachedZipKeyStrings)
+                    : new JSObject(context);
             PropertyKey[] keys = keyArray.clone();
             PropertyDescriptor[] descriptors = new PropertyDescriptor[iterCount];
             JSValue[] values = new JSValue[iterCount];
@@ -154,7 +154,7 @@ public final class IteratorPrototype {
     }
 
     private static JSValue closeIterator(JSContext context, JSObject iteratorObject) {
-        JSValue returnMethod = iteratorObject.get(context, PropertyKey.RETURN);
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -235,7 +235,7 @@ public final class IteratorPrototype {
             if (!(arg instanceof JSObject sourceObject)) {
                 return context.throwTypeError("not an object");
             }
-            JSValue iteratorMethod = sourceObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+            JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -251,7 +251,7 @@ public final class IteratorPrototype {
         final JSObject[] currentIterator = {null};
         final JSValue[] currentNextMethod = {JSUndefined.INSTANCE};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("already running");
             }
@@ -299,7 +299,7 @@ public final class IteratorPrototype {
             }
         });
 
-        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -350,7 +350,7 @@ public final class IteratorPrototype {
     }
 
     private static JSNativeFunction createHelperReturnFunction(JSObject iteratorObject, boolean[] running, boolean[] done) {
-        return new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+        return new JSNativeFunction(iteratorObject.getContext(), "return", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -408,7 +408,7 @@ public final class IteratorPrototype {
     private static JSValue createIteratorWrap(JSContext context, JSObject wrappedIterator, JSValue wrappedNextMethod) {
         final boolean[] done = {false};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (done[0]) {
                 return iteratorResult(childContext, JSUndefined.INSTANCE, true);
             }
@@ -424,7 +424,7 @@ public final class IteratorPrototype {
             return iteratorResult(childContext, step.value(), false);
         });
 
-        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
             done[0] = true;
             JSValue returnMethod = wrappedIterator.get(childContext, PropertyKey.RETURN);
             if (childContext.hasPendingException()) {
@@ -500,7 +500,7 @@ public final class IteratorPrototype {
         // Generator state: 0 = suspended-start, 1 = suspended-yield, 2 = executing, 3 = completed
         int[] generatorState = {0};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (generatorState[0] == 2) {
                 return childContext.throwTypeError("generator is already running");
             }
@@ -586,7 +586,7 @@ public final class IteratorPrototype {
             }
         });
 
-        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
             if (generatorState[0] == 2) {
                 return childContext.throwTypeError("generator is already running");
             }
@@ -637,7 +637,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -646,7 +646,7 @@ public final class IteratorPrototype {
         final boolean[] done = {false};
         final boolean[] running = {false};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -700,7 +700,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -743,7 +743,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -752,7 +752,7 @@ public final class IteratorPrototype {
         final boolean[] done = {false};
         final boolean[] running = {false};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -806,7 +806,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -849,7 +849,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -860,7 +860,7 @@ public final class IteratorPrototype {
         final JSObject[] innerIterator = {null};
         final JSValue[] innerNextMethod = {JSUndefined.INSTANCE};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -952,7 +952,7 @@ public final class IteratorPrototype {
             }
         });
 
-        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -1002,7 +1002,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1049,8 +1049,8 @@ public final class IteratorPrototype {
         JSObject iteratorObject = lookupObject;
         // For strings, use primitive receiver so strict-mode getters see typeof this === 'string'
         JSValue iteratorMethod = isString
-                ? lookupObject.get(context, PropertyKey.SYMBOL_ITERATOR, sourceValue)
-                : lookupObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+                ? lookupObject.get(PropertyKey.SYMBOL_ITERATOR, sourceValue)
+                : lookupObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1068,7 +1068,7 @@ public final class IteratorPrototype {
             iteratorObject = jsObject;
         }
 
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1084,7 +1084,7 @@ public final class IteratorPrototype {
      * Get and validate the "mode" option. Returns "shortest", "longest", or "strict".
      */
     private static String getAndValidateMode(JSContext context, JSObject options) {
-        JSValue modeValue = options.get(context, PropertyKey.fromString("mode"));
+        JSValue modeValue = options.get(PropertyKey.fromString("mode"));
         if (context.hasPendingException()) {
             return null;
         }
@@ -1105,11 +1105,11 @@ public final class IteratorPrototype {
     }
 
     private static long getArrayLikeLength(JSContext context, JSObject arrayLike) {
-        return JSTypeConversions.toLength(context, arrayLike.get(context, PropertyKey.LENGTH));
+        return JSTypeConversions.toLength(context, arrayLike.get(PropertyKey.LENGTH));
     }
 
     private static JSValue getArrayLikeValue(JSContext context, JSObject arrayLike, long index) {
-        return arrayLike.get(context, PropertyKey.fromString(Long.toString(index)));
+        return arrayLike.get(PropertyKey.fromString(Long.toString(index)));
     }
 
     /**
@@ -1121,7 +1121,7 @@ public final class IteratorPrototype {
             return null;
         }
 
-        JSValue iteratorMethod = objObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = objObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1146,7 +1146,7 @@ public final class IteratorPrototype {
             iterator = iterObj;
         }
 
-        JSValue nextMethod = iterator.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iterator.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1210,11 +1210,11 @@ public final class IteratorPrototype {
     }
 
     private static boolean isIteratorInstance(JSContext context, JSObject object) {
-        JSValue iteratorConstructorValue = context.getGlobalObject().get(context, PropertyKey.ITERATOR_CAP);
+        JSValue iteratorConstructorValue = context.getGlobalObject().get(PropertyKey.ITERATOR_CAP);
         if (context.hasPendingException() || !(iteratorConstructorValue instanceof JSObject iteratorConstructorObject)) {
             return false;
         }
-        JSValue iteratorPrototypeValue = iteratorConstructorObject.get(context, PropertyKey.PROTOTYPE);
+        JSValue iteratorPrototypeValue = iteratorConstructorObject.get(PropertyKey.PROTOTYPE);
         if (context.hasPendingException() || !(iteratorPrototypeValue instanceof JSObject iteratorPrototypeObject)) {
             return false;
         }
@@ -1247,7 +1247,7 @@ public final class IteratorPrototype {
             // GetMethod(iterator, "return") - may throw via getter/proxy
             JSValue returnMethod;
             try {
-                returnMethod = iterator.get(context, PropertyKey.RETURN);
+                returnMethod = iterator.get(PropertyKey.RETURN);
             } catch (JSVirtualMachineException e) {
                 convertVMException(context, e);
                 if (!isThrow) {
@@ -1305,7 +1305,7 @@ public final class IteratorPrototype {
     private static JSObject iteratorResult(JSContext context, JSValue value, boolean done) {
         JSValue actualValue = value != null ? value : JSUndefined.INSTANCE;
         JSValue doneValue = JSBoolean.valueOf(done);
-        JSObject result = new JSIteratorResultObject(actualValue, doneValue);
+        JSObject result = new JSIteratorResultObject(context, actualValue, doneValue);
         context.transferPrototype(result, JSObject.NAME);
         return result;
     }
@@ -1323,7 +1323,7 @@ public final class IteratorPrototype {
             context.throwTypeError("not an object");
             return null;
         }
-        JSValue doneValue = resultObject.get(context, PropertyKey.DONE);
+        JSValue doneValue = resultObject.get(PropertyKey.DONE);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1331,7 +1331,7 @@ public final class IteratorPrototype {
         if (isDone) {
             return new IteratorStep(JSUndefined.INSTANCE, true);
         }
-        JSValue value = resultObject.get(context, PropertyKey.VALUE);
+        JSValue value = resultObject.get(PropertyKey.VALUE);
         if (context.hasPendingException()) {
             return null;
         }
@@ -1355,7 +1355,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1364,7 +1364,7 @@ public final class IteratorPrototype {
         final boolean[] done = {false};
         final boolean[] running = {false};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -1462,7 +1462,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1566,7 +1566,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1647,7 +1647,7 @@ public final class IteratorPrototype {
             closeIteratorIgnoringResult(context, iteratorObject);
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1656,7 +1656,7 @@ public final class IteratorPrototype {
         final boolean[] done = {false};
         final boolean[] running = {false};
 
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, childThisArg, childArgs) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, childThisArg, childArgs) -> {
             if (running[0]) {
                 return childContext.throwTypeError("cannot invoke a running iterator");
             }
@@ -1702,7 +1702,7 @@ public final class IteratorPrototype {
         if (iteratorObject == null) {
             return context.getPendingException();
         }
-        JSValue nextMethod = iteratorObject.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObject.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1773,7 +1773,7 @@ public final class IteratorPrototype {
         // Step 6-8: Handle padding for "longest" mode
         JSValue paddingOption = JSUndefined.INSTANCE;
         if ("longest".equals(mode)) {
-            paddingOption = options.get(context, PropertyKey.fromString("padding"));
+            paddingOption = options.get(PropertyKey.fromString("padding"));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1783,7 +1783,7 @@ public final class IteratorPrototype {
         }
 
         // Step 10: GetIterator(iterables, sync)
-        JSValue iteratorMethod = iterablesObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = iterablesObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1797,7 +1797,7 @@ public final class IteratorPrototype {
         if (!(inputIterValue instanceof JSObject inputIter)) {
             return context.throwTypeError("iterator result is not an object");
         }
-        JSValue inputNextMethod = inputIter.get(context, PropertyKey.NEXT);
+        JSValue inputNextMethod = inputIter.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1843,7 +1843,7 @@ public final class IteratorPrototype {
                 }
             } else {
                 JSObject paddingObject = (JSObject) paddingOption;
-                JSValue padIterMethod = paddingObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+                JSValue padIterMethod = paddingObject.get(PropertyKey.SYMBOL_ITERATOR);
                 if (context.hasPendingException()) {
                     iteratorCloseAll(iters, context.getPendingException(), context);
                     return context.getPendingException();
@@ -1863,7 +1863,7 @@ public final class IteratorPrototype {
                     iteratorCloseAll(iters, error, context);
                     return context.getPendingException();
                 }
-                JSValue padNextMethod = padIter.get(context, PropertyKey.NEXT);
+                JSValue padNextMethod = padIter.get(PropertyKey.NEXT);
                 if (context.hasPendingException()) {
                     iteratorCloseAll(iters, context.getPendingException(), context);
                     return context.getPendingException();
@@ -1931,7 +1931,7 @@ public final class IteratorPrototype {
         // Step 6-8: Handle padding for "longest" mode
         JSObject paddingObject = null;
         if ("longest".equals(mode)) {
-            JSValue paddingOption = options.get(context, PropertyKey.fromString("padding"));
+            JSValue paddingOption = options.get(PropertyKey.fromString("padding"));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1966,7 +1966,7 @@ public final class IteratorPrototype {
             }
             JSValue value;
             try {
-                value = iterablesObject.get(context, key);
+                value = iterablesObject.get(key);
             } catch (JSVirtualMachineException e) {
                 convertVMException(context, e);
                 iteratorCloseAll(iters, context.getPendingException(), context);
@@ -1998,7 +1998,7 @@ public final class IteratorPrototype {
                 }
             } else {
                 for (PropertyKey key : keys) {
-                    JSValue padValue = paddingObject.get(context, key);
+                    JSValue padValue = paddingObject.get(key);
                     if (context.hasPendingException()) {
                         iteratorCloseAll(iters, context.getPendingException(), context);
                         return context.getPendingException();
@@ -2030,8 +2030,8 @@ public final class IteratorPrototype {
         private boolean pristine;
         private JSValue valueValue;
 
-        private JSIteratorResultObject(JSValue valueValue, JSValue doneValue) {
-            super();
+        private JSIteratorResultObject(JSContext context, JSValue valueValue, JSValue doneValue) {
+            super(context);
             this.valueValue = valueValue;
             this.doneValue = doneValue;
             this.pristine = true;
@@ -2052,7 +2052,7 @@ public final class IteratorPrototype {
         @Override
         public boolean delete(JSContext context, PropertyKey key) {
             materialize();
-            return super.delete(context, key);
+            return super.delete(key);
         }
 
         @Override
@@ -2085,7 +2085,20 @@ public final class IteratorPrototype {
                     return doneValue;
                 }
             }
-            return super.get(context, key);
+            return super.get(key);
+        }
+
+        @Override
+        public JSValue get(PropertyKey key) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return valueValue;
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return doneValue;
+                }
+            }
+            return super.get(key);
         }
 
         @Override
@@ -2098,7 +2111,20 @@ public final class IteratorPrototype {
                     return doneValue;
                 }
             }
-            return super.get(context, key, receiver);
+            return super.get(key, receiver);
+        }
+
+        @Override
+        public JSValue get(PropertyKey key, JSValue receiver) {
+            if (pristine) {
+                if (PropertyKey.VALUE.equals(key)) {
+                    return valueValue;
+                }
+                if (PropertyKey.DONE.equals(key)) {
+                    return doneValue;
+                }
+            }
+            return super.get(key, receiver);
         }
 
         @Override
@@ -2185,13 +2211,13 @@ public final class IteratorPrototype {
         @Override
         public void set(JSContext context, PropertyKey key, JSValue value) {
             materialize();
-            super.set(context, key, value);
+            super.set(key, value);
         }
 
         @Override
         public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
             materialize();
-            super.set(context, key, value, receiver);
+            super.set(key, value, receiver);
         }
     }
 
@@ -2204,8 +2230,8 @@ public final class IteratorPrototype {
         private final PropertyKey[] expectedKeys;
         private boolean pristine;
 
-        private JSZipKeyedResultObject(PropertyKey[] expectedKeys, JSValue[] cachedKeyStrings) {
-            super();
+        private JSZipKeyedResultObject(JSContext context, PropertyKey[] expectedKeys, JSValue[] cachedKeyStrings) {
+            super(context);
             this.expectedKeys = expectedKeys;
             this.cachedKeyStrings = cachedKeyStrings;
             this.pristine = true;
@@ -2226,7 +2252,7 @@ public final class IteratorPrototype {
         @Override
         public boolean delete(JSContext context, PropertyKey key) {
             pristine = false;
-            return super.delete(context, key);
+            return super.delete(key);
         }
 
         @Override
@@ -2280,13 +2306,13 @@ public final class IteratorPrototype {
         @Override
         public void set(JSContext context, PropertyKey key, JSValue value) {
             pristine = false;
-            super.set(context, key, value);
+            super.set(key, value);
         }
 
         @Override
         public void set(JSContext context, PropertyKey key, JSValue value, JSObject receiver) {
             pristine = false;
-            super.set(context, key, value, receiver);
+            super.set(key, value, receiver);
         }
     }
 }

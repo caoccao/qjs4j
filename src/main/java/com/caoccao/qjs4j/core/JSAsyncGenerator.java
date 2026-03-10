@@ -48,7 +48,7 @@ public final class JSAsyncGenerator extends JSObject {
      * @param context           The execution context
      */
     public JSAsyncGenerator(AsyncGeneratorFunction generatorFunction, JSContext context) {
-        super();
+        super(context);
         this.state = AsyncGeneratorState.SUSPENDED_START;
         this.context = context;
         this.generatorFunction = generatorFunction;
@@ -58,26 +58,26 @@ public final class JSAsyncGenerator extends JSObject {
         this.thrownValue = null;
 
         // Add next() method
-        this.set(PropertyKey.NEXT, new JSNativeFunction("next", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.NEXT, new JSNativeFunction(context, "next", 1, (childContext, thisArg, args) -> {
             JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return next(value);
         }));
 
         // Add return() method
-        this.set(PropertyKey.RETURN, new JSNativeFunction("return", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.RETURN, new JSNativeFunction(context, "return", 1, (childContext, thisArg, args) -> {
             JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return return_(value);
         }));
 
         // Add throw() method
-        this.set(PropertyKey.THROW, new JSNativeFunction("throw", 1, (childContext, thisArg, args) -> {
+        this.set(PropertyKey.THROW, new JSNativeFunction(context, "throw", 1, (childContext, thisArg, args) -> {
             JSValue exception = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
             return throw_(exception);
         }));
 
         // Make this an async iterable via Symbol.asyncIterator
         this.set(PropertyKey.SYMBOL_ASYNC_ITERATOR,
-                new JSNativeFunction("[Symbol.asyncIterator]", 0, (childContext, thisArg, args) -> thisArg));
+                new JSNativeFunction(context, "[Symbol.asyncIterator]", 0, (childContext, thisArg, args) -> thisArg));
     }
 
     /**
@@ -217,7 +217,7 @@ public final class JSAsyncGenerator extends JSObject {
                     } else {
                         completionPromise.addReactions(
                                 new JSPromise.ReactionRecord(
-                                        new JSNativeFunction("onReturnResolve", 1, (childContext, thisArg, args) -> {
+                                        new JSNativeFunction(context, "onReturnResolve", 1, (childContext, thisArg, args) -> {
                                             JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                             request.promise().fulfill(result);
                                             return JSUndefined.INSTANCE;
@@ -226,7 +226,7 @@ public final class JSAsyncGenerator extends JSObject {
                                         context
                                 ),
                                 new JSPromise.ReactionRecord(
-                                        new JSNativeFunction("onReturnReject", 1, (childContext, thisArg, args) -> {
+                                        new JSNativeFunction(context, "onReturnReject", 1, (childContext, thisArg, args) -> {
                                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                             request.promise().reject(error);
                                             return JSUndefined.INSTANCE;
@@ -289,7 +289,7 @@ public final class JSAsyncGenerator extends JSObject {
             // await handler may directly fulfill request.promise() via completeCurrentRequest.
             resultPromise.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
+                            new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                                 if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
                                     return JSUndefined.INSTANCE;
                                 }
@@ -303,7 +303,7 @@ public final class JSAsyncGenerator extends JSObject {
                             context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
+                            new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
                                 if (request.promise().getState() != JSPromise.PromiseState.PENDING) {
                                     return JSUndefined.INSTANCE;
                                 }

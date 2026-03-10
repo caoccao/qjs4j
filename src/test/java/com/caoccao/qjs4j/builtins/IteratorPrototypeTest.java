@@ -42,7 +42,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayEntries() {
         // Create test array
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSString("a"));
         array.push(new JSString("b"));
 
@@ -104,7 +104,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayKeys() {
         // Create test array
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(10));
         array.push(new JSNumber(20));
 
@@ -126,7 +126,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on plain object (generic, works via ToObject)
-        result = IteratorPrototype.arrayKeys(context, new JSObject(), JSValue.NO_ARGS);
+        result = IteratorPrototype.arrayKeys(context, new JSObject(context), JSValue.NO_ARGS);
         JSIterator keysIter = result.asIterator().orElseThrow();
         iteratorResult = keysIter.next();
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
@@ -152,7 +152,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testArrayValues() {
         // Create test array
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(1));
         array.push(new JSString("hello"));
         array.push(JSBoolean.TRUE);
@@ -256,7 +256,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testMapEntriesIterator() {
         // Create test map
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSNumber(42));
 
@@ -288,7 +288,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on non-map
-        result = IteratorPrototype.mapEntriesIterator(context, new JSArray(), JSValue.NO_ARGS);
+        result = IteratorPrototype.mapEntriesIterator(context, new JSArray(context), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -299,7 +299,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testMapKeysIterator() {
         // Create test map
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("a"), new JSNumber(1));
         map.mapSet(new JSString("b"), new JSNumber(2));
 
@@ -333,7 +333,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testMapValuesIterator() {
         // Create test map
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSNumber(1), new JSString("one"));
         map.mapSet(new JSNumber(2), new JSString("two"));
 
@@ -367,7 +367,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create an array iterator
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(1));
         array.push(new JSNumber(2));
         JSIterator iterator = JSIterator.arrayIterator(context, array);
@@ -402,7 +402,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testSetEntriesIterator() {
         // Create test set
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("hello"));
         set.setAdd(new JSNumber(42));
 
@@ -441,7 +441,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testSetKeysIterator() {
         // Create test set
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("x"));
         set.setAdd(new JSNumber(5));
 
@@ -454,7 +454,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         // Note: In a full test, we'd verify they produce the same results
 
         // Edge case: called on non-set (should delegate to setValuesIterator)
-        result = IteratorPrototype.setKeysIterator(context, new JSArray(), JSValue.NO_ARGS);
+        result = IteratorPrototype.setKeysIterator(context, new JSArray(context), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -465,7 +465,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testSetValuesIterator() {
         // Create test set
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("a"));
         set.setAdd(new JSString("b"));
         set.setAdd(new JSNumber(3));
@@ -498,7 +498,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on non-set
-        result = IteratorPrototype.setValuesIterator(context, new JSObject(), JSValue.NO_ARGS);
+        result = IteratorPrototype.setValuesIterator(context, new JSObject(context), JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -539,7 +539,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: boxed string
-        JSObject boxedString = new JSObject();
+        JSObject boxedString = new JSObject(context);
         boxedString.setPrimitiveValue(str);
         result = IteratorPrototype.stringIterator(context, boxedString, JSValue.NO_ARGS);
         result.asIterator().orElseThrow();
@@ -553,7 +553,7 @@ public class IteratorPrototypeTest extends BaseJavetTest {
         assertThat(context.getPendingException()).isNotNull();
 
         // Edge case: boxed non-string
-        JSObject badBox = new JSObject();
+        JSObject badBox = new JSObject(context);
         badBox.set("[[PrimitiveValue]]", new JSNumber(456));
         result = IteratorPrototype.stringIterator(context, badBox, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {

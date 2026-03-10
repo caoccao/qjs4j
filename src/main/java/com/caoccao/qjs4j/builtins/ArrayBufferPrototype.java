@@ -200,7 +200,7 @@ public final class ArrayBufferPrototype {
         } else {
             // Call the species constructor via Reflect.construct
             JSValue newObj = JSReflectObject.construct(context, JSUndefined.INSTANCE,
-                    new JSValue[]{ctor, new JSArray(JSNumber.of(newLen))});
+                    new JSValue[]{ctor, new JSArray(context, JSNumber.of(newLen))});
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -246,7 +246,7 @@ public final class ArrayBufferPrototype {
      * Sets pending exception on error.
      */
     private static JSValue speciesConstructor(JSContext context, JSObject obj) {
-        JSValue ctor = obj.get(context, PropertyKey.CONSTRUCTOR);
+        JSValue ctor = obj.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -257,7 +257,7 @@ public final class ArrayBufferPrototype {
             context.throwTypeError("constructor is not an object");
             return JSUndefined.INSTANCE;
         }
-        JSValue species = ctorObj.get(context, PropertyKey.SYMBOL_SPECIES);
+        JSValue species = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

@@ -980,7 +980,7 @@ public class StringPrototypeTest extends BaseJavetTest {
     public void testSubstrAbruptConversions() {
         int[] lengthCallCount = new int[]{0};
         JSObject lenValueOf = context.createJSObject();
-        lenValueOf.set("valueOf", new JSNativeFunction("valueOf", 0, (ctx, thisArg, args) -> {
+        lenValueOf.set("valueOf", new JSNativeFunction(context, "valueOf", 0, (ctx, thisArg, args) -> {
             lengthCallCount[0]++;
             return new JSNumber(1);
         }));
@@ -991,7 +991,7 @@ public class StringPrototypeTest extends BaseJavetTest {
 
         lengthCallCount[0] = 0;
         JSObject startValueOf = context.createJSObject();
-        startValueOf.set("valueOf", new JSNativeFunction("valueOf", 0, (ctx, thisArg, args) -> ctx.throwError("x")));
+        startValueOf.set("valueOf", new JSNativeFunction(context, "valueOf", 0, (ctx, thisArg, args) -> ctx.throwError("x")));
 
         StringPrototype.substr(context, new JSString(""), new JSValue[]{startValueOf, lenValueOf});
         assertThat(lengthCallCount[0]).isEqualTo(0);

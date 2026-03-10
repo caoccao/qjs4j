@@ -30,7 +30,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testApply() {
         // Create a test function that returns the sum of its arguments
-        JSFunction testFunc = new JSNativeFunction("sum", 2, (childContext, thisArg, args) -> {
+        JSFunction testFunc = new JSNativeFunction(context, "sum", 2, (childContext, thisArg, args) -> {
             double sum = 0;
             for (JSValue arg : args) {
                 if (arg instanceof JSNumber num) {
@@ -41,7 +41,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         });
 
         // Normal case: apply with array of arguments
-        JSArray argsArray = new JSArray();
+        JSArray argsArray = new JSArray(context);
         argsArray.push(new JSNumber(1));
         argsArray.push(new JSNumber(2));
         argsArray.push(new JSNumber(3));
@@ -53,7 +53,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(6.0));
 
         // Normal case: apply with custom thisArg
-        JSObject customThis = new JSObject();
+        JSObject customThis = new JSObject(context);
         result = FunctionPrototype.apply(context, testFunc, new JSValue[]{
                 customThis,
                 argsArray
@@ -69,7 +69,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
         // Normal case: apply with array-like object
-        JSObject arrayLikeObject = new JSObject();
+        JSObject arrayLikeObject = new JSObject(context);
         arrayLikeObject.set("0", new JSNumber(4));
         arrayLikeObject.set("1", new JSNumber(5));
         arrayLikeObject.set("2", new JSNumber(6));
@@ -100,7 +100,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testBind() {
         // Create a test function that returns this.value + sum of arguments
-        JSFunction testFunc = new JSNativeFunction("addToThis", 2, (childContext, thisArg, args) -> {
+        JSFunction testFunc = new JSNativeFunction(context, "addToThis", 2, (childContext, thisArg, args) -> {
             double sum = 0;
             if (thisArg instanceof JSObject obj && obj.get("value") instanceof JSNumber num) {
                 sum += num.value();
@@ -114,7 +114,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         });
 
         // Normal case: bind with thisArg
-        JSObject boundThis = new JSObject();
+        JSObject boundThis = new JSObject(context);
         boundThis.set("value", new JSNumber(10));
 
         JSValue result = FunctionPrototype.bind(context, testFunc, new JSValue[]{
@@ -147,7 +147,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testCall() {
         // Create a test function that returns the sum of its arguments
-        JSFunction testFunc = new JSNativeFunction("sum", 2, (childContext, thisArg, args) -> {
+        JSFunction testFunc = new JSNativeFunction(context, "sum", 2, (childContext, thisArg, args) -> {
             double sum = 0;
             for (JSValue arg : args) {
                 if (arg instanceof JSNumber num) {
@@ -167,7 +167,7 @@ public class FunctionPrototypeTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(6.0));
 
         // Normal case: call with custom thisArg
-        JSObject customThis = new JSObject();
+        JSObject customThis = new JSObject(context);
         result = FunctionPrototype.call(context, testFunc, new JSValue[]{
                 customThis,
                 new JSNumber(5)
@@ -382,12 +382,12 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetLength() {
         // Normal case: function with length
-        JSFunction testFunc = new JSNativeFunction("test", 3, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction testFunc = new JSNativeFunction(context, "test", 3, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.getLength(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(3.0));
 
         // Normal case: function with zero length
-        JSFunction zeroFunc = new JSNativeFunction("zero", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction zeroFunc = new JSNativeFunction(context, "zero", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.getLength(context, zeroFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, num -> assertThat(num.value()).isEqualTo(0.0));
 
@@ -403,12 +403,12 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetName() {
         // Normal case: function with name
-        JSFunction testFunc = new JSNativeFunction("myFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction testFunc = new JSNativeFunction(context, "myFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.getName(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("myFunction"));
 
         // Normal case: function without name
-        JSFunction anonFunc = new JSNativeFunction("", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction anonFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.getName(context, anonFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo(""));
 
@@ -503,12 +503,12 @@ public class FunctionPrototypeTest extends BaseJavetTest {
     @Test
     public void testToString() {
         // Normal case: function with name (QuickJS format)
-        JSFunction testFunc = new JSNativeFunction("testFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction testFunc = new JSNativeFunction(context, "testFunction", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         JSValue result = FunctionPrototype.toString_(context, testFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function testFunction() { [native code] }"));
 
         // Normal case: function without name
-        JSFunction anonFunc = new JSNativeFunction("", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction anonFunc = new JSNativeFunction(context, "", 1, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         result = FunctionPrototype.toString_(context, anonFunc, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("function () { [native code] }"));
 

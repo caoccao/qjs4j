@@ -51,8 +51,8 @@ public final class JSBooleanObject extends JSObject {
      *
      * @param value the primitive boolean value to wrap
      */
-    public JSBooleanObject(boolean value) {
-        this(JSBoolean.valueOf(value));
+    public JSBooleanObject(JSContext context, boolean value) {
+        this(context, JSBoolean.valueOf(value));
     }
 
     /**
@@ -60,8 +60,8 @@ public final class JSBooleanObject extends JSObject {
      *
      * @param value the JSBoolean value to wrap
      */
-    public JSBooleanObject(JSBoolean value) {
-        super();
+    public JSBooleanObject(JSContext context, JSBoolean value) {
+        super(context);
         this.value = value;
         this.setPrimitiveValue(value);
     }
@@ -69,7 +69,7 @@ public final class JSBooleanObject extends JSObject {
     public static JSObject create(JSContext context, JSValue... args) {
         JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSBoolean boolValue = JSTypeConversions.toBoolean(value);
-        JSObject jsObject = new JSBooleanObject(boolValue);
+        JSObject jsObject = new JSBooleanObject(context, boolValue);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
     }

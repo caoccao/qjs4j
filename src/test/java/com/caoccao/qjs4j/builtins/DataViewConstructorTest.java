@@ -165,7 +165,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
     @Test
     public void testDataViewJavaConstructor() {
         // Test creating DataView from Java
-        JSArrayBuffer buffer = new JSArrayBuffer(16);
+        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = (JSDataView) JSDataView.create(context, buffer);
 
         assertThat(dataView).isNotNull();
@@ -176,7 +176,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
     @Test
     public void testDataViewJavaConstructorWithOffset() {
         // Test creating DataView with offset from Java
-        JSArrayBuffer buffer = new JSArrayBuffer(16);
+        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = (JSDataView) JSDataView.create(context, buffer, new JSNumber(4));
 
         assertThat(dataView).isNotNull();
@@ -187,7 +187,7 @@ public class DataViewConstructorTest extends BaseJavetTest {
     @Test
     public void testDataViewJavaConstructorWithOffsetAndLength() {
         // Test creating DataView with offset and length from Java
-        JSArrayBuffer buffer = new JSArrayBuffer(16);
+        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
         JSDataView dataView = (JSDataView) JSDataView.create(context, buffer, new JSNumber(4), new JSNumber(8));
 
         assertThat(dataView).isNotNull();

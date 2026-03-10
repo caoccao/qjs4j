@@ -20,7 +20,9 @@ import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
+import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
+import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.vm.Bytecode;
@@ -37,6 +39,7 @@ public final class Compiler {
     private final String fileName;
     private final String source;
     private boolean classFieldEval;
+    private JSContext context;
     private boolean evalAllowNewTarget;
     private boolean evalAllowSuperProperty;
     private Map<String, JSSymbol> evalPrivateSymbols;
@@ -69,6 +72,7 @@ public final class Compiler {
         try {
             Program ast = parse(isModule);
             BytecodeCompiler compiler = new BytecodeCompiler();
+            compiler.setContext(context);
             compiler.setSourceCode(source);
             compiler.setPredeclareProgramLexicalsAsLocals(predeclareProgramLexicalsAsLocals);
             if (isEval) {
@@ -83,7 +87,19 @@ public final class Compiler {
             Bytecode bytecode = compiler.compile(ast);
             String name = fileName != null ? fileName : (isModule ? "<module>" : "<script>");
             boolean strict = isModule || ast.isStrict();
-            JSBytecodeFunction func = new JSBytecodeFunction(bytecode, name, 0, strict, null);
+            JSBytecodeFunction func = new JSBytecodeFunction(
+                    context,
+                    bytecode,
+                    name,
+                    0,
+                    JSValue.NO_ARGS,
+                    null,
+                    true,
+                    false,
+                    false,
+                    false,
+                    strict,
+                    null);
             return new CompileResult(func, ast);
         } catch (JSCompilerException | JSErrorException e) {
             throw e;
@@ -118,6 +134,11 @@ public final class Compiler {
 
     public Compiler setClassFieldEval(boolean classFieldEval) {
         this.classFieldEval = classFieldEval;
+        return this;
+    }
+
+    public Compiler setContext(JSContext context) {
+        this.context = context;
         return this;
     }
 

@@ -49,8 +49,8 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      *
      * @param byteLength The length in bytes
      */
-    public JSSharedArrayBuffer(int byteLength) {
-        this(byteLength, byteLength, false);
+    public JSSharedArrayBuffer(JSContext context, int byteLength) {
+        this(context, byteLength, byteLength, false);
     }
 
     /**
@@ -59,12 +59,12 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      * @param byteLength    The current length in bytes
      * @param maxByteLength The maximum length in bytes
      */
-    public JSSharedArrayBuffer(int byteLength, int maxByteLength) {
-        this(byteLength, maxByteLength, true);
+    public JSSharedArrayBuffer(JSContext context, int byteLength, int maxByteLength) {
+        this(context, byteLength, maxByteLength, true);
     }
 
-    private JSSharedArrayBuffer(int byteLength, int maxByteLength, boolean growable) {
-        super();
+    private JSSharedArrayBuffer(JSContext context, int byteLength, int maxByteLength, boolean growable) {
+        super(context);
         if (byteLength < 0) {
             throw new IllegalArgumentException("Invalid array buffer length");
         }
@@ -89,8 +89,8 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         int intLength = (int) length;
         int intMaxLength = (int) maxLength;
         return growable
-                ? new JSSharedArrayBuffer(intLength, intMaxLength)
-                : new JSSharedArrayBuffer(intLength);
+                ? new JSSharedArrayBuffer(context, intLength, intMaxLength)
+                : new JSSharedArrayBuffer(context, intLength);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -148,7 +148,7 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         // GetArrayBufferMaxByteLengthOption: if Type(options) is not Object, return empty
         if (args.length > 1 && args[1] instanceof JSObject optionsObject) {
             boolean hadException = context.hasPendingException();
-            JSValue maxByteLengthValue = optionsObject.get(context, PropertyKey.fromString("maxByteLength"));
+            JSValue maxByteLengthValue = optionsObject.get(PropertyKey.fromString("maxByteLength"));
             if (!hadException && context.hasPendingException()) {
                 throw new JSException(context.getPendingException());
             }
@@ -276,7 +276,7 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         int newLength = Math.max(end - begin, 0);
 
         // Create new buffer and copy bytes
-        JSSharedArrayBuffer newBuffer = new JSSharedArrayBuffer(newLength);
+        JSSharedArrayBuffer newBuffer = new JSSharedArrayBuffer(context, newLength);
         if (newLength > 0) {
             byte[] bytes = new byte[newLength];
             synchronized (buffer) {

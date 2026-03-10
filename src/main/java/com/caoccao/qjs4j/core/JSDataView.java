@@ -40,22 +40,22 @@ public final class JSDataView extends JSObject {
     /**
      * Create a DataView for the entire buffer.
      */
-    public JSDataView(IJSArrayBuffer buffer) {
-        this(buffer, 0, buffer.getByteLength());
+    public JSDataView(JSContext context, IJSArrayBuffer buffer) {
+        this(context, buffer, 0, buffer.getByteLength());
     }
 
     /**
      * Create a DataView for a portion of the buffer.
      */
-    public JSDataView(IJSArrayBuffer buffer, int byteOffset, int byteLength) {
-        this(buffer, byteOffset, byteLength, false);
+    public JSDataView(JSContext context, IJSArrayBuffer buffer, int byteOffset, int byteLength) {
+        this(context, buffer, byteOffset, byteLength, false);
     }
 
     /**
      * Create a DataView with optional length-tracking semantics on resizable/growable buffers.
      */
-    public JSDataView(IJSArrayBuffer buffer, int byteOffset, int byteLength, boolean lengthTracking) {
-        super();
+    public JSDataView(JSContext context, IJSArrayBuffer buffer, int byteOffset, int byteLength, boolean lengthTracking) {
+        super(context);
         if (buffer == null || buffer.isDetached()) {
             throw new IllegalArgumentException("Cannot create DataView on detached buffer");
         }
@@ -136,7 +136,7 @@ public final class JSDataView extends JSObject {
             return context.throwRangeError("byteOffset + byteLength out of range");
         }
 
-        JSDataView dataView = new JSDataView(buffer, byteOffset, byteLength, lengthTracking);
+        JSDataView dataView = new JSDataView(context, buffer, byteOffset, byteLength, lengthTracking);
         context.transferPrototype(dataView, NAME);
         return dataView;
     }

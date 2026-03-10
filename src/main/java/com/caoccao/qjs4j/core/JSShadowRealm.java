@@ -25,8 +25,8 @@ public final class JSShadowRealm extends JSObject {
 
     private final JSContext shadowContext;
 
-    public JSShadowRealm(JSContext shadowContext) {
-        super();
+    public JSShadowRealm(JSContext context, JSContext shadowContext) {
+        super(context);
         this.shadowContext = shadowContext;
     }
 

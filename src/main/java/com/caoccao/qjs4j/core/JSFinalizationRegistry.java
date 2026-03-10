@@ -48,7 +48,7 @@ public final class JSFinalizationRegistry extends JSObject {
      * @param cleanupCallback Callback function called with held values
      */
     public JSFinalizationRegistry(JSContext context, JSFunction cleanupCallback) {
-        super();
+        super(context);
         this.cleanupCallback = cleanupCallback;
         this.context = context;
         this.referenceQueue = new ReferenceQueue<>();

@@ -93,7 +93,7 @@ public final class PromisePrototype {
         if (global == null) {
             return JSUndefined.INSTANCE;
         }
-        return global.get(context, PropertyKey.fromString(JSPromise.NAME));
+        return global.get(PropertyKey.fromString(JSPromise.NAME));
     }
 
     private static JSValue invokeThen(JSContext context, JSValue target, JSValue[] thenArgs) {
@@ -117,7 +117,7 @@ public final class PromisePrototype {
                 return JSUndefined.INSTANCE;
             }
         }
-        JSValue constructor = targetObject.get(context, PropertyKey.CONSTRUCTOR);
+        JSValue constructor = targetObject.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -127,7 +127,7 @@ public final class PromisePrototype {
         if (!(constructor instanceof JSObject constructorObject)) {
             return context.throwTypeError("Promise constructor is not an object");
         }
-        JSValue species = constructorObject.get(context, PropertyKey.SYMBOL_SPECIES);
+        JSValue species = constructorObject.get(PropertyKey.SYMBOL_SPECIES);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

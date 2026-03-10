@@ -24,44 +24,44 @@ public class StringPrototypeDemo {
 
             // 2. match() - non-global regex
             System.out.println("\n2. match() with non-global RegExp:");
-            JSRegExp regex1 = new JSRegExp("h\\w+", "");
+            JSRegExp regex1 = new JSRegExp(context, "h\\w+", "");
             result = StringPrototype.match(context, testStr, new JSValue[]{regex1});
             System.out.println("   \"hello world, hello universe\".match(/h\\w+/) = " + result);
 
             // 3. match() - global regex
             System.out.println("\n3. match() with global RegExp:");
-            JSRegExp regex2 = new JSRegExp("hello", "g");
+            JSRegExp regex2 = new JSRegExp(context, "hello", "g");
             result = StringPrototype.match(context, testStr, new JSValue[]{regex2});
             System.out.println("   \"hello world, hello universe\".match(/hello/g) = " + result);
 
             // 4. search() - finding position
             System.out.println("\n4. search() with RegExp:");
-            JSRegExp regex3 = new JSRegExp("world", "");
+            JSRegExp regex3 = new JSRegExp(context, "world", "");
             result = StringPrototype.search(context, testStr, new JSValue[]{regex3});
             System.out.println("   \"hello world, hello universe\".search(/world/) = " + result);
 
             // 5. replace() - simple replacement
             System.out.println("\n5. replace() with RegExp:");
-            JSRegExp regex4 = new JSRegExp("hello", "");
+            JSRegExp regex4 = new JSRegExp(context, "hello", "");
             result = StringPrototype.replace(context, testStr, new JSValue[]{regex4, new JSString("hi")});
             System.out.println("   \"hello world, hello universe\".replace(/hello/, \"hi\") = " + result);
 
             // 6. replaceAll() - replace all occurrences
             System.out.println("\n6. replaceAll() with global RegExp:");
-            JSRegExp regex5 = new JSRegExp("hello", "g");
+            JSRegExp regex5 = new JSRegExp(context, "hello", "g");
             result = StringPrototype.replaceAll(context, testStr, new JSValue[]{regex5, new JSString("hi")});
             System.out.println("   \"hello world, hello universe\".replaceAll(/hello/g, \"hi\") = " + result);
 
             // 7. split() - with regex separator
             System.out.println("\n7. split() with RegExp:");
-            JSRegExp regex6 = new JSRegExp(",?\\s+", "");
+            JSRegExp regex6 = new JSRegExp(context, ",?\\s+", "");
             result = StringPrototype.split(context, testStr, new JSValue[]{regex6});
             System.out.println("   \"hello world, hello universe\".split(/,?\\s+/) = " + result);
 
             // 8. Capture groups in replace()
             System.out.println("\n8. replace() with capture groups:");
             JSString testStr2 = new JSString("John Doe");
-            JSRegExp regex7 = new JSRegExp("(\\w+) (\\w+)", "");
+            JSRegExp regex7 = new JSRegExp(context, "(\\w+) (\\w+)", "");
             result = StringPrototype.replace(context, testStr2, new JSValue[]{regex7, new JSString("$2, $1")});
             System.out.println("   \"John Doe\".replace(/(\\w+) (\\w+)/, \"$2, $1\") = " + result);
 

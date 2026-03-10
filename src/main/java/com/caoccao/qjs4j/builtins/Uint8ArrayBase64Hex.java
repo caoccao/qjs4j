@@ -323,7 +323,7 @@ public final class Uint8ArrayBase64Hex {
         if (context.hasPendingException() || optionsObj == null) {
             return null;
         }
-        JSValue alphabetValue = optionsObj.get(context, PropertyKey.fromString("alphabet"));
+        JSValue alphabetValue = optionsObj.get(PropertyKey.fromString("alphabet"));
         if (context.hasPendingException()) {
             return null;
         }
@@ -354,7 +354,7 @@ public final class Uint8ArrayBase64Hex {
         if (context.hasPendingException() || optionsObj == null) {
             return null;
         }
-        JSValue lastChunkValue = optionsObj.get(context, PropertyKey.fromString("lastChunkHandling"));
+        JSValue lastChunkValue = optionsObj.get(PropertyKey.fromString("lastChunkHandling"));
         if (context.hasPendingException()) {
             return null;
         }
@@ -384,7 +384,7 @@ public final class Uint8ArrayBase64Hex {
         if (context.hasPendingException() || optionsObj == null) {
             return false;
         }
-        JSValue omitPaddingValue = optionsObj.get(context, PropertyKey.fromString("omitPadding"));
+        JSValue omitPaddingValue = optionsObj.get(PropertyKey.fromString("omitPadding"));
         if (context.hasPendingException()) {
             return false;
         }
@@ -458,8 +458,8 @@ public final class Uint8ArrayBase64Hex {
 
         // Return { read, written }
         JSObject resultObj = context.createJSObject();
-        resultObj.set(context, PropertyKey.fromString("read"), JSNumber.of(result.read));
-        resultObj.set(context, PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
+        resultObj.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
+        resultObj.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
         return resultObj;
     }
 
@@ -495,8 +495,8 @@ public final class Uint8ArrayBase64Hex {
 
         // Return { read, written }
         JSObject resultObj = context.createJSObject();
-        resultObj.set(context, PropertyKey.fromString("read"), JSNumber.of(result.read));
-        resultObj.set(context, PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
+        resultObj.set(PropertyKey.fromString("read"), JSNumber.of(result.read));
+        resultObj.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
         return resultObj;
     }
 

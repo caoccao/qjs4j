@@ -222,7 +222,7 @@ public class AsyncGeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrowOnNonAsyncGenerator() {
         // Test throw() called on non-async generator
-        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(), new JSValue[]{new JSString("error")});
+        JSValue result = AsyncGeneratorPrototype.throw_(context, new JSObject(context), new JSValue[]{new JSString("error")});
         JSPromise promise = result.asPromise().orElseThrow();
         assertThat(awaitPromise(promise)).isTrue();
         assertThat(promise.getState()).isEqualTo(JSPromise.PromiseState.REJECTED);

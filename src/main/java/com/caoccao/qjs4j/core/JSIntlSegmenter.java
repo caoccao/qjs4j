@@ -28,8 +28,8 @@ public final class JSIntlSegmenter extends JSObject {
     private final Locale locale;
     private final JSObject segmentsPrototype;
 
-    public JSIntlSegmenter(Locale locale, String granularity, JSObject segmentsPrototype) {
-        super();
+    public JSIntlSegmenter(JSContext context, Locale locale, String granularity, JSObject segmentsPrototype) {
+        super(context);
         this.locale = locale;
         this.granularity = granularity;
         this.segmentsPrototype = segmentsPrototype;
@@ -44,7 +44,7 @@ public final class JSIntlSegmenter extends JSObject {
     }
 
     public JSIntlSegments createSegments(String input) {
-        JSIntlSegments segments = new JSIntlSegments(this, input);
+        JSIntlSegments segments = new JSIntlSegments(context, this, input);
         if (segmentsPrototype != null) {
             segments.setPrototype(segmentsPrototype);
         }

@@ -38,7 +38,7 @@ public class MapConstructorTest extends BaseJavetTest {
         items.push(new JSNumber(4));
 
         // Callback function: group by even/odd
-        JSFunction callback = new JSNativeFunction("testCallback", 3, (childContext, thisArg, args) -> {
+        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
             double num = args[0].asNumber().map(JSNumber::value).orElseThrow();
             return (num % 2 == 0) ? new JSString("even") : new JSString("odd");
         });
@@ -182,7 +182,7 @@ public class MapConstructorTest extends BaseJavetTest {
         JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
         int[] called = {0};
-        mapPrototype.set("set", new JSNativeFunction("set", 2, (childContext, thisArg, args) -> {
+        mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> {
             called[0]++;
             return thisArg;
         }));

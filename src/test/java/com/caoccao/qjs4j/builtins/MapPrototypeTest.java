@@ -119,7 +119,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testClear() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
@@ -174,7 +174,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDelete() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
@@ -429,7 +429,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testEntries() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
@@ -458,7 +458,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat((Boolean) iterResult3.get("done").toJavaObject()).isTrue();
 
         // Normal case: empty map
-        JSMap emptyMap = new JSMap();
+        JSMap emptyMap = new JSMap(context);
         result = MapPrototype.entries(context, emptyMap, JSValue.NO_ARGS);
         iterator = result.asIterator().orElseThrow();
         JSObject emptyResult = iterator.next();
@@ -555,13 +555,13 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testForEach() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
         // Normal case: forEach with callback
         final StringBuilder result = new StringBuilder();
-        JSFunction callback = new JSNativeFunction("testCallback", 3, (childContext, thisArg, args) -> {
+        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
             String value = args[0].asString().map(JSString::value).orElseThrow();
             String key = args[1].asString().map(JSString::value).orElseThrow();
             result.append(key).append(":").append(value).append(",");
@@ -818,7 +818,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGet() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
@@ -884,7 +884,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGetSize() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
 
         // Normal case: empty map
         JSValue result = MapPrototype.getSize(context, map, JSValue.NO_ARGS);
@@ -924,7 +924,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testHas() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
 
         // Normal case: existing key
@@ -1069,7 +1069,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testKeys() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
@@ -1082,7 +1082,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("key2");
 
         // Normal case: empty map
-        JSMap emptyMap = new JSMap();
+        JSMap emptyMap = new JSMap(context);
         result = MapPrototype.keys(context, emptyMap, JSValue.NO_ARGS);
         keys = result.asIterator().orElseThrow();
         jsArray = JSIteratorHelper.toArray(context, keys);
@@ -1138,7 +1138,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         boolean[] closed = {false};
         boolean[] produced = {false};
         JSObject iterator = context.createJSObject();
-        JSNativeFunction nextFunction = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+        JSNativeFunction nextFunction = new JSNativeFunction(context, "next", 0, (childContext, thisArg, args) -> {
             JSObject result = childContext.createJSObject();
             if (produced[0]) {
                 result.set("done", JSBoolean.TRUE);
@@ -1153,7 +1153,7 @@ public class MapPrototypeTest extends BaseJavetTest {
             result.set("value", entry);
             return result;
         });
-        JSNativeFunction returnFunction = new JSNativeFunction("return", 0, (childContext, thisArg, args) -> {
+        JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, thisArg, args) -> {
             JSObject result = childContext.createJSObject();
             result.set("done", JSBoolean.TRUE);
             result.set("value", JSUndefined.INSTANCE);
@@ -1165,12 +1165,12 @@ public class MapPrototypeTest extends BaseJavetTest {
 
         JSObject iterable = context.createJSObject();
         iterable.set(PropertyKey.SYMBOL_ITERATOR,
-                new JSNativeFunction("[Symbol.iterator]", 0, (childContext, thisArg, args) -> iterator));
+                new JSNativeFunction(context, "[Symbol.iterator]", 0, (childContext, thisArg, args) -> iterator));
 
         JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
         JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
-        mapPrototype.set("set", new JSNativeFunction("set", 2, (childContext, thisArg, args) -> childContext.throwError("Error", "boom")));
+        mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> childContext.throwError("Error", "boom")));
         try {
             JSValue result = JSMap.create(context, iterable);
             assertThat(result.isError()).isTrue();
@@ -1420,8 +1420,8 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     void testObjectHashCodesUseIdentity() {
-        JSObject obj1 = new JSObject();
-        JSObject obj2 = new JSObject();
+        JSObject obj1 = new JSObject(context);
+        JSObject obj2 = new JSObject(context);
         JSMap.KeyWrapper key1 = new JSMap.KeyWrapper(obj1);
         JSMap.KeyWrapper key2 = new JSMap.KeyWrapper(obj1); // Same object
         JSMap.KeyWrapper key3 = new JSMap.KeyWrapper(obj2); // Different object
@@ -1450,7 +1450,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testSet() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
 
         // Normal case: set key-value pair
         JSValue result = MapPrototype.set(context, map, new JSValue[]{new JSString("key"), new JSString("value")});
@@ -1692,7 +1692,7 @@ public class MapPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testValues() {
-        JSMap map = new JSMap();
+        JSMap map = new JSMap(context);
         map.mapSet(new JSString("key1"), new JSString("value1"));
         map.mapSet(new JSString("key2"), new JSString("value2"));
 
@@ -1705,7 +1705,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         assertThat(jsArray.get(1).asString().map(JSString::value).orElse(null)).isEqualTo("value2");
 
         // Normal case: empty map
-        JSMap emptyMap = new JSMap();
+        JSMap emptyMap = new JSMap(context);
         result = MapPrototype.values(context, emptyMap, JSValue.NO_ARGS);
         values = result.asIterator().orElseThrow();
         jsArray = JSIteratorHelper.toArray(context, values);

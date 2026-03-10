@@ -31,8 +31,8 @@ public final class JSMap extends JSObject {
     /**
      * Create an empty Map.
      */
-    public JSMap() {
-        super();
+    public JSMap(JSContext context) {
+        super(context);
         this.data = new LinkedHashMap<>();
         this.entriesById = new HashMap<>();
         this.nextEntryId = 1;
@@ -72,7 +72,7 @@ public final class JSMap extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = mapObj.get(context, PropertyKey.SET);
+            JSValue adder = mapObj.get(PropertyKey.SET);
             if (context.hasPendingException()) {
                 return mapObj;
             }
@@ -114,7 +114,7 @@ public final class JSMap extends JSObject {
                     break;
                 }
 
-                JSValue entry = nextResult.get(context, PropertyKey.VALUE);
+                JSValue entry = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();
@@ -128,7 +128,7 @@ public final class JSMap extends JSObject {
                     return context.throwTypeError("Iterator value must be an object");
                 }
 
-                JSValue key = entryObj.get(context, PropertyKey.fromIndex(0));
+                JSValue key = entryObj.get(PropertyKey.fromIndex(0));
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();
@@ -137,7 +137,7 @@ public final class JSMap extends JSObject {
                     }
                     return context.throwTypeError("Map constructor failed");
                 }
-                JSValue value = entryObj.get(context, PropertyKey.fromIndex(1));
+                JSValue value = entryObj.get(PropertyKey.fromIndex(1));
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();

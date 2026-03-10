@@ -46,21 +46,19 @@ public class JSAsyncIterator extends JSObject {
      * @param context          The execution context
      */
     public JSAsyncIterator(AsyncIteratorFunction iteratorFunction, JSContext context) {
-        super();
+        super(context);
         this.iteratorFunction = iteratorFunction;
         this.context = context;
 
         // Add next() method
-        this.set(PropertyKey.NEXT, new JSNativeFunction(
-                "next",
+        this.set(PropertyKey.NEXT, new JSNativeFunction(context, "next",
                 0,
                 (childContext, thisArg, args) -> iteratorFunction.next()));
 
         // Make this iterable via Symbol.asyncIterator
         JSSymbol asyncIteratorSymbol = JSSymbol.getWellKnownSymbol("asyncIterator");
         if (asyncIteratorSymbol != null) {
-            this.set(PropertyKey.fromSymbol(asyncIteratorSymbol), new JSNativeFunction(
-                    "[Symbol.asyncIterator]",
+            this.set(PropertyKey.fromSymbol(asyncIteratorSymbol), new JSNativeFunction(context, "[Symbol.asyncIterator]",
                     0,
                     (childContext, thisArg, args) -> thisArg));
         }
@@ -106,7 +104,7 @@ public class JSAsyncIterator extends JSObject {
      */
     public static JSPromise createAsyncFromSyncResultPromise(JSContext context, JSValue value, boolean done) {
         if (value instanceof JSPromise promiseValue) {
-            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
+            promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
                 return createRejectedPromise(context, consumePendingException(context));
             }
@@ -114,7 +112,7 @@ public class JSAsyncIterator extends JSObject {
             JSPromise resultPromise = context.createJSPromise();
             promiseValue.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
                                 result.set(PropertyKey.VALUE, resolved);
@@ -126,7 +124,7 @@ public class JSAsyncIterator extends JSObject {
                             context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                 return JSUndefined.INSTANCE;
                             }),
@@ -138,7 +136,7 @@ public class JSAsyncIterator extends JSObject {
         }
         // Check if value is a promise/thenable that needs resolution
         if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get(context, PropertyKey.THEN);
+            JSValue thenMethod = obj.get(PropertyKey.THEN);
             if (context.hasPendingException()) {
                 return createRejectedPromise(context, consumePendingException(context));
             }
@@ -146,7 +144,7 @@ public class JSAsyncIterator extends JSObject {
                 JSPromise resultPromise = context.createJSPromise();
                 try {
                     thenFunc.call(context, value, new JSValue[]{
-                            new JSNativeFunction("", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction(context, "", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
                                 result.set(PropertyKey.VALUE, resolved);
@@ -154,7 +152,7 @@ public class JSAsyncIterator extends JSObject {
                                 resultPromise.fulfill(result);
                                 return JSUndefined.INSTANCE;
                             }),
-                            new JSNativeFunction("", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            new JSNativeFunction(context, "", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                 resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                                 return JSUndefined.INSTANCE;
                             })
@@ -330,7 +328,7 @@ public class JSAsyncIterator extends JSObject {
                 JSPromise resultPromise = context.createJSPromise();
                 promise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
+                                new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                                     JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                     JSObject result = childContext.createJSObject();
                                     result.set(PropertyKey.VALUE, value);
@@ -342,7 +340,7 @@ public class JSAsyncIterator extends JSObject {
                                 context
                         ),
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
+                                new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
                                     // If promise rejects, propagate the rejection
                                     JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                     resultPromise.reject(reason);
@@ -443,7 +441,7 @@ public class JSAsyncIterator extends JSObject {
         // When next promise resolves, process the result
         nextPromise.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onNextFulfilled", 1, (childContext, thisArg, args) -> {
+                        new JSNativeFunction(context, "onNextFulfilled", 1, (childContext, thisArg, args) -> {
                             JSValue result = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
                             if (!(result instanceof JSObject resultObj)) {
@@ -468,7 +466,7 @@ public class JSAsyncIterator extends JSObject {
                             // When processing completes, continue to next iteration
                             processingPromise.addReactions(
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                            new JSNativeFunction(context, "onProcessed", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 // Continue iteration
                                                 iterateNext(iterator, callback, childContext, completionPromise);
                                                 return JSUndefined.INSTANCE;
@@ -477,7 +475,7 @@ public class JSAsyncIterator extends JSObject {
                                             childContext
                                     ),
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                            new JSNativeFunction(context, "onProcessError", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 // If processing fails, reject completion promise
                                                 JSValue error = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                 completionPromise.reject(error);
@@ -494,7 +492,7 @@ public class JSAsyncIterator extends JSObject {
                         context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onNextRejected", 1, (childContext, thisArg, args) -> {
+                        new JSNativeFunction(context, "onNextRejected", 1, (childContext, thisArg, args) -> {
                             // If next() fails, reject completion promise
                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                             JSPromise closePromise = iterator.close();
@@ -504,7 +502,7 @@ public class JSAsyncIterator extends JSObject {
                             }
                             closePromise.addReactions(
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onCloseResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                            new JSNativeFunction(context, "onCloseResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 completionPromise.reject(error);
                                                 return JSUndefined.INSTANCE;
                                             }),
@@ -512,7 +510,7 @@ public class JSAsyncIterator extends JSObject {
                                             childContext
                                     ),
                                     new JSPromise.ReactionRecord(
-                                            new JSNativeFunction("onCloseReject", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                            new JSNativeFunction(context, "onCloseReject", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                 // Preserve the original next() rejection reason.
                                                 completionPromise.reject(error);
                                                 return JSUndefined.INSTANCE;
@@ -550,7 +548,7 @@ public class JSAsyncIterator extends JSObject {
             return resolved;
         }).addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onComplete", 1, (childContext, thisArg, args) -> {
+                        new JSNativeFunction(context, "onComplete", 1, (childContext, thisArg, args) -> {
                             resultPromise.fulfill(array);
                             return JSUndefined.INSTANCE;
                         }),
@@ -558,7 +556,7 @@ public class JSAsyncIterator extends JSObject {
                         context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onError", 1, (childContext, thisArg, args) -> {
+                        new JSNativeFunction(context, "onError", 1, (childContext, thisArg, args) -> {
                             JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                             resultPromise.reject(error);
                             return JSUndefined.INSTANCE;
@@ -616,11 +614,11 @@ public class JSAsyncIterator extends JSObject {
                 return createRejectedPromise(context, consumePendingException(context));
             }
             if (result instanceof JSObject resultObj) {
-                JSValue value = resultObj.get(context, PropertyKey.VALUE);
+                JSValue value = resultObj.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     return createRejectedPromise(context, consumePendingException(context));
                 }
-                JSValue doneValue = resultObj.get(context, PropertyKey.DONE);
+                JSValue doneValue = resultObj.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     return createRejectedPromise(context, consumePendingException(context));
                 }
@@ -648,7 +646,7 @@ public class JSAsyncIterator extends JSObject {
         if (iter == null) {
             return null;
         }
-        JSValue returnMethod = iter.get(context, PropertyKey.RETURN);
+        JSValue returnMethod = iter.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
             JSPromise rejected = context.createJSPromise();
             rejected.reject(consumePendingException(context));

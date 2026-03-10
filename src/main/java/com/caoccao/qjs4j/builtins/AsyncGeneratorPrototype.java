@@ -124,7 +124,7 @@ public final class AsyncGeneratorPrototype {
 
             currentPromise.addReactions(
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onFulfilled", 1, (childContext, thisArg, args) -> {
+                            new JSNativeFunction(context, "onFulfilled", 1, (childContext, thisArg, args) -> {
                                 JSValue value = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 JSObject result = context.createJSObject();
                                 result.set(PropertyKey.VALUE, value);
@@ -136,7 +136,7 @@ public final class AsyncGeneratorPrototype {
                             context
                     ),
                     new JSPromise.ReactionRecord(
-                            new JSNativeFunction("onRejected", 1, (childContext, thisArg, args) -> {
+                            new JSNativeFunction(context, "onRejected", 1, (childContext, thisArg, args) -> {
                                 JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                                 resultPromise.reject(error);
                                 return JSUndefined.INSTANCE;

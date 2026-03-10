@@ -94,7 +94,7 @@ public final class ShadowRealmPrototype {
     }
 
     private static JSNativeFunction createWrappedFunction(JSContext callerContext, JSContext targetContext, JSValue targetCallable) {
-        JSNativeFunction wrappedFunction = new JSNativeFunction("", 0, (callbackContext, thisArg, args) -> {
+        JSNativeFunction wrappedFunction = new JSNativeFunction(callerContext, "", 0, (callbackContext, thisArg, args) -> {
             JSValue[] wrappedArguments = new JSValue[args.length];
             for (int i = 0; i < args.length; i++) {
                 JSValue wrappedArgument = getWrappedValue(targetContext, callerContext, args[i]);
@@ -151,7 +151,7 @@ public final class ShadowRealmPrototype {
 
         String sourceText = sourceTextValue.value();
         try {
-            Compiler compilerCheck = new Compiler(sourceText, "<shadowrealm>");
+            Compiler compilerCheck = new Compiler(sourceText, "<shadowrealm>").setContext(callerContext);
             compilerCheck.setPredeclareProgramLexicalsAsLocals(true);
             compilerCheck.compile(false);
         } catch (JSCompilerException e) {

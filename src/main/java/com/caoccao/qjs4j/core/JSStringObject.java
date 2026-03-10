@@ -50,8 +50,8 @@ public final class JSStringObject extends JSObject {
     public static final String NAME = "String";
     private final JSString value;
 
-    public JSStringObject() {
-        this(new JSString(""));
+    public JSStringObject(JSContext context) {
+        this(context, new JSString(""));
     }
 
     /**
@@ -59,8 +59,8 @@ public final class JSStringObject extends JSObject {
      *
      * @param value the primitive string value to wrap
      */
-    public JSStringObject(String value) {
-        this(new JSString(value));
+    public JSStringObject(JSContext context, String value) {
+        this(context, new JSString(value));
     }
 
     /**
@@ -68,8 +68,8 @@ public final class JSStringObject extends JSObject {
      *
      * @param value the JSString value to wrap
      */
-    public JSStringObject(JSString value) {
-        super();
+    public JSStringObject(JSContext context, JSString value) {
+        super(context);
         this.value = value;
         this.setPrimitiveValue(value);
         // String objects have a non-writable, non-enumerable, non-configurable length property
@@ -84,13 +84,14 @@ public final class JSStringObject extends JSObject {
         } else {
             strValue = JSTypeConversions.toString(context, args[0]);
         }
-        JSObject jsObject = new JSStringObject(strValue);
+        JSObject jsObject = new JSStringObject(context, strValue);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
     }
 
     @Override
     public boolean delete(JSContext context, PropertyKey key) {
+        JSContext effectiveContext = resolveContext(context);
         boolean isCharacterIndex = false;
         if (key.isIndex()) {
             int index = key.asIndex();
@@ -104,13 +105,18 @@ public final class JSStringObject extends JSObject {
             }
         }
         if (isCharacterIndex) {
-            if (context != null && context.isStrictMode()) {
-                context.throwTypeError(
+            if (effectiveContext.isStrictMode()) {
+                effectiveContext.throwTypeError(
                         "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForDelete());
             }
             return false;
         }
-        return super.delete(context, key);
+        return super.delete(effectiveContext, key);
+    }
+
+    @Override
+    public boolean delete(PropertyKey key) {
+        return delete(resolveContext(null), key);
     }
 
     /**
@@ -268,6 +274,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public void set(JSContext context, PropertyKey key, JSValue val) {
+        JSContext effectiveContext = resolveContext(context);
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -280,13 +287,11 @@ public final class JSStringObject extends JSObject {
         }
         if (charIndex >= 0 && charIndex < value.value().length()) {
             // Character indices are non-writable, non-configurable own properties
-            if (context != null) {
-                context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
-                        + "' of object '[object String]'");
-            }
+            effectiveContext.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+                    + "' of object '[object String]'");
             return;
         }
-        super.set(context, key, val);
+        super.set(effectiveContext, key, val);
     }
 
     /**

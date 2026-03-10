@@ -51,8 +51,8 @@ public final class JSNumberObject extends JSObject {
      *
      * @param value the primitive number value to wrap
      */
-    public JSNumberObject(double value) {
-        this(JSNumber.of(value));
+    public JSNumberObject(JSContext context, double value) {
+        this(context, JSNumber.of(value));
     }
 
     /**
@@ -60,8 +60,8 @@ public final class JSNumberObject extends JSObject {
      *
      * @param value the JSNumber value to wrap
      */
-    public JSNumberObject(JSNumber value) {
-        super();
+    public JSNumberObject(JSContext context, JSNumber value) {
+        super(context);
         this.value = value;
         this.setPrimitiveValue(value);
     }
@@ -76,7 +76,7 @@ public final class JSNumberObject extends JSObject {
         } else {
             numValue = JSTypeConversions.toNumber(context, args[0]);
         }
-        JSObject jsObject = new JSNumberObject(numValue);
+        JSObject jsObject = new JSNumberObject(context, numValue);
         context.transferPrototype(jsObject, NAME);
         return jsObject;
     }

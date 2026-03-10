@@ -62,13 +62,12 @@ public final class SuperHelper {
         JSObject superRef = context.createJSObject();
 
         // Add __call__ for super() constructor calls
-        superRef.set("__call__", new JSNativeFunction(
-                "super",
+        superRef.set("__call__", new JSNativeFunction(context, "super",
                 0,
                 (childContext, thisArg, args) -> callSuperConstructor(childContext, derivedClass, instance, args)));
 
         // Add __get__ for super.method() calls
-        superRef.set("__get__", new JSNativeFunction("getSuperMethod", 1, (childContext, thisArg, args) -> {
+        superRef.set("__get__", new JSNativeFunction(context, "getSuperMethod", 1, (childContext, thisArg, args) -> {
             if (args.length == 0) {
                 return JSUndefined.INSTANCE;
             }

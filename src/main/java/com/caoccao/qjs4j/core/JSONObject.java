@@ -153,7 +153,7 @@ public final class JSONObject {
      */
     private JSValue getSafe(JSContext context, JSObject obj, String key) {
         try {
-            return obj.get(context, PropertyKey.fromString(key));
+            return obj.get(PropertyKey.fromString(key));
         } catch (JSVirtualMachineException e) {
             convertVMException(context, e);
             return null;
@@ -165,7 +165,7 @@ public final class JSONObject {
 
     private JSValue getSafe(JSContext context, JSObject obj, PropertyKey key) {
         try {
-            return obj.get(context, key);
+            return obj.get(key);
         } catch (JSVirtualMachineException e) {
             convertVMException(context, e);
             return null;
@@ -178,9 +178,9 @@ public final class JSONObject {
     private JSValue getSafe(JSContext context, JSObject obj, long index) {
         try {
             if (index >= 0 && index <= Integer.MAX_VALUE) {
-                return obj.get(context, PropertyKey.fromIndex((int) index));
+                return obj.get(PropertyKey.fromIndex((int) index));
             }
-            return obj.get(context, PropertyKey.fromString(Long.toString(index)));
+            return obj.get(PropertyKey.fromString(Long.toString(index)));
         } catch (JSVirtualMachineException e) {
             convertVMException(context, e);
             return null;
@@ -199,7 +199,7 @@ public final class JSONObject {
                                             JSFunction reviver, ParseContext parseContext) {
         JSValue val;
         try {
-            val = ((JSObject) holder).get(context, PropertyKey.fromString(name));
+            val = ((JSObject) holder).get(PropertyKey.fromString(name));
         } catch (JSVirtualMachineException e) {
             convertVMException(context, e);
             return null;
@@ -223,7 +223,7 @@ public final class JSONObject {
                 // Process array elements
                 long arrayLength;
                 try {
-                    JSValue lengthVal = obj.get(context, PropertyKey.LENGTH);
+                    JSValue lengthVal = obj.get(PropertyKey.LENGTH);
                     if (context.hasPendingException()) {
                         return null;
                     }
@@ -245,7 +245,7 @@ public final class JSONObject {
                     }
                     try {
                         if (newElement instanceof JSUndefined) {
-                            obj.delete(context, PropertyKey.fromString(Long.toString(i)));
+                            obj.delete(PropertyKey.fromString(Long.toString(i)));
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
                             obj.defineProperty(context, PropertyKey.fromString(Long.toString(i)),
@@ -281,7 +281,7 @@ public final class JSONObject {
                     }
                     try {
                         if (newElement instanceof JSUndefined) {
-                            obj.delete(context, PropertyKey.fromString(prop));
+                            obj.delete(PropertyKey.fromString(prop));
                         } else {
                             // Use CreateDataProperty, not [[Set]]
                             obj.defineProperty(context, PropertyKey.fromString(prop),
@@ -390,7 +390,7 @@ public final class JSONObject {
                     JSObject boxed = JSTypeConversions.toObject(context, val);
                     if (boxed != null) {
                         try {
-                            toJSON = boxed.get(context, PropertyKey.fromString("toJSON"), val);
+                            toJSON = boxed.get(PropertyKey.fromString("toJSON"), val);
                         } catch (JSVirtualMachineException e) {
                             convertVMException(context, e);
                             return null;
@@ -1059,7 +1059,7 @@ public final class JSONObject {
                     List<String> propertyList = new ArrayList<>();
                     long replacerLength;
                     try {
-                        JSValue lengthVal = ((JSObject) replacer).get(context, PropertyKey.LENGTH);
+                        JSValue lengthVal = ((JSObject) replacer).get(PropertyKey.LENGTH);
                         if (context.hasPendingException()) {
                             return JSUndefined.INSTANCE;
                         }
@@ -1074,7 +1074,7 @@ public final class JSONObject {
                     for (long i = 0; i < replacerLength; i++) {
                         JSValue item;
                         try {
-                            item = ((JSObject) replacer).get(context, PropertyKey.fromString(Long.toString(i)));
+                            item = ((JSObject) replacer).get(PropertyKey.fromString(Long.toString(i)));
                         } catch (JSVirtualMachineException e) {
                             convertVMException(context, e);
                             return JSUndefined.INSTANCE;
@@ -1198,7 +1198,7 @@ public final class JSONObject {
         sb.append('[');
         long arrayLength;
         try {
-            JSValue lengthVal = arr.get(context, PropertyKey.LENGTH);
+            JSValue lengthVal = arr.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return false;
             }

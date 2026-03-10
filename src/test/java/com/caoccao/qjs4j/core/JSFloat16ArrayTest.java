@@ -30,7 +30,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testBasicCreationAndAccess() {
-        JSFloat16Array array = new JSFloat16Array(5);
+        JSFloat16Array array = new JSFloat16Array(context, 5);
 
         assertThat(array.getLength()).isEqualTo(5);
         assertThat(array.getByteLength()).isEqualTo(10); // 5 * 2 bytes
@@ -53,8 +53,8 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testBufferView() {
-        JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSFloat16Array array = new JSFloat16Array(buffer, 4, 4);
+        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
+        JSFloat16Array array = new JSFloat16Array(context, buffer, 4, 4);
 
         assertThat(array.getLength()).isEqualTo(4);
         assertThat(array.getByteLength()).isEqualTo(8); // 4 * 2 bytes
@@ -91,7 +91,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testFloat16Precision() {
-        JSFloat16Array array = new JSFloat16Array(7);
+        JSFloat16Array array = new JSFloat16Array(context, 7);
 
         // Test various float16 values
         float[] testValues = {0f, 1f, -1f, 12.345f, -12.345f, 65504f, -65504f};
@@ -136,7 +136,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testJSValueIntegration() {
-        JSFloat16Array array = new JSFloat16Array(5);
+        JSFloat16Array array = new JSFloat16Array(context, 5);
 
         // Test isFloat16Array
         assertThat(array.isFloat16Array()).isTrue();
@@ -151,7 +151,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testSpecialValues() {
-        JSFloat16Array array = new JSFloat16Array(6);
+        JSFloat16Array array = new JSFloat16Array(context, 6);
 
         // Test special float values
         array.setElement(0, Float.POSITIVE_INFINITY);
@@ -172,7 +172,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testSubarray() {
-        JSFloat16Array original = new JSFloat16Array(10);
+        JSFloat16Array original = new JSFloat16Array(context, 10);
 
         // Fill with test data
         for (int i = 0; i < 10; i++) {
@@ -202,7 +202,7 @@ public class JSFloat16ArrayTest extends BaseTest {
 
     @Test
     public void testSubarrayNegativeIndices() {
-        JSFloat16Array array = new JSFloat16Array(10);
+        JSFloat16Array array = new JSFloat16Array(context, 10);
 
         // subarray with negative begin
         JSTypedArray sub1 = array.subarray(-5, 10);

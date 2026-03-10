@@ -126,34 +126,34 @@ public final class JSIntlNumberFormat extends JSObject {
     private final boolean useSignificantDigits;
     private JSFunction boundFormatFunction;
 
-    public JSIntlNumberFormat(Locale locale, String style, String currency) {
-        this(locale, style, currency, "auto", 1, -1, -1, false, 0,
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency) {
+        this(context, locale, style, currency, "auto", 1, -1, -1, false, 0,
                 null, null, "auto", "halfExpand", null);
     }
 
-    public JSIntlNumberFormat(Locale locale, String style, String currency,
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
                               boolean useGrouping, int minimumIntegerDigits,
                               int minimumFractionDigits, int maximumFractionDigits,
                               boolean useSignificantDigits, int maximumSignificantDigits) {
-        this(locale, style, currency, useGrouping ? "always" : "false", minimumIntegerDigits,
+        this(context, locale, style, currency, useGrouping ? "always" : "false", minimumIntegerDigits,
                 minimumFractionDigits, maximumFractionDigits, useSignificantDigits, maximumSignificantDigits,
                 null, null, "auto", "halfExpand", null);
     }
 
-    public JSIntlNumberFormat(Locale locale, String style, String currency,
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
                               String useGroupingMode, int minimumIntegerDigits,
                               int minimumFractionDigits, int maximumFractionDigits,
                               boolean useSignificantDigits, int maximumSignificantDigits,
                               String unit, String unitDisplay, String signDisplay,
                               String roundingMode, String numberingSystem) {
-        this(locale, style, currency,
+        this(context, locale, style, currency,
                 useGroupingMode, minimumIntegerDigits, minimumFractionDigits, maximumFractionDigits,
                 useSignificantDigits, useSignificantDigits ? 1 : 0, maximumSignificantDigits,
                 unit, unitDisplay, signDisplay, roundingMode, numberingSystem,
                 "standard", null, "symbol", "standard", 1, "auto", "auto");
     }
 
-    public JSIntlNumberFormat(Locale locale, String style, String currency,
+    public JSIntlNumberFormat(JSContext context, Locale locale, String style, String currency,
                               String useGroupingMode, int minimumIntegerDigits,
                               int minimumFractionDigits, int maximumFractionDigits,
                               boolean useSignificantDigits, int minimumSignificantDigits, int maximumSignificantDigits,
@@ -163,7 +163,7 @@ public final class JSIntlNumberFormat extends JSObject {
                               String currencyDisplay, String currencySign,
                               int roundingIncrement, String roundingPriority,
                               String trailingZeroDisplay) {
-        super();
+        super(context);
         this.locale = locale;
         this.style = style;
         this.currency = currency;
@@ -1021,7 +1021,7 @@ public final class JSIntlNumberFormat extends JSObject {
             JSObject part = context.createJSObject();
             part.set("type", new JSString(token.type()));
             part.set("value", new JSString(token.value()));
-            result.set(context, index, part);
+            result.set(index, part);
         }
         return result;
     }

@@ -27,6 +27,10 @@ public abstract sealed class JSFunction extends JSObject
     private JSObject homeObject;
     private String importMetaFilename;
 
+    protected JSFunction(JSContext context) {
+        super(context);
+    }
+
     /**
      * Call this function with the given context, this value, and arguments.
      */
@@ -80,7 +84,7 @@ public abstract sealed class JSFunction extends JSObject
                     // that inherits from AsyncGenerator.prototype (writable, not configurable)
                     JSValue asyncGenProto = asyncGeneratorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (asyncGenProto instanceof JSObject asyncGenProtoObj) {
-                        JSObject funcPrototype = new JSObject();
+                        JSObject funcPrototype = new JSObject(context);
                         funcPrototype.setPrototype(asyncGenProtoObj);
                         this.defineProperty(PropertyKey.PROTOTYPE,
                                 PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
@@ -98,7 +102,7 @@ public abstract sealed class JSFunction extends JSObject
                     // that inherits from Generator.prototype (writable, not configurable)
                     JSValue genProto = generatorFunctionPrototype.get(PropertyKey.PROTOTYPE);
                     if (genProto instanceof JSObject genProtoObj) {
-                        JSObject funcPrototype = new JSObject();
+                        JSObject funcPrototype = new JSObject(context);
                         funcPrototype.setPrototype(genProtoObj);
                         this.defineProperty(PropertyKey.PROTOTYPE,
                                 PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));

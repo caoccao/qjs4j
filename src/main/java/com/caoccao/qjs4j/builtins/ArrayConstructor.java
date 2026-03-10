@@ -95,7 +95,7 @@ public final class ArrayConstructor {
         // ES spec uses GetV which auto-boxes primitives to find Symbol.iterator
         boolean hasIterator = false;
         if (items instanceof JSObject itemsObj) {
-            JSValue iterMethod = itemsObj.get(context, PropertyKey.SYMBOL_ITERATOR);
+            JSValue iterMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -109,7 +109,7 @@ public final class ArrayConstructor {
             // Auto-box other primitives (Number, Boolean, BigInt, Symbol) to find Symbol.iterator
             JSObject boxed = JSTypeConversions.toObject(context, items);
             if (boxed != null) {
-                JSValue iterMethod = boxed.get(context, PropertyKey.SYMBOL_ITERATOR);
+                JSValue iterMethod = boxed.get(PropertyKey.SYMBOL_ITERATOR);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -165,7 +165,7 @@ public final class ArrayConstructor {
             }
 
             // Step 6.e: Set A.length
-            A.set(context, PropertyKey.LENGTH, JSNumber.of(k[0]));
+            A.set(PropertyKey.LENGTH, JSNumber.of(k[0]));
             return A;
         }
 
@@ -191,12 +191,12 @@ public final class ArrayConstructor {
             } else {
                 A = context.createJSArray();
             }
-            A.set(context, PropertyKey.LENGTH, JSNumber.of(initialLength));
+            A.set(PropertyKey.LENGTH, JSNumber.of(initialLength));
             return A;
         }
 
         // Step 9: Let len be ? LengthOfArrayLike(arrayLike).
-        JSValue lenValue = arrayLike.get(context, PropertyKey.LENGTH);
+        JSValue lenValue = arrayLike.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -219,7 +219,7 @@ public final class ArrayConstructor {
 
         // Step 12-15: Loop
         for (long k = 0; k < sourceLength; k++) {
-            JSValue kValue = arrayLike.get(context, PropertyKey.fromString(Long.toString(k)));
+            JSValue kValue = arrayLike.get(PropertyKey.fromString(Long.toString(k)));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -237,7 +237,7 @@ public final class ArrayConstructor {
         }
 
         // Step 16: Set A.length
-        A.set(context, PropertyKey.LENGTH, JSNumber.of(sourceLength));
+        A.set(PropertyKey.LENGTH, JSNumber.of(sourceLength));
         return A;
     }
 
@@ -271,7 +271,7 @@ public final class ArrayConstructor {
 
             if (arrayLike instanceof JSObject obj) {
                 // Pass context so getter functions execute properly
-                JSValue asyncIterMethod = obj.get(context, PropertyKey.SYMBOL_ASYNC_ITERATOR);
+                JSValue asyncIterMethod = obj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
                 if (context.hasPendingException()) {
                     JSValue pendingException = context.getPendingException();
                     context.clearAllPendingExceptions();
@@ -288,7 +288,7 @@ public final class ArrayConstructor {
 
                 // Step 5: if usingAsyncIterator is undefined, get @@iterator
                 if (usingAsyncIterator instanceof JSUndefined) {
-                    JSValue syncIterMethod = obj.get(context, PropertyKey.SYMBOL_ITERATOR);
+                    JSValue syncIterMethod = obj.get(PropertyKey.SYMBOL_ITERATOR);
                     if (context.hasPendingException()) {
                         JSValue pendingException = context.getPendingException();
                         context.clearAllPendingExceptions();
@@ -355,7 +355,7 @@ public final class ArrayConstructor {
             }
 
             // LengthOfArrayLike — getter may throw
-            JSValue lenValue = arrayLikeObj.get(context, PropertyKey.LENGTH);
+            JSValue lenValue = arrayLikeObj.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 JSValue pendingException = context.getPendingException();
                 context.clearAllPendingExceptions();
@@ -446,7 +446,7 @@ public final class ArrayConstructor {
         // Step 1: Get element value - may throw (e.g., getter throws)
         JSValue value;
         try {
-            value = arrayLikeObj.get(context, PropertyKey.fromString(Integer.toString(index)));
+            value = arrayLikeObj.get(PropertyKey.fromString(Integer.toString(index)));
         } catch (Exception e) {
             resultPromise.reject(consumePendingExceptionOrCreateStringError(context, e));
             return;
@@ -460,7 +460,7 @@ public final class ArrayConstructor {
         JSPromise awaitValue = resolveThenable(context, value);
         awaitValue.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onValueResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "onValueResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             JSValue awaitedValue = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
 
                             // Step 2: If mapping, call mapFn on awaited value, then await result
@@ -479,7 +479,7 @@ public final class ArrayConstructor {
                                 JSPromise awaitMapped = resolveThenable(context, mapped);
                                 awaitMapped.addReactions(
                                         new JSPromise.ReactionRecord(
-                                                new JSNativeFunction("onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                new JSNativeFunction(context, "onMapResolve", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     JSValue finalValue = innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE;
                                                     // Per spec: CreateDataPropertyOrThrow(A, Pk, mappedValue)
                                                     target.defineProperty(innerContext, PropertyKey.fromString(Integer.toString(index)), finalValue, PropertyDescriptor.DataState.All);
@@ -489,7 +489,7 @@ public final class ArrayConstructor {
                                                 null, context
                                         ),
                                         new JSPromise.ReactionRecord(
-                                                new JSNativeFunction("onMapReject", 1, (innerContext, innerThisArg, innerArgs) -> {
+                                                new JSNativeFunction(context, "onMapReject", 1, (innerContext, innerThisArg, innerArgs) -> {
                                                     resultPromise.reject(innerArgs.length > 0 ? innerArgs[0] : JSUndefined.INSTANCE);
                                                     return JSUndefined.INSTANCE;
                                                 }),
@@ -507,7 +507,7 @@ public final class ArrayConstructor {
                         null, context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onValueReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "onValueReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
@@ -561,7 +561,7 @@ public final class ArrayConstructor {
                 JSPromise processingPromise = context.createJSPromise();
                 awaitPromise.addReactions(
                         new JSPromise.ReactionRecord(
-                                new JSNativeFunction("onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                     JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                     // CreateDataPropertyOrThrow
                                     if (isArray) {
@@ -583,7 +583,7 @@ public final class ArrayConstructor {
                         ),
                         new JSPromise.ReactionRecord(
                                 // IfAbruptCloseAsyncIterator: async mapFn rejection
-                                new JSNativeFunction("onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                                new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                                     asyncIterator.close();
                                     context.processMicrotasks();
                                     processingPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
@@ -617,7 +617,7 @@ public final class ArrayConstructor {
 
         iterationPromise.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "onComplete", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             if (!isArray) {
                                 // Per spec: Perform ? Set(A, "length", len, true)
                                 try {
@@ -645,7 +645,7 @@ public final class ArrayConstructor {
                         context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("onError", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "onError", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
@@ -761,11 +761,11 @@ public final class ArrayConstructor {
             if (thenMethod instanceof JSFunction thenFunc) {
                 JSPromise promise = context.createJSPromise();
                 thenFunc.call(context, value, new JSValue[]{
-                        new JSNativeFunction("resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "resolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             promise.fulfill(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
-                        new JSNativeFunction("reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "reject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
                             promise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         })

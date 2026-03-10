@@ -792,7 +792,7 @@ public final class JSTypeConversions {
                 return JSUndefined.INSTANCE;
             }
 
-            JSValue toPrimitiveMethod = obj.get(context, PropertyKey.SYMBOL_TO_PRIMITIVE);
+            JSValue toPrimitiveMethod = obj.get(PropertyKey.SYMBOL_TO_PRIMITIVE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -832,7 +832,7 @@ public final class JSTypeConversions {
                     : new String[]{"valueOf", "toString"};
 
             for (String methodName : methodNames) {
-                JSValue method = obj.get(context, PropertyKey.fromString(methodName));
+                JSValue method = obj.get(PropertyKey.fromString(methodName));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }

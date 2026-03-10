@@ -33,8 +33,8 @@ public final class JSWeakSet extends JSObject {
     /**
      * Create an empty WeakSet.
      */
-    public JSWeakSet() {
-        super();
+    public JSWeakSet(JSContext context) {
+        super(context);
         this.objectData = Collections.newSetFromMap(new WeakHashMap<>());
         this.symbolData = Collections.newSetFromMap(new WeakHashMap<>());
     }
@@ -62,7 +62,7 @@ public final class JSWeakSet extends JSObject {
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
-            JSValue adder = weakSetObj.get(context, PropertyKey.fromString("add"));
+            JSValue adder = weakSetObj.get(PropertyKey.fromString("add"));
             if (context.hasPendingException()) {
                 JSValue pendingException = context.getPendingException();
                 if (pendingException instanceof JSObject pendingObject) {
@@ -111,7 +111,7 @@ public final class JSWeakSet extends JSObject {
                     return context.throwTypeError("Iterator result must be an object");
                 }
 
-                JSValue done = nextResult.get(context, PropertyKey.DONE);
+                JSValue done = nextResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();
@@ -124,7 +124,7 @@ public final class JSWeakSet extends JSObject {
                     break;
                 }
 
-                JSValue value = nextResult.get(context, PropertyKey.VALUE);
+                JSValue value = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
                     JSValue pendingException = context.getPendingException();

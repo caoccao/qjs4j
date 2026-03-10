@@ -29,15 +29,15 @@ public final class JSUint32Array extends JSTypedArray {
     /**
      * Create a Uint32Array with a new buffer.
      */
-    public JSUint32Array(int length) {
-        super(length, BYTES_PER_ELEMENT);
+    public JSUint32Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     /**
      * Create a Uint32Array view on an existing buffer.
      */
-    public JSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
+    public JSUint32Array(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length) {
+        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -80,7 +80,7 @@ public final class JSUint32Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(context, PropertyKey.LENGTH);
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSUint32Array(length);
                 jsTypedArray.setArray(context, jsObject, 0);
@@ -145,6 +145,6 @@ public final class JSUint32Array extends JSTypedArray {
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;
 
-        return new JSUint32Array(buffer, newByteOffset, newLength);
+        return new JSUint32Array(context, buffer, newByteOffset, newLength);
     }
 }

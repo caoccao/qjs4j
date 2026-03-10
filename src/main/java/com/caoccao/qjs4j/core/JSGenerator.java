@@ -45,7 +45,7 @@ public final class JSGenerator extends JSObject {
      * Used by JSBytecodeFunction.call() for function* generators.
      */
     public JSGenerator(JSContext context, JSGeneratorState generatorState) {
-        super();
+        super(context);
         this.context = context;
         this.generatorState = generatorState;
         this.iteratorFunction = null;
@@ -59,7 +59,7 @@ public final class JSGenerator extends JSObject {
      * Used for manually created generators (fromArray, fromIteratorFunction).
      */
     public JSGenerator(JSContext context, JSIterator.IteratorFunction iteratorFunction) {
-        super();
+        super(context);
         this.context = context;
         this.generatorState = null;
         this.iteratorFunction = iteratorFunction;

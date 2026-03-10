@@ -52,12 +52,12 @@ public final class JSClass extends JSFunction {
      * @param constructor Constructor function
      * @param superClass  Parent class (null for no inheritance)
      */
-    public JSClass(String name, JSFunction constructor, JSClass superClass) {
-        super();
+    public JSClass(JSContext context, String name, JSFunction constructor, JSClass superClass) {
+        super(context);
         this.name = name != null ? name : "";
         this.constructor = constructor;
         this.superClass = superClass;
-        this.prototype = new JSObject();
+        this.prototype = new JSObject(context);
         this.instanceMethods = new HashMap<>();
         this.staticMethods = new HashMap<>();
         this.instanceFields = new HashMap<>();
@@ -74,6 +74,10 @@ public final class JSClass extends JSFunction {
 
         // Set prototype property on class
         this.defineProperty(PropertyKey.fromString("prototype"), prototype, DataState.None);
+    }
+
+    public JSClass(String name, JSFunction constructor, JSClass superClass) {
+        this(constructor.getContext(), name, constructor, superClass);
     }
 
     /**
@@ -142,7 +146,7 @@ public final class JSClass extends JSFunction {
     public JSObject construct(JSContext context, JSValue[] args) {
         JSContext executionContext = getHomeContext() != null ? getHomeContext() : context;
         // Create new instance with this class's prototype
-        JSObject instance = new JSObject();
+        JSObject instance = new JSObject(executionContext);
         instance.setPrototype(prototype);
 
         // Initialize instance fields

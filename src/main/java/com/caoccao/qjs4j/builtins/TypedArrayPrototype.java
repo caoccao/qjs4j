@@ -298,7 +298,7 @@ public final class TypedArrayPrototype {
         start = Math.min(start, end);
 
         for (int i = start; i < end; i++) {
-            typedArray.set(context, PropertyKey.fromIndex(i), convertedValue);
+            typedArray.set(PropertyKey.fromIndex(i), convertedValue);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -343,7 +343,7 @@ public final class TypedArrayPrototype {
         }
         JSTypedArray resultArray = (JSTypedArray) result;
         for (int i = 0; i < kept.size(); i++) {
-            resultArray.set(context, PropertyKey.fromIndex(i), kept.get(i));
+            resultArray.set(PropertyKey.fromIndex(i), kept.get(i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -750,7 +750,7 @@ public final class TypedArrayPrototype {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            resultArray.set(context, PropertyKey.fromIndex(k), mappedValue);
+            resultArray.set(PropertyKey.fromIndex(k), mappedValue);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -844,8 +844,8 @@ public final class TypedArrayPrototype {
             int upper = length - 1 - lower;
             JSValue lowerValue = typedArray.getJSElement(lower);
             JSValue upperValue = typedArray.getJSElement(upper);
-            typedArray.set(context, PropertyKey.fromIndex(lower), upperValue);
-            typedArray.set(context, PropertyKey.fromIndex(upper), lowerValue);
+            typedArray.set(PropertyKey.fromIndex(lower), upperValue);
+            typedArray.set(PropertyKey.fromIndex(upper), lowerValue);
         }
         return typedArray;
     }
@@ -916,7 +916,7 @@ public final class TypedArrayPrototype {
         }
 
         // Step 8: Get source length
-        JSValue srcLengthValue = src.get(context, PropertyKey.LENGTH);
+        JSValue srcLengthValue = src.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -935,7 +935,7 @@ public final class TypedArrayPrototype {
         // Step 11: Loop - convert values and write
         for (long k = 0; k < srcLength; k++) {
             PropertyKey pk = PropertyKey.fromString(Long.toString(k));
-            JSValue value = src.get(context, pk);
+            JSValue value = src.get(pk);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -955,7 +955,7 @@ public final class TypedArrayPrototype {
             int targetIndex = (int) (targetOffset + k);
             if (!target.getBuffer().isDetached() && !target.isOutOfBounds()
                     && targetIndex < target.getLength()) {
-                target.set(context, PropertyKey.fromIndex(targetIndex), convertedValue);
+                target.set(PropertyKey.fromIndex(targetIndex), convertedValue);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1012,7 +1012,7 @@ public final class TypedArrayPrototype {
                 tempValues[i] = source.getJSElement(i);
             }
             for (int i = 0; i < srcLength; i++) {
-                target.set(context, PropertyKey.fromIndex(targetOffset + i), tempValues[i]);
+                target.set(PropertyKey.fromIndex(targetOffset + i), tempValues[i]);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1021,7 +1021,7 @@ public final class TypedArrayPrototype {
             // Different buffers - direct copy
             for (int i = 0; i < srcLength; i++) {
                 JSValue value = source.getJSElement(i);
-                target.set(context, PropertyKey.fromIndex(targetOffset + i), value);
+                target.set(PropertyKey.fromIndex(targetOffset + i), value);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1120,7 +1120,7 @@ public final class TypedArrayPrototype {
                     // Different types: per-element copy (step 14h), limited by srcCount
                     for (int k = 0; k < srcCount; k++) {
                         JSValue kValue = safeGetElement(typedArray, start + k);
-                        resultArray.set(context, PropertyKey.fromIndex(k), kValue);
+                        resultArray.set(PropertyKey.fromIndex(k), kValue);
                         if (context.hasPendingException()) {
                             return context.getPendingException();
                         }
@@ -1219,7 +1219,7 @@ public final class TypedArrayPrototype {
 
         // Write back
         for (int i = 0; i < length; i++) {
-            typedArray.set(context, PropertyKey.fromIndex(i), elements[i]);
+            typedArray.set(PropertyKey.fromIndex(i), elements[i]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1275,7 +1275,7 @@ public final class TypedArrayPrototype {
         // SpeciesConstructor(O, defaultConstructor)
         IJSArrayBuffer buffer = typedArray.getBuffer();
         JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(typedArray.getTypedArrayName()));
-        JSValue constructorValue = typedArray.get(context, PropertyKey.CONSTRUCTOR);
+        JSValue constructorValue = typedArray.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1285,7 +1285,7 @@ public final class TypedArrayPrototype {
         } else if (!(constructorValue instanceof JSObject constructorObj)) {
             return context.throwTypeError("constructor is not an object");
         } else {
-            JSValue species = constructorObj.get(context, PropertyKey.SYMBOL_SPECIES);
+            JSValue species = constructorObj.get(PropertyKey.SYMBOL_SPECIES);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1346,12 +1346,12 @@ public final class TypedArrayPrototype {
                 // Invoke element.toLocaleString()
                 JSValue toLocaleStringFn = null;
                 if (element instanceof JSObject elementObj) {
-                    toLocaleStringFn = elementObj.get(context, PropertyKey.fromString("toLocaleString"));
+                    toLocaleStringFn = elementObj.get(PropertyKey.fromString("toLocaleString"));
                 } else {
                     // Auto-box primitive to get toLocaleString from prototype
                     JSObject boxed = JSTypeConversions.toObject(context, element);
                     if (boxed != null) {
-                        toLocaleStringFn = boxed.get(context, PropertyKey.fromString("toLocaleString"));
+                        toLocaleStringFn = boxed.get(PropertyKey.fromString("toLocaleString"));
                     }
                 }
                 if (context.hasPendingException()) {
@@ -1394,7 +1394,7 @@ public final class TypedArrayPrototype {
 
         for (int k = 0; k < length; k++) {
             JSValue fromValue = typedArray.getJSElement(length - 1 - k);
-            resultArray.set(context, PropertyKey.fromIndex(k), fromValue);
+            resultArray.set(PropertyKey.fromIndex(k), fromValue);
         }
         return resultArray;
     }
@@ -1467,7 +1467,7 @@ public final class TypedArrayPrototype {
 
         // Write into result
         for (int i = 0; i < elements.length; i++) {
-            resultArray.set(context, PropertyKey.fromIndex(i), elements[i]);
+            resultArray.set(PropertyKey.fromIndex(i), elements[i]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1482,7 +1482,7 @@ public final class TypedArrayPrototype {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
         if (thisArg instanceof JSObject jsObject) {
-            JSValue joinFn = jsObject.get(context, PropertyKey.fromString("join"));
+            JSValue joinFn = jsObject.get(PropertyKey.fromString("join"));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1515,7 +1515,7 @@ public final class TypedArrayPrototype {
         JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(exemplar.getTypedArrayName()));
 
         // SpeciesConstructor(exemplar, defaultConstructor)
-        JSValue constructorValue = exemplar.get(context, PropertyKey.CONSTRUCTOR);
+        JSValue constructorValue = exemplar.get(PropertyKey.CONSTRUCTOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -1526,7 +1526,7 @@ public final class TypedArrayPrototype {
         } else if (!(constructorValue instanceof JSObject constructorObj)) {
             return context.throwTypeError("constructor is not an object");
         } else {
-            JSValue species = constructorObj.get(context, PropertyKey.SYMBOL_SPECIES);
+            JSValue species = constructorObj.get(PropertyKey.SYMBOL_SPECIES);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -1642,10 +1642,10 @@ public final class TypedArrayPrototype {
         // Steps 11-12: Copy elements using original length
         for (int k = 0; k < length; k++) {
             if (k == actualIndex) {
-                resultArray.set(context, PropertyKey.fromIndex(k), convertedValue);
+                resultArray.set(PropertyKey.fromIndex(k), convertedValue);
             } else {
                 JSValue fromValue = safeGetElement(typedArray, k);
-                resultArray.set(context, PropertyKey.fromIndex(k), fromValue);
+                resultArray.set(PropertyKey.fromIndex(k), fromValue);
             }
         }
         return resultArray;

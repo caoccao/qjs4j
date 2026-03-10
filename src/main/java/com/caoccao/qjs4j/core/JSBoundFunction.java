@@ -27,15 +27,19 @@ public final class JSBoundFunction extends JSFunction {
     private final String computedName;
     private final JSFunction target;
 
-    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
-        this(target, boundThis, boundArgs,
+    public JSBoundFunction(JSContext context, JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
+        this(context, target, boundThis, boundArgs,
                 Math.max(0, target.getLength() - (boundArgs != null ? boundArgs.length : 0)),
                 "bound " + (target.getName() != null ? target.getName() : ""));
     }
 
-    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs,
+    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs) {
+        this(target.getContext(), target, boundThis, boundArgs);
+    }
+
+    public JSBoundFunction(JSContext context, JSFunction target, JSValue boundThis, JSValue[] boundArgs,
                            double computedLength, String computedName) {
-        super(); // Initialize as JSObject
+        super(context); // Initialize as JSObject
         this.target = target;
         this.boundThis = boundThis;
         this.boundArgs = boundArgs != null ? boundArgs.clone() : JSValue.NO_ARGS;
@@ -69,6 +73,11 @@ public final class JSBoundFunction extends JSFunction {
                         PropertyDescriptor.DataState.Configurable
                 )
         );
+    }
+
+    public JSBoundFunction(JSFunction target, JSValue boundThis, JSValue[] boundArgs,
+                           double computedLength, String computedName) {
+        this(target.getContext(), target, boundThis, boundArgs, computedLength, computedName);
     }
 
     @Override

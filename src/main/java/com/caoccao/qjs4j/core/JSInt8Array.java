@@ -29,15 +29,15 @@ public final class JSInt8Array extends JSTypedArray {
     /**
      * Create an Int8Array with a new buffer.
      */
-    public JSInt8Array(int length) {
-        super(length, BYTES_PER_ELEMENT);
+    public JSInt8Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     /**
      * Create an Int8Array view on an existing buffer.
      */
-    public JSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
+    public JSInt8Array(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length) {
+        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -80,7 +80,7 @@ public final class JSInt8Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(context, PropertyKey.LENGTH);
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSInt8Array(length);
                 jsTypedArray.setArray(context, jsObject, 0);
@@ -145,6 +145,6 @@ public final class JSInt8Array extends JSTypedArray {
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;
 
-        return new JSInt8Array(buffer, newByteOffset, newLength);
+        return new JSInt8Array(context, buffer, newByteOffset, newLength);
     }
 }

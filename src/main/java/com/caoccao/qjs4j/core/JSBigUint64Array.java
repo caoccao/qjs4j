@@ -34,15 +34,15 @@ public final class JSBigUint64Array extends JSTypedArray {
     /**
      * Create a BigUint64Array with a new buffer.
      */
-    public JSBigUint64Array(int length) {
-        super(length, BYTES_PER_ELEMENT);
+    public JSBigUint64Array(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     /**
      * Create a BigUint64Array view on an existing buffer.
      */
-    public JSBigUint64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
+    public JSBigUint64Array(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length) {
+        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -92,7 +92,7 @@ public final class JSBigUint64Array extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(context, PropertyKey.LENGTH);
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
                 jsTypedArray.setArray(context, jsObject, 0);
@@ -202,6 +202,6 @@ public final class JSBigUint64Array extends JSTypedArray {
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;
 
-        return new JSBigUint64Array(buffer, newByteOffset, newLength);
+        return new JSBigUint64Array(context, buffer, newByteOffset, newLength);
     }
 }

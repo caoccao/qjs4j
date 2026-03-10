@@ -27,16 +27,16 @@ public final class JSNativeFunction extends JSFunction {
     private final String name;
     private final boolean requiresNew;
 
-    public JSNativeFunction(String name, int length, NativeCallback callback) {
-        this(name, length, callback, false, false);
+    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback) {
+        this(context, name, length, callback, false, false);
     }
 
-    public JSNativeFunction(String name, int length, NativeCallback callback, boolean isConstructor) {
-        this(name, length, callback, isConstructor, false);
+    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback, boolean isConstructor) {
+        this(context, name, length, callback, isConstructor, false);
     }
 
-    public JSNativeFunction(String name, int length, NativeCallback callback, boolean isConstructor, boolean requiresNew) {
-        super(); // Initialize as JSObject
+    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback, boolean isConstructor, boolean requiresNew) {
+        super(context); // Initialize as JSObject
         this.name = name;
         this.length = length;
         this.callback = callback;
@@ -70,7 +70,7 @@ public final class JSNativeFunction extends JSFunction {
 
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {
-            JSObject funcPrototype = new JSObject();
+            JSObject funcPrototype = new JSObject(context);
             funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
             // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
             this.defineProperty(PropertyKey.PROTOTYPE,

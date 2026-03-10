@@ -47,7 +47,7 @@ public class JSIterator extends JSObject {
      * Create an iterator with optional own next() installation.
      */
     public JSIterator(JSContext context, IteratorFunction iteratorFunction, String toStringTag, boolean defineOwnNext) {
-        super();
+        super(context);
         this.context = context;
         this.iteratorFunction = iteratorFunction;
         this.exhausted = false;
@@ -63,7 +63,7 @@ public class JSIterator extends JSObject {
         if (defineOwnNext) {
             // Set up 'next' as an own property for iterator kinds that do not
             // rely on prototype-dispatched next semantics.
-            JSNativeFunction nextMethod = new JSNativeFunction("next", 0, (childContext, thisArg, args) -> {
+            JSNativeFunction nextMethod = new JSNativeFunction(context, "next", 0, (childContext, thisArg, args) -> {
                 if (thisArg instanceof JSIterator iter) {
                     return iter.next();
                 }
@@ -73,7 +73,7 @@ public class JSIterator extends JSObject {
         }
 
         // Make the iterator iterable by adding [Symbol.iterator] method
-        JSNativeFunction iteratorMethod = new JSNativeFunction("@@iterator", 0, (childContext, thisArg, args) -> thisArg);
+        JSNativeFunction iteratorMethod = new JSNativeFunction(context, "@@iterator", 0, (childContext, thisArg, args) -> thisArg);
         defineProperty(PropertyKey.fromSymbol(JSSymbol.ITERATOR), iteratorMethod, PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Only set own toStringTag if no shared prototype provides it

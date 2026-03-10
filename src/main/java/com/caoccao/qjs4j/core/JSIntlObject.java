@@ -662,8 +662,8 @@ public final class JSIntlObject {
             if (!(partValue instanceof JSObject partObject)) {
                 continue;
             }
-            JSValue typeValue = partObject.get(context, PropertyKey.fromString("type"));
-            JSValue valueValue = partObject.get(context, PropertyKey.fromString("value"));
+            JSValue typeValue = partObject.get(PropertyKey.fromString("type"));
+            JSValue valueValue = partObject.get(PropertyKey.fromString("value"));
             if (!(typeValue instanceof JSString typeString) || !(valueValue instanceof JSString valueString)) {
                 continue;
             }
@@ -1063,7 +1063,7 @@ public final class JSIntlObject {
                 }
             }
             // Step 5: Let len be ToLength(Get(O, "length"))
-            JSValue lengthValue = localeObject.get(context, PropertyKey.fromString("length"));
+            JSValue lengthValue = localeObject.get(PropertyKey.fromString("length"));
             if (context.hasPendingException()) {
                 return localeTags;
             }
@@ -1098,7 +1098,7 @@ public final class JSIntlObject {
                 if (!kPresent) {
                     continue;
                 }
-                JSValue element = localeObject.get(context, pk);
+                JSValue element = localeObject.get(pk);
                 if (context.hasPendingException()) {
                     return localeTags;
                 }
@@ -1399,7 +1399,7 @@ public final class JSIntlObject {
         if (cached != null) {
             return cached;
         }
-        JSNativeFunction boundCompare = new JSNativeFunction("", 2,
+        JSNativeFunction boundCompare = new JSNativeFunction(context, "", 2,
                 (ctx, thisVal, compareArgs) -> collatorCompare(ctx, collator, compareArgs));
         context.transferPrototype(boundCompare, JSFunction.NAME);
         collator.setBoundCompareFunction(boundCompare);
@@ -1497,7 +1497,7 @@ public final class JSIntlObject {
             boolean numericSet = false;
             boolean numeric = false;
             if (optionsValue instanceof JSObject optionsObject) {
-                JSValue numericValue = optionsObject.get(context, PropertyKey.fromString("numeric"));
+                JSValue numericValue = optionsObject.get(PropertyKey.fromString("numeric"));
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1540,7 +1540,7 @@ public final class JSIntlObject {
             // 7. ignorePunctuation - Thai locale defaults to true per ECMA-402
             boolean ignorePunctuation = "th".equals(locale.getLanguage());
             if (optionsValue instanceof JSObject optionsObject2) {
-                JSValue ipValue = optionsObject2.get(context, PropertyKey.fromString("ignorePunctuation"));
+                JSValue ipValue = optionsObject2.get(PropertyKey.fromString("ignorePunctuation"));
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -1554,7 +1554,7 @@ public final class JSIntlObject {
             String resolvedLocaleTag = buildResolvedLocaleTag(locale, collation, numeric, caseFirst,
                     unicodeExtensions);
 
-            JSIntlCollator collator = new JSIntlCollator(resolvedLocale, sensitivity, usage, collation,
+            JSIntlCollator collator = new JSIntlCollator(context, resolvedLocale, sensitivity, usage, collation,
                     numeric, caseFirst, ignorePunctuation, resolvedLocaleTag);
             JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Collator");
             if (context.hasPendingException()) {
@@ -1648,7 +1648,7 @@ public final class JSIntlObject {
             }
 
             // 4. hour12
-            JSValue hour12Value = optionsObject.get(context, PropertyKey.fromString("hour12"));
+            JSValue hour12Value = optionsObject.get(PropertyKey.fromString("hour12"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1718,7 +1718,7 @@ public final class JSIntlObject {
 
             // 16. fractionalSecondDigits (GetNumberOption: ToNumber, range check, then floor)
             Integer fractionalSecondDigits = null;
-            JSValue fsdValue = optionsObject.get(context, PropertyKey.fromString("fractionalSecondDigits"));
+            JSValue fsdValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1889,7 +1889,7 @@ public final class JSIntlObject {
                 hourCycle = getLocaleDefaultHourCycle(locale);
             }
 
-            JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(
+            JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(context,
                     resolvedLocale, dateStyle, timeStyle, calendar, numberingSystem, timeZone,
                     hourCycle, weekdayOption, eraOption, yearOption, monthOption, dayOption,
                     dayPeriodOption, hourOption, minuteOption, secondOption, fractionalSecondDigits,
@@ -1992,7 +1992,7 @@ public final class JSIntlObject {
         }
 
         // Create instance and set prototype
-        JSIntlDisplayNames displayNames = new JSIntlDisplayNames(locale, style, type, fallback, languageDisplay);
+        JSIntlDisplayNames displayNames = new JSIntlDisplayNames(context, locale, style, type, fallback, languageDisplay);
         if (resolvedPrototype != null) {
             displayNames.setPrototype(resolvedPrototype);
         }
@@ -2176,13 +2176,13 @@ public final class JSIntlObject {
         // explicitly set. This ensures minutes:seconds pair is always shown
         // in digital format even when hours is hidden (hoursDisplay="auto").
         if ("digital".equals(style) && options != null) {
-            JSValue hoursDisplayVal = options.get(context, PropertyKey.fromString("hoursDisplay"));
+            JSValue hoursDisplayVal = options.get(PropertyKey.fromString("hoursDisplay"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
             boolean hoursDisplayExplicit = hoursDisplayVal != null && !(hoursDisplayVal instanceof JSUndefined);
             if (hoursDisplayExplicit) {
-                JSValue minutesDisplayVal = options.get(context, PropertyKey.fromString("minutesDisplay"));
+                JSValue minutesDisplayVal = options.get(PropertyKey.fromString("minutesDisplay"));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -2190,7 +2190,7 @@ public final class JSIntlObject {
                 if (!minutesDisplayExplicit) {
                     unitDisplays[5] = "always"; // minutes
                 }
-                JSValue secondsDisplayVal = options.get(context, PropertyKey.fromString("secondsDisplay"));
+                JSValue secondsDisplayVal = options.get(PropertyKey.fromString("secondsDisplay"));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -2204,7 +2204,7 @@ public final class JSIntlObject {
         // Read fractionalDigits
         Integer fractionalDigits = null;
         if (options != null) {
-            JSValue fdValue = options.get(context, PropertyKey.fromString("fractionalDigits"));
+            JSValue fdValue = options.get(PropertyKey.fromString("fractionalDigits"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2221,7 +2221,7 @@ public final class JSIntlObject {
             }
         }
 
-        JSIntlDurationFormat durationFormat = new JSIntlDurationFormat(locale, numberingSystem, style,
+        JSIntlDurationFormat durationFormat = new JSIntlDurationFormat(context, locale, numberingSystem, style,
                 unitStyles, unitDisplays, fractionalDigits);
         if (resolvedPrototype != null) {
             durationFormat.setPrototype(resolvedPrototype);
@@ -2268,7 +2268,7 @@ public final class JSIntlObject {
                 return JSUndefined.INSTANCE;
             }
 
-            JSIntlListFormat listFormat = new JSIntlListFormat(locale, style, type);
+            JSIntlListFormat listFormat = new JSIntlListFormat(context, locale, style, type);
             JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "ListFormat");
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -2373,7 +2373,7 @@ public final class JSIntlObject {
             boolean numericOpt = false;
             boolean numericOptSet = false;
             if (optionsValue instanceof JSObject numericOptsObj) {
-                JSValue numericRaw = numericOptsObj.get(context, PropertyKey.fromString("numeric"));
+                JSValue numericRaw = numericOptsObj.get(PropertyKey.fromString("numeric"));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -2391,7 +2391,7 @@ public final class JSIntlObject {
             // Read firstDayOfWeek option (as string, then apply WeekdayToString)
             String firstDayOfWeekOpt = null;
             if (optionsValue instanceof JSObject fdowOptsObj) {
-                JSValue fdowRaw = fdowOptsObj.get(context, PropertyKey.fromString("firstDayOfWeek"));
+                JSValue fdowRaw = fdowOptsObj.get(PropertyKey.fromString("firstDayOfWeek"));
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -2562,7 +2562,7 @@ public final class JSIntlObject {
             boolean numericSet = finalKn != null;
             boolean numeric = "true".equals(finalKn) || (finalKn != null && finalKn.isEmpty());
 
-            JSIntlLocale intlLocale = new JSIntlLocale(locale, tag,
+            JSIntlLocale intlLocale = new JSIntlLocale(context, locale, tag,
                     calendar, caseFirst, collation, firstDayOfWeek, hourCycle, numberingSystem,
                     numeric, numericSet);
             JSObject resolvedPrototype = resolveIntlPrototype(context, prototype, "Locale");
@@ -2779,7 +2779,7 @@ public final class JSIntlObject {
                 return context.throwRangeError("Invalid option value: " + compactDisplay);
             }
 
-            JSValue useGroupingValue = optionsObject.get(context, PropertyKey.fromString("useGrouping"));
+            JSValue useGroupingValue = optionsObject.get(PropertyKey.fromString("useGrouping"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -2896,7 +2896,7 @@ public final class JSIntlObject {
                         .build();
             }
 
-            JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(
+            JSIntlNumberFormat numberFormat = new JSIntlNumberFormat(context,
                     resolvedLocale,
                     style,
                     currency,
@@ -3048,7 +3048,7 @@ public final class JSIntlObject {
             }
             normalizeOption(trailingZeroDisplay, "auto", "auto", "stripIfInteger");
 
-            JSIntlPluralRules pluralRules = new JSIntlPluralRules(
+            JSIntlPluralRules pluralRules = new JSIntlPluralRules(context,
                     locale,
                     type,
                     notation,
@@ -3147,7 +3147,7 @@ public final class JSIntlObject {
                 }
             }
 
-            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(
+            JSIntlRelativeTimeFormat relativeTimeFormat = new JSIntlRelativeTimeFormat(context,
                     resolvedLocale, style, numeric, numberingSystem);
             if (resolvedPrototype != null) {
                 relativeTimeFormat.setPrototype(resolvedPrototype);
@@ -3167,7 +3167,7 @@ public final class JSIntlObject {
 
     private static JSIntlNumberFormat createRelativeTimeNumberFormat(JSIntlRelativeTimeFormat relativeTimeFormat) {
         String useGroupingMode = "pl".equals(relativeTimeFormat.getLocale().getLanguage()) ? "min2" : "auto";
-        return new JSIntlNumberFormat(
+        return new JSIntlNumberFormat(relativeTimeFormat.context,
                 relativeTimeFormat.getLocale(),
                 "decimal",
                 null,
@@ -3236,7 +3236,7 @@ public final class JSIntlObject {
             }
             granularity = normalizeOption(granularity, "grapheme", "grapheme", "word", "sentence");
 
-            JSIntlSegmenter segmenter = new JSIntlSegmenter(locale, granularity, segmentsPrototype);
+            JSIntlSegmenter segmenter = new JSIntlSegmenter(context, locale, granularity, segmentsPrototype);
             if (resolvedPrototype != null) {
                 segmenter.setPrototype(resolvedPrototype);
             }
@@ -3279,7 +3279,7 @@ public final class JSIntlObject {
         if (cachedBoundFormatFunction != null) {
             return cachedBoundFormatFunction;
         }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction("", 1,
+        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1,
                 (childContext, thisValue, formatArgs) -> dateTimeFormatFormat(childContext, dateTimeFormat, formatArgs));
         context.transferPrototype(boundFormatFunction, JSFunction.NAME);
         dateTimeFormat.setBoundFormatFunction(boundFormatFunction);
@@ -3649,7 +3649,7 @@ public final class JSIntlObject {
             if (part.unit() != null) {
                 partObj.set("unit", new JSString(part.unit()));
             }
-            result.set(context, i, partObj);
+            result.set(i, partObj);
         }
         return result;
     }
@@ -3827,7 +3827,7 @@ public final class JSIntlObject {
             String key,
             int minimum,
             int maximum) {
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
         }
@@ -3854,7 +3854,7 @@ public final class JSIntlObject {
         if (!(optionsValue instanceof JSObject optionsObject)) {
             return null;
         }
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
         }
@@ -3872,7 +3872,7 @@ public final class JSIntlObject {
         if (!(optionsValue instanceof JSObject optionsObject)) {
             return null;
         }
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
         }
@@ -4332,7 +4332,7 @@ public final class JSIntlObject {
             JSObject partObj = context.createJSObject();
             partObj.set("type", new JSString(part.type()));
             partObj.set("value", new JSString(part.value()));
-            result.set(context, i, partObj);
+            result.set(i, partObj);
         }
         return result;
     }
@@ -4589,7 +4589,7 @@ public final class JSIntlObject {
             if (!extensionSuffix.isEmpty()) {
                 maximizedTag = maximizedTag + extensionSuffix;
             }
-            JSIntlLocale result = new JSIntlLocale(maximized, maximizedTag,
+            JSIntlLocale result = new JSIntlLocale(context, maximized, maximizedTag,
                     intlLocale.getCalendar(), intlLocale.getCaseFirst(),
                     intlLocale.getCollation(), intlLocale.getFirstDayOfWeek(), intlLocale.getHourCycle(),
                     intlLocale.getNumberingSystem(), intlLocale.getNumeric(), intlLocale.isNumericSet());
@@ -4615,7 +4615,7 @@ public final class JSIntlObject {
             if (!extensionSuffix.isEmpty()) {
                 minimizedTag = minimizedTag + extensionSuffix;
             }
-            JSIntlLocale result = new JSIntlLocale(minimized, minimizedTag,
+            JSIntlLocale result = new JSIntlLocale(context, minimized, minimizedTag,
                     intlLocale.getCalendar(), intlLocale.getCaseFirst(),
                     intlLocale.getCollation(), intlLocale.getFirstDayOfWeek(), intlLocale.getHourCycle(),
                     intlLocale.getNumberingSystem(), intlLocale.getNumeric(), intlLocale.isNumericSet());
@@ -4753,7 +4753,7 @@ public final class JSIntlObject {
         if (cachedBoundFormatFunction != null) {
             return cachedBoundFormatFunction;
         }
-        JSNativeFunction boundFormatFunction = new JSNativeFunction("", 1,
+        JSNativeFunction boundFormatFunction = new JSNativeFunction(context, "", 1,
                 (childContext, thisValue, formatArgs) -> numberFormatFormat(childContext, numberFormat, formatArgs));
         context.transferPrototype(boundFormatFunction, JSFunction.NAME);
         numberFormat.setBoundFormatFunction(boundFormatFunction);
@@ -5151,7 +5151,7 @@ public final class JSIntlObject {
      * Read a string option from options object. Returns null if option is undefined.
      */
     private static String readStringOption(JSContext context, JSObject optionsObject, String key) {
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
         }
@@ -5167,7 +5167,7 @@ public final class JSIntlObject {
      */
     private static String readValidatedOption(JSContext context, JSObject optionsObject,
                                               String key, String... allowedValues) {
-        JSValue rawValue = optionsObject.get(context, PropertyKey.fromString(key));
+        JSValue rawValue = optionsObject.get(PropertyKey.fromString(key));
         if (context.hasPendingException()) {
             return null;
         }
@@ -5343,7 +5343,7 @@ public final class JSIntlObject {
         if (!(newTarget instanceof JSObject newTargetObject)) {
             return defaultPrototype;
         }
-        JSValue newTargetProto = newTargetObject.get(context, PropertyKey.PROTOTYPE);
+        JSValue newTargetProto = newTargetObject.get(PropertyKey.PROTOTYPE);
         if (context.hasPendingException()) {
             return null;
         }
@@ -5452,7 +5452,7 @@ public final class JSIntlObject {
         }
 
         // Get [Symbol.iterator]
-        JSValue iteratorMethod = listObj.get(context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = listObj.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return result;
         }
@@ -5472,7 +5472,7 @@ public final class JSIntlObject {
         }
 
         // Get next method
-        JSValue nextMethod = iteratorObj.get(context, PropertyKey.NEXT);
+        JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
         if (context.hasPendingException()) {
             return result;
         }
@@ -5492,7 +5492,7 @@ public final class JSIntlObject {
                 return result;
             }
 
-            JSValue doneValue = nextResultObj.get(context, PropertyKey.DONE);
+            JSValue doneValue = nextResultObj.get(PropertyKey.DONE);
             if (context.hasPendingException()) {
                 return result;
             }
@@ -5500,7 +5500,7 @@ public final class JSIntlObject {
                 break;
             }
 
-            JSValue value = nextResultObj.get(context, PropertyKey.VALUE);
+            JSValue value = nextResultObj.get(PropertyKey.VALUE);
             if (context.hasPendingException()) {
                 return result;
             }
@@ -5508,7 +5508,7 @@ public final class JSIntlObject {
             // Per spec, each element must be a string
             if (!(value instanceof JSString)) {
                 // IteratorClose: call return() if it exists
-                JSValue returnMethod = iteratorObj.get(context, PropertyKey.RETURN);
+                JSValue returnMethod = iteratorObj.get(PropertyKey.RETURN);
                 if (returnMethod instanceof JSFunction returnFunc) {
                     returnFunc.call(context, iterator, JSValue.NO_ARGS);
                 }

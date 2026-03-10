@@ -70,7 +70,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateToStringConsistency() {
         // Multiple calls should return consistent format
-        JSDate date = new JSDate(1704067200000L); // 2024-01-01 00:00:00 UTC
+        JSDate date = new JSDate(context, 1704067200000L); // 2024-01-01 00:00:00 UTC
 
         JSValue result1 = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
         JSValue result2 = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
@@ -82,7 +82,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     public void testDateToStringDifferentTimezones() {
         // The toString method uses local timezone
         // We can't hardcode the exact output, but we can verify the format
-        JSDate date = new JSDate(0); // Unix epoch
+        JSDate date = new JSDate(context, 0); // Unix epoch
 
         JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
         String str = ((JSString) result).value();
@@ -100,7 +100,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateToStringFormat() {
         // Test with specific timestamp: 2025-01-01 00:00:00 UTC
-        JSDate date = new JSDate(1735689600000L);
+        JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOf(JSString.class);
@@ -158,7 +158,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testDateToStringVsRFC1123() {
         // This test documents the difference between V8 and RFC 1123 formats
-        JSDate date = new JSDate(1735689600000L);
+        JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
         String v8Format = ((JSString) result).value();
@@ -196,7 +196,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testGetDay() {
         // Test with 2024-01-01 00:00:00 UTC
-        JSDate date = new JSDate(1704067200000L);
+        JSDate date = new JSDate(context, 1704067200000L);
 
         JSValue result = DatePrototype.getDay(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
@@ -224,7 +224,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testGetHours() {
         // Test with 2024-01-01 00:00:00 UTC
-        JSDate date = new JSDate(1704067200000L);
+        JSDate date = new JSDate(context, 1704067200000L);
 
         JSValue result = DatePrototype.getHours(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSNumber.class, jsNum -> {
@@ -354,7 +354,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testToISOString() {
         // Test with 2024-01-01 00:00:00 UTC
-        JSDate date = new JSDate(1704067200000L);
+        JSDate date = new JSDate(context, 1704067200000L);
 
         JSValue result = DatePrototype.toISOString(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
@@ -371,7 +371,7 @@ public class DatePrototypeTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         // Test with 2024-01-01 00:00:00 UTC
-        JSDate date = new JSDate(1704067200000L);
+        JSDate date = new JSDate(context, 1704067200000L);
 
         JSValue result = DatePrototype.toJSON(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {
@@ -400,7 +400,7 @@ public class DatePrototypeTest extends BaseJavetTest {
 
     @Test
     public void testToString() {
-        JSDate date = new JSDate(1735689600000L);
+        JSDate date = new JSDate(context, 1735689600000L);
 
         JSValue result = DatePrototype.toStringMethod(context, date, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> {

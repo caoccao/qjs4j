@@ -231,7 +231,7 @@ public final class StringPrototype {
                         replacementIndex += 2;
                         continue;
                     }
-                    JSValue groupValue = namedCapturesObject.get(context, PropertyKey.fromString(groupName));
+                    JSValue groupValue = namedCapturesObject.get(PropertyKey.fromString(groupName));
                     if (context.hasPendingException()) {
                         return null;
                     }
@@ -389,7 +389,7 @@ public final class StringPrototype {
         callbackArgs[matchCaptures.length] = JSNumber.of(matchStart);
         callbackArgs[matchCaptures.length + 1] = new JSString(input);
         if (hasNamedCaptures) {
-            callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(captures, groupNames);
+            callbackArgs[matchCaptures.length + 2] = createNamedGroupsObject(context, captures, groupNames);
         }
         return callbackArgs;
     }
@@ -521,8 +521,8 @@ public final class StringPrototype {
         return new JSString(result.toString());
     }
 
-    private static JSObject createNamedGroupsObject(String[] captures, String[] groupNames) {
-        JSObject groupsObject = new JSObject();
+    private static JSObject createNamedGroupsObject(JSContext context, String[] captures, String[] groupNames) {
+        JSObject groupsObject = new JSObject(context);
         groupsObject.setPrototype(null);
         if (captures == null || groupNames == null) {
             return groupsObject;
@@ -539,12 +539,12 @@ public final class StringPrototype {
         return groupsObject;
     }
 
-    private static JSValue createNamedGroupsValue(String[] captures, String[] groupNames) {
+    private static JSValue createNamedGroupsValue(JSContext context, String[] captures, String[] groupNames) {
         if (groupNames == null || captures == null) {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject groups = new JSObject();
+        JSObject groups = new JSObject(context);
         groups.setPrototype(null);
 
         int maxLength = Math.min(captures.length, groupNames.length);
@@ -876,7 +876,7 @@ public final class StringPrototype {
         if (!(value instanceof JSObject obj)) {
             return 0;
         }
-        JSValue matcher = obj.get(context, PropertyKey.SYMBOL_MATCH);
+        JSValue matcher = obj.get(PropertyKey.SYMBOL_MATCH);
         if (context.hasPendingException()) {
             return -1;
         }
@@ -997,7 +997,7 @@ public final class StringPrototype {
 
         JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (regexpArg instanceof JSObject regexpObj) {
-            JSValue matcher = regexpObj.get(context, PropertyKey.SYMBOL_MATCH);
+            JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1020,7 +1020,7 @@ public final class StringPrototype {
         }
         JSRegExp rx = context.createJSRegExp(pattern, "");
         // Step 7: Return Invoke(rx, @@match, «S»).
-        JSValue matchFn = rx.get(context, PropertyKey.SYMBOL_MATCH);
+        JSValue matchFn = rx.get(PropertyKey.SYMBOL_MATCH);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1051,7 +1051,7 @@ public final class StringPrototype {
                 }
                 // Step 2a.ii: Check flags contain "g"
                 if (regexpArg instanceof JSObject regObj) {
-                    JSValue flags = regObj.get(context, PropertyKey.fromString("flags"));
+                    JSValue flags = regObj.get(PropertyKey.fromString("flags"));
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -1066,7 +1066,7 @@ public final class StringPrototype {
             }
             // Step 2b: GetMethod(regexp, @@matchAll)
             if (regexpArg instanceof JSObject regexpObj) {
-                JSValue matcher = regexpObj.get(context, PropertyKey.SYMBOL_MATCH_ALL);
+                JSValue matcher = regexpObj.get(PropertyKey.SYMBOL_MATCH_ALL);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1103,7 +1103,7 @@ public final class StringPrototype {
         }
 
         // Step 5: Return ? Invoke(rx, @@matchAll, « S »).
-        JSValue matchAllMethod = rx.get(context, PropertyKey.SYMBOL_MATCH_ALL);
+        JSValue matchAllMethod = rx.get(PropertyKey.SYMBOL_MATCH_ALL);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1292,7 +1292,7 @@ public final class StringPrototype {
         JSValue searchValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue replaceValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         if (searchValue instanceof JSObject searchValueObject) {
-            JSValue replacer = searchValueObject.get(context, PropertyKey.SYMBOL_REPLACE);
+            JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1361,7 +1361,7 @@ public final class StringPrototype {
                 }
                 // Step 2a.ii: Check flags contain "g"
                 if (searchValue instanceof JSObject searchObj) {
-                    JSValue flags = searchObj.get(context, PropertyKey.fromString("flags"));
+                    JSValue flags = searchObj.get(PropertyKey.fromString("flags"));
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
@@ -1376,7 +1376,7 @@ public final class StringPrototype {
             }
             // Step 2b: GetMethod(searchValue, @@replace)
             if (searchValue instanceof JSObject searchValueObject) {
-                JSValue replacer = searchValueObject.get(context, PropertyKey.SYMBOL_REPLACE);
+                JSValue replacer = searchValueObject.get(PropertyKey.SYMBOL_REPLACE);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1444,7 +1444,7 @@ public final class StringPrototype {
     }
 
     private static JSValue replaceRegExpSubclassOnce(JSContext context, JSRegExp regexp, JSValue replaceValue, JSString inputString) {
-        JSValue execValue = regexp.get(context, PropertyKey.EXEC);
+        JSValue execValue = regexp.get(PropertyKey.EXEC);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1464,7 +1464,7 @@ public final class StringPrototype {
             return context.throwTypeError("RegExp exec method returned non-object");
         }
 
-        JSValue matchValue = resultObject.get(context, PropertyKey.fromIndex(0));
+        JSValue matchValue = resultObject.get(PropertyKey.fromIndex(0));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1473,7 +1473,7 @@ public final class StringPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue indexValue = resultObject.get(context, PropertyKey.INDEX);
+        JSValue indexValue = resultObject.get(PropertyKey.INDEX);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1484,7 +1484,7 @@ public final class StringPrototype {
         int matchEnd = Math.max(matchStart, Math.min(input.length(), matchStart + matchedString.length()));
         matchStart = Math.max(0, Math.min(matchStart, input.length()));
 
-        JSValue lengthValue = resultObject.get(context, PropertyKey.LENGTH);
+        JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1495,7 +1495,7 @@ public final class StringPrototype {
         int resultLength = (int) Math.min(resultLengthLong, Integer.MAX_VALUE);
         String[] captures = new String[resultLength];
         for (int captureIndex = 0; captureIndex < resultLength; captureIndex++) {
-            JSValue captureValue = resultObject.get(context, PropertyKey.fromIndex(captureIndex));
+            JSValue captureValue = resultObject.get(PropertyKey.fromIndex(captureIndex));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1509,7 +1509,7 @@ public final class StringPrototype {
             }
         }
 
-        JSValue namedCapturesValue = resultObject.get(context, PropertyKey.GROUPS);
+        JSValue namedCapturesValue = resultObject.get(PropertyKey.GROUPS);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1540,7 +1540,7 @@ public final class StringPrototype {
 
         JSValue regexpArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (regexpArg instanceof JSObject regexpObj) {
-            JSValue searcher = regexpObj.get(context, PropertyKey.SYMBOL_SEARCH);
+            JSValue searcher = regexpObj.get(PropertyKey.SYMBOL_SEARCH);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1563,7 +1563,7 @@ public final class StringPrototype {
         }
         JSRegExp rx = context.createJSRegExp(pattern, "");
         // Step 7: Return Invoke(rx, @@search, «S»).
-        JSValue searchFn = rx.get(context, PropertyKey.SYMBOL_SEARCH);
+        JSValue searchFn = rx.get(PropertyKey.SYMBOL_SEARCH);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1627,7 +1627,7 @@ public final class StringPrototype {
         JSValue separatorArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue limitArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         if (separatorArg instanceof JSObject separatorObject) {
-            JSValue splitter = separatorObject.get(context, PropertyKey.SYMBOL_SPLIT);
+            JSValue splitter = separatorObject.get(PropertyKey.SYMBOL_SPLIT);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

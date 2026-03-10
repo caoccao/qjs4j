@@ -47,8 +47,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
     /**
      * Create a TypedArray with a new buffer of the given length.
      */
-    protected JSTypedArray(int length, int bytesPerElement) {
-        super();
+    protected JSTypedArray(JSContext context, int length, int bytesPerElement) {
+        super(context);
         if (length < 0) {
             throw new JSRangeErrorException("invalid length");
         }
@@ -59,15 +59,15 @@ public sealed abstract class JSTypedArray extends JSObject permits
         this.length = length;
         this.byteLength = length * bytesPerElement;
         this.byteOffset = 0;
-        this.buffer = new JSArrayBuffer(this.byteLength);
+        this.buffer = new JSArrayBuffer(context, this.byteLength);
         this.trackRab = false;
     }
 
     /**
      * Create a TypedArray view on an existing ArrayBuffer or SharedArrayBuffer.
      */
-    protected JSTypedArray(IJSArrayBuffer buffer, int byteOffset, int length, int bytesPerElement) {
-        super();
+    protected JSTypedArray(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length, int bytesPerElement) {
+        super(context);
         if (buffer == null) {
             throw new IllegalArgumentException("Cannot create TypedArray on null buffer");
         }
@@ -156,7 +156,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             return source;
         }
 
-        JSValue iteratorMethod = sourceObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = sourceObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return source;
         }
@@ -357,19 +357,25 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public boolean delete(JSContext context, PropertyKey key) {
+        JSContext effectiveContext = resolveContext(context);
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
             // In-bounds element: not deletable
             if (index < getLength() && !buffer.isDetached()) {
-                if (context != null && context.isStrictMode()) {
-                    context.throwTypeError("Cannot delete property '" + index + "'");
+                if (effectiveContext.isStrictMode()) {
+                    effectiveContext.throwTypeError("Cannot delete property '" + index + "'");
                 }
                 return false;
             }
             // Out-of-bounds or detached: canonical numeric index returns true
             return true;
         }
-        return super.delete(context, key);
+        return super.delete(effectiveContext, key);
+    }
+
+    @Override
+    public boolean delete(PropertyKey key) {
+        return delete(resolveContext(null), key);
     }
 
     @Override
@@ -658,6 +664,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
 
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value) {
+        JSContext effectiveContext = resolveContext(context);
         if (isCanonicalNumericIndex(key)) {
             // TypedArray [[Set]] with SameValue(O, Receiver) = true
             // Always call integerIndexedElementSet which performs value conversion
@@ -665,27 +672,32 @@ public sealed abstract class JSTypedArray extends JSObject permits
             String str = key.toPropertyString();
             if ("-0".equals(str)) {
                 // -0 is never a valid integer index; use -1 to skip write after conversion
-                integerIndexedElementSet(-1, value, context);
+                integerIndexedElementSet(-1, value, effectiveContext);
                 return;
             }
             try {
                 double numericIndex = Double.parseDouble(str);
                 if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                    integerIndexedElementSet(-1, value, context);
+                    integerIndexedElementSet(-1, value, effectiveContext);
                     return;
                 }
                 int index = (int) numericIndex;
                 if (index != numericIndex) {
-                    integerIndexedElementSet(-1, value, context);
+                    integerIndexedElementSet(-1, value, effectiveContext);
                     return;
                 }
-                integerIndexedElementSet(index, value, context);
+                integerIndexedElementSet(index, value, effectiveContext);
             } catch (NumberFormatException e) {
-                integerIndexedElementSet(-1, value, context);
+                integerIndexedElementSet(-1, value, effectiveContext);
             }
             return;
         }
-        super.set(context, key, value);
+        super.set(effectiveContext, key, value);
+    }
+
+    @Override
+    public void set(PropertyKey key, JSValue value) {
+        set(resolveContext(null), key, value);
     }
 
     /**
@@ -693,23 +705,24 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * Copy values from array into this TypedArray.
      */
     public void setArray(JSContext context, JSValue source, int offset) {
+        JSContext effectiveContext = resolveContext(context);
         int currentLength = getLength();
         if (offset < 0 || offset > currentLength) {
             throw new JSRangeErrorException("TypedArray offset out of range");
         }
 
         if (source instanceof JSArray srcArray) {
-            int srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
+            int srcLength = toArrayLikeLength(effectiveContext, JSNumber.of(srcArray.getLength()));
             if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(context, PropertyKey.fromString(Integer.toString(i)));
-                if (context != null && context.hasPendingException()) {
+                JSValue value = srcArray.get(PropertyKey.fromString(Integer.toString(i)));
+                if (effectiveContext.hasPendingException()) {
                     return;
                 }
-                setJSElement(offset + i, value, context);
-                if (context != null && context.hasPendingException()) {
+                setJSElement(offset + i, value, effectiveContext);
+                if (effectiveContext.hasPendingException()) {
                     return;
                 }
             }
@@ -719,36 +732,36 @@ public sealed abstract class JSTypedArray extends JSObject permits
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                setJSElement(offset + i, srcTyped.getJSElement(i), context);
-                if (context != null && context.hasPendingException()) {
+                setJSElement(offset + i, srcTyped.getJSElement(i), effectiveContext);
+                if (effectiveContext.hasPendingException()) {
                     return;
                 }
             }
         } else if (source instanceof JSIterator jsIterator) {
-            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
-            if (context != null && context.hasPendingException()) {
+            JSArray jsArray = JSIteratorHelper.toArray(effectiveContext, jsIterator);
+            if (effectiveContext.hasPendingException()) {
                 return;
             }
-            setArray(context, jsArray, offset);
+            setArray(effectiveContext, jsArray, offset);
         } else if (source instanceof JSObject srcObject) {
-            JSValue lengthValue = srcObject.get(context, PropertyKey.LENGTH);
-            if (context != null && context.hasPendingException()) {
+            JSValue lengthValue = srcObject.get(PropertyKey.LENGTH);
+            if (effectiveContext.hasPendingException()) {
                 return;
             }
-            int srcLength = toArrayLikeLength(context, lengthValue);
-            if (context != null && context.hasPendingException()) {
+            int srcLength = toArrayLikeLength(effectiveContext, lengthValue);
+            if (effectiveContext.hasPendingException()) {
                 return;
             }
             if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(context, PropertyKey.fromString(Integer.toString(i)));
-                if (context != null && context.hasPendingException()) {
+                JSValue value = srcObject.get(PropertyKey.fromString(Integer.toString(i)));
+                if (effectiveContext.hasPendingException()) {
                     return;
                 }
-                setJSElement(offset + i, value, context);
-                if (context != null && context.hasPendingException()) {
+                setJSElement(offset + i, value, effectiveContext);
+                if (effectiveContext.hasPendingException()) {
                     return;
                 }
             }

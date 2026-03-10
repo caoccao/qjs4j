@@ -35,20 +35,20 @@ public final class JSIntlLocale extends JSObject {
     private final boolean numericSet;
     private final String tag;
 
-    public JSIntlLocale(Locale locale, String tag) {
-        this(locale, tag, null, null, null, null, null, null, false, false);
+    public JSIntlLocale(JSContext context, Locale locale, String tag) {
+        this(context, locale, tag, null, null, null, null, null, null, false, false);
     }
 
-    public JSIntlLocale(Locale locale, String tag, String calendar, String caseFirst,
+    public JSIntlLocale(JSContext context, Locale locale, String tag, String calendar, String caseFirst,
                         String collation, String hourCycle, String numberingSystem,
                         boolean numeric, boolean numericSet) {
-        this(locale, tag, calendar, caseFirst, collation, null, hourCycle, numberingSystem, numeric, numericSet);
+        this(context, locale, tag, calendar, caseFirst, collation, null, hourCycle, numberingSystem, numeric, numericSet);
     }
 
-    public JSIntlLocale(Locale locale, String tag, String calendar, String caseFirst,
+    public JSIntlLocale(JSContext context, Locale locale, String tag, String calendar, String caseFirst,
                         String collation, String firstDayOfWeek, String hourCycle,
                         String numberingSystem, boolean numeric, boolean numericSet) {
-        super();
+        super(context);
         this.locale = locale;
         this.tag = tag;
         this.calendar = calendar;

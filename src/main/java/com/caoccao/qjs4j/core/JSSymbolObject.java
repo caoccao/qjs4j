@@ -59,8 +59,8 @@ public final class JSSymbolObject extends JSObject {
      *
      * @param description the symbol description to wrap
      */
-    public JSSymbolObject(String description) {
-        this(new JSSymbol(description));
+    public JSSymbolObject(JSContext context, String description) {
+        this(context, new JSSymbol(description));
     }
 
     /**
@@ -68,8 +68,8 @@ public final class JSSymbolObject extends JSObject {
      *
      * @param value the JSSymbol value to wrap
      */
-    public JSSymbolObject(JSSymbol value) {
-        super();
+    public JSSymbolObject(JSContext context, JSSymbol value) {
+        super(context);
         this.value = value;
         this.setPrimitiveValue(value);
     }

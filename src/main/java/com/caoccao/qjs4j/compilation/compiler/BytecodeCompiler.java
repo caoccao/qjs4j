@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.ASTNode;
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Bytecode;
@@ -47,11 +48,15 @@ public final class BytecodeCompiler {
      * @param inheritedStrictMode Strict mode inherited from parent function
      */
     public BytecodeCompiler(boolean inheritedStrictMode) {
-        this(inheritedStrictMode, null);
+        this(inheritedStrictMode, null, null);
     }
 
     BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
-        this.compilerContext = new CompilerContext(inheritedStrictMode, parentCaptureResolver);
+        this(inheritedStrictMode, parentCaptureResolver, null);
+    }
+
+    BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
+        this.compilerContext = new CompilerContext(inheritedStrictMode, parentCaptureResolver, context);
         this.delegates = new CompilerDelegates(compilerContext);
     }
 
@@ -94,6 +99,10 @@ public final class BytecodeCompiler {
 
     public void setClassFieldEvalContext(boolean classFieldEvalContext) {
         compilerContext.classFieldEvalContext = classFieldEvalContext;
+    }
+
+    public void setContext(JSContext context) {
+        compilerContext.context = context;
     }
 
     public void setEvalMode(boolean evalMode) {

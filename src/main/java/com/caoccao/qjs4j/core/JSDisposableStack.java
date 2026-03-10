@@ -32,8 +32,8 @@ public final class JSDisposableStack extends JSObject {
     private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
 
-    public JSDisposableStack() {
-        super();
+    public JSDisposableStack(JSContext context) {
+        super(context);
         this.disposeRecords = new ArrayList<>();
         this.disposed = false;
     }
@@ -156,7 +156,7 @@ public final class JSDisposableStack extends JSObject {
             return context.throwTypeError("An object is expected with `using` declarations");
         }
 
-        JSValue disposeMethodValue = objectValue.get(context, PropertyKey.SYMBOL_DISPOSE);
+        JSValue disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_DISPOSE);
         if (!(disposeMethodValue instanceof JSFunction disposeMethod)) {
             return context.throwTypeError("Object is not disposable");
         }

@@ -42,39 +42,39 @@ public class ArrayBufferConstructorTest extends BaseJavetTest {
         PropertyKey speciesKey = PropertyKey.SYMBOL_SPECIES;
         JSValue speciesGetter = arrayBufferConstructor.get(speciesKey);
         assertThat(speciesGetter).isNotNull();
-        assertThat(speciesGetter.isFunction()).isFalse();
+        assertThat(speciesGetter.isFunction()).isTrue();
     }
 
     @Test
     public void testIsView() {
         // Normal case: TypedArray instances should return true
-        JSArrayBuffer buffer = new JSArrayBuffer(16);
-        JSUint8Array uint8Array = new JSUint8Array(buffer, 0, 8);
+        JSArrayBuffer buffer = new JSArrayBuffer(context, 16);
+        JSUint8Array uint8Array = new JSUint8Array(context, buffer, 0, 8);
         JSValue result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{uint8Array});
         assertThat(result.isBooleanTrue()).isTrue();
 
-        JSInt32Array int32Array = new JSInt32Array(buffer, 0, 4);
+        JSInt32Array int32Array = new JSInt32Array(context, buffer, 0, 4);
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{int32Array});
         assertThat(result.isBooleanTrue()).isTrue();
 
-        JSFloat16Array float16Array = new JSFloat16Array(buffer, 0, 8);
+        JSFloat16Array float16Array = new JSFloat16Array(context, buffer, 0, 8);
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float16Array});
         assertThat(result.isBooleanTrue()).isTrue();
 
-        JSFloat32Array float32Array = new JSFloat32Array(buffer, 0, 4);
+        JSFloat32Array float32Array = new JSFloat32Array(context, buffer, 0, 4);
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{float32Array});
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Normal case: DataView should return true
-        JSDataView dataView = new JSDataView(buffer);
+        JSDataView dataView = new JSDataView(context, buffer);
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{dataView});
         assertThat(result.isBooleanTrue()).isTrue();
 
         // Normal case: non-view objects should return false
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSArray()});
+        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSArray(context)});
         assertThat(result.isBooleanFalse()).isTrue();
 
-        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject()});
+        result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSObject(context)});
         assertThat(result.isBooleanFalse()).isTrue();
 
         result = ArrayBufferConstructor.isView(context, JSUndefined.INSTANCE, new JSValue[]{new JSString("test")});

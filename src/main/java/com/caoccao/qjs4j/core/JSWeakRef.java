@@ -40,8 +40,8 @@ public final class JSWeakRef extends JSObject {
      *
      * @param target The target object to weakly reference
      */
-    public JSWeakRef(JSValue target) {
-        super();
+    public JSWeakRef(JSContext context, JSValue target) {
+        super(context);
         if (target == null) {
             throw new IllegalArgumentException("WeakRef target cannot be null");
         }
@@ -57,7 +57,7 @@ public final class JSWeakRef extends JSObject {
         if (!isWeakRefTarget(targetArg)) {
             return context.throwTypeError("WeakRef: invalid target");
         }
-        JSWeakRef weakRef = new JSWeakRef(targetArg);
+        JSWeakRef weakRef = new JSWeakRef(context, targetArg);
         context.transferPrototype(weakRef, NAME);
         return weakRef;
     }

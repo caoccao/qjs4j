@@ -32,7 +32,7 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testExec() {
         // Create a simple regex
-        JSRegExp regexp = new JSRegExp("hello", "");
+        JSRegExp regexp = new JSRegExp(context, "hello", "");
 
         // Normal case: match found
         JSValue result = RegExpPrototype.exec(context, regexp, new JSValue[]{new JSString("hello world")});
@@ -63,17 +63,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetFlags() {
         // Normal case: no flags
-        JSRegExp regexp = new JSRegExp("test", "");
+        JSRegExp regexp = new JSRegExp(context, "test", "");
         JSValue result = RegExpPrototype.getFlags(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo(""));
 
         // Normal case: multiple flags
-        JSRegExp withFlags = new JSRegExp("hello", "gim");
+        JSRegExp withFlags = new JSRegExp(context, "hello", "gim");
         result = RegExpPrototype.getFlags(context, withFlags, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("gim"));
 
         // Normal case: single flag
-        JSRegExp singleFlag = new JSRegExp("world", "i");
+        JSRegExp singleFlag = new JSRegExp(context, "world", "i");
         result = RegExpPrototype.getFlags(context, singleFlag, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("i"));
 
@@ -86,17 +86,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetGlobal() {
         // Normal case: global flag set
-        JSRegExp global = new JSRegExp("test", "g");
+        JSRegExp global = new JSRegExp(context, "test", "g");
         JSValue result = RegExpPrototype.getGlobal(context, global, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: global flag not set
-        JSRegExp nonGlobal = new JSRegExp("test", "i");
+        JSRegExp nonGlobal = new JSRegExp(context, "test", "i");
         result = RegExpPrototype.getGlobal(context, nonGlobal, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
-        JSRegExp noFlags = new JSRegExp("test", "");
+        JSRegExp noFlags = new JSRegExp(context, "test", "");
         result = RegExpPrototype.getGlobal(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
@@ -108,17 +108,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetIgnoreCase() {
         // Normal case: ignoreCase flag set
-        JSRegExp ignoreCase = new JSRegExp("test", "i");
+        JSRegExp ignoreCase = new JSRegExp(context, "test", "i");
         JSValue result = RegExpPrototype.getIgnoreCase(context, ignoreCase, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: ignoreCase flag not set
-        JSRegExp caseSensitive = new JSRegExp("test", "g");
+        JSRegExp caseSensitive = new JSRegExp(context, "test", "g");
         result = RegExpPrototype.getIgnoreCase(context, caseSensitive, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
-        JSRegExp noFlags = new JSRegExp("test", "");
+        JSRegExp noFlags = new JSRegExp(context, "test", "");
         result = RegExpPrototype.getIgnoreCase(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
@@ -130,17 +130,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetMultiline() {
         // Normal case: multiline flag set
-        JSRegExp multiline = new JSRegExp("test", "m");
+        JSRegExp multiline = new JSRegExp(context, "test", "m");
         JSValue result = RegExpPrototype.getMultiline(context, multiline, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: multiline flag not set
-        JSRegExp singleLine = new JSRegExp("test", "g");
+        JSRegExp singleLine = new JSRegExp(context, "test", "g");
         result = RegExpPrototype.getMultiline(context, singleLine, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: no flags
-        JSRegExp noFlags = new JSRegExp("test", "");
+        JSRegExp noFlags = new JSRegExp(context, "test", "");
         result = RegExpPrototype.getMultiline(context, noFlags, JSValue.NO_ARGS);
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
@@ -152,12 +152,12 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testGetSource() {
         // Normal case: simple pattern
-        JSRegExp regexp = new JSRegExp("test", "");
+        JSRegExp regexp = new JSRegExp(context, "test", "");
         JSValue result = RegExpPrototype.getSource(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
 
         // Normal case: pattern with special characters
-        JSRegExp special = new JSRegExp("test", "i");
+        JSRegExp special = new JSRegExp(context, "test", "i");
         result = RegExpPrototype.getSource(context, special, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("test"));
 
@@ -447,7 +447,7 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testTest() {
         // Create a simple regex
-        JSRegExp regexp = new JSRegExp("test", "");
+        JSRegExp regexp = new JSRegExp(context, "test", "");
 
         // Normal case: match found
         JSValue result = RegExpPrototype.test(context, regexp, new JSValue[]{new JSString("this is a test")});
@@ -462,12 +462,12 @@ public class RegExpPrototypeTest extends BaseJavetTest {
         assertThat(result).isEqualTo(JSBoolean.FALSE);
 
         // Normal case: case insensitive
-        JSRegExp caseInsensitive = new JSRegExp("TEST", "i");
+        JSRegExp caseInsensitive = new JSRegExp(context, "TEST", "i");
         result = RegExpPrototype.test(context, caseInsensitive, new JSValue[]{new JSString("test")});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
 
         // Normal case: global regex with lastIndex
-        JSRegExp global = new JSRegExp("test", "g");
+        JSRegExp global = new JSRegExp(context, "test", "g");
         result = RegExpPrototype.test(context, global, new JSValue[]{new JSString("test test test")});
         assertThat(result).isEqualTo(JSBoolean.TRUE);
         assertThat(global.getLastIndex()).isEqualTo(4); // After first match
@@ -489,17 +489,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testToStringMethod() {
         // Normal case: simple regex
-        JSRegExp regexp = new JSRegExp("test", "");
+        JSRegExp regexp = new JSRegExp(context, "test", "");
         JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/"));
 
         // Normal case: regex with flags
-        JSRegExp withFlags = new JSRegExp("hello", "gi");
+        JSRegExp withFlags = new JSRegExp(context, "hello", "gi");
         result = RegExpPrototype.toStringMethod(context, withFlags, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/hello/gi"));
 
         // Normal case: pattern with special characters
-        JSRegExp special = new JSRegExp("test", "m");
+        JSRegExp special = new JSRegExp(context, "test", "m");
         result = RegExpPrototype.toStringMethod(context, special, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/m"));
 

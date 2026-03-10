@@ -32,14 +32,14 @@ public final class JSAsyncDisposableStack extends JSObject {
     private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
 
-    public JSAsyncDisposableStack() {
-        super();
+    public JSAsyncDisposableStack(JSContext context) {
+        super(context);
         this.disposeRecords = new ArrayList<>();
         this.disposed = false;
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSAsyncDisposableStack stack = new JSAsyncDisposableStack();
+        JSAsyncDisposableStack stack = new JSAsyncDisposableStack(context);
         context.transferPrototype(stack, NAME);
         return stack;
     }
@@ -165,7 +165,7 @@ public final class JSAsyncDisposableStack extends JSObject {
         if (disposed) {
             return context.throwTypeError("Cannot move a disposed AsyncDisposableStack");
         }
-        JSAsyncDisposableStack newStack = new JSAsyncDisposableStack();
+        JSAsyncDisposableStack newStack = new JSAsyncDisposableStack(context);
         newStack.disposeRecords.addAll(disposeRecords);
         newStack.setPrototype(getPrototype());
         disposeRecords.clear();
@@ -184,12 +184,12 @@ public final class JSAsyncDisposableStack extends JSObject {
             return context.throwTypeError("AsyncDisposableStack.use requires an object or null/undefined");
         }
 
-        JSValue disposeMethodValue = objectValue.get(context, PropertyKey.SYMBOL_ASYNC_DISPOSE);
+        JSValue disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_ASYNC_DISPOSE);
         JSFunction disposeMethod;
         if (disposeMethodValue instanceof JSFunction asyncDisposeMethod) {
             disposeMethod = asyncDisposeMethod;
         } else {
-            disposeMethodValue = objectValue.get(context, PropertyKey.SYMBOL_DISPOSE);
+            disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_DISPOSE);
             if (!(disposeMethodValue instanceof JSFunction syncDisposeMethod)) {
                 return context.throwTypeError("Object is not async disposable");
             }

@@ -37,10 +37,10 @@ public final class JSIntlCollator extends JSObject {
     private final String usage;
     private JSFunction boundCompareFunction;
 
-    public JSIntlCollator(Locale locale, String sensitivity, String usage, String collation,
+    public JSIntlCollator(JSContext context, Locale locale, String sensitivity, String usage, String collation,
                           boolean numeric, String caseFirst, boolean ignorePunctuation,
                           String resolvedLocaleTag) {
-        super();
+        super(context);
         this.locale = locale;
         this.sensitivity = sensitivity;
         this.usage = usage;

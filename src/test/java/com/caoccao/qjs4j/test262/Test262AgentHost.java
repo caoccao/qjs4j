@@ -57,7 +57,7 @@ final class Test262AgentHost implements AutoCloseable {
             int length,
             JSNativeFunction.NativeCallback callback
     ) {
-        JSNativeFunction function = new JSNativeFunction(name, length, callback);
+        JSNativeFunction function = new JSNativeFunction(context, name, length, callback);
         context.transferPrototype(function, JSFunction.NAME);
         return function;
     }

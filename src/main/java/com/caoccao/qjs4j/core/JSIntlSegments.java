@@ -50,8 +50,8 @@ public final class JSIntlSegments extends JSObject {
     private final String text;
     private List<SegmentRange> segmentRanges;
 
-    public JSIntlSegments(JSIntlSegmenter segmenter, String text) {
-        super();
+    public JSIntlSegments(JSContext context, JSIntlSegmenter segmenter, String text) {
+        super(context);
         this.segmenter = segmenter;
         this.text = text;
     }

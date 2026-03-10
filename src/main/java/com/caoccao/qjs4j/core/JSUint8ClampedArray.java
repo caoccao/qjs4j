@@ -30,15 +30,15 @@ public final class JSUint8ClampedArray extends JSTypedArray {
     /**
      * Create a Uint8ClampedArray with a new buffer.
      */
-    public JSUint8ClampedArray(int length) {
-        super(length, BYTES_PER_ELEMENT);
+    public JSUint8ClampedArray(JSContext context, int length) {
+        super(context, length, BYTES_PER_ELEMENT);
     }
 
     /**
      * Create a Uint8ClampedArray view on an existing buffer.
      */
-    public JSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
-        super(buffer, byteOffset, length, BYTES_PER_ELEMENT);
+    public JSUint8ClampedArray(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length) {
+        super(context, buffer, byteOffset, length, BYTES_PER_ELEMENT);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -81,7 +81,7 @@ public final class JSUint8ClampedArray extends JSTypedArray {
                 jsTypedArray.setArray(context, jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
-                JSValue lengthValue = jsObject.get(context, PropertyKey.LENGTH);
+                JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSUint8ClampedArray(length);
                 jsTypedArray.setArray(context, jsObject, 0);
@@ -147,6 +147,6 @@ public final class JSUint8ClampedArray extends JSTypedArray {
         int newLength = Math.max(end - begin, 0);
         int newByteOffset = byteOffset + begin * BYTES_PER_ELEMENT;
 
-        return new JSUint8ClampedArray(buffer, newByteOffset, newLength);
+        return new JSUint8ClampedArray(context, buffer, newByteOffset, newLength);
     }
 }

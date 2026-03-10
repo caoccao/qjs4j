@@ -52,16 +52,16 @@ public final class JSDate extends JSObject {
                     .withZone(ZoneOffset.UTC);
     private double timeValue;
 
-    public JSDate() {
-        this(System.currentTimeMillis());
+    public JSDate(JSContext context) {
+        this(context, System.currentTimeMillis());
     }
 
-    public JSDate(long timeValue) {
-        this((double) timeValue);
+    public JSDate(JSContext context, long timeValue) {
+        this(context, (double) timeValue);
     }
 
-    public JSDate(double timeValue) {
-        super();
+    public JSDate(JSContext context, double timeValue) {
+        super(context);
         this.timeValue = timeValue;
     }
 

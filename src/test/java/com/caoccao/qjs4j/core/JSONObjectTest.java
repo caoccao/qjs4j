@@ -322,7 +322,7 @@ public class JSONObjectTest extends BaseJavetTest {
         String json = "{\"a\":1,\"b\":2,\"c\":3}";
 
         // Create a reviver that doubles all numbers
-        JSFunction reviver = new JSNativeFunction("reviver", 2, (context, thisArg, args) -> {
+        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
             JSValue value = args[1];
             if (value instanceof JSNumber num) {
                 return new JSNumber(num.value() * 2);
@@ -357,7 +357,7 @@ public class JSONObjectTest extends BaseJavetTest {
         String json = "[1,2]";
 
         // Create a reviver that doubles array elements (simpler logic)
-        JSFunction reviver = new JSNativeFunction("reviver", 2, (context, thisArg, args) -> {
+        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
             JSValue value = args[1];
 
             // For all numbers, double them
@@ -391,7 +391,7 @@ public class JSONObjectTest extends BaseJavetTest {
         String json = "{\"name\":\"Alice\",\"age\":30,\"internal\":\"secret\"}";
 
         // Create a reviver that removes properties starting with "internal"
-        JSFunction reviver = new JSNativeFunction("reviver", 2, (context, thisArg, args) -> {
+        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
             String key = args[0].asString().map(JSString::value).orElseThrow();
             JSValue value = args[1];
 
@@ -427,7 +427,7 @@ public class JSONObjectTest extends BaseJavetTest {
         String json = "{\"user\":{\"name\":\"Bob\",\"age\":25},\"count\":5}";
 
         // Create a reviver that converts age to string
-        JSFunction reviver = new JSNativeFunction("reviver", 2, (context, thisArg, args) -> {
+        JSFunction reviver = new JSNativeFunction(context, "reviver", 2, (context, thisArg, args) -> {
             String key = args[0].asString().map(JSString::value).orElseThrow();
             JSValue value = args[1];
 
@@ -570,13 +570,13 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testRoundTrip() {
         // Test round-trip: stringify then parse
-        JSObject original = new JSObject();
+        JSObject original = new JSObject(context);
         original.set("string", new JSString("hello"));
         original.set("number", new JSNumber(42));
         original.set("boolean", JSBoolean.TRUE);
         original.set("null", JSNull.INSTANCE);
 
-        JSArray arr = new JSArray();
+        JSArray arr = new JSArray(context);
         arr.push(new JSString("item1"));
         arr.push(new JSNumber(2));
         original.set("array", arr);
@@ -787,7 +787,7 @@ public class JSONObjectTest extends BaseJavetTest {
 
     @Test
     public void testStringifyForIndent() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("name", new JSString("test"));
         obj.set("value", new JSNumber(123));
 
@@ -858,7 +858,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr.contains("\nabcdefghij")).isTrue(); // Should have first 10 chars
 
         // Test indentation with arrays
-        JSArray testArr = new JSArray();
+        JSArray testArr = new JSArray(context);
         testArr.push(new JSNumber(1));
         testArr.push(new JSString("test"));
         testArr.push(JSBoolean.TRUE);
@@ -868,9 +868,9 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr.contains("[\n  1,\n  \"test\",\n  true\n]")).isTrue(); // Should have proper array indentation
 
         // Test indentation with nested structures
-        JSObject nested = new JSObject();
+        JSObject nested = new JSObject(context);
         nested.set("inner", new JSString("value"));
-        JSObject outer = new JSObject();
+        JSObject outer = new JSObject(context);
         outer.set("nested", nested);
         outer.set("array", testArr);
 
@@ -882,12 +882,12 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyForObjects() {
         // Normal case: stringify empty array
-        JSArray emptyArr = new JSArray();
+        JSArray emptyArr = new JSArray(context);
         JSValue result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{emptyArr});
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("[]");
 
         // Normal case: stringify array with values
-        JSArray arr = new JSArray();
+        JSArray arr = new JSArray(context);
         arr.push(new JSNumber(1));
         arr.push(new JSString("two"));
         arr.push(JSBoolean.TRUE);
@@ -895,12 +895,12 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("[1,\"two\",true]");
 
         // Normal case: stringify empty object
-        JSObject emptyObj = new JSObject();
+        JSObject emptyObj = new JSObject(context);
         result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
         assertThat(result.asString().map(JSString::value).orElseThrow()).isEqualTo("{}");
 
         // Normal case: stringify object with properties
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("name", new JSString("test"));
         obj.set("value", new JSNumber(123));
         result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{obj});
@@ -910,9 +910,9 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(jsonStr.contains("\"value\":123")).isTrue();
 
         // Normal case: stringify nested object
-        JSObject nestedObj = new JSObject();
+        JSObject nestedObj = new JSObject(context);
         nestedObj.set("nested", JSBoolean.TRUE);
-        JSObject parentObj = new JSObject();
+        JSObject parentObj = new JSObject(context);
         parentObj.set("data", nestedObj);
         result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{parentObj});
         jsonStr = result.asString().map(JSString::value).orElseThrow();
@@ -923,7 +923,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: stringify function (should be undefined in simplified implementation)
-        JSFunction func = new JSNativeFunction("test", 0, (context, thisArg, args) -> JSUndefined.INSTANCE);
+        JSFunction func = new JSNativeFunction(context, "test", 0, (context, thisArg, args) -> JSUndefined.INSTANCE);
         result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{func});
         assertThat(result.isUndefined()).isTrue();
 
@@ -932,7 +932,7 @@ public class JSONObjectTest extends BaseJavetTest {
         assertThat(result.isUndefined()).isTrue();
 
         // Edge case: stringify object with undefined values (should be omitted in simplified implementation)
-        JSObject objWithUndefined = new JSObject();
+        JSObject objWithUndefined = new JSObject(context);
         objWithUndefined.set("defined", new JSString("value"));
         objWithUndefined.set("undefined", JSUndefined.INSTANCE);
         result = jsonObject().stringify(context, JSUndefined.INSTANCE, new JSValue[]{objWithUndefined});
@@ -975,12 +975,12 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyForReplacer() {
         // Test replacer function that converts BigInts to strings
-        JSObject objWithBigInt = new JSObject();
+        JSObject objWithBigInt = new JSObject(context);
         objWithBigInt.set("num", new JSNumber(123));  // Using number instead of BigInt for testing
         objWithBigInt.set("str", new JSString("test"));
 
         // Create a replacer function that doubles numbers
-        JSFunction replacer = new JSNativeFunction("replacer", 2, (context, thisArg, args) -> {
+        JSFunction replacer = new JSNativeFunction(context, "replacer", 2, (context, thisArg, args) -> {
             JSValue value = args[1];
             if (value instanceof JSNumber num) {
                 return new JSNumber(num.value() * 2);
@@ -1116,17 +1116,17 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerAndToJSON() {
         // Test that toJSON is called before replacer
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("value", new JSNumber(10));
 
         // Add a toJSON method that returns a different value
-        JSFunction toJSON = new JSNativeFunction("toJSON", 0, (context, thisArg, args) -> {
+        JSFunction toJSON = new JSNativeFunction(context, "toJSON", 0, (context, thisArg, args) -> {
             return new JSNumber(20);
         });
         obj.set("toJSON", toJSON);
 
         // Create a replacer that doubles numbers
-        JSFunction replacer = new JSNativeFunction("replacer", 2, (context, thisArg, args) -> {
+        JSFunction replacer = new JSNativeFunction(context, "replacer", 2, (context, thisArg, args) -> {
             JSValue value = args[1];
             if (value instanceof JSNumber num) {
                 return new JSNumber(num.value() * 2);
@@ -1144,14 +1144,14 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerArray() {
         // Test replacer array (property whitelist)
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("name", new JSString("Alice"));
         obj.set("age", new JSNumber(30));
         obj.set("internal", new JSString("secret"));
         obj.set("password", new JSString("12345"));
 
         // Create a replacer array with only allowed properties
-        JSArray replacer = new JSArray();
+        JSArray replacer = new JSArray(context);
         replacer.push(new JSString("name"));
         replacer.push(new JSString("age"));
 
@@ -1167,17 +1167,17 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerArrayNested() {
         // Test replacer array with nested objects
-        JSObject inner = new JSObject();
+        JSObject inner = new JSObject(context);
         inner.set("x", new JSNumber(1));
         inner.set("y", new JSNumber(2));
         inner.set("z", new JSNumber(3));
 
-        JSObject outer = new JSObject();
+        JSObject outer = new JSObject(context);
         outer.set("data", inner);
         outer.set("extra", new JSString("value"));
 
         // Only allow "data" and "x", "y" properties
-        JSArray replacer = new JSArray();
+        JSArray replacer = new JSArray(context);
         replacer.push(new JSString("data"));
         replacer.push(new JSString("x"));
         replacer.push(new JSString("y"));
@@ -1210,18 +1210,18 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerArrayNumbers() {
         // Test that replacer array can contain numbers (for array indices)
-        JSArray arr = new JSArray();
+        JSArray arr = new JSArray(context);
         arr.push(new JSString("a"));
         arr.push(new JSString("b"));
         arr.push(new JSString("c"));
 
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("0", new JSString("zero"));
         obj.set("1", new JSString("one"));
         obj.set("2", new JSString("two"));
 
         // Replacer array with numbers
-        JSArray replacer = new JSArray();
+        JSArray replacer = new JSArray(context);
         replacer.push(new JSNumber(0));
         replacer.push(new JSNumber(2));
 
@@ -1262,13 +1262,13 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithReplacerFunction() {
         // Test replacer function
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("name", new JSString("test"));
         obj.set("value", new JSNumber(100));
         obj.set("active", JSBoolean.TRUE);
 
         // Create a replacer that filters out boolean values
-        JSFunction replacer = new JSNativeFunction("replacer", 2, (context, thisArg, args) -> {
+        JSFunction replacer = new JSNativeFunction(context, "replacer", 2, (context, thisArg, args) -> {
             String key = args[0].asString().map(JSString::value).orElseThrow();
             JSValue value = args[1];
 
@@ -1326,11 +1326,11 @@ public class JSONObjectTest extends BaseJavetTest {
     @Test
     public void testStringifyWithToJSON() {
         // Test toJSON method support
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("value", new JSNumber(42));
 
         // Add a toJSON method
-        JSFunction toJSON = new JSNativeFunction("toJSON", 0, (context, thisArg, args) -> {
+        JSFunction toJSON = new JSNativeFunction(context, "toJSON", 0, (context, thisArg, args) -> {
             return new JSString("custom");
         });
         obj.set("toJSON", toJSON);

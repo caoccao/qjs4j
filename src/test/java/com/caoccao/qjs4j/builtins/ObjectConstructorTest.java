@@ -28,13 +28,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class ObjectConstructorTest extends BaseJavetTest {
     @Test
     public void testAssign() {
-        JSObject target = new JSObject();
+        JSObject target = new JSObject(context);
         target.set("a", new JSNumber(1));
 
-        JSObject source1 = new JSObject();
+        JSObject source1 = new JSObject(context);
         source1.set("b", new JSNumber(2));
 
-        JSObject source2 = new JSObject();
+        JSObject source2 = new JSObject(context);
         source2.set("c", new JSNumber(3));
         source2.set("a", new JSNumber(10)); // Override target.a
 
@@ -46,7 +46,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(target.get("c").asNumber().map(JSNumber::value).orElseThrow()).isEqualTo(3.0);
 
         // Edge case: null/undefined sources (should be ignored)
-        JSObject target2 = new JSObject();
+        JSObject target2 = new JSObject(context);
         target2.set("x", new JSNumber(1));
         result = ObjectConstructor.assign(context, JSUndefined.INSTANCE, new JSValue[]{target2, JSNull.INSTANCE, JSUndefined.INSTANCE});
         assertThat(result).isSameAs(target2);
@@ -85,7 +85,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testCreate() {
-        JSObject proto = new JSObject();
+        JSObject proto = new JSObject(context);
         proto.set("x", new JSNumber(100));
 
         // Normal case: create object with prototype
@@ -141,7 +141,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testEntries() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
         obj.set("b", new JSNumber(2));
 
@@ -159,7 +159,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         });
 
         // Edge case: empty object
-        JSObject emptyObj = new JSObject();
+        JSObject emptyObj = new JSObject(context);
         result = ObjectConstructor.entries(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, entries -> assertThat(entries.getLength()).isEqualTo(0));
 
@@ -174,7 +174,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testFreeze() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
 
         // Normal case
@@ -372,13 +372,13 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertPendingException(context);
 
         // Test with string keys and various value types - use manual creation
-        JSArray mixedEntries = new JSArray();
-        JSArray mixedEntry1 = new JSArray();
+        JSArray mixedEntries = new JSArray(context);
+        JSArray mixedEntry1 = new JSArray(context);
         mixedEntry1.push(new JSString("key1"));
         mixedEntry1.push(new JSString("value1"));
         mixedEntries.push(mixedEntry1);
 
-        JSArray mixedEntry2 = new JSArray();
+        JSArray mixedEntry2 = new JSArray(context);
         mixedEntry2.push(new JSString("key2"));
         mixedEntry2.push(JSBoolean.TRUE);
         mixedEntries.push(mixedEntry2);
@@ -403,7 +403,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetOwnPropertyDescriptor() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("testProp", new JSString("testValue"));
 
         // Normal case: existing property
@@ -438,7 +438,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetOwnPropertyNames() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("prop1", new JSString("value1"));
         obj.set("prop2", new JSString("value2"));
 
@@ -453,7 +453,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         });
 
         // Normal case: empty object
-        JSObject emptyObj = new JSObject();
+        JSObject emptyObj = new JSObject(context);
         result = ObjectConstructor.getOwnPropertyNames(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, names -> assertThat(names.getLength()).isEqualTo(0));
 
@@ -482,7 +482,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetOwnPropertySymbols() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         JSSymbol symbol1 = new JSSymbol("sym1");
         JSSymbol symbol2 = new JSSymbol("sym2");
         obj.set(PropertyKey.fromSymbol(symbol1), new JSString("value1"));
@@ -493,7 +493,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, symbols -> assertThat(symbols.getLength()).isEqualTo(2));
 
         // Normal case: object with no symbol properties
-        JSObject regularObj = new JSObject();
+        JSObject regularObj = new JSObject(context);
         regularObj.set("prop", new JSString("value"));
         result = ObjectConstructor.getOwnPropertySymbols(context, JSUndefined.INSTANCE, new JSValue[]{regularObj});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, symbols -> assertThat(symbols.getLength()).isEqualTo(0));
@@ -509,8 +509,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testGetPrototypeOf() {
-        JSObject proto = new JSObject();
-        JSObject obj = new JSObject();
+        JSObject proto = new JSObject(context);
+        JSObject obj = new JSObject(context);
         obj.setPrototype(proto);
 
         // Normal case
@@ -518,7 +518,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isSameAs(proto);
 
         // Edge case: null prototype
-        JSObject objWithNullProto = new JSObject();
+        JSObject objWithNullProto = new JSObject(context);
         objWithNullProto.setPrototype(null);
         result = ObjectConstructor.getPrototypeOf(context, JSUndefined.INSTANCE, new JSValue[]{objWithNullProto});
         assertThat(result.isNull()).isTrue();
@@ -554,7 +554,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         items.push(new JSNumber(4));
 
         // Callback function: group by even/odd
-        JSFunction callback = new JSNativeFunction("testCallback", 3, (childContext, thisArg, args) -> {
+        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
             double num = args[0].asNumber().map(JSNumber::value).orElseThrow();
             return (num % 2 == 0) ? new JSString("even") : new JSString("odd");
         });
@@ -603,7 +603,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testHasOwn() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("existingProp", new JSString("value"));
 
         // Normal case: existing property
@@ -629,7 +629,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testHasOwnProperty() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
         obj.set("b", new JSNumber(2));
 
@@ -678,7 +678,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testIsFrozen() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
 
         // Normal case: not frozen
@@ -697,7 +697,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testIsSealed() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
 
         // Normal case: not sealed
@@ -716,7 +716,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testKeys() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
         obj.set("b", new JSNumber(2));
         obj.set("c", new JSNumber(3));
@@ -726,7 +726,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, keys -> assertThat(keys.getLength()).isEqualTo(3));
 
         // Edge case: empty object
-        JSObject emptyObj = new JSObject();
+        JSObject emptyObj = new JSObject(context);
         result = ObjectConstructor.keys(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, keys -> assertThat(keys.getLength()).isEqualTo(0));
 
@@ -743,7 +743,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testPreventExtensions() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
 
         // Normal case: prevent extensions on object
         JSValue result = ObjectConstructor.preventExtensions(context, JSUndefined.INSTANCE, new JSValue[]{obj});
@@ -761,7 +761,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testSeal() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
 
         // Normal case
@@ -816,8 +816,8 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testSetPrototypeOf() {
-        JSObject obj = new JSObject();
-        JSObject newProto = new JSObject();
+        JSObject obj = new JSObject(context);
+        JSObject newProto = new JSObject(context);
         newProto.set("y", new JSNumber(200));
 
         // Normal case
@@ -846,7 +846,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
 
     @Test
     public void testValues() {
-        JSObject obj = new JSObject();
+        JSObject obj = new JSObject(context);
         obj.set("a", new JSNumber(1));
         obj.set("b", new JSNumber(2));
         obj.set("c", new JSNumber(3));
@@ -856,7 +856,7 @@ public class ObjectConstructorTest extends BaseJavetTest {
         assertThat(result).isInstanceOfSatisfying(JSArray.class, values -> assertThat(values.getLength()).isEqualTo(3));
 
         // Edge case: empty object
-        JSObject emptyObj = new JSObject();
+        JSObject emptyObj = new JSObject(context);
         result = ObjectConstructor.values(context, JSUndefined.INSTANCE, new JSValue[]{emptyObj});
         assertThat(result).isInstanceOfSatisfying(JSArray.class, values -> assertThat(values.getLength()).isEqualTo(0));
 

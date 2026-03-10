@@ -44,16 +44,16 @@ public final class JSIntlPluralRules extends JSObject {
     private final String notation;
     private final String type;
 
-    public JSIntlPluralRules(
-            Locale locale,
-            String type,
-            String notation,
-            int minimumIntegerDigits,
-            int minimumFractionDigits,
-            int maximumFractionDigits,
-            Integer minimumSignificantDigits,
-            Integer maximumSignificantDigits) {
-        super();
+    public JSIntlPluralRules(JSContext context,
+                             Locale locale,
+                             String type,
+                             String notation,
+                             int minimumIntegerDigits,
+                             int minimumFractionDigits,
+                             int maximumFractionDigits,
+                             Integer minimumSignificantDigits,
+                             Integer maximumSignificantDigits) {
+        super(context);
         this.locale = locale;
         this.type = type;
         this.notation = notation;

@@ -34,8 +34,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
             JSValue[] closureVars,
             JSValue thisArg,
             JSValue... args) {
-        JSBytecodeFunction function = new JSBytecodeFunction(
-                emitter.build(localCount),
+        JSBytecodeFunction function = new JSBytecodeFunction(context, emitter.build(localCount),
                 "test",
                 args.length,
                 closureVars,
@@ -69,7 +68,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
         AtomicInteger closeCount = new AtomicInteger(0);
 
         JSObject iteratorWithReturn = context.createJSObject();
-        JSNativeFunction returnMethod = new JSNativeFunction("return", 0, (ctx, thisArg, args) -> {
+        JSNativeFunction returnMethod = new JSNativeFunction(context, "return", 0, (ctx, thisArg, args) -> {
             closeCount.incrementAndGet();
             JSObject result = ctx.createJSObject();
             result.set("done", JSBoolean.TRUE);
@@ -105,7 +104,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
     @Test
     public void testIteratorNextAndGetValueDone() {
         JSObject iterator = context.createJSObject();
-        JSNativeFunction nextMethod = new JSNativeFunction("next", 1, (ctx, thisArg, args) -> {
+        JSNativeFunction nextMethod = new JSNativeFunction(context, "next", 1, (ctx, thisArg, args) -> {
             JSObject result = ctx.createJSObject();
             result.set("value", args.length > 0 ? args[0] : JSUndefined.INSTANCE);
             result.set("done", JSBoolean.FALSE);
@@ -163,7 +162,7 @@ public class HighPriorityOpcodeTest extends BaseTest {
         assertThat(((JSString) marker).value()).isEqualTo("ok");
 
         JSObject homeObject = context.createJSObject();
-        JSNativeFunction method = new JSNativeFunction("m", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
+        JSNativeFunction method = new JSNativeFunction(context, "m", 0, (ctx, thisArg, args) -> JSUndefined.INSTANCE);
 
         BytecodeEmitter homeObjectEmitter = new BytecodeEmitter();
         homeObjectEmitter.emitOpcodeConstant(Opcode.PUSH_CONST, homeObject);

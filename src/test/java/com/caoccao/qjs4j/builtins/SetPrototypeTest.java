@@ -89,7 +89,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testAdd() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
 
         // Normal case: add new value
         JSValue result = SetPrototype.add(context, set, new JSValue[]{new JSString("value1")});
@@ -243,7 +243,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testClear() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
 
@@ -307,7 +307,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testDelete() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
 
@@ -544,13 +544,13 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testForEach() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("value1"));
         set.setAdd(new JSString("value2"));
 
         // Normal case: forEach with callback
         final StringBuilder result = new StringBuilder();
-        JSFunction callback = new JSNativeFunction("testCallback", 3, (childContext, thisArg, args) -> {
+        JSFunction callback = new JSNativeFunction(context, "testCallback", 3, (childContext, thisArg, args) -> {
             String value = args[0].asString().map(JSString::value).orElseThrow();
             result.append(value).append(",");
             return JSUndefined.INSTANCE;
@@ -854,7 +854,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testGetSize() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
 
         // Normal case: empty set
         JSValue result = SetPrototype.getSize(context, set, JSValue.NO_ARGS);
@@ -877,7 +877,7 @@ public class SetPrototypeTest extends BaseJavetTest {
 
     @Test
     public void testHas() {
-        JSSet set = new JSSet();
+        JSSet set = new JSSet(context);
         set.setAdd(new JSString("value1"));
 
         // Normal case: existing value

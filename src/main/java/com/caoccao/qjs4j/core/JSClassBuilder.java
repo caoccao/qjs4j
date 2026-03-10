@@ -38,6 +38,7 @@ package com.caoccao.qjs4j.core;
  */
 public final class JSClassBuilder {
     private final JSClass classObject;
+    private final JSContext context;
     private final String name;
     private JSFunction constructor;
     private JSClass superClass;
@@ -47,9 +48,10 @@ public final class JSClassBuilder {
      *
      * @param name Class name
      */
-    public JSClassBuilder(String name) {
+    public JSClassBuilder(JSContext context, String name) {
+        this.context = context;
         this.name = name;
-        this.constructor = new JSNativeFunction("constructor", 0, (context, thisArg, args) -> JSUndefined.INSTANCE);
+        this.constructor = new JSNativeFunction(this.context, "constructor", 0, (childContext, thisArg, args) -> JSUndefined.INSTANCE);
         this.superClass = null;
         this.classObject = null; // Will be created in build()
     }
@@ -60,7 +62,7 @@ public final class JSClassBuilder {
      * @return The constructed class
      */
     public JSClass build() {
-        JSClass result = new JSClass(name, constructor, superClass);
+        JSClass result = new JSClass(context, name, constructor, superClass);
         return result;
     }
 
@@ -71,7 +73,7 @@ public final class JSClassBuilder {
      * @return A BuilderWithClass that allows adding methods/fields
      */
     public BuilderWithClass buildAndConfigure() {
-        JSClass result = new JSClass(name, constructor, superClass);
+        JSClass result = new JSClass(context, name, constructor, superClass);
         return new BuilderWithClass(result);
     }
 
@@ -82,7 +84,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder constructor(JSNativeFunction.NativeCallback constructor) {
-        this.constructor = new JSNativeFunction("constructor", 0, constructor, true);
+        this.constructor = new JSNativeFunction(this.context, "constructor", 0, constructor, true);
         return this;
     }
 
@@ -94,7 +96,7 @@ public final class JSClassBuilder {
      * @return This builder
      */
     public JSClassBuilder constructor(int length, JSNativeFunction.NativeCallback constructor) {
-        this.constructor = new JSNativeFunction("constructor", length, constructor, true);
+        this.constructor = new JSNativeFunction(this.context, "constructor", length, constructor, true);
         return this;
     }
 
@@ -153,7 +155,7 @@ public final class JSClassBuilder {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }
-        JSNativeFunction method = new JSNativeFunction(methodName, length, callback);
+        JSNativeFunction method = new JSNativeFunction(this.context, methodName, length, callback);
         classObject.addInstanceMethod(methodName, method);
         return this;
     }
@@ -202,7 +204,7 @@ public final class JSClassBuilder {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }
-        JSNativeFunction method = new JSNativeFunction(methodName, length, callback);
+        JSNativeFunction method = new JSNativeFunction(this.context, methodName, length, callback);
         classObject.addStaticMethod(methodName, method);
         return this;
     }
@@ -235,7 +237,7 @@ public final class JSClassBuilder {
         }
 
         public BuilderWithClass instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
-            JSNativeFunction method = new JSNativeFunction(methodName, length, callback);
+            JSNativeFunction method = new JSNativeFunction(classObject.getContext(), methodName, length, callback);
             classObject.addInstanceMethod(methodName, method);
             return this;
         }
@@ -250,7 +252,7 @@ public final class JSClassBuilder {
         }
 
         public BuilderWithClass staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
-            JSNativeFunction method = new JSNativeFunction(methodName, length, callback);
+            JSNativeFunction method = new JSNativeFunction(classObject.getContext(), methodName, length, callback);
             classObject.addStaticMethod(methodName, method);
             return this;
         }

@@ -32,7 +32,7 @@ public sealed class JSError extends JSObject permits
      * Create an Error with a message.
      */
     public JSError(JSContext context, String message) {
-        super();
+        super(context);
         this.context = context;
         if (message != null && !message.isEmpty()) {
             defineProperty(PropertyKey.MESSAGE,
@@ -59,7 +59,7 @@ public sealed class JSError extends JSObject permits
 
     public static JSObject createPrototype(JSContext context, JSValue... args) {
         // Error.prototype is a plain object (not an Error instance) per ES spec / QuickJS
-        JSObject errorPrototype = new JSObject();
+        JSObject errorPrototype = new JSObject(context);
         // Error.prototype.[[Prototype]] = Object.prototype (ES2024 20.5.3)
         context.transferPrototype(errorPrototype, JSObject.NAME);
 
@@ -67,11 +67,10 @@ public sealed class JSError extends JSObject permits
         errorPrototype.defineProperty(PropertyKey.fromString("name"), new JSString(NAME), PropertyDescriptor.DataState.ConfigurableWritable);
         errorPrototype.defineProperty(PropertyKey.fromString("message"), new JSString(""), PropertyDescriptor.DataState.ConfigurableWritable);
         errorPrototype.defineProperty(PropertyKey.fromString("toString"),
-                new JSNativeFunction("toString", 0, JSError::errorToString), PropertyDescriptor.DataState.ConfigurableWritable);
+                new JSNativeFunction(context, "toString", 0, JSError::errorToString), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Standard Error(message, options) — length = 1
-        JSNativeFunction errorConstructor = new JSNativeFunction(
-                NAME,
+        JSNativeFunction errorConstructor = new JSNativeFunction(context, NAME,
                 1,
                 (childContext, thisObj, childArgs) -> create(childContext, childArgs),
                 true);
@@ -79,7 +78,7 @@ public sealed class JSError extends JSObject permits
 
         // Error.isError static method (ES2024)
         errorConstructor.defineProperty(PropertyKey.fromString("isError"),
-                new JSNativeFunction("isError", 1, JSError::isError), PropertyDescriptor.DataState.ConfigurableWritable);
+                new JSNativeFunction(context, "isError", 1, JSError::isError), PropertyDescriptor.DataState.ConfigurableWritable);
 
         // Constructor property on prototype (writable, non-enumerable, configurable)
         errorPrototype.defineProperty(PropertyKey.fromString("constructor"), errorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
@@ -96,7 +95,7 @@ public sealed class JSError extends JSObject permits
             return context.throwTypeError("Error.prototype.toString requires that 'this' be an Object");
         }
 
-        JSValue nameValue = error.get(context, PropertyKey.NAME);
+        JSValue nameValue = error.get(PropertyKey.NAME);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -110,7 +109,7 @@ public sealed class JSError extends JSObject permits
             }
         }
 
-        JSValue messageValue = error.get(context, PropertyKey.MESSAGE);
+        JSValue messageValue = error.get(PropertyKey.MESSAGE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -142,7 +141,7 @@ public sealed class JSError extends JSObject permits
     public static boolean installErrorCause(JSContext context, JSObject obj, JSValue options) {
         if (options instanceof JSObject optionsObj) {
             if (optionsObj.has("cause")) {
-                JSValue cause = optionsObj.get(context, PropertyKey.CAUSE);
+                JSValue cause = optionsObj.get(PropertyKey.CAUSE);
                 if (context.hasPendingException()) {
                     return false;
                 }

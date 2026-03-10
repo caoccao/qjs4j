@@ -73,7 +73,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testEmptyGenerator() {
         // Create an empty generator
-        JSArray emptyArray = new JSArray();
+        JSArray emptyArray = new JSArray(context);
         JSGenerator generator = JSGenerator.fromArray(context, emptyArray);
 
         // Normal case: next() on empty generator
@@ -135,7 +135,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testNext() {
         // Create a simple generator from array
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(1));
         array.push(new JSNumber(2));
         array.push(new JSNumber(3));
@@ -209,7 +209,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testReturn() {
         // Create a generator
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(1));
         array.push(new JSNumber(2));
         array.push(new JSNumber(3));
@@ -236,7 +236,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
         assertThat(iteratorResult.get("done")).isEqualTo(JSBoolean.TRUE);
 
         // Edge case: called on non-generator
-        result = GeneratorPrototype.returnMethod(context, new JSObject(), new JSValue[]{new JSNumber(42)});
+        result = GeneratorPrototype.returnMethod(context, new JSObject(context), new JSValue[]{new JSNumber(42)});
         assertThat(result).isInstanceOfSatisfying(JSObject.class, error -> {
             assertThat(error.get("name")).isInstanceOfSatisfying(JSString.class, name ->
                     assertThat(name.value()).isEqualTo("TypeError"));
@@ -285,7 +285,7 @@ public class GeneratorPrototypeTest extends BaseJavetTest {
     @Test
     public void testThrow() {
         // Create a generator
-        JSArray array = new JSArray();
+        JSArray array = new JSArray(context);
         array.push(new JSNumber(1));
         array.push(new JSNumber(2));
         JSGenerator generator = JSGenerator.fromArray(context, array);

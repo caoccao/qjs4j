@@ -81,7 +81,7 @@ public final class JSArguments extends JSObject {
             boolean isStrict,
             JSFunction callee,
             VarRef[] mappedVarRefs) {
-        super();
+        super(context);
         this.argumentValues = args != null ? args : JSValue.NO_ARGS;
         this.isStrict = isStrict;
         this.parameterVarRefs = mappedVarRefs;
@@ -115,8 +115,7 @@ public final class JSArguments extends JSObject {
             JSNativeFunction thrower = context.getThrowTypeErrorIntrinsic();
             if (thrower == null) {
                 // Fallback if intrinsic not yet initialized
-                thrower = new JSNativeFunction(
-                        "ThrowTypeError",
+                thrower = new JSNativeFunction(context, "ThrowTypeError",
                         0,
                         (ctx, thisArg, argsArray) -> ctx.throwTypeError(
                                 "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them"
@@ -214,7 +213,7 @@ public final class JSArguments extends JSObject {
 
     @Override
     public boolean delete(JSContext context, PropertyKey key) {
-        boolean deleted = super.delete(context, key);
+        boolean deleted = super.delete(key);
         if (deleted) {
             int index = getArgumentIndex(key);
             if (index >= 0) {
@@ -225,12 +224,22 @@ public final class JSArguments extends JSObject {
     }
 
     @Override
+    public boolean delete(PropertyKey key) {
+        return delete(resolveContext(null), key);
+    }
+
+    @Override
     public JSValue get(JSContext context, PropertyKey key) {
         int index = getArgumentIndex(key);
         if (isMappedIndex(index, key)) {
             return getMappedValue(index);
         }
-        return super.get(context, key);
+        return super.get(key);
+    }
+
+    @Override
+    public JSValue get(PropertyKey key) {
+        return get(resolveContext(null), key);
     }
 
     private int getArgumentIndex(PropertyKey key) {
@@ -299,7 +308,7 @@ public final class JSArguments extends JSObject {
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value) {
         // First, call the parent implementation to handle the property descriptor
-        super.set(context, key, value);
+        super.set(key, value);
 
         int index = getArgumentIndex(key);
         if (index >= 0 && index < argumentValues.length) {
@@ -311,6 +320,11 @@ public final class JSArguments extends JSObject {
                 varRef.set(value);
             }
         }
+    }
+
+    @Override
+    public void set(PropertyKey key, JSValue value) {
+        set(resolveContext(null), key, value);
     }
 
     /**

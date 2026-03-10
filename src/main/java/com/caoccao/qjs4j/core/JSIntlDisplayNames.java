@@ -49,7 +49,8 @@ public final class JSIntlDisplayNames extends JSObject {
     private final String style;
     private final String type;
 
-    public JSIntlDisplayNames(Locale locale, String style, String type, String fallback, String languageDisplay) {
+    public JSIntlDisplayNames(JSContext context, Locale locale, String style, String type, String fallback, String languageDisplay) {
+        super(context);
         this.locale = locale;
         this.style = style;
         this.type = type;

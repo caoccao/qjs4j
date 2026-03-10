@@ -33,7 +33,7 @@ public final class ShadowRealmConstructor {
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
         JSRuntime runtime = context.getRuntime();
         JSContext shadowContext = runtime.createContext();
-        JSShadowRealm shadowRealm = new JSShadowRealm(shadowContext);
+        JSShadowRealm shadowRealm = new JSShadowRealm(context, shadowContext);
         context.transferPrototype(shadowRealm, JSShadowRealm.NAME);
         return shadowRealm;
     }

@@ -50,7 +50,7 @@ public final class JSContext implements AutoCloseable {
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
             Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
-    private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSObject();
+    private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
     private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
@@ -264,9 +264,9 @@ public final class JSContext implements AutoCloseable {
             absentKeys.add(bindingName);
         }
         PropertyKey importKey = PropertyKey.fromString(importedName);
-        JSNativeFunction getter = new JSNativeFunction("get " + bindingName, 0,
+        JSNativeFunction getter = new JSNativeFunction(this, "get " + bindingName, 0,
                 (context, thisArg, args) -> {
-                    JSValue val = namespaceObject.get(context, importKey);
+                    JSValue val = namespaceObject.get(importKey);
                     if (context != null && context.hasPendingException()) {
                         JSValue exception = context.getPendingException();
                         context.clearPendingException();
@@ -285,7 +285,7 @@ public final class JSContext implements AutoCloseable {
         // from property-based writes (PUT_FIELD, e.g., globalThis.check = true).
         // Bare variable assignment to an import binding throws TypeError (ES2024 immutable binding).
         // Property-based writes update savedGlobals for correct value restoration.
-        JSNativeFunction setter = new JSNativeFunction("set " + bindingName, 1,
+        JSNativeFunction setter = new JSNativeFunction(this, "set " + bindingName, 1,
                 (ctx, thisArg, args) -> {
                     if (ctx != null && ctx.isInBareVariableAssignment()) {
                         ctx.throwTypeError("Assignment to constant variable.");
@@ -413,7 +413,7 @@ public final class JSContext implements AutoCloseable {
             JSPromise.ResolveState resolveState) {
         int[] remaining = new int[]{dependencyPromises.size()};
         for (JSPromise dependencyPromise : dependencyPromises) {
-            JSNativeFunction onFulfill = new JSNativeFunction("", 0,
+            JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
                     (ctx, thisArg, args) -> {
                         remaining[0]--;
                         if (remaining[0] == 0 && !resolveState.alreadyResolved) {
@@ -423,7 +423,7 @@ public final class JSContext implements AutoCloseable {
                         return JSUndefined.INSTANCE;
                     });
             onFulfill.initializePrototypeChain(this);
-            JSNativeFunction onReject = new JSNativeFunction("", 1,
+            JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
                     (ctx, thisArg, args) -> {
                         if (!resolveState.alreadyResolved) {
                             resolveState.alreadyResolved = true;
@@ -444,7 +444,7 @@ public final class JSContext implements AutoCloseable {
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
         JSObject namespace = moduleRecord.namespace();
-        JSNativeFunction onFulfill = new JSNativeFunction("", 0,
+        JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
                 (ctx, thisArg, args) -> {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
@@ -453,7 +453,7 @@ public final class JSContext implements AutoCloseable {
                     return JSUndefined.INSTANCE;
                 });
         onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction("", 1,
+        JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
                 (ctx, thisArg, args) -> {
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
@@ -670,7 +670,7 @@ public final class JSContext implements AutoCloseable {
         String cacheKey = filename != null ? filename : "";
         JSObject importMetaObject = importMetaCache.get(cacheKey);
         if (importMetaObject == null) {
-            importMetaObject = new JSObject();
+            importMetaObject = new JSObject(this);
             importMetaObject.setPrototype(null);
             if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
                 importMetaObject.set(PropertyKey.fromString("url"), new JSString(filename));
@@ -716,7 +716,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArray instance with prototype set
      */
     public JSArray createJSArray(long length, int capacity) {
-        JSArray jsArray = new JSArray(length, capacity);
+        JSArray jsArray = new JSArray(this, length, capacity);
         transferPrototype(jsArray, JSArray.NAME);
         return jsArray;
     }
@@ -729,7 +729,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArray instance with prototype set
      */
     public JSArray createJSArray(JSValue... values) {
-        JSArray jsArray = new JSArray(values);
+        JSArray jsArray = new JSArray(this, values);
         transferPrototype(jsArray, JSArray.NAME);
         return jsArray;
     }
@@ -739,7 +739,7 @@ public final class JSContext implements AutoCloseable {
      * Internal fast path to avoid an extra defensive copy in hot built-in paths.
      */
     public JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
-        JSArray jsArray = new JSArray(values, takeOwnership);
+        JSArray jsArray = new JSArray(this, values, takeOwnership);
         transferPrototype(jsArray, JSArray.NAME);
         return jsArray;
     }
@@ -751,7 +751,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArrayBuffer instance with prototype set
      */
     public JSArrayBuffer createJSArrayBuffer(int byteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength);
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(this, byteLength);
         transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
         return jsArrayBuffer;
     }
@@ -764,7 +764,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArrayBuffer instance with prototype set
      */
     public JSArrayBuffer createJSArrayBuffer(int byteLength, int maxByteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(byteLength, maxByteLength);
+        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(this, byteLength, maxByteLength);
         transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
         return jsArrayBuffer;
     }
@@ -852,15 +852,15 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSBigInt64Array instance with prototype set
      */
     public JSBigInt64Array createJSBigInt64Array(int length) {
-        return initializeTypedArray(new JSBigInt64Array(length), JSBigInt64Array.NAME);
+        return initializeTypedArray(new JSBigInt64Array(this, length), JSBigInt64Array.NAME);
     }
 
     public JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSBigInt64Array(buffer, byteOffset, length), JSBigInt64Array.NAME);
+        return initializeTypedArray(new JSBigInt64Array(this, buffer, byteOffset, length), JSBigInt64Array.NAME);
     }
 
     public JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        JSBigIntObject wrapper = new JSBigIntObject(value);
+        JSBigIntObject wrapper = new JSBigIntObject(this, value);
         transferPrototype(wrapper, JSBigIntObject.NAME);
         return wrapper;
     }
@@ -872,15 +872,15 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSBigUint64Array instance with prototype set
      */
     public JSBigUint64Array createJSBigUint64Array(int length) {
-        return initializeTypedArray(new JSBigUint64Array(length), JSBigUint64Array.NAME);
+        return initializeTypedArray(new JSBigUint64Array(this, length), JSBigUint64Array.NAME);
     }
 
     public JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSBigUint64Array(buffer, byteOffset, length), JSBigUint64Array.NAME);
+        return initializeTypedArray(new JSBigUint64Array(this, buffer, byteOffset, length), JSBigUint64Array.NAME);
     }
 
     public JSBooleanObject createJSBooleanObject(JSBoolean value) {
-        JSBooleanObject wrapper = new JSBooleanObject(value);
+        JSBooleanObject wrapper = new JSBooleanObject(this, value);
         transferPrototype(wrapper, JSBooleanObject.NAME);
         return wrapper;
     }
@@ -894,7 +894,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSDataView instance with prototype set
      */
     public JSDataView createJSDataView(IJSArrayBuffer buffer, int byteOffset, int byteLength) {
-        JSDataView jsDataView = new JSDataView(buffer, byteOffset, byteLength);
+        JSDataView jsDataView = new JSDataView(this, buffer, byteOffset, byteLength);
         transferPrototype(jsDataView, JSDataView.NAME);
         return jsDataView;
     }
@@ -906,13 +906,13 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSDate instance with prototype set
      */
     public JSDate createJSDate(double timeValue) {
-        JSDate jsDate = new JSDate(timeValue);
+        JSDate jsDate = new JSDate(this, timeValue);
         transferPrototype(jsDate, JSDate.NAME);
         return jsDate;
     }
 
     public JSDisposableStack createJSDisposableStack() {
-        JSDisposableStack stack = new JSDisposableStack();
+        JSDisposableStack stack = new JSDisposableStack(this);
         transferPrototype(stack, JSDisposableStack.NAME);
         return stack;
     }
@@ -936,11 +936,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSFloat16Array instance with prototype set
      */
     public JSFloat16Array createJSFloat16Array(int length) {
-        return initializeTypedArray(new JSFloat16Array(length), JSFloat16Array.NAME);
+        return initializeTypedArray(new JSFloat16Array(this, length), JSFloat16Array.NAME);
     }
 
     public JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat16Array(buffer, byteOffset, length), JSFloat16Array.NAME);
+        return initializeTypedArray(new JSFloat16Array(this, buffer, byteOffset, length), JSFloat16Array.NAME);
     }
 
     /**
@@ -950,11 +950,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSFloat32Array instance with prototype set
      */
     public JSFloat32Array createJSFloat32Array(int length) {
-        return initializeTypedArray(new JSFloat32Array(length), JSFloat32Array.NAME);
+        return initializeTypedArray(new JSFloat32Array(this, length), JSFloat32Array.NAME);
     }
 
     public JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat32Array(buffer, byteOffset, length), JSFloat32Array.NAME);
+        return initializeTypedArray(new JSFloat32Array(this, buffer, byteOffset, length), JSFloat32Array.NAME);
     }
 
     /**
@@ -964,11 +964,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSFloat64Array instance with prototype set
      */
     public JSFloat64Array createJSFloat64Array(int length) {
-        return initializeTypedArray(new JSFloat64Array(length), JSFloat64Array.NAME);
+        return initializeTypedArray(new JSFloat64Array(this, length), JSFloat64Array.NAME);
     }
 
     public JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat64Array(buffer, byteOffset, length), JSFloat64Array.NAME);
+        return initializeTypedArray(new JSFloat64Array(this, buffer, byteOffset, length), JSFloat64Array.NAME);
     }
 
     /**
@@ -978,11 +978,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSInt16Array instance with prototype set
      */
     public JSInt16Array createJSInt16Array(int length) {
-        return initializeTypedArray(new JSInt16Array(length), JSInt16Array.NAME);
+        return initializeTypedArray(new JSInt16Array(this, length), JSInt16Array.NAME);
     }
 
     public JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt16Array(buffer, byteOffset, length), JSInt16Array.NAME);
+        return initializeTypedArray(new JSInt16Array(this, buffer, byteOffset, length), JSInt16Array.NAME);
     }
 
     /**
@@ -992,11 +992,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSInt32Array instance with prototype set
      */
     public JSInt32Array createJSInt32Array(int length) {
-        return initializeTypedArray(new JSInt32Array(length), JSInt32Array.NAME);
+        return initializeTypedArray(new JSInt32Array(this, length), JSInt32Array.NAME);
     }
 
     public JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt32Array(buffer, byteOffset, length), JSInt32Array.NAME);
+        return initializeTypedArray(new JSInt32Array(this, buffer, byteOffset, length), JSInt32Array.NAME);
     }
 
     /**
@@ -1006,11 +1006,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSInt8Array instance with prototype set
      */
     public JSInt8Array createJSInt8Array(int length) {
-        return initializeTypedArray(new JSInt8Array(length), JSInt8Array.NAME);
+        return initializeTypedArray(new JSInt8Array(this, length), JSInt8Array.NAME);
     }
 
     public JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt8Array(buffer, byteOffset, length), JSInt8Array.NAME);
+        return initializeTypedArray(new JSInt8Array(this, buffer, byteOffset, length), JSInt8Array.NAME);
     }
 
     /**
@@ -1019,13 +1019,13 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSMap instance with prototype set
      */
     public JSMap createJSMap() {
-        JSMap jsMap = new JSMap();
+        JSMap jsMap = new JSMap(this);
         transferPrototype(jsMap, JSMap.NAME);
         return jsMap;
     }
 
     public JSNumberObject createJSNumberObject(JSNumber value) {
-        JSNumberObject wrapper = new JSNumberObject(value);
+        JSNumberObject wrapper = new JSNumberObject(this, value);
         transferPrototype(wrapper, JSNumberObject.NAME);
         return wrapper;
     }
@@ -1037,7 +1037,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSObject instance with prototype set
      */
     public JSObject createJSObject() {
-        JSObject jsObject = new JSObject();
+        JSObject jsObject = new JSObject(this);
         if (cachedObjectPrototype != null) {
             jsObject.setPrototype(cachedObjectPrototype);
         } else {
@@ -1052,7 +1052,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSPromise instance with prototype set
      */
     public JSPromise createJSPromise() {
-        JSPromise jsPromise = new JSPromise();
+        JSPromise jsPromise = new JSPromise(this);
         if (cachedPromisePrototype != null) {
             jsPromise.setPrototype(cachedPromisePrototype);
         } else {
@@ -1081,7 +1081,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSRegExp instance with prototype set
      */
     public JSRegExp createJSRegExp(String pattern, String flags) {
-        JSRegExp jsRegExp = new JSRegExp(pattern, flags);
+        JSRegExp jsRegExp = new JSRegExp(this, pattern, flags);
         transferPrototype(jsRegExp, JSRegExp.NAME);
         return jsRegExp;
     }
@@ -1092,19 +1092,19 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSSet instance with prototype set
      */
     public JSSet createJSSet() {
-        JSSet jsSet = new JSSet();
+        JSSet jsSet = new JSSet(this);
         transferPrototype(jsSet, JSSet.NAME);
         return jsSet;
     }
 
     public JSStringObject createJSStringObject() {
-        JSStringObject wrapper = new JSStringObject();
+        JSStringObject wrapper = new JSStringObject(this);
         transferPrototype(wrapper, JSStringObject.NAME);
         return wrapper;
     }
 
     public JSStringObject createJSStringObject(JSString value) {
-        JSStringObject wrapper = new JSStringObject(value);
+        JSStringObject wrapper = new JSStringObject(this, value);
         transferPrototype(wrapper, JSStringObject.NAME);
         return wrapper;
     }
@@ -1116,7 +1116,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        JSSymbolObject wrapper = new JSSymbolObject(value);
+        JSSymbolObject wrapper = new JSSymbolObject(this, value);
         transferPrototype(wrapper, JSSymbolObject.NAME);
         return wrapper;
     }
@@ -1146,11 +1146,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSUint16Array instance with prototype set
      */
     public JSUint16Array createJSUint16Array(int length) {
-        return initializeTypedArray(new JSUint16Array(length), JSUint16Array.NAME);
+        return initializeTypedArray(new JSUint16Array(this, length), JSUint16Array.NAME);
     }
 
     public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint16Array(buffer, byteOffset, length), JSUint16Array.NAME);
+        return initializeTypedArray(new JSUint16Array(this, buffer, byteOffset, length), JSUint16Array.NAME);
     }
 
     /**
@@ -1160,11 +1160,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSUint32Array instance with prototype set
      */
     public JSUint32Array createJSUint32Array(int length) {
-        return initializeTypedArray(new JSUint32Array(length), JSUint32Array.NAME);
+        return initializeTypedArray(new JSUint32Array(this, length), JSUint32Array.NAME);
     }
 
     public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint32Array(buffer, byteOffset, length), JSUint32Array.NAME);
+        return initializeTypedArray(new JSUint32Array(this, buffer, byteOffset, length), JSUint32Array.NAME);
     }
 
     /**
@@ -1174,11 +1174,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSUint8Array instance with prototype set
      */
     public JSUint8Array createJSUint8Array(int length) {
-        return initializeTypedArray(new JSUint8Array(length), JSUint8Array.NAME);
+        return initializeTypedArray(new JSUint8Array(this, length), JSUint8Array.NAME);
     }
 
     public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint8Array(buffer, byteOffset, length), JSUint8Array.NAME);
+        return initializeTypedArray(new JSUint8Array(this, buffer, byteOffset, length), JSUint8Array.NAME);
     }
 
     /**
@@ -1188,11 +1188,11 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSUint8ClampedArray instance with prototype set
      */
     public JSUint8ClampedArray createJSUint8ClampedArray(int length) {
-        return initializeTypedArray(new JSUint8ClampedArray(length), JSUint8ClampedArray.NAME);
+        return initializeTypedArray(new JSUint8ClampedArray(this, length), JSUint8ClampedArray.NAME);
     }
 
     public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint8ClampedArray(buffer, byteOffset, length), JSUint8ClampedArray.NAME);
+        return initializeTypedArray(new JSUint8ClampedArray(this, buffer, byteOffset, length), JSUint8ClampedArray.NAME);
     }
 
     /**
@@ -1201,7 +1201,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSWeakMap instance with prototype set
      */
     public JSWeakMap createJSWeakMap() {
-        JSWeakMap jsWeakMap = new JSWeakMap();
+        JSWeakMap jsWeakMap = new JSWeakMap(this);
         transferPrototype(jsWeakMap, JSWeakMap.NAME);
         return jsWeakMap;
     }
@@ -1212,7 +1212,7 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSWeakSet instance with prototype set
      */
     public JSWeakSet createJSWeakSet() {
-        JSWeakSet jsWeakSet = new JSWeakSet();
+        JSWeakSet jsWeakSet = new JSWeakSet(this);
         transferPrototype(jsWeakSet, JSWeakSet.NAME);
         return jsWeakSet;
     }
@@ -1285,7 +1285,7 @@ public final class JSContext implements AutoCloseable {
         if (namespace.hasDefinedOwnProperty(exportKey)) {
             return;
         }
-        JSNativeFunction getter = new JSNativeFunction("get " + exportName, 0,
+        JSNativeFunction getter = new JSNativeFunction(this, "get " + exportName, 0,
                 (ctx, thisArg, args) -> {
                     if ("*namespace*".equals(importedName)) {
                         return targetModuleRecord.namespace();
@@ -1434,7 +1434,7 @@ public final class JSContext implements AutoCloseable {
                     dynamicImportEvalModuleRecord.setRawSource(code);
                     // Validate the original source for early errors (duplicate exports,
                     // unresolvable bindings, etc.) before doing IIFE transformation.
-                    new Compiler(code, filename).parse(true);
+                    new Compiler(code, filename).setContext(this).parse(true);
                     parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
                     dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
                 } else if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
@@ -1457,7 +1457,7 @@ public final class JSContext implements AutoCloseable {
                         && dynamicImportEvalModuleRecord.hasTLA()
                         && !hasModuleStaticImportSyntax(code);
 
-        Compiler compiler = new Compiler(code, filename);
+        Compiler compiler = new Compiler(code, filename).setContext(this);
         // Per QuickJS, eval code has is_eval=true which prevents top-level return.
         // Only syntactic direct eval should inherit caller frame semantics.
         StackFrame directEvalCallerFrame = isDirectEval && useDirectEvalCallerFrame
@@ -3349,7 +3349,7 @@ public final class JSContext implements AutoCloseable {
                 // Eagerly validate syntax of deferred modules per spec.
                 // SyntaxErrors are not deferred — they must be detected at linking time.
                 try {
-                    new Compiler(sourceCode, resolvedSpecifier).parse(true);
+                    new Compiler(sourceCode, resolvedSpecifier).setContext(this).parse(true);
                 } catch (JSSyntaxErrorException syntaxError) {
                     dynamicImportModuleCache.remove(resolvedSpecifier);
                     throw new JSException(throwSyntaxError(syntaxError.getMessage()));
@@ -3429,7 +3429,7 @@ public final class JSContext implements AutoCloseable {
             JSObject deferredNs = moduleRecord.deferredNamespace();
             int[] remaining = {tlaEvaluationPromises.size()};
             for (JSPromise tlaPromise : tlaEvaluationPromises) {
-                JSNativeFunction onFulfill = new JSNativeFunction("", 0,
+                JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
                         (ctx, thisArg, args) -> {
                             remaining[0]--;
                             if (remaining[0] == 0 && !resolveState.alreadyResolved) {
@@ -3439,7 +3439,7 @@ public final class JSContext implements AutoCloseable {
                             return JSUndefined.INSTANCE;
                         });
                 onFulfill.initializePrototypeChain(this);
-                JSNativeFunction onReject = new JSNativeFunction("", 1,
+                JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
                         (ctx, thisArg, args) -> {
                             if (!resolveState.alreadyResolved) {
                                 resolveState.alreadyResolved = true;
@@ -4461,7 +4461,7 @@ public final class JSContext implements AutoCloseable {
             JSDynamicImportModule moduleRecord,
             JSPromise asyncPromise,
             Set<String> importResolutionStack) {
-        JSNativeFunction onFulfill = new JSNativeFunction("onFulfill", 0,
+        JSNativeFunction onFulfill = new JSNativeFunction(this, "onFulfill", 0,
                 (ctx, thisArg, args) -> {
                     resolveDynamicImportReExports(moduleRecord, new HashSet<>());
                     moduleRecord.namespace().finalizeNamespace();
@@ -4470,7 +4470,7 @@ public final class JSContext implements AutoCloseable {
                     return JSUndefined.INSTANCE;
                 });
         onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction("onReject", 1,
+        JSNativeFunction onReject = new JSNativeFunction(this, "onReject", 1,
                 (ctx, thisArg, args) -> {
                     JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                     moduleRecord.setEvaluationError(error);
@@ -4490,13 +4490,13 @@ public final class JSContext implements AutoCloseable {
         if (asyncModulePromise == null || evalOverlayFrame == null) {
             return;
         }
-        JSNativeFunction onFulfill = new JSNativeFunction("", 0,
+        JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
                 (ctx, thisArg, args) -> {
                     restoreEvalOverlayFrame(evalOverlayFrame);
                     return JSUndefined.INSTANCE;
                 });
         onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction("", 1,
+        JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
                 (ctx, thisArg, args) -> {
                     restoreEvalOverlayFrame(evalOverlayFrame);
                     return JSUndefined.INSTANCE;

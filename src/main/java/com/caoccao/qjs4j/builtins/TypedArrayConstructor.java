@@ -53,7 +53,7 @@ public final class TypedArrayConstructor {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
 
-        JSValue iteratorMethod = itemsObject.get(context, PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = itemsObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -77,14 +77,14 @@ public final class TypedArrayConstructor {
                 if (iterResult == null) {
                     break;
                 }
-                JSValue doneValue = iterResult.get(context, PropertyKey.DONE);
+                JSValue doneValue = iterResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
                 if (JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE) {
                     break;
                 }
-                JSValue value = iterResult.get(context, PropertyKey.VALUE);
+                JSValue value = iterResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
@@ -93,7 +93,7 @@ public final class TypedArrayConstructor {
             itemsLength = iterableValues.getLength();
         } else {
             arrayLike = itemsObject;
-            JSValue lengthValue = arrayLike.get(context, PropertyKey.LENGTH);
+            JSValue lengthValue = arrayLike.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -108,8 +108,8 @@ public final class TypedArrayConstructor {
         for (long k = 0; k < itemsLength; k++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(k));
             JSValue kValue = iterableValues != null
-                    ? iterableValues.get(context, key)
-                    : arrayLike.get(context, key);
+                    ? iterableValues.get(key)
+                    : arrayLike.get(key);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -119,7 +119,7 @@ public final class TypedArrayConstructor {
                     return context.getPendingException();
                 }
             }
-            target.set(context, key, kValue);
+            target.set(key, kValue);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -157,7 +157,7 @@ public final class TypedArrayConstructor {
 
         // Set each item
         for (int k = 0; k < len; k++) {
-            newObj.set(context, PropertyKey.fromIndex(k), args[k]);
+            newObj.set(PropertyKey.fromIndex(k), args[k]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

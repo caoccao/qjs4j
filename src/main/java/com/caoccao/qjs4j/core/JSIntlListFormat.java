@@ -101,8 +101,8 @@ public final class JSIntlListFormat extends JSObject {
     private final String style;
     private final String type;
 
-    public JSIntlListFormat(Locale locale, String style, String type) {
-        super();
+    public JSIntlListFormat(JSContext context, Locale locale, String style, String type) {
+        super(context);
         this.locale = locale;
         this.style = style;
         this.type = type;

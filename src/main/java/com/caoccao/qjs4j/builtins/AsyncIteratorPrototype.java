@@ -49,7 +49,7 @@ public final class AsyncIteratorPrototype {
             }
         }
 
-        JSValue returnMethodValue = iteratorObject.get(context, PropertyKey.RETURN);
+        JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
         if (context.hasPendingException()) {
             JSValue exception = context.getPendingException();
             context.clearAllPendingExceptions();
@@ -110,7 +110,7 @@ public final class AsyncIteratorPrototype {
         JSPromise wrapperPromise = createPromiseResolve(context, returnResult);
         wrapperPromise.addReactions(
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
                             resultPromise.fulfill(JSUndefined.INSTANCE);
                             return JSUndefined.INSTANCE;
                         }),
@@ -118,7 +118,7 @@ public final class AsyncIteratorPrototype {
                         context
                 ),
                 new JSPromise.ReactionRecord(
-                        new JSNativeFunction("", 1, (childContext, callbackThisArg, callbackArgs) -> {
+                        new JSNativeFunction(context, "", 1, (childContext, callbackThisArg, callbackArgs) -> {
                             JSValue error = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                             resultPromise.reject(error);
                             return JSUndefined.INSTANCE;
@@ -133,7 +133,7 @@ public final class AsyncIteratorPrototype {
     private static JSPromise createPromiseResolve(JSContext context, JSValue value) {
         JSPromise wrapperPromise = context.createJSPromise();
         if (value instanceof JSPromise promiseValue) {
-            promiseValue.get(context, PropertyKey.CONSTRUCTOR);
+            promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
                 JSValue exception = context.getPendingException();
                 context.clearAllPendingExceptions();

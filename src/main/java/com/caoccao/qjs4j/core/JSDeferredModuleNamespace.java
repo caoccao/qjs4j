@@ -33,7 +33,7 @@ final class JSDeferredModuleNamespace extends JSObject {
     JSDeferredModuleNamespace(
             JSContext context,
             JSDynamicImportModule moduleRecord) {
-        super();
+        super(context);
         this.context = context;
         this.moduleRecord = moduleRecord;
         setPrototype(null);
@@ -63,11 +63,16 @@ final class JSDeferredModuleNamespace extends JSObject {
             return true;
         }
         try {
-            return ensureEvaluated().delete(context, key);
+            return ensureEvaluated().delete(key);
         } catch (JSException jsException) {
             setEvaluationPendingException(context, jsException);
             return false;
         }
+    }
+
+    @Override
+    public boolean delete(PropertyKey key) {
+        return delete(resolveContext(null), key);
     }
 
     private JSImportNamespaceObject ensureEvaluated() {
@@ -101,29 +106,29 @@ final class JSDeferredModuleNamespace extends JSObject {
 
     @Override
     public JSValue get(JSContext context, PropertyKey key) {
+        JSContext effectiveContext = resolveContext(context);
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.get(context != null ? context : this.context, key);
+            return super.get(effectiveContext, key);
         }
         try {
-            return ensureEvaluated().get(context != null ? context : this.context, key);
+            return ensureEvaluated().get(effectiveContext, key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(context, jsException);
+            setEvaluationPendingException(effectiveContext, jsException);
             return JSUndefined.INSTANCE;
         }
     }
 
     @Override
     public JSValue get(JSContext context, PropertyKey key, JSValue receiver) {
+        JSContext effectiveContext = resolveContext(context);
+        JSValue effectiveReceiver = receiver != null ? receiver : this;
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.get(context != null ? context : this.context, key, receiver != null ? receiver : this);
+            return super.get(effectiveContext, key, effectiveReceiver);
         }
         try {
-            return ensureEvaluated().get(
-                    context != null ? context : this.context,
-                    key,
-                    receiver != null ? receiver : this);
+            return ensureEvaluated().get(effectiveContext, key, effectiveReceiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(context, jsException);
+            setEvaluationPendingException(effectiveContext, jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -131,10 +136,10 @@ final class JSDeferredModuleNamespace extends JSObject {
     @Override
     public JSValue get(PropertyKey key) {
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.get(context, key);
+            return super.get(key);
         }
         try {
-            return ensureEvaluated().get(context, key);
+            return ensureEvaluated().get(key);
         } catch (JSException jsException) {
             setEvaluationPendingException(null, jsException);
             return JSUndefined.INSTANCE;
@@ -171,15 +176,14 @@ final class JSDeferredModuleNamespace extends JSObject {
 
     @Override
     protected JSValue getWithReceiver(JSContext context, PropertyKey key, JSValue receiver) {
+        JSContext effectiveContext = resolveContext(context);
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.getWithReceiver(
-                    context != null ? context : this.context, key, receiver);
+            return super.getWithReceiver(effectiveContext, key, receiver);
         }
         try {
-            return ensureEvaluated().get(
-                    context != null ? context : this.context, key, receiver);
+            return ensureEvaluated().get(effectiveContext, key, receiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(context, jsException);
+            setEvaluationPendingException(effectiveContext, jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -240,6 +244,11 @@ final class JSDeferredModuleNamespace extends JSObject {
     @Override
     public void set(JSContext context, PropertyKey key, JSValue value) {
         // Namespace objects are immutable; no-op without evaluation
+    }
+
+    @Override
+    public void set(PropertyKey key, JSValue value) {
+        set(resolveContext(null), key, value);
     }
 
     private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {

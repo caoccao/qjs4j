@@ -56,8 +56,8 @@ public final class JSBigIntObject extends JSObject {
      *
      * @param value the primitive BigInteger value to wrap
      */
-    public JSBigIntObject(BigInteger value) {
-        this(new JSBigInt(value));
+    public JSBigIntObject(JSContext context, BigInteger value) {
+        this(context, new JSBigInt(value));
     }
 
     /**
@@ -65,8 +65,8 @@ public final class JSBigIntObject extends JSObject {
      *
      * @param value the JSBigInt value to wrap
      */
-    public JSBigIntObject(JSBigInt value) {
-        super();
+    public JSBigIntObject(JSContext context, JSBigInt value) {
+        super(context);
         this.value = value;
         this.setPrimitiveValue(value);
     }

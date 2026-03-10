@@ -92,13 +92,13 @@ public final class PromiseConstructor {
     static JSValue callGet(JSContext context, JSValue target, PropertyKey propertyKey) {
         try {
             if (target instanceof JSObject objectTarget) {
-                return objectTarget.get(context, propertyKey);
+                return objectTarget.get(propertyKey);
             }
             JSObject boxedTarget = JSTypeConversions.toObject(context, target);
             if (boxedTarget == null || context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return boxedTarget.get(context, propertyKey);
+            return boxedTarget.get(propertyKey);
         } catch (JSException e) {
             if (!context.hasPendingException()) {
                 context.setPendingException(e.getErrorValue());
@@ -152,7 +152,7 @@ public final class PromiseConstructor {
             String functionName,
             int length,
             JSNativeFunction.NativeCallback callback) {
-        JSNativeFunction function = new JSNativeFunction(functionName, length, callback);
+        JSNativeFunction function = new JSNativeFunction(context, functionName, length, callback);
         context.transferPrototype(function, JSFunction.NAME);
         return function;
     }
