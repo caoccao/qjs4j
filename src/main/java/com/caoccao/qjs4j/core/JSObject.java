@@ -980,7 +980,7 @@ public non-sealed class JSObject implements JSValue {
      * ES5.1 15.2.3.10
      */
     public void preventExtensions() {
-        this.extensible = false;
+        extensible = false;
     }
 
     private void resetVisitedObjects() {
@@ -1000,8 +1000,8 @@ public non-sealed class JSObject implements JSValue {
      * Existing properties can still be modified.
      */
     public void seal() {
-        this.sealed = true;
-        this.extensible = false; // Sealed objects are not extensible
+        sealed = true;
+        extensible = false; // Sealed objects are not extensible
     }
 
     /**
@@ -1021,10 +1021,9 @@ public non-sealed class JSObject implements JSValue {
                 sparseProperties = new HashMap<>();
             }
             sparseProperties.put(index, value);
-            return;
+        } else {
+            set(PropertyKey.fromIndex(index), value);
         }
-
-        set(PropertyKey.fromIndex(index), value);
     }
 
     // Prototype chain
@@ -1043,7 +1042,7 @@ public non-sealed class JSObject implements JSValue {
      * This is for internal use only - not accessible from JavaScript.
      */
     public void setConstructorType(JSConstructorType type) {
-        this.constructorType = type;
+        constructorType = type;
     }
 
     /**
@@ -1060,11 +1059,10 @@ public non-sealed class JSObject implements JSValue {
      * Used for Object.prototype.
      */
     public void setImmutablePrototype() {
-        this.immutablePrototype = true;
+        immutablePrototype = true;
     }
 
     private boolean setInternal(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
-        JSContext effectiveContext = this.context;
         // Check if property already exists
         int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
@@ -1072,10 +1070,10 @@ public non-sealed class JSObject implements JSValue {
 
             if (descriptor != null && descriptor.isAccessorDescriptor()) {
                 JSFunction setter = descriptor.getSetter();
-                if (setter != null && effectiveContext != null) {
-                    boolean hadPendingException = effectiveContext.hasPendingException();
-                    setter.call(effectiveContext, receiver, new JSValue[]{value});
-                    return hadPendingException || !effectiveContext.hasPendingException();
+                if (setter != null) {
+                    boolean hadPendingException = context.hasPendingException();
+                    setter.call(context, receiver, new JSValue[]{value});
+                    return hadPendingException || !context.hasPendingException();
                 }
                 return failSet(key, throwOnFailure);
             }
@@ -1104,7 +1102,7 @@ public non-sealed class JSObject implements JSValue {
             // TypedArray has exotic [[Set]] for canonical numeric index keys
             if (proto instanceof JSTypedArray typedArray) {
                 boolean result = typedArray.setWithResult(key, value, (JSValue) receiver);
-                if (!result && throwOnFailure && !effectiveContext.hasPendingException()) {
+                if (!result && throwOnFailure && !context.hasPendingException()) {
                     return failSet(key, true);
                 }
                 return result;
@@ -1115,10 +1113,10 @@ public non-sealed class JSObject implements JSValue {
                 PropertyDescriptor protoDescriptor = proto.shape.getDescriptorAt(protoOffset);
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
                     JSFunction setter = protoDescriptor.getSetter();
-                    if (setter != null && effectiveContext != null) {
-                        boolean hadPendingException = effectiveContext.hasPendingException();
-                        setter.call(effectiveContext, receiver, new JSValue[]{value});
-                        return hadPendingException || !effectiveContext.hasPendingException();
+                    if (setter != null) {
+                        boolean hadPendingException = context.hasPendingException();
+                        setter.call(context, receiver, new JSValue[]{value});
+                        return hadPendingException || !context.hasPendingException();
                     }
                     return failSet(key, throwOnFailure);
                 }
@@ -1134,16 +1132,15 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
-        JSContext effectiveContext = this.context;
         // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
         // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
         // methods on the receiver so that proxy traps are correctly invoked when
         // the receiver is a Proxy object.
 
         // Step 2c: Let existingDescriptor be ? Receiver.[[GetOwnPropertyDescriptor]](P).
-        boolean hadPendingException = effectiveContext != null && effectiveContext.hasPendingException();
+        boolean hadPendingException = context.hasPendingException();
         PropertyDescriptor existingDescriptor = receiver.getOwnPropertyDescriptor(key);
-        if (effectiveContext != null && !hadPendingException && effectiveContext.hasPendingException()) {
+        if (!hadPendingException && context.hasPendingException()) {
             return false;
         }
 
@@ -1171,8 +1168,8 @@ public non-sealed class JSObject implements JSValue {
         // wrapper field is always true so the defineProperty trap handles
         // extensibility validation instead.
         if (!receiver.extensible) {
-            if (throwOnFailure && effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
+            if (throwOnFailure && context.isStrictMode()) {
+                context.throwTypeError("Cannot add property " + key.toPropertyString() + ", object is not extensible");
             }
             return false;
         }
