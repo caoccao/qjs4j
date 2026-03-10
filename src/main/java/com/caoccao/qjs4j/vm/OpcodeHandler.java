@@ -876,7 +876,7 @@ public final class OpcodeHandler {
         }
 
         int index = (int) indexNumber.value();
-        array.set(executionContext.virtualMachine.context, index, value);
+        array.set(index, value);
 
         executionContext.sp = sp;
         executionContext.pc += op.getSize();

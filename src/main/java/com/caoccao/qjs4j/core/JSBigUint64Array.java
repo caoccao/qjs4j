@@ -78,24 +78,24 @@ public final class JSBigUint64Array extends JSTypedArray {
                 }
                 length = jsTypedArray.getLength();
                 JSTypedArray newTypedArray = context.createJSBigUint64Array(length);
-                newTypedArray.setArray(context, jsTypedArray, 0);
+                newTypedArray.setArray(jsTypedArray, 0);
                 return newTypedArray;
             } else if (firstArg instanceof JSArray jsArray) {
                 length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
-                jsTypedArray.setArray(context, jsArray, 0);
+                jsTypedArray.setArray(jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSIterator jsIterator) {
                 JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
                 length = toTypedArrayLength(jsArray.getLength(), BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
-                jsTypedArray.setArray(context, jsArray, 0);
+                jsTypedArray.setArray(jsArray, 0);
                 return jsTypedArray;
             } else if (firstArg instanceof JSObject jsObject) {
                 JSValue lengthValue = jsObject.get(PropertyKey.LENGTH);
                 length = toTypedArrayLength(context, lengthValue, BYTES_PER_ELEMENT);
                 JSTypedArray jsTypedArray = context.createJSBigUint64Array(length);
-                jsTypedArray.setArray(context, jsObject, 0);
+                jsTypedArray.setArray(jsObject, 0);
                 return jsTypedArray;
             } else {
                 length = toTypedArrayLength(context, firstArg, BYTES_PER_ELEMENT);
@@ -138,7 +138,7 @@ public final class JSBigUint64Array extends JSTypedArray {
     }
 
     @Override
-    protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
+    protected void integerIndexedElementSet(int index, JSValue value) {
         long longVal;
         try {
             longVal = JSTypeConversions.toBigInt64(context, value);
@@ -175,7 +175,7 @@ public final class JSBigUint64Array extends JSTypedArray {
     }
 
     @Override
-    protected void setJSElement(int index, JSValue value, JSContext context) {
+    protected void setJSElement(int index, JSValue value) {
         long longVal = JSTypeConversions.toBigInt64(context, value);
         checkIndex(index);
         ByteBuffer buf = getByteBuffer();

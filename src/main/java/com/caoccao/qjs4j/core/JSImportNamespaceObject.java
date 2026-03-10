@@ -116,7 +116,7 @@ public final class JSImportNamespaceObject extends JSObject {
 
     @Override
     public boolean delete(PropertyKey key) {
-        JSContext context = resolveContext(null);
+        JSContext context = this.context;
         if (isExportProperty(key)) {
             if (context.isStrictMode()) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
@@ -147,10 +147,9 @@ public final class JSImportNamespaceObject extends JSObject {
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         if (hasDefinedExportProperty(key)) {
-            JSContext effectiveContext = context;
             JSValue value = get(key);
-            if (effectiveContext.hasPendingException()) {
-                throw new JSException(effectiveContext.getPendingException());
+            if (context.hasPendingException()) {
+                throw new JSException(context.getPendingException());
             }
             PropertyDescriptor descriptor = new PropertyDescriptor();
             descriptor.setValue(value);

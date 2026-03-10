@@ -183,11 +183,10 @@ public final class JSArray extends JSObject {
 
     @Override
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        JSContext effectiveContext = resolveContext(context);
         // Per ES spec ArraySetLength (10.4.2.4) / QuickJS set_array_length:
         // When defining "length" with a value, coerce BEFORE descriptor validation
         if (key.isString() && "length".equals(key.asString()) && descriptor.hasValue()) {
-            Long newLength = toArrayLengthForLengthProperty(effectiveContext, descriptor.getValue());
+            Long newLength = toArrayLengthForLengthProperty(this.context, descriptor.getValue());
             if (newLength == null) {
                 return false; // coercion error (RangeError pending)
             }
@@ -269,7 +268,7 @@ public final class JSArray extends JSObject {
         long index = getArrayIndex(key);
         if (index >= 0 && index >= this.length) {
             if (!isLengthWritable()) {
-                effectiveContext.throwTypeError("Cannot add property " + index + ", array length is not writable");
+                this.context.throwTypeError("Cannot add property " + index + ", array length is not writable");
                 return false;
             }
             boolean result = super.defineProperty(key, descriptor);
@@ -446,25 +445,6 @@ public final class JSArray extends JSObject {
 
         // Otherwise, use the shape-based storage from JSObject
         return super.get(key);
-    }
-
-    /**
-     * copyWithin helper:
-     * resolves an indexed source value while honoring inherited indexed properties.
-     * Mirrors QuickJS JS_TryGetPropertyInt64 lookup shape for this use case.
-     */
-    public JSValue getDense(JSContext context, PropertyKey key, long index) {
-        JSObject current = this;
-        while (current != null) {
-            if (current.hasOwnProperty(key)) {
-                if (current instanceof JSArray currentArray && currentArray.hasElement(index)) {
-                    return currentArray.get(index);
-                }
-                return current.getWithReceiver(key, this);
-            }
-            current = current.getPrototype();
-        }
-        return JSUndefined.INSTANCE;
     }
 
     /**
@@ -646,23 +626,6 @@ public final class JSArray extends JSObject {
         super.defineProperty(PropertyKey.LENGTH, lengthDesc);
     }
 
-    /**
-     * Check if array is dense (no holes).
-     */
-    public boolean isDense() {
-        if (sparseProperties != null && !sparseProperties.isEmpty()) {
-            return false;
-        }
-
-        for (int i = 0; i < Math.min(length, denseArray.length); i++) {
-            if (denseArray[i] == null) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     private boolean isLengthWritable() {
         PropertyDescriptor descriptor = shape.getDescriptor(PropertyKey.LENGTH);
         return descriptor == null || descriptor.isWritable();
@@ -701,24 +664,16 @@ public final class JSArray extends JSObject {
      * Add element to the end of the array.
      */
     public void push(JSValue value) {
-        push(value, null);
-    }
-
-    /**
-     * Add element to the end of the array with context for strict mode checking.
-     */
-    public void push(JSValue value, JSContext context) {
-        JSContext effectiveContext = resolveContext(context);
         long previousLength = length;
-        set(effectiveContext, length, value);
+        set(length, value);
 
         // Array.prototype.push must throw when append fails because the array is not extensible
         // or length is read-only.
-        if (!effectiveContext.hasPendingException() && length == previousLength) {
+        if (!this.context.hasPendingException() && length == previousLength) {
             if (!extensible) {
-                effectiveContext.throwTypeError("Cannot add property " + previousLength + ", object is not extensible");
+                this.context.throwTypeError("Cannot add property " + previousLength + ", object is not extensible");
             } else if (!isLengthWritable()) {
-                effectiveContext.throwTypeError(
+                this.context.throwTypeError(
                         "Cannot assign to read only property 'length' of object '[object Array]'");
             }
         }
@@ -728,14 +683,6 @@ public final class JSArray extends JSObject {
      * Set element at index.
      */
     public void set(long index, JSValue value) {
-        set(context, index, value);
-    }
-
-    /**
-     * Set element at index with context for strict mode checking.
-     */
-    public void set(JSContext context, long index, JSValue value) {
-        JSContext effectiveContext = resolveContext(context);
         if (index < 0 || index > MAX_ARRAY_INDEX) {
             // Negative indices are treated as string properties
             super.set(PropertyKey.fromString(Long.toString(index)), value);
@@ -748,8 +695,8 @@ public final class JSArray extends JSObject {
         // Check if array is not extensible/frozen before adding new elements
         if (isAddingNewElement && !extensible) {
             // In strict mode, throw TypeError when trying to add to non-extensible array
-            if (effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError(
+            if (this.context.isStrictMode()) {
+                this.context.throwTypeError(
                         "Cannot add property " + index + ", object is not extensible");
             }
             return;
@@ -757,8 +704,8 @@ public final class JSArray extends JSObject {
 
         // Growing the array requires writable length.
         if (isAddingNewElement && !isLengthWritable()) {
-            if (effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError(
+            if (this.context.isStrictMode()) {
+                this.context.throwTypeError(
                         "Cannot assign to read only property 'length' of object '[object Array]'");
             }
             return;
@@ -767,8 +714,8 @@ public final class JSArray extends JSObject {
         // Check if array is frozen when modifying existing elements
         if (!isAddingNewElement && frozen) {
             // In strict mode, throw TypeError when trying to modify frozen array
-            if (effectiveContext.isStrictMode()) {
-                effectiveContext.throwTypeError(
+            if (this.context.isStrictMode()) {
+                this.context.throwTypeError(
                         "Cannot assign to read only property '" + index + "' of object '[object Array]'");
             }
             return;
@@ -828,7 +775,6 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        JSContext effectiveContext = context;
         long index = getArrayIndex(key);
         if (index >= 0) {
             // When adding a new element (index >= length), check if the prototype
@@ -837,12 +783,12 @@ public final class JSArray extends JSObject {
             if (index >= length && hasExoticSetInPrototypeChain()) {
                 super.set(key, value);
             } else {
-                set(effectiveContext, index, value);
+                set(index, value);
             }
         } else if (key.isString() && "length".equals(key.asString())) {
             // Per ES spec ArraySetLength / QuickJS set_array_length:
             // Coerce value BEFORE the read-only test (coercion can change writable flag)
-            Long newLength = toArrayLengthForLengthProperty(effectiveContext, value);
+            Long newLength = toArrayLengthForLengthProperty(this.context, value);
             if (newLength == null) {
                 return; // coercion error (pending exception)
             }
@@ -979,48 +925,6 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Shift elements right (for unshift operation).
-     */
-    private void shiftElementsRight(int start, int count) {
-        ensureDenseCapacity((int) Math.min(length + count, MAX_DENSE_SIZE));
-
-        Map<Integer, JSValue> newSparse = null;
-        if (sparseProperties != null) {
-            newSparse = new HashMap<>();
-            for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
-                int index = entry.getKey();
-                if (index >= start) {
-                    newSparse.put(index + count, entry.getValue());
-                } else {
-                    newSparse.put(index, entry.getValue());
-                }
-            }
-        }
-
-        // Shift dense elements
-        int denseEnd = (int) Math.min(length, denseArray.length);
-        for (int i = denseEnd - 1; i >= start; i--) {
-            if (i + count < denseArray.length) {
-                denseArray[i + count] = denseArray[i];
-            } else if (denseArray[i] != null) {
-                // Move to sparse storage
-                if (newSparse == null) {
-                    newSparse = new HashMap<>();
-                }
-                newSparse.put(i + count, denseArray[i]);
-            }
-        }
-
-        // Clear the gap
-        for (int i = start; i < start + count && i < denseArray.length; i++) {
-            denseArray[i] = null;
-        }
-
-        sparseProperties = newSparse == null || newSparse.isEmpty() ? null : newSparse;
-        setLength(length + count);
-    }
-
-    /**
      * Convert array to a Java array.
      */
     public JSValue[] toArray() {
@@ -1111,17 +1015,6 @@ public final class JSArray extends JSObject {
         }
         sb.append("]");
         return sb.toString();
-    }
-
-    /**
-     * Add element to the beginning of the array.
-     */
-    public void unshift(JSValue value) {
-        // Shift all elements up
-        shiftElementsRight(0, 1);
-
-        // Insert at position 0
-        set(0, value);
     }
 
     /**

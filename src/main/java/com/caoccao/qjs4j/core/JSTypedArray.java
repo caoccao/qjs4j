@@ -191,17 +191,6 @@ public sealed abstract class JSTypedArray extends JSObject permits
         return (int) length;
     }
 
-    protected static int toTypedArrayBufferDefaultLength(IJSArrayBuffer buffer, int byteOffset, int bytesPerElement) {
-        // QuickJS / spec order: detached buffer check must happen before range/alignment checks.
-        // This ensures abrupt detachment during byteOffset conversion throws TypeError, not RangeError.
-        validateTypedArrayBufferNotDetached(buffer);
-        int remainingBytes = buffer.getByteLength() - byteOffset;
-        if (remainingBytes < 0 || remainingBytes % bytesPerElement != 0) {
-            throw new JSRangeErrorException("invalid length");
-        }
-        return remainingBytes / bytesPerElement;
-    }
-
     protected static int toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {
         return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
@@ -345,7 +334,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
         }
         // IntegerIndexedElementSet: convert value then write if buffer still valid
         if (descriptor.hasValue()) {
-            integerIndexedElementSet(index, descriptor.getValue(), context);
+            integerIndexedElementSet(index, descriptor.getValue());
         }
         return true;
     }
@@ -357,7 +346,6 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public boolean delete(PropertyKey key) {
-        JSContext context = resolveContext(null);
         int index = toTypedArrayIndex(key);
         if (index >= 0) {
             // In-bounds element: not deletable
@@ -608,7 +596,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * This handles the case where ToNumber/ToBigInt detaches the buffer as a side effect.
      * BigInt typed arrays override to use ToBigInt instead of ToNumber.
      */
-    protected void integerIndexedElementSet(int index, JSValue value, JSContext context) {
+    protected void integerIndexedElementSet(int index, JSValue value) {
         double numValue = JSTypeConversions.toNumber(context, value).value();
         if (!buffer.isDetached() && index >= 0 && index < getLength()) {
             setElement(index, numValue);
@@ -659,7 +647,6 @@ public sealed abstract class JSTypedArray extends JSObject permits
 
     @Override
     public void set(PropertyKey key, JSValue value) {
-        JSContext effectiveContext = this.context;
         if (isCanonicalNumericIndex(key)) {
             // TypedArray [[Set]] with SameValue(O, Receiver) = true
             // Always call integerIndexedElementSet which performs value conversion
@@ -667,23 +654,23 @@ public sealed abstract class JSTypedArray extends JSObject permits
             String str = key.toPropertyString();
             if ("-0".equals(str)) {
                 // -0 is never a valid integer index; use -1 to skip write after conversion
-                integerIndexedElementSet(-1, value, effectiveContext);
+                integerIndexedElementSet(-1, value);
                 return;
             }
             try {
                 double numericIndex = Double.parseDouble(str);
                 if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                    integerIndexedElementSet(-1, value, effectiveContext);
+                    integerIndexedElementSet(-1, value);
                     return;
                 }
                 int index = (int) numericIndex;
                 if (index != numericIndex) {
-                    integerIndexedElementSet(-1, value, effectiveContext);
+                    integerIndexedElementSet(-1, value);
                     return;
                 }
-                integerIndexedElementSet(index, value, effectiveContext);
+                integerIndexedElementSet(index, value);
             } catch (NumberFormatException e) {
-                integerIndexedElementSet(-1, value, effectiveContext);
+                integerIndexedElementSet(-1, value);
             }
             return;
         }
@@ -694,25 +681,24 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * TypedArray.prototype.set(array, offset)
      * Copy values from array into this TypedArray.
      */
-    public void setArray(JSContext context, JSValue source, int offset) {
-        JSContext effectiveContext = resolveContext(context);
+    public void setArray(JSValue source, int offset) {
         int currentLength = getLength();
         if (offset < 0 || offset > currentLength) {
             throw new JSRangeErrorException("TypedArray offset out of range");
         }
 
         if (source instanceof JSArray srcArray) {
-            int srcLength = toArrayLikeLength(effectiveContext, JSNumber.of(srcArray.getLength()));
+            int srcLength = toArrayLikeLength(context, JSNumber.of(srcArray.getLength()));
             if (offset + srcLength > currentLength) {
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
                 JSValue value = srcArray.get(PropertyKey.fromString(Integer.toString(i)));
-                if (effectiveContext.hasPendingException()) {
+                if (context.hasPendingException()) {
                     return;
                 }
-                setJSElement(offset + i, value, effectiveContext);
-                if (effectiveContext.hasPendingException()) {
+                setJSElement(offset + i, value);
+                if (context.hasPendingException()) {
                     return;
                 }
             }
@@ -722,24 +708,24 @@ public sealed abstract class JSTypedArray extends JSObject permits
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                setJSElement(offset + i, srcTyped.getJSElement(i), effectiveContext);
-                if (effectiveContext.hasPendingException()) {
+                setJSElement(offset + i, srcTyped.getJSElement(i));
+                if (context.hasPendingException()) {
                     return;
                 }
             }
         } else if (source instanceof JSIterator jsIterator) {
-            JSArray jsArray = JSIteratorHelper.toArray(effectiveContext, jsIterator);
-            if (effectiveContext.hasPendingException()) {
+            JSArray jsArray = JSIteratorHelper.toArray(context, jsIterator);
+            if (context.hasPendingException()) {
                 return;
             }
-            setArray(effectiveContext, jsArray, offset);
+            setArray(jsArray, offset);
         } else if (source instanceof JSObject srcObject) {
             JSValue lengthValue = srcObject.get(PropertyKey.LENGTH);
-            if (effectiveContext.hasPendingException()) {
+            if (context.hasPendingException()) {
                 return;
             }
-            int srcLength = toArrayLikeLength(effectiveContext, lengthValue);
-            if (effectiveContext.hasPendingException()) {
+            int srcLength = toArrayLikeLength(context, lengthValue);
+            if (context.hasPendingException()) {
                 return;
             }
             if (offset + srcLength > currentLength) {
@@ -747,11 +733,11 @@ public sealed abstract class JSTypedArray extends JSObject permits
             }
             for (int i = 0; i < srcLength; i++) {
                 JSValue value = srcObject.get(PropertyKey.fromString(Integer.toString(i)));
-                if (effectiveContext.hasPendingException()) {
+                if (context.hasPendingException()) {
                     return;
                 }
-                setJSElement(offset + i, value, effectiveContext);
-                if (effectiveContext.hasPendingException()) {
+                setJSElement(offset + i, value);
+                if (context.hasPendingException()) {
                     return;
                 }
             }
@@ -767,7 +753,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * Set an element from a JSValue, performing the appropriate type conversion.
      * Regular typed arrays convert to Number, BigInt typed arrays override to convert to BigInt.
      */
-    protected void setJSElement(int index, JSValue value, JSContext context) {
+    protected void setJSElement(int index, JSValue value) {
         setElement(index, JSTypeConversions.toNumber(context, value).value());
     }
 
@@ -793,7 +779,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             if (receiver == this) {
                 // Perform TypedArraySetElement(O, numericIndex, V)
                 set(key, value);
-                return !this.context.hasPendingException();
+                return !context.hasPendingException();
             }
             // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
             String str = key.toPropertyString();
@@ -818,7 +804,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             // skips prototype chain walk and goes directly to setting on the receiver.
             if (receiver instanceof JSObject receiverObj) {
                 PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
-                if (this.context.hasPendingException()) {
+                if (context.hasPendingException()) {
                     return false;
                 }
                 if (existingDescriptor != null) {

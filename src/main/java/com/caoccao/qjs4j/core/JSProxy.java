@@ -73,7 +73,7 @@ public final class JSProxy extends JSObject {
      * ES2020 9.5.13 [[Call]]
      */
     public JSValue apply(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSContext executionContext = resolveContext(context);
+        JSContext executionContext = context != null ? context : this.context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'apply' on a proxy that has been revoked"));
         }
@@ -106,7 +106,7 @@ public final class JSProxy extends JSObject {
      * ES2020 9.5.14 [[Construct]]
      */
     public JSValue construct(JSContext context, JSValue[] args, JSValue newTarget) {
-        JSContext executionContext = resolveContext(context);
+        JSContext executionContext = context != null ? context : this.context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'construct' on a proxy that has been revoked"));
         }
@@ -177,7 +177,7 @@ public final class JSProxy extends JSObject {
     }
 
     public boolean definePropertyWithResult(JSContext context, PropertyKey key, PropertyDescriptor descriptor) {
-        JSContext executionContext = resolveContext(context);
+        JSContext executionContext = context != null ? context : this.context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'defineProperty' on a proxy that has been revoked"));
         }
@@ -379,7 +379,7 @@ public final class JSProxy extends JSObject {
      * Internal get implementation that accepts a receiver parameter for prototype chain support.
      */
     private JSValue getInternal(PropertyKey key, JSContext context, JSValue receiver) {
-        JSContext executionContext = resolveContext(context);
+        JSContext executionContext = context != null ? context : this.context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'get' on a proxy that has been revoked"));
         }
@@ -976,11 +976,11 @@ public final class JSProxy extends JSObject {
      * preserve current execution realm for TypeError construction.
      */
     public void proxySet(JSContext executionContext, PropertyKey key, JSValue value) {
-        proxySetInternal(key, value, resolveContext(executionContext), this, true);
+        proxySetInternal(key, value, executionContext != null ? executionContext : this.context, this, true);
     }
 
     public void proxySet(JSContext executionContext, PropertyKey key, JSValue value, JSObject receiver) {
-        proxySetInternal(key, value, resolveContext(executionContext), receiver, true);
+        proxySetInternal(key, value, executionContext != null ? executionContext : this.context, receiver, true);
     }
 
     private boolean proxySetInternal(
@@ -989,7 +989,7 @@ public final class JSProxy extends JSObject {
             JSContext ctx,
             JSValue receiver,
             boolean throwOnFailure) {
-        JSContext executionContext = resolveContext(ctx);
+        JSContext executionContext = ctx != null ? ctx : this.context;
         if (revoked) {
             throw new JSException(executionContext.throwTypeError("Cannot perform 'set' on a proxy that has been revoked"));
         }
@@ -1042,7 +1042,7 @@ public final class JSProxy extends JSObject {
     }
 
     public boolean proxySetWithReceiver(JSContext executionContext, PropertyKey key, JSValue value, JSValue receiver) {
-        return proxySetInternal(key, value, resolveContext(executionContext), receiver, false);
+        return proxySetInternal(key, value, executionContext != null ? executionContext : this.context, receiver, false);
     }
 
     /**
@@ -1171,7 +1171,7 @@ public final class JSProxy extends JSObject {
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value) {
-        return proxySetInternal(key, value, resolveContext(null), this, false);
+        return proxySetInternal(key, value, this.context, this, false);
     }
 
     @Override

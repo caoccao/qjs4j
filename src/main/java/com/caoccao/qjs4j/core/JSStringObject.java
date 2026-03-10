@@ -91,7 +91,7 @@ public final class JSStringObject extends JSObject {
 
     @Override
     public boolean delete(PropertyKey key) {
-        JSContext context = resolveContext(null);
+        JSContext context = this.context;
         boolean isCharacterIndex = false;
         if (key.isIndex()) {
             int index = key.asIndex();
@@ -269,7 +269,6 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue val) {
-        JSContext effectiveContext = this.context;
         int charIndex = -1;
         if (key.isIndex()) {
             charIndex = key.asIndex();
@@ -282,7 +281,7 @@ public final class JSStringObject extends JSObject {
         }
         if (charIndex >= 0 && charIndex < value.value().length()) {
             // Character indices are non-writable, non-configurable own properties
-            effectiveContext.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
+            this.context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
                     + "' of object '[object String]'");
             return;
         }

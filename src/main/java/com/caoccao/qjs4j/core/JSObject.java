@@ -990,10 +990,6 @@ public non-sealed class JSObject implements JSValue {
         }
     }
 
-    protected JSContext resolveContext(JSContext candidateContext) {
-        return candidateContext != null ? candidateContext : context;
-    }
-
     /**
      * Seal this object.
      * Prevents adding new properties and deleting existing properties.

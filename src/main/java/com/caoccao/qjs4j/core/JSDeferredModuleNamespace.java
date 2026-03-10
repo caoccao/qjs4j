@@ -102,21 +102,19 @@ final class JSDeferredModuleNamespace extends JSObject {
 
     @Override
     public JSValue get(PropertyKey key) {
-        JSContext effectiveContext = resolveContext(null);
         if (isSymbolLikeNamespaceKey(key)) {
             return super.get(key);
         }
         try {
             return ensureEvaluated().get(key);
         } catch (JSException jsException) {
-            setEvaluationPendingException(effectiveContext, jsException);
+            setEvaluationPendingException(this.context, jsException);
             return JSUndefined.INSTANCE;
         }
     }
 
     @Override
     public JSValue get(PropertyKey key, JSValue receiver) {
-        JSContext effectiveContext = resolveContext(null);
         JSValue effectiveReceiver = receiver != null ? receiver : this;
         if (isSymbolLikeNamespaceKey(key)) {
             return super.get(key, effectiveReceiver);
@@ -124,7 +122,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         try {
             return ensureEvaluated().get(key, effectiveReceiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(effectiveContext, jsException);
+            setEvaluationPendingException(this.context, jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -159,14 +157,13 @@ final class JSDeferredModuleNamespace extends JSObject {
 
     @Override
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
-        JSContext effectiveContext = resolveContext(null);
         if (isSymbolLikeNamespaceKey(key)) {
             return super.getWithReceiver(key, receiver);
         }
         try {
             return ensureEvaluated().get(key, receiver);
         } catch (JSException jsException) {
-            setEvaluationPendingException(effectiveContext, jsException);
+            setEvaluationPendingException(this.context, jsException);
             return JSUndefined.INSTANCE;
         }
     }
@@ -230,13 +227,13 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {
-        JSContext effectiveContext = callerContext != null ? callerContext : this.context;
         JSValue errorValue = jsException.getErrorValue();
         if (errorValue != null) {
-            effectiveContext.setPendingException(errorValue);
+            (callerContext != null ? callerContext : this.context).setPendingException(errorValue);
         } else {
-            effectiveContext.setPendingException(
-                    effectiveContext.throwError("Error",
+            JSContext context = callerContext != null ? callerContext : this.context;
+            context.setPendingException(
+                    context.throwError("Error",
                             jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error"));
         }
     }
