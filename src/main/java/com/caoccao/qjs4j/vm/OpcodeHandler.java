@@ -5366,9 +5366,6 @@ public final class OpcodeHandler {
 
     static void handleYieldStar(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        // yield* delegates to another iterator
-        // Pop the iterable from the stack
-        JSValue iterable = executionContext.virtualMachine.valueStack.pop();
         try {
 
             // Check for RETURN/THROW resume (yield* delegation protocol per ES2024 27.5.3.3)
@@ -5384,6 +5381,12 @@ public final class OpcodeHandler {
                     && lastYieldResult.isYieldStar()
                     && lastYieldResult.delegateIterator() != null
                     && lastYieldResult.delegationProgramCounter() == executionContext.pc;
+
+            JSValue iterable = JSUndefined.INSTANCE;
+            if (!reuseDelegateIterator) {
+                // Fresh delegation entry: iterable is on top of stack.
+                iterable = executionContext.virtualMachine.valueStack.pop();
+            }
 
             JSObject iteratorObj;
             if (reuseDelegateIterator) {
@@ -5666,13 +5669,21 @@ public final class OpcodeHandler {
                     }
                 }
             }
+            if (executionContext.virtualMachine.yieldResult != null) {
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
+                // Resume at the same YIELD_STAR opcode until delegation completes.
+                executionContext.virtualMachine.saveActiveGeneratorSuspendedExecutionState(
+                        executionContext.frame,
+                        executionContext.pc,
+                        executionContext.stack,
+                        executionContext.sp,
+                        executionContext.frameStackBase);
+                executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, returnValue);
+                return;
+            }
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
             executionContext.pc += op.getSize();
-            if (executionContext.virtualMachine.yieldResult != null) {
-                JSValue returnValue = (JSValue) executionContext.stack[--executionContext.sp];
-                executionContext.virtualMachine.clearActiveGeneratorSuspendedExecutionState();
-                executionContext.virtualMachine.requestOpcodeReturnFromExecute(executionContext, returnValue);
-            }
         } catch (JSVirtualMachineException exception) {
             executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(exception);
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;

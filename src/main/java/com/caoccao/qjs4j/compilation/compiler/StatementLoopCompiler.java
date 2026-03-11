@@ -281,14 +281,27 @@ final class StatementLoopCompiler {
             }
         }
 
-        compilerContext.enterScope();
-        delegates.expressions.compileExpression(forOfStmt.getRight());
-
-        if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+        boolean hasHeadTdzScope = !isExpressionBased && !isVar;
+        if (hasHeadTdzScope && pattern != null) {
+            compilerContext.enterScope();
+            delegates.patterns.declarePatternVariables(pattern);
+            for (String boundName : CompilerContext.extractBoundNames(pattern)) {
+                Integer localIndex = compilerContext.currentScope().getLocal(boundName);
+                if (localIndex != null) {
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    compilerContext.tdzLocals.add(boundName);
+                }
+            }
+            delegates.expressions.compileExpression(forOfStmt.getRight());
+            if (forOfStmt.isAsync()) {
+                compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+            }
+            compilerContext.exitScope();
         }
+
+        compilerContext.enterScope();
 
         if (!isExpressionBased && !isVar) {
             delegates.patterns.declarePatternVariables(pattern);
@@ -298,9 +311,14 @@ final class StatementLoopCompiler {
                 delegates.patterns.markPatternConstBindings(pattern);
             }
         }
-
-        boolean savedInGlobalScope = compilerContext.inGlobalScope;
-        compilerContext.inGlobalScope = false;
+        if (!hasHeadTdzScope) {
+            delegates.expressions.compileExpression(forOfStmt.getRight());
+            if (forOfStmt.isAsync()) {
+                compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+            }
+        }
 
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
@@ -343,11 +361,7 @@ final class StatementLoopCompiler {
         int loopEnd = compilerContext.emitter.currentOffset();
         compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
 
-        if (forOfStmt.isAsync()) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         int breakTarget = compilerContext.emitter.currentOffset();
         compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
@@ -360,7 +374,6 @@ final class StatementLoopCompiler {
         }
 
         compilerContext.loopStack.pop();
-        compilerContext.inGlobalScope = savedInGlobalScope;
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();

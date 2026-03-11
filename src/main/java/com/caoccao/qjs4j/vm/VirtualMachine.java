@@ -673,9 +673,23 @@ public final class VirtualMachine {
                 System.arraycopy(suspendedStackValues, 0, executionContext.stack, frameStackBase, suspendedStackValues.length);
             }
             executionContext.sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
+            int suspendedProgramCounter = generatorStateForExecution.getSuspendedProgramCounter();
+            executionContext.pc = suspendedProgramCounter;
+            Opcode suspendedOpcode = Opcode.fromInt(executionContext.bytecode.readU8(suspendedProgramCounter));
+            boolean suspendedAtYieldStar =
+                    suspendedOpcode == Opcode.YIELD_STAR || suspendedOpcode == Opcode.ASYNC_YIELD_STAR;
+            YieldResult suspendedYieldResult = generatorStateForExecution.getLastYieldResult();
+            boolean resumingActiveYieldStarDelegation = suspendedAtYieldStar
+                    && suspendedYieldResult != null
+                    && suspendedYieldResult.isYieldStar()
+                    && suspendedYieldResult.delegationProgramCounter() == suspendedProgramCounter
+                    && suspendedYieldResult.delegateIterator() != null;
             JSGeneratorState.ResumeRecord pendingResumeRecord = generatorStateForExecution.consumePendingResumeRecord();
             if (pendingResumeRecord != null) {
-                if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
+                if (resumingActiveYieldStarDelegation) {
+                    generatorResumeRecords = List.of(pendingResumeRecord);
+                    generatorResumeIndex = 0;
+                } else if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.THROW) {
                     pendingException = pendingResumeRecord.value();
                     context.setPendingException(pendingResumeRecord.value());
                 } else if (pendingResumeRecord.kind() == JSGeneratorState.ResumeKind.RETURN) {
@@ -687,7 +701,6 @@ public final class VirtualMachine {
                     executionContext.stack[executionContext.sp++] = pendingResumeRecord.value();
                 }
             }
-            executionContext.pc = generatorStateForExecution.getSuspendedProgramCounter();
         } else {
             executionContext.sp = valueStack.stackTop;
             executionContext.pc = 0;

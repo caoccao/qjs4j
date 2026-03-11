@@ -937,8 +937,8 @@ final class ExpressionCompiler {
             }
             if (JSKeyword.THIS.equals(name)) {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-            } else if (JSArguments.NAME.equals(name) && !compilerContext.inGlobalScope
-                    && (!compilerContext.isInArrowFunction || compilerContext.hasEnclosingArgumentsBinding)
+            } else if (JSArguments.NAME.equals(name)
+                    && compilerContext.hasEnclosingArgumentsBinding
                     && compilerContext.findLocalInScopes(name) == null) {
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(0);
@@ -1055,8 +1055,7 @@ final class ExpressionCompiler {
         // For arrow functions without enclosing regular function: resolve as normal variable
         // Following QuickJS: arrow functions inherit arguments from enclosing scope,
         // but only if there is an enclosing scope with arguments binding
-        if (JSArguments.NAME.equals(name) && !compilerContext.inGlobalScope
-                && (!compilerContext.isInArrowFunction || compilerContext.hasEnclosingArgumentsBinding)) {
+        if (JSArguments.NAME.equals(name) && compilerContext.hasEnclosingArgumentsBinding) {
             // Emit SPECIAL_OBJECT opcode with type 0 (SPECIAL_OBJECT_ARGUMENTS)
             // The VM will handle differently for arrow vs regular functions
             compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);

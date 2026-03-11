@@ -651,7 +651,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 throw new JSSyntaxErrorException("Invalid initializer in for-of declaration");
             }
             parserContext.expect(TokenType.OF);
-            Expression iterable = delegates.expressions.parseExpression();
+            // Per grammar, for-of RHS is AssignmentExpression (not full Expression).
+            Expression iterable = delegates.expressions.parseAssignmentExpression();
             parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
             validateNoLabelledFunctionInIterationBody(body);
@@ -736,6 +737,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 // Parse as assignment expression first, then check for 'in' or 'of'.
                 // Suppress 'in' as binary operator per ES spec [~In] grammar parameter.
                 boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
+                TokenType forHeadStartTokenType = parserContext.currentToken.type();
+                boolean leftStartsWithLetToken = forHeadStartTokenType == TokenType.LET;
+                boolean leftStartsWithAsyncToken = forHeadStartTokenType == TokenType.ASYNC;
                 boolean allowInInsideDestructuringHead = parserContext.currentToken.type() == TokenType.LBRACKET
                         || parserContext.currentToken.type() == TokenType.LBRACE;
                 parserContext.inOperatorAllowed = allowInInsideDestructuringHead;
@@ -784,12 +788,22 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     return new ForInStatement(expr, object, body, location);
                 } else if (parserContext.match(TokenType.OF)) {
                     // for (expr of iterable) -- expression-based for-of
+                    if (!isAwait && leftStartsWithLetToken) {
+                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                    }
+                    if (!isAwait
+                            && leftStartsWithAsyncToken
+                            && expr instanceof Identifier identifier
+                            && JSKeyword.ASYNC.equals(identifier.getName())) {
+                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                    }
                     if (!parserContext.isValidForInOfTarget(expr)) {
                         throw new JSSyntaxErrorException("invalid for in/of left hand-side");
                     }
                     delegates.expressions.validateForInOfAssignmentTarget(expr, parserContext.currentToken.offset());
                     parserContext.advance(); // consume 'of'
-                    Expression iterable = delegates.expressions.parseExpression();
+                    // Per grammar, for-of RHS is AssignmentExpression (not full Expression).
+                    Expression iterable = delegates.expressions.parseAssignmentExpression();
                     parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     validateNoLabelledFunctionInIterationBody(body);

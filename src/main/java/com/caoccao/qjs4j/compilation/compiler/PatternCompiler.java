@@ -964,10 +964,7 @@ final class PatternCompiler {
     }
 
     private Integer ensureImplicitArgumentsLocalBinding() {
-        if (compilerContext.inGlobalScope) {
-            return null;
-        }
-        if (compilerContext.isInArrowFunction && !compilerContext.hasEnclosingArgumentsBinding) {
+        if (!compilerContext.hasEnclosingArgumentsBinding) {
             return null;
         }
         Integer localIndex = compilerContext.findLocalInScopes(JSArguments.NAME);
