@@ -319,6 +319,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     && nextType != TokenType.LPAREN
                     && nextType != TokenType.ASSIGN;
             if (treatAsStaticModifier) {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 parserContext.advance();
                 isStatic = true;
                 methodStartLocation = parserContext.getLocation();

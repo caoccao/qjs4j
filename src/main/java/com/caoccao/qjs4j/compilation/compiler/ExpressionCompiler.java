@@ -777,7 +777,11 @@ final class ExpressionCompiler {
                     compileExpression(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
+                    if (compilerContext.isLocalBindingConst(id.getName())) {
+                        emitConstAssignmentErrorForLocal(id.getName(), localIndex);
+                    } else {
+                        compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
+                    }
                     return;
                 }
 
@@ -787,7 +791,11 @@ final class ExpressionCompiler {
                     compileExpression(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
+                    if (compilerContext.isCapturedBindingConst(id.getName())) {
+                        emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
+                    } else {
+                        compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
+                    }
                     return;
                 }
 
@@ -1002,6 +1010,24 @@ final class ExpressionCompiler {
             // Not found in local scopes, use global variable
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, name);
         }
+    }
+
+    private void emitConstAssignmentError(String name) {
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
+        compilerContext.emitter.emitU8(0);
+    }
+
+    private void emitConstAssignmentErrorForCaptured(String name, int capturedIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitConstAssignmentError(name);
+    }
+
+    private void emitConstAssignmentErrorForLocal(String name, int localIndex) {
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        emitConstAssignmentError(name);
     }
 
     private void emitIdentifierLookupWithoutWith(String name) {

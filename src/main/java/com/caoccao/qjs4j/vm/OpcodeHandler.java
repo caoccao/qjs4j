@@ -1902,6 +1902,21 @@ public final class OpcodeHandler {
                 if (syncDone) {
                     return asyncFromSyncResultPromise;
                 }
+                if (asyncFromSyncResultPromise.getState() == JSPromise.PromiseState.REJECTED) {
+                    JSValue rejectionReason = asyncFromSyncResultPromise.getResult();
+                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
+                    if (childContext.hasPendingException()) {
+                        childContext.clearAllPendingExceptions();
+                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
+                        returnFunction.call(childContext, syncIteratorObject, JSValue.NO_ARGS);
+                        if (childContext.hasPendingException()) {
+                            childContext.clearAllPendingExceptions();
+                        }
+                    }
+                    JSPromise rejectedPromise = childContext.createJSPromise();
+                    rejectedPromise.reject(rejectionReason);
+                    return rejectedPromise;
+                }
                 JSPromise closeOnRejectionPromise = childContext.createJSPromise();
                 asyncFromSyncResultPromise.addReactions(
                         new JSPromise.ReactionRecord(
@@ -1915,23 +1930,17 @@ public final class OpcodeHandler {
                         ),
                         new JSPromise.ReactionRecord(
                                 new JSNativeFunction(executionContext.virtualMachine.context, "onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                                    JSValue rejectionReason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
                                     JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
                                     if (callbackContext.hasPendingException()) {
                                         callbackContext.clearAllPendingExceptions();
                                     } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                        JSValue closeResult = returnFunction.call(callbackContext, syncIteratorObject, JSValue.NO_ARGS);
+                                        returnFunction.call(callbackContext, syncIteratorObject, JSValue.NO_ARGS);
                                         if (callbackContext.hasPendingException()) {
                                             callbackContext.clearAllPendingExceptions();
-                                        } else if (!(closeResult instanceof JSObject)) {
-                                            // Preserve the original rejection reason during close-on-rejection.
                                         }
-                                    } else if (returnMethodValue.isNullOrUndefined()) {
-                                        // No return method.
-                                    } else {
-                                        // Non-callable return method is ignored here to preserve original rejection.
                                     }
-                                    closeOnRejectionPromise.reject(reason);
+                                    closeOnRejectionPromise.reject(rejectionReason);
                                     return JSUndefined.INSTANCE;
                                 }),
                                 null,
@@ -3182,19 +3191,12 @@ public final class OpcodeHandler {
                 StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
                 while (callerFrame != null) {
                     JSFunction callerFunc = callerFrame.getFunction();
-                    if (callerFunc instanceof JSBytecodeFunction callerBf) {
-                        if (callerBf.isDerivedConstructor()) {
-                            callerFrame.setThisArg(jsObject);
-                            VarRef callerThisRef = callerFrame.getDerivedThisRef();
-                            if (callerThisRef != null) {
-                                callerThisRef.set(jsObject);
-                            }
-                            break;
+                    if (callerFunc instanceof JSBytecodeFunction callerBf && callerBf.isDerivedConstructor()) {
+                        callerFrame.setThisArg(jsObject);
+                        VarRef callerThisRef = callerFrame.getDerivedThisRef();
+                        if (callerThisRef != null) {
+                            callerThisRef.set(jsObject);
                         }
-                        if (!callerBf.isArrow()) {
-                            break;
-                        }
-                    } else {
                         break;
                     }
                     callerFrame = callerFrame.getCaller();

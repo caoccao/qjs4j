@@ -189,6 +189,8 @@ public final class Parser {
 
         if (parserContext.moduleMode) {
             validateModuleEarlyErrors(body);
+        } else {
+            delegates.statements.validateProgramEarlyErrors(body);
         }
 
         return new Program(body, parserContext.moduleMode,

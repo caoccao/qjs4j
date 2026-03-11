@@ -994,6 +994,37 @@ final class PatternCompiler {
         return false;
     }
 
+    void markPatternConstBindings(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            compilerContext.currentScope().markConstLocal(id.getName());
+            return;
+        }
+        if (pattern instanceof ArrayPattern arrayPattern) {
+            for (Pattern element : arrayPattern.getElements()) {
+                if (element != null) {
+                    markPatternConstBindings(element);
+                }
+            }
+            return;
+        }
+        if (pattern instanceof ObjectPattern objectPattern) {
+            for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                markPatternConstBindings(property.getValue());
+            }
+            if (objectPattern.getRestElement() != null) {
+                markPatternConstBindings(objectPattern.getRestElement().getArgument());
+            }
+            return;
+        }
+        if (pattern instanceof AssignmentPattern assignmentPattern) {
+            markPatternConstBindings(assignmentPattern.getLeft());
+            return;
+        }
+        if (pattern instanceof RestElement restElement) {
+            markPatternConstBindings(restElement.getArgument());
+        }
+    }
+
     /**
      * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT.
      * Per spec (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not

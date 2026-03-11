@@ -118,4 +118,8 @@ final class ExpressionParser {
     Expression parseUnaryExpression() {
         return primaryParser.parseUnaryExpression();
     }
+
+    void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
+        assignmentParser.validateForInOfAssignmentTarget(expression, assignmentBoundaryOffset);
+    }
 }

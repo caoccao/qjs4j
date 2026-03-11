@@ -17,15 +17,26 @@
 package com.caoccao.qjs4j.compilation.ast;
 
 /**
- * Base sealed class for all statement nodes.
+ * Represents a debugger statement.
  */
-public abstract sealed class Statement extends ASTNode permits
-        ExpressionStatement, BlockStatement, IfStatement, WhileStatement, DoWhileStatement,
-        ForStatement, ForOfStatement, ForInStatement, ReturnStatement, BreakStatement, ContinueStatement,
-        ThrowStatement, TryStatement, SwitchStatement, WithStatement, DebuggerStatement, VariableDeclaration,
-        LabeledStatement, Declaration {
-
-    protected Statement(SourceLocation location) {
+public final class DebuggerStatement extends Statement {
+    public DebuggerStatement(SourceLocation location) {
         super(location);
+    }
+
+    @Override
+    public boolean containsAwait() {
+        if (awaitInside == null) {
+            awaitInside = false;
+        }
+        return awaitInside;
+    }
+
+    @Override
+    public boolean containsYield() {
+        if (yieldInside == null) {
+            yieldInside = false;
+        }
+        return yieldInside;
     }
 }

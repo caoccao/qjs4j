@@ -104,6 +104,11 @@ final class StatementLoopCompiler {
     }
 
     void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);
@@ -158,6 +163,9 @@ final class StatementLoopCompiler {
         if (!isExpressionBased) {
             if (varDecl.getKind() != VariableKind.VAR) {
                 compilerContext.currentScope().declareLocal(varName);
+                if (varDecl.getKind() == VariableKind.CONST) {
+                    compilerContext.currentScope().markConstLocal(varName);
+                }
             }
             varIndex = compilerContext.findLocalInScopes(varName);
         }
@@ -256,47 +264,6 @@ final class StatementLoopCompiler {
     }
 
     private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
-        if (leftExpression instanceof Identifier id) {
-            Integer localIndex = compilerContext.findLocalInScopes(id.getName());
-            if (localIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
-            } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.getName());
-                if (capturedIndex != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF, capturedIndex);
-                } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
-                }
-            }
-            return;
-        }
-
-        if (leftExpression instanceof MemberExpression memberExpression) {
-            if (memberExpression.isComputed()) {
-                throw new JSCompilerException("Computed member expression in for-of not yet supported");
-            }
-            if (memberExpression.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-                JSSymbol privateSymbol = compilerContext.privateSymbols.get(privateIdentifier.getName());
-                if (privateSymbol == null) {
-                    throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
-                }
-                delegates.expressions.compileExpression(memberExpression.getObject());
-                compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
-                compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                return;
-            }
-            if (!(memberExpression.getProperty() instanceof Identifier propertyIdentifier)) {
-                throw new JSCompilerException("Invalid for-of assignment target");
-            }
-            delegates.expressions.compileExpression(memberExpression.getObject());
-            compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.getName());
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            return;
-        }
-
         if (leftExpression instanceof CallExpression) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(leftExpression);
@@ -305,8 +272,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.emitU8(5);
             return;
         }
-
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        delegates.patterns.compileAssignmentTarget(leftExpression);
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
@@ -344,12 +310,10 @@ final class StatementLoopCompiler {
 
         if (!isExpressionBased && (!isVar || compilerContext.inGlobalScope)) {
             delegates.patterns.declarePatternVariables(pattern);
-            // Mark using/await-using bindings as immutable (const-like)
-            if (varDecl != null && (varDecl.getKind() == VariableKind.USING
+            if (varDecl != null && (varDecl.getKind() == VariableKind.CONST
+                    || varDecl.getKind() == VariableKind.USING
                     || varDecl.getKind() == VariableKind.AWAIT_USING)) {
-                if (pattern instanceof Identifier id) {
-                    compilerContext.currentScope().markConstLocal(id.getName());
-                }
+                delegates.patterns.markPatternConstBindings(pattern);
             }
         }
 

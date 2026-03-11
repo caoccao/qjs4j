@@ -826,6 +826,16 @@ final class ExpressionAssignmentParser {
         }
     }
 
+    void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
+        if (expression instanceof CallExpression) {
+            if (parserContext.strictMode) {
+                throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+            }
+            return;
+        }
+        validateAssignmentPatternTarget(expression, assignmentBoundaryOffset);
+    }
+
     /**
      * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
      * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the

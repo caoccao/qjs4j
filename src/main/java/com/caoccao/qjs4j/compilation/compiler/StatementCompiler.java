@@ -663,6 +663,8 @@ final class StatementCompiler {
             compileSwitchStatement(switchStmt);
         } else if (stmt instanceof WithStatement withStmt) {
             compileWithStatement(withStmt);
+        } else if (stmt instanceof DebuggerStatement) {
+            // No-op in runtime unless a debugger is attached.
         } else if (stmt instanceof VariableDeclaration varDecl) {
             compileVariableDeclaration(varDecl);
         } else if (stmt instanceof FunctionDeclaration funcDecl) {

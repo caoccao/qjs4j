@@ -336,6 +336,9 @@ final class ParserContext {
         if (expr instanceof MemberExpression) {
             return true;
         }
+        if (expr instanceof ArrayExpression || expr instanceof ObjectExpression) {
+            return true;
+        }
         return !strictMode && expr instanceof CallExpression;
     }
 
