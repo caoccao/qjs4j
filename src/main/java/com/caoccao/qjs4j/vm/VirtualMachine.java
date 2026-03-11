@@ -1006,6 +1006,7 @@ public final class VirtualMachine {
         int previousYieldSkipCount = yieldSkipCount;
         List<JSGeneratorState.ResumeRecord> previousGeneratorResumeRecords = generatorResumeRecords;
         int previousGeneratorResumeIndex = generatorResumeIndex;
+        YieldResult previousYieldResult = yieldResult;
 
         // Clear any previous yield result
         yieldResult = null;
@@ -1037,9 +1038,11 @@ public final class VirtualMachine {
             awaitSuspensionEnabled = true;
         }
         JSValue result;
+        YieldResult currentYieldResult;
         try {
             // Execute (or resume) the generator
             result = execute(function, thisArg, args);
+            currentYieldResult = yieldResult;
         } finally {
             awaitSuspensionEnabled = previousAwaitSuspensionEnabled;
             activeGeneratorState = previousActiveGeneratorState;
@@ -1048,16 +1051,17 @@ public final class VirtualMachine {
             yieldSkipCount = previousYieldSkipCount;
             generatorResumeRecords = previousGeneratorResumeRecords;
             generatorResumeIndex = previousGeneratorResumeIndex;
+            yieldResult = previousYieldResult;
         }
 
         // Check if generator yielded
-        if (yieldResult != null) {
+        if (currentYieldResult != null) {
             // Generator yielded - increment count and update state
             state.incrementYieldCount();
             state.setState(JSGeneratorState.State.SUSPENDED_YIELD);
             // Save yield result per-generator so each generator tracks its own yield* state
-            state.setLastYieldResult(yieldResult);
-            return yieldResult.value();
+            state.setLastYieldResult(currentYieldResult);
+            return currentYieldResult.value();
         } else if (awaitSuspensionPromise != null) {
             state.setAwaitSuspended(true);
             state.setState(JSGeneratorState.State.SUSPENDED_YIELD);

@@ -592,6 +592,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         if (isForOf) {
             // This is a for-of loop: for (let x of iterable)
+            if (parsedDecl instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getDeclarations().stream().anyMatch(
+                    variableDeclarator -> variableDeclarator != null && variableDeclarator.getInit() != null)) {
+                throw new JSSyntaxErrorException("Invalid initializer in for-of declaration");
+            }
             parserContext.expect(TokenType.OF);
             Expression iterable = delegates.expressions.parseExpression();
             parserContext.expect(TokenType.RPAREN);
