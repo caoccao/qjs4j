@@ -329,7 +329,7 @@ private static void initializeAsyncDisposableStackConstructor(JSContext context,
     
     // Create constructor object
     JSObject constructor = new JSObject();
-    constructor.set("prototype", prototype);
+    constructor.defineProperty(PropertyKey.fromString("prototype"), prototype, PropertyDescriptor.DataState.None);
     constructor.setConstructorType(ConstructorType.ASYNC_DISPOSABLE_STACK);
     prototype.set("constructor", constructor);
     

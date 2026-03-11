@@ -103,15 +103,13 @@ final class StatementLoopCompiler {
     }
 
     void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        }
+        emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);
 
+        emitEvalReturnUndefinedIfNeeded();
         owner.compileStatement(doWhileStmt.getBody());
 
         int testStart = compilerContext.emitter.currentOffset();
@@ -136,10 +134,7 @@ final class StatementLoopCompiler {
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        }
+        emitEvalReturnUndefinedIfNeeded();
 
         boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;
         VariableDeclaration varDecl = null;
@@ -206,6 +201,7 @@ final class StatementLoopCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        emitEvalReturnUndefinedIfNeeded();
 
         if (isExpressionBased) {
             compileForOfExpressionTargetAssignment((Expression) forInStmt.getLeft());
@@ -253,10 +249,7 @@ final class StatementLoopCompiler {
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        }
+        emitEvalReturnUndefinedIfNeeded();
 
         boolean isExpressionBased = !(forOfStmt.getLeft() instanceof VariableDeclaration);
         VariableDeclaration varDecl = null;
@@ -333,6 +326,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+            emitEvalReturnUndefinedIfNeeded();
             if (isExpressionBased) {
                 compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
             } else {
@@ -341,6 +335,7 @@ final class StatementLoopCompiler {
         } else {
             compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+            emitEvalReturnUndefinedIfNeeded();
             if (isExpressionBased) {
                 compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
             } else {
@@ -380,10 +375,7 @@ final class StatementLoopCompiler {
     }
 
     void compileForStatement(ForStatement forStmt) {
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        }
+        emitEvalReturnUndefinedIfNeeded();
 
         boolean initCompiled = false;
         if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
@@ -410,6 +402,11 @@ final class StatementLoopCompiler {
             }
         }
 
+        if (forStmt.getInit() instanceof VariableDeclaration lexicalForInit
+                && lexicalForInit.getKind() != VariableKind.VAR) {
+            delegates.emitHelpers.emitCloseLocForPattern(lexicalForInit);
+        }
+
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);
@@ -419,6 +416,7 @@ final class StatementLoopCompiler {
             delegates.expressions.compileExpression(forStmt.getTest());
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         }
+        emitEvalReturnUndefinedIfNeeded();
 
         owner.compileStatement(forStmt.getBody());
 
@@ -457,10 +455,7 @@ final class StatementLoopCompiler {
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        }
+        emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
@@ -468,6 +463,7 @@ final class StatementLoopCompiler {
 
         delegates.expressions.compileExpression(whileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+        emitEvalReturnUndefinedIfNeeded();
 
         owner.compileStatement(whileStmt.getBody());
 
@@ -486,5 +482,12 @@ final class StatementLoopCompiler {
         }
 
         compilerContext.loopStack.pop();
+    }
+
+    private void emitEvalReturnUndefinedIfNeeded() {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
     }
 }

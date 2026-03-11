@@ -596,13 +596,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 || parserContext.isUsingDeclarationStart()
                 || parserContext.isAwaitUsingDeclarationStart()
                 || parserContext.match(TokenType.LET);
-        if (parseAsDeclarationHead) {
-            if (parserContext.match(TokenType.LET) && !parserContext.strictMode) {
-                Token lookahead = parserContext.peek();
-                if (lookahead != null && (lookahead.type() == TokenType.IN || lookahead.type() == TokenType.OF)) {
-                    parseAsDeclarationHead = false;
-                }
-            }
+        if (parseAsDeclarationHead && parserContext.match(TokenType.LET)) {
+            parseAsDeclarationHead = shouldParseLetAsLexicalDeclarationInForHead();
         }
         if (parseAsDeclarationHead) {
             // Annex B: suppress 'in' as binary operator only for 'var' in non-strict mode
@@ -716,13 +711,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     || parserContext.match(TokenType.CONST)
                     || parserContext.isUsingDeclarationStart()
                     || parserContext.isAwaitUsingDeclarationStart();
-            if (parseAsDeclarationInTraditionalFor
-                    && parserContext.match(TokenType.LET)
-                    && !parserContext.strictMode) {
-                Token lookahead = parserContext.peek();
-                if (lookahead != null && (lookahead.type() == TokenType.IN || lookahead.type() == TokenType.OF)) {
-                    parseAsDeclarationInTraditionalFor = false;
-                }
+            if (parseAsDeclarationInTraditionalFor && parserContext.match(TokenType.LET)) {
+                parseAsDeclarationInTraditionalFor = shouldParseLetAsLexicalDeclarationInForHead();
             }
             if (parseAsDeclarationInTraditionalFor) {
                 if (parserContext.isAwaitUsingDeclarationStart()) {
@@ -852,6 +842,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
         validateNoLexicalDeclarationInStatementPosition(body);
         validateNoUsingDeclarationWithInitializerInStatementPosition(body);
+        if (init instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
+            validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
+        }
 
         return new ForStatement(init, test, update, body, location);
     }
@@ -1432,6 +1425,23 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Statement body = parseStatement();
         validateNoLexicalDeclarationInStatementPosition(body);
         return new WithStatement(object, body, location);
+    }
+
+    private boolean shouldParseLetAsLexicalDeclarationInForHead() {
+        if (!parserContext.match(TokenType.LET)) {
+            return true;
+        }
+        if (parserContext.strictMode) {
+            return true;
+        }
+        Token lookahead = parserContext.peek();
+        if (lookahead == null) {
+            return true;
+        }
+        return switch (lookahead.type()) {
+            case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET, LBRACKET, LBRACE -> true;
+            default -> false;
+        };
     }
 
     private void validateBlockEarlyErrors(List<Statement> statements) {

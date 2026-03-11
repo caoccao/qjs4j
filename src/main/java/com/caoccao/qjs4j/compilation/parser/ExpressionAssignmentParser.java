@@ -276,6 +276,17 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
+    private boolean isAsyncArrowParameterIdentifierToken(TokenType tokenType) {
+        return tokenType == TokenType.IDENTIFIER
+                || tokenType == TokenType.ASYNC
+                || tokenType == TokenType.AWAIT
+                || tokenType == TokenType.YIELD
+                || tokenType == TokenType.FROM
+                || tokenType == TokenType.OF
+                || tokenType == TokenType.AS
+                || tokenType == TokenType.LET;
+    }
+
     private boolean isOptionalChainExpression(Expression expression) {
         if (expression instanceof MemberExpression memberExpression) {
             return memberExpression.isOptional() || isOptionalChainExpression(memberExpression.getObject());
@@ -361,7 +372,8 @@ final class ExpressionAssignmentParser {
                     return expressions.parsePostPrimaryExpression(asyncFunc, location);
                 }
 
-                if (parserContext.match(TokenType.IDENTIFIER) && parserContext.nextToken.type() == TokenType.ARROW) {
+                if (isAsyncArrowParameterIdentifierToken(parserContext.currentToken.type())
+                        && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
                     validateBindingIdentifier(param.getName());
                     parserContext.expect(TokenType.ARROW);

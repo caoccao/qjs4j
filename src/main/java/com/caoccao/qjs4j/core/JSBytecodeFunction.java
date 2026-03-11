@@ -139,7 +139,9 @@ public final class JSBytecodeFunction extends JSFunction {
         } else if (isConstructor) {
             // User-defined function constructor: prototype is {writable: true, enumerable: false, configurable: false}
             JSObject funcPrototype = new JSObject(context);
-            funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
+            funcPrototype.defineProperty(
+                    PropertyKey.CONSTRUCTOR,
+                    PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
             this.defineProperty(PropertyKey.PROTOTYPE,
                     PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.Writable));
         }

@@ -1070,6 +1070,10 @@ final class ExpressionCompiler {
         emitCapturedOrGlobalIdentifierLookup(name);
     }
 
+    void emitIdentifierReference(String name) {
+        assignmentCompiler.emitIdentifierReference(name);
+    }
+
     private boolean emitInheritedWithAwareIdentifierLookup(String name) {
         if (compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
             return false;

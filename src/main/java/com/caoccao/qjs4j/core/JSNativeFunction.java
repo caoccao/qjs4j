@@ -71,7 +71,9 @@ public final class JSNativeFunction extends JSFunction {
         // Native functions have a prototype property only if they are constructors
         if (isConstructor) {
             JSObject funcPrototype = new JSObject(context);
-            funcPrototype.set(PropertyKey.CONSTRUCTOR, this);
+            funcPrototype.defineProperty(
+                    PropertyKey.CONSTRUCTOR,
+                    PropertyDescriptor.dataDescriptor(this, PropertyDescriptor.DataState.ConfigurableWritable));
             // Default prototype is configurable so it can be deleted (Proxy) or overridden by explicit setup
             this.defineProperty(PropertyKey.PROTOTYPE,
                     PropertyDescriptor.dataDescriptor(funcPrototype, PropertyDescriptor.DataState.ConfigurableWritable));

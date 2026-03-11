@@ -24,7 +24,7 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.List;
+import java.util.*;
 
 /**
  * Delegate compiler for pattern matching and destructuring assignment compilation.
@@ -33,10 +33,12 @@ import java.util.List;
 final class PatternCompiler {
     private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
+    private final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
 
     PatternCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
+        this.preResolvedBindingReferences = new HashMap<>();
     }
 
     void compileArrayDestructuringAssignment(ArrayExpression arrayExpr) {
@@ -489,7 +491,14 @@ final class PatternCompiler {
         if (pattern instanceof Identifier id) {
             // Simple identifier: value is on stack, just assign it
             String varName = id.getName();
-            if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
+            if (emitAssignmentUsingPreResolvedBindingReference(varName)) {
+                // Assignment consumed by a cached ResolveBinding reference.
+            } else if (useExistingBindingInParentScopes
+                    && compilerContext.hasActiveWithObject()) {
+                delegates.expressions.emitIdentifierReference(varName);
+                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+            } else if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: let/const was pre-declared as a local for TDZ enforcement
                 Integer tdzLocal = compilerContext.findLocalInScopes(varName);
                 if (tdzLocal != null) {
@@ -554,17 +563,11 @@ final class PatternCompiler {
                 Expression propertyKey = prop.getKey();
                 if (!prop.isComputed() && propertyKey instanceof Identifier identifier) {
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
-                        delegates.expressions.compileIdentifier(bindingIdentifier);
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
+                    maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, identifier.getName());
                 } else if (!prop.isComputed() && propertyKey instanceof Literal literal && literal.getValue() instanceof String propertyName) {
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
-                        delegates.expressions.compileIdentifier(bindingIdentifier);
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
+                    maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyName);
                 } else if (!prop.isComputed() && propertyKey instanceof Literal literal
                         && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
@@ -576,19 +579,13 @@ final class PatternCompiler {
                         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
                     }
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
-                        delegates.expressions.compileIdentifier(bindingIdentifier);
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
+                    maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else {
                     delegates.expressions.compileExpression(propertyKey);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
-                    if (useExistingBindingInParentScopes && bindingIdentifier != null) {
-                        delegates.expressions.compileIdentifier(bindingIdentifier);
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
-                    }
+                    maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 }
                 // Assign to the pattern (could be nested)
@@ -917,6 +914,24 @@ final class PatternCompiler {
         }
     }
 
+    private boolean emitAssignmentUsingPreResolvedBindingReference(String variableName) {
+        Deque<PreResolvedReference> references = preResolvedBindingReferences.get(variableName);
+        if (references == null || references.isEmpty()) {
+            return false;
+        }
+
+        PreResolvedReference reference = references.removeFirst();
+        if (references.isEmpty()) {
+            preResolvedBindingReferences.remove(variableName);
+        }
+
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, reference.objectLocalIndex());
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, reference.propertyLocalIndex());
+        compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+        compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+        return true;
+    }
+
     private void emitConstAssignmentError(String name) {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
@@ -1047,6 +1062,35 @@ final class PatternCompiler {
         }
     }
 
+    private void maybePreResolveBindingIdentifierReference(
+            Identifier bindingIdentifier,
+            boolean useExistingBindingInParentScopes) {
+        if (!useExistingBindingInParentScopes || bindingIdentifier == null) {
+            return;
+        }
+
+        if (!compilerContext.hasActiveWithObject()) {
+            delegates.expressions.compileIdentifier(bindingIdentifier);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            return;
+        }
+
+        String bindingName = bindingIdentifier.getName();
+        delegates.expressions.emitIdentifierReference(bindingName);
+
+        int propertyLocalIndex = compilerContext.currentScope().declareLocal(
+                "$preResolvedRefProp" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyLocalIndex);
+
+        int objectLocalIndex = compilerContext.currentScope().declareLocal(
+                "$preResolvedRefObj" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, objectLocalIndex);
+
+        preResolvedBindingReferences
+                .computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
+                .addLast(new PreResolvedReference(objectLocalIndex, propertyLocalIndex));
+    }
+
     /**
      * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT.
      * Per spec (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not
@@ -1079,5 +1123,8 @@ final class PatternCompiler {
         }
         // Identifiers and nested patterns: no pre-evaluation needed
         return 0;
+    }
+
+    private record PreResolvedReference(int objectLocalIndex, int propertyLocalIndex) {
     }
 }
