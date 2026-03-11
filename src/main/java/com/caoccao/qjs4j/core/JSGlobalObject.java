@@ -71,7 +71,7 @@ public final class JSGlobalObject {
         this.context = context;
         this.console = new JSConsole();
         this.globalObject = new JSObject(context);
-        this.jsonObject = new JSONObject();
+        this.jsonObject = new JSONObject(context);
     }
 
     public JSConsole getConsole() {
@@ -1225,10 +1225,18 @@ public final class JSGlobalObject {
      */
     private void initializeJSONObject() {
         JSObject json = context.createJSObject();
-        json.defineProperty(PropertyKey.fromString("parse"), new JSNativeFunction(context, "parse", 2, jsonObject::parse), PropertyDescriptor.DataState.ConfigurableWritable);
-        json.defineProperty(PropertyKey.fromString("stringify"), new JSNativeFunction(context, "stringify", 3, jsonObject::stringify), PropertyDescriptor.DataState.ConfigurableWritable);
-        json.defineProperty(PropertyKey.fromString("rawJSON"), new JSNativeFunction(context, "rawJSON", 1, jsonObject::rawJSON), PropertyDescriptor.DataState.ConfigurableWritable);
-        json.defineProperty(PropertyKey.fromString("isRawJSON"), new JSNativeFunction(context, "isRawJSON", 1, jsonObject::isRawJSON), PropertyDescriptor.DataState.ConfigurableWritable);
+        json.defineProperty(PropertyKey.fromString("parse"),
+                new JSNativeFunction(context, "parse", 2, (ignoredContext, thisArg, args) -> jsonObject.parse(thisArg, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        json.defineProperty(PropertyKey.fromString("stringify"),
+                new JSNativeFunction(context, "stringify", 3, (ignoredContext, thisArg, args) -> jsonObject.stringify(thisArg, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        json.defineProperty(PropertyKey.fromString("rawJSON"),
+                new JSNativeFunction(context, "rawJSON", 1, (ignoredContext, thisArg, args) -> jsonObject.rawJSON(thisArg, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        json.defineProperty(PropertyKey.fromString("isRawJSON"),
+                new JSNativeFunction(context, "isRawJSON", 1, (ignoredContext, thisArg, args) -> jsonObject.isRawJSON(thisArg, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
         json.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("JSON"), PropertyDescriptor.DataState.Configurable);
 
         globalObject.defineProperty(PropertyKey.fromString("JSON"), json, PropertyDescriptor.DataState.ConfigurableWritable);
