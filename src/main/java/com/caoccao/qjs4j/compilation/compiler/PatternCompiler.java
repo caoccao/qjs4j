@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSNumber;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
@@ -148,6 +149,9 @@ final class PatternCompiler {
         if (target instanceof Identifier id) {
             String name = id.getName();
             Integer localIndex = compilerContext.findLocalInScopes(name);
+            if (localIndex == null && JSArguments.NAME.equals(name)) {
+                localIndex = ensureImplicitArgumentsLocalBinding();
+            }
             if (localIndex != null) {
                 if (compilerContext.isLocalBindingConst(name)) {
                     emitConstAssignmentErrorForLocal(name, localIndex);
@@ -957,6 +961,24 @@ final class PatternCompiler {
         for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preservedLocalIndexes[valueIndex]);
         }
+    }
+
+    private Integer ensureImplicitArgumentsLocalBinding() {
+        if (compilerContext.inGlobalScope) {
+            return null;
+        }
+        if (compilerContext.isInArrowFunction && !compilerContext.hasEnclosingArgumentsBinding) {
+            return null;
+        }
+        Integer localIndex = compilerContext.findLocalInScopes(JSArguments.NAME);
+        if (localIndex != null) {
+            return localIndex;
+        }
+        CompilerScope currentScope = compilerContext.currentScope();
+        if (currentScope == null) {
+            return null;
+        }
+        return currentScope.declareLocal(JSArguments.NAME);
     }
 
     /**

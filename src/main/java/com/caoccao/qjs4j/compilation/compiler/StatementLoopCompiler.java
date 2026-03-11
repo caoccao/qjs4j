@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -143,49 +142,61 @@ final class StatementLoopCompiler {
         }
 
         boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;
-        String varName = null;
         VariableDeclaration varDecl = null;
+        Pattern declarationPattern = null;
+        boolean isVar = false;
 
         if (!isExpressionBased) {
             varDecl = (VariableDeclaration) forInStmt.getLeft();
             if (varDecl.getDeclarations().size() != 1) {
                 throw new JSCompilerException("for-in loop must have exactly one variable");
             }
-            Pattern pattern = varDecl.getDeclarations().get(0).getId();
-            if (!(pattern instanceof Identifier id)) {
-                throw new JSCompilerException("for-in loop variable must be an identifier");
+            declarationPattern = varDecl.getDeclarations().get(0).getId();
+            isVar = varDecl.getKind() == VariableKind.VAR;
+            if (isVar && !compilerContext.inGlobalScope) {
+                delegates.patterns.declarePatternVariables(declarationPattern);
             }
-            varName = id.getName();
+        }
 
-            if (varDecl.getKind() == VariableKind.VAR) {
-                compilerContext.currentScope().declareLocal(varName);
+        boolean hasHeadTdzScope = !isExpressionBased && !isVar;
+        if (hasHeadTdzScope && declarationPattern != null) {
+            compilerContext.enterScope();
+            delegates.patterns.declarePatternVariables(declarationPattern);
+            if (declarationPattern != null) {
+                for (String boundName : CompilerContext.extractBoundNames(declarationPattern)) {
+                    Integer localIndex = compilerContext.currentScope().getLocal(boundName);
+                    if (localIndex != null) {
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.tdzLocals.add(boundName);
+                    }
+                }
             }
+            delegates.expressions.compileExpression(forInStmt.getRight());
+            compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
+            compilerContext.exitScope();
         }
 
         compilerContext.enterScope();
 
-        Integer varIndex = null;
+        if (!isExpressionBased && !isVar && declarationPattern != null) {
+            delegates.patterns.declarePatternVariables(declarationPattern);
+            if (varDecl != null && varDecl.getKind() == VariableKind.CONST) {
+                delegates.patterns.markPatternConstBindings(declarationPattern);
+            }
+        }
+
         if (!isExpressionBased) {
-            if (varDecl.getKind() != VariableKind.VAR) {
-                compilerContext.currentScope().declareLocal(varName);
-                if (varDecl.getKind() == VariableKind.CONST) {
-                    compilerContext.currentScope().markConstLocal(varName);
-                }
-            }
-            varIndex = compilerContext.findLocalInScopes(varName);
-        }
-
-        if (!isExpressionBased && varDecl != null && varDecl.getDeclarations().get(0).getInit() != null) {
-            delegates.expressions.compileExpression(varDecl.getDeclarations().get(0).getInit());
-            if (varIndex != null) {
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, varIndex);
-            } else {
-                compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, varName);
+            Expression initializer = varDecl != null ? varDecl.getDeclarations().get(0).getInit() : null;
+            if (initializer != null && declarationPattern != null) {
+                delegates.expressions.compileExpression(initializer);
+                delegates.patterns.compileForOfValueAssignment(declarationPattern, true);
             }
         }
 
-        delegates.expressions.compileExpression(forInStmt.getRight());
-        compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
+        if (!hasHeadTdzScope) {
+            delegates.expressions.compileExpression(forInStmt.getRight());
+            compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
+        }
 
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
@@ -197,54 +208,15 @@ final class StatementLoopCompiler {
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         if (isExpressionBased) {
-            Expression leftExpr = (Expression) forInStmt.getLeft();
-            if (leftExpr instanceof Identifier id) {
-                Integer localIdx = compilerContext.findLocalInScopes(id.getName());
-                if (localIdx != null) {
-                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIdx);
-                } else {
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
-                }
-            } else if (leftExpr instanceof MemberExpression memberExpr) {
-                delegates.expressions.compileExpression(memberExpr.getObject());
-                if (memberExpr.isComputed()) {
-                    delegates.expressions.compileExpression(memberExpr.getProperty());
-                    throw new JSCompilerException("Computed member expression in for-in not yet supported");
-                } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-                    JSSymbol privateSymbol = compilerContext.privateSymbols.get(privateIdentifier.getName());
-                    if (privateSymbol == null) {
-                        throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
-                    }
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
-                    compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                } else if (memberExpr.getProperty() instanceof Identifier propertyIdentifier) {
-                    compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propertyIdentifier.getName());
-                    compilerContext.emitter.emitOpcode(Opcode.DROP);
-                } else {
-                    throw new JSCompilerException("Invalid for-in assignment target");
-                }
-            } else if (leftExpr instanceof CallExpression) {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                delegates.expressions.compileExpression(leftExpr);
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-                compilerContext.emitter.emitU8(5);
-            } else {
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            }
-        } else if (varIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, varIndex);
-        } else {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compileForOfExpressionTargetAssignment((Expression) forInStmt.getLeft());
+        } else if (declarationPattern != null) {
+            delegates.patterns.compileForOfValueAssignment(declarationPattern, isVar);
         }
 
         owner.compileStatement(forInStmt.getBody());
 
-        if (!isExpressionBased && varDecl != null && varDecl.getKind() != VariableKind.VAR && varIndex != null) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, varIndex);
+        if (!isExpressionBased && !isVar && declarationPattern != null) {
+            delegates.emitHelpers.emitCloseLocForPattern(declarationPattern);
         }
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
@@ -318,7 +290,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
         }
 
-        if (!isExpressionBased && (!isVar || compilerContext.inGlobalScope)) {
+        if (!isExpressionBased && !isVar) {
             delegates.patterns.declarePatternVariables(pattern);
             if (varDecl != null && (varDecl.getKind() == VariableKind.CONST
                     || varDecl.getKind() == VariableKind.USING

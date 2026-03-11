@@ -1956,17 +1956,43 @@ public final class OpcodeHandler {
         for (int i = 0; i < depth; i++) {
             executionContext.virtualMachine.forOfTempValues[i] = executionContext.virtualMachine.valueStack.pop();
         }
-        // Now top of stack is the iterator catch marker (JSCatchOffset(0))
+        int markerIndex = -1;
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        for (int index = executionContext.virtualMachine.valueStack.stackTop - 1;
+             index >= executionContext.frameStackBase;
+             index--) {
+            if (stack[index] instanceof JSCatchOffset catchOffset && catchOffset.isIteratorCloseMarker()) {
+                markerIndex = index;
+                break;
+            }
+        }
+        if (markerIndex < 2) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
+        }
+
+        int preservedMarkerCount = executionContext.virtualMachine.valueStack.stackTop - markerIndex - 1;
+        JSStackValue[] preservedMarkers = preservedMarkerCount > 0 ? new JSStackValue[preservedMarkerCount] : null;
+        for (int markerOffset = 0; markerOffset < preservedMarkerCount; markerOffset++) {
+            preservedMarkers[markerOffset] = executionContext.virtualMachine.valueStack.popStackValue();
+        }
+
         JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
 
-        // Now peek next method and iterator (don't pop - they stay for next iteration)
-        JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);  // next method (top)
-        JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);    // iterator object (below next)
+        int stackTop = executionContext.virtualMachine.valueStack.stackTop;
+        if (stackTop < 2) {
+            throw new JSVirtualMachineException(
+                    executionContext.virtualMachine.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
+        }
+        JSStackValue nextMethodStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 1];
+        JSStackValue iteratorStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 2];
+        JSValue nextMethod = nextMethodStackValue instanceof JSValue jsValue ? jsValue : null;
+        JSValue iterator = iteratorStackValue instanceof JSValue jsValue ? jsValue : null;
 
         // Call iterator.next()
         if (!(nextMethod instanceof JSFunction nextFunc)) {
-            String actualType = nextMethod == null ? "null" : nextMethod.getClass().getSimpleName();
-            String iterType = iterator == null ? "null" : iterator.getClass().getSimpleName();
+            String actualType = nextMethodStackValue == null ? "null" : nextMethodStackValue.getClass().getSimpleName();
+            String iterType = iteratorStackValue == null ? "null" : iteratorStackValue.getClass().getSimpleName();
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
                     "Next method must be a function in FOR_OF_NEXT (nextMethod="
                             + actualType + ", iterator=" + iterType + ")"));
@@ -1978,6 +2004,9 @@ public final class OpcodeHandler {
         if (executionContext.virtualMachine.context.hasPendingException()) {
             // Restore stack before throwing
             executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+            for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+            }
             for (int i = depth - 1; i >= 0; i--) {
                 executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
                 executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -1998,6 +2027,9 @@ public final class OpcodeHandler {
         JSValue doneValue = resultObj.get(PropertyKey.DONE);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+            for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+            }
             for (int i = depth - 1; i >= 0; i--) {
                 executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
                 executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -2015,6 +2047,9 @@ public final class OpcodeHandler {
             value = resultObj.get(PropertyKey.VALUE);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+                for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                    executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+                }
                 for (int i = depth - 1; i >= 0; i--) {
                     executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
                     executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -2032,6 +2067,9 @@ public final class OpcodeHandler {
 
         // Push catch_offset back, then restore temp values, then push value and done
         executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+        for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+            executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+        }
         for (int i = depth - 1; i >= 0; i--) {
             executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
             executionContext.virtualMachine.forOfTempValues[i] = null;
@@ -3409,9 +3447,35 @@ public final class OpcodeHandler {
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;
         JSValue originalPendingException = executionContext.virtualMachine.pendingException;
-        sp--;
-        sp--;
-        JSValue iteratorValue = (JSValue) stack[--sp];
+        int markerIndex = -1;
+        for (int index = sp - 1; index >= executionContext.frameStackBase; index--) {
+            if (stack[index] instanceof JSCatchOffset catchOffset && catchOffset.isIteratorCloseMarker()) {
+                markerIndex = index;
+                break;
+            }
+        }
+        if (markerIndex < 0 && sp > executionContext.frameStackBase) {
+            JSStackValue markerCandidate = stack[sp - 1];
+            if (markerCandidate instanceof JSNumber markerNumber && markerNumber.value() == 0) {
+                markerIndex = sp - 1;
+            }
+        }
+        if (markerIndex < 2) {
+            executionContext.pc += op.getSize();
+            return;
+        }
+
+        int removeStartIndex = markerIndex - 2;
+        JSValue iteratorValue = stack[removeStartIndex] instanceof JSValue jsValue ? jsValue : JSUndefined.INSTANCE;
+        int tailCount = sp - (markerIndex + 1);
+        if (tailCount > 0) {
+            System.arraycopy(stack, markerIndex + 1, stack, removeStartIndex, tailCount);
+        }
+        sp -= 3;
+        for (int index = sp; index < sp + 3 && index < stack.length; index++) {
+            stack[index] = null;
+        }
+
         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
             JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
             if (executionContext.virtualMachine.context.hasPendingException()) {

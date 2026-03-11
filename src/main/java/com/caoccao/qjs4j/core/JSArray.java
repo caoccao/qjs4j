@@ -581,21 +581,6 @@ public final class JSArray extends JSObject {
         return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
     }
 
-    /**
-     * Check if the prototype chain contains an exotic object (e.g., TypedArray)
-     * whose [[Set]] behavior must be respected per ES2024 OrdinarySet step 5.c.
-     */
-    private boolean hasExoticSetInPrototypeChain() {
-        JSObject proto = getPrototype();
-        while (proto != null) {
-            if (proto instanceof JSTypedArray) {
-                return true;
-            }
-            proto = proto.getPrototype();
-        }
-        return false;
-    }
-
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
         if (super.hasOwnProperty(key)) {
@@ -612,6 +597,21 @@ public final class JSArray extends JSObject {
             return intIndex < denseArray.length && denseArray[intIndex] != null;
         }
         return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
+    }
+
+    private boolean hasPrototypeSetInterference(PropertyKey key) {
+        JSObject prototypeObject = getPrototype();
+        Set<JSObject> visitedObjects = new HashSet<>();
+        while (prototypeObject != null && visitedObjects.add(prototypeObject)) {
+            if (prototypeObject instanceof JSTypedArray || prototypeObject instanceof JSProxy) {
+                return true;
+            }
+            if (prototypeObject.getOwnPropertyDescriptor(key) != null) {
+                return true;
+            }
+            prototypeObject = prototypeObject.getPrototype();
+        }
+        return false;
     }
 
     /**
@@ -777,10 +777,8 @@ public final class JSArray extends JSObject {
     public void set(PropertyKey key, JSValue value) {
         long index = getArrayIndex(key);
         if (index >= 0) {
-            // When adding a new element (index >= length), check if the prototype
-            // chain has exotic [[Set]] behavior (e.g., TypedArray) that must be
-            // consulted per ES2024 OrdinarySet step 5.c before creating a property.
-            if (index >= length && hasExoticSetInPrototypeChain()) {
+            boolean hasOwnIndexedElement = hasElement(index);
+            if (!hasOwnIndexedElement && hasPrototypeSetInterference(key)) {
                 super.set(key, value);
             } else {
                 set(index, value);

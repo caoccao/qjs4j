@@ -111,6 +111,40 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
+    private void collectPatternBoundNamesAndCheckDuplicates(Pattern pattern, Set<String> names) {
+        if (pattern instanceof Identifier identifier) {
+            String name = identifier.getName();
+            if (!names.add(name)) {
+                throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
+            }
+            return;
+        }
+        if (pattern instanceof ArrayPattern arrayPattern) {
+            for (Pattern element : arrayPattern.getElements()) {
+                if (element != null) {
+                    collectPatternBoundNamesAndCheckDuplicates(element, names);
+                }
+            }
+            return;
+        }
+        if (pattern instanceof ObjectPattern objectPattern) {
+            for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                collectPatternBoundNamesAndCheckDuplicates(property.getValue(), names);
+            }
+            if (objectPattern.getRestElement() != null) {
+                collectPatternBoundNamesAndCheckDuplicates(objectPattern.getRestElement().getArgument(), names);
+            }
+            return;
+        }
+        if (pattern instanceof AssignmentPattern assignmentPattern) {
+            collectPatternBoundNamesAndCheckDuplicates(assignmentPattern.getLeft(), names);
+            return;
+        }
+        if (pattern instanceof RestElement restElement) {
+            collectPatternBoundNamesAndCheckDuplicates(restElement.getArgument(), names);
+        }
+    }
+
     /**
      * Collect binding names from a pattern (identifier, array, object destructuring).
      */
@@ -557,8 +591,20 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         // Try to parse as variable declaration (without consuming semicolon,
         // since we need to check for 'of' or 'in' first)
-        if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)
-                || parserContext.isUsingDeclarationStart() || parserContext.isAwaitUsingDeclarationStart()) {
+        boolean parseAsDeclarationHead = parserContext.match(TokenType.VAR)
+                || parserContext.match(TokenType.CONST)
+                || parserContext.isUsingDeclarationStart()
+                || parserContext.isAwaitUsingDeclarationStart()
+                || parserContext.match(TokenType.LET);
+        if (parseAsDeclarationHead) {
+            if (parserContext.match(TokenType.LET) && !parserContext.strictMode) {
+                Token lookahead = parserContext.peek();
+                if (lookahead != null && (lookahead.type() == TokenType.IN || lookahead.type() == TokenType.OF)) {
+                    parseAsDeclarationHead = false;
+                }
+            }
+        }
+        if (parseAsDeclarationHead) {
             // Annex B: suppress 'in' as binary operator only for 'var' in non-strict mode
             // (allows for-in initializers: for (var a = expr in obj))
             boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
@@ -592,6 +638,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
         if (isForOf) {
             // This is a for-of loop: for (let x of iterable)
+            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
+                throw new JSSyntaxErrorException("Expected VariableDeclaration in for-of loop");
+            }
+            if (varDecl.getDeclarations().size() != 1) {
+                throw new JSSyntaxErrorException("for-of loop must have exactly one declaration");
+            }
+            validateForInOfDeclarationBoundNames(varDecl);
             if (parsedDecl instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getDeclarations().stream().anyMatch(
                     variableDeclarator -> variableDeclarator != null && variableDeclarator.getInit() != null)) {
@@ -602,13 +655,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
             validateNoLabelledFunctionInIterationBody(body);
+            validateNoFunctionDeclarationInIterationBody(body, "for-of");
             validateNoLexicalDeclarationInStatementPosition(body);
             validateNoUsingDeclarationWithInitializerInStatementPosition(body);
-
-            // parsedDecl should be a VariableDeclaration
-            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
-                throw new JSSyntaxErrorException("Expected VariableDeclaration in for-of loop");
-            }
+            validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
 
             return new ForOfStatement(varDecl, iterable, body, isAwait, location);
         }
@@ -622,19 +672,24 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     && (varDeclCheck.getKind() == VariableKind.USING || varDeclCheck.getKind() == VariableKind.AWAIT_USING)) {
                 throw new JSSyntaxErrorException("The left-hand side of a for-in loop may not be a using declaration");
             }
+            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
+                throw new JSSyntaxErrorException("Expected VariableDeclaration in for-in loop");
+            }
+            if (varDecl.getDeclarations().size() != 1) {
+                throw new JSSyntaxErrorException("for-in loop must have exactly one declaration");
+            }
+            validateForInOfDeclarationBoundNames(varDecl);
+            validateForInDeclarationInitializers(varDecl);
             // This is a for-in loop: for (var x in obj)
             parserContext.expect(TokenType.IN);
             Expression object = delegates.expressions.parseExpression();
             parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
             validateNoLabelledFunctionInIterationBody(body);
+            validateNoFunctionDeclarationInIterationBody(body, "for-in");
             validateNoLexicalDeclarationInStatementPosition(body);
             validateNoUsingDeclarationWithInitializerInStatementPosition(body);
-
-            // parsedDecl should be a VariableDeclaration
-            if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
-                throw new JSSyntaxErrorException("Expected VariableDeclaration in for-in loop");
-            }
+            validateForInOfDeclarationBodyEarlyErrors(varDecl, body);
 
             return new ForInStatement(varDecl, object, body, location);
         }
@@ -655,8 +710,20 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             parserContext.expect(TokenType.SEMICOLON); // consume ; after init declaration
         } else if (!parserContext.match(TokenType.SEMICOLON)) {
-            if (parserContext.match(TokenType.VAR) || parserContext.match(TokenType.LET) || parserContext.match(TokenType.CONST)
-                    || parserContext.isUsingDeclarationStart() || parserContext.isAwaitUsingDeclarationStart()) {
+            boolean parseAsDeclarationInTraditionalFor = parserContext.match(TokenType.VAR)
+                    || parserContext.match(TokenType.LET)
+                    || parserContext.match(TokenType.CONST)
+                    || parserContext.isUsingDeclarationStart()
+                    || parserContext.isAwaitUsingDeclarationStart();
+            if (parseAsDeclarationInTraditionalFor
+                    && parserContext.match(TokenType.LET)
+                    && !parserContext.strictMode) {
+                Token lookahead = parserContext.peek();
+                if (lookahead != null && (lookahead.type() == TokenType.IN || lookahead.type() == TokenType.OF)) {
+                    parseAsDeclarationInTraditionalFor = false;
+                }
+            }
+            if (parseAsDeclarationInTraditionalFor) {
                 if (parserContext.isAwaitUsingDeclarationStart()) {
                     init = parseUsingDeclaration(true);
                 } else if (parserContext.isUsingDeclarationStart()) {
@@ -674,6 +741,28 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.inOperatorAllowed = allowInInsideDestructuringHead;
                 Expression expr = delegates.expressions.parseAssignmentExpression();
                 parserContext.inOperatorAllowed = savedInOperatorAllowed;
+                if (expr instanceof BinaryExpression binaryExpression
+                        && binaryExpression.getOperator() == BinaryOperator.IN
+                        && parserContext.match(TokenType.RPAREN)) {
+                    if (isAwait) {
+                        throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
+                    }
+                    Expression leftExpression = binaryExpression.getLeft();
+                    if (!parserContext.isValidForInOfTarget(leftExpression)) {
+                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                    }
+                    int errorOffset = binaryExpression.getLocation() != null
+                            ? binaryExpression.getLocation().offset()
+                            : parserContext.currentToken.offset();
+                    delegates.expressions.validateForInOfAssignmentTarget(leftExpression, errorOffset);
+                    parserContext.expect(TokenType.RPAREN);
+                    Statement body = parseStatement();
+                    validateNoLabelledFunctionInIterationBody(body);
+                    validateNoFunctionDeclarationInIterationBody(body, "for-in");
+                    validateNoLexicalDeclarationInStatementPosition(body);
+                    validateNoUsingDeclarationWithInitializerInStatementPosition(body);
+                    return new ForInStatement(leftExpression, binaryExpression.getRight(), body, location);
+                }
                 if (parserContext.match(TokenType.IN)) {
                     if (isAwait) {
                         throw new JSSyntaxErrorException("'for await' loop should be used with 'of'");
@@ -689,6 +778,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     validateNoLabelledFunctionInIterationBody(body);
+                    validateNoFunctionDeclarationInIterationBody(body, "for-in");
                     validateNoLexicalDeclarationInStatementPosition(body);
                     validateNoUsingDeclarationWithInitializerInStatementPosition(body);
                     return new ForInStatement(expr, object, body, location);
@@ -703,6 +793,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     validateNoLabelledFunctionInIterationBody(body);
+                    validateNoFunctionDeclarationInIterationBody(body, "for-of");
                     validateNoLexicalDeclarationInStatementPosition(body);
                     validateNoUsingDeclarationWithInitializerInStatementPosition(body);
                     return new ForOfStatement(expr, iterable, body, isAwait, location);
@@ -1224,11 +1315,20 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
 
             Pattern id = delegates.patterns.parsePattern();
+            Set<String> declaredNames = new HashSet<>();
             if (kind != VariableKind.VAR) {
-                Set<String> declaredNames = new HashSet<>();
-                collectPatternBoundNames(id, declaredNames);
+                collectPatternBoundNamesAndCheckDuplicates(id, declaredNames);
                 if (declaredNames.contains(JSKeyword.LET)) {
                     throw new JSSyntaxErrorException("let is disallowed as a lexically bound name");
+                }
+            } else {
+                collectPatternBoundNames(id, declaredNames);
+            }
+            if (parserContext.strictMode) {
+                for (String declaredName : declaredNames) {
+                    if (JSKeyword.EVAL.equals(declaredName) || JSKeyword.ARGUMENTS.equals(declaredName)) {
+                        throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+                    }
                 }
             }
             if (isUsingKind && !(id instanceof Identifier)) {
@@ -1365,6 +1465,56 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (varNames.contains(lexicalName)) {
                 throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
             }
+        }
+    }
+
+    private void validateForInDeclarationInitializers(VariableDeclaration variableDeclaration) {
+        if (variableDeclaration == null || variableDeclaration.getDeclarations().isEmpty()) {
+            return;
+        }
+        VariableDeclaration.VariableDeclarator declarator = variableDeclaration.getDeclarations().get(0);
+        if (declarator.getInit() == null) {
+            return;
+        }
+        if (variableDeclaration.getKind() != VariableKind.VAR) {
+            throw new JSSyntaxErrorException("Invalid initializer in for-in declaration");
+        }
+        if (parserContext.strictMode || !(declarator.getId() instanceof Identifier)) {
+            throw new JSSyntaxErrorException("Invalid initializer in for-in declaration");
+        }
+    }
+
+    private void validateForInOfDeclarationBodyEarlyErrors(VariableDeclaration declaration, Statement statement) {
+        if (declaration == null || declaration.getKind() == VariableKind.VAR) {
+            return;
+        }
+        Set<String> boundNames = new HashSet<>();
+        for (VariableDeclaration.VariableDeclarator declarator : declaration.getDeclarations()) {
+            collectPatternBoundNames(declarator.getId(), boundNames);
+        }
+        Set<String> varNames = new HashSet<>();
+        collectVarDeclaredNames(statement, varNames);
+        for (String boundName : boundNames) {
+            if (varNames.contains(boundName)) {
+                throw new JSSyntaxErrorException("Identifier '" + boundName + "' has already been declared");
+            }
+        }
+    }
+
+    private void validateForInOfDeclarationBoundNames(VariableDeclaration declaration) {
+        if (declaration == null || declaration.getKind() == VariableKind.VAR) {
+            return;
+        }
+        Set<String> boundNames = new HashSet<>();
+        for (VariableDeclaration.VariableDeclarator declarator : declaration.getDeclarations()) {
+            collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), boundNames);
+        }
+    }
+
+    private void validateNoFunctionDeclarationInIterationBody(Statement statement, String statementKind) {
+        if (statement instanceof FunctionDeclaration) {
+            throw new JSSyntaxErrorException(
+                    "Function declarations are not allowed in " + statementKind + " statement position");
         }
     }
 
