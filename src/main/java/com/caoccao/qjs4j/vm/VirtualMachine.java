@@ -1349,16 +1349,29 @@ public final class VirtualMachine {
     }
 
     JSValue readReferenceValue(StackFrame frame, Opcode makeRefOpcode, int refIndex) {
-        return switch (makeRefOpcode) {
-            case MAKE_LOC_REF -> (refIndex >= 0 && refIndex < frame.getLocals().length)
-                    ? frame.getLocals()[refIndex]
-                    : JSUndefined.INSTANCE;
-            case MAKE_ARG_REF -> (refIndex >= 0 && refIndex < frame.getArguments().length)
-                    ? frame.getArguments()[refIndex]
-                    : JSUndefined.INSTANCE;
-            case MAKE_VAR_REF_REF -> frame.getVarRef(refIndex);
-            default -> JSUndefined.INSTANCE;
-        };
+        JSValue referenceValue;
+        switch (makeRefOpcode) {
+            case MAKE_LOC_REF -> {
+                if (refIndex < 0 || refIndex >= frame.getLocals().length) {
+                    return JSUndefined.INSTANCE;
+                }
+                referenceValue = frame.getLocals()[refIndex];
+            }
+            case MAKE_ARG_REF -> {
+                if (refIndex < 0 || refIndex >= frame.getArguments().length) {
+                    return JSUndefined.INSTANCE;
+                }
+                referenceValue = frame.getArguments()[refIndex];
+            }
+            case MAKE_VAR_REF_REF -> referenceValue = frame.getVarRef(refIndex);
+            default -> {
+                return JSUndefined.INSTANCE;
+            }
+        }
+        if (isUninitialized(referenceValue)) {
+            throwVariableUninitializedReferenceError();
+        }
+        return referenceValue;
     }
 
     JSVirtualMachineException referenceErrorNotDefined(PropertyKey key) {
@@ -1603,6 +1616,9 @@ public final class VirtualMachine {
         switch (makeRefOpcode) {
             case MAKE_LOC_REF -> {
                 if (refIndex >= 0 && refIndex < frame.getLocals().length) {
+                    if (isUninitialized(frame.getLocals()[refIndex])) {
+                        throwVariableUninitializedReferenceError();
+                    }
                     frame.getLocals()[refIndex] = value;
                 }
             }
@@ -1611,7 +1627,12 @@ public final class VirtualMachine {
                     frame.getArguments()[refIndex] = value;
                 }
             }
-            case MAKE_VAR_REF_REF -> frame.setVarRef(refIndex, value);
+            case MAKE_VAR_REF_REF -> {
+                if (isUninitialized(frame.getVarRef(refIndex))) {
+                    throwVariableUninitializedReferenceError();
+                }
+                frame.setVarRef(refIndex, value);
+            }
             default -> {
             }
         }

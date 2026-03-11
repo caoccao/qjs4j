@@ -432,7 +432,8 @@ final class ExpressionAssignmentCompiler {
                     if (compilerContext.isCapturedBindingConst(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     } else {
-                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_VAR_REF, capturedIndex);
+                        compilerContext.emitter.emitOpcode(Opcode.DUP);
+                        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_VAR_REF_CHECK, capturedIndex);
                     }
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.DUP);

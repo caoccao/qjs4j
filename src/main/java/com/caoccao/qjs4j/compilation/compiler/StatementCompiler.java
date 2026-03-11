@@ -77,7 +77,7 @@ final class StatementCompiler {
         boolean savedGlobalScope = compilerContext.inGlobalScope;
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
-        // Single pass: pre-declare lexical bindings and hoist function declarations
+        // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
                 for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
@@ -105,10 +105,18 @@ final class StatementCompiler {
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
-            } else if (stmt instanceof FunctionDeclaration funcDecl) {
+            }
+        }
+
+        // Phase 2: hoist function declarations after lexical bindings exist,
+        // so nested function bodies resolve captures against block-scoped names.
+        for (Statement stmt : block.getBody()) {
+            if (stmt instanceof FunctionDeclaration funcDecl) {
                 delegates.functions.compileFunctionDeclaration(funcDecl);
             }
         }
+
+        // Phase 3: compile non-function statements in source order.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted
@@ -171,6 +179,13 @@ final class StatementCompiler {
                 throw new JSSyntaxErrorException(
                         "In strict mode code, functions can only be declared at top level or inside a block.");
             }
+        }
+
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            // IfStatement completion defaults to undefined before branch evaluation.
+            // Branch statements that produce a completion value overwrite this slot.
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
 
         // Compile condition
