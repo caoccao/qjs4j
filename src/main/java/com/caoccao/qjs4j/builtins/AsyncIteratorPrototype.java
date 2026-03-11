@@ -83,7 +83,7 @@ public final class AsyncIteratorPrototype {
             } else if (e.getJsError() != null) {
                 resultPromise.reject(e.getJsError());
             } else {
-                JSValue error = context.throwError( e.getMessage() != null ? e.getMessage() : e.toString());
+                JSValue error = context.throwError(e.getMessage() != null ? e.getMessage() : e.toString());
                 context.clearAllPendingExceptions();
                 resultPromise.reject(error);
             }
@@ -94,7 +94,7 @@ public final class AsyncIteratorPrototype {
                 context.clearAllPendingExceptions();
                 resultPromise.reject(exception);
             } else {
-                JSValue error = context.throwError( e.getMessage() != null ? e.getMessage() : e.toString());
+                JSValue error = context.throwError(e.getMessage() != null ? e.getMessage() : e.toString());
                 context.clearAllPendingExceptions();
                 resultPromise.reject(error);
             }

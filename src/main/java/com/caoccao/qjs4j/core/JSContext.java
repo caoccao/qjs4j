@@ -1858,7 +1858,7 @@ public final class JSContext implements AutoCloseable {
                 JSValue exception = getPendingException();
                 throw new JSException(exception);
             }
-            JSValue error = throwError( "VM error: " + e.getMessage());
+            JSValue error = throwError("VM error: " + e.getMessage());
             throw new JSException(error);
         } catch (JSErrorException e) {
             if (dynamicImportEvalModuleRecord != null
@@ -1872,7 +1872,7 @@ public final class JSContext implements AutoCloseable {
                     && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
                 dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
             }
-            JSValue error = throwError( "Execution error: " + e.getMessage());
+            JSValue error = throwError("Execution error: " + e.getMessage());
             throw new JSException(error);
         } finally {
             if (selfModuleRecord != null) {
@@ -3576,7 +3576,7 @@ public final class JSContext implements AutoCloseable {
             throw jsException;
         } catch (Exception exception) {
             dynamicImportModuleCache.remove(resolvedSpecifier);
-            throw new JSException(throwError( exception.getMessage() != null ? exception.getMessage() : "Module load error"));
+            throw new JSException(throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
     }
 
@@ -5109,7 +5109,7 @@ public final class JSContext implements AutoCloseable {
 
     public JSError throwError(JSErrorException jsErrorException) {
         if (jsErrorException == null) {
-            return throwError( "Unknown error");
+            return throwError("Unknown error");
         }
         return throwError(jsErrorException.getErrorType().name(), jsErrorException.getMessage());
     }

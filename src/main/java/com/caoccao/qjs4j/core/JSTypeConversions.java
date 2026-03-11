@@ -130,7 +130,7 @@ public final class JSTypeConversions {
             if (jsValue != null) {
                 context.setPendingException(jsValue);
             } else {
-                context.setPendingException(context.throwError( e.getMessage()));
+                context.setPendingException(context.throwError(e.getMessage()));
             }
         }
     }

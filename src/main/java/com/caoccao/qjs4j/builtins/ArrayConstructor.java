@@ -64,7 +64,7 @@ public final class ArrayConstructor {
             }
         }
         String message = e.getMessage() != null ? e.getMessage() : e.toString();
-        JSValue error = context.throwError( message);
+        JSValue error = context.throwError(message);
         context.clearPendingException();
         return error;
     }

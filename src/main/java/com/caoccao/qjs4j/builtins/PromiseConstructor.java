@@ -77,13 +77,13 @@ public final class PromiseConstructor {
                 } else if (e.getJsError() != null) {
                     context.setPendingException(e.getJsError());
                 } else {
-                    context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                 }
             }
             return JSUndefined.INSTANCE;
         } catch (Exception e) {
             if (!context.hasPendingException()) {
-                context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
             }
             return JSUndefined.INSTANCE;
         }
@@ -111,13 +111,13 @@ public final class PromiseConstructor {
                 } else if (e.getJsError() != null) {
                     context.setPendingException(e.getJsError());
                 } else {
-                    context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                 }
             }
             return JSUndefined.INSTANCE;
         } catch (Exception e) {
             if (!context.hasPendingException()) {
-                context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
             }
             return JSUndefined.INSTANCE;
         }
@@ -137,7 +137,7 @@ public final class PromiseConstructor {
             }
         } catch (Exception e) {
             if (!context.hasPendingException()) {
-                context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
             }
         }
         if (context.hasPendingException()) {
@@ -280,14 +280,14 @@ public final class PromiseConstructor {
                     } else if (e.getJsError() != null) {
                         context.setPendingException(e.getJsError());
                     } else {
-                        context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                        context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                 }
                 iteratorDone[0] = true;
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
             } catch (Exception e) {
                 if (!context.hasPendingException()) {
-                    context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                 }
                 iteratorDone[0] = true;
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone[0]);
@@ -496,14 +496,14 @@ public final class PromiseConstructor {
                     } else if (e.getJsError() != null) {
                         context.setPendingException(e.getJsError());
                     } else {
-                        context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                        context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                 }
                 iteratorDone = true;
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);
             } catch (Exception e) {
                 if (!context.hasPendingException()) {
-                    context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                    context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                 }
                 iteratorDone = true;
                 return rejectAbruptPromiseMaybeClose(context, iteratorObject, promiseCapability, iteratorDone);

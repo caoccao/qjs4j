@@ -2965,7 +2965,7 @@ public final class OpcodeHandler {
             context.clearPendingException();
             JSValue errorValue = exception.getErrorValue();
             if (errorValue == null) {
-                errorValue = context.throwError( exception.getMessage());
+                errorValue = context.throwError(exception.getMessage());
                 context.clearPendingException();
             }
             if (!resolveState.alreadyResolved) {
@@ -2982,7 +2982,7 @@ public final class OpcodeHandler {
                 errorValue = exception.getJsError();
             }
             if (errorValue == null) {
-                errorValue = context.throwError( exception.getMessage() != null
+                errorValue = context.throwError(exception.getMessage() != null
                         ? exception.getMessage()
                         : "Module load error");
                 context.clearPendingException();

@@ -98,7 +98,7 @@ public final class JSONObject {
         if (e.getErrorValue() != null) {
             context.setPendingException(e.getErrorValue());
         } else if (!context.hasPendingException()) {
-            context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
     }
 
@@ -108,7 +108,7 @@ public final class JSONObject {
         } else if (e.getJsError() != null) {
             context.setPendingException(e.getJsError());
         } else if (!context.hasPendingException()) {
-            context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            context.throwError(e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
     }
 
