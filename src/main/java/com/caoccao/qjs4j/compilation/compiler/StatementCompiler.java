@@ -22,10 +22,7 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Compiles statement AST nodes into bytecode.
@@ -146,13 +143,26 @@ final class StatementCompiler {
      */
     private void compileFinallyBlockBody(BlockStatement block) {
         compilerContext.enterScope();
-        for (Statement stmt : block.getBody()) {
-            if (stmt instanceof ExpressionStatement exprStmt) {
-                delegates.expressions.compileExpression(exprStmt.getExpression());
-                compilerContext.emitter.emitOpcode(Opcode.DROP);
-            } else {
+        compilerContext.finallySubroutineDepth++;
+        int savedEvalReturnLocalIndex = -1;
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            savedEvalReturnLocalIndex = compilerContext.currentScope().declareLocal(
+                    "$finally_eval_ret_" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, compilerContext.evalReturnLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, savedEvalReturnLocalIndex);
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+        try {
+            for (Statement stmt : block.getBody()) {
                 compileStatement(stmt, false);
             }
+        } finally {
+            compilerContext.finallySubroutineDepth--;
+        }
+        if (savedEvalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, savedEvalReturnLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
@@ -559,6 +569,11 @@ final class StatementCompiler {
     }
 
     void compileReturnStatement(ReturnStatement retStmt) {
+        if (compilerContext.finallySubroutineDepth > 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
+
         // Tail call optimization: when the return argument has a call in tail position
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
@@ -607,11 +622,17 @@ final class StatementCompiler {
 
         // Execute active finally blocks via GOSUB before returning.
         // Walk from innermost to outermost finally context.
-        for (List<Integer> gosubPatches : compilerContext.activeFinallyGosubPatches) {
+        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
+        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
+        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
+            List<Integer> gosubPatches = gosubPatchIterator.next();
+            int nipCatchCount = nipCatchCountIterator.next();
             // Push dummy value (NIP_CATCH expects a value on top of the CatchOffset)
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             // NIP_CATCH removes the CatchOffset for this try-finally, keeps dummy on top
-            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            for (int i = 0; i < nipCatchCount; i++) {
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            }
             // GOSUB pushes return address and jumps to finally block (patched later)
             int gosubPos = compilerContext.emitter.emitJump(Opcode.GOSUB);
             gosubPatches.add(gosubPos);
@@ -667,9 +688,10 @@ final class StatementCompiler {
         } else if (stmt instanceof TryStatement tryStmt) {
             compileTryStatement(tryStmt);
             // Try statements produce a value on the stack (the try/catch result).
-            // Always drop it — when eval_ret_idx is active, expression statements
-            // inside the try/catch already store to eval_ret_idx.
+            // When eval_ret_idx is active, store the completion value first.
             if (compilerContext.evalReturnLocalIndex >= 0) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else if (!isLastInProgram) {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -692,8 +714,69 @@ final class StatementCompiler {
     }
 
     void compileSwitchStatement(SwitchStatement switchStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            // Default switch completion value is undefined.
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         // Compile discriminant
         delegates.expressions.compileExpression(switchStmt.getDiscriminant());
+
+        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.enterScope();
+        compilerContext.inGlobalScope = false;
+
+        // Switch creates a lexical environment before evaluating case selectors.
+        for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
+            for (Statement statement : switchCase.getConsequent()) {
+                if (statement instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() != VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                        Set<String> declarationNames = new HashSet<>();
+                        delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
+                        for (String declarationName : declarationNames) {
+                            Integer localIndex = compilerContext.currentScope().getLocal(declarationName);
+                            if (localIndex == null) {
+                                localIndex = compilerContext.currentScope().declareLocal(declarationName);
+                            }
+                            if (variableDeclaration.getKind() == VariableKind.CONST
+                                    || variableDeclaration.getKind() == VariableKind.USING
+                                    || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
+                                compilerContext.currentScope().markConstLocal(declarationName);
+                            }
+                            compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                            compilerContext.tdzLocals.add(declarationName);
+                        }
+                    }
+                } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                    String className = classDeclaration.getId().getName();
+                    Integer localIndex = compilerContext.currentScope().getLocal(className);
+                    if (localIndex == null) {
+                        localIndex = compilerContext.currentScope().declareLocal(className);
+                    }
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    compilerContext.tdzLocals.add(className);
+                } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+                    String functionName = functionDeclaration.getId().getName();
+                    Integer localIndex = compilerContext.currentScope().getLocal(functionName);
+                    if (localIndex == null) {
+                        localIndex = compilerContext.currentScope().declareLocal(functionName);
+                    }
+                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                    compilerContext.tdzLocals.add(functionName);
+                }
+            }
+        }
+
+        // BlockDeclarationInstantiation for switch case block: initialize function declarations.
+        for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
+            for (Statement statement : switchCase.getConsequent()) {
+                if (statement instanceof FunctionDeclaration functionDeclaration) {
+                    delegates.functions.compileFunctionDeclaration(functionDeclaration);
+                }
+            }
+        }
 
         List<Integer> caseJumps = new ArrayList<>();
         List<Integer> caseBodyStarts = new ArrayList<>();
@@ -726,14 +809,8 @@ final class StatementCompiler {
         // Jump to default or end
         int jumpToDefault = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        // Compile case bodies
-        // The switch body always creates a block scope for lexical declarations (let/const).
-        // Per QuickJS: push_scope is unconditional for switch statements.
-        boolean savedGlobalScope = compilerContext.inGlobalScope;
-        compilerContext.enterScope();
-        compilerContext.inGlobalScope = false;
-
         LoopContext loop = compilerContext.createLoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeDepth, compilerContext.scopeDepth);
+        loop.isSwitchStatement = true;
         compilerContext.loopStack.push(loop);
 
         int defaultBodyStart = -1;
@@ -748,6 +825,9 @@ final class StatementCompiler {
             }
 
             for (Statement stmt : switchCase.getConsequent()) {
+                if (stmt instanceof FunctionDeclaration) {
+                    continue; // already initialized by block declaration instantiation
+                }
                 compileStatement(stmt);
             }
         }
@@ -837,38 +917,8 @@ final class StatementCompiler {
                     delegates.patterns.compilePatternAssignment(catchParam);
                 }
 
-                // Compile catch body in the SAME scope as the parameter
-                List<Statement> body = handler.getBody().getBody();
-                if (compilerContext.evalReturnLocalIndex >= 0) {
-                    // When eval_ret_idx is active, use compileStatement for proper handling
-                    for (Statement stmt : body) {
-                        compileStatement(stmt);
-                    }
-                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                } else {
-                    for (int i = 0; i < body.size(); i++) {
-                        boolean isLast = (i == body.size() - 1);
-                        Statement stmt = body.get(i);
-
-                        if (stmt instanceof ExpressionStatement exprStmt) {
-                            delegates.expressions.compileExpression(exprStmt.getExpression());
-                            // Keep the value on stack for the last expression, drop otherwise
-                            if (!isLast) {
-                                compilerContext.emitter.emitOpcode(Opcode.DROP);
-                            }
-                        } else {
-                            compileStatement(stmt, false);
-                            // If last statement is not an expression, push undefined
-                            if (isLast) {
-                                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                            }
-                        }
-                    }
-                    // If block is empty, push undefined
-                    if (body.isEmpty()) {
-                        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                    }
-                }
+                // Catch body has its own block lexical environment nested under parameter scope.
+                compileTryFinallyBlock(handler.getBody());
 
                 compilerContext.inGlobalScope = savedGlobalScope;
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
@@ -890,38 +940,102 @@ final class StatementCompiler {
         boolean savedGlobalScope = compilerContext.inGlobalScope;
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
-        List<Statement> body = block.getBody();
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            // When eval_ret_idx is active, expression statements store to it.
-            // The try block still needs to leave a value on the stack for NIP_CATCH.
-            for (Statement stmt : body) {
-                compileStatement(stmt);
-            }
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-        } else {
-            for (int i = 0; i < body.size(); i++) {
-                boolean isLast = (i == body.size() - 1);
-                Statement stmt = body.get(i);
 
-                if (stmt instanceof ExpressionStatement exprStmt) {
-                    delegates.expressions.compileExpression(exprStmt.getExpression());
-                    // Keep the value on stack for the last expression, drop otherwise
-                    if (!isLast) {
-                        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        List<Statement> body = block.getBody();
+
+        // Phase 1: pre-declare lexical bindings for TDZ.
+        for (Statement statement : body) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    Set<String> declarationNames = new HashSet<>();
+                    delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
+                    for (String declarationName : declarationNames) {
+                        Integer localIndex = compilerContext.currentScope().getLocal(declarationName);
+                        if (localIndex == null) {
+                            localIndex = compilerContext.currentScope().declareLocal(declarationName);
+                        }
+                        if (variableDeclaration.getKind() == VariableKind.CONST
+                                || variableDeclaration.getKind() == VariableKind.USING
+                                || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
+                            compilerContext.currentScope().markConstLocal(declarationName);
+                        }
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.tdzLocals.add(declarationName);
                     }
-                } else {
-                    compileStatement(stmt, false);
-                    // If last statement is not an expression, push undefined
-                    if (isLast) {
-                        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                String className = classDeclaration.getId().getName();
+                Integer localIndex = compilerContext.currentScope().getLocal(className);
+                if (localIndex == null) {
+                    localIndex = compilerContext.currentScope().declareLocal(className);
+                }
+                compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                compilerContext.tdzLocals.add(className);
+            }
+        }
+
+        // Phase 2: hoist function declarations.
+        for (Statement statement : body) {
+            if (statement instanceof FunctionDeclaration functionDeclaration) {
+                delegates.functions.compileFunctionDeclaration(functionDeclaration);
+            }
+        }
+
+        // Phase 3: compile non-function statements and preserve block completion value.
+        int effectiveLastIndex = -1;
+        for (int index = body.size() - 1; index >= 0; index--) {
+            if (!(body.get(index) instanceof FunctionDeclaration)) {
+                effectiveLastIndex = index;
+                break;
+            }
+        }
+
+        for (int index = 0; index < body.size(); index++) {
+            Statement statement = body.get(index);
+            if (statement instanceof FunctionDeclaration) {
+                continue;
+            }
+            boolean isLast = index == effectiveLastIndex;
+
+            if (statement instanceof ExpressionStatement expressionStatement) {
+                delegates.expressions.compileExpression(expressionStatement.getExpression());
+                if (compilerContext.evalReturnLocalIndex >= 0) {
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+                }
+                if (!isLast) {
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                }
+            } else if (statement instanceof TryStatement tryStatement) {
+                compileTryStatement(tryStatement);
+                if (compilerContext.evalReturnLocalIndex >= 0) {
+                    compilerContext.emitter.emitOpcode(Opcode.DUP);
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+                }
+                if (!isLast) {
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                }
+            } else {
+                compileStatement(statement, false);
+                if (isLast) {
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    if (compilerContext.evalReturnLocalIndex >= 0) {
+                        compilerContext.emitter.emitOpcode(Opcode.DUP);
+                        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
                     }
                 }
             }
-            // If block is empty, push undefined
-            if (body.isEmpty()) {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        }
+
+        if (effectiveLastIndex < 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            if (compilerContext.evalReturnLocalIndex >= 0) {
+                compilerContext.emitter.emitOpcode(Opcode.DUP);
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
             }
         }
+
         compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
@@ -933,49 +1047,115 @@ final class StatementCompiler {
             return;
         }
 
-        // Collect GOSUB positions for return statements that need to execute the finally block
         List<Integer> gosubPatches = new ArrayList<>();
         compilerContext.activeFinallyGosubPatches.push(gosubPatches);
+        int finallyNipCatchCount = tryStmt.getHandler() != null ? 2 : 1;
+        compilerContext.activeFinallyNipCatchCounts.push(finallyNipCatchCount);
 
-        // Outer CATCH for exception path to finally
-        int finallyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
-
-        // Compile try body (with optional inner catch block)
-        compileTryCatchPart(tryStmt);
-
-        compilerContext.activeFinallyGosubPatches.pop();
-
-        // Normal path: inline finally (preserves existing stack value behavior)
-        compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compileTryFinallyBlock(tryStmt.getFinalizer());
-        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
-
-        // Exception path: inline finally, then rethrow
-        compilerContext.emitter.patchJump(finallyCatchJump, compilerContext.emitter.currentOffset());
-        compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
-        int exceptionLocalIndex = compilerContext.currentScope().declareLocal(
-                "$finally_exception_" + compilerContext.emitter.currentOffset());
-        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, exceptionLocalIndex);
-        compileTryFinallyBlock(tryStmt.getFinalizer());
-        compilerContext.emitter.emitOpcode(Opcode.DROP);
-        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
-        compilerContext.emitter.emitOpcode(Opcode.THROW);
-
-        // GOSUB finally block (only used by return statements inside try/catch bodies)
-        if (!gosubPatches.isEmpty()) {
-            int finallyOffset = compilerContext.emitter.currentOffset();
-            compileFinallyBlockBody(tryStmt.getFinalizer());
-            compilerContext.emitter.emitOpcode(Opcode.RET);
-
-            // Patch all GOSUBs to point to this finally block
-            for (int pos : gosubPatches) {
-                compilerContext.emitter.patchJump(pos, finallyOffset);
-            }
+        int finallyCatchJump = -1;
+        int catchFromTryJump;
+        if (tryStmt.getHandler() != null) {
+            finallyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            catchFromTryJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+        } else {
+            catchFromTryJump = compilerContext.emitter.emitJump(Opcode.CATCH);
         }
 
-        // End label
-        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        compileTryFinallyBlock(tryStmt.getBlock());
+        compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+        if (tryStmt.getHandler() != null) {
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+        }
+        int tryNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+        List<Integer> jumpsToEnd = new ArrayList<>();
+        jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+
+        int catchNormalGosub = -1;
+        int catchExceptionGosub = -1;
+        int finallyExceptionGosub = -1;
+
+        if (tryStmt.getHandler() != null) {
+            compilerContext.emitter.patchJump(catchFromTryJump, compilerContext.emitter.currentOffset());
+
+            TryStatement.CatchClause handler = tryStmt.getHandler();
+            if (handler.getParam() != null) {
+                compilerContext.enterScope();
+                boolean savedGlobalScope = compilerContext.inGlobalScope;
+                compilerContext.inGlobalScope = false;
+                Pattern catchParam = handler.getParam();
+                if (catchParam instanceof Identifier id) {
+                    int localIndex = compilerContext.currentScope().declareLocal(id.getName());
+                    compilerContext.currentScope().markSimpleCatchParam(id.getName());
+                    compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+                } else {
+                    delegates.patterns.declarePatternVariables(catchParam);
+                    delegates.patterns.compilePatternAssignment(catchParam);
+                }
+
+                int catchBodyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+                compileTryFinallyBlock(handler.getBody());
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                catchNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+                jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+                compilerContext.emitter.patchJump(catchBodyCatchJump, compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                catchExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+                compilerContext.emitter.emitOpcode(Opcode.THROW);
+
+                compilerContext.inGlobalScope = savedGlobalScope;
+                delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+                compilerContext.exitScope();
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+                int catchBodyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+                compileTryFinallyBlock(handler.getBody());
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                catchNormalGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+                jumpsToEnd.add(compilerContext.emitter.emitJump(Opcode.GOTO));
+                compilerContext.emitter.patchJump(catchBodyCatchJump, compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                catchExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+                compilerContext.emitter.emitOpcode(Opcode.THROW);
+            }
+            compilerContext.emitter.patchJump(finallyCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.markCatchAsFinally(finallyCatchJump);
+            finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+            compilerContext.emitter.emitOpcode(Opcode.THROW);
+        } else {
+            compilerContext.emitter.patchJump(catchFromTryJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitter.markCatchAsFinally(catchFromTryJump);
+            finallyExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
+            compilerContext.emitter.emitOpcode(Opcode.THROW);
+        }
+
+        compilerContext.activeFinallyGosubPatches.pop();
+        compilerContext.activeFinallyNipCatchCounts.pop();
+
+        int finallyOffset = compilerContext.emitter.currentOffset();
+        compileFinallyBlockBody(tryStmt.getFinalizer());
+        compilerContext.emitter.emitOpcode(Opcode.RET);
+
+        compilerContext.emitter.patchJump(tryNormalGosub, finallyOffset);
+        if (catchNormalGosub >= 0) {
+            compilerContext.emitter.patchJump(catchNormalGosub, finallyOffset);
+        }
+        if (catchExceptionGosub >= 0) {
+            compilerContext.emitter.patchJump(catchExceptionGosub, finallyOffset);
+        }
+        if (finallyExceptionGosub >= 0) {
+            compilerContext.emitter.patchJump(finallyExceptionGosub, finallyOffset);
+        }
+        for (int gosubPatch : gosubPatches) {
+            compilerContext.emitter.patchJump(gosubPatch, finallyOffset);
+        }
+
+        int endOffset = compilerContext.emitter.currentOffset();
+        for (int jumpToEnd : jumpsToEnd) {
+            compilerContext.emitter.patchJump(jumpToEnd, endOffset);
+        }
     }
 
     void compileVariableDeclaration(VariableDeclaration varDecl) {
@@ -1032,6 +1212,30 @@ final class StatementCompiler {
                 continue;
             }
 
+            if (varDecl.getKind() == VariableKind.VAR
+                    && declarator.getId() instanceof Identifier identifier
+                    && declarator.getInit() != null
+                    && compilerContext.hasActiveWithObject()) {
+                // Resolve binding before evaluating initializer (ES VariableDeclaration semantics).
+                delegates.expressions.emitIdentifierReference(identifier.getName());
+                int preResolvedPropertyLocalIndex = compilerContext.currentScope().declareLocal(
+                        "$preResolvedVarProperty_" + compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedPropertyLocalIndex);
+                int preResolvedObjectLocalIndex = compilerContext.currentScope().declareLocal(
+                        "$preResolvedVarObject_" + compilerContext.emitter.currentOffset());
+                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
+
+                delegates.expressions.compileExpression(declarator.getInit());
+                if (isAnonymousFunctionDefinition(declarator.getInit())) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
+                }
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preResolvedObjectLocalIndex);
+                compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preResolvedPropertyLocalIndex);
+                compilerContext.emitter.emitOpcode(Opcode.ROT3L);
+                compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
+                continue;
+            }
+
             // Compile initializer or push undefined
             if (declarator.getInit() != null) {
                 // Pass inferred name to anonymous class expressions for NamedEvaluation
@@ -1068,9 +1272,16 @@ final class StatementCompiler {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
         }
 
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            // Default with completion value is undefined.
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         compilerContext.enterScope();
         int withObjectLocalIndex = compilerContext.currentScope().declareLocal("$withObject" + compilerContext.scopeDepth);
         delegates.expressions.compileExpression(withStmt.getObject());
+        compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
         compilerContext.pushWithObjectLocal(withObjectLocalIndex);

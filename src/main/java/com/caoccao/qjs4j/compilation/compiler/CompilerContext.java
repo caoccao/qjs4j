@@ -31,6 +31,7 @@ import java.util.*;
  */
 final class CompilerContext {
     final Deque<List<Integer>> activeFinallyGosubPatches;
+    final Deque<Integer> activeFinallyNipCatchCounts;
     final Set<String> annexBFunctionNames;
     final Map<String, Integer> annexBFunctionScopeLocals;
     final CaptureResolver captureResolver;
@@ -46,6 +47,7 @@ final class CompilerContext {
     boolean emitTailCalls;
     boolean evalMode;
     int evalReturnLocalIndex;
+    int finallySubroutineDepth;
     boolean hasEnclosingArgumentsBinding;
     boolean inClassFieldInitializer;
     boolean inGlobalScope;
@@ -79,12 +81,14 @@ final class CompilerContext {
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
         this.activeFinallyGosubPatches = new ArrayDeque<>();
+        this.activeFinallyNipCatchCounts = new ArrayDeque<>();
         this.annexBFunctionNames = new HashSet<>();
         this.annexBFunctionScopeLocals = new HashMap<>();
         this.emitter = new BytecodeEmitter();
         this.context = context;
         this.evalMode = false;
         this.evalReturnLocalIndex = -1;
+        this.finallySubroutineDepth = 0;
         this.scopes = new ArrayDeque<>();
         this.loopStack = new ArrayDeque<>();
         this.withObjectLocalStack = new ArrayDeque<>();

@@ -267,6 +267,12 @@ public final class AstUtils {
         }
     }
 
+    private static boolean isAnnexBSimpleFunctionDeclaration(FunctionDeclaration functionDeclaration) {
+        return functionDeclaration != null
+                && !functionDeclaration.isAsync()
+                && !functionDeclaration.isGenerator();
+    }
+
     /**
      * Scan for Annex B function declaration candidates in compound statements.
      * These are function declarations inside blocks, if-statements, switch cases, etc.
@@ -285,7 +291,8 @@ public final class AstUtils {
 
             for (Statement s : block.getBody()) {
                 if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (!blockLexicals.contains(fd.getId().getName())) {
+                    if (isAnnexBSimpleFunctionDeclaration(fd)
+                            && !blockLexicals.contains(fd.getId().getName())) {
                         result.add(fd.getId().getName());
                     }
                 }
@@ -293,7 +300,8 @@ public final class AstUtils {
             }
         } else if (stmt instanceof IfStatement ifStmt) {
             if (ifStmt.getConsequent() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (!lexicalBindings.contains(fd.getId().getName())) {
+                if (isAnnexBSimpleFunctionDeclaration(fd)
+                        && !lexicalBindings.contains(fd.getId().getName())) {
                     result.add(fd.getId().getName());
                 }
             } else {
@@ -301,7 +309,8 @@ public final class AstUtils {
             }
             if (ifStmt.getAlternate() != null) {
                 if (ifStmt.getAlternate() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (!lexicalBindings.contains(fd.getId().getName())) {
+                    if (isAnnexBSimpleFunctionDeclaration(fd)
+                            && !lexicalBindings.contains(fd.getId().getName())) {
                         result.add(fd.getId().getName());
                     }
                 } else {
@@ -318,7 +327,8 @@ public final class AstUtils {
             for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
                 for (Statement s : sc.getConsequent()) {
                     if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                        if (!switchLexicals.contains(fd.getId().getName())) {
+                        if (isAnnexBSimpleFunctionDeclaration(fd)
+                                && !switchLexicals.contains(fd.getId().getName())) {
                             result.add(fd.getId().getName());
                         }
                     }

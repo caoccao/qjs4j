@@ -5221,8 +5221,11 @@ public final class OpcodeHandler {
         JSValue value = (JSValue) stack[sp - 1];
         JSObject object = executionContext.virtualMachine.toObject(value);
         if (object == null) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("value has no property"));
+            executionContext.virtualMachine.context.throwTypeError("Cannot convert undefined or null to object");
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+            executionContext.sp = sp;
+            executionContext.pc = pc;
+            return;
         }
         stack[sp - 1] = object;
         executionContext.pc = pc + op.getSize();

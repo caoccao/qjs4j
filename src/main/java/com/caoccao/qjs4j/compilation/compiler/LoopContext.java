@@ -32,6 +32,7 @@ final class LoopContext {
     final int startOffset;
     boolean hasIterator;
     boolean isRegularStmt; // true for labeled non-loop statements (break allowed, continue not)
+    boolean isSwitchStatement;
 
     LoopContext(int startOffset, int breakTargetScopeDepth, int continueTargetScopeDepth) {
         this(startOffset, breakTargetScopeDepth, continueTargetScopeDepth, null);

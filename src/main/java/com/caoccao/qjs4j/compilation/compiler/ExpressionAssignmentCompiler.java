@@ -550,9 +550,7 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSSymbol.UNSCOPABLES);
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
-        compilerContext.emitter.emitOpcode(Opcode.DUP);
-        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
-        int jumpToResolveWithoutUnscopables = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        int[] jumpToResolveWithoutUnscopables = emitWithUnscopablesSkipJumps();
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
@@ -561,7 +559,10 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
 
-        compilerContext.emitter.patchJump(jumpToResolveWithoutUnscopables, compilerContext.emitter.currentOffset());
+        int resolveWithoutUnscopablesOffset = compilerContext.emitter.currentOffset();
+        for (int jumpOffset : jumpToResolveWithoutUnscopables) {
+            compilerContext.emitter.patchJump(jumpOffset, resolveWithoutUnscopablesOffset);
+        }
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(name));
         jumpToResolvedOffsets.add(compilerContext.emitter.emitJump(Opcode.GOTO));
@@ -570,6 +571,27 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.patchJump(jumpToCandidateFallback, candidateFallbackOffset);
         compilerContext.emitter.patchJump(jumpToCandidateFallbackWhenBlocked, candidateFallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
+    }
+
+    private int[] emitWithUnscopablesSkipJumps() {
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToResolveWithoutUnscopablesOnNullish = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("object"));
+        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
+        int jumpToCheckBlockedWhenObject = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString("function"));
+        compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
+        int jumpToResolveWithoutUnscopablesOnPrimitive = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
+
+        compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
+        return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
     }
 
     private boolean isAnonymousFunctionDefinition(Expression expression) {

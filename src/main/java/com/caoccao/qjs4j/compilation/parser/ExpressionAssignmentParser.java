@@ -830,6 +830,9 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateBindingIdentifier(String name) {
+        if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
+            throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
         if (RESERVED_WORDS.contains(name)) {
             throw new JSSyntaxErrorException("Unexpected reserved word");
         }

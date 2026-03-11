@@ -17,6 +17,9 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.ast.Statement;
+import com.caoccao.qjs4j.compilation.ast.VariableDeclaration;
+import com.caoccao.qjs4j.compilation.ast.VariableKind;
 import com.caoccao.qjs4j.compilation.lexer.Lexer;
 import com.caoccao.qjs4j.compilation.parser.Parser;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
@@ -25,6 +28,7 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Bytecode;
 
 import java.util.Map;
@@ -71,6 +75,7 @@ public final class Compiler {
     public CompileResult compile(boolean isModule) {
         try {
             Program ast = parse(isModule);
+            validateTopLevelUsingDeclarations(ast, isModule);
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setContext(context);
             compiler.setSourceCode(source);
@@ -173,6 +178,20 @@ public final class Compiler {
     public Compiler setPredeclareProgramLexicalsAsLocals(boolean predeclareProgramLexicalsAsLocals) {
         this.predeclareProgramLexicalsAsLocals = predeclareProgramLexicalsAsLocals;
         return this;
+    }
+
+    private void validateTopLevelUsingDeclarations(Program ast, boolean isModule) {
+        if (isModule) {
+            return;
+        }
+        for (Statement statement : ast.getBody()) {
+            if (statement instanceof VariableDeclaration variableDeclaration) {
+                VariableKind kind = variableDeclaration.getKind();
+                if (kind == VariableKind.USING || kind == VariableKind.AWAIT_USING) {
+                    throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
+                }
+            }
+        }
     }
 
     public record CompileResult(JSBytecodeFunction function, Program ast) {

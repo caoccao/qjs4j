@@ -1146,6 +1146,8 @@ final class FunctionClassCompiler {
         // scope has a lexical binding for the same name (otherwise replacing this
         // function with var F would produce an Early Error).
         boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
+                && !funcDecl.isAsync()
+                && !funcDecl.isGenerator()
                 && !compilerContext.hasEnclosingBlockScopeLocal(functionName);
         Integer localIndex = compilerContext.findLocalInScopes(functionName);
         if (localIndex != null) {

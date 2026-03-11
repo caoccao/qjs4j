@@ -86,6 +86,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     private void collectPatternBoundNames(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier identifier) {
+            if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(identifier.getName())) {
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
             names.add(identifier.getName());
             return;
         }
@@ -114,6 +117,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     private void collectPatternBoundNamesAndCheckDuplicates(Pattern pattern, Set<String> names) {
         if (pattern instanceof Identifier identifier) {
             String name = identifier.getName();
+            if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
+                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+            }
             if (!names.add(name)) {
                 throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
             }
@@ -236,6 +242,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             }
             return;
         }
+        if (statement instanceof WithStatement withStatement) {
+            collectVarDeclaredNames(withStatement.getBody(), varNames);
+            return;
+        }
         if (statement instanceof TryStatement tryStatement) {
             collectVarDeclaredNames(tryStatement.getBlock(), varNames);
             if (tryStatement.getHandler() != null) {
@@ -244,6 +254,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (tryStatement.getFinalizer() != null) {
                 collectVarDeclaredNames(tryStatement.getFinalizer(), varNames);
             }
+            return;
+        }
+        if (statement instanceof LabeledStatement labeledStatement) {
+            collectVarDeclaredNames(labeledStatement.getBody(), varNames);
         }
     }
 
@@ -319,6 +333,22 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return true;
         }
         return labeledStatement.getBody() != null && isLabelledFunction(labeledStatement.getBody());
+    }
+
+    private boolean isUsingDeclarationStartInForHead() {
+        if (!parserContext.isUsingDeclarationStart()) {
+            return false;
+        }
+        Token bindingIdentifierToken = parserContext.peek();
+        if (bindingIdentifierToken == null || bindingIdentifierToken.type() != TokenType.OF) {
+            return true;
+        }
+        Token tokenAfterBindingIdentifier = parserContext.lexer.peekToken();
+        if (tokenAfterBindingIdentifier == null) {
+            return true;
+        }
+        return tokenAfterBindingIdentifier.type() != TokenType.OF
+                && tokenAfterBindingIdentifier.type() != TokenType.IN;
     }
 
     private boolean isWithKeyword() {
@@ -608,11 +638,13 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         boolean isForIn = false;
         Statement parsedDecl = null;
 
+        boolean usingDeclarationStartInForHead = isUsingDeclarationStartInForHead();
+
         // Try to parse as variable declaration (without consuming semicolon,
         // since we need to check for 'of' or 'in' first)
         boolean parseAsDeclarationHead = parserContext.match(TokenType.VAR)
                 || parserContext.match(TokenType.CONST)
-                || parserContext.isUsingDeclarationStart()
+                || usingDeclarationStartInForHead
                 || parserContext.isAwaitUsingDeclarationStart()
                 || parserContext.match(TokenType.LET);
         if (parseAsDeclarationHead && parserContext.match(TokenType.LET)) {
@@ -631,7 +663,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.expect(TokenType.AWAIT);
                 parserContext.advance(); // consume 'using'
                 parsedDecl = parseVariableDeclarationBody(VariableKind.AWAIT_USING, declLocation, false);
-            } else if (parserContext.isUsingDeclarationStart()) {
+            } else if (usingDeclarationStartInForHead) {
                 SourceLocation declLocation = parserContext.getLocation();
                 parserContext.advance(); // consume 'using'
                 parsedDecl = parseVariableDeclarationBody(VariableKind.USING, declLocation, false);
@@ -728,7 +760,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             boolean parseAsDeclarationInTraditionalFor = parserContext.match(TokenType.VAR)
                     || parserContext.match(TokenType.LET)
                     || parserContext.match(TokenType.CONST)
-                    || parserContext.isUsingDeclarationStart()
+                    || isUsingDeclarationStartInForHead()
                     || parserContext.isAwaitUsingDeclarationStart();
             if (parseAsDeclarationInTraditionalFor && parserContext.match(TokenType.LET)) {
                 parseAsDeclarationInTraditionalFor = shouldParseLetAsLexicalDeclarationInForHead();
@@ -736,7 +768,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parseAsDeclarationInTraditionalFor) {
                 if (parserContext.isAwaitUsingDeclarationStart()) {
                     init = parseUsingDeclaration(true);
-                } else if (parserContext.isUsingDeclarationStart()) {
+                } else if (isUsingDeclarationStartInForHead()) {
                     init = parseUsingDeclaration(false);
                 } else {
                     init = parseVariableDeclaration();
@@ -1136,6 +1168,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.statementNesting++;
         try {
             if (parserContext.isAwaitUsingDeclarationStart()) {
+                validateAwaitUsingDeclarationPlacement();
                 return parseUsingDeclaration(true);
             }
             if (parserContext.isUsingDeclarationStart()) {
@@ -1232,6 +1265,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         parserContext.expect(TokenType.LBRACE);
 
         List<SwitchStatement.SwitchCase> cases = new ArrayList<>();
+        boolean defaultClauseFound = false;
 
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             if (parserContext.match(TokenType.CASE)) {
@@ -1251,6 +1285,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
                 cases.add(new SwitchStatement.SwitchCase(test, consequent));
             } else if (parserContext.match(TokenType.DEFAULT)) {
+                if (defaultClauseFound) {
+                    throw new JSSyntaxErrorException("More than one default clause in switch statement");
+                }
+                defaultClauseFound = true;
                 parserContext.advance();
                 parserContext.expect(TokenType.COLON);
 
@@ -1266,11 +1304,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
                 cases.add(new SwitchStatement.SwitchCase(null, consequent));
             } else {
-                parserContext.advance(); // skip unexpected token
+                throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
             }
         }
 
         parserContext.expect(TokenType.RBRACE);
+        validateSwitchCaseBlockEarlyErrors(cases);
         return new SwitchStatement(discriminant, cases, location);
     }
 
@@ -1297,9 +1336,19 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             if (parserContext.match(TokenType.LPAREN)) {
                 parserContext.advance();
                 param = delegates.patterns.parsePattern();
+                Set<String> boundNames = new HashSet<>();
+                collectPatternBoundNamesAndCheckDuplicates(param, boundNames);
+                if (parserContext.strictMode) {
+                    for (String boundName : boundNames) {
+                        if (JSKeyword.EVAL.equals(boundName) || JSKeyword.ARGUMENTS.equals(boundName)) {
+                            throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+                        }
+                    }
+                }
                 parserContext.expect(TokenType.RPAREN);
             }
             BlockStatement catchBody = parseBlockStatement();
+            validateCatchClauseEarlyErrors(param, catchBody);
             handler = new TryStatement.CatchClause(param, catchBody);
         }
 
@@ -1307,6 +1356,10 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (parserContext.match(TokenType.FINALLY)) {
             parserContext.advance();
             finalizer = parseBlockStatement();
+        }
+
+        if (handler == null && finalizer == null) {
+            throw new JSSyntaxErrorException("Missing catch or finally after try");
         }
 
         return new TryStatement(block, handler, finalizer, location);
@@ -1458,6 +1511,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         Expression object = delegates.expressions.parseExpression();
         parserContext.expect(TokenType.RPAREN);
         Statement body = parseStatement();
+        validateNoFunctionDeclarationInWithStatementPosition(body);
+        validateNoLabelledFunctionInWithStatementPosition(body);
         validateNoLexicalDeclarationInStatementPosition(body);
         return new WithStatement(object, body, location);
     }
@@ -1477,6 +1532,17 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             case IDENTIFIER, ASYNC, AWAIT, YIELD, FROM, OF, AS, LET, LBRACKET, LBRACE -> true;
             default -> false;
         };
+    }
+
+    private void validateAwaitUsingDeclarationPlacement() {
+        if (parserContext.moduleMode
+                || parserContext.functionNesting > 0
+                || parserContext.statementNesting > 1
+                || parserContext.inClassStaticInit
+                || parserContext.classBodyNesting > 0) {
+            return;
+        }
+        throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
     }
 
     private void validateBlockEarlyErrors(List<Statement> statements) {
@@ -1523,6 +1589,34 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         for (String lexicalName : lexicalNames) {
             if (varNames.contains(lexicalName)) {
                 throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
+            }
+        }
+    }
+
+    private void validateCatchClauseEarlyErrors(Pattern catchParameter, BlockStatement catchBody) {
+        if (catchParameter == null || catchBody == null) {
+            return;
+        }
+        Set<String> catchParameterNames = new HashSet<>();
+        collectPatternBoundNames(catchParameter, catchParameterNames);
+
+        Set<String> lexicalNames = new HashSet<>();
+        for (Statement statement : catchBody.getBody()) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() != VariableKind.VAR) {
+                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBoundNames(declarator.getId(), lexicalNames);
+                }
+            } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+                lexicalNames.add(functionDeclaration.getId().getName());
+            } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                lexicalNames.add(classDeclaration.getId().getName());
+            }
+        }
+
+        for (String catchParameterName : catchParameterNames) {
+            if (lexicalNames.contains(catchParameterName)) {
+                throw new JSSyntaxErrorException("Identifier '" + catchParameterName + "' has already been declared");
             }
         }
     }
@@ -1592,7 +1686,19 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
+    private void validateNoFunctionDeclarationInWithStatementPosition(Statement statement) {
+        if (statement instanceof FunctionDeclaration) {
+            throw new JSSyntaxErrorException("Function declarations are not allowed in with statement position");
+        }
+    }
+
     private void validateNoLabelledFunctionInIterationBody(Statement statement) {
+        if (isLabelledFunction(statement)) {
+            throw new JSSyntaxErrorException("Labelled functions are only allowed at body level");
+        }
+    }
+
+    private void validateNoLabelledFunctionInWithStatementPosition(Statement statement) {
         if (isLabelledFunction(statement)) {
             throw new JSSyntaxErrorException("Labelled functions are only allowed at body level");
         }
@@ -1650,6 +1756,63 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 varNames.add(functionDeclaration.getId().getName());
             }
             collectVarDeclaredNames(statement, varNames);
+        }
+
+        for (String lexicalName : lexicalNames) {
+            if (varNames.contains(lexicalName)) {
+                throw new JSSyntaxErrorException("Identifier '" + lexicalName + "' has already been declared");
+            }
+        }
+    }
+
+    private void validateSwitchCaseBlockEarlyErrors(List<SwitchStatement.SwitchCase> cases) {
+        Set<String> lexicalNames = new HashSet<>();
+        Set<String> simpleFunctionLexicalNames = new HashSet<>();
+        Set<String> varNames = new HashSet<>();
+
+        if (cases == null) {
+            return;
+        }
+
+        for (SwitchStatement.SwitchCase switchCase : cases) {
+            if (switchCase == null) {
+                continue;
+            }
+            for (Statement statement : switchCase.getConsequent()) {
+                if (statement instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() != VariableKind.VAR) {
+                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                        Set<String> declarationNames = new HashSet<>();
+                        collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), declarationNames);
+                        for (String declarationName : declarationNames) {
+                            if (!lexicalNames.add(declarationName)) {
+                                throw new JSSyntaxErrorException("Identifier '" + declarationName + "' has already been declared");
+                            }
+                        }
+                    }
+                } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+                    String functionName = functionDeclaration.getId().getName();
+                    boolean isSimpleFunctionDeclaration = !functionDeclaration.isAsync() && !functionDeclaration.isGenerator();
+                    if (lexicalNames.contains(functionName)) {
+                        boolean duplicatedSimpleFunctionDeclaration = simpleFunctionLexicalNames.contains(functionName)
+                                && isSimpleFunctionDeclaration;
+                        if (parserContext.strictMode || !duplicatedSimpleFunctionDeclaration) {
+                            throw new JSSyntaxErrorException("Identifier '" + functionName + "' has already been declared");
+                        }
+                    } else {
+                        lexicalNames.add(functionName);
+                    }
+                    if (isSimpleFunctionDeclaration) {
+                        simpleFunctionLexicalNames.add(functionName);
+                    }
+                } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
+                    String className = classDeclaration.getId().getName();
+                    if (!lexicalNames.add(className)) {
+                        throw new JSSyntaxErrorException("Identifier '" + className + "' has already been declared");
+                    }
+                }
+                collectVarDeclaredNames(statement, varNames);
+            }
         }
 
         for (String lexicalName : lexicalNames) {

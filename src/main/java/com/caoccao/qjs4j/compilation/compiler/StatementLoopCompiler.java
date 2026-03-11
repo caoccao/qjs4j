@@ -20,6 +20,9 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.util.Iterator;
+import java.util.List;
+
 final class StatementLoopCompiler {
     private final CompilerContext compilerContext;
     private final CompilerDelegates delegates;
@@ -32,6 +35,10 @@ final class StatementLoopCompiler {
     }
 
     void compileBreakStatement(BreakStatement breakStmt) {
+        if (compilerContext.finallySubroutineDepth > 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
         if (breakStmt.getLabel() != null) {
             String labelName = breakStmt.getLabel().getName();
             LoopContext target = null;
@@ -46,6 +53,7 @@ final class StatementLoopCompiler {
             }
             delegates.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);
+            emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.breakPositions.add(jumpPos);
         } else {
@@ -63,17 +71,22 @@ final class StatementLoopCompiler {
                 throw new JSCompilerException("Break statement outside of loop");
             }
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
+            emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.breakPositions.add(jumpPos);
         }
     }
 
     void compileContinueStatement(ContinueStatement contStmt) {
+        if (compilerContext.finallySubroutineDepth > 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
         if (contStmt.getLabel() != null) {
             String labelName = contStmt.getLabel().getName();
             LoopContext target = null;
             for (LoopContext loopCtx : compilerContext.loopStack) {
-                if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt) {
+                if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
                     target = loopCtx;
                     break;
                 }
@@ -83,12 +96,13 @@ final class StatementLoopCompiler {
             }
             delegates.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
+            emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.continuePositions.add(jumpPos);
         } else {
             LoopContext loopContext = null;
             for (LoopContext loopCtx : compilerContext.loopStack) {
-                if (!loopCtx.isRegularStmt) {
+                if (!loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
                     loopContext = loopCtx;
                     break;
                 }
@@ -97,6 +111,7 @@ final class StatementLoopCompiler {
                 throw new JSCompilerException("Continue statement outside of loop");
             }
             delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
+            emitActiveFinallyGosubs();
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             loopContext.continuePositions.add(jumpPos);
         }
@@ -482,6 +497,22 @@ final class StatementLoopCompiler {
         }
 
         compilerContext.loopStack.pop();
+    }
+
+    private void emitActiveFinallyGosubs() {
+        Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
+        Iterator<Integer> nipCatchCountIterator = compilerContext.activeFinallyNipCatchCounts.iterator();
+        while (gosubPatchIterator.hasNext() && nipCatchCountIterator.hasNext()) {
+            List<Integer> gosubPatches = gosubPatchIterator.next();
+            int nipCatchCount = nipCatchCountIterator.next();
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            for (int i = 0; i < nipCatchCount; i++) {
+                compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            }
+            int gosubPosition = compilerContext.emitter.emitJump(Opcode.GOSUB);
+            gosubPatches.add(gosubPosition);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
     }
 
     private void emitEvalReturnUndefinedIfNeeded() {

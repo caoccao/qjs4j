@@ -141,6 +141,10 @@ final class CompilerAnalysis {
                     collectVarNamesFromStatement(s, varNames);
                 }
             }
+        } else if (stmt instanceof WithStatement withStmt) {
+            if (withStmt.getBody() != null) {
+                collectVarNamesFromStatement(withStmt.getBody(), varNames);
+            }
         } else if (stmt instanceof LabeledStatement labeledStmt) {
             collectVarNamesFromStatement(labeledStmt.getBody(), varNames);
         }
@@ -277,6 +281,12 @@ final class CompilerAnalysis {
         }
     }
 
+    private boolean isAnnexBSimpleFunctionDeclaration(FunctionDeclaration functionDeclaration) {
+        return functionDeclaration != null
+                && !functionDeclaration.isAsync()
+                && !functionDeclaration.isGenerator();
+    }
+
     void scanAnnexBBlock(List<Statement> body, Set<String> parentLexicals, Set<String> result) {
         // Single pass: collect lexical bindings and function names, then scan for Annex B candidates
         Set<String> blockLexicals = new HashSet<>(parentLexicals);
@@ -296,7 +306,7 @@ final class CompilerAnalysis {
         blockLexicalsWithFuncs.addAll(blockFuncNames);
         for (Statement s : body) {
             if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (!blockLexicals.contains(fd.getId().getName())) {
+                if (isAnnexBSimpleFunctionDeclaration(fd) && !blockLexicals.contains(fd.getId().getName())) {
                     result.add(fd.getId().getName());
                 }
             }
@@ -343,7 +353,7 @@ final class CompilerAnalysis {
             scanAnnexBBlock(block.getBody(), lexicalBindings, result);
         } else if (stmt instanceof IfStatement ifStmt) {
             if (ifStmt.getConsequent() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (!lexicalBindings.contains(fd.getId().getName())) {
+                if (isAnnexBSimpleFunctionDeclaration(fd) && !lexicalBindings.contains(fd.getId().getName())) {
                     result.add(fd.getId().getName());
                 }
             } else {
@@ -351,7 +361,7 @@ final class CompilerAnalysis {
             }
             if (ifStmt.getAlternate() != null) {
                 if (ifStmt.getAlternate() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (!lexicalBindings.contains(fd.getId().getName())) {
+                    if (isAnnexBSimpleFunctionDeclaration(fd) && !lexicalBindings.contains(fd.getId().getName())) {
                         result.add(fd.getId().getName());
                     }
                 } else {
@@ -384,7 +394,7 @@ final class CompilerAnalysis {
             for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
                 for (Statement s : sc.getConsequent()) {
                     if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                        if (!switchLexicals.contains(fd.getId().getName())) {
+                        if (isAnnexBSimpleFunctionDeclaration(fd) && !switchLexicals.contains(fd.getId().getName())) {
                             result.add(fd.getId().getName());
                         }
                     }

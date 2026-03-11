@@ -309,7 +309,8 @@ final class ParserContext {
     boolean isUsingDeclarationStart() {
         return currentToken.type() == TokenType.IDENTIFIER
                 && JSKeyword.USING.equals(currentToken.value())
-                && isBindingIdentifierStartToken(nextToken);
+                && isBindingIdentifierStartToken(nextToken)
+                && nextToken.line() == currentToken.line();
     }
 
     boolean isUsingIdentifierToken(Token token) {
