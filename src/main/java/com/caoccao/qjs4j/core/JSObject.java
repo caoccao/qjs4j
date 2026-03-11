@@ -806,7 +806,7 @@ public non-sealed class JSObject implements JSValue {
                         // Getter threw - convert to pending exception so callers can handle it
                         JSValue exception = e.getJsError() != null ? e.getJsError()
                                 : e.getJsValue() != null ? e.getJsValue()
-                                : this.context.throwError("Error", e.getMessage());
+                                : this.context.throwError( e.getMessage());
                         this.context.setPendingException(exception);
                         return JSUndefined.INSTANCE;
                     } finally {

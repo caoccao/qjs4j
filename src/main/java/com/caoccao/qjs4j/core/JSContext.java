@@ -1858,21 +1858,21 @@ public final class JSContext implements AutoCloseable {
                 JSValue exception = getPendingException();
                 throw new JSException(exception);
             }
-            JSValue error = throwError("Error", "VM error: " + e.getMessage());
+            JSValue error = throwError( "VM error: " + e.getMessage());
             throw new JSException(error);
         } catch (JSErrorException e) {
             if (dynamicImportEvalModuleRecord != null
                     && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
                 dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
             }
-            JSValue error = throwError(e.getErrorType().name(), e.getMessage());
+            JSValue error = throwError(e);
             throw new JSException(error);
         } catch (Exception e) {
             if (dynamicImportEvalModuleRecord != null
                     && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
                 dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
             }
-            JSValue error = throwError("Error", "Execution error: " + e.getMessage());
+            JSValue error = throwError( "Execution error: " + e.getMessage());
             throw new JSException(error);
         } finally {
             if (selfModuleRecord != null) {
@@ -3576,7 +3576,7 @@ public final class JSContext implements AutoCloseable {
             throw jsException;
         } catch (Exception exception) {
             dynamicImportModuleCache.remove(resolvedSpecifier);
-            throw new JSException(throwError("Error", exception.getMessage() != null ? exception.getMessage() : "Module load error"));
+            throw new JSException(throwError( exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
     }
 
@@ -5105,6 +5105,13 @@ public final class JSContext implements AutoCloseable {
         // Set as pending exception
         setPendingException(jsError);
         return jsError;
+    }
+
+    public JSError throwError(JSErrorException jsErrorException) {
+        if (jsErrorException == null) {
+            return throwError( "Unknown error");
+        }
+        return throwError(jsErrorException.getErrorType().name(), jsErrorException.getMessage());
     }
 
     /**

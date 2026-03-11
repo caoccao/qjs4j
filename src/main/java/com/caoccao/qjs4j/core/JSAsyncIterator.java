@@ -86,7 +86,7 @@ public class JSAsyncIterator extends JSObject {
             }
         }
         String message = e.getMessage() != null ? e.getMessage() : e.toString();
-        JSValue error = context.throwError("Error", message);
+        JSValue error = context.throwError( message);
         context.clearPendingException();
         return error;
     }

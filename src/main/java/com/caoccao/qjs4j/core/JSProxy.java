@@ -976,22 +976,22 @@ public final class JSProxy extends JSObject {
      * preserve current execution realm for TypeError construction.
      */
     public void proxySet(JSContext executionContext, PropertyKey key, JSValue value) {
-        proxySetInternal(key, value, executionContext != null ? executionContext : this.context, this, true);
+        proxySetInternal(executionContext, key, value, this, true);
     }
 
     public void proxySet(JSContext executionContext, PropertyKey key, JSValue value, JSObject receiver) {
-        proxySetInternal(key, value, executionContext != null ? executionContext : this.context, receiver, true);
+        proxySetInternal(executionContext, key, value, receiver, true);
     }
 
     private boolean proxySetInternal(
+            JSContext executionContext,
             PropertyKey key,
             JSValue value,
-            JSContext ctx,
             JSValue receiver,
             boolean throwOnFailure) {
-        JSContext executionContext = ctx != null ? ctx : this.context;
+        JSContext effectiveContext = executionContext != null ? executionContext : context;
         if (revoked) {
-            throw new JSException(executionContext.throwTypeError("Cannot perform 'set' on a proxy that has been revoked"));
+            throw new JSException(effectiveContext.throwTypeError("Cannot perform 'set' on a proxy that has been revoked"));
         }
 
         JSObject targetObj = (JSObject) target;
@@ -1003,12 +1003,12 @@ public final class JSProxy extends JSObject {
                     value,
                     receiver
             };
-            JSValue result = setTrapFunc.call(executionContext, handler, args);
+            JSValue result = setTrapFunc.call(effectiveContext, handler, args);
             boolean trapResult = JSTypeConversions.toBoolean(result) == JSBoolean.TRUE;
 
             if (!trapResult) {
-                if (throwOnFailure && executionContext.isStrictMode()) {
-                    throw new JSException(executionContext.throwTypeError(
+                if (throwOnFailure && effectiveContext.isStrictMode()) {
+                    throw new JSException(effectiveContext.throwTypeError(
                             "'set' on proxy: trap returned falsish for property '" + key.toPropertyString() + "'"));
                 }
                 return false;
@@ -1018,13 +1018,13 @@ public final class JSProxy extends JSObject {
             if (targetDesc != null) {
                 if (targetDesc.isDataDescriptor() && !targetDesc.isConfigurable() && !targetDesc.isWritable()) {
                     if (!sameValue(targetDesc.getValue(), value)) {
-                        throw new JSException(executionContext.throwTypeError(
+                        throw new JSException(effectiveContext.throwTypeError(
                                 "'set' on proxy: trap returned truish for property '" +
                                         key.toPropertyString() +
                                         "' which exists in the proxy target as a non-configurable and non-writable data property with a different value"));
                     }
                 } else if (targetDesc.isAccessorDescriptor() && !targetDesc.isConfigurable() && targetDesc.getSetter() == null) {
-                    throw new JSException(executionContext.throwTypeError(
+                    throw new JSException(effectiveContext.throwTypeError(
                             "'set' on proxy: trap returned truish for property '" +
                                     key.toPropertyString() +
                                     "' which exists in the proxy target as a non-configurable and non-writable accessor property without a setter"));
@@ -1034,15 +1034,15 @@ public final class JSProxy extends JSObject {
         }
 
         boolean success = targetObj.setWithResult(key, value, receiver);
-        if (!success && throwOnFailure && executionContext.isStrictMode()) {
-            throw new JSException(executionContext.throwTypeError(
+        if (!success && throwOnFailure && effectiveContext.isStrictMode()) {
+            throw new JSException(effectiveContext.throwTypeError(
                     "'set' on proxy: trap returned falsish for property '" + key.toPropertyString() + "'"));
         }
         return success;
     }
 
-    public boolean proxySetWithReceiver(JSContext executionContext, PropertyKey key, JSValue value, JSValue receiver) {
-        return proxySetInternal(key, value, executionContext != null ? executionContext : this.context, receiver, false);
+    public boolean proxySetWithReceiver(PropertyKey key, JSValue value, JSValue receiver) {
+        return proxySetInternal(context, key, value, receiver, false);
     }
 
     /**
@@ -1111,7 +1111,7 @@ public final class JSProxy extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        proxySetInternal(key, value, context, this, true);
+        proxySetInternal(context, key, value, this, true);
     }
 
     /**
@@ -1171,17 +1171,17 @@ public final class JSProxy extends JSObject {
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value) {
-        return proxySetInternal(key, value, this.context, this, false);
+        return proxySetInternal(context, key, value, this, false);
     }
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return proxySetInternal(key, value, this.context, receiver, false);
+        return proxySetInternal(context, key, value, receiver, false);
     }
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
-        return proxySetInternal(key, value, this.context, receiver, false);
+        return proxySetInternal(context, key, value, receiver, false);
     }
 
     private JSValue toKeyValue(PropertyKey key) {

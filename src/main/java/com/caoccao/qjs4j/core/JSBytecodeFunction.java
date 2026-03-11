@@ -1507,13 +1507,13 @@ public final class JSBytecodeFunction extends JSFunction {
                             String errorMessage = virtualMachineException.getMessage() != null
                                     ? virtualMachineException.getMessage()
                                     : virtualMachineException.toString();
-                            JSValue error = executionContext.throwError("Error", errorMessage);
+                            JSValue error = executionContext.throwError( errorMessage);
                             executionContext.clearPendingException();
                             promise.reject(error);
                         }
                     } else {
                         String errorMessage = e.getMessage() != null ? e.getMessage() : e.toString();
-                        JSValue error = executionContext.throwError("Error", errorMessage);
+                        JSValue error = executionContext.throwError( errorMessage);
                         executionContext.clearPendingException();
                         promise.reject(error);
                     }

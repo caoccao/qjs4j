@@ -100,15 +100,6 @@ public final class AtomicsObject {
         return byteBuffer;
     }
 
-    private static JSValue rethrowAsJSValue(JSContext context, JSErrorException errorException) {
-        return switch (errorException.getErrorType()) {
-            case RangeError -> context.throwRangeError(errorException.getMessage());
-            case TypeError -> context.throwTypeError(errorException.getMessage());
-            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
-            default -> context.throwError(errorException.getMessage());
-        };
-    }
-
     /**
      * Atomics.add(typedArray, index, value)
      * ES2017 24.4.3
@@ -197,7 +188,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.add invalid typed array");
     }
@@ -289,7 +280,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.and invalid typed array");
     }
@@ -406,7 +397,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.compareExchange invalid typed array");
     }
@@ -499,7 +490,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.exchange invalid typed array");
     }
@@ -518,7 +509,7 @@ public final class AtomicsObject {
         try {
             size = (int) JSTypeConversions.toInteger(context, args[0]);
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
 
         // In Java, operations on 1, 2, 4 bytes are typically lock-free on modern hardware
@@ -590,7 +581,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.load invalid typed array");
     }
@@ -639,7 +630,7 @@ public final class AtomicsObject {
             int notified = waitList.notifyWaiters(count);
             return JSNumber.of(notified);
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
     }
 
@@ -730,7 +721,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.or invalid typed array");
     }
@@ -837,7 +828,7 @@ public final class AtomicsObject {
                 return JSNumber.of(returnValue);
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.store invalid typed array");
     }
@@ -929,7 +920,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.sub invalid typed array");
     }
@@ -1013,7 +1004,7 @@ public final class AtomicsObject {
             Thread.currentThread().interrupt();
             return new JSString("timed-out");
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
     }
 
@@ -1110,7 +1101,7 @@ public final class AtomicsObject {
             }
             return result;
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
     }
 
@@ -1202,7 +1193,7 @@ public final class AtomicsObject {
                 }
             }
         } catch (JSErrorException e) {
-            return rethrowAsJSValue(context, e);
+            return context.throwError(e);
         }
         return context.throwTypeError("Atomics.xor invalid typed array");
     }

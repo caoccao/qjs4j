@@ -233,7 +233,7 @@ final class JSDeferredModuleNamespace extends JSObject {
         } else {
             JSContext context = callerContext != null ? callerContext : this.context;
             context.setPendingException(
-                    context.throwError("Error",
+                    context.throwError(
                             jsException.getMessage() != null ? jsException.getMessage() : "Module evaluation error"));
         }
     }

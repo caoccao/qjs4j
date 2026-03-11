@@ -44,7 +44,7 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.pendingException = errorValue;
         } else {
             executionContext.virtualMachine.pendingException =
-                    executionContext.virtualMachine.context.throwError("Error",
+                    executionContext.virtualMachine.context.throwError(
                             e.getMessage() != null ? e.getMessage() : "Unknown error");
             executionContext.virtualMachine.context.clearPendingException();
         }
@@ -151,7 +151,7 @@ public final class OpcodeHandler {
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             } catch (JSErrorException e) {
                 executionContext.virtualMachine.pendingException =
-                        executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+                        executionContext.virtualMachine.context.throwError(e);
                 executionContext.virtualMachine.context.clearPendingException();
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             }
@@ -187,7 +187,7 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.context.clearPendingException();
         } catch (JSErrorException e) {
             executionContext.virtualMachine.pendingException =
-                    executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+                    executionContext.virtualMachine.context.throwError(e);
             executionContext.virtualMachine.context.clearPendingException();
         }
         executionContext.pc = pc + op.getSize();
@@ -781,7 +781,7 @@ public final class OpcodeHandler {
                     } else if (executionContext.virtualMachine.context.hasPendingException()) {
                         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                     executionContext.virtualMachine.context.clearPendingException();
@@ -2965,7 +2965,7 @@ public final class OpcodeHandler {
             context.clearPendingException();
             JSValue errorValue = exception.getErrorValue();
             if (errorValue == null) {
-                errorValue = context.throwError("Error", exception.getMessage());
+                errorValue = context.throwError( exception.getMessage());
                 context.clearPendingException();
             }
             if (!resolveState.alreadyResolved) {
@@ -2982,7 +2982,7 @@ public final class OpcodeHandler {
                 errorValue = exception.getJsError();
             }
             if (errorValue == null) {
-                errorValue = context.throwError("Error", exception.getMessage() != null
+                errorValue = context.throwError( exception.getMessage() != null
                         ? exception.getMessage()
                         : "Module load error");
                 context.clearPendingException();
@@ -4953,7 +4953,7 @@ public final class OpcodeHandler {
             if (e.getErrorValue() != null) {
                 executionContext.virtualMachine.pendingException = e.getErrorValue();
             } else {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
                         e.getMessage() != null ? e.getMessage() : "toPrimitive");
             }
         }
@@ -5826,14 +5826,14 @@ public final class OpcodeHandler {
                     } else if (executionContext.virtualMachine.context.hasPendingException()) {
                         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                     executionContext.virtualMachine.context.clearPendingException();
                     executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
                 } catch (JSErrorException e) {
                     // Native function threw a typed JS error (e.g. JSRangeErrorException)
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(e.getErrorType().name(), e.getMessage());
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(e);
                     executionContext.virtualMachine.context.clearPendingException();
                     executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
                 }
@@ -5855,7 +5855,7 @@ public final class OpcodeHandler {
                     } else if (executionContext.virtualMachine.context.hasPendingException()) {
                         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                     executionContext.virtualMachine.context.clearPendingException();
@@ -5880,7 +5880,7 @@ public final class OpcodeHandler {
                     } else if (executionContext.virtualMachine.context.hasPendingException()) {
                         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError("Error",
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
                     executionContext.virtualMachine.context.clearPendingException();

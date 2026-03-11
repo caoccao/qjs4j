@@ -83,7 +83,7 @@ public final class JSClassBuilder {
      * @param constructor Constructor function
      * @return This builder
      */
-    public JSClassBuilder constructor(JSNativeFunction.NativeCallback constructor) {
+    public JSClassBuilder constructor(JSNativeCallback constructor) {
         this.constructor = new JSNativeFunction(this.context, "constructor", 0, constructor, true);
         return this;
     }
@@ -95,7 +95,7 @@ public final class JSClassBuilder {
      * @param constructor Constructor function
      * @return This builder
      */
-    public JSClassBuilder constructor(int length, JSNativeFunction.NativeCallback constructor) {
+    public JSClassBuilder constructor(int length, JSNativeCallback constructor) {
         this.constructor = new JSNativeFunction(this.context, "constructor", length, constructor, true);
         return this;
     }
@@ -139,7 +139,7 @@ public final class JSClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public JSClassBuilder instanceMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder instanceMethod(String methodName, JSNativeCallback callback) {
         return instanceMethod(methodName, 0, callback);
     }
 
@@ -151,7 +151,7 @@ public final class JSClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public JSClassBuilder instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder instanceMethod(String methodName, int length, JSNativeCallback callback) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }
@@ -188,7 +188,7 @@ public final class JSClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public JSClassBuilder staticMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder staticMethod(String methodName, JSNativeCallback callback) {
         return staticMethod(methodName, 0, callback);
     }
 
@@ -200,7 +200,7 @@ public final class JSClassBuilder {
      * @param callback   Method implementation
      * @return This builder
      */
-    public JSClassBuilder staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+    public JSClassBuilder staticMethod(String methodName, int length, JSNativeCallback callback) {
         if (classObject == null) {
             throw new IllegalStateException("Must call build() before adding methods");
         }
@@ -232,11 +232,11 @@ public final class JSClassBuilder {
             return this;
         }
 
-        public BuilderWithClass instanceMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+        public BuilderWithClass instanceMethod(String methodName, JSNativeCallback callback) {
             return instanceMethod(methodName, 0, callback);
         }
 
-        public BuilderWithClass instanceMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+        public BuilderWithClass instanceMethod(String methodName, int length, JSNativeCallback callback) {
             JSNativeFunction method = new JSNativeFunction(classObject.getContext(), methodName, length, callback);
             classObject.addInstanceMethod(methodName, method);
             return this;
@@ -251,13 +251,13 @@ public final class JSClassBuilder {
             return this;
         }
 
-        public BuilderWithClass staticMethod(String methodName, int length, JSNativeFunction.NativeCallback callback) {
+        public BuilderWithClass staticMethod(String methodName, int length, JSNativeCallback callback) {
             JSNativeFunction method = new JSNativeFunction(classObject.getContext(), methodName, length, callback);
             classObject.addStaticMethod(methodName, method);
             return this;
         }
 
-        public BuilderWithClass staticMethod(String methodName, JSNativeFunction.NativeCallback callback) {
+        public BuilderWithClass staticMethod(String methodName, JSNativeCallback callback) {
             return staticMethod(methodName, 0, callback);
         }
     }

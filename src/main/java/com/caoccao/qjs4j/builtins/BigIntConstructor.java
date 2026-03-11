@@ -43,7 +43,7 @@ public final class BigIntConstructor {
             }
             return wrapBigIntSigned(bits, bigInt);
         } catch (JSErrorException e) {
-            return rethrowError(context, e);
+            return context.throwError(e);
         }
     }
 
@@ -63,7 +63,7 @@ public final class BigIntConstructor {
             }
             return wrapBigIntUnsigned(bits, bigInt);
         } catch (JSErrorException e) {
-            return rethrowError(context, e);
+            return context.throwError(e);
         }
     }
 
@@ -119,15 +119,6 @@ public final class BigIntConstructor {
         } else {
             return context.throwTypeError("Cannot convert value to BigInt");
         }
-    }
-
-    private static JSValue rethrowError(JSContext context, JSErrorException errorException) {
-        return switch (errorException.getErrorType()) {
-            case RangeError -> context.throwRangeError(errorException.getMessage());
-            case SyntaxError -> context.throwSyntaxError(errorException.getMessage());
-            case TypeError -> context.throwTypeError(errorException.getMessage());
-            default -> context.throwError(errorException.getMessage());
-        };
     }
 
     private static JSBigInt wrapBigIntSigned(long bitsLong, JSBigInt bigInt) {

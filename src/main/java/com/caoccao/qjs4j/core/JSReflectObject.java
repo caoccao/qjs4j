@@ -228,14 +228,14 @@ public final class JSReflectObject {
             try {
                 return JSArrayBuffer.createForConstruct(context, function, newTarget, args);
             } catch (JSErrorException e) {
-                return context.throwError(e.getErrorType().name(), e.getMessage());
+                return context.throwError(e);
             }
         }
         if (constructorType == JSConstructorType.SHARED_ARRAY_BUFFER) {
             try {
                 return JSSharedArrayBuffer.createForConstruct(context, function, newTarget, args);
             } catch (JSErrorException e) {
-                return context.throwError(e.getErrorType().name(), e.getMessage());
+                return context.throwError(e);
             } catch (JSException e) {
                 if (e.getErrorValue() instanceof JSObject errorObject) {
                     return errorObject;
@@ -248,7 +248,7 @@ public final class JSReflectObject {
         try {
             result = constructorType.create(context, args);
         } catch (JSErrorException e) {
-            return context.throwError(e.getErrorType().name(), e.getMessage());
+            return context.throwError(e);
         }
         if (context.hasPendingException()) {
             return context.getPendingException();
@@ -504,7 +504,7 @@ public final class JSReflectObject {
         JSValue receiver = args.length > 3 ? args[3] : target;
 
         boolean success = target instanceof JSProxy proxy
-                ? proxy.proxySetWithReceiver(context, key, value, receiver)
+                ? proxy.proxySetWithReceiver(key, value, receiver)
                 : target.setWithResult(key, value, receiver);
         if (context.hasPendingException()) {
             return context.getPendingException();

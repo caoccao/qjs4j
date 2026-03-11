@@ -351,7 +351,7 @@ public final class VirtualMachine {
         } else if (context.hasPendingException()) {
             pendingException = context.getPendingException();
         } else {
-            pendingException = context.throwError("Error",
+            pendingException = context.throwError(
                     e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
@@ -369,7 +369,7 @@ public final class VirtualMachine {
         } else if (context.hasPendingException()) {
             pendingException = context.getPendingException();
         } else {
-            pendingException = context.throwError("Error",
+            pendingException = context.throwError(
                     e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
@@ -530,7 +530,7 @@ public final class VirtualMachine {
             result = constructorType.create(context, args);
         } catch (JSErrorException e) {
             throw new JSVirtualMachineException(
-                    context.throwError(e.getErrorType().name(), e.getMessage()));
+                    context.throwError(e));
         }
         if (context.hasPendingException()) {
             throw new JSVirtualMachineException(context.getPendingException().toString(),

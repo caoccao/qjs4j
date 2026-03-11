@@ -1864,7 +1864,7 @@ public final class JSGlobalObject {
      * individual typed array constructors that inherit from it.
      */
     private void initializeTypedArrayConstructors() {
-        record TypedArrayDef(String name, JSNativeFunction.NativeCallback callback, JSConstructorType type,
+        record TypedArrayDef(String name, JSNativeCallback callback, JSConstructorType type,
                              int bytesPerElement) {
         }
         JSValue arrayToString = JSUndefined.INSTANCE;

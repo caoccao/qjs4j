@@ -345,7 +345,7 @@ public final class IteratorPrototype {
         } else if (e.getJsError() != null) {
             context.setPendingException(e.getJsError());
         } else if (!context.hasPendingException()) {
-            context.throwError("Error", e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+            context.throwError( e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
     }
 

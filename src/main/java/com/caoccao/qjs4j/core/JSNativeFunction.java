@@ -21,21 +21,21 @@ package com.caoccao.qjs4j.core;
  */
 public final class JSNativeFunction extends JSFunction {
     public static final String NAME = JSFunction.NAME;
-    private final NativeCallback callback;
+    private final JSNativeCallback callback;
     private final boolean isConstructor;
     private final int length;
     private final String name;
     private final boolean requiresNew;
 
-    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback) {
+    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback) {
         this(context, name, length, callback, false, false);
     }
 
-    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback, boolean isConstructor) {
+    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback, boolean isConstructor) {
         this(context, name, length, callback, isConstructor, false);
     }
 
-    public JSNativeFunction(JSContext context, String name, int length, NativeCallback callback, boolean isConstructor, boolean requiresNew) {
+    public JSNativeFunction(JSContext context, String name, int length, JSNativeCallback callback, boolean isConstructor, boolean requiresNew) {
         super(context); // Initialize as JSObject
         this.name = name;
         this.length = length;
@@ -129,8 +129,4 @@ public final class JSNativeFunction extends JSFunction {
         return JSValueType.FUNCTION;
     }
 
-    @FunctionalInterface
-    public interface NativeCallback {
-        JSValue call(JSContext context, JSValue thisArg, JSValue[] args);
-    }
 }

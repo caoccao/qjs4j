@@ -1170,7 +1170,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         JSObject mapConstructor = context.getGlobalObject().get("Map").asObject().orElseThrow();
         JSObject mapPrototype = mapConstructor.get("prototype").asObject().orElseThrow();
         JSValue originalSet = mapPrototype.get("set");
-        mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> childContext.throwError("Error", "boom")));
+        mapPrototype.set("set", new JSNativeFunction(context, "set", 2, (childContext, thisArg, args) -> childContext.throwError( "boom")));
         try {
             JSValue result = JSMap.create(context, iterable);
             assertThat(result.isError()).isTrue();
