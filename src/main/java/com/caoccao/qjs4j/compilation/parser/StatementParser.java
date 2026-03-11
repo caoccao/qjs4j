@@ -602,6 +602,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
             validateNoLabelledFunctionInIterationBody(body);
+            validateNoLexicalDeclarationInStatementPosition(body);
+            validateNoUsingDeclarationWithInitializerInStatementPosition(body);
 
             // parsedDecl should be a VariableDeclaration
             if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
@@ -626,6 +628,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parserContext.expect(TokenType.RPAREN);
             Statement body = parseStatement();
             validateNoLabelledFunctionInIterationBody(body);
+            validateNoLexicalDeclarationInStatementPosition(body);
+            validateNoUsingDeclarationWithInitializerInStatementPosition(body);
 
             // parsedDecl should be a VariableDeclaration
             if (!(parsedDecl instanceof VariableDeclaration varDecl)) {
@@ -685,6 +689,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     validateNoLabelledFunctionInIterationBody(body);
+                    validateNoLexicalDeclarationInStatementPosition(body);
+                    validateNoUsingDeclarationWithInitializerInStatementPosition(body);
                     return new ForInStatement(expr, object, body, location);
                 } else if (parserContext.match(TokenType.OF)) {
                     // for (expr of iterable) -- expression-based for-of
@@ -697,6 +703,8 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     parserContext.expect(TokenType.RPAREN);
                     Statement body = parseStatement();
                     validateNoLabelledFunctionInIterationBody(body);
+                    validateNoLexicalDeclarationInStatementPosition(body);
+                    validateNoUsingDeclarationWithInitializerInStatementPosition(body);
                     return new ForOfStatement(expr, iterable, body, isAwait, location);
                 }
                 if (isAwait) {
@@ -1028,7 +1036,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     // when NOT followed by an identifier, '[', or '{'
                     if (!parserContext.strictMode) {
                         Token nextTok = parserContext.peek();
-                        if (nextTok == null || (nextTok.type() != TokenType.IDENTIFIER
+                        boolean hasLineTerminatorAfterLet = nextTok != null && nextTok.line() > parserContext.currentToken.line();
+                        boolean treatLetAsExpressionByAsi = hasLineTerminatorAfterLet
+                                && (nextTok.type() == TokenType.IDENTIFIER || nextTok.type() == TokenType.LBRACE);
+                        if (nextTok == null
+                                || treatLetAsExpressionByAsi
+                                || (nextTok.type() != TokenType.IDENTIFIER
                                 && nextTok.type() != TokenType.LBRACKET
                                 && nextTok.type() != TokenType.LBRACE
                                 && nextTok.type() != TokenType.ASYNC

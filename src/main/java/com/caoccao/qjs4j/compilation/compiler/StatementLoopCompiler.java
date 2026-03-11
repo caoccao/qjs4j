@@ -137,6 +137,11 @@ final class StatementLoopCompiler {
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;
         String varName = null;
         VariableDeclaration varDecl = null;
@@ -276,6 +281,11 @@ final class StatementLoopCompiler {
     }
 
     void compileForOfStatement(ForOfStatement forOfStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         boolean isExpressionBased = !(forOfStmt.getLeft() instanceof VariableDeclaration);
         VariableDeclaration varDecl = null;
         Pattern pattern = null;
@@ -385,6 +395,11 @@ final class StatementLoopCompiler {
     }
 
     void compileForStatement(ForStatement forStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         boolean initCompiled = false;
         if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
             owner.compileVariableDeclaration(varDecl);
@@ -457,6 +472,11 @@ final class StatementLoopCompiler {
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
+
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
         compilerContext.loopStack.push(loop);

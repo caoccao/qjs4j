@@ -27,15 +27,17 @@ import java.util.Set;
  */
 public class JSForInEnumerator {
     private final List<String> keys;
+    private final JSObject rootObject;
     private int index;
 
     public JSForInEnumerator(JSValue obj) {
         this.keys = new ArrayList<>();
         this.index = 0;
+        this.rootObject = obj instanceof JSObject jsObject ? jsObject : null;
 
         // Collect all enumerable property keys
-        if (obj instanceof JSObject jsObj) {
-            collectKeys(jsObj, new HashSet<>(), new HashSet<>());
+        if (rootObject != null) {
+            collectKeys(rootObject, new HashSet<>(), new HashSet<>());
         }
     }
 
@@ -53,11 +55,11 @@ public class JSForInEnumerator {
                 continue;
             }
             PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
-            if (descriptor == null || !descriptor.isEnumerable()) {
+            String propertyName = key.toPropertyString();
+            if (!seenPropertyNames.add(propertyName)) {
                 continue;
             }
-            String propertyName = key.toPropertyString();
-            if (seenPropertyNames.add(propertyName)) {
+            if (descriptor != null && descriptor.isEnumerable()) {
                 keys.add(propertyName);
             }
         }
@@ -69,13 +71,28 @@ public class JSForInEnumerator {
         }
     }
 
+    private boolean isCurrentlyEnumerable(JSObject obj, PropertyKey key) {
+        JSObject currentObject = obj;
+        while (currentObject != null) {
+            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptor(key);
+            if (descriptor != null) {
+                return descriptor.isEnumerable();
+            }
+            currentObject = currentObject.getPrototype();
+        }
+        return false;
+    }
+
     /**
      * Get the next property key, or null if iteration is complete.
      */
     public JSValue next() {
-        if (index >= keys.size()) {
-            return JSUndefined.INSTANCE;
+        while (index < keys.size()) {
+            String key = keys.get(index++);
+            if (rootObject == null || isCurrentlyEnumerable(rootObject, PropertyKey.fromString(key))) {
+                return new JSString(key);
+            }
         }
-        return new JSString(keys.get(index++));
+        return JSUndefined.INSTANCE;
     }
 }

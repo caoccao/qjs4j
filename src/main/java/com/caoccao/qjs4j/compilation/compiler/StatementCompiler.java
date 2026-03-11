@@ -770,9 +770,6 @@ final class StatementCompiler {
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
-        if (compilerContext.hasActiveIteratorLoops()) {
-            delegates.emitHelpers.emitAbruptCompletionIteratorClose();
-        }
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
     }

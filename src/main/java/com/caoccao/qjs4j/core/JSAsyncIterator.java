@@ -103,73 +103,47 @@ public class JSAsyncIterator extends JSObject {
      * @return A promise that resolves to the iterator result (with resolved value)
      */
     public static JSPromise createAsyncFromSyncResultPromise(JSContext context, JSValue value, boolean done) {
+        JSPromise valueWrapperPromise;
         if (value instanceof JSPromise promiseValue) {
+            // PromiseResolve(%Promise%, value) performs observable constructor access.
             promiseValue.get(PropertyKey.CONSTRUCTOR);
             if (context.hasPendingException()) {
                 return createRejectedPromise(context, consumePendingException(context));
             }
-            // Preserve current behavior after observable constructor lookup.
-            JSPromise resultPromise = context.createJSPromise();
-            promiseValue.addReactions(
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                JSObject result = context.createJSObject();
-                                result.set(PropertyKey.VALUE, resolved);
-                                result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                                resultPromise.fulfill(result);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context
-                    ),
-                    new JSPromise.ReactionRecord(
-                            new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            null,
-                            context
-                    )
-            );
-            return resultPromise;
-        }
-        // Check if value is a promise/thenable that needs resolution
-        if (value instanceof JSObject obj) {
-            JSValue thenMethod = obj.get(PropertyKey.THEN);
+            valueWrapperPromise = promiseValue;
+        } else {
+            valueWrapperPromise = context.createJSPromise();
+            valueWrapperPromise.resolve(context, value);
             if (context.hasPendingException()) {
                 return createRejectedPromise(context, consumePendingException(context));
             }
-            if (thenMethod instanceof JSFunction thenFunc) {
-                JSPromise resultPromise = context.createJSPromise();
-                try {
-                    thenFunc.call(context, value, new JSValue[]{
-                            new JSNativeFunction(context, "", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                JSObject result = context.createJSObject();
-                                result.set(PropertyKey.VALUE, resolved);
-                                result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
-                                resultPromise.fulfill(result);
-                                return JSUndefined.INSTANCE;
-                            }),
-                            new JSNativeFunction(context, "", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                resultPromise.reject(callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE);
-                                return JSUndefined.INSTANCE;
-                            })
-                    });
-                } catch (JSException e) {
-                    return createRejectedPromise(context, e.getErrorValue());
-                } catch (Exception e) {
-                    return createRejectedPromise(context, consumePendingExceptionOrCreateStringError(context, e));
-                }
-                if (context.hasPendingException()) {
-                    return createRejectedPromise(context, consumePendingException(context));
-                }
-                return resultPromise;
-            }
         }
-        // Non-thenable: use directly
-        return createIteratorResultPromise(context, value, done);
+
+        JSPromise resultPromise = context.createJSPromise();
+        valueWrapperPromise.addReactions(
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction(context, "onResolve", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            JSValue resolved = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            JSObject result = context.createJSObject();
+                            result.set(PropertyKey.VALUE, resolved);
+                            result.set(PropertyKey.DONE, JSBoolean.valueOf(done));
+                            resultPromise.fulfill(result);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                ),
+                new JSPromise.ReactionRecord(
+                        new JSNativeFunction(context, "onReject", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
+                            JSValue reason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
+                            resultPromise.reject(reason);
+                            return JSUndefined.INSTANCE;
+                        }),
+                        null,
+                        context
+                )
+        );
+        return resultPromise;
     }
 
     /**

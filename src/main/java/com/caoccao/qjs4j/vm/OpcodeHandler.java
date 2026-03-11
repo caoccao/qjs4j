@@ -651,11 +651,19 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         JSValue value = executionContext.virtualMachine.valueStack.pop();
 
-        // If the value is already a promise, use it directly.
+        // If the value is already a promise, preserve PromiseResolve observability by
+        // accessing `constructor` first (may throw), then use the promise directly.
         // Otherwise, wrap it via Promise.resolve() which handles thenables.
         JSPromise promise;
-        if (value instanceof JSPromise) {
-            promise = (JSPromise) value;
+        if (value instanceof JSPromise promiseValue) {
+            promiseValue.get(PropertyKey.CONSTRUCTOR);
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
+            }
+            promise = promiseValue;
         } else {
             promise = executionContext.virtualMachine.context.createJSPromise();
             promise.resolve(executionContext.virtualMachine.context, value);
@@ -1746,14 +1754,14 @@ public final class OpcodeHandler {
 
     static void handleForAwaitOfNext(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue catchOffset = executionContext.virtualMachine.valueStack.pop();
+        JSStackValue catchOffset = executionContext.virtualMachine.valueStack.popStackValue();
         JSValue nextMethod = executionContext.virtualMachine.valueStack.peek(0);
         JSValue iterator = executionContext.virtualMachine.valueStack.peek(1);
         if (!(nextMethod instanceof JSFunction nextFunc)) {
             throw new JSVirtualMachineException("Next method must be a function");
         }
         JSValue result = nextFunc.call(executionContext.virtualMachine.context, iterator, JSValue.NO_ARGS);
-        executionContext.virtualMachine.valueStack.push(catchOffset);
+        executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
         executionContext.virtualMachine.valueStack.push(result);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
@@ -1898,63 +1906,14 @@ public final class OpcodeHandler {
                     rejectedPromise.reject(reason);
                     return rejectedPromise;
                 }
-                JSPromise asyncFromSyncResultPromise = JSAsyncIterator.createAsyncFromSyncResultPromise(childContext, syncValue, syncDone);
-                if (syncDone) {
-                    return asyncFromSyncResultPromise;
-                }
-                if (asyncFromSyncResultPromise.getState() == JSPromise.PromiseState.REJECTED) {
-                    JSValue rejectionReason = asyncFromSyncResultPromise.getResult();
-                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
-                    if (childContext.hasPendingException()) {
-                        childContext.clearAllPendingExceptions();
-                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                        returnFunction.call(childContext, syncIteratorObject, JSValue.NO_ARGS);
-                        if (childContext.hasPendingException()) {
-                            childContext.clearAllPendingExceptions();
-                        }
-                    }
-                    JSPromise rejectedPromise = childContext.createJSPromise();
-                    rejectedPromise.reject(rejectionReason);
-                    return rejectedPromise;
-                }
-                JSPromise closeOnRejectionPromise = childContext.createJSPromise();
-                asyncFromSyncResultPromise.addReactions(
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction(executionContext.virtualMachine.context, "onFulfilled", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue iteratorResult = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    closeOnRejectionPromise.fulfill(iteratorResult);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                childContext
-                        ),
-                        new JSPromise.ReactionRecord(
-                                new JSNativeFunction(executionContext.virtualMachine.context, "onRejected", 1, (callbackContext, callbackThisArg, callbackArgs) -> {
-                                    JSValue rejectionReason = callbackArgs.length > 0 ? callbackArgs[0] : JSUndefined.INSTANCE;
-                                    JSValue returnMethodValue = syncIteratorObject.get(PropertyKey.RETURN);
-                                    if (callbackContext.hasPendingException()) {
-                                        callbackContext.clearAllPendingExceptions();
-                                    } else if (returnMethodValue instanceof JSFunction returnFunction) {
-                                        returnFunction.call(callbackContext, syncIteratorObject, JSValue.NO_ARGS);
-                                        if (callbackContext.hasPendingException()) {
-                                            callbackContext.clearAllPendingExceptions();
-                                        }
-                                    }
-                                    closeOnRejectionPromise.reject(rejectionReason);
-                                    return JSUndefined.INSTANCE;
-                                }),
-                                null,
-                                childContext
-                        )
-                );
-                return closeOnRejectionPromise;
+                return JSAsyncIterator.createAsyncFromSyncResultPromise(childContext, syncValue, syncDone);
             });
         }
 
         // Push iterator, next method, and catch offset (0) onto the stack
         executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
         executionContext.virtualMachine.valueStack.push(nextMethodForStack);       // next() method
-        executionContext.virtualMachine.valueStack.push(JSNumber.of(0));  // Catch offset (placeholder)
+        executionContext.virtualMachine.valueStack.pushStackValue(JSCatchOffset.ITERATOR_CLOSE_MARKER);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
