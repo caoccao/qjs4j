@@ -251,6 +251,52 @@ public class AsyncTest extends BaseJavetTest {
     }
 
     @Test
+    void testForAwaitOfWithObjectRestGetter() {
+        assertIntegerWithJavet("""
+                async function test() {
+                    let getterCount = 0;
+                    const asyncIter = (async function*() {
+                        yield {
+                            get v() {
+                                getterCount++;
+                                return 2;
+                            }
+                        };
+                    })();
+                    let iterCount = 0;
+                    for await (const {...rest} of asyncIter) {
+                        if (rest.v !== 2) {
+                            return -1;
+                        }
+                        iterCount++;
+                    }
+                    return getterCount * 10 + iterCount;
+                }
+                test();""");
+    }
+
+    @Test
+    void testForAwaitOfWithObjectRestSkipsNonEnumerable() {
+        assertIntegerWithJavet("""
+                async function test() {
+                    const source = { a: 3, b: 4 };
+                    Object.defineProperty(source, "x", { value: 5, enumerable: false });
+                    const asyncIter = (async function*() {
+                        yield source;
+                    })();
+                    let iterCount = 0;
+                    for await (const {...rest} of asyncIter) {
+                        if (rest.a !== 3 || rest.b !== 4 || rest.x !== undefined) {
+                            return -1;
+                        }
+                        iterCount++;
+                    }
+                    return iterCount;
+                }
+                test();""");
+    }
+
+    @Test
     void testMultipleSequentialAwaits() {
         assertStringWithJavet("""
                 let order = [];

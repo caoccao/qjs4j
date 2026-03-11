@@ -643,7 +643,7 @@ final class PatternCompiler {
                     compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 7);
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
-                    // Stack: [target]
+                    // Stack: [target, target]
                 } else {
                     // Stack: [excludeList, source]
                     compilerContext.emitter.emitOpcode(Opcode.OBJECT);
@@ -655,7 +655,10 @@ final class PatternCompiler {
                 }
                 // Assign target (TOS) to the rest pattern
                 compilePatternAssignment(objPattern.getRestElement().getArgument(), useExistingBindingInParentScopes);
-                if (!objPattern.getProperties().isEmpty()) {
+                if (objPattern.getProperties().isEmpty()) {
+                    // Drop extra target preserved for COPY_DATA_PROPERTIES.
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                } else {
                     // Stack: [excludeList, source]
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop source
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
