@@ -1169,12 +1169,11 @@ public final class TypedArrayPrototype {
         if (typedArray.isOutOfBounds()) {
             return context.throwTypeError("Cannot perform TypedArray.prototype.sort on a typed array backed by a detached or out-of-bounds buffer");
         }
-        JSFunction compareFn = null;
-        if (args.length > 0 && !args[0].isUndefined()) {
-            if (!(args[0] instanceof JSFunction fn)) {
+        JSValue compareArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(compareArg instanceof JSUndefined)) {
+            if (!JSTypeChecking.isCallable(compareArg)) {
                 return context.throwTypeError("compareFn is not a function");
             }
-            compareFn = fn;
         }
         int length = typedArray.getLength();
         if (length <= 1) {
@@ -1188,16 +1187,16 @@ public final class TypedArrayPrototype {
         }
 
         // Sort
-        JSFunction finalCompareFn = compareFn;
+        final JSValue finalCompareArg = compareArg;
         final boolean[] hasError = {false};
         try {
             Arrays.sort(elements, (a, b) -> {
                 if (hasError[0]) {
                     return 0;
                 }
-                if (finalCompareFn != null) {
-                    JSValue result = finalCompareFn.call(context, JSUndefined.INSTANCE,
-                            new JSValue[]{a, b});
+                if (!(finalCompareArg instanceof JSUndefined)) {
+                    JSValue result = callCallable(context, finalCompareArg,
+                            JSUndefined.INSTANCE, new JSValue[]{a, b});
                     if (context.hasPendingException()) {
                         hasError[0] = true;
                         return 0;
@@ -1401,12 +1400,11 @@ public final class TypedArrayPrototype {
 
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: Validate compareFn first (before this-value validation per spec)
-        JSFunction compareFn = null;
-        if (args.length > 0 && !args[0].isUndefined()) {
-            if (!(args[0] instanceof JSFunction fn)) {
+        JSValue compareArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(compareArg instanceof JSUndefined)) {
+            if (!JSTypeChecking.isCallable(compareArg)) {
                 return context.throwTypeError("compareFn is not a function");
             }
-            compareFn = fn;
         }
 
         JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.toSorted");
@@ -1436,16 +1434,16 @@ public final class TypedArrayPrototype {
         }
 
         // Sort
-        JSFunction finalCompareFn = compareFn;
+        final JSValue finalCompareArg = compareArg;
         final boolean[] hasError = {false};
         try {
             Arrays.sort(elements, (a, b) -> {
                 if (hasError[0]) {
                     return 0;
                 }
-                if (finalCompareFn != null) {
-                    JSValue cmpResult = finalCompareFn.call(context, JSUndefined.INSTANCE,
-                            new JSValue[]{a, b});
+                if (!(finalCompareArg instanceof JSUndefined)) {
+                    JSValue cmpResult = callCallable(context, finalCompareArg,
+                            JSUndefined.INSTANCE, new JSValue[]{a, b});
                     if (context.hasPendingException()) {
                         hasError[0] = true;
                         return 0;
@@ -1495,6 +1493,16 @@ public final class TypedArrayPrototype {
             }
         }
         return JSTypeConversions.toString(context, thisArg);
+    }
+
+    private static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
+        if (callable instanceof JSProxy proxy) {
+            return proxy.apply(context, thisArg, args);
+        }
+        if (callable instanceof JSFunction function) {
+            return function.call(context, thisArg, args);
+        }
+        return context.throwTypeError("Value is not callable");
     }
 
     private static JSTypedArray toTypedArray(JSContext context, JSValue thisArg, String methodName) {

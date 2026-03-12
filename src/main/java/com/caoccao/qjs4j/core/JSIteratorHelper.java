@@ -307,12 +307,16 @@ public final class JSIteratorHelper {
         }
 
         JSValue result = nextFunc.call(context, iterator, JSValue.NO_ARGS);
+        if (context.hasPendingException()) {
+            return null;
+        }
 
-        // Result should be an object with value and done properties
+        // Result must be an object per ES2024 7.4.2 IteratorNext step 3
         if (result instanceof JSObject resultObj) {
             return resultObj;
         }
 
+        context.throwTypeError("iterator.next() returned a non-object value");
         return null;
     }
 

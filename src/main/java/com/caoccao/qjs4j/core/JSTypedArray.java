@@ -204,6 +204,23 @@ public sealed abstract class JSTypedArray extends JSObject permits
         return (int) offset;
     }
 
+    /**
+     * ES2024 InitializeTypedArrayFromArrayBuffer steps 2-3:
+     * Resolve byteOffset via ToIndex, then check alignment before ToIndex(length).
+     * Returns the validated byteOffset, or -1 if a pending exception was set.
+     */
+    protected static int resolveAndValidateByteOffset(JSContext context, JSValue value, int bytesPerElement) {
+        int byteOffset = toTypedArrayByteOffset(context, value);
+        if (context.hasPendingException()) {
+            return -1;
+        }
+        if (bytesPerElement > 1 && byteOffset % bytesPerElement != 0) {
+            context.throwRangeError("start offset of TypedArray should be a multiple of " + bytesPerElement);
+            return -1;
+        }
+        return byteOffset;
+    }
+
     protected static int toTypedArrayIndex(JSContext context, JSValue value, int bytesPerElement) {
         return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
@@ -599,6 +616,9 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     protected void integerIndexedElementSet(int index, JSValue value) {
         double numValue = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return;
+        }
         if (!buffer.isDetached() && index >= 0 && index < getLength()) {
             setElement(index, numValue);
         }

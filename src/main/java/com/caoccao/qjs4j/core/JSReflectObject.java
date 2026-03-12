@@ -325,6 +325,22 @@ public final class JSReflectObject {
             }
         }
 
+        // For TypedArray constructors with buffer argument, ES2024 requires
+        // AllocateTypedArray (prototype from newTarget) BEFORE argument processing.
+        boolean isTypedArrayConstructor = constructorType.name().startsWith("TYPED_ARRAY_");
+        JSObject resolvedPrototype = null;
+        if (isTypedArrayConstructor && args.length > 0 && args[0] instanceof IJSArrayBuffer) {
+            if (newTarget instanceof JSObject newTargetObject) {
+                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
+                resolvedPrototype = context.getPrototypeFromConstructor(
+                        newTargetObject,
+                        intrinsicDefaultPrototypeName);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+        }
+
         JSValue result;
         try {
             result = constructorType.create(context, args);
@@ -335,19 +351,29 @@ public final class JSReflectObject {
             return context.getPendingException();
         }
 
-        // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype
-        // from newTarget AFTER argument processing so that argument errors
-        // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
-        // newTarget.prototype.
         if (result instanceof JSObject jsObject && !jsObject.isProxy()) {
-            JSObject resolvedPrototype = null;
-            if (newTarget instanceof JSObject newTargetObject) {
-                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(
-                        newTargetObject,
-                        intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
+            if (resolvedPrototype == null && !isTypedArrayConstructor) {
+                // For non-TypedArray constructors (and TypedArray with non-buffer arg),
+                // resolve prototype after argument processing.
+                if (newTarget instanceof JSObject newTargetObject) {
+                    String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
+                    resolvedPrototype = context.getPrototypeFromConstructor(
+                            newTargetObject,
+                            intrinsicDefaultPrototypeName);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
+                }
+            } else if (resolvedPrototype == null && isTypedArrayConstructor) {
+                // TypedArray with non-buffer arg: resolve prototype after argument processing
+                if (newTarget instanceof JSObject newTargetObject) {
+                    String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
+                    resolvedPrototype = context.getPrototypeFromConstructor(
+                            newTargetObject,
+                            intrinsicDefaultPrototypeName);
+                    if (context.hasPendingException()) {
+                        return context.getPendingException();
+                    }
                 }
             }
             if (resolvedPrototype != null) {

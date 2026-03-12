@@ -60,9 +60,10 @@ public class JSIterator extends JSObject {
             context.transferPrototype(this, NAME);
         }
 
-        if (defineOwnNext) {
+        if (defineOwnNext && iterProto == null) {
             // Set up 'next' as an own property for iterator kinds that do not
             // rely on prototype-dispatched next semantics.
+            // When a shared prototype exists, the prototype's next() handles dispatch.
             JSNativeFunction nextMethod = new JSNativeFunction(context, "next", 0, (childContext, thisArg, args) -> {
                 if (thisArg instanceof JSIterator iter) {
                     return iter.next();

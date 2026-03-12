@@ -52,10 +52,16 @@ public final class JSInt8Array extends JSTypedArray {
             } else if (firstArg instanceof IJSArrayBuffer jsArrayBuffer) {
                 int byteOffset = 0;
                 if (args.length >= 2) {
-                    byteOffset = toTypedArrayByteOffset(context, args[1]);
+                    byteOffset = resolveAndValidateByteOffset(context, args[1], BYTES_PER_ELEMENT);
+                    if (context.hasPendingException()) {
+                        return null;
+                    }
                 }
                 if (args.length >= 3 && !(args[2] instanceof JSUndefined)) {
                     length = toTypedArrayBufferLength(context, args[2], BYTES_PER_ELEMENT);
+                    if (context.hasPendingException()) {
+                        return null;
+                    }
                     return context.createJSInt8Array(jsArrayBuffer, byteOffset, length);
                 }
                 return context.createJSInt8Array(jsArrayBuffer, byteOffset, -1);
