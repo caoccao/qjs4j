@@ -1278,10 +1278,18 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private boolean setWithPrimitiveReceiver(PropertyKey key, JSValue value, JSValue primitiveReceiver) {
-        // Walk the prototype chain of this object looking for setters
+        // Walk the prototype chain of this (the boxed object) looking for setters.
+        // Per QuickJS JS_SetPropertyInternal: when this_obj is not an object,
+        // traverse the prototype chain. If a Proxy is in the chain, delegate
+        // to its set trap. If a setter is found, call it with the primitive receiver.
+        // Otherwise return false (caller throws TypeError in strict mode).
         Set<JSObject> visited = new HashSet<>();
         JSObject current = this;
         while (current != null && !visited.contains(current)) {
+            // Proxy in the chain: delegate to its set trap with primitive receiver
+            if (current instanceof JSProxy proxy) {
+                return proxy.proxySetWithReceiver(key, value, primitiveReceiver);
+            }
             visited.add(current);
             int propertyOffset = current.getOwnPropertyOffset(key);
             if (propertyOffset >= 0) {

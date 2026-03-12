@@ -97,6 +97,12 @@ public final class JSRegExp extends JSObject {
         JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
+        // ES2024 22.2.3.1 step 1: Always call IsRegExp first (may access @@match).
+        boolean patternIsRegExp = isRegExpLike(context, patternArg);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
         JSValue patternValue;
         JSValue flagsValue;
 
@@ -109,11 +115,8 @@ public final class JSRegExp extends JSObject {
             } else {
                 flagsValue = flagsArg;
             }
-        } else if (isRegExpLike(context, patternArg)) {
+        } else if (patternIsRegExp) {
             // ES2024 22.2.3.1 step 5: patternIsRegExp but no [[RegExpMatcher]]
-            if (context.hasPendingException()) {
-                return null;
-            }
             if (!(patternArg instanceof JSObject patternObject)) {
                 context.throwTypeError("Invalid RegExp pattern");
                 return null;
@@ -131,9 +134,6 @@ public final class JSRegExp extends JSObject {
                 flagsValue = flagsArg;
             }
         } else {
-            if (context.hasPendingException()) {
-                return null;
-            }
             patternValue = patternArg instanceof JSUndefined ? new JSString("") : patternArg;
             flagsValue = flagsArg instanceof JSUndefined ? new JSString("") : flagsArg;
         }

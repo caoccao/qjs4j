@@ -1893,7 +1893,7 @@ public final class StringPrototype {
         if ("lt".equals(locale.getLanguage())) {
             source = removeLithuanianSoftDottedDots(source);
         }
-        return new JSString(source.toUpperCase(locale));
+        return new JSString(toUpperCaseUnicode16(source.toUpperCase(locale)));
     }
 
     /**
@@ -1913,14 +1913,16 @@ public final class StringPrototype {
      * a cased letter), it maps to U+03C2 (final sigma) instead of U+03C3.
      */
     private static String toLowerCaseWithSigma(String s) {
-        boolean hasSigma = false;
-        for (int i = 0; i < s.length(); i++) {
-            if (s.charAt(i) == '\u03A3') {
-                hasSigma = true;
+        boolean needsCustom = false;
+        for (int i = 0; i < s.length(); ) {
+            int codePoint = s.codePointAt(i);
+            if (codePoint == 0x03A3 || codePointToLower16(codePoint) != codePoint) {
+                needsCustom = true;
                 break;
             }
+            i += Character.charCount(codePoint);
         }
-        if (!hasSigma) {
+        if (!needsCustom) {
             return s.toLowerCase();
         }
 
@@ -1937,11 +1939,30 @@ public final class StringPrototype {
                     result.append('\u03C3'); // regular sigma
                 }
             } else {
-                result.appendCodePoint(Character.toLowerCase(codePoint));
+                int lower = Character.toLowerCase(codePoint);
+                // Apply Unicode 16.0 additions
+                int lower16 = codePointToLower16(lower);
+                result.appendCodePoint(lower16 != lower ? lower16 : lower);
             }
             i += charCount;
         }
         return result.toString();
+    }
+
+    private static int codePointToLower16(int codePoint) {
+        return switch (codePoint) {
+            case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE -> small (Unicode 16.0)
+            case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN -> small (Unicode 15.0)
+            case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE -> small (Unicode 15.0)
+            case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
+            case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
+            default -> {
+                if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
+                    yield codePoint + 0x20; // Garay uppercase -> lowercase (Unicode 16.0)
+                }
+                yield codePoint;
+            }
+        };
     }
 
     /**
@@ -1971,7 +1992,50 @@ public final class StringPrototype {
      */
     public static JSValue toUpperCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(str.value().toUpperCase());
+        return new JSString(toUpperCaseUnicode16(str.value()));
+    }
+
+    /**
+     * toUpperCase with Unicode 16.0 case mappings that Java 17 (Unicode 14.0) lacks.
+     */
+    private static String toUpperCaseUnicode16(String s) {
+        String result = s.toUpperCase();
+        // Apply Unicode 16.0 additions
+        boolean needsPatch = false;
+        for (int i = 0; i < result.length(); ) {
+            int codePoint = result.codePointAt(i);
+            if (codePointToUpper16(codePoint) != codePoint) {
+                needsPatch = true;
+                break;
+            }
+            i += Character.charCount(codePoint);
+        }
+        if (!needsPatch) {
+            return result;
+        }
+        StringBuilder sb = new StringBuilder(result.length());
+        for (int i = 0; i < result.length(); ) {
+            int codePoint = result.codePointAt(i);
+            sb.appendCodePoint(codePointToUpper16(codePoint));
+            i += Character.charCount(codePoint);
+        }
+        return sb.toString();
+    }
+
+    private static int codePointToUpper16(int codePoint) {
+        return switch (codePoint) {
+            case 0x019B -> 0xA7DC; // LATIN SMALL LETTER LAMBDA WITH STROKE -> CAPITAL (Unicode 16.0)
+            case 0x0264 -> 0xA7CB; // LATIN SMALL LETTER RAMS HORN -> CAPITAL (Unicode 15.0)
+            case 0x1C8A -> 0x1C89; // CYRILLIC SMALL LETTER TJE -> CAPITAL (Unicode 15.0)
+            case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
+            case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
+            default -> {
+                if (codePoint >= 0x10D70 && codePoint <= 0x10D85) {
+                    yield codePoint - 0x20; // Garay lowercase -> uppercase (Unicode 16.0)
+                }
+                yield codePoint;
+            }
+        };
     }
 
     /**

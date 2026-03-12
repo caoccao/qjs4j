@@ -527,11 +527,13 @@ public final class SetPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSSet newSet = copySet(context, set);
+        // Per ES2024: GetKeysIterator (step 4) before copying SetData (step 5).
+        // The iterator's next getter may modify the set.
         IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
         if (iteratorRecord == null) {
             return JSUndefined.INSTANCE;
         }
+        JSSet newSet = copySet(context, set);
         while (true) {
             IteratorStep step = iteratorStep(context, iteratorRecord);
             if (step == null) {
@@ -564,11 +566,13 @@ public final class SetPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSSet newSet = copySet(context, set);
+        // Per ES2024: GetKeysIterator (step 4) before copying SetData (step 5).
+        // The iterator's next getter may modify the set.
         IteratorRecord iteratorRecord = getKeysIteratorRecord(context, record);
         if (iteratorRecord == null) {
             return JSUndefined.INSTANCE;
         }
+        JSSet newSet = copySet(context, set);
         while (true) {
             IteratorStep step = iteratorStep(context, iteratorRecord);
             if (step == null) {

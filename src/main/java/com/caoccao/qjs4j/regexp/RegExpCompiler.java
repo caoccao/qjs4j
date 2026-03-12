@@ -76,7 +76,9 @@ public final class RegExpCompiler {
         if (!Character.isHighSurrogate((char) codePoint)) {
             return codePoint;
         }
-        UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseUnicodeEscapeAt(context, context.pos);
+        // Per QuickJS: only combine with 4-digit \\uHHHH trailing escapes,
+        // NOT braced \\u{XXXX} escapes.
+        UnicodeEscapeParseResult unicodeEscapeParseResult = tryParseFourDigitUnicodeEscapeAt(context, context.pos);
         if (unicodeEscapeParseResult == null) {
             return codePoint;
         }
@@ -748,8 +750,9 @@ public final class RegExpCompiler {
                         if (!closedBrace) {
                             throw new RegExpSyntaxException("Invalid unicode escape");
                         }
-                        int combinedCodePoint = combineTrailingLowSurrogateEscapeIfPresent(context, value);
-                        compileLiteralChar(context, combinedCodePoint, isBackwardDirection);
+                        // Per QuickJS: braced escapes are NOT combined with
+                        // trailing surrogates. Only 4-digit escapes combine.
+                        compileLiteralChar(context, value, isBackwardDirection);
                     } else {
                         // Non-unicode mode: backslash-u is identity escape, '{' handled by caller
                         compileLiteralChar(context, 'u', isBackwardDirection);
@@ -1847,6 +1850,9 @@ public final class RegExpCompiler {
                         value = (value << 4) | hexVal;
                         digitCount++;
                         context.pos++;
+                        if (value > 0x10FFFF) {
+                            throw new RegExpSyntaxException("Unicode escape out of range");
+                        }
                     }
                     if (digitCount == 0) {
                         throw new RegExpSyntaxException("Empty unicode escape");
@@ -1854,8 +1860,9 @@ public final class RegExpCompiler {
                     if (!closedBrace) {
                         throw new RegExpSyntaxException("Invalid unicode escape");
                     }
-                    // In unicode mode, combine surrogate pairs in character classes
-                    yield combineTrailingLowSurrogateEscapeIfPresent(context, value);
+                    // Per QuickJS: braced escapes are NOT combined
+                    // with trailing surrogates. Only 4-digit escapes combine.
+                    yield value;
                 }
                 boolean validUnicode = context.pos + 3 < context.codePoints.length
                         && hexValue(context.codePoints[context.pos]) != -1
@@ -2600,6 +2607,35 @@ public final class RegExpCompiler {
         throw new RegExpSyntaxException("Incomplete group syntax");
     }
 
+    /**
+     * Parse only a 4-digit \\uHHHH escape at the given position.
+     * Per QuickJS, surrogate pair combining only applies to 4-digit escapes.
+     */
+    private UnicodeEscapeParseResult tryParseFourDigitUnicodeEscapeAt(CompileContext context, int startPos) {
+        if (startPos + 1 >= context.codePoints.length
+                || context.codePoints[startPos] != '\\'
+                || context.codePoints[startPos + 1] != 'u') {
+            return null;
+        }
+        int currentPos = startPos + 2;
+        // Skip braced escapes — only 4-digit allowed
+        if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
+            return null;
+        }
+        if (currentPos + 3 >= context.codePoints.length) {
+            return null;
+        }
+        int value = 0;
+        for (int i = 0; i < 4; i++) {
+            int hexValue = hexValue(context.codePoints[currentPos + i]);
+            if (hexValue < 0) {
+                return null;
+            }
+            value = (value << 4) | hexValue;
+        }
+        return new UnicodeEscapeParseResult(value, currentPos + 4);
+    }
+
     private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos) {
         if (startPos + 1 >= context.codePoints.length
                 || context.codePoints[startPos] != '\\'
@@ -2678,7 +2714,11 @@ public final class RegExpCompiler {
 
         CompileContext(String pattern, int flags, DynamicBuffer buffer) {
             this.pattern = pattern;
-            this.codePoints = pattern.codePoints().toArray();
+            // In non-unicode mode, work with UTF-16 code units so that
+            // raw surrogates in the pattern are individual atoms.
+            // In unicode mode, combine surrogate pairs into code points.
+            boolean isUnicodeMode = (flags & (RegExpBytecode.FLAG_UNICODE | RegExpBytecode.FLAG_UNICODE_SETS)) != 0;
+            this.codePoints = isUnicodeMode ? pattern.codePoints().toArray() : pattern.chars().toArray();
             this.flags = flags;
             this.currentFlags = flags;
             this.buffer = buffer;

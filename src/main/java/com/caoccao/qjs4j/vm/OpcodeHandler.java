@@ -2251,7 +2251,15 @@ public final class OpcodeHandler {
         if (targetObject != null) {
             try {
                 PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                JSValue result = targetObject.get(key);
+                // Pass the original primitive as receiver so strict getters see
+                // the unboxed value. For objects, use get(key) so subclass
+                // overrides (e.g. JSArguments mapped args) are dispatched.
+                JSValue result;
+                if (objectValue instanceof JSObject) {
+                    result = targetObject.get(key);
+                } else {
+                    result = targetObject.get(key, objectValue);
+                }
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -2299,7 +2307,15 @@ public final class OpcodeHandler {
         if (targetObject != null) {
             try {
                 PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                JSValue result = targetObject.get(key);
+                // Pass the original primitive as receiver so strict getters see
+                // the unboxed value. For objects, use get(key) so subclass
+                // overrides (e.g. JSArguments mapped args) are dispatched.
+                JSValue result;
+                if (arrayObjectValue instanceof JSObject) {
+                    result = targetObject.get(key);
+                } else {
+                    result = targetObject.get(key, arrayObjectValue);
+                }
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     executionContext.virtualMachine.context.clearPendingException();
@@ -4255,27 +4271,25 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
         } else {
-            // In strict mode, setting a property on a primitive throws TypeError
-            if (executionContext.virtualMachine.context.isStrictMode()) {
-                PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                executionContext.virtualMachine.context.throwTypeError(
-                        "Cannot create property '" + key + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.context.clearPendingException();
-            } else {
-                JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
-                if (boxedObject != null) {
-                    try {
-                        PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
-                        if (boxedObject instanceof JSProxy proxy) {
-                            proxy.proxySet(executionContext.virtualMachine.context, key, assignedValue);
-                        } else {
-                            boxedObject.set(key, assignedValue);
-                        }
-                        executionContext.virtualMachine.capturePendingExceptionFromContext(boxedObject.getContext());
-                    } catch (JSVirtualMachineException e) {
-                        executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            // For primitives, box to find setters in the prototype chain,
+            // passing the original primitive as receiver. If no setter is
+            // found, strict mode throws TypeError (QuickJS JS_PROP_THROW_STRICT).
+            JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
+            if (boxedObject != null) {
+                try {
+                    PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, indexValue);
+                    boolean setSucceeded = boxedObject.setWithResult(key, assignedValue, objectValue);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        executionContext.virtualMachine.context.clearPendingException();
+                    } else if (!setSucceeded && executionContext.virtualMachine.context.isStrictMode()) {
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot create property '" + key + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        executionContext.virtualMachine.context.clearPendingException();
                     }
+                } catch (JSVirtualMachineException e) {
+                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                 }
             }
         }
@@ -4310,25 +4324,24 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.virtualMachine.context.clearPendingException();
         } else {
-            // In strict mode, setting a property on a primitive throws TypeError
-            if (executionContext.virtualMachine.context.isStrictMode()) {
-                executionContext.virtualMachine.context.throwTypeError(
-                        "Cannot create property '" + fieldName + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.context.clearPendingException();
-            } else {
-                JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
-                if (boxedObject != null) {
-                    try {
-                        if (boxedObject instanceof JSProxy proxy) {
-                            proxy.proxySet(executionContext.virtualMachine.context, propertyKey, fieldValue);
-                        } else {
-                            boxedObject.set(propertyKey, fieldValue);
-                        }
-                        executionContext.virtualMachine.capturePendingExceptionFromContext(boxedObject.getContext());
-                    } catch (JSVirtualMachineException e) {
-                        executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            // For primitives, box to find setters in the prototype chain,
+            // passing the original primitive as receiver. If no setter is
+            // found, strict mode throws TypeError (QuickJS JS_PROP_THROW_STRICT).
+            JSObject boxedObject = executionContext.virtualMachine.toObject(objectValue);
+            if (boxedObject != null) {
+                try {
+                    boolean setSucceeded = boxedObject.setWithResult(propertyKey, fieldValue, objectValue);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        executionContext.virtualMachine.context.clearPendingException();
+                    } else if (!setSucceeded && executionContext.virtualMachine.context.isStrictMode()) {
+                        executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot create property '" + fieldName + "' on " + JSTypeChecking.typeof(objectValue) + " '" + objectValue + "'");
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        executionContext.virtualMachine.context.clearPendingException();
                     }
+                } catch (JSVirtualMachineException e) {
+                    executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                 }
             }
         }

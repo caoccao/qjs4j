@@ -162,6 +162,10 @@ public final class RegExpPrototype {
         if (context.hasPendingException()) {
             return null;
         }
+        return constructWithSpecies(context, constructorValue, regexpObject, flags);
+    }
+
+    private static JSObject constructWithSpecies(JSContext context, JSValue constructorValue, JSObject regexpObject, String flags) {
         JSArray argsArray = context.createJSArray();
         argsArray.push(regexpObject);
         argsArray.push(new JSString(flags));
@@ -843,6 +847,12 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
+        // ES2024 22.2.6.9 step 4: SpeciesConstructor BEFORE reading flags (step 5).
+        JSValue speciesConstructor = getRegExpSpeciesConstructor(context, regexpObject);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
         String flags = getFlagsString(context, regexpObject);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -851,7 +861,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject matcher = constructMatcherFromSpecies(context, regexpObject, flags);
+        JSObject matcher = constructWithSpecies(context, speciesConstructor, regexpObject, flags);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -967,96 +977,101 @@ public final class RegExpPrototype {
             return inputStringValue;
         }
 
-        StringBuilder accumulated = new StringBuilder(inputString.length() + 16);
-        int nextSourcePosition = 0;
-        for (JSObject resultObject : results) {
-            // ES2024 22.2.5.11 step 14a: nCaptures = ToLength(Get(result, "length"))
-            JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            int resultLength = (int) Math.min(JSTypeConversions.toLength(context, lengthValue), Integer.MAX_VALUE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // ES2024 22.2.5.11 step 14c: matched = ToString(Get(result, "0"))
-            JSValue matchedValue = resultObject.get(PropertyKey.fromIndex(0));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            String matched = JSTypeConversions.toString(context, matchedValue).value();
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-
-            // ES2024 22.2.5.11 step 14d: position = ToIntegerOrInfinity(Get(result, "index"))
-            JSValue positionValue = resultObject.get(PropertyKey.INDEX);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            int position = (int) JSTypeConversions.toInteger(context, positionValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            position = Math.max(0, Math.min(position, inputString.length()));
-            int tailPosition = Math.max(0, Math.min(position + matched.length(), inputString.length()));
-
-            // ES2024 22.2.5.11 step 14f-g: captures
-            String[] captures = new String[Math.max(1, resultLength)];
-            captures[0] = matched;
-            for (int i = 1; i < resultLength; i++) {
-                JSValue captureValue = resultObject.get(PropertyKey.fromIndex(i));
+        try {
+            StringBuilder accumulated = new StringBuilder(inputString.length() + 16);
+            int nextSourcePosition = 0;
+            for (JSObject resultObject : results) {
+                // ES2024 22.2.5.11 step 14a: nCaptures = ToLength(Get(result, "length"))
+                JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                if (captureValue instanceof JSUndefined) {
-                    captures[i] = null;
-                } else {
-                    captures[i] = JSTypeConversions.toString(context, captureValue).value();
+                int resultLength = (int) Math.min(JSTypeConversions.toLength(context, lengthValue), Integer.MAX_VALUE);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                // ES2024 22.2.5.11 step 14c: matched = ToString(Get(result, "0"))
+                JSValue matchedValue = resultObject.get(PropertyKey.fromIndex(0));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                String matched = JSTypeConversions.toString(context, matchedValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                // ES2024 22.2.5.11 step 14d: position = ToIntegerOrInfinity(Get(result, "index"))
+                JSValue positionValue = resultObject.get(PropertyKey.INDEX);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                int position = (int) JSTypeConversions.toInteger(context, positionValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                position = Math.max(0, Math.min(position, inputString.length()));
+                int tailPosition = Math.max(0, Math.min(position + matched.length(), inputString.length()));
+
+                // ES2024 22.2.5.11 step 14f-g: captures
+                String[] captures = new String[Math.max(1, resultLength)];
+                captures[0] = matched;
+                for (int i = 1; i < resultLength; i++) {
+                    JSValue captureValue = resultObject.get(PropertyKey.fromIndex(i));
                     if (context.hasPendingException()) {
                         return JSUndefined.INSTANCE;
                     }
+                    if (captureValue instanceof JSUndefined) {
+                        captures[i] = null;
+                    } else {
+                        captures[i] = JSTypeConversions.toString(context, captureValue).value();
+                        if (context.hasPendingException()) {
+                            return JSUndefined.INSTANCE;
+                        }
+                    }
                 }
-            }
 
-            // ES2024 22.2.5.11 step 14h: namedCaptures = Get(result, "groups")
-            JSValue groupsValue = resultObject.get(PropertyKey.GROUPS);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            if (!functionalReplace && !(groupsValue instanceof JSUndefined)) {
-                JSObject namedCapturesObject = JSTypeConversions.toObject(context, groupsValue);
+                // ES2024 22.2.5.11 step 14h: namedCaptures = Get(result, "groups")
+                JSValue groupsValue = resultObject.get(PropertyKey.GROUPS);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                if (namedCapturesObject == null) {
-                    return context.throwTypeError("Cannot convert undefined or null to object");
+                if (!functionalReplace && !(groupsValue instanceof JSUndefined)) {
+                    JSObject namedCapturesObject = JSTypeConversions.toObject(context, groupsValue);
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    if (namedCapturesObject == null) {
+                        return context.throwTypeError("Cannot convert undefined or null to object");
+                    }
+                }
+
+                String replacement = StringPrototype.applyRegExpReplacementWithNamedCapturesObject(
+                        context,
+                        replaceValue,
+                        inputString,
+                        position,
+                        tailPosition,
+                        captures,
+                        groupsValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+
+                if (position >= nextSourcePosition) {
+                    accumulated.append(inputString, nextSourcePosition, position);
+                    accumulated.append(replacement);
+                    nextSourcePosition = tailPosition;
                 }
             }
-
-            String replacement = StringPrototype.applyRegExpReplacementWithNamedCapturesObject(
-                    context,
-                    replaceValue,
-                    inputString,
-                    position,
-                    tailPosition,
-                    captures,
-                    groupsValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
+            if (nextSourcePosition < inputString.length()) {
+                accumulated.append(inputString.substring(nextSourcePosition));
             }
-
-            if (position >= nextSourcePosition) {
-                accumulated.append(inputString, nextSourcePosition, position);
-                accumulated.append(replacement);
-                nextSourcePosition = tailPosition;
-            }
+            return new JSString(accumulated.toString());
+        } catch (OutOfMemoryError e) {
+            context.throwError("InternalError", "out of memory");
+            return JSUndefined.INSTANCE;
         }
-        if (nextSourcePosition < inputString.length()) {
-            accumulated.append(inputString.substring(nextSourcePosition));
-        }
-        return new JSString(accumulated.toString());
     }
 
     /**
@@ -1139,6 +1154,12 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
+        // ES2024 22.2.6.14 step 4: SpeciesConstructor BEFORE reading flags (step 5).
+        JSValue speciesConstructor = getRegExpSpeciesConstructor(context, regexpObject);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
         String flags = getFlagsString(context, regexpObject);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -1149,7 +1170,8 @@ public final class RegExpPrototype {
         boolean unicodeMatching = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
         String newFlags = flags.indexOf('y') >= 0 ? flags : flags + "y";
 
-        JSObject splitter = constructMatcherFromSpecies(context, regexpObject, newFlags);
+        // ES2024 22.2.6.14 step 8: Construct splitter.
+        JSObject splitter = constructWithSpecies(context, speciesConstructor, regexpObject, newFlags);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1171,10 +1193,7 @@ public final class RegExpPrototype {
 
         int size = s.length();
         if (size == 0) {
-            setLastIndexOrThrow(context, splitter, JSNumber.of(0));
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+            // ES2024 22.2.6.14 step 12: no setLastIndex for empty string case.
             JSValue zValue = regExpExec(context, splitter, new JSString(s));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -1221,17 +1240,8 @@ public final class RegExpPrototype {
                 continue;
             }
 
-            JSValue matchIndexValue = zObject.get(PropertyKey.INDEX);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            int zIndex = (int) JSTypeConversions.toInteger(context, matchIndexValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            zIndex = Math.max(0, Math.min(zIndex, s.length()));
-            int splitIndex = Math.max(p, zIndex);
-            result.push(new JSString(s.substring(p, splitIndex)));
+            // ES2024 22.2.6.14 step 13.c.iii.4.a: T = substring(S, p, q).
+            result.push(new JSString(s.substring(p, q)));
             lengthA++;
             if (lengthA == limit) {
                 return result;
