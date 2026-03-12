@@ -104,6 +104,9 @@ final class FunctionClassFieldCompiler {
                 if (symbol != null) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    if (isAnonymousFunctionDefinition(field.getValue())) {
+                        compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+                    }
                     compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.DROP);

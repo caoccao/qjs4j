@@ -685,30 +685,37 @@ public final class JSProxy extends JSObject {
             return targetObj.getPrototype();
         }
 
-        if (!(trap instanceof JSFunction trapFunc)) {
+        if (!JSTypeChecking.isCallable(trap)) {
             throw new JSException(executionContext.throwTypeError("getPrototypeOf trap must be a function"));
         }
 
         // Call trap: handler.getPrototypeOf(target)
         JSValue[] args = new JSValue[]{target};
-        JSValue result = trapFunc.call(executionContext, handler, args);
+        JSValue result;
+        if (trap instanceof JSProxy proxyTrap) {
+            result = proxyTrap.apply(executionContext, handler, args);
+        } else {
+            JSFunction trapFunction = (JSFunction) trap;
+            result = trapFunction.call(executionContext, handler, args);
+        }
 
         // Validate result is null or object
         if (!(result instanceof JSNull) && !(result instanceof JSObject)) {
             throw new JSException(executionContext.throwTypeError(
                     "proxy getPrototypeOf handler must return an object or null"));
         }
+        JSObject handlerPrototype = result instanceof JSNull ? null : (JSObject) result;
 
         // Check invariants if target is not extensible
         if (!targetObj.isExtensible()) {
             JSObject targetProto = targetObj.getPrototype();
-            if (!sameValue(targetProto, result)) {
+            if (!sameValue(targetProto, handlerPrototype)) {
                 throw new JSException(executionContext.throwTypeError(
                         "'getPrototypeOf' on proxy: proxy target is non-extensible but the trap did not return its actual prototype"));
             }
         }
 
-        return (result instanceof JSNull) ? null : (JSObject) result;
+        return handlerPrototype;
     }
 
     public JSContext getProxyContext() {
@@ -1143,7 +1150,7 @@ public final class JSProxy extends JSObject {
      * Private field operations must bypass proxy traps and operate on the proxy object itself.
      */
     public void setPrivatePropertyDirect(PropertyKey key, JSValue value) {
-        super.set(key, value);
+        super.setPrivatePropertyDirect(key, value);
     }
 
     /**

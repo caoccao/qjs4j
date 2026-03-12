@@ -1526,6 +1526,21 @@ final class FunctionClassCompiler {
                 parameterSlotIndexes);
         declareAndInitializeImplicitArgumentsBinding(methodCtx);
 
+        // For base constructors, instance private methods/fields are initialized before
+        // parameter default evaluation so defaults can access private members on `this`.
+        if (isConstructor && !isDerivedConstructor) {
+            if (!privateInstanceMethodFunctions.isEmpty()) {
+                methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
+            }
+            if (!instanceFields.isEmpty()) {
+                methodDelegates.functions.compileFieldInitialization(
+                        instanceFields,
+                        privateSymbols,
+                        computedFieldSymbols,
+                        autoAccessorBackingSymbols);
+            }
+        }
+
         // Emit default parameter initialization following QuickJS pattern
         if (functionExpression.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
@@ -1568,17 +1583,6 @@ final class FunctionClassCompiler {
                                 autoAccessorBackingSymbols);
                     }
                 };
-            } else {
-                if (!privateInstanceMethodFunctions.isEmpty()) {
-                    methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
-                }
-                if (!instanceFields.isEmpty()) {
-                    methodDelegates.functions.compileFieldInitialization(
-                            instanceFields,
-                            privateSymbols,
-                            computedFieldSymbols,
-                            autoAccessorBackingSymbols);
-                }
             }
         }
 

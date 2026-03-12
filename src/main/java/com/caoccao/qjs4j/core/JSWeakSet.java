@@ -49,26 +49,31 @@ public final class JSWeakSet extends JSObject {
         }
         JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
-            returnFunction.call(context, iterator, JSValue.NO_ARGS);
+            try {
+                returnFunction.call(context, iterator, JSValue.NO_ARGS);
+            } catch (RuntimeException ignored) {
+                // Preserve the original abrupt completion.
+            }
         }
         if (pendingException != null) {
+            context.clearPendingException();
             context.setPendingException(pendingException);
         }
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
         JSWeakSet weakSetObj = context.createJSWeakSet();
+        initializePrototypeFromNewTarget(context, weakSetObj);
+        if (context.hasPendingException()) {
+            return returnAbruptResult(context, weakSetObj);
+        }
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
             JSValue adder = weakSetObj.get(PropertyKey.fromString("add"));
             if (context.hasPendingException()) {
-                JSValue pendingException = context.getPendingException();
-                if (pendingException instanceof JSObject pendingObject) {
-                    return pendingObject;
-                }
-                return context.throwTypeError("WeakSet constructor failed");
+                return returnAbruptResult(context, weakSetObj);
             }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
@@ -76,11 +81,7 @@ public final class JSWeakSet extends JSObject {
 
             JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
             if (context.hasPendingException()) {
-                JSValue pendingException = context.getPendingException();
-                if (pendingException instanceof JSObject pendingObject) {
-                    return pendingObject;
-                }
-                return context.throwTypeError("WeakSet constructor failed");
+                return returnAbruptResult(context, weakSetObj);
             }
             if (!(iterator instanceof JSObject)) {
                 return context.throwTypeError("Object is not iterable");
@@ -91,34 +92,18 @@ public final class JSWeakSet extends JSObject {
                 try {
                     nextResult = JSIteratorHelper.iteratorNext(iterator, context);
                 } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
                     throw e;
                 }
-                if (nextResult instanceof JSError) {
-                    closeIterator(context, iterator);
-                    return nextResult;
-                }
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("WeakSet constructor failed");
+                    return returnAbruptResult(context, weakSetObj);
                 }
                 if (nextResult == null) {
-                    closeIterator(context, iterator);
                     return context.throwTypeError("Iterator result must be an object");
                 }
 
                 JSValue done = nextResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("WeakSet constructor failed");
+                    return returnAbruptResult(context, weakSetObj);
                 }
                 if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
                     break;
@@ -126,34 +111,35 @@ public final class JSWeakSet extends JSObject {
 
                 JSValue value = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("WeakSet constructor failed");
+                    return returnAbruptResult(context, weakSetObj);
                 }
-                JSValue adderResult;
                 try {
-                    adderResult = adderFunction.call(context, weakSetObj, new JSValue[]{value});
+                    adderFunction.call(context, weakSetObj, new JSValue[]{value});
                 } catch (RuntimeException e) {
                     closeIterator(context, iterator);
                     throw e;
                 }
-                if (adderResult instanceof JSError || context.hasPendingException()) {
+                if (context.hasPendingException()) {
                     closeIterator(context, iterator);
-                    if (adderResult instanceof JSObject adderResultObject) {
-                        return adderResultObject;
-                    }
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("WeakSet constructor failed");
+                    return returnAbruptResult(context, weakSetObj);
                 }
             }
         }
         return weakSetObj;
+    }
+
+    private static void initializePrototypeFromNewTarget(JSContext context, JSWeakSet weakSetObject) {
+        JSValue newTarget = context.getNativeConstructorNewTarget();
+        if (!(newTarget instanceof JSObject newTargetObject)) {
+            return;
+        }
+        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSWeakSet.NAME);
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (resolvedPrototype != null) {
+            weakSetObject.setPrototype(resolvedPrototype);
+        }
     }
 
     public static boolean isWeakSetValue(JSValue value) {
@@ -164,6 +150,14 @@ public final class JSWeakSet extends JSObject {
             return !s.isRegistered();
         }
         return false;
+    }
+
+    private static JSObject returnAbruptResult(JSContext context, JSWeakSet fallbackObject) {
+        JSValue pendingException = context.getPendingException();
+        if (pendingException instanceof JSObject pendingObject) {
+            return pendingObject;
+        }
+        return fallbackObject;
     }
 
     @Override

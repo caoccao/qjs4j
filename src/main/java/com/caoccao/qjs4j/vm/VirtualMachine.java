@@ -559,11 +559,26 @@ public final class VirtualMachine {
         }
 
         JSValue result;
+        JSValue savedNewTarget = context.getConstructorNewTarget();
+        JSValue savedConstructorContextNewTarget = null;
+        JSValue savedNativeConstructorContextNewTarget = constructorContext.getNativeConstructorNewTarget();
+        context.setConstructorNewTarget(newTarget);
+        if (constructorContext != context) {
+            savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
+            constructorContext.setConstructorNewTarget(newTarget);
+        }
+        constructorContext.setNativeConstructorNewTarget(newTarget);
         try {
             result = constructorType.create(constructorContext, args);
         } catch (JSErrorException e) {
             throw new JSVirtualMachineException(
                     context.throwError(e));
+        } finally {
+            constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
+            if (constructorContext != context) {
+                constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
+            }
+            context.setConstructorNewTarget(savedNewTarget);
         }
         if (constructorContext != context && constructorContext.hasPendingException()) {
             context.setPendingException(constructorContext.getPendingException());

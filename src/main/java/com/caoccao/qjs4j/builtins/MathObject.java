@@ -72,8 +72,29 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
-        // acosh(x) = ln(x + sqrt(x*x - 1))
-        return JSNumber.of(Math.log(x + Math.sqrt(x * x - 1)));
+        if (Double.isNaN(x)) {
+            return JSNumber.of(Double.NaN);
+        }
+        if (x < 1.0) {
+            return JSNumber.of(Double.NaN);
+        }
+        if (x == 1.0) {
+            return JSNumber.of(0.0);
+        }
+        if (Double.isInfinite(x)) {
+            return JSNumber.of(Double.POSITIVE_INFINITY);
+        }
+
+        double result;
+        if (x > 0x1.0p28) {
+            result = Math.log(x) + LN2;
+        } else if (x > 2.0) {
+            result = Math.log(2.0 * x - 1.0 / (x + Math.sqrt(x * x - 1.0)));
+        } else {
+            double delta = x - 1.0;
+            result = Math.log1p(delta + Math.sqrt(2.0 * delta + delta * delta));
+        }
+        return JSNumber.of(result);
     }
 
     /**
@@ -100,8 +121,20 @@ public final class MathObject {
         if (x == 0.0 || Double.isNaN(x) || Double.isInfinite(x)) {
             return JSNumber.of(x);
         }
-        // asinh(x) = ln(x + sqrt(x*x + 1))
-        return JSNumber.of(Math.log(x + Math.sqrt(x * x + 1)));
+
+        double absoluteValue = Math.abs(x);
+        double resultMagnitude;
+        if (absoluteValue < 0x1.0p-28) {
+            resultMagnitude = absoluteValue;
+        } else if (absoluteValue > 0x1.0p28) {
+            resultMagnitude = Math.log(absoluteValue) + LN2;
+        } else if (absoluteValue > 2.0) {
+            resultMagnitude = Math.log(2.0 * absoluteValue + 1.0 / (Math.sqrt(absoluteValue * absoluteValue + 1.0) + absoluteValue));
+        } else {
+            double squared = absoluteValue * absoluteValue;
+            resultMagnitude = Math.log1p(absoluteValue + squared / (1.0 + Math.sqrt(1.0 + squared)));
+        }
+        return JSNumber.of(Math.copySign(resultMagnitude, x));
     }
 
     /**
@@ -135,11 +168,30 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
+        if (Double.isNaN(x)) {
+            return JSNumber.of(Double.NaN);
+        }
+        if (x < -1.0 || x > 1.0) {
+            return JSNumber.of(Double.NaN);
+        }
+        if (x == -1.0) {
+            return JSNumber.of(Double.NEGATIVE_INFINITY);
+        }
+        if (x == 1.0) {
+            return JSNumber.of(Double.POSITIVE_INFINITY);
+        }
         if (x == 0.0) {
             return JSNumber.of(x);
         }
-        // atanh(x) = 0.5 * ln((1+x)/(1-x))
-        return JSNumber.of(0.5 * Math.log((1 + x) / (1 - x)));
+
+        double absoluteValue = Math.abs(x);
+        double resultMagnitude;
+        if (absoluteValue < 0.5) {
+            resultMagnitude = 0.5 * Math.log1p(2.0 * absoluteValue + 2.0 * absoluteValue * absoluteValue / (1.0 - absoluteValue));
+        } else {
+            resultMagnitude = 0.5 * Math.log1p((2.0 * absoluteValue) / (1.0 - absoluteValue));
+        }
+        return JSNumber.of(Math.copySign(resultMagnitude, x));
     }
 
     /**
@@ -226,6 +278,12 @@ public final class MathObject {
             return JSNumber.of(Double.NaN);
         }
         double x = JSTypeConversions.toNumber(context, args[0]).value();
+        if (x == 1.0) {
+            return JSNumber.of(E);
+        }
+        if (x == -1.0) {
+            return JSNumber.of(1.0 / E);
+        }
         return JSNumber.of(Math.exp(x));
     }
 

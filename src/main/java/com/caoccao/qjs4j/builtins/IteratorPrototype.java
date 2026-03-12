@@ -466,28 +466,6 @@ public final class IteratorPrototype {
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
     }
 
-    public static JSValue wrapOrHelperNext(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
-            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
-        }
-        JSFunction internalNext = wrapOrHelperIteratorObject.getInternalNext();
-        if (internalNext == null) {
-            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
-        }
-        return internalNext.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
-    }
-
-    public static JSValue wrapOrHelperReturn(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
-            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
-        }
-        JSFunction internalReturn = wrapOrHelperIteratorObject.getInternalReturn();
-        if (internalReturn == null) {
-            return iteratorResult(context, JSUndefined.INSTANCE, true);
-        }
-        return internalReturn.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
-    }
-
     /**
      * Shared IteratorZip implementation for both zip and zipKeyed.
      * When keys is null, produces arrays (zip). When keys is non-null, produces null-proto objects (zipKeyed).
@@ -1791,6 +1769,28 @@ public final class IteratorPrototype {
         return limit;
     }
 
+    public static JSValue wrapOrHelperNext(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        JSFunction internalNext = wrapOrHelperIteratorObject.getInternalNext();
+        if (internalNext == null) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        return internalNext.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
+    }
+
+    public static JSValue wrapOrHelperReturn(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        JSFunction internalReturn = wrapOrHelperIteratorObject.getInternalReturn();
+        if (internalReturn == null) {
+            return iteratorResult(context, JSUndefined.INSTANCE, true);
+        }
+        return internalReturn.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
+    }
+
     /**
      * Iterator.zip(iterables [, options])
      * Creates an iterator that zips multiple iterables together.
@@ -2067,31 +2067,6 @@ public final class IteratorPrototype {
     private record IteratorStep(JSValue value, boolean done) {
     }
 
-    private static final class JSWrapOrHelperIteratorObject extends JSObject {
-        private JSFunction internalNext;
-        private JSFunction internalReturn;
-
-        private JSWrapOrHelperIteratorObject(JSContext context) {
-            super(context);
-        }
-
-        private JSFunction getInternalNext() {
-            return internalNext;
-        }
-
-        private JSFunction getInternalReturn() {
-            return internalReturn;
-        }
-
-        private void setInternalNext(JSFunction internalNext) {
-            this.internalNext = internalNext;
-        }
-
-        private void setInternalReturn(JSFunction internalReturn) {
-            this.internalReturn = internalReturn;
-        }
-    }
-
     /**
      * Specialized CreateIteratorResultObject for iterator helper hot paths.
      * It lazily materializes to a normal object when mutated.
@@ -2241,6 +2216,31 @@ public final class IteratorPrototype {
             super.set(key, value);
         }
 
+    }
+
+    private static final class JSWrapOrHelperIteratorObject extends JSObject {
+        private JSFunction internalNext;
+        private JSFunction internalReturn;
+
+        private JSWrapOrHelperIteratorObject(JSContext context) {
+            super(context);
+        }
+
+        private JSFunction getInternalNext() {
+            return internalNext;
+        }
+
+        private JSFunction getInternalReturn() {
+            return internalReturn;
+        }
+
+        private void setInternalNext(JSFunction internalNext) {
+            this.internalNext = internalNext;
+        }
+
+        private void setInternalReturn(JSFunction internalReturn) {
+            this.internalReturn = internalReturn;
+        }
     }
 
     /**

@@ -352,6 +352,7 @@ public final class DtoaConverter {
             return convert(value);
         }
 
+        boolean negativeNonZeroInput = value < 0.0;
         // Use BigDecimal for precise fixed-point formatting
         // Note: Use new BigDecimal(value) instead of BigDecimal.valueOf(value)
         // to preserve the exact binary representation of the double, including
@@ -359,10 +360,17 @@ public final class DtoaConverter {
         try {
             BigDecimal bigDecimal = new BigDecimal(value);
             bigDecimal = bigDecimal.setScale(fractionDigits, RoundingMode.HALF_UP);
+            if (negativeNonZeroInput && bigDecimal.signum() == 0) {
+                return "-" + bigDecimal.abs().toPlainString();
+            }
             return bigDecimal.toPlainString();
         } catch (NumberFormatException e) {
             // Fallback to String.format
-            return String.format(Locale.US, "%." + fractionDigits + "f", value);
+            String fixedString = String.format(Locale.US, "%." + fractionDigits + "f", value);
+            if (negativeNonZeroInput && (fixedString.equals("0") || fixedString.startsWith("0."))) {
+                return "-" + fixedString;
+            }
+            return fixedString;
         }
     }
 

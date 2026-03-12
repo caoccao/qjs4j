@@ -1196,7 +1196,14 @@ public final class OpcodeHandler {
                     && key.asSymbol().getDescription().startsWith("#");
             boolean isProxyPrivateTarget = isPrivateSymbolKey && object instanceof JSProxy;
             if (methodValue instanceof JSFunction methodFunction) {
-                methodFunction.setHomeObject(object);
+                JSObject homeObject = object;
+                if (isPrivateSymbolKey && !(object instanceof JSFunction)) {
+                    JSObject prototypeObject = object.getPrototype();
+                    if (prototypeObject != null) {
+                        homeObject = prototypeObject;
+                    }
+                }
+                methodFunction.setHomeObject(homeObject);
                 String namePrefix;
                 if (methodKind == 1) {
                     namePrefix = "get ";
@@ -4453,11 +4460,7 @@ public final class OpcodeHandler {
                 if (object instanceof JSProxy proxy) {
                     proxy.setPrivatePropertyDirect(key, value);
                 } else {
-                    if (object instanceof JSProxy proxy) {
-                        proxy.proxySet(executionContext.virtualMachine.context, key, value);
-                    } else {
-                        object.set(key, value);
-                    }
+                    object.setPrivatePropertyDirect(key, value);
                 }
             }
         }

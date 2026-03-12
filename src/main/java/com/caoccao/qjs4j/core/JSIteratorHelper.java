@@ -118,12 +118,22 @@ public final class JSIteratorHelper {
             return JSIterator.stringIterator(context, jsString);
         }
 
-        if (!(iterable instanceof JSObject iterableObj)) {
+        JSObject iterableObject;
+        if (iterable instanceof JSObject jsObject) {
+            iterableObject = jsObject;
+        } else {
+            iterableObject = JSTypeConversions.toObject(context, iterable);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+
+        if (iterableObject == null) {
             return null;
         }
 
         // Get the [Symbol.iterator] method
-        JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
+        JSValue iteratorMethod = iterableObject.get(PropertyKey.SYMBOL_ITERATOR);
         if (context.hasPendingException()) {
             return null;
         }

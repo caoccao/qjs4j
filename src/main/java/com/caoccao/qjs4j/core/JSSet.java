@@ -48,28 +48,40 @@ public final class JSSet extends JSObject {
         }
         JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
         if (returnMethod instanceof JSFunction returnFunction) {
-            returnFunction.call(context, iterator, JSValue.NO_ARGS);
+            try {
+                returnFunction.call(context, iterator, JSValue.NO_ARGS);
+            } catch (RuntimeException ignored) {
+                // Preserve the original abrupt completion.
+            }
         }
         if (pendingException != null) {
+            context.clearPendingException();
             context.setPendingException(pendingException);
         }
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
         JSSet setObj = context.createJSSet();
+        initializePrototypeFromNewTarget(context, setObj);
+        if (context.hasPendingException()) {
+            return returnAbruptResult(context, setObj);
+        }
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
             JSValue adder = setObj.get(PropertyKey.fromString("add"));
             if (context.hasPendingException()) {
-                return null;
+                return returnAbruptResult(context, setObj);
             }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
 
             JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (context.hasPendingException()) {
+                return returnAbruptResult(context, setObj);
+            }
             if (!(iterator instanceof JSObject)) {
                 return context.throwTypeError("Object is not iterable");
             }
@@ -79,29 +91,17 @@ public final class JSSet extends JSObject {
                 try {
                     nextResult = JSIteratorHelper.iteratorNext(iterator, context);
                 } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
                     throw e;
                 }
-                if (nextResult instanceof JSError) {
-                    closeIterator(context, iterator);
-                    return nextResult;
-                }
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Set constructor failed");
+                    return returnAbruptResult(context, setObj);
                 }
                 if (nextResult == null) {
-                    closeIterator(context, iterator);
                     return context.throwTypeError("Iterator result must be an object");
                 }
                 JSValue done = nextResult.get(PropertyKey.DONE);
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return null;
+                    return returnAbruptResult(context, setObj);
                 }
                 if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
                     break;
@@ -109,30 +109,43 @@ public final class JSSet extends JSObject {
 
                 JSValue value = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return null;
+                    return returnAbruptResult(context, setObj);
                 }
-                JSValue adderResult;
                 try {
-                    adderResult = adderFunction.call(context, setObj, new JSValue[]{value});
+                    adderFunction.call(context, setObj, new JSValue[]{value});
                 } catch (RuntimeException e) {
                     closeIterator(context, iterator);
                     throw e;
                 }
-                if (adderResult instanceof JSError || context.hasPendingException()) {
+                if (context.hasPendingException()) {
                     closeIterator(context, iterator);
-                    if (adderResult instanceof JSObject adderResultObject) {
-                        return adderResultObject;
-                    }
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Set constructor failed");
+                    return returnAbruptResult(context, setObj);
                 }
             }
         }
         return setObj;
+    }
+
+    private static void initializePrototypeFromNewTarget(JSContext context, JSSet setObject) {
+        JSValue newTarget = context.getNativeConstructorNewTarget();
+        if (!(newTarget instanceof JSObject newTargetObject)) {
+            return;
+        }
+        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSSet.NAME);
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (resolvedPrototype != null) {
+            setObject.setPrototype(resolvedPrototype);
+        }
+    }
+
+    private static JSObject returnAbruptResult(JSContext context, JSSet fallbackObject) {
+        JSValue pendingException = context.getPendingException();
+        if (pendingException instanceof JSObject pendingObject) {
+            return pendingObject;
+        }
+        return fallbackObject;
     }
 
     public IterationCursor createIterationCursor() {

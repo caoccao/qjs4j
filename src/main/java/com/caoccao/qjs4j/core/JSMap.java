@@ -68,19 +68,26 @@ public final class JSMap extends JSObject {
 
     public static JSObject create(JSContext context, JSValue... args) {
         JSMap mapObj = context.createJSMap();
+        initializePrototypeFromNewTarget(context, mapObj);
+        if (context.hasPendingException()) {
+            return mapObj;
+        }
 
         if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
             JSValue iterableArg = args[0];
 
             JSValue adder = mapObj.get(PropertyKey.SET);
             if (context.hasPendingException()) {
-                return mapObj;
+                return returnAbruptResult(context, mapObj);
             }
             if (!(adder instanceof JSFunction adderFunction)) {
                 return context.throwTypeError("set/add is not a function");
             }
 
             JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
+            if (context.hasPendingException()) {
+                return returnAbruptResult(context, mapObj);
+            }
             if (!(iterator instanceof JSObject)) {
                 return context.throwTypeError("Object is not iterable");
             }
@@ -90,38 +97,25 @@ public final class JSMap extends JSObject {
                 try {
                     nextResult = JSIteratorHelper.iteratorNext(iterator, context);
                 } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
                     throw e;
                 }
-                if (nextResult instanceof JSError) {
-                    closeIterator(context, iterator);
-                    return nextResult;
-                }
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Map constructor failed");
+                    return returnAbruptResult(context, mapObj);
                 }
                 if (nextResult == null) {
-                    closeIterator(context, iterator);
                     return context.throwTypeError("Iterator result must be an object");
                 }
-                JSValue done = nextResult.get("done");
+                JSValue done = nextResult.get(PropertyKey.DONE);
+                if (context.hasPendingException()) {
+                    return returnAbruptResult(context, mapObj);
+                }
                 if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
                     break;
                 }
 
                 JSValue entry = nextResult.get(PropertyKey.VALUE);
                 if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Map constructor failed");
+                    return returnAbruptResult(context, mapObj);
                 }
                 if (!(entry instanceof JSObject entryObj)) {
                     closeIterator(context, iterator);
@@ -131,42 +125,48 @@ public final class JSMap extends JSObject {
                 JSValue key = entryObj.get(PropertyKey.fromIndex(0));
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Map constructor failed");
+                    return returnAbruptResult(context, mapObj);
                 }
                 JSValue value = entryObj.get(PropertyKey.fromIndex(1));
                 if (context.hasPendingException()) {
                     closeIterator(context, iterator);
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Map constructor failed");
+                    return returnAbruptResult(context, mapObj);
                 }
-                JSValue adderResult;
                 try {
-                    adderResult = adderFunction.call(context, mapObj, new JSValue[]{key, value});
+                    adderFunction.call(context, mapObj, new JSValue[]{key, value});
                 } catch (RuntimeException e) {
                     closeIterator(context, iterator);
                     throw e;
                 }
-                if (adderResult instanceof JSError || context.hasPendingException()) {
+                if (context.hasPendingException()) {
                     closeIterator(context, iterator);
-                    if (adderResult instanceof JSObject adderResultObject) {
-                        return adderResultObject;
-                    }
-                    JSValue pendingException = context.getPendingException();
-                    if (pendingException instanceof JSObject pendingObject) {
-                        return pendingObject;
-                    }
-                    return context.throwTypeError("Map constructor failed");
+                    return returnAbruptResult(context, mapObj);
                 }
             }
         }
         return mapObj;
+    }
+
+    private static void initializePrototypeFromNewTarget(JSContext context, JSMap mapObject) {
+        JSValue newTarget = context.getNativeConstructorNewTarget();
+        if (!(newTarget instanceof JSObject newTargetObject)) {
+            return;
+        }
+        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSMap.NAME);
+        if (context.hasPendingException()) {
+            return;
+        }
+        if (resolvedPrototype != null) {
+            mapObject.setPrototype(resolvedPrototype);
+        }
+    }
+
+    private static JSObject returnAbruptResult(JSContext context, JSMap fallbackObject) {
+        JSValue pendingException = context.getPendingException();
+        if (pendingException instanceof JSObject pendingObject) {
+            return pendingObject;
+        }
+        return fallbackObject;
     }
 
     public IterationCursor createIterationCursor() {

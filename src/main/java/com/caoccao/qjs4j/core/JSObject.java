@@ -634,6 +634,9 @@ public non-sealed class JSObject implements JSValue {
             if (shapeKey == null) {
                 continue; // deleted property
             }
+            if (isPrivateSymbolKey(shapeKey)) {
+                continue;
+            }
             if (enumerableOnly) {
                 PropertyDescriptor descriptor = shape.getDescriptorAt(i);
                 if (descriptor == null || !descriptor.isEnumerable()) {
@@ -951,6 +954,18 @@ public non-sealed class JSObject implements JSValue {
         return htmlDDA;
     }
 
+    private boolean isPrivateSymbolKey(PropertyKey key) {
+        if (key == null || !key.isSymbol()) {
+            return false;
+        }
+        JSSymbol symbol = key.asSymbol();
+        if (symbol == null) {
+            return false;
+        }
+        String description = symbol.getDescription();
+        return description != null && description.startsWith("#");
+    }
+
     /**
      * Check if this object is sealed.
      */
@@ -1038,8 +1053,6 @@ public non-sealed class JSObject implements JSValue {
         setInternal(key, value, this, true);
     }
 
-    // Object integrity levels (ES5)
-
     /**
      * Set the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
@@ -1047,6 +1060,8 @@ public non-sealed class JSObject implements JSValue {
     public void setConstructorType(JSConstructorType type) {
         constructorType = type;
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Set the [IsHTMLDDA] internal slot.
@@ -1185,6 +1200,34 @@ public non-sealed class JSObject implements JSValue {
      */
     public void setPrimitiveValue(JSValue value) {
         this.primitiveValue = value;
+    }
+
+    /**
+     * Directly set a private field value on this object, bypassing ordinary [[Set]]
+     * extensibility/frozen checks. Private elements are internal slots and are not
+     * affected by Object.freeze()/Object.seal().
+     */
+    public void setPrivatePropertyDirect(PropertyKey key, JSValue value) {
+        int offset = getOwnPropertyOffset(key);
+        if (offset >= 0) {
+            propertyValues[offset] = value;
+            PropertyDescriptor descriptor = shape.getDescriptorAt(offset);
+            if (descriptor != null && descriptor.isDataDescriptor()) {
+                descriptor.setValue(value);
+            }
+            return;
+        }
+
+        long arrayIndex = getCanonicalArrayIndex(key);
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            int sparseIndex = (int) arrayIndex;
+            if (sparseProperties.containsKey(sparseIndex)) {
+                sparseProperties.put(sparseIndex, value);
+                return;
+            }
+        }
+
+        set(key, value);
     }
 
     public void setPrototype(JSObject prototype) {
