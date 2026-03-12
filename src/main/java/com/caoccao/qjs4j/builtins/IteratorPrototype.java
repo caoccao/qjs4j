@@ -384,7 +384,20 @@ public final class IteratorPrototype {
             JSNativeFunction nextFunction,
             JSNativeFunction returnFunction,
             String toStringTag) {
-        JSObject iteratorObject = context.createJSObject();
+        nextFunction.initializePrototypeChain(context);
+        if (returnFunction != null) {
+            returnFunction.initializePrototypeChain(context);
+        }
+        JSObject iteratorObject;
+        if ("Iterator Helper".equals(toStringTag) || "Iterator Wrap".equals(toStringTag)) {
+            iteratorObject = new JSWrapOrHelperIteratorObject(context);
+        } else {
+            iteratorObject = context.createJSObject();
+        }
+        if (iteratorObject instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject) {
+            wrapOrHelperIteratorObject.setInternalNext(nextFunction);
+            wrapOrHelperIteratorObject.setInternalReturn(returnFunction);
+        }
         // Use shared iterator-type-specific prototype if available
         JSObject iterProto = (toStringTag != null) ? context.getIteratorPrototype(toStringTag) : null;
         if (iterProto != null) {
@@ -392,9 +405,11 @@ public final class IteratorPrototype {
         } else {
             context.transferPrototype(iteratorObject, JSIterator.NAME);
         }
-        iteratorObject.defineProperty(PropertyKey.fromString("next"), nextFunction, PropertyDescriptor.DataState.ConfigurableWritable);
-        if (returnFunction != null) {
-            iteratorObject.defineProperty(PropertyKey.fromString("return"), returnFunction, PropertyDescriptor.DataState.ConfigurableWritable);
+        if (!(iteratorObject instanceof JSWrapOrHelperIteratorObject)) {
+            iteratorObject.defineProperty(PropertyKey.fromString("next"), nextFunction, PropertyDescriptor.DataState.ConfigurableWritable);
+            if (returnFunction != null) {
+                iteratorObject.defineProperty(PropertyKey.fromString("return"), returnFunction, PropertyDescriptor.DataState.ConfigurableWritable);
+            }
         }
         // Only set own toStringTag if no shared prototype provides it
         if (toStringTag != null && iterProto == null) {
@@ -412,16 +427,25 @@ public final class IteratorPrototype {
             if (done[0]) {
                 return iteratorResult(childContext, JSUndefined.INSTANCE, true);
             }
-            IteratorStep step = iteratorStep(childContext, wrappedIterator, wrappedNextMethod);
-            if (step == null) {
+            if (!(wrappedNextMethod instanceof JSFunction wrappedNextFunction)) {
+                return childContext.throwTypeError("not a function");
+            }
+            JSValue wrappedResult = callSafe(childContext, wrappedNextFunction, wrappedIterator, JSValue.NO_ARGS);
+            if (childContext.hasPendingException()) {
                 done[0] = true;
                 return childContext.getPendingException();
             }
-            if (step.done()) {
-                done[0] = true;
-                return iteratorResult(childContext, JSUndefined.INSTANCE, true);
+            if (wrappedResult instanceof JSObject wrappedResultObject) {
+                JSValue doneValue = wrappedResultObject.get(PropertyKey.DONE);
+                if (childContext.hasPendingException()) {
+                    done[0] = true;
+                    return childContext.getPendingException();
+                }
+                if (JSTypeConversions.toBoolean(doneValue).isBooleanTrue()) {
+                    done[0] = true;
+                }
             }
-            return iteratorResult(childContext, step.value(), false);
+            return wrappedResult;
         });
 
         JSNativeFunction returnFunction = new JSNativeFunction(context, "return", 0, (childContext, childThisArg, childArgs) -> {
@@ -440,6 +464,28 @@ public final class IteratorPrototype {
         });
 
         return createIteratorObject(context, nextFunction, returnFunction, "Iterator Wrap");
+    }
+
+    public static JSValue wrapOrHelperNext(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        JSFunction internalNext = wrapOrHelperIteratorObject.getInternalNext();
+        if (internalNext == null) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        return internalNext.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
+    }
+
+    public static JSValue wrapOrHelperReturn(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSWrapOrHelperIteratorObject wrapOrHelperIteratorObject)) {
+            return context.throwTypeError("Iterator.prototype.next called on non-iterator");
+        }
+        JSFunction internalReturn = wrapOrHelperIteratorObject.getInternalReturn();
+        if (internalReturn == null) {
+            return iteratorResult(context, JSUndefined.INSTANCE, true);
+        }
+        return internalReturn.call(context, wrapOrHelperIteratorObject, JSValue.NO_ARGS);
     }
 
     /**
@@ -2019,6 +2065,31 @@ public final class IteratorPrototype {
     }
 
     private record IteratorStep(JSValue value, boolean done) {
+    }
+
+    private static final class JSWrapOrHelperIteratorObject extends JSObject {
+        private JSFunction internalNext;
+        private JSFunction internalReturn;
+
+        private JSWrapOrHelperIteratorObject(JSContext context) {
+            super(context);
+        }
+
+        private JSFunction getInternalNext() {
+            return internalNext;
+        }
+
+        private JSFunction getInternalReturn() {
+            return internalReturn;
+        }
+
+        private void setInternalNext(JSFunction internalNext) {
+            this.internalNext = internalNext;
+        }
+
+        private void setInternalReturn(JSFunction internalReturn) {
+            this.internalReturn = internalReturn;
+        }
     }
 
     /**

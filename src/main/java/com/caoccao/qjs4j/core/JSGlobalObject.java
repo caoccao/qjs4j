@@ -1210,7 +1210,7 @@ public final class JSGlobalObject {
 
         // Create shared iterator-type-specific prototypes inheriting from Iterator.prototype
         // Each has its own 'next' (writable, configurable) and Symbol.toStringTag per ES2024 spec
-        for (String tag : new String[]{"Array Iterator", "Map Iterator", "Set Iterator", "String Iterator", "Iterator Helper"}) {
+        for (String tag : new String[]{"Array Iterator", "Map Iterator", "Set Iterator", "String Iterator"}) {
             JSObject proto = new JSObject(context);
             proto.setPrototype(iteratorPrototype);
             proto.defineProperty(PropertyKey.fromString("next"), new JSNativeFunction(context, "next", 0, IteratorPrototype::next), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -1219,6 +1219,21 @@ public final class JSGlobalObject {
                     PropertyDescriptor.dataDescriptor(new JSString(tag), PropertyDescriptor.DataState.Configurable));
             context.registerIteratorPrototype(tag, proto);
         }
+
+        JSObject iteratorHelperPrototype = new JSObject(context);
+        iteratorHelperPrototype.setPrototype(iteratorPrototype);
+        iteratorHelperPrototype.defineProperty(
+                PropertyKey.fromString("next"),
+                new JSNativeFunction(context, "next", 0, IteratorPrototype::wrapOrHelperNext),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        iteratorHelperPrototype.defineProperty(
+                PropertyKey.fromString("return"),
+                new JSNativeFunction(context, "return", 0, IteratorPrototype::wrapOrHelperReturn),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        iteratorHelperPrototype.defineProperty(
+                PropertyKey.SYMBOL_TO_STRING_TAG,
+                PropertyDescriptor.dataDescriptor(new JSString("Iterator Helper"), PropertyDescriptor.DataState.Configurable));
+        context.registerIteratorPrototype("Iterator Helper", iteratorHelperPrototype);
 
         JSObject regExpStringIteratorPrototype = new JSObject(context);
         regExpStringIteratorPrototype.setPrototype(iteratorPrototype);
@@ -1235,6 +1250,14 @@ public final class JSGlobalObject {
         // This prototype inherits from Iterator.prototype and provides next/return methods
         JSObject wrapForValidIteratorPrototype = new JSObject(context);
         wrapForValidIteratorPrototype.setPrototype(iteratorPrototype);
+        wrapForValidIteratorPrototype.defineProperty(
+                PropertyKey.fromString("next"),
+                new JSNativeFunction(context, "next", 0, IteratorPrototype::wrapOrHelperNext),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        wrapForValidIteratorPrototype.defineProperty(
+                PropertyKey.fromString("return"),
+                new JSNativeFunction(context, "return", 0, IteratorPrototype::wrapOrHelperReturn),
+                PropertyDescriptor.DataState.ConfigurableWritable);
         context.registerIteratorPrototype("Iterator Wrap", wrapForValidIteratorPrototype);
 
         globalObject.defineProperty(PropertyKey.fromString(JSIterator.NAME), iteratorConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
