@@ -30,6 +30,23 @@ import java.util.*;
  */
 public final class RegExpCompiler {
 
+    /**
+     * JavaScript whitespace ranges for \s (differs from Unicode White_Space:
+     * includes U+FEFF which is not in the Unicode White_Space property).
+     * Pairs of [start, end] inclusive.
+     */
+    private static final int[] JS_WHITESPACE_RANGES = {
+            0x0009, 0x000D,  // TAB, LF, VT, FF, CR
+            0x0020, 0x0020,  // SPACE
+            0x00A0, 0x00A0,  // NO-BREAK SPACE
+            0x1680, 0x1680,  // OGHAM SPACE MARK
+            0x2000, 0x200A,  // EN QUAD .. HAIR SPACE
+            0x2028, 0x2029,  // LINE SEPARATOR, PARAGRAPH SEPARATOR
+            0x202F, 0x202F,  // NARROW NO-BREAK SPACE
+            0x205F, 0x205F,  // MEDIUM MATHEMATICAL SPACE
+            0x3000, 0x3000,  // IDEOGRAPHIC SPACE
+            0xFEFF, 0xFEFF,  // ZERO WIDTH NO-BREAK SPACE (BOM)
+    };
     private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
@@ -1748,13 +1765,14 @@ public final class RegExpCompiler {
                 yield -1;
             }
             case 's' -> {
-                // \s - whitespace characters
-                appendRanges(ranges, UnicodePropertyResolver.resolveBinaryProperty("White_Space"));
+                // \s - JavaScript whitespace (not the same as Unicode White_Space;
+                // includes U+FEFF which is not in Unicode White_Space)
+                appendRanges(ranges, JS_WHITESPACE_RANGES);
                 yield -1;
             }
             case 'S' -> {
                 // \S - non-whitespace characters
-                appendRanges(ranges, invertRanges(UnicodePropertyResolver.resolveBinaryProperty("White_Space")));
+                appendRanges(ranges, invertRanges(JS_WHITESPACE_RANGES));
                 yield -1;
             }
             case 'p', 'P' -> {
@@ -1858,7 +1876,21 @@ public final class RegExpCompiler {
                     throw new RegExpSyntaxException("Invalid unicode escape");
                 }
             }
-            case '0', '1', '2', '3', '4', '5', '6', '7' -> {
+            case '0' -> {
+                if (context.isUnicodeMode()) {
+                    // In unicode mode, \0 is allowed only if NOT followed by a decimal digit
+                    if (context.pos < context.codePoints.length) {
+                        int nextCh = context.codePoints[context.pos];
+                        if (nextCh >= '0' && nextCh <= '9') {
+                            throw new RegExpSyntaxException("Invalid escape sequence");
+                        }
+                    }
+                    yield 0; // NULL character
+                } else {
+                    yield parseLegacyOctalEscape(context, 0);
+                }
+            }
+            case '1', '2', '3', '4', '5', '6', '7' -> {
                 if (context.isUnicodeMode()) {
                     throw new RegExpSyntaxException("Invalid escape sequence");
                 }

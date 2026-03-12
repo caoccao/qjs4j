@@ -54,39 +54,18 @@ public final class JSRegExp extends JSObject {
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
-        JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-
-        JSValue patternValue;
-        JSValue flagsValue;
-
-        if (isRegExpLike(context, patternArg)) {
-            if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
-            }
-            if (!(patternArg instanceof JSObject patternObject)) {
-                return context.throwTypeError("Invalid RegExp pattern");
-            }
-            patternValue = patternObject.get(PropertyKey.fromString("source"));
-            if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
-            }
-            if (flagsArg instanceof JSUndefined) {
-                flagsValue = patternObject.get(PropertyKey.fromString("flags"));
-                if (context.hasPendingException()) {
-                    return (JSObject) context.getPendingException();
-                }
-            } else {
-                flagsValue = flagsArg;
-            }
-        } else {
-            if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
-            }
-            patternValue = patternArg instanceof JSUndefined ? new JSString("") : patternArg;
-            flagsValue = flagsArg instanceof JSUndefined ? new JSString("") : flagsArg;
+        JSValue[] rawArgs = extractRawArgs(context, args);
+        if (rawArgs == null) {
+            return (JSObject) context.getPendingException();
         }
+        return createFromRawArgs(context, rawArgs[0], rawArgs[1]);
+    }
 
+    /**
+     * ES2024 22.2.3.1 steps 7-10: ToString the raw args and compile the RegExp.
+     * Called AFTER RegExpAlloc (prototype resolution).
+     */
+    public static JSObject createFromRawArgs(JSContext context, JSValue patternValue, JSValue flagsValue) {
         String pattern = "";
         String flags = "";
         if (!(patternValue instanceof JSUndefined)) {
@@ -107,6 +86,59 @@ public final class JSRegExp extends JSObject {
         } catch (Exception e) {
             return context.throwSyntaxError("Invalid regular expression: /" + pattern + "/: " + e.getMessage());
         }
+    }
+
+    /**
+     * ES2024 22.2.3.1 steps 4-5: Extract raw pattern/flags values from arguments.
+     * This must be called BEFORE RegExpAlloc (prototype resolution) per spec ordering.
+     * Returns [patternValue, flagsValue] as raw JSValues (not yet ToString'd).
+     */
+    public static JSValue[] extractRawArgs(JSContext context, JSValue[] args) {
+        JSValue patternArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue flagsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+
+        JSValue patternValue;
+        JSValue flagsValue;
+
+        if (patternArg instanceof JSRegExp patternRegExp) {
+            // ES2024 22.2.3.1 step 4: pattern has [[RegExpMatcher]] internal slot
+            // Use internal slots directly, NOT property getters
+            patternValue = new JSString(patternRegExp.getPattern());
+            if (flagsArg instanceof JSUndefined) {
+                flagsValue = new JSString(patternRegExp.getFlags());
+            } else {
+                flagsValue = flagsArg;
+            }
+        } else if (isRegExpLike(context, patternArg)) {
+            // ES2024 22.2.3.1 step 5: patternIsRegExp but no [[RegExpMatcher]]
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(patternArg instanceof JSObject patternObject)) {
+                context.throwTypeError("Invalid RegExp pattern");
+                return null;
+            }
+            patternValue = patternObject.get(PropertyKey.fromString("source"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (flagsArg instanceof JSUndefined) {
+                flagsValue = patternObject.get(PropertyKey.fromString("flags"));
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            } else {
+                flagsValue = flagsArg;
+            }
+        } else {
+            if (context.hasPendingException()) {
+                return null;
+            }
+            patternValue = patternArg instanceof JSUndefined ? new JSString("") : patternArg;
+            flagsValue = flagsArg instanceof JSUndefined ? new JSString("") : flagsArg;
+        }
+
+        return new JSValue[]{patternValue, flagsValue};
     }
 
     private static boolean isRegExpLike(JSContext context, JSValue value) {

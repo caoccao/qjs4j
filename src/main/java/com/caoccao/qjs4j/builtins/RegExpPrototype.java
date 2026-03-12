@@ -244,15 +244,48 @@ public final class RegExpPrototype {
             return "(?:)";
         }
         StringBuilder escaped = new StringBuilder(source.length() + 8);
+        boolean afterBackslash = false;
+        boolean inCharClass = false;
         for (int index = 0; index < source.length(); index++) {
             char currentChar = source.charAt(index);
-            switch (currentChar) {
-                case '/' -> escaped.append("\\/");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\u2028' -> escaped.append("\\u2028");
-                case '\u2029' -> escaped.append("\\u2029");
-                default -> escaped.append(currentChar);
+            if (afterBackslash) {
+                // Previous character was an unescaped backslash.
+                // Pass through most characters, but escape line terminators.
+                afterBackslash = false;
+                switch (currentChar) {
+                    case '\n' -> escaped.append("n");
+                    case '\r' -> escaped.append("r");
+                    case '\u2028' -> escaped.append("u2028");
+                    case '\u2029' -> escaped.append("u2029");
+                    default -> escaped.append(currentChar);
+                }
+            } else {
+                switch (currentChar) {
+                    case '\\' -> {
+                        afterBackslash = true;
+                        escaped.append('\\');
+                    }
+                    case '/' -> {
+                        if (inCharClass) {
+                            escaped.append('/');
+                        } else {
+                            escaped.append("\\/");
+                        }
+                    }
+                    case '[' -> {
+                        inCharClass = true;
+                        escaped.append('[');
+                    }
+                    case ']' -> {
+                        inCharClass = false;
+                        escaped.append(']');
+                    }
+                    case '\n' -> escaped.append("\\n");
+                    case '\r' -> escaped.append("\\r");
+                    case '\u2028' -> escaped.append("\\u2028");
+                    case '\u2029' -> escaped.append("\\u2029");
+                    default -> escaped.append(currentChar);
+                }
             }
         }
         return escaped.toString();
@@ -274,9 +307,6 @@ public final class RegExpPrototype {
         }
         String str = inputString.value();
 
-        boolean global = regexp.isGlobal();
-        boolean sticky = regexp.isSticky();
-
         JSValue lastIndexValue = regexp.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -285,6 +315,12 @@ public final class RegExpPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
+
+        // ES2024 22.2.7.2: Read flags AFTER ToLength(lastIndex), because
+        // side-effects during ToLength (e.g. RegExp.prototype.compile) may
+        // have changed the internal flags and engine.
+        boolean global = regexp.isGlobal();
+        boolean sticky = regexp.isSticky();
 
         int lastIndex = 0;
         if (global || sticky) {
@@ -863,22 +899,18 @@ public final class RegExpPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            getFlagsString(context, regexpObject);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
         }
 
-        JSValue globalValue = regexpObject.get(PROPERTY_GLOBAL);
+        // ES2024 22.2.5.11 step 6-8: Read flags string, parse global and unicode from it
+        String flags = getFlagsString(context, regexpObject);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean global = JSTypeConversions.toBoolean(globalValue).value();
-        JSValue unicodeValue = regexpObject.get(PROPERTY_UNICODE);
-        if (context.hasPendingException()) {
+        if (flags == null) {
             return JSUndefined.INSTANCE;
         }
-        boolean fullUnicode = JSTypeConversions.toBoolean(unicodeValue).value();
+        boolean global = flags.indexOf('g') >= 0;
+        boolean fullUnicode = flags.indexOf('u') >= 0 || flags.indexOf('v') >= 0;
 
         if (global) {
             setLastIndexOrThrow(context, regexpObject, JSNumber.of(0));
@@ -938,6 +970,17 @@ public final class RegExpPrototype {
         StringBuilder accumulated = new StringBuilder(inputString.length() + 16);
         int nextSourcePosition = 0;
         for (JSObject resultObject : results) {
+            // ES2024 22.2.5.11 step 14a: nCaptures = ToLength(Get(result, "length"))
+            JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            int resultLength = (int) Math.min(JSTypeConversions.toLength(context, lengthValue), Integer.MAX_VALUE);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+
+            // ES2024 22.2.5.11 step 14c: matched = ToString(Get(result, "0"))
             JSValue matchedValue = resultObject.get(PropertyKey.fromIndex(0));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -947,6 +990,7 @@ public final class RegExpPrototype {
                 return JSUndefined.INSTANCE;
             }
 
+            // ES2024 22.2.5.11 step 14d: position = ToIntegerOrInfinity(Get(result, "index"))
             JSValue positionValue = resultObject.get(PropertyKey.INDEX);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -958,14 +1002,7 @@ public final class RegExpPrototype {
             position = Math.max(0, Math.min(position, inputString.length()));
             int tailPosition = Math.max(0, Math.min(position + matched.length(), inputString.length()));
 
-            JSValue lengthValue = resultObject.get(PropertyKey.LENGTH);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            int resultLength = (int) Math.min(JSTypeConversions.toLength(context, lengthValue), Integer.MAX_VALUE);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+            // ES2024 22.2.5.11 step 14f-g: captures
             String[] captures = new String[Math.max(1, resultLength)];
             captures[0] = matched;
             for (int i = 1; i < resultLength; i++) {
@@ -983,6 +1020,7 @@ public final class RegExpPrototype {
                 }
             }
 
+            // ES2024 22.2.5.11 step 14h: namedCaptures = Get(result, "groups")
             JSValue groupsValue = resultObject.get(PropertyKey.GROUPS);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -1055,33 +1093,7 @@ public final class RegExpPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        JSValue returnValue;
-        if (resultValue instanceof JSNull) {
-            returnValue = JSNumber.of(-1);
-        } else if (resultValue instanceof JSObject resultObject) {
-            JSValue indexValue = resultObject.get(PropertyKey.INDEX);
-            if (context.hasPendingException()) {
-                if (restoreRequired) {
-                    restoreLastIndex(context, regexpObject, previousLastIndex);
-                }
-                return JSUndefined.INSTANCE;
-            }
-            double index = JSTypeConversions.toInteger(context, indexValue);
-            if (context.hasPendingException()) {
-                if (restoreRequired) {
-                    restoreLastIndex(context, regexpObject, previousLastIndex);
-                }
-                return JSUndefined.INSTANCE;
-            }
-            returnValue = JSNumber.of(index);
-        } else {
-            returnValue = context.throwTypeError("RegExp exec method returned something other than an Object or null");
-            if (context.hasPendingException() && restoreRequired) {
-                restoreLastIndex(context, regexpObject, previousLastIndex);
-            }
-            return JSUndefined.INSTANCE;
-        }
-
+        // ES2024 22.2.5.10 steps 8-9: Restore lastIndex BEFORE reading result properties
         JSValue currentLastIndex = regexpObject.get(PropertyKey.LAST_INDEX);
         if (context.hasPendingException()) {
             if (restoreRequired) {
@@ -1094,7 +1106,23 @@ public final class RegExpPrototype {
                 return JSUndefined.INSTANCE;
             }
         }
-        return returnValue;
+
+        // ES2024 22.2.5.10 step 10-11: Read result index
+        if (resultValue instanceof JSNull) {
+            return JSNumber.of(-1);
+        } else if (resultValue instanceof JSObject resultObject) {
+            JSValue indexValue = resultObject.get(PropertyKey.INDEX);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            double index = JSTypeConversions.toInteger(context, indexValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            return JSNumber.of(index);
+        } else {
+            return context.throwTypeError("RegExp exec method returned something other than an Object or null");
+        }
     }
 
     /**
@@ -1259,19 +1287,30 @@ public final class RegExpPrototype {
 
     /**
      * RegExp.prototype.toString()
-     * ES2020 21.2.5.14
+     * ES2024 22.2.5.14
+     * Reads "source" and "flags" properties from the this value (any object).
      */
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSRegExp regexp)) {
-            return context.throwTypeError("RegExp.prototype.toString called on non-RegExp");
+        if (!(thisArg instanceof JSObject regexpObject)) {
+            return context.throwTypeError("RegExp.prototype.toString requires that 'this' be an Object");
         }
-
-        // Per ES spec, empty pattern should be "(?:)"
-        String pattern = regexp.getPattern();
-        if (pattern.isEmpty()) {
-            pattern = "(?:)";
+        JSValue sourceValue = regexpObject.get(PropertyKey.fromString("source"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
-        return new JSString("/" + pattern + "/" + regexp.getFlags());
+        JSString sourceString = JSTypeConversions.toString(context, sourceValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue flagsValue = regexpObject.get(PROPERTY_FLAGS);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSString flagsString = JSTypeConversions.toString(context, flagsValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString("/" + sourceString.value() + "/" + flagsString.value());
     }
 
     private static final class JSRegExpStringIterator extends JSObject {

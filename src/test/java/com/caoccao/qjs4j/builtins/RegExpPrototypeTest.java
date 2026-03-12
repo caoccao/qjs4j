@@ -489,17 +489,17 @@ public class RegExpPrototypeTest extends BaseJavetTest {
     @Test
     public void testToStringMethod() {
         // Normal case: simple regex
-        JSRegExp regexp = new JSRegExp(context, "test", "");
+        JSRegExp regexp = context.createJSRegExp("test", "");
         JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/"));
 
         // Normal case: regex with flags
-        JSRegExp withFlags = new JSRegExp(context, "hello", "gi");
+        JSRegExp withFlags = context.createJSRegExp("hello", "gi");
         result = RegExpPrototype.toStringMethod(context, withFlags, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/hello/gi"));
 
         // Normal case: pattern with special characters
-        JSRegExp special = new JSRegExp(context, "test", "m");
+        JSRegExp special = context.createJSRegExp("test", "m");
         result = RegExpPrototype.toStringMethod(context, special, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, jsStr -> assertThat(jsStr.value()).isEqualTo("/test/m"));
 

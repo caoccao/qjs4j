@@ -640,13 +640,13 @@ public class RegExpConstructorTest extends BaseJavetTest {
 
     @Test
     public void testToString() {
-        JSRegExp regexp = new JSRegExp(context, "test", "gi");
+        JSRegExp regexp = context.createJSRegExp("test", "gi");
 
         JSValue result = RegExpPrototype.toStringMethod(context, regexp, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/test/gi"));
 
         // Edge case: empty pattern (should be /(?:)/ per ES spec)
-        JSRegExp regexp2 = new JSRegExp(context, "", "");
+        JSRegExp regexp2 = context.createJSRegExp("", "");
         result = RegExpPrototype.toStringMethod(context, regexp2, JSValue.NO_ARGS);
         assertThat(result).isInstanceOfSatisfying(JSString.class, str -> assertThat(str.value()).isEqualTo("/(?:)/"));
 

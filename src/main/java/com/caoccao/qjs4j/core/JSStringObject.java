@@ -89,6 +89,26 @@ public final class JSStringObject extends JSObject {
         return jsObject;
     }
 
+    /**
+     * Parse a string as a valid non-negative integer index, ensuring the string round-trips.
+     * This rejects strings like "-0", "+1", "01" which Integer.parseInt would accept
+     * but are not canonical numeric index strings per ES spec.
+     */
+    private static int parseValidIndex(String str) {
+        if (str == null || str.isEmpty()) {
+            return -1;
+        }
+        try {
+            int index = Integer.parseInt(str);
+            if (index >= 0 && String.valueOf(index).equals(str)) {
+                return index;
+            }
+        } catch (NumberFormatException e) {
+            // Not a numeric string
+        }
+        return -1;
+    }
+
     @Override
     public boolean delete(PropertyKey key) {
         JSContext context = this.context;
@@ -97,11 +117,9 @@ public final class JSStringObject extends JSObject {
             int index = key.asIndex();
             isCharacterIndex = index >= 0 && index < value.value().length();
         } else if (key.isString()) {
-            try {
-                int index = Integer.parseInt(key.asString());
-                isCharacterIndex = index >= 0 && index < value.value().length();
-            } catch (NumberFormatException e) {
-                isCharacterIndex = false;
+            int index = parseValidIndex(key.asString());
+            if (index >= 0 && index < value.value().length()) {
+                isCharacterIndex = true;
             }
         }
         if (isCharacterIndex) {
@@ -139,14 +157,9 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public JSValue get(String propertyName) {
-        // Try to parse as numeric index
-        try {
-            int index = Integer.parseInt(propertyName);
-            if (index >= 0 && index < value.value().length()) {
-                return new JSString(String.valueOf(value.value().charAt(index)));
-            }
-        } catch (NumberFormatException e) {
-            // Not a numeric index, fall through to normal property access
+        int index = parseValidIndex(propertyName);
+        if (index >= 0 && index < value.value().length()) {
+            return new JSString(String.valueOf(value.value().charAt(index)));
         }
         return super.get(propertyName);
     }
@@ -180,32 +193,13 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        // Check if this is an indexed property within the string bounds
-        if (key.isIndex()) {
-            int index = (int) key.getValue();
-            if (index >= 0 && index < value.value().length()) {
-                // Return descriptor for character at index
-                JSValue charValue = new JSString(String.valueOf(value.value().charAt(index)));
-                return PropertyDescriptor.dataDescriptor(
-                        charValue,
-                        PropertyDescriptor.DataState.Enumerable
-                );
-            }
-        } else if (key.isString()) {
-            // Check if string key is a valid numeric index
-            try {
-                int index = Integer.parseInt(key.asString());
-                if (index >= 0 && index < value.value().length()) {
-                    // Return descriptor for character at index
-                    JSValue charValue = new JSString(String.valueOf(value.value().charAt(index)));
-                    return PropertyDescriptor.dataDescriptor(
-                            charValue,
-                            PropertyDescriptor.DataState.Enumerable
-                    );
-                }
-            } catch (NumberFormatException e) {
-                // Not a numeric index, fall through
-            }
+        int charIndex = resolveCharacterIndex(key);
+        if (charIndex >= 0 && charIndex < value.value().length()) {
+            JSValue charValue = new JSString(String.valueOf(value.value().charAt(charIndex)));
+            return PropertyDescriptor.dataDescriptor(
+                    charValue,
+                    PropertyDescriptor.DataState.Enumerable
+            );
         }
 
         // For non-indexed properties, use default behavior
@@ -244,22 +238,24 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            if (index >= 0 && index < value.value().length()) {
-                return true;
-            }
-        } else if (key.isString()) {
-            try {
-                int index = Integer.parseInt(key.asString());
-                if (index >= 0 && index < value.value().length()) {
-                    return true;
-                }
-            } catch (NumberFormatException e) {
-                // Not a numeric index, fall through
-            }
+        int charIndex = resolveCharacterIndex(key);
+        if (charIndex >= 0 && charIndex < value.value().length()) {
+            return true;
         }
         return super.hasOwnProperty(key);
+    }
+
+    /**
+     * Resolve a PropertyKey to a character index for String exotic object semantics.
+     * Returns -1 if the key is not a valid character index.
+     */
+    private int resolveCharacterIndex(PropertyKey key) {
+        if (key.isIndex()) {
+            return key.asIndex();
+        } else if (key.isString()) {
+            return parseValidIndex(key.asString());
+        }
+        return -1;
     }
 
     /**
@@ -269,16 +265,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue val) {
-        int charIndex = -1;
-        if (key.isIndex()) {
-            charIndex = key.asIndex();
-        } else if (key.isString()) {
-            try {
-                charIndex = Integer.parseInt(key.asString());
-            } catch (NumberFormatException e) {
-                // Not a numeric index
-            }
-        }
+        int charIndex = resolveCharacterIndex(key);
         if (charIndex >= 0 && charIndex < value.value().length()) {
             // Character indices are non-writable, non-configurable own properties
             this.context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
@@ -295,16 +282,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value) {
-        int charIndex = -1;
-        if (key.isIndex()) {
-            charIndex = key.asIndex();
-        } else if (key.isString()) {
-            try {
-                charIndex = Integer.parseInt(key.asString());
-            } catch (NumberFormatException e) {
-                // Not a numeric index
-            }
-        }
+        int charIndex = resolveCharacterIndex(key);
         if (charIndex >= 0 && charIndex < this.value.value().length()) {
             return false;
         }

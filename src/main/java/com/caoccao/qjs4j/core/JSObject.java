@@ -1277,6 +1277,39 @@ public non-sealed class JSObject implements JSValue {
         return SetPrototypeResult.SUCCESS;
     }
 
+    private boolean setWithPrimitiveReceiver(PropertyKey key, JSValue value, JSValue primitiveReceiver) {
+        // Walk the prototype chain of this object looking for setters
+        Set<JSObject> visited = new HashSet<>();
+        JSObject current = this;
+        while (current != null && !visited.contains(current)) {
+            visited.add(current);
+            int propertyOffset = current.getOwnPropertyOffset(key);
+            if (propertyOffset >= 0) {
+                PropertyDescriptor descriptor = current.shape.getDescriptorAt(propertyOffset);
+                if (descriptor != null && descriptor.isAccessorDescriptor()) {
+                    JSFunction setter = descriptor.getSetter();
+                    if (setter != null) {
+                        boolean hadPendingException = context != null && context.hasPendingException();
+                        setter.call(context, primitiveReceiver, new JSValue[]{value});
+                        return hadPendingException || (context != null && !context.hasPendingException());
+                    }
+                    // Accessor without setter
+                    return false;
+                }
+                if (descriptor != null && !descriptor.isWritable()) {
+                    return false;
+                }
+                // Writable data property found on prototype - would need to define on receiver,
+                // but receiver is not an object, so return false
+                return false;
+            }
+            current = current.prototype;
+        }
+        // No property found in prototype chain - would need to define on receiver,
+        // but receiver is not an object, so return false
+        return false;
+    }
+
     public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
         return setInternal(key, value, receiver, true);
     }
@@ -1299,9 +1332,10 @@ public non-sealed class JSObject implements JSValue {
         if (receiver instanceof JSObject objReceiver) {
             return setWithResult(key, value, objReceiver);
         }
-        // Per QuickJS JS_SetPropertyInternal: when receiver (this_obj) is not an object (p == NULL),
-        // after prototype lookup completes without finding a setter, returns error/false.
-        return false;
+        // Per QuickJS JS_SetPropertyInternal: when receiver (this_obj) is not an object,
+        // traverse the prototype chain looking for setters. If a setter is found,
+        // call it with the primitive receiver. Otherwise return false.
+        return setWithPrimitiveReceiver(key, value, receiver);
     }
 
     // JSValue implementation

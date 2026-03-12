@@ -28,30 +28,30 @@ public final class CharacterProperties {
      * For most characters, it's the same as toLowerCase, but there are exceptions.
      */
     public static int caseFold(int codePoint) {
-        // Case folding special cases
-        // For most characters, case folding equals toLowerCase
-        // But there are some special mappings for full Unicode case folding
-
-        // Common case folding: use lowercase
-        int lower = Character.toLowerCase(codePoint);
-
-        // Special cases for case folding
+        // Unicode CaseFolding.txt "C" (Common) and special entries.
+        // For most characters, case folding equals toLowerCase,
+        // but these entries differ from Java's Character.toLowerCase().
         return switch (codePoint) {
-            // Turkish I with dot
-            case 0x0130 -> // İ (LATIN CAPITAL LETTER I WITH DOT ABOVE)
-                    0x0069; // i (LATIN SMALL LETTER I)
-
-            // Greek sigma at end of word
-            case 0x03A3 -> // Σ (GREEK CAPITAL LETTER SIGMA)
-                    0x03C3; // σ (GREEK SMALL LETTER SIGMA)
-
-            // Common/simple case-folding pairs used by RegExp /ui tests
-            case 0x0390, 0x1FD3 -> 0x1FD3; // GREEK SMALL LETTER IOTA WITH DIALYTIKA AND TONOS
-            case 0x03B0, 0x1FE3 -> 0x1FE3; // GREEK SMALL LETTER UPSILON WITH DIALYTIKA AND TONOS
+            case 0x00B5 -> 0x03BC; // MICRO SIGN → GREEK SMALL LETTER MU
+            case 0x0130 -> 0x0069; // LATIN CAPITAL LETTER I WITH DOT ABOVE → i
+            case 0x017F -> 0x0073; // LATIN SMALL LETTER LONG S → s
+            case 0x0345 -> 0x03B9; // COMBINING GREEK YPOGEGRAMMENI → GREEK SMALL LETTER IOTA
+            case 0x0390, 0x1FD3 -> 0x0390; // GREEK SMALL LETTER IOTA WITH DIALYTIKA AND TONOS
+            case 0x03A3 -> 0x03C3; // GREEK CAPITAL LETTER SIGMA → σ
+            case 0x03B0, 0x1FE3 -> 0x03B0; // GREEK SMALL LETTER UPSILON WITH DIALYTIKA AND TONOS
+            case 0x03C2 -> 0x03C3; // GREEK SMALL LETTER FINAL SIGMA → σ
+            case 0x03D0 -> 0x03B2; // GREEK BETA SYMBOL → β
+            case 0x03D1 -> 0x03B8; // GREEK THETA SYMBOL → θ
+            case 0x03D5 -> 0x03C6; // GREEK PHI SYMBOL → φ
+            case 0x03D6 -> 0x03C0; // GREEK PI SYMBOL → π
+            case 0x03F0 -> 0x03BA; // GREEK KAPPA SYMBOL → κ
+            case 0x03F1 -> 0x03C1; // GREEK RHO SYMBOL → ρ
+            case 0x03F5 -> 0x03B5; // GREEK LUNATE EPSILON SYMBOL → ε
+            case 0x1E9E -> 0x00DF; // LATIN CAPITAL LETTER SHARP S → ß
+            case 0x212A -> 0x006B; // KELVIN SIGN → k
+            case 0x212B -> 0x00E5; // ANGSTROM SIGN → å
             case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st
-
-            // Other special cases can be added as needed
-            default -> lower;
+            default -> Character.toLowerCase(codePoint);
         };
     }
 

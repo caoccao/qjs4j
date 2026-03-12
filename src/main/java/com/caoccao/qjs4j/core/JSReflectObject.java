@@ -265,6 +265,43 @@ public final class JSReflectObject {
             return thisObject;
         }
 
+        // RegExp: ES2024 22.2.3.1 ordering:
+        // Step 4-5: Extract raw pattern/flags (reads internal slots)
+        // Step 6: RegExpAlloc(newTarget) → prototype lookup
+        // Step 7-9: ToString(flags) → compile
+        if (constructorType == JSConstructorType.REGEXP) {
+            // Step 4-5: Extract raw args BEFORE prototype lookup
+            JSValue[] rawArgs = JSRegExp.extractRawArgs(context, args);
+            if (rawArgs == null || context.hasPendingException()) {
+                return context.getPendingException();
+            }
+
+            // Step 6: Resolve prototype from newTarget
+            JSObject resolvedPrototype = null;
+            if (newTarget instanceof JSObject newTargetObject) {
+                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
+                resolvedPrototype = context.getPrototypeFromConstructor(
+                        newTargetObject, intrinsicDefaultPrototypeName);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+
+            // Step 7-9: ToString and compile
+            JSValue result = JSRegExp.createFromRawArgs(context, rawArgs[0], rawArgs[1]);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (result instanceof JSObject jsObject) {
+                if (resolvedPrototype != null) {
+                    jsObject.setPrototype(resolvedPrototype);
+                } else {
+                    context.transferPrototype(jsObject, function);
+                }
+            }
+            return result;
+        }
+
         // ArrayBuffer/SharedArrayBuffer: ES spec requires OrdinaryCreateFromConstructor
         // (prototype access) AFTER argument validation but BEFORE CreateByteDataBlock
         // (allocation). Use createForConstruct which handles this ordering.
@@ -419,13 +456,13 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.get called on non-object");
         }
 
-        if (args.length < 2) {
-            return JSUndefined.INSTANCE;
+        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        PropertyKey key = PropertyKey.fromValue(context, keyArg);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
-        JSObject receiver = args.length > 2 && args[2] instanceof JSObject r ? r : target;
-        return target.getWithReceiver(key, receiver);
+        JSValue receiver = args.length > 2 ? args[2] : target;
+        return target.get(key, receiver);
     }
 
     /**
@@ -470,11 +507,11 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.has called on non-object");
         }
 
-        if (args.length < 2) {
-            return JSBoolean.FALSE;
+        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        PropertyKey key = PropertyKey.fromValue(context, keyArg);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         return JSBoolean.valueOf(target.has(key));
     }
 
@@ -542,11 +579,11 @@ public final class JSReflectObject {
             return context.throwTypeError("Reflect.set called on non-object");
         }
 
-        if (args.length < 2) {
-            return JSBoolean.FALSE;
+        JSValue keyArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        PropertyKey key = PropertyKey.fromValue(context, keyArg);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
         }
-
-        PropertyKey key = PropertyKey.fromValue(context, args[1]);
         JSValue value = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
         JSValue receiver = args.length > 3 ? args[3] : target;
 

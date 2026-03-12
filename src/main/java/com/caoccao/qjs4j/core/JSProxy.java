@@ -47,6 +47,19 @@ public final class JSProxy extends JSObject {
         this.handler = handler;
     }
 
+    /**
+     * Call a trap value that may be a JSFunction or a callable JSProxy.
+     */
+    private static JSValue callTrapValue(JSContext context, JSValue trap, JSValue thisArg, JSValue[] args) {
+        if (trap instanceof JSFunction trapFunc) {
+            return trapFunc.call(context, thisArg, args);
+        }
+        if (trap instanceof JSProxy trapProxy) {
+            return trapProxy.apply(context, thisArg, args);
+        }
+        throw new JSException(context.throwTypeError("trap is not a function"));
+    }
+
     public static JSObject create(JSContext context, JSValue... args) {
         // Proxy requires exactly 2 arguments: target and handler
         if (args.length < 2) {
@@ -386,7 +399,7 @@ public final class JSProxy extends JSObject {
         // Check if handler has 'get' trap
         JSValue getTrap = handler.get(PropertyKey.GET);
         if (getTrap != null && !(getTrap instanceof JSUndefined) && !(getTrap instanceof JSNull)) {
-            if (getTrap instanceof JSFunction getTrapFunc) {
+            if (JSTypeChecking.isCallable(getTrap)) {
                 // Call the trap: handler.get(property, receiver)
                 // Convert PropertyKey to JSValue for the trap
                 JSValue keyValue;
@@ -405,7 +418,7 @@ public final class JSProxy extends JSObject {
                         keyValue,
                         receiver  // Use the receiver parameter instead of 'this'
                 };
-                JSValue trapResult = getTrapFunc.call(executionContext, handler, args);
+                JSValue trapResult = callTrapValue(executionContext, getTrap, handler, args);
 
                 // Check invariant: non-configurable accessor without getter must return undefined
                 // Since JSFunction extends JSObject, target is always a JSObject
@@ -737,6 +750,11 @@ public final class JSProxy extends JSObject {
         }
         if (trap instanceof JSFunction trapFunc) {
             return trapFunc;
+        }
+        // A Proxy wrapping a callable target is also callable (ES2024 10.5.12/13)
+        if (trap instanceof JSProxy trapProxy && JSTypeChecking.isCallable(trapProxy)) {
+            return new JSNativeFunction(executionContext, trapName, 0, (callContext, thisArg, callArgs) ->
+                    trapProxy.apply(callContext, thisArg, callArgs));
         }
         String trapValue = JSTypeConversions.toString(executionContext, trap).value();
         throw new JSException(executionContext.throwTypeError(
