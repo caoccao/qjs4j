@@ -1011,8 +1011,10 @@ public final class JSONObject {
         JSObject obj = context.createJSObject();
         obj.setPrototype(null);
 
-        // Step 6: Perform CreateDataPropertyOrThrow(obj, "rawJSON", jsonString)
-        obj.defineProperty(PropertyKey.fromString("rawJSON"), jsonString, PropertyDescriptor.DataState.All);
+        // Step 6 + Step 7 effective state:
+        // Define rawJSON as enumerable but non-writable/non-configurable so the
+        // object satisfies frozen integrity checks after freeze() marks it non-extensible.
+        obj.defineProperty(PropertyKey.fromString("rawJSON"), jsonString, PropertyDescriptor.DataState.Enumerable);
 
         // Mark as rawJSON object using Java-level tracking (not visible to JS)
         rawJSONObjects.put(obj, Boolean.TRUE);
@@ -1464,12 +1466,12 @@ public final class JSONObject {
                 if (sources != null) {
                     SourceEntry entry = sources.get(key);
                     if (entry != null) {
-                        // Compare current value with original parsed value by identity
-                        // If the value was modified by the reviver, source is undefined
-                        if (entry.originalValue == currentValue) {
+                        // If current value is SameValue to original parsed value, source remains visible.
+                        // This matches json-parse-with-source semantics when a reviver reassigns an equivalent value.
+                        if (isSameValue(entry.originalValue, currentValue)) {
                             return entry.sourceText;
                         }
-                        return null; // value was modified
+                        return null;
                     }
                 }
             }
@@ -1494,6 +1496,39 @@ public final class JSONObject {
                 return text.substring(start, end);
             }
             return null; // structured types don't have source
+        }
+
+        private boolean isSameValue(JSValue leftValue, JSValue rightValue) {
+            if (leftValue == rightValue) {
+                return true;
+            }
+            if (leftValue == null || rightValue == null) {
+                return false;
+            }
+            if (leftValue.getClass() != rightValue.getClass()) {
+                return false;
+            }
+            if (leftValue instanceof JSNumber leftNumber && rightValue instanceof JSNumber rightNumber) {
+                double leftDoubleValue = leftNumber.value();
+                double rightDoubleValue = rightNumber.value();
+                if (Double.isNaN(leftDoubleValue) && Double.isNaN(rightDoubleValue)) {
+                    return true;
+                }
+                if (leftDoubleValue == 0.0D && rightDoubleValue == 0.0D) {
+                    return Double.doubleToRawLongBits(leftDoubleValue) == Double.doubleToRawLongBits(rightDoubleValue);
+                }
+                return leftDoubleValue == rightDoubleValue;
+            }
+            if (leftValue instanceof JSString leftString && rightValue instanceof JSString rightString) {
+                return leftString.value().equals(rightString.value());
+            }
+            if (leftValue instanceof JSBoolean leftBoolean && rightValue instanceof JSBoolean rightBoolean) {
+                return leftBoolean.value() == rightBoolean.value();
+            }
+            if (leftValue instanceof JSBigInt leftBigInt && rightValue instanceof JSBigInt rightBigInt) {
+                return leftBigInt.value().equals(rightBigInt.value());
+            }
+            return false;
         }
 
         void recordElementSource(JSValue parent, String key, JSValue parsedValue, int sourceStart, int sourceEnd) {

@@ -1222,43 +1222,83 @@ public final class JSProxy extends JSObject {
      * Helper to convert JSObject to PropertyDescriptor.
      */
     private PropertyDescriptor toPropertyDescriptor(JSObject obj) {
-        PropertyDescriptor desc = new PropertyDescriptor();
+        JSContext executionContext = resolveExecutionContext(null);
+        PropertyDescriptor descriptor = new PropertyDescriptor();
+        boolean hasAccessorFields = false;
+        boolean hasDataFields = false;
 
-        JSValue value = obj.get(PropertyKey.VALUE);
-        if (!(value instanceof JSUndefined)) {
-            desc.setValue(value);
-        }
-
-        JSValue writable = obj.get(PropertyKey.WRITABLE);
-        if (!(writable instanceof JSUndefined)) {
-            desc.setWritable(JSTypeConversions.toBoolean(writable) == JSBoolean.TRUE);
-        }
-
-        JSValue enumerable = obj.get(PropertyKey.ENUMERABLE);
-        if (!(enumerable instanceof JSUndefined)) {
-            desc.setEnumerable(JSTypeConversions.toBoolean(enumerable) == JSBoolean.TRUE);
-        }
-
-        JSValue configurable = obj.get(PropertyKey.CONFIGURABLE);
-        if (!(configurable instanceof JSUndefined)) {
-            desc.setConfigurable(JSTypeConversions.toBoolean(configurable) == JSBoolean.TRUE);
-        }
-
-        JSValue get = obj.get(PropertyKey.GET);
-        if (!(get instanceof JSUndefined)) {
-            if (get instanceof JSFunction getFunc) {
-                desc.setGetter(getFunc);
+        if (obj.has(PropertyKey.ENUMERABLE)) {
+            JSValue enumerableValue = obj.get(PropertyKey.ENUMERABLE);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
             }
+            descriptor.setEnumerable(JSTypeConversions.toBoolean(enumerableValue) == JSBoolean.TRUE);
         }
 
-        JSValue set = obj.get(PropertyKey.SET);
-        if (!(set instanceof JSUndefined)) {
-            if (set instanceof JSFunction setFunc) {
-                desc.setSetter(setFunc);
+        if (obj.has(PropertyKey.CONFIGURABLE)) {
+            JSValue configurableValue = obj.get(PropertyKey.CONFIGURABLE);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
             }
+            descriptor.setConfigurable(JSTypeConversions.toBoolean(configurableValue) == JSBoolean.TRUE);
         }
 
-        return desc;
+        if (obj.has(PropertyKey.VALUE)) {
+            JSValue value = obj.get(PropertyKey.VALUE);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
+            }
+            descriptor.setValue(value);
+            hasDataFields = true;
+        }
+
+        if (obj.has(PropertyKey.WRITABLE)) {
+            JSValue writableValue = obj.get(PropertyKey.WRITABLE);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
+            }
+            descriptor.setWritable(JSTypeConversions.toBoolean(writableValue) == JSBoolean.TRUE);
+            hasDataFields = true;
+        }
+
+        if (obj.has(PropertyKey.GET)) {
+            JSValue getterValue = obj.get(PropertyKey.GET);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
+            }
+            if (!(getterValue instanceof JSUndefined) && !JSTypeChecking.isCallable(getterValue)) {
+                throw new JSException(executionContext.throwTypeError("Getter must be a function"));
+            }
+            if (getterValue instanceof JSFunction getterFunction) {
+                descriptor.setGetter(getterFunction);
+            } else {
+                descriptor.setGetter(null);
+            }
+            hasAccessorFields = true;
+        }
+
+        if (obj.has(PropertyKey.SET)) {
+            JSValue setterValue = obj.get(PropertyKey.SET);
+            if (executionContext.hasPendingException()) {
+                throw new JSException(executionContext.getPendingException());
+            }
+            if (!(setterValue instanceof JSUndefined) && !JSTypeChecking.isCallable(setterValue)) {
+                throw new JSException(executionContext.throwTypeError("Setter must be a function"));
+            }
+            if (setterValue instanceof JSFunction setterFunction) {
+                descriptor.setSetter(setterFunction);
+            } else {
+                descriptor.setSetter(null);
+            }
+            hasAccessorFields = true;
+        }
+
+        if (hasAccessorFields && hasDataFields) {
+            throw new JSException(executionContext.throwTypeError(
+                    "Invalid property descriptor. Cannot both specify accessors and a value or writable attribute, #<Object>"));
+        }
+
+        return descriptor;
     }
 
     @Override

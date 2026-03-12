@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+
 /**
  * Represents a native (Java-implemented) JavaScript function.
  */
@@ -92,13 +95,21 @@ public final class JSNativeFunction extends JSFunction {
             }
             return context.throwTypeError(errorMessage);
         }
-        JSContext callbackContext = getHomeContext() != null ? getHomeContext() : context;
-        JSValue result = callback.call(callbackContext, thisArg, args);
-        if (callbackContext != context && callbackContext.hasPendingException()) {
-            context.setPendingException(callbackContext.getPendingException());
-            callbackContext.clearPendingException();
+        JSContext callbackContext = getRealmContext();
+        try {
+            JSValue result = callback.call(callbackContext, thisArg, args);
+            if (callbackContext != context && callbackContext.hasPendingException()) {
+                context.setPendingException(callbackContext.getPendingException());
+                callbackContext.clearPendingException();
+            }
+            return result;
+        } catch (JSException | JSVirtualMachineException exception) {
+            if (callbackContext != context && callbackContext.hasPendingException()) {
+                context.setPendingException(callbackContext.getPendingException());
+                callbackContext.clearPendingException();
+            }
+            throw exception;
         }
-        return result;
     }
 
     @Override
