@@ -355,6 +355,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             boolean hasNoLineTerminatorAfterAccessor =
                     parserContext.nextToken.line() == parserContext.currentToken.line();
             if (hasNoLineTerminatorAfterAccessor
+                    && nextType != TokenType.LPAREN
                     && nextType != TokenType.ASSIGN
                     && nextType != TokenType.SEMICOLON
                     && nextType != TokenType.COMMA
@@ -382,7 +383,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 validateClassFieldName(key, computed, isPrivate);
                 Expression value = parseClassFieldInitializer();
                 parserContext.consumeSemicolon();
-                return new PropertyDefinition(key, value, computed, isStatic, isPrivate);
+                return new PropertyDefinition(key, value, computed, isStatic, isPrivate, true);
             }
         }
 

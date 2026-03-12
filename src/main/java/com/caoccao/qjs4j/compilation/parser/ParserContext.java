@@ -200,7 +200,9 @@ final class ParserContext {
     }
 
     boolean isAwaitUsingDeclarationStart() {
-        if (!match(TokenType.AWAIT) || !isUsingIdentifierToken(nextToken)) {
+        boolean awaitToken = match(TokenType.AWAIT)
+                || (match(TokenType.IDENTIFIER) && JSKeyword.AWAIT.equals(currentToken.value()));
+        if (!awaitToken || !isUsingIdentifierToken(nextToken)) {
             return false;
         }
         // [no LineTerminator here] between 'await' and 'using'

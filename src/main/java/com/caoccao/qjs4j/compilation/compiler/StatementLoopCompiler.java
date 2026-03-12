@@ -34,6 +34,19 @@ final class StatementLoopCompiler {
         this.delegates = delegates;
     }
 
+    private static boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.getId() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.getId() == null;
+        }
+        return false;
+    }
+
     void compileBreakStatement(BreakStatement breakStmt) {
         if (compilerContext.finallySubroutineDepth > 0) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -198,7 +211,17 @@ final class StatementLoopCompiler {
         if (!isExpressionBased) {
             Expression initializer = varDecl != null ? varDecl.getDeclarations().get(0).getInit() : null;
             if (initializer != null && declarationPattern != null) {
+                if (declarationPattern instanceof Identifier identifier
+                        && initializer instanceof ClassExpression classExpression
+                        && classExpression.getId() == null) {
+                    compilerContext.inferredClassName = identifier.getName();
+                }
                 delegates.expressions.compileExpression(initializer);
+                if (declarationPattern instanceof Identifier identifier
+                        && isAnonymousFunctionDefinition(initializer)) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
+                }
+                compilerContext.inferredClassName = null;
                 delegates.patterns.compileForOfValueAssignment(declarationPattern, true);
             }
         }

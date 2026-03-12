@@ -69,19 +69,29 @@ public final class ArrayConstructor {
         return error;
     }
 
+    private static JSObject createArrayFromThis(JSContext context, JSValue constructorValue, JSValue[] constructorArgs) {
+        if (JSTypeChecking.isConstructor(constructorValue)) {
+            JSValue constructedValue = JSReflectObject.constructSimple(context, constructorValue, constructorArgs);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(constructedValue instanceof JSObject constructedObject)) {
+                context.throwTypeError("Array.from constructor must return an object");
+                return null;
+            }
+            return constructedObject;
+        }
+        return context.createJSArray();
+    }
+
     /**
      * Array.from(items, mapFn, thisArg)
      * ES2024 23.1.2.1
      * Creates a new Array instance from an array-like or iterable object.
      */
     public static JSValue from(JSContext context, JSValue thisArg, JSValue[] args) {
-        // Step 1: Let C be the this value.
         JSValue C = thisArg;
-
-        // Step 2: Let items
         JSValue items = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-
-        // Step 3-4: mapfn handling
         JSFunction mapFn = null;
         if (args.length > 1 && !(args[1] instanceof JSUndefined)) {
             if (!(args[1] instanceof JSFunction)) {
@@ -90,155 +100,149 @@ public final class ArrayConstructor {
             mapFn = (JSFunction) args[1];
         }
         JSValue mapThisArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
-
-        // Step 5: Let usingIterator be ? GetMethod(items, @@iterator).
-        // ES spec uses GetV which auto-boxes primitives to find Symbol.iterator
-        boolean hasIterator = false;
-        if (items instanceof JSObject itemsObj) {
-            JSValue iterMethod = itemsObj.get(PropertyKey.SYMBOL_ITERATOR);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-            if (iterMethod != null && !(iterMethod instanceof JSUndefined) && !(iterMethod instanceof JSNull)) {
-                hasIterator = true;
-            }
-        } else if (items instanceof JSString) {
-            // Strings are iterable (have @@iterator)
-            hasIterator = true;
-        } else if (!(items instanceof JSNull) && !(items instanceof JSUndefined)) {
-            // Auto-box other primitives (Number, Boolean, BigInt, Symbol) to find Symbol.iterator
-            JSObject boxed = JSTypeConversions.toObject(context, items);
-            if (boxed != null) {
-                JSValue iterMethod = boxed.get(PropertyKey.SYMBOL_ITERATOR);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                if (iterMethod != null && !(iterMethod instanceof JSUndefined) && !(iterMethod instanceof JSNull)) {
-                    hasIterator = true;
-                    items = boxed;
-                }
-            }
-        }
-
-        // Step 6: If usingIterator is not undefined, then
-        if (hasIterator) {
-            // Step 6.a: If IsConstructor(C), let A be Construct(C, « »), else let A be ArrayCreate(0).
-            JSObject A;
-            if (JSTypeChecking.isConstructor(C)) {
-                JSValue constructed = JSReflectObject.constructSimple(context, C, JSValue.NO_ARGS);
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                A = (JSObject) constructed;
-            } else {
-                A = context.createJSArray();
-            }
-
-            // Step 6.d: iterate
-            final int[] k = {0};
-            final JSFunction mapping = mapFn;
-            final JSObject target = A;
-            final boolean[] error = {false};
-            JSIteratorHelper.forOf(context, items, (value) -> {
-                if (context.hasPendingException()) {
-                    error[0] = true;
-                    return false;
-                }
-                JSValue mappedValue = value;
-                if (mapping != null) {
-                    mappedValue = mapping.call(context, mapThisArg, new JSValue[]{value, JSNumber.of(k[0])});
-                    if (context.hasPendingException()) {
-                        error[0] = true;
-                        return false;
-                    }
-                }
-                // Step 6.g.ix: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-                if (!target.defineProperty(PropertyKey.fromString(Integer.toString(k[0])), mappedValue, PropertyDescriptor.DataState.All)) {
-                    context.throwTypeError("Cannot define property " + k[0] + " on result object");
-                    return false;
-                }
-                k[0]++;
-                return true;
-            });
-            if (context.hasPendingException()) {
-                return context.getPendingException();
-            }
-
-            // Step 6.e: Set A.length
-            A.set(PropertyKey.LENGTH, JSNumber.of(k[0]));
-            return A;
-        }
-
-        // Step 7-8: Array-like path
-        // Let arrayLike be ! ToObject(items).
-        JSObject arrayLike;
-        if (items instanceof JSObject obj) {
-            arrayLike = obj;
+        JSObject itemsObject;
+        if (items instanceof JSObject objectValue) {
+            itemsObject = objectValue;
         } else if (items instanceof JSUndefined || items instanceof JSNull) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         } else {
-            // Non-iterable primitives (numbers, booleans, bigints, symbols).
-            // When boxed via ToObject, these have no "length" property,
-            // so LengthOfArrayLike returns 0, resulting in an empty array.
-            long initialLength = 0;
-            JSObject A;
-            if (JSTypeChecking.isConstructor(C)) {
-                JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(initialLength)});
-                if (context.hasPendingException()) {
-                    return context.getPendingException();
-                }
-                A = (JSObject) constructed;
-            } else {
-                A = context.createJSArray();
-            }
-            A.set(PropertyKey.LENGTH, JSNumber.of(initialLength));
-            return A;
-        }
-
-        // Step 9: Let len be ? LengthOfArrayLike(arrayLike).
-        JSValue lenValue = arrayLike.get(PropertyKey.LENGTH);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        long sourceLength = JSTypeConversions.toLength(context, lenValue);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-
-        // Step 10-11: If IsConstructor(C), let A be Construct(C, «sourceLength»), else ArrayCreate(sourceLength).
-        JSObject A;
-        if (JSTypeChecking.isConstructor(C)) {
-            JSValue constructed = JSReflectObject.constructSimple(context, C, new JSValue[]{JSNumber.of(sourceLength)});
+            itemsObject = JSTypeConversions.toObject(context, items);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            A = (JSObject) constructed;
-        } else {
-            A = context.createJSArray();
+            if (itemsObject == null) {
+                return context.throwTypeError("Cannot convert value to object");
+            }
         }
 
-        // Step 12-15: Loop
+        JSValue iteratorMethod = itemsObject.get(PropertyKey.SYMBOL_ITERATOR, items);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        if (!(iteratorMethod instanceof JSUndefined) && !(iteratorMethod instanceof JSNull)) {
+            if (!(iteratorMethod instanceof JSFunction iteratorFunction)) {
+                return context.throwTypeError("value is not iterable");
+            }
+            JSObject targetArray = createArrayFromThis(context, C, JSValue.NO_ARGS);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            JSValue iteratorValue = iteratorFunction.call(context, items, JSValue.NO_ARGS);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(iteratorValue instanceof JSObject iteratorObject)) {
+                return context.throwTypeError("iterator must be an object");
+            }
+            JSValue nextMethodValue = iteratorObject.get(PropertyKey.NEXT);
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (!(nextMethodValue instanceof JSFunction nextFunction)) {
+                return context.throwTypeError("iterator next is not a function");
+            }
+
+            long k = 0;
+            while (true) {
+                JSValue nextResultValue = nextFunction.call(context, iteratorObject, JSValue.NO_ARGS);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (!(nextResultValue instanceof JSObject nextResultObject)) {
+                    return context.throwTypeError("iterator result is not an object");
+                }
+                JSValue doneValue = nextResultObject.get(PropertyKey.DONE);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (JSTypeConversions.toBoolean(doneValue).isBooleanTrue()) {
+                    break;
+                }
+                JSValue mappedValue = nextResultObject.get(PropertyKey.VALUE);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (mapFn != null) {
+                    try {
+                        mappedValue = mapFn.call(context, mapThisArg, new JSValue[]{mappedValue, JSNumber.of(k)});
+                    } catch (Exception e) {
+                        JSValue exceptionValue = consumePendingExceptionOrCreateStringError(context, e);
+                        return iteratorCloseAndRestoreException(context, iteratorObject, exceptionValue);
+                    }
+                    if (context.hasPendingException()) {
+                        JSValue exceptionValue = context.getPendingException();
+                        return iteratorCloseAndRestoreException(context, iteratorObject, exceptionValue);
+                    }
+                }
+                try {
+                    if (!targetArray.defineProperty(
+                            PropertyKey.fromString(Long.toString(k)),
+                            mappedValue,
+                            PropertyDescriptor.DataState.All)) {
+                        if (!context.hasPendingException()) {
+                            context.throwTypeError("Cannot define property " + k + " on result object");
+                        }
+                        JSValue exceptionValue = context.getPendingException();
+                        return iteratorCloseAndRestoreException(context, iteratorObject, exceptionValue);
+                    }
+                } catch (Exception e) {
+                    JSValue exceptionValue = consumePendingExceptionOrCreateStringError(context, e);
+                    return iteratorCloseAndRestoreException(context, iteratorObject, exceptionValue);
+                }
+                k++;
+            }
+            if (!targetArray.setWithResult(PropertyKey.LENGTH, JSNumber.of(k))) {
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                return context.throwTypeError("Cannot set property length of result object");
+            }
+            return targetArray;
+        }
+
+        JSValue lengthValue = itemsObject.get(PropertyKey.LENGTH);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        long sourceLength = JSTypeConversions.toLength(context, lengthValue);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+
+        JSObject targetArray = createArrayFromThis(context, C, new JSValue[]{JSNumber.of(sourceLength)});
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
         for (long k = 0; k < sourceLength; k++) {
-            JSValue kValue = arrayLike.get(PropertyKey.fromString(Long.toString(k)));
+            JSValue sourceValue = itemsObject.get(PropertyKey.fromString(Long.toString(k)));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            JSValue mappedValue = kValue;
+            JSValue mappedValue = sourceValue;
             if (mapFn != null) {
-                mappedValue = mapFn.call(context, mapThisArg, new JSValue[]{kValue, JSNumber.of(k)});
+                mappedValue = mapFn.call(context, mapThisArg, new JSValue[]{sourceValue, JSNumber.of(k)});
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
             }
-            // Step 15.viii: CreateDataPropertyOrThrow(A, Pk, mappedValue)
-            if (!A.defineProperty(PropertyKey.fromString(Long.toString(k)), mappedValue, PropertyDescriptor.DataState.All)) {
+            if (!targetArray.defineProperty(
+                    PropertyKey.fromString(Long.toString(k)),
+                    mappedValue,
+                    PropertyDescriptor.DataState.All)) {
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
                 return context.throwTypeError("Cannot define property " + k + " on result object");
             }
         }
-
-        // Step 16: Set A.length
-        A.set(PropertyKey.LENGTH, JSNumber.of(sourceLength));
-        return A;
+        if (!targetArray.setWithResult(PropertyKey.LENGTH, JSNumber.of(sourceLength))) {
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            return context.throwTypeError("Cannot set property length of result object");
+        }
+        return targetArray;
     }
 
     /**
@@ -680,6 +684,20 @@ public final class ArrayConstructor {
             return context.getPendingException();
         }
         return JSBoolean.valueOf(res != 0);
+    }
+
+    private static JSValue iteratorCloseAndRestoreException(
+            JSContext context,
+            JSObject iteratorObject,
+            JSValue originalException) {
+        context.clearPendingException();
+        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
+        if (!context.hasPendingException() && JSTypeChecking.isCallable(returnMethod)) {
+            PromiseConstructor.callCallable(context, returnMethod, iteratorObject, JSValue.NO_ARGS);
+        }
+        context.clearPendingException();
+        context.setPendingException(originalException);
+        return originalException;
     }
 
     /**

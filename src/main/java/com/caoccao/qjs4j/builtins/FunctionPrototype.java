@@ -64,8 +64,31 @@ public final class FunctionPrototype {
      * ES2024 20.2.3.2
      */
     public static JSValue bind(JSContext context, JSValue thisArg, JSValue[] args) {
-        // thisArg for bind() is the function itself
-        if (!(thisArg instanceof JSFunction targetFunc)) {
+        JSFunction targetFunction;
+        JSObject callableObject;
+        if (thisArg instanceof JSFunction jsFunction) {
+            targetFunction = jsFunction;
+            callableObject = jsFunction;
+        } else if (thisArg instanceof JSProxy jsProxy) {
+            if (!JSTypeChecking.isFunction(jsProxy.getTarget())) {
+                return context.throwTypeError("Function.prototype.bind called on non-function");
+            }
+            boolean constructableTarget = JSTypeChecking.isConstructor(jsProxy.getTarget());
+            targetFunction = new JSNativeFunction(
+                    context,
+                    "",
+                    0,
+                    (childContext, childThisArg, childArgs) -> {
+                        JSValue newTarget = childContext.getNativeConstructorNewTarget();
+                        if (newTarget != null && !(newTarget instanceof JSUndefined)) {
+                            return jsProxy.construct(childContext, childArgs, newTarget);
+                        }
+                        return jsProxy.apply(childContext, childThisArg, childArgs);
+                    },
+                    constructableTarget);
+            context.transferPrototype(targetFunction, JSFunction.NAME);
+            callableObject = jsProxy;
+        } else {
             return context.throwTypeError("Function.prototype.bind called on non-function");
         }
 
@@ -83,9 +106,9 @@ public final class FunctionPrototype {
         // Per spec, read target's "length" property (not use internal getLength())
         // to handle overridden length values including Infinity, NaN, etc.
         double computedLength = 0;
-        PropertyDescriptor lengthDesc = targetFunc.getOwnPropertyDescriptor(PropertyKey.LENGTH);
+        PropertyDescriptor lengthDesc = callableObject.getOwnPropertyDescriptor(PropertyKey.LENGTH);
         if (lengthDesc != null) {
-            JSValue targetLenValue = targetFunc.get(PropertyKey.LENGTH);
+            JSValue targetLenValue = callableObject.get(PropertyKey.LENGTH);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -108,7 +131,7 @@ public final class FunctionPrototype {
 
         // Step 12-15: Compute name from target's "name" property
         // Per spec, read target's "name" property (not use internal getName())
-        JSValue targetNameValue = targetFunc.get(PropertyKey.NAME);
+        JSValue targetNameValue = callableObject.get(PropertyKey.NAME);
         if (context.hasPendingException()) {
             return context.getPendingException();
         }
@@ -121,7 +144,7 @@ public final class FunctionPrototype {
         String boundName = "bound " + targetName;
 
         // Create bound function with computed length and name
-        JSBoundFunction boundFunc = new JSBoundFunction(targetFunc, boundThis, boundArgs,
+        JSBoundFunction boundFunc = new JSBoundFunction(targetFunction, boundThis, boundArgs,
                 computedLength, boundName);
 
         // Set [[Prototype]] to Function.prototype

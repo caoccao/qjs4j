@@ -110,6 +110,46 @@ public final class JSReflectObject {
         return constructFunction(context, args[0], constructorArgs, newTarget);
     }
 
+    private static JSValue constructDynamicFunction(
+            JSContext context,
+            JSFunction function,
+            JSNativeFunction nativeFunction,
+            JSValue[] args,
+            JSValue newTarget) {
+        JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
+        JSValue savedNewTarget = context.getConstructorNewTarget();
+        JSValue savedConstructorContextNewTarget = null;
+        JSValue savedNativeConstructorNewTarget = constructorContext.getNativeConstructorNewTarget();
+
+        context.setConstructorNewTarget(newTarget);
+        if (constructorContext != context) {
+            savedConstructorContextNewTarget = constructorContext.getConstructorNewTarget();
+            constructorContext.setConstructorNewTarget(newTarget);
+        }
+        constructorContext.setNativeConstructorNewTarget(newTarget);
+
+        try {
+            JSValue result = nativeFunction.call(context, JSUndefined.INSTANCE, args);
+            if (constructorContext != context && constructorContext.hasPendingException()) {
+                context.setPendingException(constructorContext.getPendingException());
+                constructorContext.clearPendingException();
+            }
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (result instanceof JSObject) {
+                return result;
+            }
+            return context.throwTypeError(function.getName() + " constructor must return an object");
+        } finally {
+            context.setConstructorNewTarget(savedNewTarget);
+            constructorContext.setNativeConstructorNewTarget(savedNativeConstructorNewTarget);
+            if (constructorContext != context) {
+                constructorContext.setConstructorNewTarget(savedConstructorContextNewTarget);
+            }
+        }
+    }
+
     private static JSValue constructFunction(JSContext context, JSValue target, JSValue[] args, JSValue newTarget) {
         if (target instanceof JSProxy proxy) {
             return proxy.construct(context, args, newTarget);
@@ -133,6 +173,10 @@ public final class JSReflectObject {
 
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType == null) {
+            if (function instanceof JSNativeFunction nativeFunction && isDynamicFunctionConstructor(nativeFunction)) {
+                return constructDynamicFunction(context, function, nativeFunction, args, newTarget);
+            }
+
             JSObject thisObject = new JSObject(context);
             String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
             if (newTarget instanceof JSObject newTargetObject) {
@@ -434,6 +478,14 @@ public final class JSReflectObject {
         return JSBoolean.valueOf(target.has(key));
     }
 
+    private static boolean isDynamicFunctionConstructor(JSNativeFunction function) {
+        String functionName = function.getName();
+        return JSFunction.NAME.equals(functionName)
+                || "GeneratorFunction".equals(functionName)
+                || "AsyncFunction".equals(functionName)
+                || "AsyncGeneratorFunction".equals(functionName);
+    }
+
     /**
      * Reflect.isExtensible(target)
      * ES2020 26.1.10
@@ -477,12 +529,7 @@ public final class JSReflectObject {
         if (args.length == 0 || !(args[0] instanceof JSObject target)) {
             return context.throwTypeError("Reflect.preventExtensions called on non-object");
         }
-
-        if (target instanceof JSProxy proxy) {
-            return JSBoolean.valueOf(proxy.preventExtensionsWithResult());
-        }
-        target.preventExtensions();
-        return JSBoolean.TRUE;
+        return JSBoolean.valueOf(target.preventExtensionsWithResult());
     }
 
     /**

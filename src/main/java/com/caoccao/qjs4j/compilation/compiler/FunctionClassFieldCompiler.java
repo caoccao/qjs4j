@@ -16,8 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
-import com.caoccao.qjs4j.compilation.ast.PropertyDefinition;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -33,6 +32,22 @@ final class FunctionClassFieldCompiler {
     FunctionClassFieldCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
+    }
+
+    private static boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression == null) {
+            return false;
+        }
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.getId() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.getId() == null;
+        }
+        return false;
     }
 
     void compileComputedFieldNameCache(
@@ -62,7 +77,8 @@ final class FunctionClassFieldCompiler {
 
     void compileFieldInitialization(List<PropertyDefinition> fields,
                                     Map<String, JSSymbol> privateSymbols,
-                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
         for (PropertyDefinition field : fields) {
             boolean isPrivate = field.isPrivate();
 
@@ -94,6 +110,24 @@ final class FunctionClassFieldCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
                     continue;
                 }
+            } else if (field.isAutoAccessor()) {
+                JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
+                if (backingSymbol == null) {
+                    throw new JSCompilerException("Auto-accessor backing symbol not found");
+                }
+
+                if (field.getValue() != null) {
+                    delegates.expressions.compileExpression(field.getValue());
+                } else {
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                }
+
+                compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                if (isAnonymousFunctionDefinition(field.getValue())) {
+                    compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+                }
+                compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
             } else {
                 if (field.isComputed()) {
                     JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);

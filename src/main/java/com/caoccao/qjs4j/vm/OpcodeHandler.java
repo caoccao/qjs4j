@@ -116,6 +116,56 @@ public final class OpcodeHandler {
         return jsError;
     }
 
+    private static StackFrame findDynamicVarBindingFrame(ExecutionContext executionContext, String variableName) {
+        if (variableName == null) {
+            return null;
+        }
+        StackFrame checkFrame = executionContext.frame;
+        while (checkFrame != null) {
+            if (checkFrame.hasDynamicVarBinding(variableName)) {
+                return checkFrame;
+            }
+            checkFrame = checkFrame.getCaller();
+        }
+        return null;
+    }
+
+    private static EvalScopedLocalBinding findEvalScopedLocalBinding(
+            ExecutionContext executionContext,
+            String variableName) {
+        if (variableName == null) {
+            return null;
+        }
+        JSContext context = executionContext.virtualMachine.context;
+        if (!context.hasEvalOverlayFrames()) {
+            return null;
+        }
+        StackFrame immediateCallerFrame = executionContext.frame.getCaller();
+        StackFrame checkFrame = immediateCallerFrame;
+        while (checkFrame != null) {
+            if (checkFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
+                String[] localVarNames = bytecodeFunction.getBytecode().getLocalVarNames();
+                JSValue[] localValues = checkFrame.getLocals();
+                if (localVarNames != null && localValues != null) {
+                    for (int localIndex = 0; localIndex < localVarNames.length && localIndex < localValues.length; localIndex++) {
+                        String localVarName = localVarNames[localIndex];
+                        if (!variableName.equals(localVarName)) {
+                            continue;
+                        }
+                        JSValue localValue = localValues[localIndex];
+                        if (localValue == VirtualMachine.UNINITIALIZED_MARKER
+                                && checkFrame != immediateCallerFrame) {
+                            break;
+                        }
+                        return new EvalScopedLocalBinding(checkFrame, localIndex, localValue);
+                    }
+                }
+            }
+            checkFrame = checkFrame.getCaller();
+        }
+        return null;
+    }
+
     static void handleAdd(Opcode op, ExecutionContext executionContext) {
         JSStackValue[] stack = executionContext.stack;
         int sp = executionContext.sp;
@@ -2525,6 +2575,31 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[sp - 2];
         JSContext context = executionContext.virtualMachine.context;
         PropertyKey key = PropertyKey.fromValue(context, propertyValue);
+        String variableName = key != null && key.isString() ? key.asString() : null;
+
+        if (variableName != null && objectValue.isUndefined()) {
+            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+            if (bindingFrame != null) {
+                JSValue variableValue = bindingFrame.getDynamicVarBinding(variableName);
+                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
+            if (localBinding != null) {
+                if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
+                    executionContext.virtualMachine.pendingException =
+                            context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
+                    stack[sp++] = JSUndefined.INSTANCE;
+                } else {
+                    stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
+                }
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+        }
 
         if (objectValue.isUndefined()) {
             String name = key != null ? key.toPropertyString() : "variable";
@@ -2544,8 +2619,28 @@ public final class OpcodeHandler {
             return;
         }
 
-        if (targetObject == context.getGlobalObject() && key != null && key.isString()) {
-            String variableName = key.asString();
+        if (targetObject == context.getGlobalObject() && variableName != null) {
+            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+            if (bindingFrame != null) {
+                JSValue variableValue = bindingFrame.getDynamicVarBinding(variableName);
+                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+            EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
+            if (localBinding != null) {
+                if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
+                    executionContext.virtualMachine.pendingException =
+                            context.throwReferenceError("Cannot access '" + variableName + "' before initialization");
+                    stack[sp++] = JSUndefined.INSTANCE;
+                } else {
+                    stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
+                }
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
                 if (!context.isGlobalLexicalBindingInitialized(variableName)) {
                     executionContext.virtualMachine.pendingException =
@@ -3648,7 +3743,9 @@ public final class OpcodeHandler {
         JSContext context = executionContext.virtualMachine.context;
         PropertyKey key = PropertyKey.fromString(atomName);
         JSValue baseObject;
-        if (context.hasGlobalLexicalBinding(atomName) || context.getGlobalObject().has(key)) {
+        if (findDynamicVarBindingFrame(executionContext, atomName) != null
+                || context.hasGlobalLexicalBinding(atomName)
+                || context.getGlobalObject().has(key)) {
             baseObject = context.getGlobalObject();
         } else {
             baseObject = JSUndefined.INSTANCE;
@@ -4140,10 +4237,7 @@ public final class OpcodeHandler {
                 } else {
                     jsObject.set(key, assignedValue);
                 }
-                if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                    executionContext.virtualMachine.context.clearPendingException();
-                }
+                executionContext.virtualMachine.capturePendingExceptionFromContext(jsObject.getContext());
             } catch (JSVirtualMachineException e) {
                 executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
             }
@@ -4171,10 +4265,7 @@ public final class OpcodeHandler {
                         } else {
                             boxedObject.set(key, assignedValue);
                         }
-                        if (executionContext.virtualMachine.context.hasPendingException()) {
-                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                            executionContext.virtualMachine.context.clearPendingException();
-                        }
+                        executionContext.virtualMachine.capturePendingExceptionFromContext(boxedObject.getContext());
                     } catch (JSVirtualMachineException e) {
                         executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     }
@@ -4202,10 +4293,7 @@ public final class OpcodeHandler {
                 } else {
                     jsObject.set(propertyKey, fieldValue);
                 }
-                if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                    executionContext.virtualMachine.context.clearPendingException();
-                }
+                executionContext.virtualMachine.capturePendingExceptionFromContext(jsObject.getContext());
             } catch (JSVirtualMachineException e) {
                 executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
             }
@@ -4230,10 +4318,7 @@ public final class OpcodeHandler {
                         } else {
                             boxedObject.set(propertyKey, fieldValue);
                         }
-                        if (executionContext.virtualMachine.context.hasPendingException()) {
-                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                            executionContext.virtualMachine.context.clearPendingException();
-                        }
+                        executionContext.virtualMachine.capturePendingExceptionFromContext(boxedObject.getContext());
                     } catch (JSVirtualMachineException e) {
                         executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     }
@@ -4390,6 +4475,17 @@ public final class OpcodeHandler {
         JSValue propertyValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyValue);
+        String variableName = key != null && key.isString() ? key.asString() : null;
+
+        if (variableName != null && objectValue.isUndefined()) {
+            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+            if (bindingFrame != null) {
+                bindingFrame.setDynamicVarBinding(variableName, setValue);
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
+        }
 
         if (objectValue.isUndefined()) {
             if (executionContext.virtualMachine.context.isStrictMode()) {
@@ -4411,8 +4507,14 @@ public final class OpcodeHandler {
         }
 
         JSContext context = executionContext.virtualMachine.context;
-        if (targetObject == context.getGlobalObject() && key != null && key.isString()) {
-            String variableName = key.asString();
+        if (targetObject == context.getGlobalObject() && variableName != null) {
+            StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+            if (bindingFrame != null) {
+                bindingFrame.setDynamicVarBinding(variableName, setValue);
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             if (variableName != null && context.hasGlobalLexicalBinding(variableName)) {
                 if (!context.isGlobalLexicalBindingInitialized(variableName)) {
                     executionContext.virtualMachine.pendingException =
@@ -4456,10 +4558,7 @@ public final class OpcodeHandler {
         } finally {
             context.setInBareVariableAssignment(false);
         }
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.context.clearPendingException();
-        }
+        executionContext.virtualMachine.capturePendingExceptionFromContext(targetObject.getContext());
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
@@ -4508,10 +4607,7 @@ public final class OpcodeHandler {
             }
         }
 
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.context.clearPendingException();
-        }
+        executionContext.virtualMachine.capturePendingExceptionFromContext(superObject.getContext());
         stack[sp++] = assignedValue;
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
@@ -6024,5 +6120,8 @@ public final class OpcodeHandler {
             return;
         }
         executionContext.frame.setVarRef(varRefIndex, value);
+    }
+
+    private record EvalScopedLocalBinding(StackFrame frame, int localIndex, JSValue value) {
     }
 }

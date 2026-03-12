@@ -28,14 +28,16 @@ import java.util.List;
  */
 public final class JSAsyncDisposableStack extends JSObject {
     public static final String NAME = "AsyncDisposableStack";
-    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal.";
+    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal";
     private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
+    private boolean movedFrom;
 
     public JSAsyncDisposableStack(JSContext context) {
         super(context);
         this.disposeRecords = new ArrayList<>();
         this.disposed = false;
+        this.movedFrom = false;
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -46,20 +48,16 @@ public final class JSAsyncDisposableStack extends JSObject {
 
     public JSValue adopt(JSContext context, JSValue value, JSValue onDisposeAsync) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed AsyncDisposableStack");
+            if (movedFrom) {
+                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.adopt on an already-disposed AsyncDisposableStack");
+            }
+            return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
         if (!(onDisposeAsync instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("AsyncDisposableStack.adopt requires a function");
         }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, new JSValue[]{value}));
+        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, new JSValue[]{value}, true));
         return value;
-    }
-
-    private boolean awaitPromise(JSContext context, JSPromise promise) {
-        for (int i = 0; i < 10000 && promise.getState() == JSPromise.PromiseState.PENDING; i++) {
-            context.processMicrotasks();
-        }
-        return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
     private JSValue composeSuppressedError(JSContext context, JSValue error, JSValue suppressed) {
@@ -68,114 +66,158 @@ public final class JSAsyncDisposableStack extends JSObject {
 
     public JSValue defer(JSContext context, JSValue onDisposeAsync) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed AsyncDisposableStack");
+            if (movedFrom) {
+                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.defer on an already-disposed AsyncDisposableStack");
+            }
+            return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
         if (!(onDisposeAsync instanceof JSFunction disposeCallback)) {
             return context.throwTypeError("AsyncDisposableStack.defer requires a function");
         }
-        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, JSValue.NO_ARGS));
+        disposeRecords.add(new DisposeRecord(disposeCallback, JSUndefined.INSTANCE, JSValue.NO_ARGS, true));
         return JSUndefined.INSTANCE;
     }
 
     public JSValue disposeAsync(JSContext context) {
         JSPromise promise = context.createJSPromise();
+
+        JSValue initialError = null;
+        if (context.hasPendingException()) {
+            initialError = context.getPendingException();
+            context.clearPendingException();
+        }
+
         if (disposed) {
-            promise.fulfill(JSUndefined.INSTANCE);
+            if (initialError != null) {
+                promise.reject(initialError);
+            } else {
+                promise.fulfill(JSUndefined.INSTANCE);
+            }
             return promise;
         }
         disposed = true;
-
-        JSValue disposalError = null;
-        for (int i = disposeRecords.size() - 1; i >= 0; i--) {
-            DisposeRecord record = disposeRecords.get(i);
-            JSValue error = invokeDisposer(context, record);
-            if (error != null) {
-                disposalError = disposalError == null
-                        ? error
-                        : composeSuppressedError(context, error, disposalError);
-            }
-        }
-        disposeRecords.clear();
-
-        if (disposalError != null) {
-            promise.reject(disposalError);
-        } else {
-            promise.fulfill(JSUndefined.INSTANCE);
-        }
+        disposeNextRecord(context, disposeRecords.size() - 1, initialError, promise);
         return promise;
     }
 
-    private JSValue invokeDisposer(JSContext context, DisposeRecord record) {
-        JSValue result;
+    private void disposeNextRecord(
+            JSContext context,
+            int index,
+            JSValue accumulatedError,
+            JSPromise completionPromise) {
+        if (index < 0) {
+            disposeRecords.clear();
+            if (accumulatedError != null) {
+                completionPromise.reject(accumulatedError);
+            } else {
+                completionPromise.fulfill(JSUndefined.INSTANCE);
+            }
+            return;
+        }
+        DisposeRecord record = disposeRecords.get(index);
+        JSValue disposerResult = JSUndefined.INSTANCE;
+        JSValue currentError = null;
         try {
-            result = record.function().call(context, record.thisArg(), record.args());
+            disposerResult = record.function().call(context, record.thisArg(), record.args());
         } catch (JSException e) {
             if (context.hasPendingException()) {
-                JSValue pending = context.getPendingException();
+                currentError = context.getPendingException();
                 context.clearPendingException();
-                return pending;
+            } else {
+                currentError = e.getErrorValue();
             }
-            return e.getErrorValue();
         } catch (JSVirtualMachineException e) {
             if (context.hasPendingException()) {
+                currentError = context.getPendingException();
+                context.clearPendingException();
+            } else if (e.getJsValue() != null) {
+                currentError = e.getJsValue();
+            } else if (e.getJsError() != null) {
+                currentError = e.getJsError();
+            } else {
+                JSValue error = context.throwError("Error during async disposal: " + e.getMessage());
                 JSValue pending = context.getPendingException();
                 context.clearPendingException();
-                return pending;
+                currentError = pending != null ? pending : error;
             }
-            if (e.getJsError() != null) {
-                return e.getJsError();
-            }
-            JSValue error = context.throwError("Error during async disposal: " + e.getMessage());
-            JSValue pending = context.getPendingException();
-            context.clearPendingException();
-            return pending != null ? pending : error;
         } catch (Throwable t) {
             JSValue error = context.throwError("Error during async disposal: " + t.getMessage());
             JSValue pending = context.getPendingException();
             context.clearPendingException();
-            return pending != null ? pending : error;
+            currentError = pending != null ? pending : error;
         }
 
-        if (context.hasPendingException()) {
-            JSValue pending = context.getPendingException();
+        if (currentError == null && context.hasPendingException()) {
+            currentError = context.getPendingException();
             context.clearPendingException();
-            return pending;
         }
-
-        if (result instanceof JSPromise promise) {
-            if (!awaitPromise(context, promise)) {
-                JSValue error = context.throwError("Promise did not settle during async disposal");
-                JSValue pending = context.getPendingException();
-                context.clearPendingException();
-                return pending != null ? pending : error;
-            }
-            if (promise.getState() == JSPromise.PromiseState.REJECTED) {
-                return promise.getResult();
-            }
+        JSValue nextAccumulatedError = mergeDisposalError(context, currentError, accumulatedError);
+        if (currentError != null) {
+            disposeNextRecord(context, index - 1, nextAccumulatedError, completionPromise);
+            return;
         }
+        if (!record.awaitResult()) {
+            disposeNextRecord(context, index - 1, nextAccumulatedError, completionPromise);
+            return;
+        }
+        JSPromise awaitedResult = context.createJSPromise();
+        awaitedResult.resolve(context, disposerResult);
+        JSNativeFunction onFulfilled = new JSNativeFunction(context, "", 1,
+                (childContext, thisArg, args) -> {
+                    disposeNextRecord(childContext, index - 1, nextAccumulatedError, completionPromise);
+                    return JSUndefined.INSTANCE;
+                });
+        JSNativeFunction onRejected = new JSNativeFunction(context, "", 1,
+                (childContext, thisArg, args) -> {
+                    JSValue rejectionValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    JSValue mergedError = mergeDisposalError(childContext, rejectionValue, nextAccumulatedError);
+                    disposeNextRecord(childContext, index - 1, mergedError, completionPromise);
+                    return JSUndefined.INSTANCE;
+                });
+        context.transferPrototype(onFulfilled, JSFunction.NAME);
+        context.transferPrototype(onRejected, JSFunction.NAME);
+        awaitedResult.addReactions(
+                new JSPromise.ReactionRecord(onFulfilled, null, context),
+                new JSPromise.ReactionRecord(onRejected, null, context));
 
-        return null;
     }
 
     public boolean isDisposed() {
         return disposed;
     }
 
+    private JSValue mergeDisposalError(JSContext context, JSValue currentError, JSValue accumulatedError) {
+        if (currentError == null) {
+            return accumulatedError;
+        }
+        if (accumulatedError == null) {
+            return currentError;
+        }
+        return composeSuppressedError(context, currentError, accumulatedError);
+    }
+
     public JSValue move(JSContext context) {
         if (disposed) {
-            return context.throwTypeError("Cannot move a disposed AsyncDisposableStack");
+            if (movedFrom) {
+                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.move on an already-disposed AsyncDisposableStack");
+            }
+            return context.throwReferenceError("Cannot move elements from a disposed stack!");
         }
         JSAsyncDisposableStack newStack = new JSAsyncDisposableStack(context);
         newStack.disposeRecords.addAll(disposeRecords);
         newStack.setPrototype(getPrototype());
         disposeRecords.clear();
         disposed = true;
+        movedFrom = true;
         return newStack;
     }
 
     public JSValue use(JSContext context, JSValue value) {
         if (disposed) {
-            return context.throwTypeError("Cannot add to a disposed AsyncDisposableStack");
+            if (movedFrom) {
+                return context.throwTypeError("Cannot call AsyncDisposableStack.prototype.use on an already-disposed AsyncDisposableStack");
+            }
+            return context.throwReferenceError("Cannot add values to a disposed stack!");
         }
         if (value.isNullOrUndefined()) {
             return value;
@@ -188,18 +230,18 @@ public final class JSAsyncDisposableStack extends JSObject {
         JSFunction disposeMethod;
         if (disposeMethodValue instanceof JSFunction asyncDisposeMethod) {
             disposeMethod = asyncDisposeMethod;
+            disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS, true));
         } else {
             disposeMethodValue = objectValue.get(PropertyKey.SYMBOL_DISPOSE);
             if (!(disposeMethodValue instanceof JSFunction syncDisposeMethod)) {
                 return context.throwTypeError("Object is not async disposable");
             }
             disposeMethod = syncDisposeMethod;
+            disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS, false));
         }
-
-        disposeRecords.add(new DisposeRecord(disposeMethod, objectValue, JSValue.NO_ARGS));
         return value;
     }
 
-    private record DisposeRecord(JSFunction function, JSValue thisArg, JSValue[] args) {
+    private record DisposeRecord(JSFunction function, JSValue thisArg, JSValue[] args, boolean awaitResult) {
     }
 }

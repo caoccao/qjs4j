@@ -139,7 +139,9 @@ final class ExpressionCallMemberCompiler {
 
             compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.getArguments().size());
         } else {
-            if (callExpr.getCallee() instanceof Identifier calleeId && compilerContext.hasActiveWithObject()) {
+            if (callExpr.getCallee() instanceof Identifier calleeId
+                    && (compilerContext.hasActiveWithObject()
+                    || !compilerContext.inheritedWithObjectBindingNames.isEmpty())) {
                 // Inside a with scope, lookup returns [value, receiver] where receiver
                 // is the with object if the name was found there (ES spec 12.3.4.1 step 4.b.ii)
                 owner.emitWithAwareIdentifierLookupForCall(calleeId.getName());
@@ -206,7 +208,9 @@ final class ExpressionCallMemberCompiler {
                 }
             }
         } else {
-            if (callExpr.getCallee() instanceof Identifier calleeId && compilerContext.hasActiveWithObject()) {
+            if (callExpr.getCallee() instanceof Identifier calleeId
+                    && (compilerContext.hasActiveWithObject()
+                    || !compilerContext.inheritedWithObjectBindingNames.isEmpty())) {
                 // Lookup returns [value, receiver]; APPLY expects [receiver, function, ...]
                 owner.emitWithAwareIdentifierLookupForCall(calleeId.getName());
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);

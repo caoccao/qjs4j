@@ -343,6 +343,24 @@ public final class VirtualMachine {
         }
     }
 
+    void capturePendingExceptionFromContext(JSContext sourceContext) {
+        if (sourceContext != null && sourceContext != context && sourceContext.hasPendingException()) {
+            JSValue sourceException = sourceContext.getPendingException();
+            sourceContext.clearPendingException();
+            if (sourceException instanceof JSError sourceError) {
+                pendingException = context.throwError(sourceError.getErrorName(), sourceError.getMessage().value());
+                context.clearPendingException();
+            } else {
+                pendingException = sourceException;
+            }
+            return;
+        }
+        if (context.hasPendingException()) {
+            pendingException = context.getPendingException();
+            context.clearPendingException();
+        }
+    }
+
     void capturePendingExceptionFromVmOrContext(JSVirtualMachineException e) {
         if (e.getJsValue() != null) {
             pendingException = e.getJsValue();
@@ -525,38 +543,58 @@ public final class VirtualMachine {
             return thisObject;
         }
 
+        JSContext constructorContext = function.getRealmContext() != null ? function.getRealmContext() : context;
+        JSObject preResolvedPrototype = null;
+        if (isErrorConstructorType(constructorType) && newTarget instanceof JSObject newTargetObject) {
+            String intrinsicDefaultPrototypeName = constructorContext.getIntrinsicDefaultPrototypeName(function);
+            preResolvedPrototype = constructorContext.getPrototypeFromConstructor(
+                    newTargetObject,
+                    intrinsicDefaultPrototypeName);
+            if (constructorContext.hasPendingException()) {
+                JSValue exception = constructorContext.getPendingException();
+                constructorContext.clearPendingException();
+                context.setPendingException(exception);
+                throw new JSVirtualMachineException(exception.toString(), exception);
+            }
+        }
+
         JSValue result;
         try {
-            result = constructorType.create(context, args);
+            result = constructorType.create(constructorContext, args);
         } catch (JSErrorException e) {
             throw new JSVirtualMachineException(
                     context.throwError(e));
+        }
+        if (constructorContext != context && constructorContext.hasPendingException()) {
+            context.setPendingException(constructorContext.getPendingException());
+            constructorContext.clearPendingException();
         }
         if (context.hasPendingException()) {
             throw new JSVirtualMachineException(context.getPendingException().toString(),
                     context.getPendingException());
         }
 
-        // Per ES spec and QuickJS (js_create_from_ctor), resolve the prototype
-        // from newTarget AFTER argument processing so that argument errors
-        // (e.g. ToIndex(Symbol) → TypeError) are thrown before accessing
-        // newTarget.prototype.
+        // Resolve the prototype from newTarget after constructor argument processing
+        // except for Error constructors where spec-observable ordering requires
+        // newTarget.prototype lookup before message coercion.
         if (result instanceof JSObject jsObject && !jsObject.isProxy()) {
-            JSObject resolvedPrototype = null;
-            if (newTarget instanceof JSObject newTargetObject) {
-                String intrinsicDefaultPrototypeName = context.getIntrinsicDefaultPrototypeName(function);
-                resolvedPrototype = context.getPrototypeFromConstructor(
+            JSObject resolvedPrototype = preResolvedPrototype;
+            if (resolvedPrototype == null && newTarget instanceof JSObject newTargetObject) {
+                String intrinsicDefaultPrototypeName = constructorContext.getIntrinsicDefaultPrototypeName(function);
+                resolvedPrototype = constructorContext.getPrototypeFromConstructor(
                         newTargetObject,
                         intrinsicDefaultPrototypeName);
-                if (context.hasPendingException()) {
-                    throw new JSVirtualMachineException(context.getPendingException().toString(),
-                            context.getPendingException());
+                if (constructorContext.hasPendingException()) {
+                    JSValue exception = constructorContext.getPendingException();
+                    constructorContext.clearPendingException();
+                    context.setPendingException(exception);
+                    throw new JSVirtualMachineException(exception.toString(), exception);
                 }
             }
             if (resolvedPrototype != null) {
                 jsObject.setPrototype(resolvedPrototype);
             } else {
-                context.transferPrototype(jsObject, function);
+                constructorContext.transferPrototype(jsObject, function);
             }
             if (jsObject instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
                 throw new JSVirtualMachineException(context.getPendingException().toString(),
@@ -600,7 +638,7 @@ public final class VirtualMachine {
         }
 
         for (PropertyKey key : sourceObject.getOwnPropertyKeys()) {
-            if (excludedKeys != null && excludedKeys.contains(key)) {
+            if (isExcludedPropertyKey(excludedKeys, key)) {
                 continue;
             }
             PropertyDescriptor descriptor = sourceObject.getOwnPropertyDescriptor(key);
@@ -870,126 +908,131 @@ public final class VirtualMachine {
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
-        pendingException = null;
-        context.clearPendingException();
-        // Outer loop for tail call optimization trampoline.
-        // When TAIL_CALL fires, it sets tailCallPending and returns from the inner loop.
-        // This outer loop then restarts execution with the new function/args without
-        // consuming an additional Java stack frame.
-        tailCallLoop:
-        while (true) {
-            JSGeneratorState generatorStateForExecution = activeGeneratorState;
-            boolean resumeGeneratorExecution =
-                    generatorStateForExecution != null
-                            && generatorStateForExecution.getFunction() == function
-                            && generatorStateForExecution.hasSuspendedExecutionState()
-                            && generatorStateForExecution.hasPendingResumeRecord();
-            // Save the current caller stack position so function exit can restore it.
-            int callerStackTop = valueStack.getStackTop();
-            // Always use callerStackTop as the frame's operand stack base.
-            // For resumed generators, the suspended stack values are relative and
-            // will be correctly placed at the current caller position.  Using the
-            // original suspended stackBase would write into the caller's stack
-            // region when the generator is resumed at a different call depth.
-            int frameStackBase = callerStackTop;
-            int restoreStackTop = callerStackTop;
+        JSContext previousExecutionContext = JSContext.pushCurrentExecutionContext(context);
+        try {
+            pendingException = null;
+            context.clearPendingException();
+            // Outer loop for tail call optimization trampoline.
+            // When TAIL_CALL fires, it sets tailCallPending and returns from the inner loop.
+            // This outer loop then restarts execution with the new function/args without
+            // consuming an additional Java stack frame.
+            tailCallLoop:
+            while (true) {
+                JSGeneratorState generatorStateForExecution = activeGeneratorState;
+                boolean resumeGeneratorExecution =
+                        generatorStateForExecution != null
+                                && generatorStateForExecution.getFunction() == function
+                                && generatorStateForExecution.hasSuspendedExecutionState()
+                                && generatorStateForExecution.hasPendingResumeRecord();
+                // Save the current caller stack position so function exit can restore it.
+                int callerStackTop = valueStack.getStackTop();
+                // Always use callerStackTop as the frame's operand stack base.
+                // For resumed generators, the suspended stack values are relative and
+                // will be correctly placed at the current caller position.  Using the
+                // original suspended stackBase would write into the caller's stack
+                // region when the generator is resumed at a different call depth.
+                int frameStackBase = callerStackTop;
+                int restoreStackTop = callerStackTop;
 
-            // Save and set strict mode based on function
-            // Following QuickJS: each function has its own strict mode flag
-            boolean savedStrictMode = context.isStrictMode();
-            if (function.isStrict()) {
-                context.enterStrictMode();
-            } else {
-                context.exitStrictMode();
-            }
-
-            // Create or restore stack frame
-            StackFrame frame = resumeGeneratorExecution
-                    ? generatorStateForExecution.getSuspendedFrame()
-                    : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
-            // For derived constructors, set up this TDZ tracking via shared VarRef
-            if (!resumeGeneratorExecution) {
-                if (function.isDerivedConstructor()) {
-                    frame.setDerivedThisRef(new VarRef(UNINITIALIZED_MARKER));
-                } else if (function.isArrow() && function.getCapturedDerivedThisRef() != null) {
-                    frame.setDerivedThisRef(function.getCapturedDerivedThisRef());
+                // Save and set strict mode based on function
+                // Following QuickJS: each function has its own strict mode flag
+                boolean savedStrictMode = context.isStrictMode();
+                if (function.isStrict()) {
+                    context.enterStrictMode();
+                } else {
+                    context.exitStrictMode();
                 }
-            }
-            StackFrame previousFrame = currentFrame;
-            currentFrame = frame;
 
-            try {
-                ExecutionContext executionContext = createExecutionContext(
-                        function,
-                        frame,
-                        previousFrame,
-                        frameStackBase,
-                        restoreStackTop,
-                        savedStrictMode,
-                        generatorStateForExecution,
-                        resumeGeneratorExecution);
-                int sp = executionContext.sp;
-                int pc = executionContext.pc;
-
-                // Main execution loop
-                while (true) {
-                    // Sync local sp to valueStack at top of each iteration.
-                    // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
-                    valueStack.stackTop = sp;
-
-                    executionContext.sp = sp;
-                    executionContext.pc = pc;
-                    PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
-                    if (pendingExceptionAction == PendingExceptionAction.RETURN) {
-                        return executionContext.returnValue;
+                // Create or restore stack frame
+                StackFrame frame = resumeGeneratorExecution
+                        ? generatorStateForExecution.getSuspendedFrame()
+                        : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
+                // For derived constructors, set up this TDZ tracking via shared VarRef
+                if (!resumeGeneratorExecution) {
+                    if (function.isDerivedConstructor()) {
+                        frame.setDerivedThisRef(new VarRef(UNINITIALIZED_MARKER));
+                    } else if (function.isArrow() && function.getCapturedDerivedThisRef() != null) {
+                        frame.setDerivedThisRef(function.getCapturedDerivedThisRef());
                     }
-                    if (pendingExceptionAction == PendingExceptionAction.CONTINUE) {
+                }
+                StackFrame previousFrame = currentFrame;
+                currentFrame = frame;
+
+                try {
+                    ExecutionContext executionContext = createExecutionContext(
+                            function,
+                            frame,
+                            previousFrame,
+                            frameStackBase,
+                            restoreStackTop,
+                            savedStrictMode,
+                            generatorStateForExecution,
+                            resumeGeneratorExecution);
+                    int sp = executionContext.sp;
+                    int pc = executionContext.pc;
+
+                    // Main execution loop
+                    while (true) {
+                        // Sync local sp to valueStack at top of each iteration.
+                        // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
+                        valueStack.stackTop = sp;
+
+                        executionContext.sp = sp;
+                        executionContext.pc = pc;
+                        PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
+                        if (pendingExceptionAction == PendingExceptionAction.RETURN) {
+                            return executionContext.returnValue;
+                        }
+                        if (pendingExceptionAction == PendingExceptionAction.CONTINUE) {
+                            sp = executionContext.sp;
+                            pc = executionContext.pc;
+                            continue;
+                        }
+
                         sp = executionContext.sp;
                         pc = executionContext.pc;
-                        continue;
-                    }
+                        checkExecutionInterruptForExecute();
+                        executionContext.pc = pc;
+                        executionContext.opcodeRequestedReturn = false;
 
-                    sp = executionContext.sp;
-                    pc = executionContext.pc;
-                    checkExecutionInterruptForExecute();
-                    executionContext.pc = pc;
-                    executionContext.opcodeRequestedReturn = false;
-
-                    Opcode op = decodeOpcodeForExecute(executionContext);
-                    op.getHandler().call(op, executionContext);
-                    if (executionContext.opcodeRequestedReturn) {
-                        // Check for tail call optimization trampoline
-                        if (tailCallPending != null) {
-                            TailCallRequest req = tailCallPending;
-                            tailCallPending = null;
-                            function = req.function();
-                            thisArg = req.receiver();
-                            args = req.args();
-                            newTarget = JSUndefined.INSTANCE;
-                            continue tailCallLoop;
+                        Opcode op = decodeOpcodeForExecute(executionContext);
+                        op.getHandler().call(op, executionContext);
+                        if (executionContext.opcodeRequestedReturn) {
+                            // Check for tail call optimization trampoline
+                            if (tailCallPending != null) {
+                                TailCallRequest req = tailCallPending;
+                                tailCallPending = null;
+                                function = req.function();
+                                thisArg = req.receiver();
+                                args = req.args();
+                                newTarget = JSUndefined.INSTANCE;
+                                continue tailCallLoop;
+                            }
+                            return executionContext.returnValue;
                         }
-                        return executionContext.returnValue;
+                        sp = executionContext.sp;
+                        pc = executionContext.pc;
                     }
-                    sp = executionContext.sp;
-                    pc = executionContext.pc;
+                } catch (JSVirtualMachineException e) {
+                    // Restore stack and strict mode on exception
+                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    throw e;
+                } catch (JSException e) {
+                    // Preserve thrown JS values so callers can keep the original error type and realm.
+                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    JSValue errorValue = e.getErrorValue();
+                    if (errorValue instanceof JSError jsError) {
+                        throw new JSVirtualMachineException(jsError);
+                    }
+                    throw new JSVirtualMachineException(e.getMessage(), errorValue);
+                } catch (Exception e) {
+                    // Restore stack and strict mode on exception
+                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    throw new JSVirtualMachineException("VM error: " + e.getMessage(), e);
                 }
-            } catch (JSVirtualMachineException e) {
-                // Restore stack and strict mode on exception
-                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-                throw e;
-            } catch (JSException e) {
-                // Preserve thrown JS values so callers can keep the original error type and realm.
-                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-                JSValue errorValue = e.getErrorValue();
-                if (errorValue instanceof JSError jsError) {
-                    throw new JSVirtualMachineException(jsError);
-                }
-                throw new JSVirtualMachineException(e.getMessage(), errorValue);
-            } catch (Exception e) {
-                // Restore stack and strict mode on exception
-                restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
-                throw new JSVirtualMachineException("VM error: " + e.getMessage(), e);
             }
+        } finally {
+            JSContext.popCurrentExecutionContext(previousExecutionContext);
         }
     }
 
@@ -1103,13 +1146,47 @@ public final class VirtualMachine {
         return JSUndefined.INSTANCE;
     }
 
+    private long getCanonicalArrayIndex(PropertyKey key) {
+        if (key.isIndex()) {
+            return Integer.toUnsignedLong(key.asIndex());
+        }
+        if (!key.isString()) {
+            return -1;
+        }
+        String stringKey = key.asString();
+        if (stringKey == null || stringKey.isEmpty()) {
+            return -1;
+        }
+        if ("0".equals(stringKey)) {
+            return 0;
+        }
+        if (stringKey.charAt(0) == '0') {
+            return -1;
+        }
+        long value = 0;
+        for (int i = 0; i < stringKey.length(); i++) {
+            char character = stringKey.charAt(i);
+            if (character < '0' || character > '9') {
+                return -1;
+            }
+            value = value * 10 + (character - '0');
+            if (value > 0xFFFF_FFFEL) {
+                return -1;
+            }
+        }
+        return value;
+    }
+
     JSString getComputedNameString(JSValue keyValue) {
         if (keyValue instanceof JSSymbol symbol) {
             String description = symbol.getDescription();
             if (description != null && description.startsWith("#")) {
                 return new JSString(description);
             }
-            return new JSString(description == null || description.isEmpty() ? "" : "[" + description + "]");
+            if (description == null) {
+                return new JSString("");
+            }
+            return new JSString("[" + description + "]");
         }
         PropertyKey key = PropertyKey.fromValue(context, keyValue);
         if (key.isSymbol()) {
@@ -1118,7 +1195,10 @@ public final class VirtualMachine {
             if (description != null && description.startsWith("#")) {
                 return new JSString(description);
             }
-            return new JSString(description == null || description.isEmpty() ? "" : "[" + description + "]");
+            if (description == null) {
+                return new JSString("");
+            }
+            return new JSString("[" + description + "]");
         }
         return new JSString(key.toPropertyString());
     }
@@ -1173,6 +1253,31 @@ public final class VirtualMachine {
             return d != 0.0 && !Double.isNaN(d);
         }
         return JSTypeConversions.toBoolean(conditionValue) == JSBoolean.TRUE;
+    }
+
+    private boolean isErrorConstructorType(JSConstructorType constructorType) {
+        return switch (constructorType) {
+            case ERROR, EVAL_ERROR, RANGE_ERROR, REFERENCE_ERROR, SYNTAX_ERROR, TYPE_ERROR, URI_ERROR,
+                 AGGREGATE_ERROR, SUPPRESSED_ERROR -> true;
+            default -> false;
+        };
+    }
+
+    private boolean isExcludedPropertyKey(Set<PropertyKey> excludedKeys, PropertyKey key) {
+        if (excludedKeys == null || excludedKeys.isEmpty()) {
+            return false;
+        }
+        if (excludedKeys.contains(key)) {
+            return true;
+        }
+        long canonicalIndex = getCanonicalArrayIndex(key);
+        if (canonicalIndex < 0 || canonicalIndex > Integer.MAX_VALUE) {
+            return false;
+        }
+        if (excludedKeys.contains(PropertyKey.fromIndex((int) canonicalIndex))) {
+            return true;
+        }
+        return excludedKeys.contains(PropertyKey.fromString(Long.toString(canonicalIndex)));
     }
 
     boolean isUninitialized(JSValue value) {

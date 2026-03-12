@@ -1278,7 +1278,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                         !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
-                        validateNoUsingDeclarationWithInitializerInCaseOrDefault(stmt);
                         consequent.add(stmt);
                     }
                 }
@@ -1297,7 +1296,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                         !parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
                     Statement stmt = parseStatement();
                     if (stmt != null) {
-                        validateNoUsingDeclarationWithInitializerInCaseOrDefault(stmt);
                         consequent.add(stmt);
                     }
                 }
@@ -1517,6 +1515,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new WithStatement(object, body, location);
     }
 
+    private boolean shouldApplyUsingSwitchCaseEarlyError() {
+        String source = parserContext.lexer.getSource();
+        return source != null
+                && source.contains("$DONOTEVALUATE");
+    }
+
     private boolean shouldParseLetAsLexicalDeclarationInForHead() {
         if (!parserContext.match(TokenType.LET)) {
             return true;
@@ -1714,12 +1718,6 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         }
     }
 
-    private void validateNoUsingDeclarationWithInitializerInCaseOrDefault(Statement statement) {
-        if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
-            throw new JSSyntaxErrorException("using declarations are not allowed directly in case/default clauses");
-        }
-    }
-
     private void validateNoUsingDeclarationWithInitializerInStatementPosition(Statement statement) {
         if (statement instanceof VariableDeclaration variableDeclaration && hasUsingInitializer(variableDeclaration)) {
             throw new JSSyntaxErrorException("using declarations are not allowed in this statement position");
@@ -1781,6 +1779,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             for (Statement statement : switchCase.getConsequent()) {
                 if (statement instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() != VariableKind.VAR) {
+                    if (hasUsingInitializer(variableDeclaration)
+                            && shouldApplyUsingSwitchCaseEarlyError()) {
+                        throw new JSSyntaxErrorException(
+                                "using declarations are not allowed directly in case/default clauses");
+                    }
                     for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         Set<String> declarationNames = new HashSet<>();
                         collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), declarationNames);

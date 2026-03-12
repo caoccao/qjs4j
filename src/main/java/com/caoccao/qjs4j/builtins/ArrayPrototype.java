@@ -81,6 +81,20 @@ public final class ArrayPrototype {
         return obj.get(PropertyKey.fromString(Long.toString(index)));
     }
 
+    private static JSValue callCallableForSort(
+            JSContext context,
+            JSValue callable,
+            JSValue thisArg,
+            JSValue[] args) {
+        if (callable instanceof JSProxy proxy) {
+            return proxy.apply(context, thisArg, args);
+        }
+        if (callable instanceof JSFunction function) {
+            return function.call(context, thisArg, args);
+        }
+        return context.throwTypeError("Value is not callable");
+    }
+
     /**
      * Array.prototype.concat(...items)
      * Merges arrays and/or values.
@@ -298,25 +312,25 @@ public final class ArrayPrototype {
         JSObject unscopables = context.createJSObject();
         unscopables.setPrototype(null);
 
+        // ES2022+ methods
+        unscopables.set("at", JSBoolean.TRUE);
+
         // ES2015 methods
         unscopables.set("copyWithin", JSBoolean.TRUE);
         unscopables.set("entries", JSBoolean.TRUE);
         unscopables.set("fill", JSBoolean.TRUE);
         unscopables.set("find", JSBoolean.TRUE);
         unscopables.set("findIndex", JSBoolean.TRUE);
+        unscopables.set("findLast", JSBoolean.TRUE);
+        unscopables.set("findLastIndex", JSBoolean.TRUE);
         unscopables.set("flat", JSBoolean.TRUE);
         unscopables.set("flatMap", JSBoolean.TRUE);
         unscopables.set("includes", JSBoolean.TRUE);
         unscopables.set("keys", JSBoolean.TRUE);
-        unscopables.set("values", JSBoolean.TRUE);
-
-        // ES2022+ methods
-        unscopables.set("at", JSBoolean.TRUE);
-        unscopables.set("findLast", JSBoolean.TRUE);
-        unscopables.set("findLastIndex", JSBoolean.TRUE);
         unscopables.set("toReversed", JSBoolean.TRUE);
         unscopables.set("toSorted", JSBoolean.TRUE);
         unscopables.set("toSpliced", JSBoolean.TRUE);
+        unscopables.set("values", JSBoolean.TRUE);
 
         return unscopables;
     }
@@ -1806,12 +1820,14 @@ public final class ArrayPrototype {
      */
     public static JSValue sort(JSContext context, JSValue thisArg, JSValue[] args) {
         // ES2024 23.1.3.30 step 1: validate comparefn before anything else
-        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSFunction)) {
+        JSValue compareFunction = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + JSTypeConversions.toString(context, args[0]).value());
         }
-        final JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction
-                ? (JSFunction) args[0] : null;
+        final JSValue compareCallable = compareFunction instanceof JSUndefined
+                ? null
+                : compareFunction;
 
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.sort called on null or undefined");
@@ -1852,9 +1868,13 @@ public final class ArrayPrototype {
 
         // Phase 2: Sort only the defined, present elements.
         Collections.sort(sortableElements, (a, b) -> {
-            if (compareFn != null) {
+            if (compareCallable != null) {
                 JSValue[] compareArgs = {a, b};
-                JSValue result = compareFn.call(context, JSUndefined.INSTANCE, compareArgs);
+                JSValue result = callCallableForSort(
+                        context,
+                        compareCallable,
+                        JSUndefined.INSTANCE,
+                        compareArgs);
                 return JSTypeConversions.toInt32(context, result);
             } else {
                 // Default: convert to strings and compare
@@ -1870,8 +1890,7 @@ public final class ArrayPrototype {
         // Write sorted elements
         for (int i = 0; i < sortableElements.size(); i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(key, sortableElements.get(i));
-            if (context.hasPendingException()) {
+            if (!setOrThrow(context, obj, key, sortableElements.get(i))) {
                 return context.getPendingException();
             }
             writeIndex++;
@@ -1880,8 +1899,7 @@ public final class ArrayPrototype {
         // Write undefined values after sorted elements
         for (int i = 0; i < undefinedCount; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(writeIndex));
-            obj.set(key, JSUndefined.INSTANCE);
-            if (context.hasPendingException()) {
+            if (!setOrThrow(context, obj, key, JSUndefined.INSTANCE)) {
                 return context.getPendingException();
             }
             writeIndex++;
@@ -1890,8 +1908,7 @@ public final class ArrayPrototype {
         // Delete remaining holes
         for (long i = writeIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            obj.delete(key);
-            if (context.hasPendingException()) {
+            if (!deleteOrThrow(context, obj, key)) {
                 return context.getPendingException();
             }
         }
@@ -2093,17 +2110,20 @@ public final class ArrayPrototype {
                 if (elementObject == null || context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                JSValue toLocaleStringValue = elementObject.get(PropertyKey.fromString("toLocaleString"));
+                JSValue toLocaleStringValue = elementObject.get(PropertyKey.fromString("toLocaleString"), element);
                 if (context.hasPendingException()) {
                     return context.getPendingException();
                 }
-                if (!(toLocaleStringValue instanceof JSFunction toLocaleStringFunction)) {
+                if (!JSTypeChecking.isCallable(toLocaleStringValue)) {
                     return context.throwTypeError("toLocaleString is not a function");
                 }
                 // Per ECMA-402, invoke toLocaleString with exactly 2 args: locales and options
                 JSValue localesArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
                 JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-                JSValue localeStringValue = toLocaleStringFunction.call(context, element,
+                JSValue localeStringValue = PromiseConstructor.callCallable(
+                        context,
+                        toLocaleStringValue,
+                        element,
                         new JSValue[]{localesArg, optionsArg});
                 if (context.hasPendingException()) {
                     return context.getPendingException();
@@ -2178,12 +2198,14 @@ public final class ArrayPrototype {
     public static JSValue toSorted(JSContext context, JSValue thisArg, JSValue[] args) {
         // Step 1: If comparefn is not undefined and IsCallable(comparefn) is false, throw a TypeError.
         // This must happen before ToObject and LengthOfArrayLike per spec.
-        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSFunction)) {
+        JSValue compareFunction = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(compareFunction instanceof JSUndefined) && !JSTypeChecking.isCallable(compareFunction)) {
             return context.throwTypeError("The comparison function must be either a function or undefined: "
                     + JSTypeConversions.toString(context, args[0]).value());
         }
-        final JSFunction compareFn = args.length > 0 && args[0] instanceof JSFunction
-                ? (JSFunction) args[0] : null;
+        final JSValue compareCallable = compareFunction instanceof JSUndefined
+                ? null
+                : compareFunction;
 
         if (thisArg instanceof JSNull || thisArg instanceof JSUndefined) {
             return context.throwTypeError("Array.prototype.toSorted called on null or undefined");
@@ -2215,9 +2237,13 @@ public final class ArrayPrototype {
 
         // Sort the copy
         elements.sort((a, b) -> {
-            if (compareFn != null) {
+            if (compareCallable != null) {
                 JSValue[] compareArgs = {a, b};
-                JSValue result = compareFn.call(context, JSUndefined.INSTANCE, compareArgs);
+                JSValue result = callCallableForSort(
+                        context,
+                        compareCallable,
+                        JSUndefined.INSTANCE,
+                        compareArgs);
                 return JSTypeConversions.toInt32(context, result);
             } else {
                 // Default: convert to strings and compare
@@ -2334,15 +2360,19 @@ public final class ArrayPrototype {
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("Cannot convert undefined or null to object");
         }
-        if (thisArg.isArray()) {
-            return join(context, thisArg, JSValue.NO_ARGS);
+        JSObject object = JSTypeConversions.toObject(context, thisArg);
+        if (object == null) {
+            return context.getPendingException();
         }
-        if (thisArg instanceof JSObject jsObject) {
-            JSValue joinValue = jsObject.get("join");
-            if (joinValue instanceof JSFunction joinFn) {
-                return joinFn.call(context, thisArg, JSValue.NO_ARGS);
-            }
-            return ObjectPrototype.toString(context, jsObject, args);
+        JSValue joinValue = object.get(PropertyKey.fromString("join"), thisArg);
+        if (context.hasPendingException()) {
+            return context.getPendingException();
+        }
+        if (JSTypeChecking.isCallable(joinValue)) {
+            return PromiseConstructor.callCallable(context, joinValue, thisArg, JSValue.NO_ARGS);
+        }
+        if (thisArg.isArray() && joinValue instanceof JSUndefined) {
+            return join(context, thisArg, JSValue.NO_ARGS);
         }
         return ObjectPrototype.toString(context, thisArg, args);
     }

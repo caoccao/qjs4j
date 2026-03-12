@@ -50,22 +50,22 @@ public final class FunctionConstructor {
      * - new Function('return 42')
      */
     public static JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
-        return callWithWrapper(context, args, "(function anonymous(", "\n) {\n", "\n})", "<Function>",
+        return callWithWrapper(context, args, "(function(", "function anonymous(", "\n) {\n", "\n})", "<Function>",
                 "Failed to create function: ", JSFunction.NAME);
     }
 
     public static JSValue callAsync(JSContext context, JSValue thisArg, JSValue[] args) {
-        return callWithWrapper(context, args, "(async function anonymous(", "\n) {\n", "\n})",
+        return callWithWrapper(context, args, "(async function(", "async function anonymous(", "\n) {\n", "\n})",
                 "<AsyncFunction>", "Failed to create async function: ", "AsyncFunction");
     }
 
     public static JSValue callAsyncGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
-        return callWithWrapper(context, args, "(async function* anonymous(", "\n) {\n", "\n})",
+        return callWithWrapper(context, args, "(async function*(", "async function* anonymous(", "\n) {\n", "\n})",
                 "<AsyncGeneratorFunction>", "Failed to create async generator function: ", "AsyncGeneratorFunction");
     }
 
     public static JSValue callGenerator(JSContext context, JSValue thisArg, JSValue[] args) {
-        return callWithWrapper(context, args, "(function* anonymous(", "\n) {\n", "\n})",
+        return callWithWrapper(context, args, "(function*(", "function* anonymous(", "\n) {\n", "\n})",
                 "<GeneratorFunction>", "Failed to create generator function: ", "GeneratorFunction");
     }
 
@@ -73,6 +73,7 @@ public final class FunctionConstructor {
             JSContext context,
             JSValue[] args,
             String sourcePrefix,
+            String toStringSourcePrefix,
             String parameterSuffix,
             String bodySuffix,
             String filename,
@@ -107,15 +108,36 @@ public final class FunctionConstructor {
         }
 
         // Build the function source code
+        String paramsSource = String.join(",", paramNames);
+
         StringBuilder functionSource = new StringBuilder(sourcePrefix);
-        if (!paramNames.isEmpty()) {
-            functionSource.append(String.join(",", paramNames));
+        if (!paramsSource.isEmpty()) {
+            functionSource.append(paramsSource);
         }
         functionSource.append(parameterSuffix);
         functionSource.append(body);
         functionSource.append(bodySuffix);
 
+        StringBuilder toStringSource = new StringBuilder(toStringSourcePrefix);
+        if (!paramsSource.isEmpty()) {
+            toStringSource.append(paramsSource);
+        }
+        toStringSource.append(parameterSuffix);
+        toStringSource.append(body);
+        toStringSource.append("\n}");
+
+        StringBuilder parameterValidationSource = new StringBuilder(toStringSourcePrefix);
+        if (!paramsSource.isEmpty()) {
+            parameterValidationSource.append(paramsSource);
+        }
+        parameterValidationSource.append(parameterSuffix);
+        parameterValidationSource.append("\n}");
+
         try {
+            // Validate parameter list in isolation so comment/string bridging from body
+            // cannot make malformed parameters parse successfully.
+            new Compiler(parameterValidationSource.toString(), filename).setContext(context).parse(false);
+
             // Compile the function
             JSBytecodeFunction func = new Compiler(functionSource.toString(), filename).setContext(context).compile(false).function();
 
@@ -125,6 +147,14 @@ public final class FunctionConstructor {
             // Execute the compiled code to get the function object
             JSValue result = context.getVirtualMachine().execute(func, context.getGlobalObject(), JSValue.NO_ARGS);
             if (result instanceof JSObject resultObject) {
+                if (resultObject instanceof JSBytecodeFunction bytecodeFunction) {
+                    bytecodeFunction.setSourceCode(toStringSource.toString());
+                }
+                if (resultObject instanceof JSFunction) {
+                    resultObject.defineProperty(
+                            PropertyKey.NAME,
+                            PropertyDescriptor.dataDescriptor(new JSString("anonymous"), PropertyDescriptor.DataState.Configurable));
+                }
                 JSValue constructorNewTarget = context.getNativeConstructorNewTarget();
                 if (constructorNewTarget instanceof JSObject newTargetObject) {
                     JSObject resolvedPrototype = context.getPrototypeFromConstructor(

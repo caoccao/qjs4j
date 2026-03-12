@@ -89,7 +89,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
         // Calculate length if not specified
         if (length < 0) {
             // Track resizable array buffer length when no explicit length given
-            boolean resizable = buffer instanceof JSArrayBuffer ab && ab.isResizable();
+            boolean resizable = (buffer instanceof JSArrayBuffer jsArrayBuffer && jsArrayBuffer.isResizable())
+                    || (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer && jsSharedArrayBuffer.isGrowable());
             this.trackRab = resizable;
             int remainingBytes = buffer.getByteLength() - byteOffset;
             if (!resizable && remainingBytes % bytesPerElement != 0) {
@@ -643,6 +644,17 @@ public sealed abstract class JSTypedArray extends JSObject permits
     @Override
     public PropertyKey[] ownPropertyKeys() {
         return getOwnPropertyKeys().toArray(new PropertyKey[0]);
+    }
+
+    @Override
+    public boolean preventExtensionsWithResult() {
+        if (buffer instanceof JSArrayBuffer arrayBuffer && arrayBuffer.isResizable()) {
+            return false;
+        }
+        if (buffer instanceof JSSharedArrayBuffer sharedArrayBuffer && sharedArrayBuffer.isGrowable() && trackRab) {
+            return false;
+        }
+        return super.preventExtensionsWithResult();
     }
 
     @Override

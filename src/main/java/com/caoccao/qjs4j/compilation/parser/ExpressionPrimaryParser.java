@@ -886,6 +886,18 @@ final class ExpressionPrimaryParser {
     }
 
     Expression parseUnaryExpression() {
+        if (parserContext.match(TokenType.ASYNC)
+                && parserContext.nextToken.type() == TokenType.FUNCTION
+                && parserContext.nextToken.line() == parserContext.currentToken.line()) {
+            if (parserContext.currentToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            SourceLocation asyncLocation = parserContext.getLocation();
+            parserContext.advance();
+            Expression asyncFunctionExpression = delegates.functions.parseFunctionExpression(true, asyncLocation);
+            return expressions.parsePostPrimaryExpression(asyncFunctionExpression, asyncLocation);
+        }
+
         if (parserContext.match(TokenType.AWAIT)) {
             if (parserContext.currentToken.escaped() && parserContext.isAwaitExpressionAllowed()) {
                 throw new JSSyntaxErrorException("Keyword must not contain escaped characters");

@@ -28,7 +28,7 @@ import java.util.List;
  */
 public final class JSDisposableStack extends JSObject {
     public static final String NAME = "DisposableStack";
-    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal.";
+    private static final String SUPPRESSED_ERROR_MESSAGE = "An error was suppressed during disposal";
     private final List<DisposeRecord> disposeRecords;
     private boolean disposed;
 
@@ -69,7 +69,17 @@ public final class JSDisposableStack extends JSObject {
     }
 
     public JSValue dispose(JSContext context) {
+        JSValue initialError = null;
+        if (context.hasPendingException()) {
+            initialError = context.getPendingException();
+            context.clearPendingException();
+        }
+
         if (disposed) {
+            if (initialError != null) {
+                context.setPendingException(initialError);
+                return initialError;
+            }
             return JSUndefined.INSTANCE;
         }
         disposed = true;
@@ -86,9 +96,18 @@ public final class JSDisposableStack extends JSObject {
         }
         disposeRecords.clear();
 
-        if (disposalError != null) {
-            context.setPendingException(disposalError);
-            return disposalError;
+        JSValue finalError = disposalError;
+        if (initialError != null) {
+            if (finalError == null) {
+                finalError = initialError;
+            } else {
+                finalError = composeSuppressedError(context, finalError, initialError);
+            }
+        }
+
+        if (finalError != null) {
+            context.setPendingException(finalError);
+            return finalError;
         }
         return JSUndefined.INSTANCE;
     }
@@ -108,6 +127,9 @@ public final class JSDisposableStack extends JSObject {
                 JSValue pending = context.getPendingException();
                 context.clearPendingException();
                 return pending;
+            }
+            if (e.getJsValue() != null) {
+                return e.getJsValue();
             }
             if (e.getJsError() != null) {
                 return e.getJsError();

@@ -45,6 +45,7 @@ import java.util.regex.Pattern;
  * from the others (separate globals, separate module namespaces).
  */
 public final class JSContext implements AutoCloseable {
+    private static final ThreadLocal<JSContext> CURRENT_EXECUTION_CONTEXT = new ThreadLocal<>();
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
@@ -161,6 +162,24 @@ public final class JSContext implements AutoCloseable {
 
         this.currentThis = jsGlobalObject.getGlobalObject();
         initializeGlobalObject();
+    }
+
+    public static JSContext getCurrentExecutionContext() {
+        return CURRENT_EXECUTION_CONTEXT.get();
+    }
+
+    public static void popCurrentExecutionContext(JSContext previousContext) {
+        if (previousContext == null) {
+            CURRENT_EXECUTION_CONTEXT.remove();
+        } else {
+            CURRENT_EXECUTION_CONTEXT.set(previousContext);
+        }
+    }
+
+    public static JSContext pushCurrentExecutionContext(JSContext context) {
+        JSContext previousContext = CURRENT_EXECUTION_CONTEXT.get();
+        CURRENT_EXECUTION_CONTEXT.set(context);
+        return previousContext;
     }
 
     private void appendDynamicImportDefaultExportNameFixup(
@@ -2976,6 +2995,10 @@ public final class JSContext implements AutoCloseable {
             }
         }
         return false;
+    }
+
+    public boolean hasEvalOverlayFrames() {
+        return !evalOverlayFrames.isEmpty();
     }
 
     private boolean hasEvaluatingAsyncDependency(JSDynamicImportModule moduleRecord) {

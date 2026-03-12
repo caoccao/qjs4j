@@ -208,6 +208,11 @@ final class ExpressionAssignmentCompiler {
                 }
             }
             owner.compileExpression(assignExpr.getRight());
+            if (operator == AssignmentOperator.ASSIGN
+                    && assignExpr.isLhsIdentifierRef()
+                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
+            }
             if (operator != AssignmentOperator.ASSIGN) {
                 switch (operator) {
                     case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
@@ -273,6 +278,7 @@ final class ExpressionAssignmentCompiler {
 
         // Pass inferred name to anonymous class expressions for NamedEvaluation
         if (operator == AssignmentOperator.ASSIGN
+                && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight() instanceof ClassExpression classExpr
                 && classExpr.getId() == null) {
             compilerContext.inferredClassName = name;

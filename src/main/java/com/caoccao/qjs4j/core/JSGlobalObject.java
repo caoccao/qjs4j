@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.JSErrorType;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.vm.StackFrame;
+import com.caoccao.qjs4j.vm.VarRef;
 
 import java.util.*;
 import java.util.stream.Stream;
@@ -691,7 +692,26 @@ public final class JSGlobalObject {
                 (childContext, thisObj, args) -> {
                     if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
                         if (!bytecodeFunc.isStrict() && bytecodeFunc.isConstructor() && args.length == 0) {
-                            return JSUndefined.INSTANCE;
+                            StackFrame frame = childContext.getVirtualMachine().getCurrentFrame();
+                            while (frame != null && frame.getFunction() != bytecodeFunc) {
+                                frame = frame.getCaller();
+                            }
+                            if (frame == null || frame.getCaller() == null) {
+                                return JSNull.INSTANCE;
+                            }
+                            StackFrame callerFrame = frame.getCaller();
+                            if (callerFrame.getCaller() == null) {
+                                return JSNull.INSTANCE;
+                            }
+                            JSFunction callerFunction = callerFrame.getFunction();
+                            if (callerFunction instanceof JSBytecodeFunction callerBytecodeFunction
+                                    && !callerBytecodeFunction.isStrict()
+                                    && !callerBytecodeFunction.isArrow()
+                                    && !callerBytecodeFunction.isAsync()
+                                    && !callerBytecodeFunction.isGenerator()) {
+                                return callerBytecodeFunction;
+                            }
+                            return JSNull.INSTANCE;
                         }
                     }
                     return childContext.throwTypeError(
@@ -2511,6 +2531,7 @@ public final class JSGlobalObject {
                     && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict();
             String[] localVarNames = null;
             Set<String> localVarNameSet = null;
+            Map<String, Integer> capturedVarOverlaySlots = null;
             Map<String, JSValue> savedGlobals = null;
             Set<String> absentKeys = null;
             Set<String> touchedOverlayKeys = null;
@@ -2548,6 +2569,7 @@ public final class JSGlobalObject {
                     && callerBytecodeFunction.getBytecode().getLocalVarNames() != null) {
                 localVarNames = callerBytecodeFunction.getBytecode().getLocalVarNames();
                 localVarNameSet = new HashSet<>();
+                capturedVarOverlaySlots = new LinkedHashMap<>();
                 savedGlobals = new HashMap<>();
                 absentKeys = new HashSet<>();
                 touchedOverlayKeys = new HashSet<>();
@@ -2574,6 +2596,72 @@ public final class JSGlobalObject {
                         global.defineProperty(PropertyKey.fromString(name), fnDesc);
                     }
                 }
+                StackFrame lexicalFrame = callerFrame.getCaller();
+                while (lexicalFrame != null && lexicalFrame.getFunction() instanceof JSBytecodeFunction lexicalBytecodeFunction) {
+                    String[] lexicalLocalVarNames = lexicalBytecodeFunction.getBytecode().getLocalVarNames();
+                    JSValue[] lexicalLocals = lexicalFrame.getLocals();
+                    if (lexicalLocalVarNames != null && lexicalLocals != null) {
+                        for (int localIndex = 0;
+                             localIndex < lexicalLocalVarNames.length && localIndex < lexicalLocals.length;
+                             localIndex++) {
+                            String localName = lexicalLocalVarNames[localIndex];
+                            if (localName == null || localName.startsWith("$")) {
+                                continue;
+                            }
+                            if (localVarNameSet.contains(localName)
+                                    || touchedOverlayKeys.contains(localName)) {
+                                continue;
+                            }
+                            if (realmContext.hasEvalOverlayBinding(localName)) {
+                                continue;
+                            }
+                            JSValue lexicalValue = lexicalLocals[localIndex];
+                            if (lexicalValue instanceof JSSymbol symbolValue
+                                    && "UninitializedMarker".equals(symbolValue.getDescription())) {
+                                continue;
+                            }
+                            overlayBinding(
+                                    global,
+                                    localName,
+                                    lexicalValue,
+                                    savedGlobals,
+                                    absentKeys,
+                                    touchedOverlayKeys);
+                        }
+                    }
+                    lexicalFrame = lexicalFrame.getCaller();
+                }
+                VarRef[] callerVarRefs = callerBytecodeFunction.getVarRefs();
+                if (callerVarRefs != null) {
+                    int selfCaptureIndex = callerBytecodeFunction.getSelfCaptureIndex();
+                    for (int captureSlot = 0; captureSlot < callerVarRefs.length; captureSlot++) {
+                        String capturedVarName = callerBytecodeFunction.getCapturedVarName(captureSlot);
+                        if (capturedVarName == null || capturedVarName.startsWith("$")) {
+                            continue;
+                        }
+                        if (localVarNameSet.contains(capturedVarName)) {
+                            continue;
+                        }
+                        JSValue capturedValue = callerFrame.getVarRef(captureSlot);
+                        overlayBinding(
+                                global,
+                                capturedVarName,
+                                capturedValue,
+                                savedGlobals,
+                                absentKeys,
+                                touchedOverlayKeys);
+                        capturedVarOverlaySlots.put(capturedVarName, captureSlot);
+                        if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
+                            PropertyDescriptor capturedFunctionNameDescriptor = new PropertyDescriptor();
+                            capturedFunctionNameDescriptor.setValue(
+                                    capturedValue != null ? capturedValue : JSUndefined.INSTANCE);
+                            capturedFunctionNameDescriptor.setWritable(false);
+                            capturedFunctionNameDescriptor.setEnumerable(true);
+                            capturedFunctionNameDescriptor.setConfigurable(true);
+                            global.defineProperty(PropertyKey.fromString(capturedVarName), capturedFunctionNameDescriptor);
+                        }
+                    }
+                }
                 Map<String, JSValue> dynamicVarBindings = callerFrame.getDynamicVarBindings();
                 if (dynamicVarBindings != null) {
                     for (Map.Entry<String, JSValue> entry : dynamicVarBindings.entrySet()) {
@@ -2581,9 +2669,10 @@ public final class JSGlobalObject {
                     }
                 }
                 List<WithObjectCandidate> withObjectCandidates = new ArrayList<>();
-                for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
+                JSValue[] callerLocals = callerFrame.getLocals();
+                for (int i = 0; i < localVarNames.length && i < callerLocals.length; i++) {
                     String name = localVarNames[i];
-                    JSValue localValue = locals[i];
+                    JSValue localValue = callerLocals[i];
                     if (name == null || localValue == null || localValue == JSUndefined.INSTANCE) {
                         continue;
                     }
@@ -2737,9 +2826,16 @@ public final class JSGlobalObject {
                             continue;
                         }
                         PropertyKey declarationKey = PropertyKey.fromString(declarationName);
-                        JSValue initialValue = global.has(declarationKey)
-                                ? global.get(declarationKey)
-                                : JSUndefined.INSTANCE;
+                        JSValue initialValue;
+                        if (absentKeys.contains(declarationName)) {
+                            // Outer lexical overlays should not initialize eval-introduced var bindings.
+                            // Var declarations created by eval start as undefined in the caller var environment.
+                            initialValue = JSUndefined.INSTANCE;
+                        } else {
+                            initialValue = global.has(declarationKey)
+                                    ? global.get(declarationKey)
+                                    : JSUndefined.INSTANCE;
+                        }
                         overlayBinding(global, declarationName, initialValue, savedGlobals, absentKeys, touchedOverlayKeys);
                     }
                 }
@@ -2821,6 +2917,11 @@ public final class JSGlobalObject {
                         if (name.startsWith("$")) {
                             continue;
                         }
+                        if (evalCodeStrict
+                                && evalVarDeclarations != null
+                                && evalVarDeclarations.contains(name)) {
+                            continue;
+                        }
                         // Skip function name bindings — they are immutable and
                         // the non-writable overlay property prevented modification.
                         if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
@@ -2829,6 +2930,26 @@ public final class JSGlobalObject {
                         PropertyKey key = PropertyKey.fromString(name);
                         if (global.has(key)) {
                             locals[i] = global.get(key);
+                        }
+                    }
+                }
+                if (capturedVarOverlaySlots != null
+                        && callerBytecodeFunction != null) {
+                    int selfCaptureIndex = callerBytecodeFunction.getSelfCaptureIndex();
+                    for (Map.Entry<String, Integer> entry : capturedVarOverlaySlots.entrySet()) {
+                        String name = entry.getKey();
+                        int captureSlot = entry.getValue();
+                        if (evalCodeStrict
+                                && evalVarDeclarations != null
+                                && evalVarDeclarations.contains(name)) {
+                            continue;
+                        }
+                        if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
+                            continue;
+                        }
+                        PropertyKey key = PropertyKey.fromString(name);
+                        if (global.has(key)) {
+                            callerFrame.setVarRef(captureSlot, global.get(key));
                         }
                     }
                 }

@@ -784,18 +784,13 @@ public final class JSArray extends JSObject {
                 set(index, value);
             }
         } else if (key.isString() && "length".equals(key.asString())) {
-            // Per ES spec ArraySetLength / QuickJS set_array_length:
-            // Coerce value BEFORE the read-only test (coercion can change writable flag)
-            Long newLength = toArrayLengthForLengthProperty(this.context, value);
-            if (newLength == null) {
-                return; // coercion error (pending exception)
+            // Route through ArraySetLength so internal `length` and element truncation
+            // stay in sync with the observable length data property.
+            boolean result = setWithResult(key, value, this);
+            if (!result && !this.context.hasPendingException() && this.context.isStrictMode()) {
+                this.context.throwTypeError(
+                        "Cannot assign to read only property 'length' of object '[object Array]'");
             }
-            if (!isLengthWritable()) {
-                // Delegate to JSObject.set which will handle the non-writable error
-                super.set(key, JSNumber.of(newLength));
-                return;
-            }
-            setLength(newLength);
         } else {
             // Otherwise, use the shape-based storage from JSObject
             super.set(key, value);
@@ -854,17 +849,21 @@ public final class JSArray extends JSObject {
         if (receiver != this) {
             return super.setWithResult(key, value, receiver);
         }
+        // [[Set]] semantics differ from [[DefineOwnProperty]] for non-writable data properties:
+        // assignment to array.length must fail even when assigning the current value.
+        PropertyDescriptor oldLengthDescriptor = getOwnPropertyDescriptor(PropertyKey.LENGTH);
+        if (oldLengthDescriptor != null && !oldLengthDescriptor.isWritable()) {
+            return false;
+        }
         // Per ES spec ArraySetLength / QuickJS set_array_length:
-        // Coerce value BEFORE the read-only test
+        // Coerce value BEFORE descriptor updates.
         Long newLength = toArrayLengthForLengthProperty(this.context, value);
         if (newLength == null) {
             return false; // coercion error (pending exception)
         }
-        if (!isLengthWritable()) {
-            return false;
-        }
-        setLength(newLength);
-        return true;
+        PropertyDescriptor lengthDescriptor = new PropertyDescriptor();
+        lengthDescriptor.setValue(JSNumber.of(newLength));
+        return defineProperty(PropertyKey.LENGTH, lengthDescriptor);
     }
 
     /**

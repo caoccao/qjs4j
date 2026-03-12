@@ -97,6 +97,73 @@ final class FunctionClassCompiler {
         return false;
     }
 
+    private static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
+        String candidateName = "__auto_accessor_" + index;
+        while (existingNames.contains(candidateName)) {
+            index++;
+            candidateName = "__auto_accessor_" + index;
+        }
+        return candidateName;
+    }
+
+    private static MethodDefinition createAutoAccessorMethod(
+            PropertyDefinition field,
+            String methodKind,
+            String backingPrivateName) {
+        SourceLocation location = field.getLocation();
+        Identifier thisIdentifier = new Identifier("this", location);
+        PrivateIdentifier backingPrivateIdentifier = new PrivateIdentifier(backingPrivateName, location);
+        MemberExpression backingMemberExpression = new MemberExpression(
+                thisIdentifier,
+                backingPrivateIdentifier,
+                false,
+                false,
+                location);
+
+        FunctionExpression methodFunctionExpression;
+        if (JSKeyword.GET.equals(methodKind)) {
+            BlockStatement body = new BlockStatement(
+                    List.of(new ReturnStatement(backingMemberExpression, location)),
+                    location);
+            methodFunctionExpression = new FunctionExpression(
+                    null,
+                    List.of(),
+                    null,
+                    null,
+                    body,
+                    false,
+                    false,
+                    location);
+        } else {
+            Identifier valueIdentifier = new Identifier("value", location);
+            AssignmentExpression assignmentExpression = new AssignmentExpression(
+                    backingMemberExpression,
+                    AssignmentOperator.ASSIGN,
+                    valueIdentifier,
+                    location);
+            BlockStatement body = new BlockStatement(
+                    List.of(new ExpressionStatement(assignmentExpression, location)),
+                    location);
+            methodFunctionExpression = new FunctionExpression(
+                    null,
+                    List.of(valueIdentifier),
+                    null,
+                    null,
+                    body,
+                    false,
+                    false,
+                    location);
+        }
+
+        return new MethodDefinition(
+                field.getKey(),
+                methodFunctionExpression,
+                methodKind,
+                field.isComputed(),
+                field.isStatic(),
+                false);
+    }
+
     private static boolean isAnonymousFunctionDefinition(Expression expression) {
         if (expression instanceof ArrowFunctionExpression) {
             return true;
@@ -411,6 +478,7 @@ final class FunctionClassCompiler {
         List<ClassElement> staticInitializers = new ArrayList<>();
         List<PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
         IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
+        IdentityHashMap<PropertyDefinition, String> autoAccessorBackingNames = new IdentityHashMap<>();
         MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
@@ -442,6 +510,16 @@ final class FunctionClassCompiler {
                     registerPrivateName(privateNameKinds, privateId.getName(), "field");
                 }
 
+                if (field.isAutoAccessor() && !field.isPrivate()) {
+                    String backingName = createAutoAccessorBackingName(
+                            autoAccessorBackingNames.size() + 1,
+                            privateNameKinds.keySet());
+                    autoAccessorBackingNames.put(field, backingName);
+                    registerPrivateName(privateNameKinds, backingName, "field");
+                    methods.add(createAutoAccessorMethod(field, JSKeyword.GET, backingName));
+                    methods.add(createAutoAccessorMethod(field, JSKeyword.SET, backingName));
+                }
+
                 if (field.isComputed() && !field.isPrivate()) {
                     computedFieldsInDefinitionOrder.add(field);
                     computedFieldSymbols.put(
@@ -462,6 +540,13 @@ final class FunctionClassCompiler {
         }
         Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
         privateSymbols.putAll(ownPrivateSymbols);
+        IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols = new IdentityHashMap<>();
+        for (Map.Entry<PropertyDefinition, String> entry : autoAccessorBackingNames.entrySet()) {
+            JSSymbol backingSymbol = privateSymbols.get(entry.getValue());
+            if (backingSymbol != null) {
+                autoAccessorBackingSymbols.put(entry.getKey(), backingSymbol);
+            }
+        }
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
         List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
@@ -477,6 +562,7 @@ final class FunctionClassCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    autoAccessorBackingSymbols,
                     privateInstanceMethodFunctions,
                     true
             );
@@ -488,6 +574,7 @@ final class FunctionClassCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    autoAccessorBackingSymbols,
                     privateInstanceMethodFunctions
             );
         }
@@ -542,6 +629,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        autoAccessorBackingSymbols,
                         List.of(),
                         false
                 );
@@ -565,6 +653,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        autoAccessorBackingSymbols,
                         List.of(),
                         false
                 );
@@ -593,7 +682,7 @@ final class FunctionClassCompiler {
             JSBytecodeFunction staticInitializerFunc;
             if (staticInitializer instanceof PropertyDefinition staticField) {
                 staticInitializerFunc = compileStaticFieldInitializer(
-                        staticField, computedFieldSymbols, privateSymbols, className);
+                        staticField, computedFieldSymbols, privateSymbols, autoAccessorBackingSymbols, className);
             } else if (staticInitializer instanceof StaticBlock staticBlock) {
                 staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
             } else {
@@ -708,6 +797,7 @@ final class FunctionClassCompiler {
         List<ClassElement> staticInitializers = new ArrayList<>();
         List<PropertyDefinition> computedFieldsInDefinitionOrder = new ArrayList<>();
         IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols = new IdentityHashMap<>();
+        IdentityHashMap<PropertyDefinition, String> autoAccessorBackingNames = new IdentityHashMap<>();
         MethodDefinition constructor = null;
         LinkedHashMap<String, String> privateNameKinds = new LinkedHashMap<>();
 
@@ -739,6 +829,16 @@ final class FunctionClassCompiler {
                     registerPrivateName(privateNameKinds, privateId.getName(), "field");
                 }
 
+                if (field.isAutoAccessor() && !field.isPrivate()) {
+                    String backingName = createAutoAccessorBackingName(
+                            autoAccessorBackingNames.size() + 1,
+                            privateNameKinds.keySet());
+                    autoAccessorBackingNames.put(field, backingName);
+                    registerPrivateName(privateNameKinds, backingName, "field");
+                    methods.add(createAutoAccessorMethod(field, JSKeyword.GET, backingName));
+                    methods.add(createAutoAccessorMethod(field, JSKeyword.SET, backingName));
+                }
+
                 if (field.isComputed() && !field.isPrivate()) {
                     computedFieldsInDefinitionOrder.add(field);
                     computedFieldSymbols.put(
@@ -759,6 +859,13 @@ final class FunctionClassCompiler {
         }
         Map<String, JSSymbol> privateSymbols = new LinkedHashMap<>(compilerContext.privateSymbols);
         privateSymbols.putAll(ownPrivateSymbols);
+        IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols = new IdentityHashMap<>();
+        for (Map.Entry<PropertyDefinition, String> entry : autoAccessorBackingNames.entrySet()) {
+            JSSymbol backingSymbol = privateSymbols.get(entry.getValue());
+            if (backingSymbol != null) {
+                autoAccessorBackingSymbols.put(entry.getKey(), backingSymbol);
+            }
+        }
         List<PrivateMethodEntry> privateInstanceMethodFunctions = compilePrivateMethodFunctions(
                 privateInstanceMethods, privateSymbols, computedFieldSymbols);
         List<PrivateMethodEntry> privateStaticMethodFunctions = compilePrivateMethodFunctions(
@@ -774,6 +881,7 @@ final class FunctionClassCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    autoAccessorBackingSymbols,
                     privateInstanceMethodFunctions,
                     true
             );
@@ -784,6 +892,7 @@ final class FunctionClassCompiler {
                     instanceFields,
                     privateSymbols,
                     computedFieldSymbols,
+                    autoAccessorBackingSymbols,
                     privateInstanceMethodFunctions
             );
         }
@@ -831,6 +940,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        autoAccessorBackingSymbols,
                         List.of(),
                         false
                 );
@@ -850,6 +960,7 @@ final class FunctionClassCompiler {
                         List.of(),
                         privateSymbols,
                         computedFieldSymbols,
+                        autoAccessorBackingSymbols,
                         List.of(),
                         false
                 );
@@ -876,7 +987,7 @@ final class FunctionClassCompiler {
             JSBytecodeFunction staticInitializerFunc;
             if (staticInitializer instanceof PropertyDefinition staticField) {
                 staticInitializerFunc = compileStaticFieldInitializer(
-                        staticField, computedFieldSymbols, privateSymbols, className);
+                        staticField, computedFieldSymbols, privateSymbols, autoAccessorBackingSymbols, className);
             } else if (staticInitializer instanceof StaticBlock staticBlock) {
                 staticInitializerFunc = compileStaticBlock(staticBlock, className, privateSymbols);
             } else {
@@ -939,8 +1050,13 @@ final class FunctionClassCompiler {
      */
     void compileFieldInitialization(List<PropertyDefinition> fields,
                                     Map<String, JSSymbol> privateSymbols,
-                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
-        fieldCompiler.compileFieldInitialization(fields, privateSymbols, computedFieldSymbols);
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+                                    IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
+        fieldCompiler.compileFieldInitialization(
+                fields,
+                privateSymbols,
+                computedFieldSymbols,
+                autoAccessorBackingSymbols);
     }
 
     void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
@@ -1382,6 +1498,7 @@ final class FunctionClassCompiler {
             List<PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions,
             boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
@@ -1444,7 +1561,11 @@ final class FunctionClassCompiler {
                         methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
                     }
                     if (!instanceFields.isEmpty()) {
-                        methodDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+                        methodDelegates.functions.compileFieldInitialization(
+                                instanceFields,
+                                privateSymbols,
+                                computedFieldSymbols,
+                                autoAccessorBackingSymbols);
                     }
                 };
             } else {
@@ -1452,7 +1573,11 @@ final class FunctionClassCompiler {
                     methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
                 }
                 if (!instanceFields.isEmpty()) {
-                    methodDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+                    methodDelegates.functions.compileFieldInitialization(
+                            instanceFields,
+                            privateSymbols,
+                            computedFieldSymbols,
+                            autoAccessorBackingSymbols);
                 }
             }
         }
@@ -1534,6 +1659,7 @@ final class FunctionClassCompiler {
                     List.of(),
                     privateSymbols,
                     computedFieldSymbols,
+                    new IdentityHashMap<>(),
                     List.of(),
                     false
             );
@@ -1638,6 +1764,7 @@ final class FunctionClassCompiler {
             PropertyDefinition field,
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
             Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols,
             String className) {
         // Pass parent captureResolver so static field initializers can capture outer scope variables
         BytecodeCompiler initializerCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
@@ -1673,6 +1800,24 @@ final class FunctionClassCompiler {
             initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             initCtx.emitter.emitOpcode(Opcode.SWAP);
             // Set function name from private symbol (e.g., "#field") for anonymous functions
+            if (field.getValue() != null && isAnonymousFunctionDefinition(field.getValue())) {
+                initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
+            }
+            initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
+        } else if (field.isAutoAccessor()) {
+            JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
+            if (backingSymbol == null) {
+                throw new JSCompilerException("Auto-accessor static backing symbol not found");
+            }
+
+            if (field.getValue() != null) {
+                initDelegates.expressions.compileExpression(field.getValue());
+            } else {
+                initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
+            }
+
+            initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
+            initCtx.emitter.emitOpcode(Opcode.SWAP);
             if (field.getValue() != null && isAnonymousFunctionDefinition(field.getValue())) {
                 initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
             }
@@ -1739,6 +1884,7 @@ final class FunctionClassCompiler {
             List<PropertyDefinition> instanceFields,
             Map<String, JSSymbol> privateSymbols,
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols,
             List<PrivateMethodEntry> privateInstanceMethodFunctions) {
         // Pass parent captureResolver so default constructors can capture outer scope variables
         BytecodeCompiler constructorCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
@@ -1765,7 +1911,11 @@ final class FunctionClassCompiler {
             ctorDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
         }
         if (!instanceFields.isEmpty()) {
-            ctorDelegates.functions.compileFieldInitialization(instanceFields, privateSymbols, computedFieldSymbols);
+            ctorDelegates.functions.compileFieldInitialization(
+                    instanceFields,
+                    privateSymbols,
+                    computedFieldSymbols,
+                    autoAccessorBackingSymbols);
         }
 
         ctorCtx.emitter.emitOpcode(hasSuper ? Opcode.PUSH_THIS : Opcode.UNDEFINED);

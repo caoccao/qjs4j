@@ -20,6 +20,7 @@ package com.caoccao.qjs4j.compilation.ast;
  * Represents a field in a class (public or private).
  */
 public final class PropertyDefinition extends ClassElement {
+    private final boolean autoAccessor;
     private final boolean computed;
     private final boolean isPrivate;
     private final boolean isStatic;
@@ -32,12 +33,23 @@ public final class PropertyDefinition extends ClassElement {
             boolean computed,
             boolean isStatic,
             boolean isPrivate) {
+        this(key, value, computed, isStatic, isPrivate, false);
+    }
+
+    public PropertyDefinition(
+            Expression key,
+            Expression value,
+            boolean computed,
+            boolean isStatic,
+            boolean isPrivate,
+            boolean autoAccessor) {
         super(key != null ? key.getLocation() : (value != null ? value.getLocation() : new SourceLocation(0, 0, 0, 0)));
         this.key = key;
         this.value = value;
         this.computed = computed;
         this.isStatic = isStatic;
         this.isPrivate = isPrivate;
+        this.autoAccessor = autoAccessor;
     }
 
     @Override
@@ -68,6 +80,10 @@ public final class PropertyDefinition extends ClassElement {
 
     public Expression getValue() {
         return value;
+    }
+
+    public boolean isAutoAccessor() {
+        return autoAccessor;
     }
 
     public boolean isComputed() {

@@ -307,20 +307,18 @@ public non-sealed class JSObject implements JSValue {
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             int sparseIndex = (int) arrayIndex;
-            if (!sparseProperties.containsKey(sparseIndex)) {
-                // Property doesn't exist, deletion successful.
-                // Even non-extensible/sealed/frozen objects return true for absent properties.
+            if (sparseProperties.containsKey(sparseIndex)) {
+                if (sealed || frozen) {
+                    if (strictMode) {
+                        context.throwTypeError(
+                                "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
+                    }
+                    return false;
+                }
+                sparseProperties.remove(sparseIndex);
                 return true;
             }
-            if (sealed || frozen) {
-                if (strictMode) {
-                    context.throwTypeError(
-                            "Cannot delete property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(true));
-                }
-                return false;
-            }
-            sparseProperties.remove(sparseIndex);
-            return true;
+            // Not in sparse storage; continue checking shape-backed properties.
         }
 
         // Find property in shape and check if it exists
@@ -981,6 +979,15 @@ public non-sealed class JSObject implements JSValue {
      */
     public void preventExtensions() {
         extensible = false;
+    }
+
+    /**
+     * Attempt to prevent extensions and report success.
+     * Ordinary objects always succeed.
+     */
+    public boolean preventExtensionsWithResult() {
+        preventExtensions();
+        return true;
     }
 
     private void resetVisitedObjects() {

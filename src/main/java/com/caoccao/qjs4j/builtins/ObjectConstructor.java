@@ -393,28 +393,31 @@ public final class ObjectConstructor {
         }
 
         JSValue arg = args[0];
-        if (!(arg instanceof JSObject obj)) {
+        if (!(arg instanceof JSObject jsObject)) {
             return arg; // Primitives are returned as-is
         }
 
         // TypedArrays backed by resizable buffers cannot be frozen because their
         // elements could change due to buffer resizing, which violates frozen semantics.
-        if (obj instanceof JSTypedArray ta) {
-            IJSArrayBuffer buf = ta.getBuffer();
-            if (buf instanceof JSArrayBuffer ab && ab.isResizable()) {
+        if (jsObject instanceof JSTypedArray jsTypedArray) {
+            IJSArrayBuffer buffer = jsTypedArray.getBuffer();
+            if ((buffer instanceof JSArrayBuffer jsArrayBuffer && jsArrayBuffer.isResizable())
+                    || (buffer instanceof JSSharedArrayBuffer jsSharedArrayBuffer && jsSharedArrayBuffer.isGrowable())) {
                 return context.throwTypeError("Cannot freeze a TypedArray backed by a resizable buffer");
             }
         }
 
         // Step 3: Set the [[Extensible]] internal slot of O to false
-        obj.preventExtensions();
+        if (!jsObject.preventExtensionsWithResult()) {
+            return context.throwTypeError("Cannot freeze array buffer views with elements");
+        }
 
         // Step 5: Let keys be ? O.[[OwnPropertyKeys]]()
-        List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();
+        List<PropertyKey> propertyKeys = jsObject.getOwnPropertyKeys();
 
         // Step 7: For each element k of keys, freeze each property
         for (PropertyKey key : propertyKeys) {
-            PropertyDescriptor currentDesc = obj.getOwnPropertyDescriptor(key);
+            PropertyDescriptor currentDesc = jsObject.getOwnPropertyDescriptor(key);
             if (currentDesc == null) {
                 continue;
             }
@@ -432,7 +435,7 @@ public final class ObjectConstructor {
             }
 
             // DefinePropertyOrThrow(O, k, desc)
-            if (!obj.defineProperty(key, freezeDesc)) {
+            if (!jsObject.defineProperty(key, freezeDesc)) {
                 if (!context.hasPendingException()) {
                     context.throwTypeError("Cannot freeze property: " + key.toPropertyString());
                 }
@@ -441,7 +444,7 @@ public final class ObjectConstructor {
         }
 
         // Mark the object as frozen (sets frozen, sealed, and extensible flags)
-        obj.freeze();
+        jsObject.freeze();
 
         return arg;
     }
@@ -967,7 +970,19 @@ public final class ObjectConstructor {
         }
 
         // 3. Return SameValueNonNumber(x, y)
-        // For other types, use reference equality
+        if (x instanceof JSString xString && y instanceof JSString yString) {
+            return JSBoolean.valueOf(xString.value().equals(yString.value()));
+        }
+        if (x instanceof JSBoolean xBoolean && y instanceof JSBoolean yBoolean) {
+            return JSBoolean.valueOf(xBoolean.value() == yBoolean.value());
+        }
+        if (x instanceof JSBigInt xBigInt && y instanceof JSBigInt yBigInt) {
+            return JSBoolean.valueOf(xBigInt.value().equals(yBigInt.value()));
+        }
+        if (x instanceof JSUndefined || x instanceof JSNull) {
+            return JSBoolean.TRUE;
+        }
+        // Symbols and Objects use identity equality.
         return JSBoolean.valueOf(x == y);
     }
 
@@ -1091,7 +1106,15 @@ public final class ObjectConstructor {
             return arg;
         }
 
-        obj.preventExtensions();
+        if (!obj.preventExtensionsWithResult()) {
+            if (context.hasPendingException()) {
+                return context.getPendingException();
+            }
+            if (obj instanceof JSProxy) {
+                return context.throwTypeError("'preventExtensions' on proxy: trap returned falsish");
+            }
+            return context.throwTypeError("Cannot prevent extensions");
+        }
         return obj;
     }
 
@@ -1112,7 +1135,9 @@ public final class ObjectConstructor {
         }
 
         // Step 2: Set the [[Extensible]] internal slot of O to false
-        obj.preventExtensions();
+        if (!obj.preventExtensionsWithResult()) {
+            return context.throwTypeError("Cannot seal array buffer views with elements");
+        }
 
         // Step 4: Let keys be ? O.[[OwnPropertyKeys]]()
         List<PropertyKey> propertyKeys = obj.getOwnPropertyKeys();

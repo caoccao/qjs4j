@@ -24,6 +24,7 @@ import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.math.BigInteger;
 import java.util.*;
 
 /**
@@ -409,6 +410,9 @@ final class PatternCompiler {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSNumber.of(propertyIndex));
                 }
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            } else if (property.getKey() instanceof Literal literal
+                    && literal.getValue() instanceof BigInteger bigIntegerValue) {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
             } else {
                 delegates.expressions.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
@@ -440,6 +444,9 @@ final class PatternCompiler {
                             && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD,
                                 String.valueOf(((Number) literal.getValue()).longValue()));
+                    } else if (property.getKey() instanceof Literal literal
+                            && literal.getValue() instanceof BigInteger bigIntegerValue) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, bigIntegerValue.toString());
                     }
                     compilerContext.emitter.emitOpcode(Opcode.DROP); // drop excludeList
                 }
@@ -581,6 +588,11 @@ final class PatternCompiler {
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+                } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                        && literal.getValue() instanceof BigInteger bigIntegerValue) {
+                    Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
+                    maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
                 } else {
                     delegates.expressions.compileExpression(propertyKey);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
@@ -609,6 +621,10 @@ final class PatternCompiler {
                     } else if (!prop.isComputed() && propertyKey instanceof Literal literal
                             && (literal.getValue() instanceof Integer || literal.getValue() instanceof Long)) {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, String.valueOf(((Number) literal.getValue()).longValue()));
+                        compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
+                    } else if (!prop.isComputed() && propertyKey instanceof Literal literal
+                            && literal.getValue() instanceof BigInteger bigIntegerValue) {
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, bigIntegerValue.toString());
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop duplicate excludeList
                     } else {
                         // Computed property key: re-evaluate expression to get the key name

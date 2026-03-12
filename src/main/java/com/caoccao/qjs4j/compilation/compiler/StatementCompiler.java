@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSKeyword;
+import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -569,11 +570,6 @@ final class StatementCompiler {
     }
 
     void compileReturnStatement(ReturnStatement retStmt) {
-        if (compilerContext.finallySubroutineDepth > 0) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-        }
-
         // Tail call optimization: when the return argument has a call in tail position
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
@@ -637,6 +633,13 @@ final class StatementCompiler {
             int gosubPos = compilerContext.emitter.emitJump(Opcode.GOSUB);
             gosubPatches.add(gosubPos);
             // After RET returns here, drop the dummy value
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
+
+        if (compilerContext.finallySubroutineDepth > 0) {
+            // Return from a finally subroutine must discard the caller completion value
+            // and GOSUB return address after nested finally chains are processed.
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
@@ -863,9 +866,25 @@ final class StatementCompiler {
         int throwValueIndex = compilerContext.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 
+        int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
+        compilerContext.emitter.emitOpcode(Opcode.THROW);
+
+        compilerContext.emitter.patchJump(disposalCatchJump, compilerContext.emitter.currentOffset());
+
+        int disposalErrorIndex = compilerContext.currentScope().declareLocal("$disposal_error_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, disposalErrorIndex);
+
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "SuppressedError");
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, disposalErrorIndex);
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, throwValueIndex);
+        compilerContext.emitter.emitOpcodeConstant(
+                Opcode.PUSH_CONST,
+                new JSString("An error was suppressed during disposal"));
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 3);
         compilerContext.emitter.emitOpcode(Opcode.THROW);
     }
 

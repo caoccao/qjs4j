@@ -587,9 +587,12 @@ public final class DataViewPrototype {
             context.throwRangeError("Invalid byteOffset");
             return null;
         }
-        if (index > Integer.MAX_VALUE) {
+        if (index > NumberPrototype.MAX_SAFE_INTEGER) {
             context.throwRangeError("byteOffset out of range");
             return null;
+        }
+        if (index > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
         }
         return (int) index;
     }

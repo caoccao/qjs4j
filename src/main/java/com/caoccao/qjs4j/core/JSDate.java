@@ -22,6 +22,8 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Represents a JavaScript Date object.
@@ -45,6 +47,11 @@ public final class JSDate extends JSObject {
             DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'Z (z)", Locale.ENGLISH);
     private static final long MILLIS_PER_DAY = 86_400_000L;
     private static final int[] MONTH_DAYS = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    private static final Pattern NOTE_DATETIME_WITH_SPACE_PATTERN = Pattern.compile(
+            "^(?<year>(?:[+-]\\d{6}|\\d{4}))-(?<month>\\d{1,2})-(?<day>\\d{1,2})\\s+"
+                    + "(?<hour>\\d{1,2}):(?<minute>\\d{1,2})"
+                    + "(?::(?<second>\\d{1,2})(?:[\\.,](?<fraction>\\d{1,9}))?)?"
+                    + "(?:(?<z>Z)|(?<tzSign>[+-])(?<tzHour>\\d{2})(?::?(?<tzMinute>\\d{2}))?)?$");
     private static final DateTimeFormatter PARSE_TO_STRING_FORMATTER =
             DateTimeFormatter.ofPattern("EEE MMM dd yyyy HH:mm:ss 'GMT'XX", Locale.ENGLISH);
     private static final DateTimeFormatter PARSE_UTC_STRING_FORMATTER =
@@ -224,6 +231,11 @@ public final class JSDate extends JSObject {
         double isoResult = parseISODateString(str);
         if (!Double.isNaN(isoResult)) {
             return isoResult;
+        }
+
+        double noteDateTimeResult = parseNoteDateTimeWithSpace(str);
+        if (!Double.isNaN(noteDateTimeResult)) {
+            return noteDateTimeResult;
         }
 
         try {
@@ -416,11 +428,16 @@ public final class JSDate extends JSObject {
                     return Double.NaN;
                 }
                 pos = tzHourResult[1];
-                int tzMinutes = 0;
+                int tzMinutes;
                 if (pos < len && str.charAt(pos) == ':') {
                     pos++;
-                }
-                if (pos < len && Character.isDigit(str.charAt(pos))) {
+                    int[] tzMinResult = parseDigits(str, pos, 2, 2);
+                    if (tzMinResult == null) {
+                        return Double.NaN;
+                    }
+                    tzMinutes = tzMinResult[0];
+                    pos = tzMinResult[1];
+                } else {
                     int[] tzMinResult = parseDigits(str, pos, 2, 2);
                     if (tzMinResult == null) {
                         return Double.NaN;
@@ -457,6 +474,76 @@ public final class JSDate extends JSObject {
             dateFields[i] = fields[i];
         }
         return setDateFields(dateFields, isLocal) - (double) fields[8] * 60000;
+    }
+
+    private static double parseNoteDateTimeWithSpace(String str) {
+        Matcher matcher = NOTE_DATETIME_WITH_SPACE_PATTERN.matcher(str);
+        if (!matcher.matches()) {
+            return Double.NaN;
+        }
+
+        int year = Integer.parseInt(matcher.group("year"));
+        int month = Integer.parseInt(matcher.group("month"));
+        int day = Integer.parseInt(matcher.group("day"));
+        int hour = Integer.parseInt(matcher.group("hour"));
+        int minute = Integer.parseInt(matcher.group("minute"));
+        int second = 0;
+        int millisecond = 0;
+
+        String secondGroup = matcher.group("second");
+        if (secondGroup != null) {
+            second = Integer.parseInt(secondGroup);
+            String fractionGroup = matcher.group("fraction");
+            if (fractionGroup != null) {
+                if (fractionGroup.length() >= 3) {
+                    millisecond = Integer.parseInt(fractionGroup.substring(0, 3));
+                } else if (fractionGroup.length() == 2) {
+                    millisecond = Integer.parseInt(fractionGroup) * 10;
+                } else {
+                    millisecond = Integer.parseInt(fractionGroup) * 100;
+                }
+            }
+        }
+
+        if (month < 1 || month > 12 || day < 1 || day > 31) {
+            return Double.NaN;
+        }
+        if (hour > 24 || minute > 59 || second > 59) {
+            return Double.NaN;
+        }
+        if (hour == 24 && (minute != 0 || second != 0 || millisecond != 0)) {
+            return Double.NaN;
+        }
+
+        double[] fields = new double[7];
+        fields[0] = year;
+        fields[1] = month - 1;
+        fields[2] = day;
+        fields[3] = hour;
+        fields[4] = minute;
+        fields[5] = second;
+        fields[6] = millisecond;
+
+        if (matcher.group("z") != null) {
+            return setDateFields(fields, false);
+        }
+
+        String tzSign = matcher.group("tzSign");
+        if (tzSign != null) {
+            int timezoneHour = Integer.parseInt(matcher.group("tzHour"));
+            String timezoneMinuteGroup = matcher.group("tzMinute");
+            int timezoneMinute = timezoneMinuteGroup == null ? 0 : Integer.parseInt(timezoneMinuteGroup);
+            if (timezoneHour > 23 || timezoneMinute > 59) {
+                return Double.NaN;
+            }
+            int offsetMinutes = timezoneHour * 60 + timezoneMinute;
+            if ("-".equals(tzSign)) {
+                offsetMinutes = -offsetMinutes;
+            }
+            return setDateFields(fields, false) - (double) offsetMinutes * 60_000;
+        }
+
+        return setDateFields(fields, true);
     }
 
     public static double setDateFields(double[] fields, boolean isLocal) {

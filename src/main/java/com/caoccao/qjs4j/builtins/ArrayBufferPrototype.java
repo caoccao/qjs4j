@@ -264,7 +264,7 @@ public final class ArrayBufferPrototype {
         if (species instanceof JSUndefined || species instanceof JSNull) {
             return JSUndefined.INSTANCE;
         }
-        if (species instanceof JSFunction) {
+        if (JSTypeChecking.isConstructor(species)) {
             return species;
         }
         context.throwTypeError("Species is not a constructor");

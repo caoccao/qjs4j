@@ -59,7 +59,7 @@ public abstract sealed class JSFunction extends JSObject
     public abstract String getName();
 
     public JSContext getRealmContext() {
-        return homeContext;
+        return homeContext != null ? homeContext : getContext();
     }
 
     /**

@@ -41,6 +41,19 @@ final class EmitHelpers {
         this.delegates = delegates;
     }
 
+    private static boolean isAnonymousFunctionDefinition(Expression expression) {
+        if (expression instanceof ArrowFunctionExpression) {
+            return true;
+        }
+        if (expression instanceof FunctionExpression functionExpression) {
+            return functionExpression.getId() == null;
+        }
+        if (expression instanceof ClassExpression classExpression) {
+            return classExpression.getId() == null;
+        }
+        return false;
+    }
+
     void emitAbruptCompletionIteratorClose() {
         for (LoopContext loopContext : compilerContext.loopStack) {
             if (loopContext.hasIterator) {
@@ -248,6 +261,10 @@ final class EmitHelpers {
                 functionCompiler.context().emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
                 functionCompiler.delegates().expressions.compileExpression(defaultExpr);
+                if (params.get(i) instanceof Identifier parameterIdentifier
+                        && isAnonymousFunctionDefinition(defaultExpr)) {
+                    functionCompiler.context().emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
+                }
                 // DUP - duplicate for PUT_ARG
                 functionCompiler.context().emitter.emitOpcode(Opcode.DUP);
                 // PUT_ARG idx - store back into the argument slot
