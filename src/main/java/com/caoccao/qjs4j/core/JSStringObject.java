@@ -89,39 +89,11 @@ public final class JSStringObject extends JSObject {
         return jsObject;
     }
 
-    /**
-     * Parse a string as a valid non-negative integer index, ensuring the string round-trips.
-     * This rejects strings like "-0", "+1", "01" which Integer.parseInt would accept
-     * but are not canonical numeric index strings per ES spec.
-     */
-    private static int parseValidIndex(String str) {
-        if (str == null || str.isEmpty()) {
-            return -1;
-        }
-        try {
-            int index = Integer.parseInt(str);
-            if (index >= 0 && String.valueOf(index).equals(str)) {
-                return index;
-            }
-        } catch (NumberFormatException e) {
-            // Not a numeric string
-        }
-        return -1;
-    }
-
     @Override
     public boolean delete(PropertyKey key) {
         JSContext context = this.context;
-        boolean isCharacterIndex = false;
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            isCharacterIndex = index >= 0 && index < value.value().length();
-        } else if (key.isString()) {
-            int index = parseValidIndex(key.asString());
-            if (index >= 0 && index < value.value().length()) {
-                isCharacterIndex = true;
-            }
-        }
+        int index = key.toIndex();
+        boolean isCharacterIndex = index >= 0 && index < value.value().length();
         if (isCharacterIndex) {
             if (context.isStrictMode()) {
                 context.throwTypeError(
@@ -157,7 +129,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public JSValue get(String propertyName) {
-        int index = parseValidIndex(propertyName);
+        int index = PropertyKey.fromString(propertyName).toIndex();
         if (index >= 0 && index < value.value().length()) {
             return new JSString(String.valueOf(value.value().charAt(index)));
         }
@@ -193,7 +165,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        int charIndex = resolveCharacterIndex(key);
+        int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < value.value().length()) {
             JSValue charValue = new JSString(String.valueOf(value.value().charAt(charIndex)));
             return PropertyDescriptor.dataDescriptor(
@@ -238,24 +210,11 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
-        int charIndex = resolveCharacterIndex(key);
+        int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < value.value().length()) {
             return true;
         }
         return super.hasOwnProperty(key);
-    }
-
-    /**
-     * Resolve a PropertyKey to a character index for String exotic object semantics.
-     * Returns -1 if the key is not a valid character index.
-     */
-    private int resolveCharacterIndex(PropertyKey key) {
-        if (key.isIndex()) {
-            return key.asIndex();
-        } else if (key.isString()) {
-            return parseValidIndex(key.asString());
-        }
-        return -1;
     }
 
     /**
@@ -265,7 +224,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue val) {
-        int charIndex = resolveCharacterIndex(key);
+        int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < value.value().length()) {
             // Character indices are non-writable, non-configurable own properties
             this.context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString()
@@ -282,7 +241,7 @@ public final class JSStringObject extends JSObject {
      */
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value) {
-        int charIndex = resolveCharacterIndex(key);
+        int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < this.value.value().length()) {
             return false;
         }

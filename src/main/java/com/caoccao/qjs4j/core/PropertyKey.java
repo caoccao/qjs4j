@@ -246,6 +246,38 @@ public final class PropertyKey {
     }
 
     /**
+     * Convert this key to an integer index if possible.
+     * Returns -1 when this key does not represent a non-negative int index.
+     */
+    public int toIndex() {
+        if (value instanceof Integer i) {
+            return i;
+        }
+        if (!(value instanceof String propertyName)) {
+            return -1;
+        }
+        if (propertyName.isEmpty()) {
+            return -1;
+        }
+        if (propertyName.length() > 1 && propertyName.charAt(0) == '0') {
+            return -1;
+        }
+        int parsedValue = 0;
+        for (int characterIndex = 0; characterIndex < propertyName.length(); characterIndex++) {
+            char character = propertyName.charAt(characterIndex);
+            if (character < '0' || character > '9') {
+                return -1;
+            }
+            int digit = character - '0';
+            if (parsedValue > (Integer.MAX_VALUE - digit) / 10) {
+                return -1;
+            }
+            parsedValue = parsedValue * 10 + digit;
+        }
+        return parsedValue;
+    }
+
+    /**
      * Convert to a string representation.
      */
     public String toPropertyString() {

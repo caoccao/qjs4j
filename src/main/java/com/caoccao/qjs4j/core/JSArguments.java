@@ -179,7 +179,7 @@ public final class JSArguments extends JSObject {
      */
     @Override
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        int index = getArgumentIndex(key);
+        int index = key.toIndex();
         boolean isMapped = isMappedIndex(index, key);
 
         PropertyDescriptor descriptorForDefine = descriptor;
@@ -215,7 +215,7 @@ public final class JSArguments extends JSObject {
     public boolean delete(PropertyKey key) {
         boolean deleted = super.delete(key);
         if (deleted) {
-            int index = getArgumentIndex(key);
+            int index = key.toIndex();
             if (index >= 0) {
                 mappedIndices.remove(index);
             }
@@ -225,25 +225,11 @@ public final class JSArguments extends JSObject {
 
     @Override
     public JSValue get(PropertyKey key) {
-        int index = getArgumentIndex(key);
+        int index = key.toIndex();
         if (isMappedIndex(index, key)) {
             return getMappedValue(index);
         }
         return super.get(key);
-    }
-
-    private int getArgumentIndex(PropertyKey key) {
-        if (key.isIndex()) {
-            return key.asIndex();
-        }
-        if (key.isString()) {
-            try {
-                return Integer.parseInt(key.asString());
-            } catch (NumberFormatException e) {
-                return -1;
-            }
-        }
-        return -1;
     }
 
     /**
@@ -268,7 +254,7 @@ public final class JSArguments extends JSObject {
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
         PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
-        int index = getArgumentIndex(key);
+        int index = key.toIndex();
         if (descriptor != null && isMappedIndex(index, key)) {
             descriptor.setValue(getMappedValue(index));
             descriptor.setWritable(true);
@@ -300,7 +286,7 @@ public final class JSArguments extends JSObject {
         // First, call the parent implementation to handle the property descriptor
         super.set(key, value);
 
-        int index = getArgumentIndex(key);
+        int index = key.toIndex();
         if (index >= 0 && index < argumentValues.length) {
             argumentValues[index] = value;
         }
