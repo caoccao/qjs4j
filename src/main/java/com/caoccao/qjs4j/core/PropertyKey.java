@@ -88,12 +88,27 @@ public final class PropertyKey {
     public static final PropertyKey VALUE = fromString("value");
     public static final PropertyKey WRITABLE = fromString("writable");
     public static final PropertyKey ZERO = fromString("0");
+    private static final long ARRAY_INDEX_NOT_COMPUTED = Long.MIN_VALUE;
+    private static final int INDEX_NOT_COMPUTED = Integer.MIN_VALUE;
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL;
     private final int atomIndex; // -1 if not interned
     private final Object value; // String, Integer, or JSSymbol
+    private long cachedArrayIndex;
+    private int cachedIndex;
 
     private PropertyKey(Object value, int atomIndex) {
         this.value = value;
         this.atomIndex = atomIndex;
+        if (value instanceof Integer integerValue) {
+            cachedIndex = integerValue;
+            cachedArrayIndex = integerValue >= 0 ? Integer.toUnsignedLong(integerValue) : -1;
+        } else if (value instanceof String) {
+            cachedIndex = INDEX_NOT_COMPUTED;
+            cachedArrayIndex = ARRAY_INDEX_NOT_COMPUTED;
+        } else {
+            cachedIndex = -1;
+            cachedArrayIndex = -1;
+        }
     }
 
     /**
@@ -246,34 +261,85 @@ public final class PropertyKey {
     }
 
     /**
+     * Convert this key to a canonical array index (0..2^32-2) if possible.
+     * Returns -1 when this key is not a canonical array index.
+     */
+    public long toArrayIndex() {
+        if (cachedArrayIndex != ARRAY_INDEX_NOT_COMPUTED) {
+            return cachedArrayIndex;
+        }
+
+        String propertyName = (String) value;
+        if (propertyName.isEmpty()) {
+            cachedArrayIndex = -1;
+            return -1;
+        }
+        if ("0".equals(propertyName)) {
+            cachedArrayIndex = 0;
+            return 0;
+        }
+        if (propertyName.charAt(0) == '0') {
+            cachedArrayIndex = -1;
+            return -1;
+        }
+        if (propertyName.length() > 10) {
+            cachedArrayIndex = -1;
+            return -1;
+        }
+
+        long parsedValue = 0;
+        for (int characterIndex = 0; characterIndex < propertyName.length(); characterIndex++) {
+            char character = propertyName.charAt(characterIndex);
+            if (character < '0' || character > '9') {
+                cachedArrayIndex = -1;
+                return -1;
+            }
+            parsedValue = parsedValue * 10 + (character - '0');
+            if (parsedValue > MAX_ARRAY_INDEX) {
+                cachedArrayIndex = -1;
+                return -1;
+            }
+        }
+
+        cachedArrayIndex = parsedValue;
+        return parsedValue;
+    }
+
+    /**
      * Convert this key to an integer index if possible.
      * Returns -1 when this key does not represent a non-negative int index.
      */
     public int toIndex() {
-        if (value instanceof Integer i) {
-            return i;
+        if (cachedIndex != INDEX_NOT_COMPUTED) {
+            return cachedIndex;
         }
-        if (!(value instanceof String propertyName)) {
-            return -1;
-        }
+
+        String propertyName = (String) value;
         if (propertyName.isEmpty()) {
+            cachedIndex = -1;
             return -1;
         }
         if (propertyName.length() > 1 && propertyName.charAt(0) == '0') {
+            cachedIndex = -1;
             return -1;
         }
+
         int parsedValue = 0;
         for (int characterIndex = 0; characterIndex < propertyName.length(); characterIndex++) {
             char character = propertyName.charAt(characterIndex);
             if (character < '0' || character > '9') {
+                cachedIndex = -1;
                 return -1;
             }
             int digit = character - '0';
             if (parsedValue > (Integer.MAX_VALUE - digit) / 10) {
+                cachedIndex = -1;
                 return -1;
             }
             parsedValue = parsedValue * 10 + digit;
         }
+
+        cachedIndex = parsedValue;
         return parsedValue;
     }
 

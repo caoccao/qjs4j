@@ -112,6 +112,8 @@ public class Test262Runner {
         int cpuCount = Runtime.getRuntime().availableProcessors();
         boolean isMacOs = System.getProperty("os.name", "").toLowerCase().contains("mac");
         int threadCount = Math.max(1, isMacOs ? cpuCount * 3 / 4 : cpuCount / 2);
+        long prewarmElapsedMilliseconds = executor.prewarm();
+        System.out.println("Prewarmed runtime/context in " + prewarmElapsedMilliseconds + " ms");
         System.out.println("Starting test execution with " + threadCount + " threads...\n");
 
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(

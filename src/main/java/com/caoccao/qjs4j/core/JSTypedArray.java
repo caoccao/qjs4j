@@ -37,6 +37,8 @@ public sealed abstract class JSTypedArray extends JSObject permits
         JSFloat16Array, JSFloat32Array, JSFloat64Array,
         JSBigInt64Array, JSBigUint64Array {
     public static final String NAME = "TypedArray";
+    private static final int CANONICAL_NUMERIC_INDEX_INVALID = -1;
+    private static final int CANONICAL_NUMERIC_INDEX_NOT_CANONICAL = Integer.MIN_VALUE;
     protected final IJSArrayBuffer buffer;
     protected final int byteLength;
     protected final int byteOffset;
@@ -115,34 +117,6 @@ public sealed abstract class JSTypedArray extends JSObject permits
 
     private static boolean isAsciiDigit(char c) {
         return c >= '0' && c <= '9';
-    }
-
-    /**
-     * CanonicalNumericIndexString check per ES spec.
-     * Returns true if the key is a canonical numeric index string
-     * (i.e., ToString(ToNumber(str)) === str, or str is "-0").
-     * Following QuickJS JS_AtomIsNumericIndex.
-     */
-    private static boolean isCanonicalNumericIndex(PropertyKey key) {
-        if (key.isSymbol()) {
-            return false;
-        }
-        String str = key.toPropertyString();
-        if (str.isEmpty()) {
-            return false;
-        }
-        if ("-0".equals(str)) {
-            return true;
-        }
-        char first = str.charAt(0);
-        if (!((first >= '0' && first <= '9') || first == '-' || first == 'I' || first == 'N')) {
-            return false;
-        }
-        if (!isValidDoubleString(str)) {
-            return false;
-        }
-        double num = Double.parseDouble(str);
-        return numberToString(num).equals(str);
     }
 
     private static boolean isValidDoubleString(String str) {
@@ -254,6 +228,52 @@ public sealed abstract class JSTypedArray extends JSObject permits
         return byteOffset;
     }
 
+    /**
+     * Resolve a key for integer-indexed exotic semantics.
+     *
+     * @return non-negative integer index when canonical and valid;
+     * {@link #CANONICAL_NUMERIC_INDEX_INVALID} when canonical numeric but invalid integer index;
+     * {@link #CANONICAL_NUMERIC_INDEX_NOT_CANONICAL} otherwise.
+     */
+    private static int resolveCanonicalNumericIndex(PropertyKey key) {
+        int typedArrayIndex = toTypedArrayIndex(key);
+        if (typedArrayIndex >= 0) {
+            return typedArrayIndex;
+        }
+        if (key.isSymbol()) {
+            return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+        }
+        String keyString = key.toPropertyString();
+        if (keyString.isEmpty()) {
+            return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+        }
+        if ("-0".equals(keyString)) {
+            return CANONICAL_NUMERIC_INDEX_INVALID;
+        }
+        char firstCharacter = keyString.charAt(0);
+        if (!((firstCharacter >= '0' && firstCharacter <= '9')
+                || firstCharacter == '-'
+                || firstCharacter == 'I'
+                || firstCharacter == 'N')) {
+            return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+        }
+        if (!isValidDoubleString(keyString)) {
+            return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+        }
+        double numericIndex = Double.parseDouble(keyString);
+        if (!numberToString(numericIndex).equals(keyString)) {
+            return CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+        }
+        if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+            return CANONICAL_NUMERIC_INDEX_INVALID;
+        }
+        int integerIndex = (int) numericIndex;
+        if (integerIndex != numericIndex) {
+            return CANONICAL_NUMERIC_INDEX_INVALID;
+        }
+        return integerIndex;
+    }
+
     protected static int toArrayLikeLength(JSContext context, JSValue value) {
         long length = JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value));
         if (length > Integer.MAX_VALUE) {
@@ -263,7 +283,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     protected static int toTypedArrayBufferLength(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
+        return toTypedArrayLength(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
 
     protected static int toTypedArrayByteOffset(JSContext context, JSValue value) {
@@ -275,7 +295,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     protected static int toTypedArrayIndex(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLengthChecked(JSTypeConversions.toIndex(context, value), bytesPerElement);
+        return toTypedArrayLength(JSTypeConversions.toIndex(context, value), bytesPerElement);
     }
 
     /**
@@ -283,48 +303,52 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * Returns the index if it's a valid canonical numeric index string, or -1 otherwise.
      */
     private static int toTypedArrayIndex(PropertyKey key) {
-        if (key.isSymbol()) {
+        int fastIndex = key.toIndex();
+        if (fastIndex >= 0) {
+            return fastIndex;
+        }
+        if (!key.isString()) {
             return -1;
         }
-        String str = key.toPropertyString();
-        if (str.isEmpty()) {
+        String keyString = key.asString();
+        if (keyString == null || keyString.isEmpty()) {
             return -1;
         }
         // Fast path: single digit
-        char c = str.charAt(0);
-        if (str.length() == 1 && c >= '0' && c <= '9') {
-            return c - '0';
+        char firstCharacter = keyString.charAt(0);
+        if (keyString.length() == 1 && firstCharacter >= '0' && firstCharacter <= '9') {
+            return firstCharacter - '0';
         }
         // Must start with a digit (not '-' or '+')
-        if (c < '0' || c > '9') {
+        if (firstCharacter < '0' || firstCharacter > '9') {
             return -1;
         }
         // No leading zeros (except "0" itself, handled above)
-        if (c == '0') {
+        if (firstCharacter == '0') {
             return -1;
         }
-        long value = c - '0';
-        for (int i = 1; i < str.length(); i++) {
-            int digit = str.charAt(i) - '0';
-            if (value > (Integer.MAX_VALUE - digit) / 10L) {
+        long parsedValue = firstCharacter - '0';
+        for (int characterIndex = 1; characterIndex < keyString.length(); characterIndex++) {
+            char character = keyString.charAt(characterIndex);
+            if (character < '0' || character > '9') {
                 return -1;
             }
-            value = value * 10 + digit;
+            int digit = character - '0';
+            if (parsedValue > (Integer.MAX_VALUE - digit) / 10L) {
+                return -1;
+            }
+            parsedValue = parsedValue * 10 + digit;
         }
-        return (int) value;
+        return (int) parsedValue;
     }
 
     protected static int toTypedArrayLength(JSContext context, JSValue value, int bytesPerElement) {
-        return toTypedArrayLengthChecked(
+        return toTypedArrayLength(
                 JSTypeConversions.toLength(context, JSTypeConversions.toNumber(context, value)),
                 bytesPerElement);
     }
 
     protected static int toTypedArrayLength(long length, int bytesPerElement) {
-        return toTypedArrayLengthChecked(length, bytesPerElement);
-    }
-
-    private static int toTypedArrayLengthChecked(long length, int bytesPerElement) {
         if (length < 0 || length > Integer.MAX_VALUE) {
             throw new JSRangeErrorException("invalid length");
         }
@@ -361,28 +385,14 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
-        if (!isCanonicalNumericIndex(key)) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
             return super.defineProperty(key, descriptor);
         }
-        String str = key.toPropertyString();
-        // -0 is never a valid integer index
-        if ("-0".equals(str)) {
+        if (canonicalNumericIndex < 0) {
             return false;
         }
-        double numericIndex = Double.parseDouble(str);
-        // Must be a finite integer
-        if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex)) {
-            return false;
-        }
-        // Must be non-negative
-        if (numericIndex < 0) {
-            return false;
-        }
-        int index = (int) numericIndex;
-        // Must fit in int and match the double
-        if (index != numericIndex) {
-            return false;
-        }
+        int index = canonicalNumericIndex;
         // Check bounds and detachment
         if (buffer.isDetached() || index >= getLength()) {
             return false;
@@ -417,7 +427,14 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public boolean delete(PropertyKey key) {
-        int index = toTypedArrayIndex(key);
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.delete(key);
+        }
+        if (canonicalNumericIndex < 0) {
+            return true;
+        }
+        int index = canonicalNumericIndex;
         if (index >= 0) {
             // In-bounds element: not deletable
             if (index < getLength() && !buffer.isDetached()) {
@@ -429,7 +446,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             // Out-of-bounds or detached: canonical numeric index returns true
             return true;
         }
-        return super.delete(key);
+        return true;
     }
 
     @Override
@@ -565,21 +582,14 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        if (!isCanonicalNumericIndex(key)) {
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
             return super.getOwnPropertyDescriptor(key);
         }
-        String str = key.toPropertyString();
-        if ("-0".equals(str)) {
+        if (canonicalNumericIndex < 0) {
             return null;
         }
-        double numericIndex = Double.parseDouble(str);
-        if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-            return null;
-        }
-        int index = (int) numericIndex;
-        if (index != numericIndex) {
-            return null;
-        }
+        int index = canonicalNumericIndex;
         if (buffer.isDetached() || index >= getLength()) {
             return null;
         }
@@ -621,43 +631,30 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        if (isCanonicalNumericIndex(key)) {
-            // For canonical numeric indices, never fall through to prototype chain.
-            String str = key.toPropertyString();
-            if ("-0".equals(str)) {
-                return JSUndefined.INSTANCE;
-            }
-            double numericIndex = Double.parseDouble(str);
-            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                return JSUndefined.INSTANCE;
-            }
-            int index = (int) numericIndex;
-            if (index != numericIndex || buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
-                return JSUndefined.INSTANCE;
-            }
-            return getJSElement(index);
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.getWithReceiver(key, receiver, depth);
         }
-        return super.getWithReceiver(key, receiver, depth);
+        if (canonicalNumericIndex < 0) {
+            return JSUndefined.INSTANCE;
+        }
+        int index = canonicalNumericIndex;
+        if (buffer.isDetached() || isOutOfBounds() || index >= getLength()) {
+            return JSUndefined.INSTANCE;
+        }
+        return getJSElement(index);
     }
 
     @Override
     public boolean has(PropertyKey key) {
-        if (isCanonicalNumericIndex(key)) {
-            String str = key.toPropertyString();
-            if ("-0".equals(str)) {
-                return false;
-            }
-            double numericIndex = Double.parseDouble(str);
-            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                return false;
-            }
-            int index = (int) numericIndex;
-            if (index != numericIndex) {
-                return false;
-            }
-            return !buffer.isDetached() && index < getLength();
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.has(key);
         }
-        return super.has(key);
+        if (canonicalNumericIndex < 0) {
+            return false;
+        }
+        return !buffer.isDetached() && canonicalNumericIndex < getLength();
     }
 
     /**
@@ -732,30 +729,20 @@ public sealed abstract class JSTypedArray extends JSObject permits
 
     @Override
     public void set(PropertyKey key, JSValue value) {
-        if (isCanonicalNumericIndex(key)) {
-            // TypedArray [[Set]] with SameValue(O, Receiver) = true
-            // Always call integerIndexedElementSet which performs value conversion
-            // (ToNumber/ToBigInt) BEFORE checking detached/bounds per spec.
-            String str = key.toPropertyString();
-            if ("-0".equals(str)) {
-                // -0 is never a valid integer index; use -1 to skip write after conversion
-                integerIndexedElementSet(-1, value);
-                return;
-            }
-            double numericIndex = Double.parseDouble(str);
-            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                integerIndexedElementSet(-1, value);
-                return;
-            }
-            int index = (int) numericIndex;
-            if (index != numericIndex) {
-                integerIndexedElementSet(-1, value);
-                return;
-            }
-            integerIndexedElementSet(index, value);
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            super.set(key, value);
             return;
         }
-        super.set(key, value);
+        // TypedArray [[Set]] with SameValue(O, Receiver) = true
+        // Always call integerIndexedElementSet which performs value conversion
+        // (ToNumber/ToBigInt) BEFORE checking detached/bounds per spec.
+        if (canonicalNumericIndex < 0) {
+            // Invalid numeric index strings must still run conversion side effects.
+            integerIndexedElementSet(CANONICAL_NUMERIC_INDEX_INVALID, value);
+            return;
+        }
+        integerIndexedElementSet(canonicalNumericIndex, value);
     }
 
     /**
@@ -855,54 +842,46 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSValue receiver) {
-        if (isCanonicalNumericIndex(key)) {
-            // Step b.i: If SameValue(O, Receiver) is true
-            if (receiver == this) {
-                // Perform TypedArraySetElement(O, numericIndex, V)
-                set(key, value);
-                return !context.hasPendingException();
-            }
-            // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
-            String str = key.toPropertyString();
-            if ("-0".equals(str)) {
-                return true;
-            }
-            double numericIndex = Double.parseDouble(str);
-            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                return true;
-            }
-            int index = (int) numericIndex;
-            if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
-                return true;
-            }
-            // Valid integer index with different receiver.
-            // Per ES2024 10.4.5.5 step 3: Return ? OrdinarySet(O, P, V, Receiver).
-            // The TypedArray element acts as an own writable data property, so OrdinarySet
-            // skips prototype chain walk and goes directly to setting on the receiver.
-            if (receiver instanceof JSObject receiverObj) {
-                PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
-                if (context.hasPendingException()) {
-                    return false;
-                }
-                if (existingDescriptor != null) {
-                    if (existingDescriptor.isAccessorDescriptor()) {
-                        return false;
-                    }
-                    if (!existingDescriptor.isWritable()) {
-                        return false;
-                    }
-                    PropertyDescriptor valueDescriptor = new PropertyDescriptor();
-                    valueDescriptor.setValue(value);
-                    return receiverObj.defineProperty(key, valueDescriptor);
-                }
-                if (!receiverObj.isExtensible()) {
-                    return false;
-                }
-                return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
-            }
-            return false;
+        int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
+        if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
+            return super.setWithResult(key, value, receiver);
         }
-        return super.setWithResult(key, value, receiver);
+        // Step b.i: If SameValue(O, Receiver) is true
+        if (receiver == this) {
+            // Perform TypedArraySetElement(O, numericIndex, V)
+            set(key, value);
+            return !context.hasPendingException();
+        }
+        // Step b.ii: If IsValidIntegerIndex(O, numericIndex) is false, return true
+        if (canonicalNumericIndex < 0 || buffer.isDetached() || canonicalNumericIndex >= getLength()) {
+            return true;
+        }
+        // Valid integer index with different receiver.
+        // Per ES2024 10.4.5.5 step 3: Return ? OrdinarySet(O, P, V, Receiver).
+        // The TypedArray element acts as an own writable data property, so OrdinarySet
+        // skips prototype chain walk and goes directly to setting on the receiver.
+        if (receiver instanceof JSObject receiverObj) {
+            PropertyDescriptor existingDescriptor = receiverObj.getOwnPropertyDescriptor(key);
+            if (context.hasPendingException()) {
+                return false;
+            }
+            if (existingDescriptor != null) {
+                if (existingDescriptor.isAccessorDescriptor()) {
+                    return false;
+                }
+                if (!existingDescriptor.isWritable()) {
+                    return false;
+                }
+                PropertyDescriptor valueDescriptor = new PropertyDescriptor();
+                valueDescriptor.setValue(value);
+                return receiverObj.defineProperty(key, valueDescriptor);
+            }
+            if (!receiverObj.isExtensible()) {
+                return false;
+            }
+            return receiverObj.defineProperty(key, value, PropertyDescriptor.DataState.All);
+        }
+        return false;
     }
 
     /**

@@ -33,7 +33,6 @@ import java.util.*;
  */
 public non-sealed class JSObject implements JSValue {
     public static final String NAME = "Object";
-    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     private static final int MAX_PROTOTYPE_DEPTH = 10000;
     protected final JSContext context;
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
@@ -252,7 +251,7 @@ public non-sealed class JSObject implements JSValue {
         // When defining a property (especially accessor), remove any sparse entry
         // so the shape-based property takes precedence in get().
         if (sparseProperties != null) {
-            long arrayIndex = getCanonicalArrayIndex(key);
+            long arrayIndex = key.toArrayIndex();
             if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE) {
                 sparseProperties.remove((int) arrayIndex);
             }
@@ -303,7 +302,7 @@ public non-sealed class JSObject implements JSValue {
     public boolean delete(PropertyKey key) {
         boolean strictMode = context.isStrictMode();
         // Check sparse properties first.
-        long arrayIndex = getCanonicalArrayIndex(key);
+        long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             int sparseIndex = (int) arrayIndex;
             if (sparseProperties.containsKey(sparseIndex)) {
@@ -391,7 +390,7 @@ public non-sealed class JSObject implements JSValue {
             if (propertyKey == null) {
                 return null;
             }
-            if (propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+            if (propertyKey.isSymbol() || propertyKey.toArrayIndex() >= 0) {
                 return null;
             }
             PropertyDescriptor descriptor = shape.getDescriptorAt(index);
@@ -430,7 +429,7 @@ public non-sealed class JSObject implements JSValue {
             if (propertyKey == null) {
                 return null;
             }
-            if (propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+            if (propertyKey.isSymbol() || propertyKey.toArrayIndex() >= 0) {
                 return null;
             }
             PropertyDescriptor descriptor = shape.getDescriptorAt(index);
@@ -514,40 +513,6 @@ public non-sealed class JSObject implements JSValue {
         return getWithReceiver(key, receiver, 0);
     }
 
-    protected long getCanonicalArrayIndex(PropertyKey key) {
-        if (key.isIndex()) {
-            return Integer.toUnsignedLong(key.asIndex());
-        }
-        if (!key.isString()) {
-            return -1;
-        }
-        return getCanonicalArrayIndex(key.asString());
-    }
-
-    private long getCanonicalArrayIndex(String key) {
-        if (key.isEmpty()) {
-            return -1;
-        }
-        if ("0".equals(key)) {
-            return 0;
-        }
-        if (key.charAt(0) == '0') {
-            return -1;
-        }
-        long value = 0;
-        for (int i = 0; i < key.length(); i++) {
-            char ch = key.charAt(i);
-            if (ch < '0' || ch > '9') {
-                return -1;
-            }
-            value = value * 10 + (ch - '0');
-            if (value > MAX_ARRAY_INDEX) {
-                return -1;
-            }
-        }
-        return value;
-    }
-
     public JSConstructorType getConstructorType() {
         return constructorType;
     }
@@ -598,7 +563,7 @@ public non-sealed class JSObject implements JSValue {
             boolean fastPathEligible = true;
             for (int index = 0; index < propertyCount; index++) {
                 PropertyKey propertyKey = shape.getPropertyKeyAt(index);
-                if (propertyKey == null || propertyKey.isSymbol() || getCanonicalArrayIndex(propertyKey) >= 0) {
+                if (propertyKey == null || propertyKey.isSymbol() || propertyKey.toArrayIndex() >= 0) {
                     fastPathEligible = false;
                     break;
                 }
@@ -640,7 +605,7 @@ public non-sealed class JSObject implements JSValue {
                     continue;
                 }
             }
-            long index = getCanonicalArrayIndex(shapeKey);
+            long index = shapeKey.toArrayIndex();
             if (index >= 0) {
                 if (seenNumericIndices.add(index)) {
                     numericKeys.add(Map.entry(index, shapeKey));
@@ -692,7 +657,7 @@ public non-sealed class JSObject implements JSValue {
             return desc;
         }
 
-        long arrayIndex = getCanonicalArrayIndex(key);
+        long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
             if (sparseValue != null) {
@@ -720,7 +685,7 @@ public non-sealed class JSObject implements JSValue {
         if (offset >= 0) {
             return offset;
         }
-        long index = getCanonicalArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index < 0 || index > Integer.MAX_VALUE) {
             return -1;
         }
@@ -734,7 +699,7 @@ public non-sealed class JSObject implements JSValue {
         if (shape.hasProperty(key)) {
             return key;
         }
-        long index = getCanonicalArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index < 0 || index > Integer.MAX_VALUE) {
             return null;
         }
@@ -765,7 +730,7 @@ public non-sealed class JSObject implements JSValue {
     }
 
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        long arrayIndex = getCanonicalArrayIndex(key);
+        long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
             if (sparseValue != null) {
@@ -862,7 +827,7 @@ public non-sealed class JSObject implements JSValue {
         if (getOwnPropertyOffset(key) >= 0) {
             return true;
         }
-        long arrayIndex = getCanonicalArrayIndex(key);
+        long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             return sparseProperties.containsKey((int) arrayIndex);
         }
@@ -1171,7 +1136,7 @@ public non-sealed class JSObject implements JSValue {
             return;
         }
 
-        long arrayIndex = getCanonicalArrayIndex(key);
+        long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             int sparseIndex = (int) arrayIndex;
             if (sparseProperties.containsKey(sparseIndex)) {

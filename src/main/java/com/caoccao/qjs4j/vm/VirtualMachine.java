@@ -1175,37 +1175,6 @@ public final class VirtualMachine {
         return JSUndefined.INSTANCE;
     }
 
-    private long getCanonicalArrayIndex(PropertyKey key) {
-        if (key.isIndex()) {
-            return Integer.toUnsignedLong(key.asIndex());
-        }
-        if (!key.isString()) {
-            return -1;
-        }
-        String stringKey = key.asString();
-        if (stringKey == null || stringKey.isEmpty()) {
-            return -1;
-        }
-        if ("0".equals(stringKey)) {
-            return 0;
-        }
-        if (stringKey.charAt(0) == '0') {
-            return -1;
-        }
-        long value = 0;
-        for (int i = 0; i < stringKey.length(); i++) {
-            char character = stringKey.charAt(i);
-            if (character < '0' || character > '9') {
-                return -1;
-            }
-            value = value * 10 + (character - '0');
-            if (value > 0xFFFF_FFFEL) {
-                return -1;
-            }
-        }
-        return value;
-    }
-
     JSString getComputedNameString(JSValue keyValue) {
         if (keyValue instanceof JSSymbol symbol) {
             String description = symbol.getDescription();
@@ -1299,7 +1268,7 @@ public final class VirtualMachine {
         if (excludedKeys.contains(key)) {
             return true;
         }
-        long canonicalIndex = getCanonicalArrayIndex(key);
+        long canonicalIndex = key.toArrayIndex();
         if (canonicalIndex < 0 || canonicalIndex > Integer.MAX_VALUE) {
             return false;
         }

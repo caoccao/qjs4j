@@ -208,11 +208,9 @@ public final class JSConsole {
         long length = array.getLength();
         List<Long> indexKeys = new ArrayList<>();
         for (PropertyKey key : array.getOwnPropertyKeys()) {
-            if (isArrayIndexKey(key)) {
-                long index = key.isIndex() ? key.asIndex() : Long.parseLong(key.asString());
-                if (index >= 0 && index < length) {
-                    indexKeys.add(index);
-                }
+            long index = key.toArrayIndex();
+            if (index >= 0 && index < length) {
+                indexKeys.add(index);
             }
         }
         indexKeys.sort(Long::compareTo);
@@ -246,7 +244,7 @@ public final class JSConsole {
         }
 
         for (PropertyKey key : array.getOwnPropertyKeys()) {
-            if (isArrayIndexKey(key) || "length".equals(key.asString())) {
+            if (key.toArrayIndex() >= 0 || "length".equals(key.asString())) {
                 continue;
             }
             PropertyDescriptor descriptor = array.getOwnPropertyDescriptor(key);
@@ -627,37 +625,6 @@ public final class JSConsole {
      */
     public JSValue info(JSContext context, JSValue thisArg, JSValue[] args) {
         return log(context, thisArg, args);
-    }
-
-    private boolean isArrayIndexKey(PropertyKey key) {
-        if (key.isIndex()) {
-            return true;
-        }
-        if (!key.isString()) {
-            return false;
-        }
-        String value = key.asString();
-        if (value == null || value.isEmpty()) {
-            return false;
-        }
-        if ("0".equals(value)) {
-            return true;
-        }
-        if (value.charAt(0) == '0') {
-            return false;
-        }
-        long index = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c < '0' || c > '9') {
-                return false;
-            }
-            index = index * 10 + (c - '0');
-            if (index > 0xFFFF_FFFEL) {
-                return false;
-            }
-        }
-        return true;
     }
 
     private boolean isAsciiIdentifier(String value) {

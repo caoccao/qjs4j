@@ -125,42 +125,6 @@ public final class JSArray extends JSObject {
         return array;
     }
 
-    private static long getArrayIndex(PropertyKey key) {
-        if (key.isIndex()) {
-            int index = key.asIndex();
-            return index >= 0 ? index : -1;
-        }
-        if (key.isString()) {
-            return parseArrayIndex(key.asString());
-        }
-        return -1;
-    }
-
-    private static long parseArrayIndex(String value) {
-        if (value == null || value.isEmpty()) {
-            return -1;
-        }
-        if ("0".equals(value)) {
-            return 0;
-        }
-        if (value.charAt(0) == '0') {
-            return -1;
-        }
-
-        long result = 0;
-        for (int i = 0; i < value.length(); i++) {
-            char c = value.charAt(i);
-            if (c < '0' || c > '9') {
-                return -1;
-            }
-            result = result * 10 + (c - '0');
-            if (result > MAX_ARRAY_INDEX) {
-                return -1;
-            }
-        }
-        return result;
-    }
-
     private static Long toArrayLengthFromNumber(double value) {
         if (!(value >= 0 && value <= UINT32_MAX_DOUBLE)) {
             return null;
@@ -236,7 +200,7 @@ public final class JSArray extends JSObject {
             // Scan shape properties to find the highest non-configurable index >= newLen.
             long actualNewLength = newLength;
             for (PropertyKey shapeKey : shape.getPropertyKeys()) {
-                long idx = getArrayIndex(shapeKey);
+                long idx = shapeKey.toArrayIndex();
                 if (idx >= newLength && idx < oldLength) {
                     PropertyDescriptor elemDesc = super.getOwnPropertyDescriptor(shapeKey);
                     if (elemDesc != null && !elemDesc.isConfigurable()) {
@@ -265,7 +229,7 @@ public final class JSArray extends JSObject {
         // Per ES spec 10.4.2.1 [[DefineOwnProperty]] / QuickJS JS_CreateProperty:
         // When defining a property at an array index >= current length,
         // update the length to index + 1 (if length is writable).
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0 && index >= this.length) {
             if (!isLengthWritable()) {
                 this.context.throwTypeError("Cannot add property " + index + ", array length is not writable");
@@ -282,7 +246,7 @@ public final class JSArray extends JSObject {
 
     @Override
     protected void definePropertyInternal(PropertyKey key, PropertyDescriptor descriptor) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0 && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
             // For default data descriptors (writable, enumerable, configurable),
@@ -330,7 +294,7 @@ public final class JSArray extends JSObject {
 
     @Override
     public boolean delete(PropertyKey key) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index < 0) {
             return super.delete(key);
         }
@@ -418,7 +382,7 @@ public final class JSArray extends JSObject {
      */
     @Override
     public JSValue get(PropertyKey key) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0) {
             // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
             PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
@@ -461,7 +425,7 @@ public final class JSArray extends JSObject {
             return descriptor;
         }
 
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index < 0) {
             return null;
         }
@@ -514,7 +478,7 @@ public final class JSArray extends JSObject {
                 .forEach(index -> keys.add(PropertyKey.fromString(Long.toString(index))));
 
         for (PropertyKey key : shape.getPropertyKeys()) {
-            long index = getArrayIndex(key);
+            long index = key.toArrayIndex();
             if (index >= 0) {
                 if (!indexedValues.containsKey(index)) {
                     PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
@@ -544,7 +508,7 @@ public final class JSArray extends JSObject {
      */
     @Override
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
             // Check dense array
@@ -587,7 +551,7 @@ public final class JSArray extends JSObject {
             return true;
         }
 
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index < 0) {
             return false;
         }
@@ -775,7 +739,7 @@ public final class JSArray extends JSObject {
      */
     @Override
     public void set(PropertyKey key, JSValue value) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0) {
             boolean hasOwnIndexedElement = hasElement(index);
             if (!hasOwnIndexedElement && hasPrototypeSetInterference(key)) {
@@ -820,7 +784,7 @@ public final class JSArray extends JSObject {
 
             // Remove indexed string properties outside the new length range.
             for (PropertyKey key : shape.getPropertyKeys()) {
-                long index = getArrayIndex(key);
+                long index = key.toArrayIndex();
                 if (index >= newLength && index >= 0) {
                     super.delete(key);
                 }
@@ -838,7 +802,7 @@ public final class JSArray extends JSObject {
 
     @Override
     public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        long index = getArrayIndex(key);
+        long index = key.toArrayIndex();
         if (index >= 0 || !(key.isString() && "length".equals(key.asString()))) {
             // Non-length keys: delegate to JSObject which handles prototype chain
             return super.setWithResult(key, value, receiver);

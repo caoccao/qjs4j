@@ -442,4 +442,21 @@ public class Test262Executor {
         return code;
     }
 
+    /**
+     * Prewarm runtime/context class loading before parallel test execution.
+     * This reduces startup class-loader contention when many workers create contexts simultaneously.
+     *
+     * @return elapsed prewarm time in milliseconds
+     */
+    public long prewarm() {
+        long startTime = System.currentTimeMillis();
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true));
+             JSContext context = runtime.createContext()) {
+            context.clearAllPendingExceptions();
+        } catch (Exception ignored) {
+            // Best-effort optimization only.
+        }
+        return System.currentTimeMillis() - startTime;
+    }
+
 }
