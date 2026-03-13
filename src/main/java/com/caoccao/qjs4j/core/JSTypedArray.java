@@ -113,6 +113,10 @@ public sealed abstract class JSTypedArray extends JSObject permits
         this.buffer = buffer;
     }
 
+    private static boolean isAsciiDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
     /**
      * CanonicalNumericIndexString check per ES spec.
      * Returns true if the key is a canonical numeric index string
@@ -134,12 +138,61 @@ public sealed abstract class JSTypedArray extends JSObject permits
         if (!((first >= '0' && first <= '9') || first == '-' || first == 'I' || first == 'N')) {
             return false;
         }
-        try {
-            double num = Double.parseDouble(str);
-            return numberToString(num).equals(str);
-        } catch (NumberFormatException e) {
+        if (!isValidDoubleString(str)) {
             return false;
         }
+        double num = Double.parseDouble(str);
+        return numberToString(num).equals(str);
+    }
+
+    private static boolean isValidDoubleString(String str) {
+        if ("NaN".equals(str) || "Infinity".equals(str) || "-Infinity".equals(str)) {
+            return true;
+        }
+
+        int index = 0;
+        int length = str.length();
+        if (str.charAt(index) == '-') {
+            index++;
+            if (index >= length) {
+                return false;
+            }
+        }
+
+        boolean hasIntegerDigits = false;
+        while (index < length && isAsciiDigit(str.charAt(index))) {
+            hasIntegerDigits = true;
+            index++;
+        }
+
+        boolean hasFractionDigits = false;
+        if (index < length && str.charAt(index) == '.') {
+            index++;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                hasFractionDigits = true;
+                index++;
+            }
+        }
+
+        if (!hasIntegerDigits && !hasFractionDigits) {
+            return false;
+        }
+
+        if (index < length && (str.charAt(index) == 'e' || str.charAt(index) == 'E')) {
+            index++;
+            if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
+                index++;
+            }
+            int exponentStart = index;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                index++;
+            }
+            if (exponentStart == index) {
+                return false;
+            }
+        }
+
+        return index == length;
     }
 
     /**
@@ -250,15 +303,15 @@ public sealed abstract class JSTypedArray extends JSObject permits
         if (c == '0') {
             return -1;
         }
-        try {
-            long val = Long.parseLong(str);
-            if (val >= 0 && val <= Integer.MAX_VALUE) {
-                return (int) val;
+        long value = c - '0';
+        for (int i = 1; i < str.length(); i++) {
+            int digit = str.charAt(i) - '0';
+            if (value > (Integer.MAX_VALUE - digit) / 10L) {
+                return -1;
             }
-        } catch (NumberFormatException e) {
-            // not a valid index
+            value = value * 10 + digit;
         }
-        return -1;
+        return (int) value;
     }
 
     protected static int toTypedArrayLength(JSContext context, JSValue value, int bytesPerElement) {
@@ -689,21 +742,17 @@ public sealed abstract class JSTypedArray extends JSObject permits
                 integerIndexedElementSet(-1, value);
                 return;
             }
-            try {
-                double numericIndex = Double.parseDouble(str);
-                if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                    integerIndexedElementSet(-1, value);
-                    return;
-                }
-                int index = (int) numericIndex;
-                if (index != numericIndex) {
-                    integerIndexedElementSet(-1, value);
-                    return;
-                }
-                integerIndexedElementSet(index, value);
-            } catch (NumberFormatException e) {
+            double numericIndex = Double.parseDouble(str);
+            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
                 integerIndexedElementSet(-1, value);
+                return;
             }
+            int index = (int) numericIndex;
+            if (index != numericIndex) {
+                integerIndexedElementSet(-1, value);
+                return;
+            }
+            integerIndexedElementSet(index, value);
             return;
         }
         super.set(key, value);
@@ -818,16 +867,12 @@ public sealed abstract class JSTypedArray extends JSObject permits
             if ("-0".equals(str)) {
                 return true;
             }
-            try {
-                double numericIndex = Double.parseDouble(str);
-                if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
-                    return true;
-                }
-                int index = (int) numericIndex;
-                if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
-                    return true;
-                }
-            } catch (NumberFormatException e) {
+            double numericIndex = Double.parseDouble(str);
+            if (!Double.isFinite(numericIndex) || numericIndex != Math.floor(numericIndex) || numericIndex < 0) {
+                return true;
+            }
+            int index = (int) numericIndex;
+            if (index != numericIndex || buffer.isDetached() || index >= getLength()) {
                 return true;
             }
             // Valid integer index with different receiver.

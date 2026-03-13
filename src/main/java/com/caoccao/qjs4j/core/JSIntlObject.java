@@ -4661,26 +4661,34 @@ public final class JSIntlObject {
             if (hm[0].length() != 2 || hm[1].length() != 2) {
                 return null;
             }
-            try {
-                hours = Integer.parseInt(hm[0]);
-                minutes = Integer.parseInt(hm[1]);
-            } catch (NumberFormatException e) {
+            int hourTens = hm[0].charAt(0) - '0';
+            int hourOnes = hm[0].charAt(1) - '0';
+            int minuteTens = hm[1].charAt(0) - '0';
+            int minuteOnes = hm[1].charAt(1) - '0';
+            if (hourTens < 0 || hourTens > 9 || hourOnes < 0 || hourOnes > 9
+                    || minuteTens < 0 || minuteTens > 9 || minuteOnes < 0 || minuteOnes > 9) {
                 return null;
             }
+            hours = hourTens * 10 + hourOnes;
+            minutes = minuteTens * 10 + minuteOnes;
         } else if (offsetPart.length() == 4) {
-            try {
-                hours = Integer.parseInt(offsetPart.substring(0, 2));
-                minutes = Integer.parseInt(offsetPart.substring(2, 4));
-            } catch (NumberFormatException e) {
+            int h0 = offsetPart.charAt(0) - '0';
+            int h1 = offsetPart.charAt(1) - '0';
+            int m0 = offsetPart.charAt(2) - '0';
+            int m1 = offsetPart.charAt(3) - '0';
+            if (h0 < 0 || h0 > 9 || h1 < 0 || h1 > 9 || m0 < 0 || m0 > 9 || m1 < 0 || m1 > 9) {
                 return null;
             }
+            hours = h0 * 10 + h1;
+            minutes = m0 * 10 + m1;
         } else if (offsetPart.length() == 2) {
-            try {
-                hours = Integer.parseInt(offsetPart);
-                minutes = 0;
-            } catch (NumberFormatException e) {
+            int h0 = offsetPart.charAt(0) - '0';
+            int h1 = offsetPart.charAt(1) - '0';
+            if (h0 < 0 || h0 > 9 || h1 < 0 || h1 > 9) {
                 return null;
             }
+            hours = h0 * 10 + h1;
+            minutes = 0;
         } else {
             return null;
         }

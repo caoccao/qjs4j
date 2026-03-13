@@ -60,18 +60,18 @@ public final class JSTypeConversions {
             return abstractEquals(context, toNumber(context, x), y);
         }
         if (x.isBigInt() && y.isString()) {
-            try {
-                return strictEquals(x, stringToBigInt(((JSString) y).value()));
-            } catch (NumberFormatException ignored) {
+            JSBigInt parsed = stringToBigInt(((JSString) y).value());
+            if (parsed == null) {
                 return false;
             }
+            return strictEquals(x, parsed);
         }
         if (x.isString() && y.isBigInt()) {
-            try {
-                return strictEquals(stringToBigInt(((JSString) x).value()), y);
-            } catch (NumberFormatException ignored) {
+            JSBigInt parsed = stringToBigInt(((JSString) x).value());
+            if (parsed == null) {
                 return false;
             }
+            return strictEquals(parsed, y);
         }
         if (x instanceof JSNumber xNumber && y instanceof JSBigInt yBigInt) {
             return numberEqualsBigInt(xNumber.value(), yBigInt.value());
@@ -148,6 +148,10 @@ public final class JSTypeConversions {
         return new BigDecimal(bigInt).compareTo(new BigDecimal(number));
     }
 
+    private static boolean isAsciiDigit(char c) {
+        return c >= '0' && c <= '9';
+    }
+
     /**
      * Check if a character is ECMAScript whitespace (StrWhiteSpaceChar).
      * Includes all characters from the ES spec's WhiteSpace and LineTerminator productions.
@@ -193,6 +197,53 @@ public final class JSTypeConversions {
             }
         }
         return true;
+    }
+
+    private static boolean isValidDecimalNumberString(String str) {
+        int index = 0;
+        int length = str.length();
+
+        if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
+            index++;
+        }
+        if (index >= length) {
+            return false;
+        }
+
+        boolean hasIntegerDigits = false;
+        while (index < length && isAsciiDigit(str.charAt(index))) {
+            hasIntegerDigits = true;
+            index++;
+        }
+
+        boolean hasFractionDigits = false;
+        if (index < length && str.charAt(index) == '.') {
+            index++;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                hasFractionDigits = true;
+                index++;
+            }
+        }
+
+        if (!hasIntegerDigits && !hasFractionDigits) {
+            return false;
+        }
+
+        if (index < length && (str.charAt(index) == 'e' || str.charAt(index) == 'E')) {
+            index++;
+            if (index < length && (str.charAt(index) == '+' || str.charAt(index) == '-')) {
+                index++;
+            }
+            int exponentStart = index;
+            while (index < length && isAsciiDigit(str.charAt(index))) {
+                index++;
+            }
+            if (exponentStart == index) {
+                return false;
+            }
+        }
+
+        return index == length;
     }
 
     /**
@@ -312,6 +363,16 @@ public final class JSTypeConversions {
         return compareBigIntAndNumber(bigInt, number) == 0;
     }
 
+    private static BigInteger parseBigIntegerDigits(String digits, int radix) {
+        BigInteger value = BigInteger.ZERO;
+        BigInteger radixBigInt = BigInteger.valueOf(radix);
+        for (int i = 0; i < digits.length(); i++) {
+            int digit = Character.digit(digits.charAt(i), radix);
+            value = value.multiply(radixBigInt).add(BigInteger.valueOf(digit));
+        }
+        return value;
+    }
+
     /**
      * Parse a radix literal string (digits after the 0x/0b/0o prefix) into a JSNumber.
      * Handles values that overflow long by using Double.
@@ -320,12 +381,24 @@ public final class JSTypeConversions {
         if (digits.isEmpty()) {
             return JSNumber.of(Double.NaN);
         }
-        try {
-            return JSNumber.of(Long.parseLong(digits, radix));
-        } catch (NumberFormatException e) {
-            // Value too large for long; parse via BigInteger then convert to double
-            return JSNumber.of(new java.math.BigInteger(digits, radix).doubleValue());
+        long value = 0L;
+        boolean overflow = false;
+        for (int i = 0; i < digits.length(); i++) {
+            int digit = Character.digit(digits.charAt(i), radix);
+            if (digit < 0) {
+                return JSNumber.of(Double.NaN);
+            }
+            if (!overflow && value > (Long.MAX_VALUE - digit) / radix) {
+                overflow = true;
+            }
+            if (!overflow) {
+                value = value * radix + digit;
+            }
         }
+        if (!overflow) {
+            return JSNumber.of(value);
+        }
+        return JSNumber.of(parseBigIntegerDigits(digits, radix).doubleValue());
     }
 
     private static void setPendingExceptionFromInvocation(JSContext context, Throwable throwable) {
@@ -408,7 +481,6 @@ public final class JSTypeConversions {
      * Decimal strings allow an optional leading sign.
      * Binary/octal/hex prefixes do not allow a leading sign.
      *
-     * @throws NumberFormatException if the string is not a valid BigInt literal
      */
     public static JSBigInt stringToBigInt(String value) {
         String text = value.strip();
@@ -425,7 +497,7 @@ public final class JSTypeConversions {
             sign = first == '-' ? -1 : 1;
             start = 1;
             if (start >= text.length()) {
-                throw new NumberFormatException("Missing digits");
+                return null;
             }
         }
 
@@ -435,7 +507,7 @@ public final class JSTypeConversions {
             char prefix = text.charAt(start + 1);
             if (prefix == 'x' || prefix == 'X' || prefix == 'o' || prefix == 'O' || prefix == 'b' || prefix == 'B') {
                 if (hasSign) {
-                    throw new NumberFormatException("Signed non-decimal BigInt is not allowed");
+                    return null;
                 }
                 digitsStart = start + 2;
                 radix = switch (prefix) {
@@ -447,14 +519,14 @@ public final class JSTypeConversions {
         }
 
         if (digitsStart >= text.length()) {
-            throw new NumberFormatException("Missing digits");
+            return null;
         }
         String digits = text.substring(digitsStart);
         if (!isValidBigIntDigits(digits, radix)) {
-            throw new NumberFormatException("Invalid digits");
+            return null;
         }
 
-        BigInteger bigInteger = new BigInteger(digits, radix);
+        BigInteger bigInteger = parseBigIntegerDigits(digits, radix);
         if (sign < 0) {
             bigInteger = bigInteger.negate();
         }
@@ -480,31 +552,28 @@ public final class JSTypeConversions {
             return JSNumber.of(Double.NEGATIVE_INFINITY);
         }
 
-        // Try to parse as number
-        try {
-            // Handle hex numbers (0x / 0X)
-            if (str.startsWith("0x") || str.startsWith("0X")) {
-                return parseRadixLiteral(str.substring(2), 16);
-            }
+        // Handle hex numbers (0x / 0X)
+        if (str.startsWith("0x") || str.startsWith("0X")) {
+            return parseRadixLiteral(str.substring(2), 16);
+        }
 
-            // Handle binary numbers (0b / 0B) - ES2015
-            if (str.startsWith("0b") || str.startsWith("0B")) {
-                return parseRadixLiteral(str.substring(2), 2);
-            }
+        // Handle binary numbers (0b / 0B) - ES2015
+        if (str.startsWith("0b") || str.startsWith("0B")) {
+            return parseRadixLiteral(str.substring(2), 2);
+        }
 
-            // Handle octal numbers (0o / 0O) - ES2015
-            if (str.startsWith("0o") || str.startsWith("0O")) {
-                return parseRadixLiteral(str.substring(2), 8);
-            }
+        // Handle octal numbers (0o / 0O) - ES2015
+        if (str.startsWith("0o") || str.startsWith("0O")) {
+            return parseRadixLiteral(str.substring(2), 8);
+        }
 
-            // Handle legacy octal (e.g., "010" is NOT octal in ToNumber, it's decimal 10)
-            // Per ES spec, ToNumber does not support legacy octal - only 0o/0O prefix.
+        // Handle legacy octal (e.g., "010" is NOT octal in ToNumber, it's decimal 10)
+        // Per ES spec, ToNumber does not support legacy octal - only 0o/0O prefix.
 
-            // Parse as decimal
-            return JSNumber.of(Double.parseDouble(str));
-        } catch (NumberFormatException e) {
+        if (!isValidDecimalNumberString(str)) {
             return JSNumber.of(Double.NaN);
         }
+        return JSNumber.of(Double.parseDouble(str));
     }
 
     /**
@@ -538,12 +607,12 @@ public final class JSTypeConversions {
             return new JSBigInt(booleanValue.value() ? 1L : 0L);
         }
         if (value instanceof JSString stringValue) {
-            try {
-                return stringToBigInt(stringValue.value());
-            } catch (NumberFormatException e) {
+            JSBigInt parsed = stringToBigInt(stringValue.value());
+            if (parsed == null) {
                 throw new JSSyntaxErrorException(
                         "Cannot convert " + stringValue.value() + " to a BigInt");
             }
+            return parsed;
         }
         if (value instanceof JSObject objectValue) {
             JSValue primitive = toPrimitive(context, objectValue, PreferredType.NUMBER);
@@ -939,11 +1008,7 @@ public final class JSTypeConversions {
     }
 
     private static JSBigInt tryStringToBigInt(String value) {
-        try {
-            return stringToBigInt(value);
-        } catch (NumberFormatException ignored) {
-            return null;
-        }
+        return stringToBigInt(value);
     }
 
     /**

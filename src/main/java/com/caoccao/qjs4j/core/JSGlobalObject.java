@@ -3231,6 +3231,22 @@ public final class JSGlobalObject {
             global.set(PropertyKey.fromString(name), value != null ? value : JSUndefined.INSTANCE);
         }
 
+        private static int parseFixedHex(String str, int start, int length) {
+            int end = start + length;
+            if (end > str.length()) {
+                return -1;
+            }
+            int value = 0;
+            for (int i = start; i < end; i++) {
+                int digit = Character.digit(str.charAt(i), 16);
+                if (digit < 0) {
+                    return -1;
+                }
+                value = (value << 4) | digit;
+            }
+            return value;
+        }
+
         /**
          * parseFloat(string)
          * Parse a string and return a floating point number.
@@ -3290,11 +3306,7 @@ public final class JSGlobalObject {
             }
 
             String validNumber = inputString.substring(signIndex, i);
-            try {
-                return JSNumber.of(Double.parseDouble(validNumber));
-            } catch (NumberFormatException ignored) {
-                return JSNumber.of(Double.NaN);
-            }
+            return JSNumber.of(Double.parseDouble(validNumber));
         }
 
         /**
@@ -3419,25 +3431,21 @@ public final class JSGlobalObject {
                 if (c == '%') {
                     // Try to parse %uXXXX format
                     if (i + 6 <= str.length() && str.charAt(i + 1) == 'u') {
-                        try {
-                            int codePoint = Integer.parseInt(str.substring(i + 2, i + 6), 16);
+                        int codePoint = parseFixedHex(str, i + 2, 4);
+                        if (codePoint >= 0) {
                             result.append((char) codePoint);
                             i += 5; // Skip the next 5 characters (uXXXX)
                             continue;
-                        } catch (NumberFormatException e) {
-                            // Not a valid %uXXXX sequence, treat as literal
                         }
                     }
 
                     // Try to parse %XX format
                     if (i + 3 <= str.length()) {
-                        try {
-                            int codePoint = Integer.parseInt(str.substring(i + 1, i + 3), 16);
+                        int codePoint = parseFixedHex(str, i + 1, 2);
+                        if (codePoint >= 0) {
                             result.append((char) codePoint);
                             i += 2; // Skip the next 2 characters (XX)
                             continue;
-                        } catch (NumberFormatException e) {
-                            // Not a valid %XX sequence, treat as literal
                         }
                     }
                 }

@@ -265,12 +265,12 @@ public final class DataViewPrototype {
     }
 
     private static JSBigInt parseBigInt(JSContext context, String value) {
-        try {
-            return JSTypeConversions.stringToBigInt(value);
-        } catch (NumberFormatException e) {
+        JSBigInt parsed = JSTypeConversions.stringToBigInt(value);
+        if (parsed == null) {
             context.throwSyntaxError("invalid bigint literal");
             return null;
         }
+        return parsed;
     }
 
     private static JSDataView requireDataView(JSContext context, JSValue thisArg, String errorMessage) {

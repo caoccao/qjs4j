@@ -172,6 +172,24 @@ public final class JSContext implements AutoCloseable {
         return CURRENT_EXECUTION_CONTEXT.get();
     }
 
+    private static int parseHex(String text) {
+        if (text == null || text.isEmpty()) {
+            return -1;
+        }
+        int value = 0;
+        for (int i = 0; i < text.length(); i++) {
+            int digit = Character.digit(text.charAt(i), 16);
+            if (digit < 0) {
+                return -1;
+            }
+            if (value > (Integer.MAX_VALUE - digit) / 16) {
+                return -1;
+            }
+            value = (value << 4) | digit;
+        }
+        return value;
+    }
+
     public static void popCurrentExecutionContext(JSContext previousContext) {
         if (previousContext == null) {
             CURRENT_EXECUTION_CONTEXT.remove();
@@ -1274,11 +1292,11 @@ public final class JSContext implements AutoCloseable {
                     continue;
                 }
                 String codePointText = text.substring(index + 1, braceEnd);
-                try {
-                    int codePoint = Integer.parseInt(codePointText, 16);
+                int codePoint = parseHex(codePointText);
+                if (codePoint >= 0) {
                     decodedTextBuilder.appendCodePoint(codePoint);
                     index = braceEnd;
-                } catch (NumberFormatException numberFormatException) {
+                } else {
                     decodedTextBuilder.append(text, escapeStart, braceEnd + 1);
                     index = braceEnd;
                 }
@@ -1289,11 +1307,11 @@ public final class JSContext implements AutoCloseable {
                 break;
             }
             String hexText = text.substring(index, index + 4);
-            try {
-                int codePoint = Integer.parseInt(hexText, 16);
+            int codePoint = parseHex(hexText);
+            if (codePoint >= 0) {
                 decodedTextBuilder.append((char) codePoint);
                 index += 3;
-            } catch (NumberFormatException numberFormatException) {
+            } else {
                 decodedTextBuilder.append(text, escapeStart, index + 4);
                 index += 3;
             }

@@ -450,8 +450,6 @@ public final class JSONObject {
         return JSUndefined.INSTANCE;
     }
 
-    // ========== JSON Parsing Helper Methods ==========
-
     /**
      * Convert value to JSON string representation.
      * Based on QuickJS js_json_to_str.
@@ -578,6 +576,8 @@ public final class JSONObject {
         return false;
     }
 
+    // ========== JSON Parsing Helper Methods ==========
+
     /**
      * JSON.parse(text[, reviver])
      * ES2024 25.5.1
@@ -680,6 +680,21 @@ public final class JSONObject {
             return new ParseResult(JSBoolean.FALSE, start + 5, start, start + 5);
         }
         throw new JSONParseException("Invalid literal " + parseContext.getPositionInfo(start));
+    }
+
+    private int parseHex4(String hex) {
+        if (hex == null || hex.length() != 4) {
+            return -1;
+        }
+        int value = 0;
+        for (int i = 0; i < 4; i++) {
+            int digit = Character.digit(hex.charAt(i), 16);
+            if (digit < 0) {
+                return -1;
+            }
+            value = (value << 4) | digit;
+        }
+        return value;
     }
 
     private ParseResult parseNull(ParseContext parseContext, int start) {
@@ -843,11 +858,11 @@ public final class JSONObject {
                             throw new JSONParseException("Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
                         }
                         String hex = parseContext.text.substring(i + 1, i + 5);
-                        try {
-                            sb.append((char) Integer.parseInt(hex, 16));
-                        } catch (NumberFormatException e) {
+                        int codePoint = parseHex4(hex);
+                        if (codePoint < 0) {
                             throw new JSONParseException("Invalid unicode escape in property name " + parseContext.getPositionInfo(i));
                         }
+                        sb.append((char) codePoint);
                         i += 4;
                     }
                     default ->
@@ -901,11 +916,11 @@ public final class JSONObject {
                             throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
                         }
                         String hex = parseContext.text.substring(i + 1, i + 5);
-                        try {
-                            sb.append((char) Integer.parseInt(hex, 16));
-                        } catch (NumberFormatException e) {
+                        int codePoint = parseHex4(hex);
+                        if (codePoint < 0) {
                             throw new JSONParseException("Invalid unicode escape " + parseContext.getPositionInfo(i));
                         }
+                        sb.append((char) codePoint);
                         i += 4;
                     }
                     default ->

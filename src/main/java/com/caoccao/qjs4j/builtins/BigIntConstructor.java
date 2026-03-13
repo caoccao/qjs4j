@@ -103,11 +103,11 @@ public final class BigIntConstructor {
             return new JSBigInt(bigIntValue);
         } else if (arg instanceof JSString str) {
             String strValue = str.value().trim();
-            try {
-                return JSTypeConversions.stringToBigInt(strValue);
-            } catch (NumberFormatException e) {
+            JSBigInt parsed = JSTypeConversions.stringToBigInt(strValue);
+            if (parsed == null) {
                 return context.throwSyntaxError("Cannot convert string to BigInt: " + strValue);
             }
+            return parsed;
         } else if (arg instanceof JSBoolean bool) {
             return new JSBigInt(bool.value() ? 1L : 0L);
         } else if (arg instanceof JSSymbol symbol) {

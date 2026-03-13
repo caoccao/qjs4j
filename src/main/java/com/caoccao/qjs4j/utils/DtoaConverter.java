@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.utils;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.Locale;
 
 /**
  * Double-to-ASCII converter.
@@ -357,21 +356,12 @@ public final class DtoaConverter {
         // Note: Use new BigDecimal(value) instead of BigDecimal.valueOf(value)
         // to preserve the exact binary representation of the double, including
         // floating-point rounding errors, which matches JavaScript behavior.
-        try {
-            BigDecimal bigDecimal = new BigDecimal(value);
-            bigDecimal = bigDecimal.setScale(fractionDigits, RoundingMode.HALF_UP);
-            if (negativeNonZeroInput && bigDecimal.signum() == 0) {
-                return "-" + bigDecimal.abs().toPlainString();
-            }
-            return bigDecimal.toPlainString();
-        } catch (NumberFormatException e) {
-            // Fallback to String.format
-            String fixedString = String.format(Locale.US, "%." + fractionDigits + "f", value);
-            if (negativeNonZeroInput && (fixedString.equals("0") || fixedString.startsWith("0."))) {
-                return "-" + fixedString;
-            }
-            return fixedString;
+        BigDecimal bigDecimal = new BigDecimal(value);
+        bigDecimal = bigDecimal.setScale(fractionDigits, RoundingMode.HALF_UP);
+        if (negativeNonZeroInput && bigDecimal.signum() == 0) {
+            return "-" + bigDecimal.abs().toPlainString();
         }
+        return bigDecimal.toPlainString();
     }
 
     /**

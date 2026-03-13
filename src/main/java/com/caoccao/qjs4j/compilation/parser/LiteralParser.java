@@ -579,14 +579,22 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                             }
                             throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
                         }
-                        int codePoint;
-                        try {
-                            codePoint = Integer.parseInt(str.substring(i + 3, end), 16);
-                        } catch (NumberFormatException e) {
-                            if (tagged) {
-                                return null;
+                        int codePoint = 0;
+                        for (int j = i + 3; j < end; j++) {
+                            int digit = Character.digit(str.charAt(j), 16);
+                            if (digit < 0) {
+                                if (tagged) {
+                                    return null;
+                                }
+                                throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
                             }
-                            throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                            if (codePoint > (0x10FFFF - digit) / 16) {
+                                if (tagged) {
+                                    return null;
+                                }
+                                throw new JSSyntaxErrorException("Malformed escape sequence in template literal");
+                            }
+                            codePoint = (codePoint << 4) | digit;
                         }
                         if (codePoint < 0 || codePoint > 0x10FFFF) {
                             if (tagged) {
