@@ -83,6 +83,7 @@ public class ExpressionContainsAwaitYieldTest {
                         LOCATION),
                 false,
                 false,
+                false,
                 LOCATION);
         ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
                 List.of(),
@@ -114,6 +115,7 @@ public class ExpressionContainsAwaitYieldTest {
                                 LOCATION),
                         LOCATION),
                 new BlockStatement(List.of(), LOCATION),
+                false,
                 false,
                 false,
                 LOCATION);

@@ -27,6 +27,7 @@ public final class FunctionExpression extends Expression {
     private final Identifier id;
     private final boolean isAsync;
     private final boolean isGenerator;
+    private final boolean needsArguments;
     private final List<Pattern> params;
     private final RestParameter restParameter;
 
@@ -38,6 +39,7 @@ public final class FunctionExpression extends Expression {
             BlockStatement body,
             boolean isAsync,
             boolean isGenerator,
+            boolean needsArguments,
             SourceLocation location) {
         super(location);
         this.id = id;
@@ -47,6 +49,7 @@ public final class FunctionExpression extends Expression {
         this.body = body;
         this.isAsync = isAsync;
         this.isGenerator = isGenerator;
+        this.needsArguments = needsArguments;
     }
 
     @Override
@@ -135,5 +138,9 @@ public final class FunctionExpression extends Expression {
 
     public boolean isGenerator() {
         return isGenerator;
+    }
+
+    public boolean needsArguments() {
+        return needsArguments;
     }
 }

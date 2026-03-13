@@ -72,6 +72,7 @@ public class StatementContainsAwaitYieldTest {
                 new BlockStatement(List.of(awaitStatement, yieldStatement), LOCATION),
                 false,
                 false,
+                false,
                 LOCATION);
 
         assertThat(functionDeclaration.containsAwait()).isTrue();

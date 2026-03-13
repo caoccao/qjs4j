@@ -162,7 +162,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 parserContext.asyncFunctionNesting,
                 parserContext.newTargetNesting,
                 parserContext.inClassFieldInitializer ? 1 : 0,
-                parserContext.inClassStaticInit ? 1 : 0
+                parserContext.inClassStaticInit ? 1 : 0,
+                parserContext.needsArguments ? 1 : 0
         });
         parserContext.functionNesting++;
         parserContext.generatorFunctionNesting = generatorFunction ? 1 : 0;
@@ -170,6 +171,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.newTargetNesting = 1;
         parserContext.inClassFieldInitializer = false;
         parserContext.inClassStaticInit = false;
+        parserContext.needsArguments = false;
     }
 
     private void exitFunctionContext(boolean asyncFunction) {
@@ -186,6 +188,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.newTargetNesting = saved[2];
         parserContext.inClassFieldInitializer = saved[3] != 0;
         parserContext.inClassStaticInit = saved[4] != 0;
+        parserContext.needsArguments = saved[5] != 0;
         parserContext.functionNesting--;
     }
 
@@ -709,11 +712,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 FunctionParams funcParams = parseFunctionParameters();
                 parserContext.inFunctionBody = savedInFunctionBody;
                 BlockStatement body = parseFunctionBody(funcParams, id);
+                boolean needsArguments = parserContext.needsArguments;
                 SourceLocation fullLocation = new SourceLocation(
                         location.line(), location.column(), location.offset(),
                         parserContext.previousTokenEndOffset);
                 return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(),
-                        funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+                        funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
             } finally {
                 parserContext.inClassStaticInit = savedInClassStaticInit;
                 exitFunctionContext(isAsync, isGenerator);
@@ -734,11 +738,12 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             FunctionParams funcParams = parseFunctionParameters();
             parserContext.inFunctionBody = savedInFunctionBody;
             BlockStatement body = parseFunctionBody(funcParams, defaultId);
+            boolean needsArguments = parserContext.needsArguments;
             SourceLocation fullLocation = new SourceLocation(
                     location.line(), location.column(), location.offset(),
                     parserContext.previousTokenEndOffset);
             return new FunctionDeclaration(defaultId, funcParams.params(), funcParams.defaults(),
-                    funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+                    funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
@@ -852,6 +857,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             // Parse body with "use strict" detection and parameter validation
             BlockStatement body = parseFunctionBody(funcParams, id);
+            boolean needsArguments = parserContext.needsArguments;
 
             // Use previousTokenEndOffset (position after closing '}') instead of
             // currentToken.offset() (position of NEXT token, which may include trailing comments)
@@ -862,7 +868,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     parserContext.previousTokenEndOffset
             );
 
-            return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+            return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
@@ -909,6 +915,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             // Parse body with "use strict" detection and parameter validation
             BlockStatement body = parseFunctionBody(funcParams, id);
+            boolean needsArguments = parserContext.needsArguments;
 
             // Use previousTokenEndOffset (position after closing '}') instead of
             // currentToken.offset() (which may include trailing comments)
@@ -919,7 +926,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     parserContext.previousTokenEndOffset
             );
 
-            return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+            return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
@@ -1020,6 +1027,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         BlockStatement body;
         FunctionParams funcParams;
+        boolean needsArguments;
         try {
             // Per QuickJS: in_function_body == FALSE prevents yield/await during
             // parsing of parameters in async/generator functions.
@@ -1040,6 +1048,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
             checkDuplicateParameters(funcParams);
             body = parseFunctionBody(funcParams, null);
+            needsArguments = parserContext.needsArguments;
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -1062,7 +1071,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         );
 
         return new FunctionExpression(null, funcParams.params(), funcParams.defaults(),
-                funcParams.restParameter(), body, isAsync, isGenerator, fullLocation);
+                funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
     }
 
     /**

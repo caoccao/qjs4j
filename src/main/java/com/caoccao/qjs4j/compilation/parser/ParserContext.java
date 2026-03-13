@@ -90,8 +90,9 @@ final class ParserContext {
     boolean inClassFieldInitializer;
     boolean inClassStaticInit;
     boolean inDerivedConstructor;
-    boolean inFunctionBody = true;
-    boolean inOperatorAllowed = true;
+    boolean inFunctionBody;
+    boolean inOperatorAllowed;
+    boolean needsArguments;
     int newTargetNesting;
     Token nextToken;
     boolean parsingClassWithSuper;
@@ -108,6 +109,8 @@ final class ParserContext {
                   boolean initialSuperPropertyAllowed,
                   boolean allowNewTargetInEval,
                   Set<String> evalPrivateNames) {
+        inFunctionBody = true;
+        inOperatorAllowed = true;
         this.lexer = lexer;
         this.moduleMode = moduleMode;
         this.isEval = isEval;
@@ -472,6 +475,9 @@ final class ParserContext {
             // 'arguments' is forbidden in class field initializers (including arrows)
             if (JSKeyword.ARGUMENTS.equals(name) && (inClassFieldInitializer || inClassStaticInit)) {
                 throw new JSSyntaxErrorException("'arguments' is not allowed in class field initializer or static initialization block");
+            }
+            if (JSKeyword.ARGUMENTS.equals(name) || JSKeyword.EVAL.equals(name)) {
+                needsArguments = true;
             }
             advance();
             return new Identifier(name, location);

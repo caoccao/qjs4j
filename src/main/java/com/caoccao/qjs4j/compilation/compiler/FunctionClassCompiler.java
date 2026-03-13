@@ -97,23 +97,6 @@ final class FunctionClassCompiler {
         return false;
     }
 
-    private static boolean containsToken(String source, String token) {
-        int length = source.length();
-        int tokenLength = token.length();
-        for (int index = 0; index <= length - tokenLength; index++) {
-            if (!source.regionMatches(index, token, 0, tokenLength)) {
-                continue;
-            }
-            boolean leftBoundary = index == 0 || !isIdentifierPart(source.charAt(index - 1));
-            int tokenEnd = index + tokenLength;
-            boolean rightBoundary = tokenEnd >= length || !isIdentifierPart(source.charAt(tokenEnd));
-            if (leftBoundary && rightBoundary) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
         String candidateName = "__auto_accessor_" + index;
         while (existingNames.contains(candidateName)) {
@@ -150,6 +133,7 @@ final class FunctionClassCompiler {
                     body,
                     false,
                     false,
+                    false,
                     location);
         } else {
             Identifier valueIdentifier = new Identifier("value", location);
@@ -167,6 +151,7 @@ final class FunctionClassCompiler {
                     null,
                     null,
                     body,
+                    false,
                     false,
                     false,
                     location);
@@ -194,11 +179,6 @@ final class FunctionClassCompiler {
         return false;
     }
 
-    private static boolean isIdentifierPart(char character) {
-        return character == '$'
-                || character == '_'
-                || Character.isLetterOrDigit(character);
-    }
 
     /**
      * Convert a pattern to a string representation for source generation.
@@ -1124,7 +1104,7 @@ final class FunctionClassCompiler {
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
-        if (shouldInitializeImplicitArgumentsBinding(funcDecl.getLocation())) {
+        if (funcDecl.needsArguments()) {
             declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
@@ -1357,7 +1337,7 @@ final class FunctionClassCompiler {
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
-        if (shouldInitializeImplicitArgumentsBinding(functionExpression.getLocation())) {
+        if (functionExpression.needsArguments()) {
             declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
@@ -1551,7 +1531,7 @@ final class FunctionClassCompiler {
                 methodCtx,
                 methodDelegates,
                 parameterSlotIndexes);
-        if (shouldInitializeImplicitArgumentsBinding(method.getLocation())) {
+        if (method.getValue().needsArguments()) {
             declareAndInitializeImplicitArgumentsBinding(methodCtx);
         }
 
@@ -2146,23 +2126,6 @@ final class FunctionClassCompiler {
             return;
         }
         throw new JSCompilerException("private class field is already defined");
-    }
-
-    private boolean shouldInitializeImplicitArgumentsBinding(SourceLocation location) {
-        if (location == null || compilerContext.sourceCode == null || compilerContext.sourceCode.isEmpty()) {
-            return true;
-        }
-        int sourceStartOffset = Math.max(0, location.offset());
-        int sourceEndOffset = Math.min(compilerContext.sourceCode.length(), location.endOffset());
-        if (sourceEndOffset <= sourceStartOffset) {
-            return true;
-        }
-        String functionSource = compilerContext.sourceCode.substring(sourceStartOffset, sourceEndOffset);
-        if (functionSource.indexOf('\\') >= 0) {
-            return true;
-        }
-        return containsToken(functionSource, JSKeyword.ARGUMENTS)
-                || containsToken(functionSource, JSKeyword.EVAL);
     }
 
     record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {

@@ -27,10 +27,11 @@ public final class FunctionDeclaration extends Declaration {
     private final Identifier id;
     private final boolean isAsync;
     private final boolean isGenerator;
+    private final boolean needsArguments;
     private final List<Pattern> params;
     private final RestParameter restParameter;
 
-    public FunctionDeclaration(Identifier id, List<Pattern> params, List<Expression> defaults, RestParameter restParameter, BlockStatement body, boolean isAsync, boolean isGenerator, SourceLocation location) {
+    public FunctionDeclaration(Identifier id, List<Pattern> params, List<Expression> defaults, RestParameter restParameter, BlockStatement body, boolean isAsync, boolean isGenerator, boolean needsArguments, SourceLocation location) {
         super(location);
         this.id = id;
         this.params = params;
@@ -39,6 +40,7 @@ public final class FunctionDeclaration extends Declaration {
         this.body = body;
         this.isAsync = isAsync;
         this.isGenerator = isGenerator;
+        this.needsArguments = needsArguments;
     }
 
     @Override
@@ -127,5 +129,9 @@ public final class FunctionDeclaration extends Declaration {
 
     public boolean isGenerator() {
         return isGenerator;
+    }
+
+    public boolean needsArguments() {
+        return needsArguments;
     }
 }
