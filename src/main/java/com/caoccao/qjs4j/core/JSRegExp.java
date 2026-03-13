@@ -40,7 +40,7 @@ public final class JSRegExp extends JSObject {
         String rawFlags = flags != null ? flags : "";
 
         // Compile the pattern to bytecode
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         this.bytecode = compiler.compile(this.pattern, rawFlags);
         this.engine = new RegExpEngine(bytecode);
         this.flags = this.bytecode.flagsToString();
@@ -257,7 +257,7 @@ public final class JSRegExp extends JSObject {
         String nextPattern = pattern != null ? pattern : "";
         String rawFlags = flags != null ? flags : "";
 
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(getContext().getUnicodePropertyResolver());
         RegExpBytecode nextBytecode = compiler.compile(nextPattern, rawFlags);
         RegExpEngine nextEngine = new RegExpEngine(nextBytecode);
         String nextFlags = nextBytecode.flagsToString();

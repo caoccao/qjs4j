@@ -33,8 +33,8 @@ public final class UnicodeData {
 
     // ASCII character type table (0-255)
     private static final byte[] ASCII_CTYPE_BITS = new byte[256];
-    private static final int[] ID_CONTINUE_RANGES = UnicodePropertyResolver.resolveBinaryProperty("ID_Continue");
-    private static final int[] ID_START_RANGES = UnicodePropertyResolver.resolveBinaryProperty("ID_Start");
+    private static final int[] ID_CONTINUE_RANGES = UnicodePropertyResolver.resolveBinaryPropertyUncached("ID_Continue");
+    private static final int[] ID_START_RANGES = UnicodePropertyResolver.resolveBinaryPropertyUncached("ID_Start");
 
     static {
         // Initialize ASCII character types

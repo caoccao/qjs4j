@@ -502,7 +502,7 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key.
      */
     public JSValue get(PropertyKey key) {
-        return getWithReceiver(key, (JSValue) this, 0);
+        return getWithReceiver(key, this, 0);
     }
 
     /**
@@ -825,7 +825,7 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.get to pass a different receiver than the target.
      */
     public JSValue getWithReceiver(PropertyKey key, JSObject receiver) {
-        return getWithReceiver(key, (JSValue) receiver, 0);
+        return getWithReceiver(key, receiver, 0);
     }
 
     /**

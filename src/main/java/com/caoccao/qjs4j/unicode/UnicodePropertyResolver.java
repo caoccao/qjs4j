@@ -17,27 +17,31 @@
 package com.caoccao.qjs4j.unicode;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static com.caoccao.qjs4j.unicode.UnicodePropertyTables.*;
 
 /**
  * Resolves Unicode property names to code point ranges.
  * Ported from QuickJS libunicode.c.
+ * <p>
+ * Each JSContext owns its own instance, so the caches are per-context
+ * and require no synchronization.
  */
 public final class UnicodePropertyResolver {
 
-    private static final Map<String, int[]> GC_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, int[]> PROPERTY_CACHE = new ConcurrentHashMap<>();
-    private static final Map<String, int[]> SCRIPT_CACHE = new ConcurrentHashMap<>();
     private static final int SCRIPT_COMMON = 26;
     private static final int SCRIPT_INHERITED = 59;
     // Script index constants
     private static final int SCRIPT_UNKNOWN = 0;
 
-    private UnicodePropertyResolver() {
+    private final Map<String, int[]> gcCache = new HashMap<>();
+    private final Map<String, int[]> propertyCache = new HashMap<>();
+    private final Map<String, int[]> scriptCache = new HashMap<>();
+
+    public UnicodePropertyResolver() {
     }
 
     /**
@@ -489,29 +493,17 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Resolve a binary property name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
+     * Resolve a binary property without caching.
+     * Used by UnicodeData static initializers that run before any JSContext exists.
      */
-    public static int[] resolveBinaryProperty(String name) {
-        int[] cached = PROPERTY_CACHE.get(name);
-        if (cached != null) {
-            return cached;
-        }
-
+    public static int[] resolveBinaryPropertyUncached(String name) {
         int propIndex = findName(PROP_NAME_TABLE, name);
         if (propIndex < 0) {
             return null;
         }
         propIndex += PROP_ASCII_HEX_DIGIT;
-
-        int[] ranges = resolvePropertyByIndex(propIndex);
-        if (ranges != null) {
-            PROPERTY_CACHE.put(name, ranges);
-        }
-        return ranges;
+        return resolvePropertyByIndex(propIndex);
     }
-
-    // --- Range set operations ---
 
     private static int[] resolveDerivedProperty(int propIndex) {
         // These match the QuickJS enum values after the table entries
@@ -666,6 +658,8 @@ public final class UnicodePropertyResolver {
         return null;
     }
 
+    // --- Range set operations ---
+
     private static SequencePropertyResult resolveEmojiKeycapSequence() {
         // Each code point c becomes sequence [c, 0xFE0F, 0x20E3]
         int[] ranges = decodeBinaryProperty(PROP_EMOJI_KEYCAP_SEQUENCE);
@@ -676,34 +670,6 @@ public final class UnicodePropertyResolver {
             }
         }
         return new SequencePropertyResult(new int[0], sequences);
-    }
-
-    /**
-     * Resolve a General Category name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public static int[] resolveGeneralCategory(String name) {
-        int[] cached = GC_CACHE.get(name);
-        if (cached != null) {
-            return cached;
-        }
-
-        int gcIndex = findName(GC_NAME_TABLE, name);
-        if (gcIndex < 0) {
-            return null;
-        }
-
-        long gcMask;
-        if (gcIndex >= 30) {
-            // Composite categories: LC, L, M, N, S, P, Z, C
-            gcMask = getCompositeGcMask(gcIndex);
-        } else {
-            gcMask = 1L << gcIndex;
-        }
-
-        int[] ranges = decodeGeneralCategory(gcMask);
-        GC_CACHE.put(name, ranges);
-        return ranges;
     }
 
     private static int[] resolvePropertyByIndex(int propIndex) {
@@ -945,29 +911,6 @@ public final class UnicodePropertyResolver {
     }
 
     /**
-     * Resolve a script name (or alias) to code point ranges.
-     * Returns null if the name is not recognized.
-     */
-    public static int[] resolveScript(String name, boolean extensions) {
-        String cacheKey = (extensions ? "scx:" : "sc:") + name;
-        int[] cached = SCRIPT_CACHE.get(cacheKey);
-        if (cached != null) {
-            return cached;
-        }
-
-        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
-        if (scriptIndex < 0) {
-            return null;
-        }
-
-        int[] ranges = decodeScript(scriptIndex, extensions);
-        if (ranges != null) {
-            SCRIPT_CACHE.put(cacheKey, ranges);
-        }
-        return ranges;
-    }
-
-    /**
      * Resolve a Unicode "property of strings" (sequence property) by name.
      * These are used in RegExp with the {@code v} flag for matching multi-codepoint sequences.
      * <p>
@@ -1096,6 +1039,74 @@ public final class UnicodePropertyResolver {
         }
         int[] notAAndB = invertRanges(aAndB);
         return intersectRanges(aOrB, notAAndB);
+    }
+
+    /**
+     * Resolve a binary property name (or alias) to code point ranges.
+     * Returns null if the name is not recognized.
+     */
+    public int[] resolveBinaryProperty(String name) {
+        int[] cached = propertyCache.get(name);
+        if (cached != null) {
+            return cached;
+        }
+
+        int[] ranges = resolveBinaryPropertyUncached(name);
+        if (ranges != null) {
+            propertyCache.put(name, ranges);
+        }
+        return ranges;
+    }
+
+    /**
+     * Resolve a General Category name (or alias) to code point ranges.
+     * Returns null if the name is not recognized.
+     */
+    public int[] resolveGeneralCategory(String name) {
+        int[] cached = gcCache.get(name);
+        if (cached != null) {
+            return cached;
+        }
+
+        int gcIndex = findName(GC_NAME_TABLE, name);
+        if (gcIndex < 0) {
+            return null;
+        }
+
+        long gcMask;
+        if (gcIndex >= 30) {
+            // Composite categories: LC, L, M, N, S, P, Z, C
+            gcMask = getCompositeGcMask(gcIndex);
+        } else {
+            gcMask = 1L << gcIndex;
+        }
+
+        int[] ranges = decodeGeneralCategory(gcMask);
+        gcCache.put(name, ranges);
+        return ranges;
+    }
+
+    /**
+     * Resolve a script name (or alias) to code point ranges.
+     * Returns null if the name is not recognized.
+     */
+    public int[] resolveScript(String name, boolean extensions) {
+        String cacheKey = (extensions ? "scx:" : "sc:") + name;
+        int[] cached = scriptCache.get(cacheKey);
+        if (cached != null) {
+            return cached;
+        }
+
+        int scriptIndex = findName(SCRIPT_NAME_TABLE, name);
+        if (scriptIndex < 0) {
+            return null;
+        }
+
+        int[] ranges = decodeScript(scriptIndex, extensions);
+        if (ranges != null) {
+            scriptCache.put(cacheKey, ranges);
+        }
+        return ranges;
     }
 
     /**

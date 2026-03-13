@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class RegExpEscapeTest extends BaseJavetTest {
     private boolean matches(String pattern, String flags, String input) {
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         RegExpBytecode bytecode = compiler.compile(pattern, flags);
         RegExpEngine engine = new RegExpEngine(bytecode);
         RegExpEngine.MatchResult result = engine.exec(input, 0);
@@ -57,7 +57,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     @Test
     public void testBackreferenceInvalidUnicodeModeFails() {
         // In unicode mode, invalid backreferences throw
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\1", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
     }
@@ -125,7 +125,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     @Test
     public void testControlEscapeInvalidInUnicodeMode() {
         // \c without valid letter should throw in unicode mode
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\c0", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
         assertThatThrownBy(() -> compiler.compile("\\c_", "u"))
@@ -177,7 +177,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
 
     @Test
     public void testHexEscapeInvalidUnicodeModeFails() {
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\xGG", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
         assertThatThrownBy(() -> compiler.compile("\\x", "u"))
@@ -218,7 +218,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     @Test
     public void testIdentityEscapeDashUnicodeModeFails() {
         // \- should throw in unicode mode outside character class
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\-", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
@@ -227,7 +227,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     @Test
     public void testIdentityEscapeNonSyntaxCharsUnicodeModeFails() {
         // Non-syntax characters should throw in unicode mode
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\a", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("invalid escape sequence");
@@ -313,7 +313,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
     @Test
     public void testNullEscapeFollowedByDigitUnicodeModeFails() {
         // \0 followed by digit should error in unicode mode
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\00", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
         assertThatThrownBy(() -> compiler.compile("\\01", "u"))
@@ -344,7 +344,7 @@ public class RegExpEscapeTest extends BaseJavetTest {
 
     @Test
     public void testUnicodeEscapeInvalidUnicodeModeFails() {
-        RegExpCompiler compiler = new RegExpCompiler();
+        RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         assertThatThrownBy(() -> compiler.compile("\\uGGGG", "u"))
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class);
     }

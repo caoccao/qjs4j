@@ -35,8 +35,8 @@ import java.util.Map;
  * for O(1) property offset lookups instead of O(N) linear scans.
  */
 public final class JSShape {
-    private static final PropertyKey[] EMPTY_KEYS = new PropertyKey[0];
     private static final PropertyDescriptor[] EMPTY_DESCRIPTORS = new PropertyDescriptor[0];
+    private static final PropertyKey[] EMPTY_KEYS = new PropertyKey[0];
     private static final int INDEX_THRESHOLD = 6;
 
     private int deletedPropCount;

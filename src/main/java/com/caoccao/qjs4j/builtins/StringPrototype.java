@@ -30,19 +30,6 @@ import java.util.Locale;
 public final class StringPrototype {
 
     /**
-     * Cached ranges for the "Case_Ignorable" Unicode binary property.
-     */
-    private static int[] caseIgnorableRanges;
-    /**
-     * Cached ranges for the "Cased" Unicode binary property.
-     */
-    private static int[] casedRanges;
-    /**
-     * Cached ranges for the "Soft_Dotted" Unicode binary property.
-     */
-    private static int[] softDottedRanges;
-
-    /**
      * String.prototype.anchor(name)
      * Creates an HTML anchor element with a name attribute.
      */
@@ -465,6 +452,38 @@ public final class StringPrototype {
         return JSNumber.of(s.codePointAt((int) pos));
     }
 
+    private static int codePointToLower16(int codePoint) {
+        return switch (codePoint) {
+            case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE -> small (Unicode 16.0)
+            case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN -> small (Unicode 15.0)
+            case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE -> small (Unicode 15.0)
+            case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
+            case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
+            default -> {
+                if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
+                    yield codePoint + 0x20; // Garay uppercase -> lowercase (Unicode 16.0)
+                }
+                yield codePoint;
+            }
+        };
+    }
+
+    private static int codePointToUpper16(int codePoint) {
+        return switch (codePoint) {
+            case 0x019B -> 0xA7DC; // LATIN SMALL LETTER LAMBDA WITH STROKE -> CAPITAL (Unicode 16.0)
+            case 0x0264 -> 0xA7CB; // LATIN SMALL LETTER RAMS HORN -> CAPITAL (Unicode 15.0)
+            case 0x1C8A -> 0x1C89; // CYRILLIC SMALL LETTER TJE -> CAPITAL (Unicode 15.0)
+            case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
+            case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
+            default -> {
+                if (codePoint >= 0x10D70 && codePoint <= 0x10D85) {
+                    yield codePoint - 0x20; // Garay lowercase -> uppercase (Unicode 16.0)
+                }
+                yield codePoint;
+            }
+        };
+    }
+
     /**
      * String.prototype.concat(...strings)
      * ES2020 21.1.3.4
@@ -760,38 +779,32 @@ public final class StringPrototype {
      * Check if a code point is "Case_Ignorable" per Unicode property.
      * Uses the full Unicode Case_Ignorable property table.
      */
-    private static boolean isCaseIgnorableUnicode(int codePoint) {
+    private static boolean isCaseIgnorableUnicode(UnicodePropertyResolver resolver, int codePoint) {
         int type = Character.getType(codePoint);
         boolean fallbackCaseIgnorable = type == Character.NON_SPACING_MARK ||
                 type == Character.ENCLOSING_MARK ||
                 type == Character.FORMAT ||
                 type == Character.MODIFIER_LETTER ||
                 type == Character.MODIFIER_SYMBOL;
-        if (caseIgnorableRanges == null) {
-            caseIgnorableRanges = UnicodePropertyResolver.resolveBinaryProperty("Case_Ignorable");
-            if (caseIgnorableRanges == null) {
-                // Fallback if tables not available
-                return fallbackCaseIgnorable;
-            }
+        int[] ranges = resolver.resolveBinaryProperty("Case_Ignorable");
+        if (ranges == null) {
+            return fallbackCaseIgnorable;
         }
-        return isInRanges(codePoint, caseIgnorableRanges) || fallbackCaseIgnorable;
+        return isInRanges(codePoint, ranges) || fallbackCaseIgnorable;
     }
 
     /**
      * Check if a code point is "Cased" per Unicode property.
      * Uses the full Unicode Cased property table.
      */
-    private static boolean isCasedUnicode(int codePoint) {
-        if (casedRanges == null) {
-            casedRanges = UnicodePropertyResolver.resolveBinaryProperty("Cased");
-            if (casedRanges == null) {
-                // Fallback if tables not available
-                return Character.isUpperCase(codePoint) ||
-                        Character.isLowerCase(codePoint) ||
-                        Character.isTitleCase(codePoint);
-            }
+    private static boolean isCasedUnicode(UnicodePropertyResolver resolver, int codePoint) {
+        int[] ranges = resolver.resolveBinaryProperty("Cased");
+        if (ranges == null) {
+            return Character.isUpperCase(codePoint) ||
+                    Character.isLowerCase(codePoint) ||
+                    Character.isTitleCase(codePoint);
         }
-        return isInRanges(codePoint, casedRanges);
+        return isInRanges(codePoint, ranges);
     }
 
     /**
@@ -822,19 +835,19 @@ public final class StringPrototype {
      * Final sigma: preceded by a cased letter (skipping case-ignorable) and
      * NOT followed by a cased letter (skipping case-ignorable).
      */
-    private static boolean isFinalSigma(String s, int sigmaPos) {
+    private static boolean isFinalSigma(UnicodePropertyResolver resolver, String s, int sigmaPos) {
         // Look backward: skip case-ignorable, check for cased
         int k = sigmaPos;
         int prevCodePoint = -1;
         while (k > 0) {
             int cp = Character.codePointBefore(s, k);
             k -= Character.charCount(cp);
-            if (!isCaseIgnorableUnicode(cp)) {
+            if (!isCaseIgnorableUnicode(resolver, cp)) {
                 prevCodePoint = cp;
                 break;
             }
         }
-        if (prevCodePoint == -1 || !isCasedUnicode(prevCodePoint)) {
+        if (prevCodePoint == -1 || !isCasedUnicode(resolver, prevCodePoint)) {
             return false;
         }
 
@@ -843,8 +856,8 @@ public final class StringPrototype {
         while (k < s.length()) {
             int cp = s.codePointAt(k);
             k += Character.charCount(cp);
-            if (!isCaseIgnorableUnicode(cp)) {
-                return !isCasedUnicode(cp);
+            if (!isCaseIgnorableUnicode(resolver, cp)) {
+                return !isCasedUnicode(resolver, cp);
             }
         }
         return true; // End of string, no following cased letter
@@ -889,14 +902,12 @@ public final class StringPrototype {
     /**
      * Check if a code point has the Unicode Soft_Dotted property.
      */
-    private static boolean isSoftDottedUnicode(int codePoint) {
-        if (softDottedRanges == null) {
-            softDottedRanges = UnicodePropertyResolver.resolveBinaryProperty("Soft_Dotted");
-            if (softDottedRanges == null) {
-                return false;
-            }
+    private static boolean isSoftDottedUnicode(UnicodePropertyResolver resolver, int codePoint) {
+        int[] ranges = resolver.resolveBinaryProperty("Soft_Dotted");
+        if (ranges == null) {
+            return false;
         }
-        return isInRanges(codePoint, softDottedRanges);
+        return isInRanges(codePoint, ranges);
     }
 
     /**
@@ -1224,7 +1235,7 @@ public final class StringPrototype {
      * Lithuanian uppercasing removes U+0307 when it follows a Soft_Dotted code point
      * with only combining marks in between.
      */
-    private static String removeLithuanianSoftDottedDots(String input) {
+    private static String removeLithuanianSoftDottedDots(UnicodePropertyResolver resolver, String input) {
         StringBuilder result = new StringBuilder(input.length());
         int index = 0;
         while (index < input.length()) {
@@ -1240,7 +1251,7 @@ public final class StringPrototype {
                         break;
                     }
                 }
-                if (previousCodePoint != -1 && isSoftDottedUnicode(previousCodePoint)) {
+                if (previousCodePoint != -1 && isSoftDottedUnicode(resolver, previousCodePoint)) {
                     index += charCount;
                     continue;
                 }
@@ -1875,7 +1886,7 @@ public final class StringPrototype {
         if ("tr".equals(language) || "az".equals(language) || "lt".equals(language)) {
             return new JSString(str.value().toLowerCase(locale));
         }
-        return new JSString(toLowerCaseWithSigma(str.value()));
+        return new JSString(toLowerCaseWithSigma(context.getUnicodePropertyResolver(), str.value()));
     }
 
     /**
@@ -1891,7 +1902,7 @@ public final class StringPrototype {
         }
         String source = str.value();
         if ("lt".equals(locale.getLanguage())) {
-            source = removeLithuanianSoftDottedDots(source);
+            source = removeLithuanianSoftDottedDots(context.getUnicodePropertyResolver(), source);
         }
         return new JSString(toUpperCaseUnicode16(source.toUpperCase(locale)));
     }
@@ -1903,7 +1914,7 @@ public final class StringPrototype {
      */
     public static JSValue toLowerCase(JSContext context, JSValue thisArg, JSValue[] args) {
         JSString str = toStringCheckObject(context, thisArg);
-        return new JSString(toLowerCaseWithSigma(str.value()));
+        return new JSString(toLowerCaseWithSigma(context.getUnicodePropertyResolver(), str.value()));
     }
 
     /**
@@ -1912,7 +1923,7 @@ public final class StringPrototype {
      * with possible case-ignorable characters in between, and NOT followed by
      * a cased letter), it maps to U+03C2 (final sigma) instead of U+03C3.
      */
-    private static String toLowerCaseWithSigma(String s) {
+    private static String toLowerCaseWithSigma(UnicodePropertyResolver resolver, String s) {
         boolean needsCustom = false;
         for (int i = 0; i < s.length(); ) {
             int codePoint = s.codePointAt(i);
@@ -1933,7 +1944,7 @@ public final class StringPrototype {
             int charCount = Character.charCount(codePoint);
             if (codePoint == 0x03A3) {
                 // Check final sigma condition
-                if (isFinalSigma(s, i)) {
+                if (isFinalSigma(resolver, s, i)) {
                     result.append('\u03C2'); // final sigma
                 } else {
                     result.append('\u03C3'); // regular sigma
@@ -1942,27 +1953,11 @@ public final class StringPrototype {
                 int lower = Character.toLowerCase(codePoint);
                 // Apply Unicode 16.0 additions
                 int lower16 = codePointToLower16(lower);
-                result.appendCodePoint(lower16 != lower ? lower16 : lower);
+                result.appendCodePoint(lower16);
             }
             i += charCount;
         }
         return result.toString();
-    }
-
-    private static int codePointToLower16(int codePoint) {
-        return switch (codePoint) {
-            case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE -> small (Unicode 16.0)
-            case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN -> small (Unicode 15.0)
-            case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE -> small (Unicode 15.0)
-            case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
-            case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
-            default -> {
-                if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
-                    yield codePoint + 0x20; // Garay uppercase -> lowercase (Unicode 16.0)
-                }
-                yield codePoint;
-            }
-        };
     }
 
     /**
@@ -2020,22 +2015,6 @@ public final class StringPrototype {
             i += Character.charCount(codePoint);
         }
         return sb.toString();
-    }
-
-    private static int codePointToUpper16(int codePoint) {
-        return switch (codePoint) {
-            case 0x019B -> 0xA7DC; // LATIN SMALL LETTER LAMBDA WITH STROKE -> CAPITAL (Unicode 16.0)
-            case 0x0264 -> 0xA7CB; // LATIN SMALL LETTER RAMS HORN -> CAPITAL (Unicode 15.0)
-            case 0x1C8A -> 0x1C89; // CYRILLIC SMALL LETTER TJE -> CAPITAL (Unicode 15.0)
-            case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
-            case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
-            default -> {
-                if (codePoint >= 0x10D70 && codePoint <= 0x10D85) {
-                    yield codePoint - 0x20; // Garay lowercase -> uppercase (Unicode 16.0)
-                }
-                yield codePoint;
-            }
-        };
     }
 
     /**

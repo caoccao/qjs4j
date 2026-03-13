@@ -57,6 +57,16 @@ public final class TypedArrayPrototype {
         return safeGetElement(typedArray, index);
     }
 
+    private static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
+        if (callable instanceof JSProxy proxy) {
+            return proxy.apply(context, thisArg, args);
+        }
+        if (callable instanceof JSFunction function) {
+            return function.call(context, thisArg, args);
+        }
+        return context.throwTypeError("Value is not callable");
+    }
+
     /**
      * CompareTypedArrayElements per ES2024 23.2.4.4.
      * Default comparison for typed array sort when no compareFn is provided.
@@ -1493,16 +1503,6 @@ public final class TypedArrayPrototype {
             }
         }
         return JSTypeConversions.toString(context, thisArg);
-    }
-
-    private static JSValue callCallable(JSContext context, JSValue callable, JSValue thisArg, JSValue[] args) {
-        if (callable instanceof JSProxy proxy) {
-            return proxy.apply(context, thisArg, args);
-        }
-        if (callable instanceof JSFunction function) {
-            return function.call(context, thisArg, args);
-        }
-        return context.throwTypeError("Value is not callable");
     }
 
     private static JSTypedArray toTypedArray(JSContext context, JSValue thisArg, String methodName) {

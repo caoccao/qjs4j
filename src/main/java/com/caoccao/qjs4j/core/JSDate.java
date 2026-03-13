@@ -22,9 +22,9 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.zone.ZoneRules;
-import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -61,8 +61,7 @@ public final class JSDate extends JSObject {
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
                     .withZone(ZoneOffset.UTC);
     private static final ZoneRules SYSTEM_ZONE_RULES = ZoneId.systemDefault().getRules();
-    private static final ThreadLocal<HashMap<Long, Integer>> TZ_OFFSET_CACHE =
-            ThreadLocal.withInitial(HashMap::new);
+    private static final Map<Long, Integer> TZ_OFFSET_CACHE = new ConcurrentHashMap<>();
     private double timeValue;
 
     public JSDate(JSContext context) {
@@ -216,15 +215,14 @@ public final class JSDate extends JSObject {
 
     public static int getTimezoneOffset(long epochMillis) {
         long epochSecond = Math.floorDiv(epochMillis, 1000L);
-        HashMap<Long, Integer> cache = TZ_OFFSET_CACHE.get();
-        Integer cached = cache.get(epochSecond);
+        Integer cached = TZ_OFFSET_CACHE.get(epochSecond);
         if (cached != null) {
             return cached;
         }
         ZoneOffset zoneOffset = SYSTEM_ZONE_RULES.getOffset(Instant.ofEpochSecond(epochSecond));
         int offsetMinutes = -zoneOffset.getTotalSeconds() / 60;
-        if (cache.size() < 8192) {
-            cache.put(epochSecond, offsetMinutes);
+        if (TZ_OFFSET_CACHE.size() < 8192) {
+            TZ_OFFSET_CACHE.put(epochSecond, offsetMinutes);
         }
         return offsetMinutes;
     }

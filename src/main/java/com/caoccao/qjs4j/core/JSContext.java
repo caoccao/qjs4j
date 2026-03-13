@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.compilation.ast.AstUtils;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
+import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
@@ -88,6 +89,7 @@ public final class JSContext implements AutoCloseable {
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
     private final JSRuntime runtime;
+    private final UnicodePropertyResolver unicodePropertyResolver;
     private final VirtualMachine virtualMachine;
     private boolean activeGlobalFunctionBindingConfigurable;
     private Set<String> activeGlobalFunctionBindingInitializations;
@@ -153,6 +155,7 @@ public final class JSContext implements AutoCloseable {
         this.moduleCache = new HashMap<>();
         this.pendingException = null;
         this.runtime = runtime;
+        this.unicodePropertyResolver = new UnicodePropertyResolver();
         this.asyncEvaluationOrderCounter = 0;
         this.inBareVariableAssignment = false;
         this.pendingDirectEvalCalls = 0;
@@ -2983,6 +2986,10 @@ public final class JSContext implements AutoCloseable {
      */
     public JSNativeFunction getThrowTypeErrorIntrinsic() {
         return throwTypeErrorIntrinsic;
+    }
+
+    public UnicodePropertyResolver getUnicodePropertyResolver() {
+        return unicodePropertyResolver;
     }
 
     /**

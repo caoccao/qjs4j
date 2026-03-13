@@ -50,10 +50,15 @@ public final class RegExpCompiler {
     private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
+    private final UnicodePropertyResolver unicodePropertyResolver;
     private int captureCount;
     private List<String> groupNames;
     private Map<String, Integer> namedCaptureIndices;
     private int totalCaptureCount;
+
+    public RegExpCompiler(UnicodePropertyResolver unicodePropertyResolver) {
+        this.unicodePropertyResolver = unicodePropertyResolver;
+    }
 
     private long appendDecimalDigitWithClamp(long currentValue, int digit) {
         if (currentValue >= MAX_QUANTIFIER_BOUND) {
@@ -2329,21 +2334,21 @@ public final class RegExpCompiler {
     private int[] resolveUnicodePropertyRanges(String propertyName, String propertyValue) {
         if (propertyValue != null) {
             if ("General_Category".equals(propertyName) || "gc".equals(propertyName)) {
-                int[] ranges = UnicodePropertyResolver.resolveGeneralCategory(propertyValue);
+                int[] ranges = unicodePropertyResolver.resolveGeneralCategory(propertyValue);
                 if (ranges == null) {
                     throw new RegExpSyntaxException("unknown unicode general category");
                 }
                 return ranges;
             }
             if ("Script".equals(propertyName) || "sc".equals(propertyName)) {
-                int[] ranges = UnicodePropertyResolver.resolveScript(propertyValue, false);
+                int[] ranges = unicodePropertyResolver.resolveScript(propertyValue, false);
                 if (ranges == null) {
                     throw new RegExpSyntaxException("unknown unicode script");
                 }
                 return ranges;
             }
             if ("Script_Extensions".equals(propertyName) || "scx".equals(propertyName)) {
-                int[] ranges = UnicodePropertyResolver.resolveScript(propertyValue, true);
+                int[] ranges = unicodePropertyResolver.resolveScript(propertyValue, true);
                 if (ranges == null) {
                     throw new RegExpSyntaxException("unknown unicode script");
                 }
@@ -2353,12 +2358,12 @@ public final class RegExpCompiler {
         }
 
         // Try General Category first (bare name like \p{Lu} or \p{Letter})
-        int[] ranges = UnicodePropertyResolver.resolveGeneralCategory(propertyName);
+        int[] ranges = unicodePropertyResolver.resolveGeneralCategory(propertyName);
         if (ranges != null) {
             return ranges;
         }
         // Try binary property (like \p{Alphabetic} or \p{Alpha})
-        ranges = UnicodePropertyResolver.resolveBinaryProperty(propertyName);
+        ranges = unicodePropertyResolver.resolveBinaryProperty(propertyName);
         if (ranges != null) {
             return ranges;
         }
@@ -2551,6 +2556,35 @@ public final class RegExpCompiler {
         return result;
     }
 
+    /**
+     * Parse only a 4-digit \\uHHHH escape at the given position.
+     * Per QuickJS, surrogate pair combining only applies to 4-digit escapes.
+     */
+    private UnicodeEscapeParseResult tryParseFourDigitUnicodeEscapeAt(CompileContext context, int startPos) {
+        if (startPos + 1 >= context.codePoints.length
+                || context.codePoints[startPos] != '\\'
+                || context.codePoints[startPos + 1] != 'u') {
+            return null;
+        }
+        int currentPos = startPos + 2;
+        // Skip braced escapes — only 4-digit allowed
+        if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
+            return null;
+        }
+        if (currentPos + 3 >= context.codePoints.length) {
+            return null;
+        }
+        int value = 0;
+        for (int i = 0; i < 4; i++) {
+            int hexValue = hexValue(context.codePoints[currentPos + i]);
+            if (hexValue < 0) {
+                return null;
+            }
+            value = (value << 4) | hexValue;
+        }
+        return new UnicodeEscapeParseResult(value, currentPos + 4);
+    }
+
     private InlineModifierGroupParseResult tryParseInlineModifierGroup(CompileContext context) {
         if (context.pos >= context.codePoints.length) {
             return null;
@@ -2605,35 +2639,6 @@ public final class RegExpCompiler {
         }
 
         throw new RegExpSyntaxException("Incomplete group syntax");
-    }
-
-    /**
-     * Parse only a 4-digit \\uHHHH escape at the given position.
-     * Per QuickJS, surrogate pair combining only applies to 4-digit escapes.
-     */
-    private UnicodeEscapeParseResult tryParseFourDigitUnicodeEscapeAt(CompileContext context, int startPos) {
-        if (startPos + 1 >= context.codePoints.length
-                || context.codePoints[startPos] != '\\'
-                || context.codePoints[startPos + 1] != 'u') {
-            return null;
-        }
-        int currentPos = startPos + 2;
-        // Skip braced escapes — only 4-digit allowed
-        if (currentPos < context.codePoints.length && context.codePoints[currentPos] == '{') {
-            return null;
-        }
-        if (currentPos + 3 >= context.codePoints.length) {
-            return null;
-        }
-        int value = 0;
-        for (int i = 0; i < 4; i++) {
-            int hexValue = hexValue(context.codePoints[currentPos + i]);
-            if (hexValue < 0) {
-                return null;
-            }
-            value = (value << 4) | hexValue;
-        }
-        return new UnicodeEscapeParseResult(value, currentPos + 4);
     }
 
     private UnicodeEscapeParseResult tryParseUnicodeEscapeAt(CompileContext context, int startPos) {
