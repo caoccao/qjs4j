@@ -89,12 +89,15 @@ public final class PropertyKey {
     public static final PropertyKey WRITABLE = fromString("writable");
     public static final PropertyKey ZERO = fromString("0");
     private static final long ARRAY_INDEX_NOT_COMPUTED = Long.MIN_VALUE;
+    private static final int INDEX_CACHE_SIZE = 1024;
     private static final int INDEX_NOT_COMPUTED = Integer.MIN_VALUE;
+    private static final PropertyKey[] INDEX_PROPERTY_KEYS = createIndexPropertyKeys();
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL;
     private final int atomIndex; // -1 if not interned
     private final Object value; // String, Integer, or JSSymbol
     private long cachedArrayIndex;
     private int cachedIndex;
+    private String cachedPropertyString;
 
     private PropertyKey(Object value, int atomIndex) {
         this.value = value;
@@ -102,13 +105,24 @@ public final class PropertyKey {
         if (value instanceof Integer integerValue) {
             cachedIndex = integerValue;
             cachedArrayIndex = integerValue >= 0 ? Integer.toUnsignedLong(integerValue) : -1;
+            cachedPropertyString = Integer.toString(integerValue);
         } else if (value instanceof String) {
             cachedIndex = INDEX_NOT_COMPUTED;
             cachedArrayIndex = ARRAY_INDEX_NOT_COMPUTED;
+            cachedPropertyString = (String) value;
         } else {
             cachedIndex = -1;
             cachedArrayIndex = -1;
+            cachedPropertyString = null;
         }
+    }
+
+    private static PropertyKey[] createIndexPropertyKeys() {
+        PropertyKey[] cachedPropertyKeys = new PropertyKey[INDEX_CACHE_SIZE];
+        for (int index = 0; index < INDEX_CACHE_SIZE; index++) {
+            cachedPropertyKeys[index] = new PropertyKey(index, -1);
+        }
+        return cachedPropertyKeys;
     }
 
     /**
@@ -122,6 +136,9 @@ public final class PropertyKey {
      * Create a property key from an integer index.
      */
     public static PropertyKey fromIndex(int index) {
+        if (index >= 0 && index < INDEX_CACHE_SIZE) {
+            return INDEX_PROPERTY_KEYS[index];
+        }
         return new PropertyKey(index, -1);
     }
 
@@ -347,16 +364,14 @@ public final class PropertyKey {
      * Convert to a string representation.
      */
     public String toPropertyString() {
-        if (value instanceof String s) {
-            return s;
+        if (cachedPropertyString == null) {
+            if (value instanceof JSSymbol symbolValue) {
+                cachedPropertyString = symbolValue.toJavaObject();
+            } else {
+                cachedPropertyString = value.toString();
+            }
         }
-        if (value instanceof Integer i) {
-            return i.toString();
-        }
-        if (value instanceof JSSymbol s) {
-            return s.toJavaObject();
-        }
-        return value.toString();
+        return cachedPropertyString;
     }
 
     @Override

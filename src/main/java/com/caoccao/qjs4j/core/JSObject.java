@@ -479,21 +479,9 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by integer index.
      */
     public JSValue get(int index) {
-        // Check sparse properties first
-        if (sparseProperties != null) {
-            JSValue value = sparseProperties.get(index);
-            if (value != null) {
-                return value;
-            }
+        if (index < 0) {
+            return get(String.valueOf(index));
         }
-
-        // Check string property
-        JSValue stringValue = get(String.valueOf(index));
-        if (!(stringValue instanceof JSUndefined)) {
-            return stringValue;
-        }
-
-        // Fall back to index property
         return get(PropertyKey.fromIndex(index));
     }
 

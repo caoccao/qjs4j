@@ -328,7 +328,7 @@ public final class VirtualMachine {
 
         JSValue[] args = new JSValue[(int) length];
         for (int i = 0; i < args.length; i++) {
-            JSValue argValue = arrayLike.get(PropertyKey.fromString(Integer.toString(i)));
+            JSValue argValue = arrayLike.get(PropertyKey.fromIndex(i));
             if (context.hasPendingException()) {
                 return null;
             }

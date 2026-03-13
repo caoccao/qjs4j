@@ -761,7 +761,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcArray.get(PropertyKey.fromString(Integer.toString(i)));
+                JSValue value = srcArray.get(i);
                 if (context.hasPendingException()) {
                     return;
                 }
@@ -800,7 +800,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
                 throw new JSRangeErrorException("Source array too large");
             }
             for (int i = 0; i < srcLength; i++) {
-                JSValue value = srcObject.get(PropertyKey.fromString(Integer.toString(i)));
+                JSValue value = srcObject.get(PropertyKey.fromIndex(i));
                 if (context.hasPendingException()) {
                     return;
                 }

@@ -71,15 +71,9 @@ public final class JSReflectObject {
 
         JSValue[] callArgs = new JSValue[(int) length];
         for (int i = 0; i < callArgs.length; i++) {
-            JSValue argumentValue = arrayLike.get(PropertyKey.fromString(String.valueOf(i)));
+            JSValue argumentValue = arrayLike.get(PropertyKey.fromIndex(i));
             if (context.hasPendingException()) {
                 return null;
-            }
-            if (argumentValue instanceof JSUndefined) {
-                argumentValue = arrayLike.get(PropertyKey.fromString(Integer.toString(i)));
-                if (context.hasPendingException()) {
-                    return null;
-                }
             }
             callArgs[i] = argumentValue;
         }
