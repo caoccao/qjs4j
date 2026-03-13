@@ -673,28 +673,37 @@ public non-sealed class JSObject implements JSValue {
         if (offset >= 0) {
             return offset;
         }
-        long index = key.toArrayIndex();
-        if (index < 0 || index > Integer.MAX_VALUE) {
+        if (key.isSymbol()) {
             return -1;
         }
-        PropertyKey alternateKey = key.isIndex()
-                ? PropertyKey.fromString(Long.toString(index))
-                : PropertyKey.fromIndex((int) index);
-        return shape.getPropertyOffset(alternateKey);
+        if (key.isIndex()) {
+            return shape.getPropertyOffsetByIndexKey(key.toPropertyString());
+        }
+        int index = key.toIndex();
+        if (index < 0) {
+            return -1;
+        }
+        return shape.getPropertyOffsetByIndexKey(index);
     }
 
     protected PropertyKey getOwnShapeKey(PropertyKey key) {
         if (shape.hasProperty(key)) {
             return key;
         }
-        long index = key.toArrayIndex();
-        if (index < 0 || index > Integer.MAX_VALUE) {
+        if (key.isSymbol()) {
             return null;
         }
-        PropertyKey alternateKey = key.isIndex()
-                ? PropertyKey.fromString(Long.toString(index))
-                : PropertyKey.fromIndex((int) index);
-        return shape.hasProperty(alternateKey) ? alternateKey : null;
+        if (key.isIndex()) {
+            String propertyName = key.toPropertyString();
+            return shape.getPropertyOffsetByIndexKey(propertyName) >= 0
+                    ? PropertyKey.fromString(propertyName)
+                    : null;
+        }
+        int index = key.toIndex();
+        if (index < 0) {
+            return null;
+        }
+        return shape.getPropertyOffsetByIndexKey(index) >= 0 ? PropertyKey.fromIndex(index) : null;
     }
 
     /**

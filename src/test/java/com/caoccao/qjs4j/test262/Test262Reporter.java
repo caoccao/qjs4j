@@ -17,9 +17,9 @@
 package com.caoccao.qjs4j.test262;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -28,13 +28,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Test262Reporter {
     private static final int TOP_SLOW_TEST_COUNT = 5;
 
-    private final List<TestResult> allResults = Collections.synchronizedList(new ArrayList<>());
+    private final ConcurrentLinkedQueue<TestResult> allResults = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failed = new AtomicInteger(0);
-    private final List<TestResult> failures = Collections.synchronizedList(new ArrayList<>());
+    private final ConcurrentLinkedQueue<TestResult> failures = new ConcurrentLinkedQueue<>();
     private final AtomicInteger passed = new AtomicInteger(0);
     private final AtomicInteger skipped = new AtomicInteger(0);
     private final AtomicInteger timeout = new AtomicInteger(0);
-    private final List<TestResult> timeouts = Collections.synchronizedList(new ArrayList<>());
+    private final ConcurrentLinkedQueue<TestResult> timeouts = new ConcurrentLinkedQueue<>();
 
     public int getFailed() {
         return failed.get();
@@ -75,7 +75,8 @@ public class Test262Reporter {
         int executed = getTotalExecuted();
 
         if (!failures.isEmpty()) {
-            List<TestResult> sortedFailures = new ArrayList<>(failures);
+            List<TestResult> sortedFailures = new ArrayList<>(failures.size());
+            sortedFailures.addAll(failures);
             sortedFailures.sort(Comparator.comparingInt(r -> r.getTestCase().getIndex()));
             System.out.println("\nFailed Tests:");
             for (TestResult failure : sortedFailures) {
@@ -112,7 +113,8 @@ public class Test262Reporter {
         System.out.println();
 
         if (!allResults.isEmpty()) {
-            List<TestResult> sortedByTime = new ArrayList<>(allResults);
+            List<TestResult> sortedByTime = new ArrayList<>(allResults.size());
+            sortedByTime.addAll(allResults);
             sortedByTime.sort((a, b) -> Long.compare(
                     b.getTestCase().getTimeElapsed(),
                     a.getTestCase().getTimeElapsed()));

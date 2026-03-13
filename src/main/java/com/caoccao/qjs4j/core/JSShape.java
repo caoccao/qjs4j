@@ -41,9 +41,13 @@ public final class JSShape {
 
     private int deletedPropCount;
     private PropertyDescriptor[] descriptors;
+    private Object lastLookupIndexKey;
+    private int lastLookupOffset;
+    private int lastLookupShapeVersion;
     private int propertyCount;
-    private Map<PropertyKey, Integer> propertyIndex;
+    private Map<Object, Integer> propertyIndex;
     private PropertyKey[] propertyKeys;
+    private int shapeVersion;
 
     /**
      * Create an empty shape (no properties).
@@ -53,6 +57,10 @@ public final class JSShape {
         this.descriptors = EMPTY_DESCRIPTORS;
         this.propertyCount = 0;
         this.deletedPropCount = 0;
+        this.shapeVersion = 0;
+        this.lastLookupShapeVersion = -1;
+        this.lastLookupOffset = -1;
+        this.lastLookupIndexKey = null;
     }
 
     /**
@@ -63,6 +71,10 @@ public final class JSShape {
         this.descriptors = other.descriptors.clone();
         this.propertyCount = other.propertyCount;
         this.deletedPropCount = other.deletedPropCount;
+        this.shapeVersion = other.shapeVersion;
+        this.lastLookupShapeVersion = -1;
+        this.lastLookupOffset = -1;
+        this.lastLookupIndexKey = null;
         if (other.propertyIndex != null) {
             this.propertyIndex = new HashMap<>(other.propertyIndex);
         }
@@ -77,6 +89,10 @@ public final class JSShape {
         this.descriptors = descriptors;
         this.propertyCount = keys.length;
         this.deletedPropCount = 0;
+        this.shapeVersion = 0;
+        this.lastLookupShapeVersion = -1;
+        this.lastLookupOffset = -1;
+        this.lastLookupIndexKey = null;
         if (propertyCount > INDEX_THRESHOLD) {
             buildIndex();
         }
@@ -112,21 +128,23 @@ public final class JSShape {
 
         // Update index
         if (propertyIndex != null) {
-            propertyIndex.put(key, propertyCount);
+            propertyIndex.put(key.getValue(), propertyCount);
         } else if (propertyCount + 1 > INDEX_THRESHOLD) {
             this.propertyCount++;
+            onShapeMutated();
             buildIndex();
             return;
         }
 
         this.propertyCount++;
+        onShapeMutated();
     }
 
     private void buildIndex() {
         propertyIndex = new HashMap<>(propertyCount * 4 / 3 + 1);
         for (int i = 0; i < propertyCount; i++) {
             if (propertyKeys[i] != null) {
-                propertyIndex.put(propertyKeys[i], i);
+                propertyIndex.put(propertyKeys[i].getValue(), i);
             }
         }
     }
@@ -157,6 +175,7 @@ public final class JSShape {
         this.descriptors = newDescriptors.toArray(new PropertyDescriptor[0]);
         this.propertyCount = newKeys.size();
         this.deletedPropCount = 0;
+        onShapeMutated();
 
         // Rebuild index if needed
         if (propertyCount > INDEX_THRESHOLD) {
@@ -254,16 +273,45 @@ public final class JSShape {
      * Uses HashMap index for shapes with more than INDEX_THRESHOLD properties.
      */
     public int getPropertyOffset(PropertyKey key) {
-        if (propertyIndex != null) {
-            Integer offset = propertyIndex.get(key);
-            return offset != null ? offset : -1;
+        if (key == null) {
+            return -1;
         }
-        for (int i = 0; i < propertyCount; i++) {
-            if (propertyKeys[i] != null && propertyKeys[i].equals(key)) {
-                return i;
+        return getPropertyOffsetByIndexKey(key.getValue());
+    }
+
+    /**
+     * Get the offset of a property by raw index key (String / Integer / JSSymbol).
+     * Returns -1 if property not found or deleted.
+     */
+    public int getPropertyOffsetByIndexKey(Object indexKey) {
+        if (indexKey == null) {
+            return -1;
+        }
+        if (lastLookupShapeVersion == shapeVersion && lastLookupIndexKey == indexKey) {
+            return lastLookupOffset;
+        }
+        int offset;
+        if (propertyIndex != null) {
+            Integer cachedOffset = propertyIndex.get(indexKey);
+            offset = cachedOffset != null ? cachedOffset : -1;
+        } else {
+            offset = -1;
+            for (int i = 0; i < propertyCount; i++) {
+                PropertyKey propertyKey = propertyKeys[i];
+                if (propertyKey == null) {
+                    continue;
+                }
+                Object propertyValue = propertyKey.getValue();
+                if (propertyValue == indexKey || propertyValue.equals(indexKey)) {
+                    offset = i;
+                    break;
+                }
             }
         }
-        return -1;
+        lastLookupShapeVersion = shapeVersion;
+        lastLookupIndexKey = indexKey;
+        lastLookupOffset = offset;
+        return offset;
     }
 
     /**
@@ -271,6 +319,13 @@ public final class JSShape {
      */
     public boolean hasProperty(PropertyKey key) {
         return getPropertyOffset(key) >= 0;
+    }
+
+    private void onShapeMutated() {
+        shapeVersion++;
+        lastLookupShapeVersion = -1;
+        lastLookupIndexKey = null;
+        lastLookupOffset = -1;
     }
 
     /**
@@ -296,10 +351,11 @@ public final class JSShape {
         propertyKeys[offset] = null;
         descriptors[offset] = null;
         deletedPropCount++;
+        onShapeMutated();
 
         // Remove from index
         if (propertyIndex != null) {
-            propertyIndex.remove(key);
+            propertyIndex.remove(key.getValue());
         }
 
         return true;

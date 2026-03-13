@@ -37,17 +37,27 @@ public class Test262Runner {
     private final Test262Executor executor;
     private final Test262Parser parser;
     private final Test262Reporter reporter;
+    private final Integer requestedThreadCount;
     private final String singleTestPathFragment;
     private final Path test262Root;
 
     public Test262Runner(Path test262Root, Test262Config config) {
-        this(test262Root, config, null);
+        this(test262Root, config, null, null);
     }
 
     public Test262Runner(Path test262Root, Test262Config config, String singleTestPathFragment) {
+        this(test262Root, config, singleTestPathFragment, null);
+    }
+
+    public Test262Runner(
+            Path test262Root,
+            Test262Config config,
+            String singleTestPathFragment,
+            Integer requestedThreadCount) {
         this.test262Root = test262Root;
         this.config = config;
         this.singleTestPathFragment = singleTestPathFragment;
+        this.requestedThreadCount = requestedThreadCount;
         this.parser = new Test262Parser();
         HarnessLoader harnessLoader = new HarnessLoader(test262Root);
         this.executor = new Test262Executor(harnessLoader, config.getAsyncTimeoutMs());
@@ -59,6 +69,7 @@ public class Test262Runner {
             Path test262Root = Paths.get("../test262");
             String mode = "";
             String singleTestPathFragment = null;
+            Integer requestedThreadCount = null;
 
             int argIndex = 0;
             if (args.length > 0 && !args[0].startsWith("--")) {
@@ -75,6 +86,14 @@ public class Test262Runner {
                     argIndex += 2;
                     continue;
                 }
+                if ("--threads".equals(argument)) {
+                    if (argIndex + 1 >= args.length) {
+                        throw new IllegalArgumentException("Missing value for --threads");
+                    }
+                    requestedThreadCount = Integer.parseInt(args[argIndex + 1]);
+                    argIndex += 2;
+                    continue;
+                }
                 mode = argument;
                 argIndex++;
             }
@@ -86,7 +105,7 @@ public class Test262Runner {
                 default -> Test262Config.loadDefault();
             };
 
-            Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment);
+            Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment, requestedThreadCount);
             runner.run();
 
         } catch (Exception e) {
@@ -180,6 +199,13 @@ public class Test262Runner {
         int cpuCount = Runtime.getRuntime().availableProcessors();
         boolean isMacOs = System.getProperty("os.name", "").toLowerCase().contains("mac");
         int threadCount = Math.max(1, isMacOs ? cpuCount * 3 / 4 : cpuCount / 2);
+        String configuredThreadCount = System.getProperty("qjs4j.test262.threads", "").trim();
+        if (!configuredThreadCount.isEmpty()) {
+            threadCount = Math.max(1, Integer.parseInt(configuredThreadCount));
+        }
+        if (requestedThreadCount != null) {
+            threadCount = Math.max(1, requestedThreadCount);
+        }
         if (singleTestPathFragment != null && !singleTestPathFragment.isBlank()) {
             threadCount = 1;
         }

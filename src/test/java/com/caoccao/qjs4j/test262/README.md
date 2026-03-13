@@ -47,6 +47,12 @@ Run a single test file (useful for profiling/hotspot analysis):
 ./gradlew test262 --args="../test262 --quick --single test/staging/sm/Date/dst-offset-caching-3-of-8.js"
 ```
 
+Override worker threads:
+
+```bash
+./gradlew test262Quick --args="../test262 --quick --threads 16"
+```
+
 ### JUnit Integration
 
 Run test262 tests via JUnit (runs a limited subset):

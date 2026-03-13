@@ -2761,6 +2761,7 @@ public final class OpcodeHandler {
             return;
         }
         String variableName = atomPool[atomIndex];
+        PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
         // Check dynamic var bindings in current frame and caller frames.
         // Variables introduced by eval("var x = ...") are stored in the caller frame's
         // dynamicVarBindings. Inner functions must be able to see these via the scope chain.
@@ -2776,18 +2777,22 @@ public final class OpcodeHandler {
             checkFrame = checkFrame.getCaller();
         }
         JSContext context = executionContext.virtualMachine.context;
-        PropertyKey key = PropertyKey.fromString(variableName);
         JSObject globalObject = context.getGlobalObject();
-        if (context.hasEvalOverlayBinding(variableName) && globalObject.has(key)) {
-            JSValue variableValue = globalObject.get(key);
-            if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
-                executionContext.virtualMachine.resetPropertyAccessTracking();
-                executionContext.virtualMachine.propertyAccessChain.append(variableName);
+        boolean hasProperty = false;
+        JSValue variableValue = JSUndefined.INSTANCE;
+        if (context.hasEvalOverlayBinding(variableName)) {
+            variableValue = globalObject.get(propertyKey);
+            hasProperty = !(variableValue instanceof JSUndefined) || globalObject.has(propertyKey);
+            if (hasProperty) {
+                if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
+                    executionContext.virtualMachine.resetPropertyAccessTracking();
+                    executionContext.virtualMachine.propertyAccessChain.append(variableName);
+                }
+                stack[sp++] = variableValue;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
-            stack[sp++] = variableValue;
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
         }
         if (context.hasGlobalLexicalBinding(variableName)) {
             if (!context.isGlobalLexicalBindingInitialized(variableName)) {
@@ -2801,11 +2806,16 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-        if (!globalObject.has(key)) {
+        variableValue = globalObject.get(propertyKey);
+        if (!(variableValue instanceof JSUndefined)) {
+            hasProperty = true;
+        } else {
+            hasProperty = globalObject.has(propertyKey);
+        }
+        if (!hasProperty) {
             executionContext.virtualMachine.pendingException = context.throwReferenceError(variableName + " is not defined");
             stack[sp++] = JSUndefined.INSTANCE;
         } else {
-            JSValue variableValue = globalObject.get(key);
             if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
                 executionContext.virtualMachine.resetPropertyAccessTracking();
                 executionContext.virtualMachine.propertyAccessChain.append(variableName);
@@ -2860,6 +2870,7 @@ public final class OpcodeHandler {
             return;
         }
         String variableName = atomPool[atomIndex];
+        PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
 
         // Check dynamic var bindings in current frame and caller frames.
         StackFrame checkFrame = executionContext.frame;
@@ -2875,13 +2886,16 @@ public final class OpcodeHandler {
         }
 
         JSContext context = executionContext.virtualMachine.context;
-        PropertyKey key = PropertyKey.fromString(variableName);
         JSObject globalObject = context.getGlobalObject();
-        if (context.hasEvalOverlayBinding(variableName) && globalObject.has(key)) {
-            stack[sp++] = globalObject.get(key);
-            executionContext.sp = sp;
-            executionContext.pc = pc + op.getSize();
-            return;
+        if (context.hasEvalOverlayBinding(variableName)) {
+            JSValue value = globalObject.get(propertyKey);
+            boolean hasProperty = !(value instanceof JSUndefined) || globalObject.has(propertyKey);
+            if (hasProperty) {
+                stack[sp++] = value;
+                executionContext.sp = sp;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
         }
         if (context.hasGlobalLexicalBinding(variableName)) {
             if (!context.isGlobalLexicalBindingInitialized(variableName)) {
@@ -2896,7 +2910,7 @@ public final class OpcodeHandler {
             return;
         }
 
-        stack[sp++] = globalObject.has(key) ? globalObject.get(key) : JSUndefined.INSTANCE;
+        stack[sp++] = globalObject.get(propertyKey);
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
