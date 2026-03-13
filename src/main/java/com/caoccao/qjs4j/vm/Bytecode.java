@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.PropertyKey;
 
 /**
  * Represents compiled bytecode for a function.
@@ -27,8 +28,9 @@ public final class Bytecode {
     private final byte[] instructions;
     private final int localCount;
     private final String[] localVarNames;
-    private volatile Opcode[] decodedOpcodes;
-    private volatile byte[] opcodeRebaseOffsets;
+    private Opcode[] decodedOpcodes;
+    private byte[] opcodeRebaseOffsets;
+    private PropertyKey[] propertyKeyCache;
 
     public Bytecode(byte[] instructions, JSValue[] constantPool, String[] atomPool, int localCount) {
         this(instructions, constantPool, atomPool, localCount, null);
@@ -46,32 +48,27 @@ public final class Bytecode {
         if (decodedOpcodes != null && opcodeRebaseOffsets != null) {
             return;
         }
-        synchronized (this) {
-            if (decodedOpcodes != null && opcodeRebaseOffsets != null) {
-                return;
-            }
-            Opcode[] decoded = new Opcode[instructions.length];
-            byte[] rebases = new byte[instructions.length];
-            int pc = 0;
-            while (pc < instructions.length) {
-                int opcode = instructions[pc] & 0xFF;
-                Opcode op = Opcode.fromInt(opcode);
-                int rebase = 0;
-                if (op == Opcode.INVALID && pc + 1 < instructions.length) {
-                    int extendedOpcode = 0x100 + (instructions[pc + 1] & 0xFF);
-                    Opcode extendedOp = Opcode.fromInt(extendedOpcode);
-                    if (extendedOp != Opcode.INVALID) {
-                        op = extendedOp;
-                        rebase = 1;
-                    }
+        Opcode[] decoded = new Opcode[instructions.length];
+        byte[] rebases = new byte[instructions.length];
+        int pc = 0;
+        while (pc < instructions.length) {
+            int opcode = instructions[pc] & 0xFF;
+            Opcode op = Opcode.fromInt(opcode);
+            int rebase = 0;
+            if (op == Opcode.INVALID && pc + 1 < instructions.length) {
+                int extendedOpcode = 0x100 + (instructions[pc + 1] & 0xFF);
+                Opcode extendedOp = Opcode.fromInt(extendedOpcode);
+                if (extendedOp != Opcode.INVALID) {
+                    op = extendedOp;
+                    rebase = 1;
                 }
-                decoded[pc] = op;
-                rebases[pc] = (byte) rebase;
-                pc += op.getSize() + rebase;
             }
-            decodedOpcodes = decoded;
-            opcodeRebaseOffsets = rebases;
+            decoded[pc] = op;
+            rebases[pc] = (byte) rebase;
+            pc += op.getSize() + rebase;
         }
+        decodedOpcodes = decoded;
+        opcodeRebaseOffsets = rebases;
     }
 
     public String getAtom(int index) {
@@ -80,6 +77,22 @@ public final class Bytecode {
 
     public String[] getAtoms() {
         return atomPool;
+    }
+
+    /**
+     * Get a cached PropertyKey for the given atom index.
+     * Avoids allocating a new PropertyKey on every GET_FIELD/PUT_FIELD opcode.
+     */
+    public PropertyKey getCachedPropertyKey(int atomIndex) {
+        if (propertyKeyCache == null) {
+            propertyKeyCache = new PropertyKey[atomPool.length];
+        }
+        PropertyKey key = propertyKeyCache[atomIndex];
+        if (key == null) {
+            key = PropertyKey.fromString(atomPool[atomIndex]);
+            propertyKeyCache[atomIndex] = key;
+        }
+        return key;
     }
 
     public JSValue getConstant(int index) {

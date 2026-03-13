@@ -543,7 +543,7 @@ public final class JSArray extends JSObject {
      * missing JSArray's dense storage when this array is in a prototype chain.
      */
     @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         long index = getArrayIndex(key);
         if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
             int intIndex = (int) index;
@@ -560,7 +560,7 @@ public final class JSArray extends JSObject {
             }
         }
         // Delegate to JSObject for shape properties, getters, and prototype chain
-        return super.getWithReceiver(key, receiver);
+        return super.getWithReceiver(key, receiver, depth);
     }
 
     /**

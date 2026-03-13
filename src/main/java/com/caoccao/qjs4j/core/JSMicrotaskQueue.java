@@ -18,8 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
 
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.ArrayDeque;
 
 /**
  * Manages the microtask queue for promise resolution and async operations.
@@ -28,11 +27,12 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * Microtasks are executed after the current script completes and before
  * returning to the event loop. This ensures promise handlers run at the
  * right time.
+ * <p>
+ * No synchronization needed: each JSContext is single-threaded following QuickJS design.
  */
 public final class JSMicrotaskQueue {
     private final JSContext context;
-    private final Object lock;
-    private final Queue<Microtask> queue;
+    private final ArrayDeque<Microtask> queue;
     private boolean executing;
 
     /**
@@ -42,8 +42,7 @@ public final class JSMicrotaskQueue {
      */
     public JSMicrotaskQueue(JSContext context) {
         this.context = context;
-        this.lock = new Object();
-        this.queue = new ConcurrentLinkedQueue<>();
+        this.queue = new ArrayDeque<>();
         this.executing = false;
     }
 
@@ -52,9 +51,7 @@ public final class JSMicrotaskQueue {
      * This is used for cleanup or testing.
      */
     public void clear() {
-        synchronized (lock) {
-            queue.clear();
-        }
+        queue.clear();
     }
 
     /**
@@ -63,9 +60,7 @@ public final class JSMicrotaskQueue {
      * @param microtask The microtask to enqueue
      */
     public void enqueue(Microtask microtask) {
-        synchronized (lock) {
-            queue.offer(microtask);
-        }
+        queue.offer(microtask);
     }
 
     /**
@@ -74,9 +69,7 @@ public final class JSMicrotaskQueue {
      * @return true if the queue is not empty
      */
     public boolean hasPendingMicrotasks() {
-        synchronized (lock) {
-            return !queue.isEmpty();
-        }
+        return !queue.isEmpty();
     }
 
     /**
@@ -86,24 +79,15 @@ public final class JSMicrotaskQueue {
      * Microtasks can enqueue more microtasks, so this runs until the queue is empty.
      */
     public void processMicrotasks() {
-        synchronized (lock) {
-            // Prevent re-entrancy
-            if (executing) {
-                return;
-            }
-            executing = true;
+        // Prevent re-entrancy
+        if (executing) {
+            return;
         }
+        executing = true;
 
         try {
-            while (true) {
-                Microtask microtask;
-                synchronized (lock) {
-                    microtask = queue.poll();
-                    if (microtask == null) {
-                        executing = false;
-                        return;
-                    }
-                }
+            Microtask microtask;
+            while ((microtask = queue.poll()) != null) {
                 try {
                     microtask.execute();
                 } catch (Exception e) {
@@ -116,9 +100,7 @@ public final class JSMicrotaskQueue {
                 }
             }
         } finally {
-            synchronized (lock) {
-                executing = false;
-            }
+            executing = false;
         }
     }
 
@@ -128,9 +110,7 @@ public final class JSMicrotaskQueue {
      * @return The queue size
      */
     public int size() {
-        synchronized (lock) {
-            return queue.size();
-        }
+        return queue.size();
     }
 
     /**

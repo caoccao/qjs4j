@@ -98,6 +98,7 @@ public final class JSContext implements AutoCloseable {
     private JSObject asyncGeneratorFunctionPrototype;
     // Async generator prototype chain (not exposed in global scope)
     private JSObject asyncGeneratorPrototype;
+    private JSObject cachedDatePrototype;
     // Cached Object.prototype for fast internal object creation
     private JSObject cachedObjectPrototype;
     private JSObject cachedPromisePrototype;
@@ -926,7 +927,11 @@ public final class JSContext implements AutoCloseable {
      */
     public JSDate createJSDate(double timeValue) {
         JSDate jsDate = new JSDate(this, timeValue);
-        transferPrototype(jsDate, JSDate.NAME);
+        if (cachedDatePrototype != null) {
+            jsDate.setPrototype(cachedDatePrototype);
+        } else {
+            transferPrototype(jsDate, JSDate.NAME);
+        }
         return jsDate;
     }
 
@@ -3093,6 +3098,13 @@ public final class JSContext implements AutoCloseable {
             JSValue proto = objCtorObj.get(PropertyKey.PROTOTYPE);
             if (proto instanceof JSObject protoObj) {
                 this.cachedObjectPrototype = protoObj;
+            }
+        }
+        JSValue dateCtor = jsGlobalObject.getGlobalObject().get(JSDate.NAME);
+        if (dateCtor instanceof JSObject dateCtorObj) {
+            JSValue proto = dateCtorObj.get(PropertyKey.PROTOTYPE);
+            if (proto instanceof JSObject protoObj) {
+                this.cachedDatePrototype = protoObj;
             }
         }
         JSValue promiseCtor = jsGlobalObject.getGlobalObject().get(JSPromise.NAME);

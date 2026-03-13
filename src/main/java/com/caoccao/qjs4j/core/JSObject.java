@@ -34,8 +34,7 @@ import java.util.*;
 public non-sealed class JSObject implements JSValue {
     public static final String NAME = "Object";
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
-    // ThreadLocal to track visited objects during prototype chain traversal
-    private static final ThreadLocal<Set<JSObject>> visitedObjects = ThreadLocal.withInitial(HashSet::new);
+    private static final int MAX_PROTOTYPE_DEPTH = 10000;
     protected final JSContext context;
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
@@ -503,8 +502,7 @@ public non-sealed class JSObject implements JSValue {
      * Get a property value by property key.
      */
     public JSValue get(PropertyKey key) {
-        resetVisitedObjects();
-        return getWithReceiver(key, (JSValue) this);
+        return getWithReceiver(key, (JSValue) this, 0);
     }
 
     /**
@@ -513,8 +511,7 @@ public non-sealed class JSObject implements JSValue {
      * allowing primitive receivers in strict mode.
      */
     public JSValue get(PropertyKey key, JSValue receiver) {
-        resetVisitedObjects();
-        return getWithReceiver(key, receiver);
+        return getWithReceiver(key, receiver, 0);
     }
 
     protected long getCanonicalArrayIndex(PropertyKey key) {
@@ -764,6 +761,10 @@ public non-sealed class JSObject implements JSValue {
      * Protected to allow JSProxy to override with proper trap handling.
      */
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+        return getWithReceiver(key, receiver, 0);
+    }
+
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         long arrayIndex = getCanonicalArrayIndex(key);
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
@@ -787,14 +788,6 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.isAccessorDescriptor()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null) {
-                    // Save and clear the prototype-chain visited set so that
-                    // re-entrant property lookups inside the getter start with
-                    // a fresh cycle-detection state (prevents false positives).
-                    Set<JSObject> outerVisited = visitedObjects.get();
-                    Set<JSObject> savedVisited = outerVisited.isEmpty() ? null : new HashSet<>(outerVisited);
-                    if (savedVisited != null) {
-                        outerVisited.clear();
-                    }
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
                         JSValue result = getter.call(this.context, receiver, JSValue.NO_ARGS);
@@ -810,12 +803,6 @@ public non-sealed class JSObject implements JSValue {
                                 : this.context.throwError(e.getMessage());
                         this.context.setPendingException(exception);
                         return JSUndefined.INSTANCE;
-                    } finally {
-                        // Restore the outer visited set for the caller's prototype walk
-                        if (savedVisited != null) {
-                            outerVisited.clear();
-                            outerVisited.addAll(savedVisited);
-                        }
                     }
                 }
                 // Accessor property without getter (or without context) reads as undefined.
@@ -825,36 +812,9 @@ public non-sealed class JSObject implements JSValue {
             return propertyValues[offset];
         }
 
-        // Look in prototype chain with cycle detection
-        if (prototype != null) {
-            Set<JSObject> visited = visitedObjects.get();
-            boolean isTopLevel = visited.isEmpty();
-
-            boolean added = false;
-            try {
-                // Check for circular reference
-                if (visited.contains(prototype)) {
-                    return JSUndefined.INSTANCE;
-                }
-
-                // Add current prototype to visited set
-                visited.add(prototype);
-                added = true;
-
-                // Recurse into prototype chain, passing along the original receiver
-                return prototype.getWithReceiver(key, receiver);
-            } finally {
-                // Only remove if we added it — early return from cycle detection
-                // must not remove a prototype added by an outer walk
-                if (added) {
-                    visited.remove(prototype);
-                }
-
-                // If this was the top-level call, clear the ThreadLocal
-                if (isTopLevel) {
-                    visited.clear();
-                }
-            }
+        // Look in prototype chain with depth-based cycle detection
+        if (prototype != null && depth < MAX_PROTOTYPE_DEPTH) {
+            return prototype.getWithReceiver(key, receiver, depth + 1);
         }
 
         return JSUndefined.INSTANCE;
@@ -865,8 +825,7 @@ public non-sealed class JSObject implements JSValue {
      * Used by Reflect.get to pass a different receiver than the target.
      */
     public JSValue getWithReceiver(PropertyKey key, JSObject receiver) {
-        resetVisitedObjects();
-        return getWithReceiver(key, (JSValue) receiver);
+        return getWithReceiver(key, (JSValue) receiver, 0);
     }
 
     /**
@@ -1005,12 +964,6 @@ public non-sealed class JSObject implements JSValue {
         return true;
     }
 
-    private void resetVisitedObjects() {
-        Set<JSObject> visited = visitedObjects.get();
-        if (!visited.isEmpty()) {
-            visited.clear();
-        }
-    }
 
     /**
      * Seal this object.

@@ -21,7 +21,10 @@ import java.text.SimpleDateFormat;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.zone.ZoneRules;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,6 +60,9 @@ public final class JSDate extends JSObject {
     private static final DateTimeFormatter PARSE_UTC_STRING_FORMATTER =
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.ENGLISH)
                     .withZone(ZoneOffset.UTC);
+    private static final ZoneRules SYSTEM_ZONE_RULES = ZoneId.systemDefault().getRules();
+    private static final ThreadLocal<HashMap<Long, Integer>> TZ_OFFSET_CACHE =
+            ThreadLocal.withInitial(HashMap::new);
     private double timeValue;
 
     public JSDate(JSContext context) {
@@ -90,6 +96,8 @@ public final class JSDate extends JSObject {
             JSValue arg = args[0];
             if (arg instanceof JSDate date) {
                 timeValue = timeClip(date.timeValue);
+            } else if (arg instanceof JSNumber num) {
+                timeValue = timeClip(num.value());
             } else {
                 JSValue primitive = JSTypeConversions.toPrimitive(context, arg, JSTypeConversions.PreferredType.DEFAULT);
                 if (context.hasPendingException()) {
@@ -207,10 +215,18 @@ public final class JSDate extends JSObject {
     }
 
     public static int getTimezoneOffset(long epochMillis) {
-        ZoneOffset zoneOffset = ZoneId.systemDefault()
-                .getRules()
-                .getOffset(Instant.ofEpochMilli(epochMillis));
-        return -zoneOffset.getTotalSeconds() / 60;
+        long epochSecond = Math.floorDiv(epochMillis, 1000L);
+        HashMap<Long, Integer> cache = TZ_OFFSET_CACHE.get();
+        Integer cached = cache.get(epochSecond);
+        if (cached != null) {
+            return cached;
+        }
+        ZoneOffset zoneOffset = SYSTEM_ZONE_RULES.getOffset(Instant.ofEpochSecond(epochSecond));
+        int offsetMinutes = -zoneOffset.getTotalSeconds() / 60;
+        if (cache.size() < 8192) {
+            cache.put(epochSecond, offsetMinutes);
+        }
+        return offsetMinutes;
     }
 
     private static long mathMod(long a, long b) {

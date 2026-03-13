@@ -156,9 +156,9 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.getWithReceiver(key, receiver);
+            return super.getWithReceiver(key, receiver, depth);
         }
         try {
             return ensureEvaluated().get(key, receiver);

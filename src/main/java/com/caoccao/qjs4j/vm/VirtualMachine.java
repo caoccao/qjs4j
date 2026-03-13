@@ -923,7 +923,11 @@ public final class VirtualMachine {
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
-        JSContext previousExecutionContext = JSContext.pushCurrentExecutionContext(context);
+        // Skip ThreadLocal push/pop for nested calls (same context already active).
+        // This avoids expensive ThreadLocal get/set on every bytecode function call.
+        boolean isOuterCall = (currentFrame == null);
+        JSContext previousExecutionContext = isOuterCall
+                ? JSContext.pushCurrentExecutionContext(context) : null;
         try {
             pendingException = null;
             context.clearPendingException();
@@ -987,29 +991,37 @@ public final class VirtualMachine {
                     int pc = executionContext.pc;
 
                     // Main execution loop
+                    // Optimized to minimize per-opcode overhead:
+                    // - Pending exception check inlined as null check (rare path calls helper)
+                    // - Interrupt check inlined (counter decrement only when deadline is set)
+                    // - Redundant sp/pc syncing removed (only sync back after handler)
                     while (true) {
-                        // Sync local sp to valueStack at top of each iteration.
-                        // This ensures cold opcodes (which use valueStack directly) see the correct stackTop.
+                        // Sync local sp to valueStack so cold opcodes see correct stackTop.
                         valueStack.stackTop = sp;
-
                         executionContext.sp = sp;
                         executionContext.pc = pc;
-                        PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
-                        if (pendingExceptionAction == PendingExceptionAction.RETURN) {
-                            return executionContext.returnValue;
-                        }
-                        if (pendingExceptionAction == PendingExceptionAction.CONTINUE) {
+
+                        // Inline pending exception check (hot path: null check only)
+                        if (pendingException != null) {
+                            PendingExceptionAction pendingExceptionAction = handlePendingExceptionForExecute(executionContext);
+                            if (pendingExceptionAction == PendingExceptionAction.RETURN) {
+                                return executionContext.returnValue;
+                            }
+                            // CONTINUE: exception was caught, sp/pc updated to handler
                             sp = executionContext.sp;
                             pc = executionContext.pc;
                             continue;
                         }
 
-                        sp = executionContext.sp;
-                        pc = executionContext.pc;
-                        checkExecutionInterruptForExecute();
-                        executionContext.pc = pc;
-                        executionContext.opcodeRequestedReturn = false;
+                        // Inline interrupt check (avoids method call overhead per opcode)
+                        if (executionDeadline != 0 && --interruptCounter <= 0) {
+                            interruptCounter = INTERRUPT_CHECK_INTERVAL;
+                            if (System.nanoTime() >= executionDeadlineNanos) {
+                                throw new JSVirtualMachineException("execution timeout");
+                            }
+                        }
 
+                        executionContext.opcodeRequestedReturn = false;
                         Opcode op = decodeOpcodeForExecute(executionContext);
                         op.getHandler().call(op, executionContext);
                         if (executionContext.opcodeRequestedReturn) {
@@ -1047,7 +1059,9 @@ public final class VirtualMachine {
                 }
             }
         } finally {
-            JSContext.popCurrentExecutionContext(previousExecutionContext);
+            if (isOuterCall) {
+                JSContext.popCurrentExecutionContext(previousExecutionContext);
+            }
         }
     }
 

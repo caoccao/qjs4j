@@ -567,7 +567,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * without walking the prototype chain.
      */
     @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         if (isCanonicalNumericIndex(key)) {
             // For canonical numeric indices, never fall through to prototype chain.
             String str = key.toPropertyString();
@@ -584,7 +584,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
             }
             return getJSElement(index);
         }
-        return super.getWithReceiver(key, receiver);
+        return super.getWithReceiver(key, receiver, depth);
     }
 
     @Override

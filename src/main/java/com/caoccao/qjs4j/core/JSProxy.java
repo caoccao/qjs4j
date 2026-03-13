@@ -787,7 +787,7 @@ public final class JSProxy extends JSObject {
      * Override get method with receiver tracking for prototype chain support.
      */
     @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
+    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         return getInternal(key, resolveExecutionContext(null), receiver);
     }
 

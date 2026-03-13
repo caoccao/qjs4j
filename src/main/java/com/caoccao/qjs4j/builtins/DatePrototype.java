@@ -558,6 +558,9 @@ public final class DatePrototype {
     }
 
     private static JSNumber toNumberOrThrow(JSContext context, JSValue value) {
+        if (value instanceof JSNumber number) {
+            return number;
+        }
         if (value.isSymbol() || value.isSymbolObject()) {
             context.throwTypeError("cannot convert symbol to number");
             return null;

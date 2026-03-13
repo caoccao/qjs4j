@@ -1126,7 +1126,7 @@ public final class OpcodeHandler {
         JSValue objectValue = (JSValue) stack[--sp];
 
         if (objectValue instanceof JSObject object) {
-            PropertyKey fieldKey = PropertyKey.fromString(fieldName);
+            PropertyKey fieldKey = executionContext.bytecode.getCachedPropertyKey(fieldNameAtom);
             boolean defineSucceeded = object.defineProperty(
                     fieldKey,
                     PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
@@ -2396,7 +2396,7 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(PropertyKey.fromString(fieldName),
+            JSValue result = targetObject.get(executionContext.bytecode.getCachedPropertyKey(atomIndex),
                     objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
@@ -2429,7 +2429,7 @@ public final class OpcodeHandler {
 
         JSObject targetObject = executionContext.virtualMachine.toObject(objectValue);
         if (targetObject != null) {
-            JSValue result = targetObject.get(PropertyKey.fromString(fieldName),
+            JSValue result = targetObject.get(executionContext.bytecode.getCachedPropertyKey(atomIndex),
                     objectValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
@@ -4305,7 +4305,7 @@ public final class OpcodeHandler {
         String fieldName = executionContext.bytecode.getAtoms()[atomIndex];
         JSValue objectValue = (JSValue) executionContext.stack[--executionContext.sp];
         JSValue fieldValue = (JSValue) executionContext.stack[executionContext.sp - 1];
-        PropertyKey propertyKey = PropertyKey.fromString(fieldName);
+        PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
 
         if (objectValue instanceof JSObject jsObject) {
             try {
@@ -5874,33 +5874,75 @@ public final class OpcodeHandler {
         // Unlock before invoking the callee so nested calls can build their own chains.
         executionContext.virtualMachine.propertyAccessLock = false;
 
-        // Handle proxy apply trap (QuickJS: js_proxy_call)
-        if (callee instanceof JSProxy proxy) {
-            JSValue result = executionContext.virtualMachine.proxyApply(proxy, receiver, args);
-            executionContext.virtualMachine.valueStack.push(result);
-            executionContext.virtualMachine.resetPropertyAccessTracking();
-            return;
-        }
-
-        // Special handling for Symbol constructor (must be called without new)
-        if (callee instanceof JSObject calleeObj) {
-            if (calleeObj.getConstructorType() == JSConstructorType.SYMBOL_OBJECT) {
-                // Call Symbol() function
+        // Fast path for native functions (most common case for built-in method calls).
+        // Checked first to avoid Proxy/constructor-type/class-constructor checks on every call.
+        if (callee instanceof JSNativeFunction nativeFunc) {
+            JSConstructorType ctorType = nativeFunc.getConstructorType();
+            if (ctorType == JSConstructorType.SYMBOL_OBJECT) {
                 JSValue result = SymbolConstructor.call(executionContext.virtualMachine.context, receiver, args);
                 executionContext.virtualMachine.valueStack.push(result);
                 return;
             }
-
-            // Special handling for BigInt constructor (must be called without new)
-            if (calleeObj.getConstructorType() == JSConstructorType.BIG_INT_OBJECT) {
-                // Call BigInt() function
+            if (ctorType == JSConstructorType.BIG_INT_OBJECT) {
                 JSValue result = BigIntConstructor.call(executionContext.virtualMachine.context, receiver, args);
                 executionContext.virtualMachine.valueStack.push(result);
                 return;
             }
-        }
-
-        if (callee instanceof JSFunction function) {
+            if (nativeFunc.requiresNew()) {
+                JSContext errorContext = nativeFunc.getRealmContext() != null
+                        ? nativeFunc.getRealmContext()
+                        : executionContext.virtualMachine.context;
+                String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
+                executionContext.virtualMachine.resetPropertyAccessTracking();
+                String errorMessage = switch (constructorName) {
+                    case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
+                    default -> "Constructor " + constructorName + " requires 'new'";
+                };
+                executionContext.virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
+                errorContext.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                return;
+            }
+            try {
+                if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
+                    executionContext.virtualMachine.context.scheduleDirectEvalCall();
+                }
+                JSValue result = nativeFunc.call(executionContext.virtualMachine.context, receiver, args);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.getPendingException();
+                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                } else {
+                    executionContext.virtualMachine.valueStack.push(result);
+                }
+            } catch (JSException e) {
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } catch (JSVirtualMachineException e) {
+                if (e.getJsValue() != null) {
+                    executionContext.virtualMachine.pendingException = e.getJsValue();
+                } else if (e.getJsError() != null) {
+                    executionContext.virtualMachine.pendingException = e.getJsError();
+                } else if (executionContext.virtualMachine.context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                } else {
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
+                }
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } catch (JSErrorException e) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(e);
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            }
+            executionContext.virtualMachine.resetPropertyAccessTracking();
+        } else if (callee instanceof JSProxy proxy) {
+            JSValue result = executionContext.virtualMachine.proxyApply(proxy, receiver, args);
+            executionContext.virtualMachine.valueStack.push(result);
+            executionContext.virtualMachine.resetPropertyAccessTracking();
+        } else if (callee instanceof JSFunction function) {
             if (function.getHomeObject() == null
                     && receiver instanceof JSObject receiverObject
                     && function instanceof JSBytecodeFunction bytecodeFunction) {
@@ -5911,7 +5953,6 @@ public final class OpcodeHandler {
                 }
             }
 
-            // Per ES spec: If F's [[FunctionKind]] is "classConstructor", throw TypeError
             boolean isClassCtor = function instanceof JSClass;
             if (!isClassCtor && function instanceof JSBytecodeFunction bytecodeFunc) {
                 isClassCtor = bytecodeFunc.isClassConstructor();
@@ -5928,67 +5969,7 @@ public final class OpcodeHandler {
                 return;
             }
 
-            if (function instanceof JSNativeFunction nativeFunc) {
-                // Check if this function requires 'new'
-                if (nativeFunc.requiresNew()) {
-                    JSContext errorContext = nativeFunc.getRealmContext() != null
-                            ? nativeFunc.getRealmContext()
-                            : executionContext.virtualMachine.context;
-                    String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
-                    executionContext.virtualMachine.resetPropertyAccessTracking();
-                    String errorMessage = switch (constructorName) {
-                        case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
-                        default -> "Constructor " + constructorName + " requires 'new'";
-                    };
-                    executionContext.virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
-                    errorContext.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    return;
-                }
-                // Call native function with receiver as thisArg
-                try {
-                    if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
-                        executionContext.virtualMachine.context.scheduleDirectEvalCall();
-                    }
-                    JSValue result = nativeFunc.call(executionContext.virtualMachine.context, receiver, args);
-                    // Check for pending exception after native function call
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        // Set pending exception in VM and push placeholder
-                        // The main loop will handle the exception on next iteration.
-                        executionContext.virtualMachine.pendingException =
-                                executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                    } else {
-                        executionContext.virtualMachine.valueStack.push(result);
-                    }
-                } catch (JSException e) {
-                    // Native function threw a JSException (e.g. from eval/evalScript)
-                    // Convert to pending exception so VM try-catch handles it.
-                    executionContext.virtualMachine.pendingException = e.getErrorValue();
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                } catch (JSVirtualMachineException e) {
-                    // Native function internally called a bytecode function that threw
-                    // (e.g. ToPrimitive calling user's toString/valueOf)
-                    if (e.getJsValue() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsValue();
-                    } else if (e.getJsError() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsError();
-                    } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                    } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
-                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                } catch (JSErrorException e) {
-                    // Native function threw a typed JS error (e.g. JSRangeErrorException)
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(e);
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
-                }
-            } else if (function instanceof JSBytecodeFunction bytecodeFunc) {
+            if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {
                     // Call through the function's call method to handle async wrapping
                     JSValue result = bytecodeFunc.call(executionContext.virtualMachine.context, receiver, args);
