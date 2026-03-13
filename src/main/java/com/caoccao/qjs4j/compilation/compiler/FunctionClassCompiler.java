@@ -97,6 +97,23 @@ final class FunctionClassCompiler {
         return false;
     }
 
+    private static boolean containsToken(String source, String token) {
+        int length = source.length();
+        int tokenLength = token.length();
+        for (int index = 0; index <= length - tokenLength; index++) {
+            if (!source.regionMatches(index, token, 0, tokenLength)) {
+                continue;
+            }
+            boolean leftBoundary = index == 0 || !isIdentifierPart(source.charAt(index - 1));
+            int tokenEnd = index + tokenLength;
+            boolean rightBoundary = tokenEnd >= length || !isIdentifierPart(source.charAt(tokenEnd));
+            if (leftBoundary && rightBoundary) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
         String candidateName = "__auto_accessor_" + index;
         while (existingNames.contains(candidateName)) {
@@ -175,6 +192,12 @@ final class FunctionClassCompiler {
             return classExpression.getId() == null;
         }
         return false;
+    }
+
+    private static boolean isIdentifierPart(char character) {
+        return character == '$'
+                || character == '_'
+                || Character.isLetterOrDigit(character);
     }
 
     /**
@@ -1101,7 +1124,9 @@ final class FunctionClassCompiler {
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
-        declareAndInitializeImplicitArgumentsBinding(functionContext);
+        if (shouldInitializeImplicitArgumentsBinding(funcDecl.getLocation())) {
+            declareAndInitializeImplicitArgumentsBinding(functionContext);
+        }
 
         // Emit default parameter initialization following QuickJS pattern
         if (funcDecl.getDefaults() != null) {
@@ -1332,7 +1357,9 @@ final class FunctionClassCompiler {
                 functionContext,
                 funcDelegates,
                 parameterSlotIndexes);
-        declareAndInitializeImplicitArgumentsBinding(functionContext);
+        if (shouldInitializeImplicitArgumentsBinding(functionExpression.getLocation())) {
+            declareAndInitializeImplicitArgumentsBinding(functionContext);
+        }
 
         if (functionExpression.getId() != null) {
             boolean conflictsWithParameter = false;
@@ -1524,7 +1551,9 @@ final class FunctionClassCompiler {
                 methodCtx,
                 methodDelegates,
                 parameterSlotIndexes);
-        declareAndInitializeImplicitArgumentsBinding(methodCtx);
+        if (shouldInitializeImplicitArgumentsBinding(method.getLocation())) {
+            declareAndInitializeImplicitArgumentsBinding(methodCtx);
+        }
 
         // For base constructors, instance private methods/fields are initialized before
         // parameter default evaluation so defaults can access private members on `this`.
@@ -2117,6 +2146,23 @@ final class FunctionClassCompiler {
             return;
         }
         throw new JSCompilerException("private class field is already defined");
+    }
+
+    private boolean shouldInitializeImplicitArgumentsBinding(SourceLocation location) {
+        if (location == null || compilerContext.sourceCode == null || compilerContext.sourceCode.isEmpty()) {
+            return true;
+        }
+        int sourceStartOffset = Math.max(0, location.offset());
+        int sourceEndOffset = Math.min(compilerContext.sourceCode.length(), location.endOffset());
+        if (sourceEndOffset <= sourceStartOffset) {
+            return true;
+        }
+        String functionSource = compilerContext.sourceCode.substring(sourceStartOffset, sourceEndOffset);
+        if (functionSource.indexOf('\\') >= 0) {
+            return true;
+        }
+        return containsToken(functionSource, JSKeyword.ARGUMENTS)
+                || containsToken(functionSource, JSKeyword.EVAL);
     }
 
     record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {

@@ -37,11 +37,17 @@ public class Test262Runner {
     private final Test262Executor executor;
     private final Test262Parser parser;
     private final Test262Reporter reporter;
+    private final String singleTestPathFragment;
     private final Path test262Root;
 
     public Test262Runner(Path test262Root, Test262Config config) {
+        this(test262Root, config, null);
+    }
+
+    public Test262Runner(Path test262Root, Test262Config config, String singleTestPathFragment) {
         this.test262Root = test262Root;
         this.config = config;
+        this.singleTestPathFragment = singleTestPathFragment;
         this.parser = new Test262Parser();
         HarnessLoader harnessLoader = new HarnessLoader(test262Root);
         this.executor = new Test262Executor(harnessLoader, config.getAsyncTimeoutMs());
@@ -50,12 +56,29 @@ public class Test262Runner {
 
     public static void main(String[] args) {
         try {
-            Path test262Root = args.length > 0
-                    ? Paths.get(args[0])
-                    : Paths.get("../test262");
+            Path test262Root = Paths.get("../test262");
+            String mode = "";
+            String singleTestPathFragment = null;
 
-            // Determine config based on arguments
-            String mode = args.length > 1 ? args[1] : "";
+            int argIndex = 0;
+            if (args.length > 0 && !args[0].startsWith("--")) {
+                test262Root = Paths.get(args[0]);
+                argIndex = 1;
+            }
+            while (argIndex < args.length) {
+                String argument = args[argIndex];
+                if ("--single".equals(argument)) {
+                    if (argIndex + 1 >= args.length) {
+                        throw new IllegalArgumentException("Missing value for --single");
+                    }
+                    singleTestPathFragment = args[argIndex + 1];
+                    argIndex += 2;
+                    continue;
+                }
+                mode = argument;
+                argIndex++;
+            }
+
             Test262Config config = switch (mode) {
                 case "--quick" -> Test262Config.forQuickTest();
                 case "--language" -> Test262Config.forLanguageTests();
@@ -63,7 +86,7 @@ public class Test262Runner {
                 default -> Test262Config.loadDefault();
             };
 
-            Test262Runner runner = new Test262Runner(test262Root, config);
+            Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment);
             runner.run();
 
         } catch (Exception e) {
@@ -87,6 +110,35 @@ public class Test262Runner {
         return testFiles;
     }
 
+    private List<Path> discoverTestsWithSingleFilter(Path testsDir) throws IOException {
+        List<Path> testFiles = discoverTests(testsDir);
+        String normalizedPathFragment = singleTestPathFragment.replace('\\', '/');
+        testFiles.removeIf(testFile ->
+                !testFile.toString().replace('\\', '/').contains(normalizedPathFragment));
+        return testFiles;
+    }
+
+    private Path resolveSingleTestPath(Path testsDir) {
+        if (singleTestPathFragment == null || singleTestPathFragment.isBlank()) {
+            return null;
+        }
+        String normalizedPath = singleTestPathFragment.replace('\\', '/');
+        Path directPath = Paths.get(normalizedPath);
+        if (!directPath.isAbsolute()) {
+            Path resolvedFromTestRoot = test262Root.resolve(directPath).normalize();
+            if (Files.isRegularFile(resolvedFromTestRoot)) {
+                return resolvedFromTestRoot;
+            }
+            Path resolvedFromTestsDir = testsDir.resolve(directPath).normalize();
+            if (Files.isRegularFile(resolvedFromTestsDir)) {
+                return resolvedFromTestsDir;
+            }
+        } else if (Files.isRegularFile(directPath)) {
+            return directPath.normalize();
+        }
+        return null;
+    }
+
     public void run() throws IOException {
         System.out.println("Test262 Runner for qjs4j");
         System.out.println("Test262 root: " + test262Root.toAbsolutePath().normalize());
@@ -100,8 +152,24 @@ public class Test262Runner {
             return;
         }
 
-        List<Path> testFiles = discoverTests(testsDir);
+        List<Path> testFiles;
+        if (singleTestPathFragment != null && !singleTestPathFragment.isBlank()) {
+            String normalizedPathFragment = singleTestPathFragment.replace('\\', '/');
+            Path singleTestPath = resolveSingleTestPath(testsDir);
+            if (singleTestPath != null) {
+                testFiles = List.of(singleTestPath);
+            } else {
+                testFiles = discoverTestsWithSingleFilter(testsDir);
+            }
+            System.out.println("Single-test filter: " + normalizedPathFragment);
+        } else {
+            testFiles = discoverTests(testsDir);
+        }
         System.out.println("Discovered " + testFiles.size() + " test files");
+        if (testFiles.isEmpty()) {
+            System.out.println("No test file matched the current filter.");
+            return;
+        }
 
         // Apply max tests limit
         if (testFiles.size() > config.getMaxTests()) {
@@ -112,6 +180,9 @@ public class Test262Runner {
         int cpuCount = Runtime.getRuntime().availableProcessors();
         boolean isMacOs = System.getProperty("os.name", "").toLowerCase().contains("mac");
         int threadCount = Math.max(1, isMacOs ? cpuCount * 3 / 4 : cpuCount / 2);
+        if (singleTestPathFragment != null && !singleTestPathFragment.isBlank()) {
+            threadCount = 1;
+        }
         long prewarmElapsedMilliseconds = executor.prewarm();
         System.out.println("Prewarmed runtime/context in " + prewarmElapsedMilliseconds + " ms");
         System.out.println("Starting test execution with " + threadCount + " threads...\n");

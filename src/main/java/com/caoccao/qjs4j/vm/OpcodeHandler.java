@@ -448,22 +448,25 @@ public final class OpcodeHandler {
 
     static void handleApplyEval(Opcode op, ExecutionContext executionContext) {
         int pc = executionContext.pc;
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue argsArrayValue = executionContext.virtualMachine.valueStack.pop();
-        JSValue callee = executionContext.virtualMachine.valueStack.pop();
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+        JSValue argsArrayValue = (JSValue) stack[--sp];
+        JSValue callee = (JSValue) stack[--sp];
 
         JSValue[] applyArgs = executionContext.virtualMachine.buildApplyArguments(argsArrayValue, true);
         if (applyArgs == null) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            stack[sp++] = JSUndefined.INSTANCE;
         } else {
-            executionContext.virtualMachine.valueStack.push(callee);
+            stack[sp++] = callee;
             for (JSValue applyArg : applyArgs) {
-                executionContext.virtualMachine.valueStack.push(applyArg);
+                stack[sp++] = applyArg;
             }
+            executionContext.sp = sp;
             internalHandleCall(executionContext, applyArgs.length, true);
+            sp = executionContext.sp;
         }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
 
@@ -763,37 +766,27 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         byte[] instructions = executionContext.instructions;
         int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, argumentCount, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall0(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, 0, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall1(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, 1, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall2(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, 2, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
     static void handleCall3(Opcode op, ExecutionContext executionContext) {
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, 3, false);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
     }
 
@@ -1536,16 +1529,18 @@ public final class OpcodeHandler {
 
         if (tailFlag != 0) {
             // Tail position eval call: handle TCO when callee is not the real eval
-            executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+            JSStackValue[] stack = executionContext.stack;
+            int sp = executionContext.sp;
 
             // Pop arguments
             JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
             for (int i = argumentCount - 1; i >= 0; i--) {
-                args[i] = executionContext.virtualMachine.valueStack.pop();
+                args[i] = (JSValue) stack[--sp];
             }
             // Eval syntax: no receiver pop (directEvalSyntax)
-            JSValue callee = executionContext.virtualMachine.valueStack.pop();
+            JSValue callee = (JSValue) stack[--sp];
             executionContext.virtualMachine.propertyAccessLock = false;
+            executionContext.virtualMachine.valueStack.stackTop = sp;
 
             // Check if callee is a non-constructor, non-async/generator bytecode function eligible for TCO
             boolean canTrampoline = false;
@@ -1566,13 +1561,15 @@ public final class OpcodeHandler {
             }
 
             // Not eligible for trampoline: push values back and call normally, then return
-            executionContext.virtualMachine.valueStack.push(callee);
+            stack[sp++] = callee;
             for (JSValue arg : args) {
-                executionContext.virtualMachine.valueStack.push(arg);
+                stack[sp++] = arg;
             }
+            executionContext.sp = sp;
             internalHandleCall(executionContext, argumentCount, true);
-            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-            JSValue result = (JSValue) executionContext.stack[--executionContext.sp];
+            sp = executionContext.sp;
+            JSValue result = (JSValue) stack[--sp];
+            executionContext.sp = sp;
             executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
             executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
             executionContext.returnValue = result;
@@ -1580,9 +1577,7 @@ public final class OpcodeHandler {
             return;
         }
 
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         internalHandleCall(executionContext, argumentCount, true);
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc = pc + op.getSize();
     }
 
@@ -5855,93 +5850,94 @@ public final class OpcodeHandler {
     }
 
     private static void internalHandleCall(ExecutionContext executionContext, int argCount, boolean directEvalSyntax) {
+        VirtualMachine virtualMachine = executionContext.virtualMachine;
+        JSContext context = virtualMachine.context;
+        JSStackValue[] stack = executionContext.stack;
+        int sp = executionContext.sp;
+
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
         // Pop arguments from stack
         JSValue[] args = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
         for (int i = argCount - 1; i >= 0; i--) {
-            args[i] = executionContext.virtualMachine.valueStack.pop();
+            args[i] = (JSValue) stack[--sp];
         }
 
         JSValue receiver = JSUndefined.INSTANCE;
         if (!directEvalSyntax) {
-            receiver = executionContext.virtualMachine.valueStack.pop();
+            receiver = (JSValue) stack[--sp];
         }
 
         // Pop callee (method)
-        JSValue callee = executionContext.virtualMachine.valueStack.pop();
+        JSValue callee = (JSValue) stack[--sp];
 
         // SWAP locks property tracking while evaluating method-call arguments.
         // Unlock before invoking the callee so nested calls can build their own chains.
-        executionContext.virtualMachine.propertyAccessLock = false;
+        virtualMachine.propertyAccessLock = false;
+        virtualMachine.valueStack.stackTop = sp;
 
         // Fast path for native functions (most common case for built-in method calls).
         // Checked first to avoid Proxy/constructor-type/class-constructor checks on every call.
         if (callee instanceof JSNativeFunction nativeFunc) {
             JSConstructorType ctorType = nativeFunc.getConstructorType();
             if (ctorType == JSConstructorType.SYMBOL_OBJECT) {
-                JSValue result = SymbolConstructor.call(executionContext.virtualMachine.context, receiver, args);
-                executionContext.virtualMachine.valueStack.push(result);
+                JSValue result = SymbolConstructor.call(context, receiver, args);
+                stack[sp++] = result;
+                executionContext.sp = sp;
+                virtualMachine.valueStack.stackTop = sp;
                 return;
             }
             if (ctorType == JSConstructorType.BIG_INT_OBJECT) {
-                JSValue result = BigIntConstructor.call(executionContext.virtualMachine.context, receiver, args);
-                executionContext.virtualMachine.valueStack.push(result);
+                JSValue result = BigIntConstructor.call(context, receiver, args);
+                stack[sp++] = result;
+                executionContext.sp = sp;
+                virtualMachine.valueStack.stackTop = sp;
                 return;
             }
             if (nativeFunc.requiresNew()) {
                 JSContext errorContext = nativeFunc.getRealmContext() != null
                         ? nativeFunc.getRealmContext()
-                        : executionContext.virtualMachine.context;
+                        : context;
                 String constructorName = nativeFunc.getName() != null ? nativeFunc.getName() : "constructor";
-                executionContext.virtualMachine.resetPropertyAccessTracking();
+                virtualMachine.resetPropertyAccessTracking();
                 String errorMessage = switch (constructorName) {
                     case JSPromise.NAME -> "Promise constructor cannot be invoked without 'new'";
                     default -> "Constructor " + constructorName + " requires 'new'";
                 };
-                executionContext.virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
+                virtualMachine.pendingException = errorContext.throwTypeError(errorMessage);
                 errorContext.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                virtualMachine.valueStack.stackTop = sp;
                 return;
             }
             try {
                 if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
-                    executionContext.virtualMachine.context.scheduleDirectEvalCall();
+                    context.scheduleDirectEvalCall();
                 }
-                JSValue result = nativeFunc.call(executionContext.virtualMachine.context, receiver, args);
-                if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.pendingException =
-                            executionContext.virtualMachine.context.getPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                JSValue result = nativeFunc.call(context, receiver, args);
+                if (context.hasPendingException()) {
+                    virtualMachine.pendingException = context.getPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
                 } else {
-                    executionContext.virtualMachine.valueStack.push(result);
+                    stack[sp++] = result;
                 }
             } catch (JSException e) {
-                executionContext.virtualMachine.pendingException = e.getErrorValue();
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                virtualMachine.pendingException = e.getErrorValue();
+                context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
             } catch (JSVirtualMachineException e) {
-                if (e.getJsValue() != null) {
-                    executionContext.virtualMachine.pendingException = e.getJsValue();
-                } else if (e.getJsError() != null) {
-                    executionContext.virtualMachine.pendingException = e.getJsError();
-                } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                } else {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
-                            e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                }
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                stack[sp++] = JSUndefined.INSTANCE;
             } catch (JSErrorException e) {
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(e);
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                virtualMachine.pendingException = context.throwError(e);
+                context.clearPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
             }
-            executionContext.virtualMachine.resetPropertyAccessTracking();
+            virtualMachine.resetPropertyAccessTracking();
         } else if (callee instanceof JSProxy proxy) {
-            JSValue result = executionContext.virtualMachine.proxyApply(proxy, receiver, args);
-            executionContext.virtualMachine.valueStack.push(result);
-            executionContext.virtualMachine.resetPropertyAccessTracking();
+            JSValue result = virtualMachine.proxyApply(proxy, receiver, args);
+            stack[sp++] = result;
+            virtualMachine.resetPropertyAccessTracking();
         } else if (callee instanceof JSFunction function) {
             if (function.getHomeObject() == null
                     && receiver instanceof JSObject receiverObject
@@ -5960,76 +5956,58 @@ public final class OpcodeHandler {
             if (isClassCtor) {
                 JSContext errorContext = function.getRealmContext() != null
                         ? function.getRealmContext()
-                        : executionContext.virtualMachine.context;
-                executionContext.virtualMachine.resetPropertyAccessTracking();
-                executionContext.virtualMachine.pendingException = errorContext.throwTypeError("Class constructor " + function.getName()
+                        : context;
+                virtualMachine.resetPropertyAccessTracking();
+                virtualMachine.pendingException = errorContext.throwTypeError("Class constructor " + function.getName()
                         + " cannot be invoked without 'new'");
                 errorContext.clearPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                stack[sp++] = JSUndefined.INSTANCE;
+                executionContext.sp = sp;
+                virtualMachine.valueStack.stackTop = sp;
                 return;
             }
 
             if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {
                     // Call through the function's call method to handle async wrapping
-                    JSValue result = bytecodeFunc.call(executionContext.virtualMachine.context, receiver, args);
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    JSValue result = bytecodeFunc.call(context, receiver, args);
+                    if (context.hasPendingException()) {
+                        virtualMachine.pendingException = context.getPendingException();
+                        stack[sp++] = JSUndefined.INSTANCE;
                     } else {
-                        executionContext.virtualMachine.valueStack.push(result);
+                        stack[sp++] = result;
                     }
                 } catch (JSVirtualMachineException e) {
-                    if (e.getJsValue() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsValue();
-                    } else if (e.getJsError() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsError();
-                    } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                    } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
-                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                    stack[sp++] = JSUndefined.INSTANCE;
                 }
             } else if (function instanceof JSBoundFunction boundFunc) {
                 // Call bound function - the receiver is ignored for bound functions
                 try {
-                    JSValue result = boundFunc.call(executionContext.virtualMachine.context, receiver, args);
+                    JSValue result = boundFunc.call(context, receiver, args);
                     // Check for pending exception after bound function call
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    if (context.hasPendingException()) {
+                        virtualMachine.pendingException = context.getPendingException();
+                        stack[sp++] = JSUndefined.INSTANCE;
                     } else {
-                        executionContext.virtualMachine.valueStack.push(result);
+                        stack[sp++] = result;
                     }
                 } catch (JSVirtualMachineException e) {
-                    if (e.getJsValue() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsValue();
-                    } else if (e.getJsError() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsError();
-                    } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                    } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
-                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                    stack[sp++] = JSUndefined.INSTANCE;
                 }
             } else {
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                stack[sp++] = JSUndefined.INSTANCE;
             }
             // Clear property access tracking after successful call
-            executionContext.virtualMachine.resetPropertyAccessTracking();
+            virtualMachine.resetPropertyAccessTracking();
         } else {
             // Not a function - set pending TypeError so JS catch handlers can process it
             // Generate a descriptive error message similar to V8/QuickJS
             String message;
-            if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+            if (!virtualMachine.propertyAccessChain.isEmpty()) {
                 // Use the tracked property access for better error messages
-                message = executionContext.virtualMachine.propertyAccessChain + " is not a function";
+                message = virtualMachine.propertyAccessChain + " is not a function";
             } else if (callee instanceof JSUndefined) {
                 message = "undefined is not a function";
             } else if (callee instanceof JSNull) {
@@ -6041,11 +6019,14 @@ public final class OpcodeHandler {
             } else {
                 message = JSTypeChecking.typeof(callee) + " is not a function";
             }
-            executionContext.virtualMachine.resetPropertyAccessTracking();
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError(message);
-            executionContext.virtualMachine.context.clearPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            virtualMachine.resetPropertyAccessTracking();
+            virtualMachine.pendingException = context.throwTypeError(message);
+            context.clearPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
         }
+
+        executionContext.sp = sp;
+        virtualMachine.valueStack.stackTop = sp;
     }
 
     private static IdentityHashMap<JSSymbol, JSSymbol> internalResolvePrivateSymbolRemap(

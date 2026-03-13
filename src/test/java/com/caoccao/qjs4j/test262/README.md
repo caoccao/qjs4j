@@ -41,6 +41,12 @@ Run only language tests:
 ./gradlew test262Language
 ```
 
+Run a single test file (useful for profiling/hotspot analysis):
+
+```bash
+./gradlew test262 --args="../test262 --quick --single test/staging/sm/Date/dst-offset-caching-3-of-8.js"
+```
+
 ### JUnit Integration
 
 Run test262 tests via JUnit (runs a limited subset):
