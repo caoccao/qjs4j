@@ -430,6 +430,7 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                 parserContext.newTargetNesting,
                 parserContext.superPropertyAllowed,
                 parserContext.allowNewTargetInEval,
+                parserContext.inDerivedConstructor,
                 parserContext.evalPrivateNames);
         Expression expression = expressionParser.parseExpression();
         if (expressionParser.currentToken().type() != TokenType.EOF) {

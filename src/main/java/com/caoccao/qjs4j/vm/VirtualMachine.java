@@ -818,9 +818,11 @@ public final class VirtualMachine {
 
             case 2: // SPECIAL_OBJECT_THIS_FUNC
                 // Return the currently executing function.
-                // For arrow functions, return the captured enclosing function (e.g., constructor for super() calls).
+                // For arrow functions and eval with super call, return the captured enclosing
+                // constructor function (e.g., for super() calls in derived constructors).
                 JSFunction thisFunc = currentFrame.getFunction();
-                if (thisFunc instanceof JSBytecodeFunction thisBf && thisBf.isArrow()) {
+                if (thisFunc instanceof JSBytecodeFunction thisBf
+                        && (thisBf.isArrow() || thisBf.isEvalSuperCallAllowed())) {
                     JSFunction activeFunc = thisBf.getCapturedActiveFunction();
                     if (activeFunc != null) {
                         return activeFunc;
@@ -971,6 +973,8 @@ public final class VirtualMachine {
                     if (function.isDerivedConstructor()) {
                         frame.setDerivedThisRef(new VarRef(UNINITIALIZED_MARKER));
                     } else if (function.isArrow() && function.getCapturedDerivedThisRef() != null) {
+                        frame.setDerivedThisRef(function.getCapturedDerivedThisRef());
+                    } else if (function.isEvalSuperCallAllowed() && function.getCapturedDerivedThisRef() != null) {
                         frame.setDerivedThisRef(function.getCapturedDerivedThisRef());
                     }
                 }

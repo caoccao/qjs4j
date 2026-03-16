@@ -67,6 +67,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap;
     private Set<JSSymbol> classPrivateSymbols;
     private boolean derivedConstructor;
+    private boolean evalSuperCallAllowed;
     private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
     private int selfLocalIndex;
@@ -1919,6 +1920,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return derivedConstructor;
     }
 
+    public boolean isEvalSuperCallAllowed() {
+        return evalSuperCallAllowed;
+    }
+
     /**
      * Check if this is a generator function.
      */
@@ -2011,6 +2016,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setDerivedConstructor(boolean derivedConstructor) {
         this.derivedConstructor = derivedConstructor;
+    }
+
+    public void setEvalSuperCallAllowed(boolean evalSuperCallAllowed) {
+        this.evalSuperCallAllowed = evalSuperCallAllowed;
     }
 
     public void setHasArgumentsParameterBinding(boolean hasArgumentsParameterBinding) {

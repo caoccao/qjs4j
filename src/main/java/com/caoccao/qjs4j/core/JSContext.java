@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.StackFrame;
+import com.caoccao.qjs4j.vm.VarRef;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
 import java.io.IOException;
@@ -1509,6 +1510,7 @@ public final class JSContext implements AutoCloseable {
                 : null;
         boolean allowNewTargetInEval = false;
         boolean allowSuperPropertyInEval = false;
+        boolean allowSuperCallInEval = false;
         Map<String, JSSymbol> evalPrivateSymbols = Map.of();
         boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
         if (isDirectEval) {
@@ -1519,12 +1521,25 @@ public final class JSContext implements AutoCloseable {
                 allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
                         && callerBytecodeFunction.getHomeObject() != null;
                 evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
+                // Per QuickJS: direct eval inherits super_call_allowed from the calling function.
+                // This is true for derived constructors, arrows inside derived constructors,
+                // and nested eval that already has super call allowed.
+                if (callerBytecodeFunction.isDerivedConstructor()) {
+                    allowSuperCallInEval = true;
+                } else if (callerBytecodeFunction.isArrow() && directEvalCallerFrame.getDerivedThisRef() != null) {
+                    allowSuperCallInEval = true;
+                } else if (callerBytecodeFunction.isEvalSuperCallAllowed()) {
+                    allowSuperCallInEval = true;
+                }
             }
             // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
+            // Per spec 16.1.7, eval in class field initializer applies "outside constructor" rules,
+            // so super() is a SyntaxError there.
             if (isClassFieldEval) {
                 compiler.setClassFieldEval(true);
+                allowSuperCallInEval = false;
             }
-            compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval);
+            compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval, allowSuperCallInEval);
             compiler.setEvalPrivateSymbols(evalPrivateSymbols);
             // Direct eval creates a fresh lexical environment whose bindings do not leak.
             compiler.setPredeclareProgramLexicalsAsLocals(true);
@@ -1786,6 +1801,43 @@ public final class JSContext implements AutoCloseable {
                 }
                 if (allowSuperPropertyInEval) {
                     func.setHomeObject(directEvalCallerFrame.getFunction().getHomeObject());
+                }
+                if (allowSuperCallInEval) {
+                    func.setEvalSuperCallAllowed(true);
+                    // Set up new.target for super() calls: inherit from caller
+                    // (including arrows that capture new.target from the constructor)
+                    JSFunction callerFunction = directEvalCallerFrame.getFunction();
+                    if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
+                        if (callerFunction instanceof JSBytecodeFunction callerBf && callerBf.isArrow()) {
+                            JSValue capturedNewTarget = callerBf.getCapturedNewTarget();
+                            if (capturedNewTarget != null) {
+                                evalNewTarget = capturedNewTarget;
+                            }
+                        }
+                        if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
+                            evalNewTarget = directEvalCallerFrame.getNewTarget();
+                        }
+                    }
+                    // Set capturedNewTarget so arrows created inside eval can inherit it via FCLOSURE
+                    func.setCapturedNewTarget(evalNewTarget);
+                    // Set capturedActiveFunction so SPECIAL_OBJECT 2 returns the constructor
+                    if (callerFunction instanceof JSBytecodeFunction callerBf) {
+                        if (callerBf.isArrow()) {
+                            JSFunction activeFunction = callerBf.getCapturedActiveFunction();
+                            if (activeFunction != null) {
+                                func.setCapturedActiveFunction(activeFunction);
+                            }
+                        } else if (callerBf.isEvalSuperCallAllowed() && callerBf.getCapturedActiveFunction() != null) {
+                            func.setCapturedActiveFunction(callerBf.getCapturedActiveFunction());
+                        } else {
+                            func.setCapturedActiveFunction(callerFunction);
+                        }
+                    }
+                    // Set capturedDerivedThisRef so INIT_CTOR can find the shared this binding
+                    VarRef callerDerivedThisRef = directEvalCallerFrame.getDerivedThisRef();
+                    if (callerDerivedThisRef != null) {
+                        func.setCapturedDerivedThisRef(callerDerivedThisRef);
+                    }
                 }
             }
             JSValue result;

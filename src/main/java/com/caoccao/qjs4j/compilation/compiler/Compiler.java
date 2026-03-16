@@ -45,6 +45,7 @@ public final class Compiler {
     private boolean classFieldEval;
     private JSContext context;
     private boolean evalAllowNewTarget;
+    private boolean evalAllowSuperCall;
     private boolean evalAllowSuperProperty;
     private Map<String, JSSymbol> evalPrivateSymbols;
     private boolean inheritedStrictMode;
@@ -58,6 +59,7 @@ public final class Compiler {
         this.source = source;
         this.fileName = fileName;
         this.evalAllowNewTarget = false;
+        this.evalAllowSuperCall = false;
         this.evalAllowSuperProperty = false;
         this.inheritedStrictMode = false;
         this.isEval = false;
@@ -130,6 +132,7 @@ public final class Compiler {
                 inheritedStrictMode,
                 evalAllowSuperProperty,
                 evalAllowNewTarget,
+                evalAllowSuperCall,
                 evalPrivateSymbols.isEmpty() ? Set.of() : evalPrivateSymbols.keySet());
         if (classFieldEval) {
             parser.setClassFieldEval(true);
@@ -159,9 +162,10 @@ public final class Compiler {
         return this;
     }
 
-    public Compiler setEvalContextFlags(boolean allowSuperProperty, boolean allowNewTarget) {
+    public Compiler setEvalContextFlags(boolean allowSuperProperty, boolean allowNewTarget, boolean allowSuperCall) {
         this.evalAllowSuperProperty = allowSuperProperty;
         this.evalAllowNewTarget = allowNewTarget;
+        this.evalAllowSuperCall = allowSuperCall;
         return this;
     }
 

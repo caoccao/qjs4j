@@ -1680,8 +1680,9 @@ public final class OpcodeHandler {
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
                 // Capture new.target and active function lexically from enclosing function
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
-                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
-                    // Nested arrow: propagate captured values from parent arrow
+                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf
+                        && (enclosingBf.isArrow() || enclosingBf.isEvalSuperCallAllowed())) {
+                    // Nested arrow or arrow inside eval: propagate captured values from parent
                     closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
                     closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
                     closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
@@ -1771,7 +1772,8 @@ public final class OpcodeHandler {
                 }
                 closureFunction.setCapturedThisArg(executionContext.frame.getThisArg());
                 JSFunction enclosingFunc = executionContext.frame.getFunction();
-                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf && enclosingBf.isArrow()) {
+                if (enclosingFunc instanceof JSBytecodeFunction enclosingBf
+                        && (enclosingBf.isArrow() || enclosingBf.isEvalSuperCallAllowed())) {
                     closureFunction.setCapturedArguments(enclosingBf.getCapturedArguments());
                     closureFunction.setCapturedNewTarget(enclosingBf.getCapturedNewTarget());
                     closureFunction.setCapturedActiveFunction(enclosingBf.getCapturedActiveFunction());
@@ -3326,10 +3328,13 @@ public final class OpcodeHandler {
             if (derivedThisRef != null) {
                 derivedThisRef.set(jsObject);
             }
-            // For arrow functions inside derived constructors, update the captured this
+            // For arrow functions and eval inside derived constructors, update the captured this
             // and propagate the initialized this back to the enclosing constructor frame.
-            if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
-                arrowBf.setCapturedThisArg(jsObject);
+            if (currentFunction instanceof JSBytecodeFunction currentBf
+                    && (currentBf.isArrow() || currentBf.isEvalSuperCallAllowed())) {
+                if (currentBf.isArrow()) {
+                    currentBf.setCapturedThisArg(jsObject);
+                }
                 StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
                 while (callerFrame != null) {
                     JSFunction callerFunc = callerFrame.getFunction();

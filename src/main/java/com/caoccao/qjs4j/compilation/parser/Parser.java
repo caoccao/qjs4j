@@ -49,11 +49,11 @@ public final class Parser {
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval) {
-        this(lexer, moduleMode, isEval, false, 0, 0, 0, 0, false, false, Set.of());
+        this(lexer, moduleMode, isEval, false, 0, 0, 0, 0, false, false, false, Set.of());
     }
 
     public Parser(Lexer lexer, boolean moduleMode, boolean isEval, boolean inheritedStrictMode) {
-        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, false, false, Set.of());
+        this(lexer, moduleMode, isEval, inheritedStrictMode, 0, 0, 0, 0, false, false, false, Set.of());
     }
 
     public Parser(
@@ -74,6 +74,7 @@ public final class Parser {
                 0,
                 initialSuperPropertyAllowed,
                 allowNewTargetInEval,
+                false,
                 Set.of());
     }
 
@@ -96,6 +97,31 @@ public final class Parser {
                 0,
                 initialSuperPropertyAllowed,
                 allowNewTargetInEval,
+                false,
+                evalPrivateNames);
+    }
+
+    public Parser(
+            Lexer lexer,
+            boolean moduleMode,
+            boolean isEval,
+            boolean inheritedStrictMode,
+            boolean initialSuperPropertyAllowed,
+            boolean allowNewTargetInEval,
+            boolean allowSuperCallInEval,
+            Set<String> evalPrivateNames) {
+        this(
+                lexer,
+                moduleMode,
+                isEval,
+                inheritedStrictMode,
+                0,
+                0,
+                0,
+                0,
+                initialSuperPropertyAllowed,
+                allowNewTargetInEval,
+                allowSuperCallInEval,
                 evalPrivateNames);
     }
 
@@ -117,6 +143,7 @@ public final class Parser {
                 newTargetNesting,
                 initialSuperPropertyAllowed,
                 allowNewTargetInEval,
+                false,
                 Set.of());
     }
 
@@ -127,6 +154,7 @@ public final class Parser {
            int newTargetNesting,
            boolean initialSuperPropertyAllowed,
            boolean allowNewTargetInEval,
+           boolean allowSuperCallInEval,
            Set<String> evalPrivateNames) {
         this.parserContext = new ParserContext(lexer, moduleMode, isEval, inheritedStrictMode,
                 functionNesting, asyncFunctionNesting,
@@ -135,6 +163,9 @@ public final class Parser {
                 initialSuperPropertyAllowed,
                 allowNewTargetInEval,
                 evalPrivateNames);
+        if (allowSuperCallInEval) {
+            this.parserContext.inDerivedConstructor = true;
+        }
         this.delegates = new ParserDelegates(parserContext);
     }
 
