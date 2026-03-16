@@ -49,62 +49,6 @@ final class FunctionClassCompiler {
         return candidateName;
     }
 
-    private static MethodDefinition createAutoAccessorMethod(
-            PropertyDefinition field,
-            String methodKind,
-            String backingPrivateName) {
-        SourceLocation location = field.getLocation();
-        Identifier thisIdentifier = new Identifier("this", location);
-        PrivateIdentifier backingPrivateIdentifier = new PrivateIdentifier(backingPrivateName, location);
-        MemberExpression backingMemberExpression = new MemberExpression(
-                thisIdentifier,
-                backingPrivateIdentifier,
-                false,
-                false,
-                location);
-
-        FunctionExpression methodFunctionExpression;
-        if (JSKeyword.GET.equals(methodKind)) {
-            BlockStatement body = new BlockStatement(
-                    List.of(new ReturnStatement(backingMemberExpression, location)),
-                    location);
-            methodFunctionExpression = new FunctionExpression(
-                    null,
-                    new FunctionParams(List.of(), null, null),
-                    body,
-                    false,
-                    false,
-                    false,
-                    location);
-        } else {
-            Identifier valueIdentifier = new Identifier("value", location);
-            AssignmentExpression assignmentExpression = new AssignmentExpression(
-                    backingMemberExpression,
-                    AssignmentOperator.ASSIGN,
-                    valueIdentifier,
-                    location);
-            BlockStatement body = new BlockStatement(
-                    List.of(new ExpressionStatement(assignmentExpression, location)),
-                    location);
-            methodFunctionExpression = new FunctionExpression(
-                    null,
-                    new FunctionParams(List.of(valueIdentifier), null, null),
-                    body,
-                    false,
-                    false,
-                    false,
-                    location);
-        }
-
-        return new MethodDefinition(
-                field.getKey(),
-                methodFunctionExpression,
-                methodKind,
-                field.isComputed(),
-                field.isStatic(),
-                false);
-    }
-
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -392,8 +336,8 @@ final class FunctionClassCompiler {
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
                     registerPrivateName(privateNameKinds, backingName, "field");
-                    methods.add(createAutoAccessorMethod(field, JSKeyword.GET, backingName));
-                    methods.add(createAutoAccessorMethod(field, JSKeyword.SET, backingName));
+                    methods.add(field.toAutoAccessorMethod(JSKeyword.GET, backingName));
+                    methods.add(field.toAutoAccessorMethod(JSKeyword.SET, backingName));
                 }
 
                 if (field.isComputed() && !field.isPrivate()) {
@@ -711,8 +655,8 @@ final class FunctionClassCompiler {
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
                     registerPrivateName(privateNameKinds, backingName, "field");
-                    methods.add(createAutoAccessorMethod(field, JSKeyword.GET, backingName));
-                    methods.add(createAutoAccessorMethod(field, JSKeyword.SET, backingName));
+                    methods.add(field.toAutoAccessorMethod(JSKeyword.GET, backingName));
+                    methods.add(field.toAutoAccessorMethod(JSKeyword.SET, backingName));
                 }
 
                 if (field.isComputed() && !field.isPrivate()) {

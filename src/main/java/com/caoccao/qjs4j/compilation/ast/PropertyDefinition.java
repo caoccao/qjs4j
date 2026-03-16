@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.List;
+
 /**
  * Represents a field in a class (public or private).
  */
@@ -96,5 +100,58 @@ public final class PropertyDefinition extends ClassElement {
 
     public boolean isStatic() {
         return isStatic;
+    }
+
+    public MethodDefinition toAutoAccessorMethod(String methodKind, String backingPrivateName) {
+        SourceLocation location = getLocation();
+        Identifier thisIdentifier = new Identifier("this", location);
+        PrivateIdentifier backingPrivateIdentifier = new PrivateIdentifier(backingPrivateName, location);
+        MemberExpression backingMemberExpression = new MemberExpression(
+                thisIdentifier,
+                backingPrivateIdentifier,
+                false,
+                false,
+                location);
+
+        FunctionExpression methodFunctionExpression;
+        if (JSKeyword.GET.equals(methodKind)) {
+            BlockStatement body = new BlockStatement(
+                    List.of(new ReturnStatement(backingMemberExpression, location)),
+                    location);
+            methodFunctionExpression = new FunctionExpression(
+                    null,
+                    new FunctionParams(List.of(), null, null),
+                    body,
+                    false,
+                    false,
+                    false,
+                    location);
+        } else {
+            Identifier valueIdentifier = new Identifier("value", location);
+            AssignmentExpression assignmentExpression = new AssignmentExpression(
+                    backingMemberExpression,
+                    AssignmentOperator.ASSIGN,
+                    valueIdentifier,
+                    location);
+            BlockStatement body = new BlockStatement(
+                    List.of(new ExpressionStatement(assignmentExpression, location)),
+                    location);
+            methodFunctionExpression = new FunctionExpression(
+                    null,
+                    new FunctionParams(List.of(valueIdentifier), null, null),
+                    body,
+                    false,
+                    false,
+                    false,
+                    location);
+        }
+
+        return new MethodDefinition(
+                key,
+                methodFunctionExpression,
+                methodKind,
+                computed,
+                isStatic,
+                false);
     }
 }
