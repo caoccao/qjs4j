@@ -23,19 +23,15 @@ import java.util.List;
  */
 public final class FunctionExpression extends Expression {
     private final BlockStatement body;
-    private final List<Expression> defaults;
+    private final FunctionParams functionParams;
     private final Identifier id;
     private final boolean isAsync;
     private final boolean isGenerator;
     private final boolean needsArguments;
-    private final List<Pattern> params;
-    private final RestParameter restParameter;
 
     public FunctionExpression(
             Identifier id,
-            List<Pattern> params,
-            List<Expression> defaults,
-            RestParameter restParameter,
+            FunctionParams functionParams,
             BlockStatement body,
             boolean isAsync,
             boolean isGenerator,
@@ -43,9 +39,7 @@ public final class FunctionExpression extends Expression {
             SourceLocation location) {
         super(location);
         this.id = id;
-        this.params = params;
-        this.defaults = defaults;
-        this.restParameter = restParameter;
+        this.functionParams = functionParams;
         this.body = body;
         this.isAsync = isAsync;
         this.isGenerator = isGenerator;
@@ -69,7 +63,11 @@ public final class FunctionExpression extends Expression {
     }
 
     public List<Expression> getDefaults() {
-        return defaults;
+        return functionParams.defaults();
+    }
+
+    public FunctionParams getFunctionParams() {
+        return functionParams;
     }
 
     public Identifier getId() {
@@ -77,11 +75,11 @@ public final class FunctionExpression extends Expression {
     }
 
     public List<Pattern> getParams() {
-        return params;
+        return functionParams.params();
     }
 
     public RestParameter getRestParameter() {
-        return restParameter;
+        return functionParams.restParameter();
     }
 
     @Override

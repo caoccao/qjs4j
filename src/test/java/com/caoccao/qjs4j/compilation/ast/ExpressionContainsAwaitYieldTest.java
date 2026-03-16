@@ -70,9 +70,7 @@ public class ExpressionContainsAwaitYieldTest {
     public void testFunctionAndArrowExpressionContainmentFromBody() {
         FunctionExpression functionExpression = new FunctionExpression(
                 null,
-                List.of(),
-                List.of(),
-                null,
+                new FunctionParams(List.of(), List.of(), null),
                 new BlockStatement(List.of(
                         new ExpressionStatement(
                                 new AwaitExpression(new Literal(1, LOCATION), LOCATION),
@@ -86,9 +84,7 @@ public class ExpressionContainsAwaitYieldTest {
                 false,
                 LOCATION);
         ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
-                List.of(),
-                List.of(),
-                null,
+                new FunctionParams(List.of(), List.of(), null),
                 new SequenceExpression(List.of(
                         new AwaitExpression(new Literal(1, LOCATION), LOCATION),
                         new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
@@ -107,28 +103,30 @@ public class ExpressionContainsAwaitYieldTest {
     public void testFunctionAndArrowExpressionContainmentFromDefaultsAndRest() {
         FunctionExpression functionExpression = new FunctionExpression(
                 null,
-                List.of(),
-                List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
-                new RestParameter(
-                        new AssignmentPattern(
-                                new Identifier("a", LOCATION),
-                                new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
-                                LOCATION),
-                        LOCATION),
+                new FunctionParams(
+                        List.of(),
+                        List.of(new AwaitExpression(new Literal(1, LOCATION), LOCATION)),
+                        new RestParameter(
+                                new AssignmentPattern(
+                                        new Identifier("a", LOCATION),
+                                        new YieldExpression(new Literal(1, LOCATION), false, LOCATION),
+                                        LOCATION),
+                                LOCATION)),
                 new BlockStatement(List.of(), LOCATION),
                 false,
                 false,
                 false,
                 LOCATION);
         ArrowFunctionExpression arrowFunctionExpression = new ArrowFunctionExpression(
-                List.of(),
-                List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
-                new RestParameter(
-                        new AssignmentPattern(
-                                new Identifier("a", LOCATION),
-                                new AwaitExpression(new Literal(1, LOCATION), LOCATION),
-                                LOCATION),
-                        LOCATION),
+                new FunctionParams(
+                        List.of(),
+                        List.of(new YieldExpression(new Literal(1, LOCATION), false, LOCATION)),
+                        new RestParameter(
+                                new AssignmentPattern(
+                                        new Identifier("a", LOCATION),
+                                        new AwaitExpression(new Literal(1, LOCATION), LOCATION),
+                                        LOCATION),
+                                LOCATION)),
                 new Identifier("body", LOCATION),
                 false,
                 LOCATION);

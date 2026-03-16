@@ -650,8 +650,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 SourceLocation fullLocation = new SourceLocation(
                         location.line(), location.column(), location.offset(),
                         parserContext.previousTokenEndOffset);
-                return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(),
-                        funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
+                return new FunctionDeclaration(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
             } finally {
                 parserContext.inFunctionBody = savedInFunctionBody;
                 parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -677,8 +676,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             SourceLocation fullLocation = new SourceLocation(
                     location.line(), location.column(), location.offset(),
                     parserContext.previousTokenEndOffset);
-            return new FunctionDeclaration(defaultId, funcParams.params(), funcParams.defaults(),
-                    funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
+            return new FunctionDeclaration(defaultId, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -717,7 +715,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Validate parameters when in strict mode (either from outer context or "use strict" directive)
         if (hasUseStrict || savedStrictMode) {
             checkStrictModeParameters(funcParams, funcName);
-        } else if (AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter())) {
+        } else if (funcParams.hasNonSimpleParameters()) {
             // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
             // and BoundNames contains any duplicate elements.
             // Following QuickJS js_parse_function_check_names: duplicates are always
@@ -726,7 +724,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
-        if (hasUseStrict && AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter())) {
+        if (hasUseStrict && funcParams.hasNonSimpleParameters()) {
             throw new JSSyntaxErrorException(
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
@@ -806,7 +804,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     parserContext.previousTokenEndOffset
             );
 
-            return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
+            return new FunctionDeclaration(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -865,7 +863,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     parserContext.previousTokenEndOffset
             );
 
-            return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
+            return new FunctionExpression(id, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
             parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
@@ -998,7 +996,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
         // is a SyntaxError. Methods are already strict (class bodies are strict mode),
         // but we must still check for the explicit directive + non-simple params combo.
-        if (AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter()) && body.hasUseStrictDirective()) {
+        if (funcParams.hasNonSimpleParameters() && body.hasUseStrictDirective()) {
             throw new JSSyntaxErrorException(
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
@@ -1010,8 +1008,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 parserContext.previousTokenEndOffset
         );
 
-        return new FunctionExpression(null, funcParams.params(), funcParams.defaults(),
-                funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
+        return new FunctionExpression(null, funcParams, body, isAsync, isGenerator, needsArguments, fullLocation);
     }
 
     /**

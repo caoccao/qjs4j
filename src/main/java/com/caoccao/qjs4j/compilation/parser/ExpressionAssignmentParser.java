@@ -360,7 +360,7 @@ final class ExpressionAssignmentParser {
                     // Async arrows have the same early errors as regular arrows (spec 15.8.1)
                     List<Expression> singleDefault = new ArrayList<>();
                     singleDefault.add(null);
-                    validateArrowParameters(List.of(param), singleDefault, null, body);
+                    validateArrowParameters(new FunctionParams(List.of(param), singleDefault, null), body);
                     if (body instanceof BlockStatement blockBody) {
                         validateFormalsBodyDuplicate(List.of(param), null, blockBody.getBody());
                     }
@@ -371,7 +371,7 @@ final class ExpressionAssignmentParser {
                             asyncLocation.offset(),
                             parserContext.previousTokenEndOffset
                     );
-                    return new ArrowFunctionExpression(List.of(param), null, null, body, true, fullLocation);
+                    return new ArrowFunctionExpression(new FunctionParams(List.of(param), null, null), body, true, fullLocation);
                 }
 
                 if (parserContext.match(TokenType.LPAREN) && peekPastParensIsArrow()) {
@@ -391,8 +391,7 @@ final class ExpressionAssignmentParser {
                         }
 
                         // Async arrows have the same early errors as regular arrows (spec 15.8.1)
-                        validateArrowParameters(funcParams.params(), funcParams.defaults(),
-                                funcParams.restParameter(), body);
+                        validateArrowParameters(funcParams, body);
                         if (body instanceof BlockStatement blockBody) {
                             validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), blockBody.getBody());
                         }
@@ -403,13 +402,7 @@ final class ExpressionAssignmentParser {
                                 location.offset(),
                                 parserContext.previousTokenEndOffset
                         );
-                        return new ArrowFunctionExpression(
-                                funcParams.params(),
-                                funcParams.defaults(),
-                                funcParams.restParameter(),
-                                body,
-                                true,
-                                fullLocation);
+                        return new ArrowFunctionExpression(funcParams, body, true, fullLocation);
                     } finally {
                         parserContext.inClassStaticInit = savedInClassStaticInit;
                         exitArrowFunctionContext(true);
@@ -529,7 +522,7 @@ final class ExpressionAssignmentParser {
                 parserContext.inClassStaticInit = savedInClassStaticInit;
                 exitArrowFunctionContext(false);
             }
-            validateArrowParameters(params, defaults, restParameter, body);
+            validateArrowParameters(new FunctionParams(params, defaults, restParameter), body);
 
             SourceLocation fullLocation = new SourceLocation(
                     location.line(),
@@ -538,7 +531,7 @@ final class ExpressionAssignmentParser {
                     parserContext.previousTokenEndOffset
             );
 
-            return new ArrowFunctionExpression(params, defaults, restParameter, body, false, fullLocation);
+            return new ArrowFunctionExpression(new FunctionParams(params, defaults, restParameter), body, false, fullLocation);
         }
 
         if (parserContext.isAssignmentOperator(parserContext.currentToken.type())) {
@@ -722,7 +715,8 @@ final class ExpressionAssignmentParser {
         }
     }
 
-    private void validateArrowParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter, ASTNode body) {
+    private void validateArrowParameters(FunctionParams functionParams, ASTNode body) {
+        List<Expression> defaults = functionParams.defaults();
         // ES2024 14.2.1 Static Semantics: Early Errors
         // ArrowFunction : ArrowParameters => ConciseBody
         // It is a Syntax Error if ArrowParameters Contains YieldExpression is true.
@@ -740,7 +734,7 @@ final class ExpressionAssignmentParser {
         boolean bodyHasUseStrict = body instanceof BlockStatement blockBody && blockBody.hasUseStrictDirective();
         boolean strictParameters = parserContext.strictMode || bodyHasUseStrict;
         Set<String> seen = new HashSet<>();
-        for (Pattern pattern : params) {
+        for (Pattern pattern : functionParams.params()) {
             for (String parameterName : pattern.getBoundNames()) {
                 if (!seen.add(parameterName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
@@ -750,6 +744,7 @@ final class ExpressionAssignmentParser {
                 }
             }
         }
+        RestParameter restParameter = functionParams.restParameter();
         if (restParameter != null) {
             for (String restName : restParameter.getArgument().getBoundNames()) {
                 if (!seen.add(restName)) {
@@ -760,7 +755,7 @@ final class ExpressionAssignmentParser {
                 }
             }
         }
-        if (bodyHasUseStrict && AstUtils.hasNonSimpleParameters(params, defaults, restParameter)) {
+        if (bodyHasUseStrict && functionParams.hasNonSimpleParameters()) {
             throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
         }
     }

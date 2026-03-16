@@ -66,9 +66,7 @@ public class StatementContainsAwaitYieldTest {
                 LOCATION);
         FunctionDeclaration functionDeclaration = new FunctionDeclaration(
                 new Identifier("f", LOCATION),
-                List.of(),
-                List.of(),
-                null,
+                new FunctionParams(List.of(), List.of(), null),
                 new BlockStatement(List.of(awaitStatement, yieldStatement), LOCATION),
                 false,
                 false,

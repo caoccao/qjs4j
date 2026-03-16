@@ -23,22 +23,16 @@ import java.util.List;
  */
 public final class ArrowFunctionExpression extends Expression {
     private final ASTNode body;
-    private final List<Expression> defaults;
+    private final FunctionParams functionParams;
     private final boolean isAsync;
-    private final List<Pattern> params;
-    private final RestParameter restParameter;
 
     public ArrowFunctionExpression(
-            List<Pattern> params,
-            List<Expression> defaults,
-            RestParameter restParameter,
+            FunctionParams functionParams,
             ASTNode body,
             boolean isAsync,
             SourceLocation location) {
         super(location);
-        this.params = params;
-        this.defaults = defaults;
-        this.restParameter = restParameter;
+        this.functionParams = functionParams;
         this.body = body;
         this.isAsync = isAsync;
     }
@@ -60,15 +54,19 @@ public final class ArrowFunctionExpression extends Expression {
     }
 
     public List<Expression> getDefaults() {
-        return defaults;
+        return functionParams.defaults();
+    }
+
+    public FunctionParams getFunctionParams() {
+        return functionParams;
     }
 
     public List<Pattern> getParams() {
-        return params;
+        return functionParams.params();
     }
 
     public RestParameter getRestParameter() {
-        return restParameter;
+        return functionParams.restParameter();
     }
 
     @Override

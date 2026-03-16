@@ -195,10 +195,10 @@ final class EmitHelpers {
 
     void emitDefaultParameterInit(
             BytecodeCompiler functionCompiler,
-            List<Pattern> params,
-            List<Expression> defaults,
-            RestParameter restParameter,
+            FunctionParams functionParams,
             List<Integer> parameterSlotIndexes) {
+        List<Pattern> params = functionParams.params();
+        List<Expression> defaults = functionParams.defaults();
         if (defaults == null || defaults.isEmpty()) {
             return;
         }
@@ -206,7 +206,7 @@ final class EmitHelpers {
             throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters");
         }
 
-        boolean hasNonSimpleParameters = AstUtils.hasNonSimpleParameters(params, defaults, restParameter);
+        boolean hasNonSimpleParameters = functionParams.hasNonSimpleParameters();
         Set<String> originalTdzLocals = new HashSet<>(functionCompiler.context().tdzLocals);
         List<Set<String>> parameterBoundNames = new ArrayList<>(params.size());
         Set<String> pendingParameterTdzNames = new HashSet<>();

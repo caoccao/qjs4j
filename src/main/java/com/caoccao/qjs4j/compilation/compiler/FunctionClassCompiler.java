@@ -70,9 +70,7 @@ final class FunctionClassCompiler {
                     location);
             methodFunctionExpression = new FunctionExpression(
                     null,
-                    List.of(),
-                    null,
-                    null,
+                    new FunctionParams(List.of(), null, null),
                     body,
                     false,
                     false,
@@ -90,9 +88,7 @@ final class FunctionClassCompiler {
                     location);
             methodFunctionExpression = new FunctionExpression(
                     null,
-                    List.of(valueIdentifier),
-                    null,
-                    null,
+                    new FunctionParams(List.of(valueIdentifier), null, null),
                     body,
                     false,
                     false,
@@ -148,8 +144,7 @@ final class FunctionClassCompiler {
             functionContext.strictMode = true;
         }
 
-        boolean hasNonSimpleParameters = AstUtils.hasNonSimpleParameters(
-                arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter());
+        boolean hasNonSimpleParameters = arrowExpr.getFunctionParams().hasNonSimpleParameters();
         boolean hasArgumentsParameterBinding = false;
         for (Pattern parameter : arrowExpr.getParams()) {
             if (parameter.getBoundNames().contains(JSArguments.NAME)) {
@@ -191,9 +186,7 @@ final class FunctionClassCompiler {
         if (arrowExpr.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    arrowExpr.getParams(),
-                    arrowExpr.getDefaults(),
-                    arrowExpr.getRestParameter(),
+                    arrowExpr.getFunctionParams(),
                     parameterSlotIndexes);
         }
 
@@ -300,7 +293,7 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
-        int definedArgCount = AstUtils.computeDefinedArgCount(arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter() != null);
+        int definedArgCount = arrowExpr.getFunctionParams().computeDefinedArgCount();
         JSBytecodeFunction function = new JSBytecodeFunction(
                 compilerContext.context,
                 functionBytecode,
@@ -995,9 +988,7 @@ final class FunctionClassCompiler {
         if (funcDecl.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    funcDecl.getParams(),
-                    funcDecl.getDefaults(),
-                    funcDecl.getRestParameter(),
+                    funcDecl.getFunctionParams(),
                     parameterSlotIndexes);
         }
 
@@ -1121,7 +1112,7 @@ final class FunctionClassCompiler {
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
-        int definedArgCount = AstUtils.computeDefinedArgCount(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter() != null);
+        int definedArgCount = funcDecl.getFunctionParams().computeDefinedArgCount();
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators are NOT constructable
         boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
@@ -1140,7 +1131,7 @@ final class FunctionClassCompiler {
                 functionSource,  // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
-        function.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter()));
+        function.setHasParameterExpressions(funcDecl.getFunctionParams().hasNonSimpleParameters());
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
@@ -1256,9 +1247,7 @@ final class FunctionClassCompiler {
         if (functionExpression.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
-                    functionExpression.getParams(),
-                    functionExpression.getDefaults(),
-                    functionExpression.getRestParameter(),
+                    functionExpression.getFunctionParams(),
                     parameterSlotIndexes);
         }
 
@@ -1347,7 +1336,7 @@ final class FunctionClassCompiler {
         String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         // Create JSBytecodeFunction
-        int definedArgCount = AstUtils.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
+        int definedArgCount = functionExpression.getFunctionParams().computeDefinedArgCount();
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators, and getter/setter methods are NOT constructable
         boolean isFuncConstructor = !forceNonConstructor
@@ -1367,7 +1356,7 @@ final class FunctionClassCompiler {
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
+        function.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
         if (functionExpressionSelfLocalIndex != null) {
             function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
         }
@@ -1449,9 +1438,7 @@ final class FunctionClassCompiler {
         if (functionExpression.getDefaults() != null) {
             delegates.emitHelpers.emitDefaultParameterInit(
                     methodCompiler,
-                    functionExpression.getParams(),
-                    functionExpression.getDefaults(),
-                    functionExpression.getRestParameter(),
+                    functionExpression.getFunctionParams(),
                     parameterSlotIndexes);
         }
 
@@ -1525,7 +1512,7 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
-        int definedArgCount = AstUtils.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
+        int definedArgCount = functionExpression.getFunctionParams().computeDefinedArgCount();
 
         // Extract method source code from original source for Function.prototype.toString
         String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
@@ -1545,7 +1532,7 @@ final class FunctionClassCompiler {
                 true,            // strict - classes are always strict mode
                 methodSource     // source code for toString()
         );
-        methodFunc.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
+        methodFunc.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
 
         // Set up capture source infos for outer variable closure capture
         delegates.emitHelpers.emitCapturedValues(methodCompiler, methodFunc);

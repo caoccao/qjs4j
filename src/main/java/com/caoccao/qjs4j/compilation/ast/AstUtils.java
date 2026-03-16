@@ -45,39 +45,4 @@ public final class AstUtils {
         return paramNames;
     }
 
-    public static int computeDefinedArgCount(List<Pattern> params, List<Expression> defaults, boolean hasRest) {
-        if (defaults == null) {
-            return params.size();
-        }
-        int count = 0;
-        for (int i = 0; i < params.size(); i++) {
-            if (i < defaults.size() && defaults.get(i) != null) {
-                break;
-            }
-            count++;
-        }
-        return count;
-    }
-
-    public static boolean hasNonSimpleParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
-        if (restParameter != null) {
-            return true;
-        }
-        if (defaults != null) {
-            for (Expression d : defaults) {
-                if (d != null) {
-                    return true;
-                }
-            }
-        }
-        if (params != null) {
-            for (Pattern param : params) {
-                if (!(param instanceof Identifier)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
 }
