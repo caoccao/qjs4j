@@ -314,7 +314,8 @@ final class ExpressionPrimaryParser {
                 yield new Identifier(name, location);
             }
             case EOF -> throw new JSSyntaxErrorException("Unexpected end of input");
-            default -> throw new JSSyntaxErrorException("Unexpected token " + parserContext.currentToken.type());
+            default ->
+                    throw new JSSyntaxErrorException("Unexpected token '" + parserContext.currentToken.value() + "'");
         };
     }
 
@@ -792,8 +793,7 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("'super' keyword unexpected here");
             }
             default -> throw new JSSyntaxErrorException(
-                    "Unexpected token " + parserContext.currentToken.type() + " at line "
-                            + parserContext.currentToken.line() + ", column " + parserContext.currentToken.column());
+                    "Unexpected token '" + parserContext.currentToken.value() + "'");
         };
     }
 

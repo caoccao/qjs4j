@@ -450,7 +450,12 @@ final class ParserContext {
                 if (currentToken.escaped()) {
                     throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
                 }
-                throw new JSSyntaxErrorException("Unexpected reserved word");
+                // V8 reports "Unexpected reserved word" for enum (a future reserved word)
+                // but "Unexpected token 'X'" for regular keywords (with, debugger, etc.)
+                if (JSKeyword.ENUM.equals(name)) {
+                    throw new JSSyntaxErrorException("Unexpected reserved word");
+                }
+                throw new JSSyntaxErrorException("Unexpected token '" + name + "'");
             }
             if (strictMode && isStrictReservedIdentifierName(name)) {
                 if (currentToken.escaped()) {
@@ -468,6 +473,9 @@ final class ParserContext {
             if (JSKeyword.YIELD.equals(name) && !isYieldIdentifierAllowed()) {
                 if (currentToken.escaped()) {
                     throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
+                if (strictMode) {
+                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
                 }
                 throw new JSSyntaxErrorException("Unexpected token 'yield'");
             }
@@ -501,6 +509,9 @@ final class ParserContext {
                 advance();
                 return new Identifier(name, location);
             }
+            if (strictMode) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            }
             throw new JSSyntaxErrorException("Unexpected token 'yield'");
         }
         if (match(TokenType.FROM)) {
@@ -526,8 +537,7 @@ final class ParserContext {
             advance();
             return new Identifier(name, location);
         }
-        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() +
-                "' at line " + currentToken.line() + ", column " + currentToken.column());
+        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
     }
 
     Token peek() {

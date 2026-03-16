@@ -29,12 +29,107 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class AsyncTest extends BaseJavetTest {
     @Test
+    void testAsyncArrowAwaitParameterRejected() {
+        // 'await' is always rejected as an async arrow parameter (sloppy and strict)
+        assertErrorWithJavet(
+                "async await => 1",
+                "async aw\\u0061it => 1",
+                "'use strict'; async await => 1",
+                "'use strict'; async aw\\u0061it => 1");
+    }
+
+    @Test
+    void testAsyncArrowEvalArgumentsAllowedInSloppyMode() {
+        // eval and arguments are allowed as async arrow params in sloppy mode
+        assertIntegerWithJavet(
+                "(async eval => 1)()",
+                "(async arguments => 1)()");
+    }
+
+    @Test
+    void testAsyncArrowEvalArgumentsRejectedInStrictMode() {
+        // eval and arguments are rejected as async arrow params in strict mode
+        assertErrorWithJavet(
+                "'use strict'; async eval => 1",
+                "'use strict'; async arguments => 1");
+    }
+
+    @Test
     void testAsyncArrowFunction() {
         assertStringWithJavet("""
                 const test = async () => {
                     return 'hello';
                 };
                 test();""");
+    }
+
+    @Test
+    void testAsyncArrowReservedWordParametersRejected() {
+        // Reserved words are always rejected as async arrow parameters
+        assertErrorWithJavet(
+                "async break => 1",
+                "async case => 1",
+                "async class => 1",
+                "async const => 1",
+                "async continue => 1",
+                "async delete => 1",
+                "async do => 1",
+                "async else => 1",
+                "async enum => 1",
+                "async export => 1",
+                "async extends => 1",
+                "async false => 1",
+                "async finally => 1",
+                "async for => 1",
+                "async function => 1",
+                "async if => 1",
+                "async import => 1",
+                "async in => 1",
+                "async instanceof => 1",
+                "async new => 1",
+                "async null => 1",
+                "async return => 1",
+                "async super => 1",
+                "async switch => 1",
+                "async this => 1",
+                "async throw => 1",
+                "async true => 1",
+                "async try => 1",
+                "async typeof => 1",
+                "async var => 1",
+                "async void => 1",
+                "async while => 1",
+                "async with => 1");
+    }
+
+    @Test
+    void testAsyncArrowStrictReservedParametersAllowedInSloppyMode() {
+        // Strict reserved words are allowed as async arrow params in sloppy mode
+        assertIntegerWithJavet(
+                "(async yield => 1)()",
+                "(async let => 1)()",
+                "(async implements => 1)()",
+                "(async interface => 1)()",
+                "(async package => 1)()",
+                "(async private => 1)()",
+                "(async protected => 1)()",
+                "(async public => 1)()",
+                "(async static => 1)()");
+    }
+
+    @Test
+    void testAsyncArrowStrictReservedParametersRejectedInStrictMode() {
+        // Strict reserved words are rejected as async arrow params in strict mode
+        assertErrorWithJavet(
+                "'use strict'; async yield => 1",
+                "'use strict'; async let => 1",
+                "'use strict'; async implements => 1",
+                "'use strict'; async interface => 1",
+                "'use strict'; async package => 1",
+                "'use strict'; async private => 1",
+                "'use strict'; async protected => 1",
+                "'use strict'; async public => 1",
+                "'use strict'; async static => 1");
     }
 
     @Test
@@ -155,6 +250,12 @@ public class AsyncTest extends BaseJavetTest {
         // A line terminator makes `async` an identifier, not a keyword modifier.
         assertErrorWithJavet(
                 "async\nfunction foo() {}");
+    }
+
+    @Test
+    void testAsyncUnicodeEscapeIdentifierUsage() {
+        assertStringWithJavet(
+                "var async = 42; \\u0061sync.toString()");
     }
 
     @Test

@@ -132,7 +132,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             List<String> boundNames = extractBoundNames(param);
             for (String paramName : boundNames) {
                 if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
-                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
         }
@@ -140,7 +140,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             List<String> restBoundNames = extractBoundNames(funcParams.restParameter().getArgument());
             for (String restName : restBoundNames) {
                 if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
-                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
         }

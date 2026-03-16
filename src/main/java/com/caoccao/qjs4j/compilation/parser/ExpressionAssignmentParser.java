@@ -375,7 +375,7 @@ final class ExpressionAssignmentParser {
                 if (isAsyncArrowParameterIdentifierToken(parserContext.currentToken.type())
                         && parserContext.nextToken.type() == TokenType.ARROW) {
                     Identifier param = parserContext.parseIdentifier();
-                    validateBindingIdentifier(param.getName());
+                    validateBindingIdentifier(param.getName(), true);
                     parserContext.expect(TokenType.ARROW);
 
                     ASTNode body;
@@ -777,7 +777,7 @@ final class ExpressionAssignmentParser {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
                 if (strictParameters && (JSKeyword.EVAL.equals(parameterName) || JSKeyword.ARGUMENTS.equals(parameterName))) {
-                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
         }
@@ -787,7 +787,7 @@ final class ExpressionAssignmentParser {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
                 if (strictParameters && (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName))) {
-                    throw new JSSyntaxErrorException("invalid argument name in strict code");
+                    throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
                 }
             }
         }
@@ -830,8 +830,15 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateBindingIdentifier(String name) {
+        validateBindingIdentifier(name, false);
+    }
+
+    private void validateBindingIdentifier(String name, boolean isAsyncContext) {
         if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
             throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
+        if (isAsyncContext && JSKeyword.AWAIT.equals(name)) {
+            throw new JSSyntaxErrorException("'await' is not a valid identifier name in an async function");
         }
         if (RESERVED_WORDS.contains(name)) {
             throw new JSSyntaxErrorException("Unexpected reserved word");
