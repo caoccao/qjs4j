@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
 import java.util.List;
 
 /**
@@ -25,6 +27,7 @@ public final class CallExpression extends Expression {
     private final List<Expression> arguments;
     private final Expression callee;
     private final boolean optional;
+    private Boolean directEvalVarArgumentsInside;
 
     public CallExpression(
             Expression callee,
@@ -35,6 +38,7 @@ public final class CallExpression extends Expression {
         this.callee = callee;
         this.arguments = arguments;
         this.optional = optional;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -52,6 +56,20 @@ public final class CallExpression extends Expression {
             awaitInside = hasAwait;
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = callee instanceof Identifier calleeIdentifier
+                    && JSKeyword.EVAL.equals(calleeIdentifier.getName())
+                    && arguments != null
+                    && !arguments.isEmpty()
+                    && arguments.get(0) instanceof Literal firstArgumentLiteral
+                    && firstArgumentLiteral.getValue() instanceof String evalSourceString
+                    && evalSourceString.contains("var arguments");
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

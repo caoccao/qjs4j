@@ -30,9 +30,12 @@ public abstract sealed class Expression extends Pattern permits
         ArrowFunctionExpression, ArrayExpression, ObjectExpression, AwaitExpression,
         YieldExpression, TemplateLiteral, TaggedTemplateExpression, ClassExpression,
         SpreadElement, SequenceExpression, ImportExpression {
-
     protected Expression(SourceLocation location) {
         super(location);
+    }
+
+    public boolean containsDirectEvalVarArguments() {
+        return false;
     }
 
     @Override
@@ -49,6 +52,11 @@ public abstract sealed class Expression extends Pattern permits
 
     public boolean isSuperIdentifier() {
         return this instanceof Identifier identifier && JSKeyword.SUPER.equals(identifier.getName());
+    }
+
+    @Override
+    public String toPatternString() {
+        return "?";
     }
 
 }

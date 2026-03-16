@@ -27,6 +27,7 @@ public final class AssignmentExpression extends Expression {
     private final boolean lhsIsIdentifierRef;
     private final AssignmentOperator operator;
     private final Expression right;
+    private Boolean directEvalVarArgumentsInside;
 
     public AssignmentExpression(Expression left, AssignmentOperator operator, Expression right, SourceLocation location) {
         this(left, operator, right, false, location);
@@ -43,6 +44,7 @@ public final class AssignmentExpression extends Expression {
         this.operator = operator;
         this.right = right;
         this.lhsIsIdentifierRef = lhsIsIdentifierRef;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -54,6 +56,14 @@ public final class AssignmentExpression extends Expression {
             }
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = right != null && right.containsDirectEvalVarArguments();
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

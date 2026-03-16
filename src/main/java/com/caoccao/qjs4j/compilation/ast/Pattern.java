@@ -31,4 +31,6 @@ public abstract sealed class Pattern extends ASTNode permits
     }
 
     public abstract List<String> getBoundNames();
+
+    public abstract String toPatternString();
 }

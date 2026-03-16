@@ -23,6 +23,7 @@ public final class UnaryExpression extends Expression {
     private final Expression operand;
     private final UnaryOperator operator;
     private final boolean prefix;
+    private Boolean directEvalVarArgumentsInside;
 
     public UnaryExpression(
             UnaryOperator operator,
@@ -33,6 +34,7 @@ public final class UnaryExpression extends Expression {
         this.operator = operator;
         this.operand = operand;
         this.prefix = prefix;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -41,6 +43,14 @@ public final class UnaryExpression extends Expression {
             awaitInside = operand != null && operand.containsAwait();
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = operand != null && operand.containsDirectEvalVarArguments();
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

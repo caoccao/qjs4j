@@ -61,4 +61,9 @@ public final class Identifier extends Expression {
     public String getName() {
         return name;
     }
+
+    @Override
+    public String toPatternString() {
+        return name;
+    }
 }

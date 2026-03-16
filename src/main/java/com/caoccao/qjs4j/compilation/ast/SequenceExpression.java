@@ -25,10 +25,12 @@ import java.util.List;
  */
 public final class SequenceExpression extends Expression {
     private final List<Expression> expressions;
+    private Boolean directEvalVarArgumentsInside;
 
     public SequenceExpression(List<Expression> expressions, SourceLocation location) {
         super(location);
         this.expressions = expressions;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -45,6 +47,22 @@ public final class SequenceExpression extends Expression {
             }
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = false;
+            if (expressions != null) {
+                for (Expression expression : expressions) {
+                    if (expression != null && expression.containsDirectEvalVarArguments()) {
+                        directEvalVarArgumentsInside = true;
+                        break;
+                    }
+                }
+            }
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

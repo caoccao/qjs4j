@@ -98,4 +98,33 @@ public final class ObjectPattern extends Pattern {
         return restElement;
     }
 
+    @Override
+    public String toPatternString() {
+        StringBuilder stringBuilder = new StringBuilder("{");
+        for (int i = 0; i < properties.size(); i++) {
+            if (i > 0) {
+                stringBuilder.append(", ");
+            }
+            ObjectPatternProperty property = properties.get(i);
+            if (property.isShorthand()) {
+                stringBuilder.append(property.getValue().toPatternString());
+            } else {
+                if (property.getKey() instanceof Identifier keyIdentifier) {
+                    stringBuilder.append(keyIdentifier.getName());
+                } else {
+                    stringBuilder.append("?");
+                }
+                stringBuilder.append(": ").append(property.getValue().toPatternString());
+            }
+        }
+        if (restElement != null) {
+            if (!properties.isEmpty()) {
+                stringBuilder.append(", ");
+            }
+            stringBuilder.append("...").append(restElement.getArgument().toPatternString());
+        }
+        stringBuilder.append("}");
+        return stringBuilder.toString();
+    }
+
 }

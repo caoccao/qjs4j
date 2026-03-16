@@ -23,6 +23,7 @@ public final class ConditionalExpression extends Expression {
     private final Expression alternate;
     private final Expression consequent;
     private final Expression test;
+    private Boolean directEvalVarArgumentsInside;
 
     public ConditionalExpression(
             Expression test,
@@ -33,6 +34,7 @@ public final class ConditionalExpression extends Expression {
         this.test = test;
         this.consequent = consequent;
         this.alternate = alternate;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -47,6 +49,20 @@ public final class ConditionalExpression extends Expression {
             }
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = test != null && test.containsDirectEvalVarArguments();
+            if (!directEvalVarArgumentsInside && consequent != null && consequent.containsDirectEvalVarArguments()) {
+                directEvalVarArgumentsInside = true;
+            }
+            if (!directEvalVarArgumentsInside && alternate != null && alternate.containsDirectEvalVarArguments()) {
+                directEvalVarArgumentsInside = true;
+            }
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

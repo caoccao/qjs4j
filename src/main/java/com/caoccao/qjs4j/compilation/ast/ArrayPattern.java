@@ -82,4 +82,20 @@ public final class ArrayPattern extends Pattern {
     public List<Pattern> getElements() {
         return elements;
     }
+
+    @Override
+    public String toPatternString() {
+        StringBuilder stringBuilder = new StringBuilder("[");
+        for (int i = 0; i < elements.size(); i++) {
+            if (i > 0) {
+                stringBuilder.append(", ");
+            }
+            Pattern element = elements.get(i);
+            if (element != null) {
+                stringBuilder.append(element.toPatternString());
+            }
+        }
+        stringBuilder.append("]");
+        return stringBuilder.toString();
+    }
 }

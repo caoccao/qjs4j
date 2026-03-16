@@ -69,4 +69,9 @@ public final class AssignmentPattern extends Pattern {
     public Expression getRight() {
         return right;
     }
+
+    @Override
+    public String toPatternString() {
+        return left.toPatternString() + " = ...";
+    }
 }

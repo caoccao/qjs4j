@@ -23,6 +23,7 @@ public final class BinaryExpression extends Expression {
     private final Expression left;
     private final BinaryOperator operator;
     private final Expression right;
+    private Boolean directEvalVarArgumentsInside;
 
     public BinaryExpression(
             BinaryOperator operator,
@@ -33,6 +34,7 @@ public final class BinaryExpression extends Expression {
         this.operator = operator;
         this.left = left;
         this.right = right;
+        directEvalVarArgumentsInside = null;
     }
 
     @Override
@@ -44,6 +46,17 @@ public final class BinaryExpression extends Expression {
             }
         }
         return awaitInside;
+    }
+
+    @Override
+    public boolean containsDirectEvalVarArguments() {
+        if (directEvalVarArgumentsInside == null) {
+            directEvalVarArgumentsInside = left != null && left.containsDirectEvalVarArguments();
+            if (!directEvalVarArgumentsInside && right != null && right.containsDirectEvalVarArguments()) {
+                directEvalVarArgumentsInside = true;
+            }
+        }
+        return directEvalVarArgumentsInside;
     }
 
     @Override

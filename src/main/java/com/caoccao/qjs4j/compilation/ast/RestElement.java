@@ -56,4 +56,9 @@ public final class RestElement extends Pattern {
         }
         return boundNames;
     }
+
+    @Override
+    public String toPatternString() {
+        return "..." + argument.toPatternString();
+    }
 }

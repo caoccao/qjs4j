@@ -40,63 +40,6 @@ final class FunctionClassCompiler {
         fieldCompiler = new FunctionClassFieldCompiler(compilerContext, delegates);
     }
 
-    private static boolean containsDirectEvalVarArguments(Expression expression) {
-        if (expression == null) {
-            return false;
-        }
-        if (expression instanceof CallExpression callExpression
-                && callExpression.getCallee() instanceof Identifier calleeIdentifier
-                && JSKeyword.EVAL.equals(calleeIdentifier.getName())
-                && !callExpression.getArguments().isEmpty()
-                && callExpression.getArguments().get(0) instanceof Literal firstArgumentLiteral
-                && firstArgumentLiteral.getValue() instanceof String evalSourceString
-                && evalSourceString.contains("var arguments")) {
-            return true;
-        }
-        if (expression instanceof AssignmentExpression assignmentExpression) {
-            return containsDirectEvalVarArguments(assignmentExpression.getRight());
-        }
-        if (expression instanceof BinaryExpression binaryExpression) {
-            if (containsDirectEvalVarArguments(binaryExpression.getLeft())) {
-                return true;
-            }
-            return containsDirectEvalVarArguments(binaryExpression.getRight());
-        }
-        if (expression instanceof ConditionalExpression conditionalExpression) {
-            if (containsDirectEvalVarArguments(conditionalExpression.getTest())) {
-                return true;
-            }
-            if (containsDirectEvalVarArguments(conditionalExpression.getConsequent())) {
-                return true;
-            }
-            return containsDirectEvalVarArguments(conditionalExpression.getAlternate());
-        }
-        if (expression instanceof SequenceExpression sequenceExpression) {
-            for (Expression sequenceItem : sequenceExpression.getExpressions()) {
-                if (containsDirectEvalVarArguments(sequenceItem)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (expression instanceof UnaryExpression unaryExpression) {
-            return containsDirectEvalVarArguments(unaryExpression.getOperand());
-        }
-        return false;
-    }
-
-    private static boolean containsDirectEvalVarArguments(List<Expression> expressions) {
-        if (expressions == null || expressions.isEmpty()) {
-            return false;
-        }
-        for (Expression expression : expressions) {
-            if (containsDirectEvalVarArguments(expression)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
         String candidateName = "__auto_accessor_" + index;
         while (existingNames.contains(candidateName)) {
@@ -166,60 +109,6 @@ final class FunctionClassCompiler {
                 false);
     }
 
-    /**
-     * Convert a pattern to a string representation for source generation.
-     * Used when generating synthetic source for Function constructor.
-     */
-    private static String patternToString(Pattern pattern) {
-        if (pattern instanceof Identifier id) {
-            return id.getName();
-        } else if (pattern instanceof ObjectPattern objPattern) {
-            StringBuilder sb = new StringBuilder("{");
-            for (int i = 0; i < objPattern.getProperties().size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-                ObjectPatternProperty prop = objPattern.getProperties().get(i);
-                if (prop.isShorthand()) {
-                    sb.append(patternToString(prop.getValue()));
-                } else {
-                    if (prop.getKey() instanceof Identifier keyId) {
-                        sb.append(keyId.getName());
-                    } else {
-                        sb.append("?");
-                    }
-                    sb.append(": ").append(patternToString(prop.getValue()));
-                }
-            }
-            if (objPattern.getRestElement() != null) {
-                if (!objPattern.getProperties().isEmpty()) {
-                    sb.append(", ");
-                }
-                sb.append("...").append(patternToString(objPattern.getRestElement().getArgument()));
-            }
-            sb.append("}");
-            return sb.toString();
-        } else if (pattern instanceof ArrayPattern arrPattern) {
-            StringBuilder sb = new StringBuilder("[");
-            for (int i = 0; i < arrPattern.getElements().size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-                Pattern element = arrPattern.getElements().get(i);
-                if (element != null) {
-                    sb.append(patternToString(element));
-                }
-            }
-            sb.append("]");
-            return sb.toString();
-        } else if (pattern instanceof AssignmentPattern assignPattern) {
-            return patternToString(assignPattern.getLeft()) + " = ...";
-        } else if (pattern instanceof RestElement restElement) {
-            return "..." + patternToString(restElement.getArgument());
-        }
-        return "?";
-    }
-
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -272,7 +161,10 @@ final class FunctionClassCompiler {
             hasArgumentsParameterBinding = arrowExpr.getRestParameter().getArgument().getBoundNames()
                     .contains(JSArguments.NAME);
         }
-        boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.getDefaults());
+        boolean hasDirectEvalVarArgumentsInDefaults = arrowExpr.getDefaults() != null
+                && arrowExpr.getDefaults().stream()
+                .filter(Objects::nonNull)
+                .anyMatch(Expression::containsDirectEvalVarArguments);
         boolean needsSyntheticEvalArgumentsBinding = hasDirectEvalVarArgumentsInDefaults
                 && arrowExpr.getDefaults() != null
                 && !functionContext.hasEnclosingArgumentsBinding
@@ -1208,13 +1100,13 @@ final class FunctionClassCompiler {
                 if (i > 0) {
                     funcSource.append(", ");
                 }
-                funcSource.append(patternToString(funcDecl.getParams().get(i)));
+                funcSource.append(funcDecl.getParams().get(i).toPatternString());
             }
             if (funcDecl.getRestParameter() != null) {
                 if (!funcDecl.getParams().isEmpty()) {
                     funcSource.append(", ");
                 }
-                funcSource.append("...").append(patternToString(funcDecl.getRestParameter().getArgument()));
+                funcSource.append("...").append(funcDecl.getRestParameter().getArgument().toPatternString());
             }
             funcSource.append(") { [function body] }");
             functionSource = funcSource.toString();
