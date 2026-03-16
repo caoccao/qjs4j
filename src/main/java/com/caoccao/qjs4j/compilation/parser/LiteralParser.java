@@ -266,12 +266,15 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
             // Capture the method start location before any modifiers (async, *)
             SourceLocation methodStartLocation = parserContext.getLocation();
 
-            // Check for 'async' modifier (only if NOT followed by colon or comma)
+            // Check for 'async' modifier (only if NOT followed by colon, comma, etc.)
             if (parserContext.match(TokenType.ASYNC)) {
                 // Peek ahead to determine if this is a modifier or property name
-                if (parserContext.nextToken.type() == TokenType.COLON || parserContext.nextToken.type() == TokenType.COMMA) {
-                    // { async: value } or { async, ... } - async is property name
-                    // Don't advance, let parsePropertyName handle it
+                TokenType nextType = parserContext.nextToken.type();
+                if (nextType == TokenType.COLON || nextType == TokenType.COMMA
+                        || nextType == TokenType.RBRACE || nextType == TokenType.LPAREN
+                        || nextType == TokenType.ASSIGN) {
+                    // { async: value }, { async, ... }, { async }, { async() {} }, { async = x }
+                    // async is a property name, not a modifier
                 } else if (parserContext.nextToken.line() == parserContext.currentToken.line()) {
                     if (parserContext.currentToken.escaped()) {
                         throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
