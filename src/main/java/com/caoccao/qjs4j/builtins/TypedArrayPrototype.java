@@ -1627,13 +1627,10 @@ public final class TypedArrayPrototype {
             return context.getPendingException();
         }
 
-        // Step 9: IsValidIntegerIndex checks against CURRENT state
-        if (typedArray.isOutOfBounds()) {
-            return context.throwTypeError("Cannot perform TypedArray.prototype.with on a typed array backed by a detached or out-of-bounds buffer");
-        }
-        int currentLength = typedArray.getLength();
-        if (actualIndex < 0 || actualIndex >= currentLength) {
-            return context.throwRangeError("Invalid index");
+        // Step 9: After value conversion, check if buffer was detached/OOB or index is out of range.
+        // Following QuickJS: combined OOB + index check throws RangeError.
+        if (typedArray.isOutOfBounds() || actualIndex < 0 || actualIndex >= typedArray.getLength()) {
+            return context.throwRangeError("Invalid typed array index");
         }
 
         // Step 10: TypedArrayCreateSameType uses ORIGINAL length (not currentLength)

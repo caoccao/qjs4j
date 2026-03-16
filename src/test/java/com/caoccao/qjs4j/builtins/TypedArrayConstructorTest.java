@@ -260,6 +260,34 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testTypedArrayWith() {
+        assertStringWithJavet(
+                "new Int32Array([1,2,3]).with(1, 42).toString()",
+                "new Int32Array([1,2,3]).with(-1, 99).toString()",
+                "new Int32Array([1,2,3]).with(0, 100).toString()");
+    }
+
+    @Test
+    public void testTypedArrayWithDetachedDuringValueOf() {
+        assertErrorWithJavet(
+                """
+                        (() => {
+                            let ta = new Int32Array(5);
+                            let value = { valueOf() { $262.detachArrayBuffer(ta.buffer); return 0; } };
+                            ta.with(0, value);
+                        })()""");
+    }
+
+    @Test
+    public void testTypedArrayWithOutOfBoundsIndex() {
+        assertErrorWithJavet(
+                "new Int32Array([1,2,3]).with(3, 0)",
+                "new Int32Array([1,2,3]).with(-4, 0)",
+                "new Int32Array([1,2,3]).with(Infinity, 0)",
+                "new Int32Array([1,2,3]).with(-Infinity, 0)");
+    }
+
+    @Test
     public void testTypeof() {
         assertStringWithJavet(
                 "typeof BigInt64Array",
