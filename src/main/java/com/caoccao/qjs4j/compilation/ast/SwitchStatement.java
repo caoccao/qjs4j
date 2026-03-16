@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -61,6 +62,26 @@ public final class SwitchStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (cases != null) {
+                for (SwitchCase switchCase : cases) {
+                    if (switchCase != null && switchCase.getConsequent() != null) {
+                        for (Statement statement : switchCase.getConsequent()) {
+                            if (statement != null) {
+                                collectedVarDeclarators.addAll(statement.getVarDeclarators());
+                            }
+                        }
+                    }
+                }
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
     public List<SwitchCase> getCases() {

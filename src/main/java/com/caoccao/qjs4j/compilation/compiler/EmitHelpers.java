@@ -173,7 +173,7 @@ final class EmitHelpers {
      * Used at the end of for-loop iteration bodies to freeze VarRefs for per-iteration binding.
      */
     void emitCloseLocForPattern(VariableDeclaration varDecl) {
-        for (VariableDeclaration.VariableDeclarator decl : varDecl.getDeclarations()) {
+        for (VariableDeclarator decl : varDecl.getDeclarations()) {
             emitCloseLocForPattern(decl.getId());
         }
     }

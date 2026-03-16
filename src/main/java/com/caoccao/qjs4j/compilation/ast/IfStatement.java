@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents an if statement.
  */
@@ -57,6 +60,21 @@ public final class IfStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (consequent != null) {
+                collectedVarDeclarators.addAll(consequent.getVarDeclarators());
+            }
+            if (alternate != null) {
+                collectedVarDeclarators.addAll(alternate.getVarDeclarators());
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
     public Statement getAlternate() {

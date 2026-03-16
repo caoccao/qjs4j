@@ -169,9 +169,9 @@ public final class PropertyKey {
         }
         if (value instanceof JSNumber n) {
             // Check if it's an array index
-            double d = n.value();
-            if (d >= 0 && d <= Integer.MAX_VALUE && d == Math.floor(d)) {
-                return fromIndex((int) d);
+            double doubleValue = n.value();
+            if (doubleValue >= 0 && doubleValue <= Integer.MAX_VALUE && doubleValue == Math.floor(doubleValue)) {
+                return fromIndex((int) doubleValue);
             }
         }
         // ES2024 ToPropertyKey: step 1 - ToPrimitive(argument, string)

@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.List;
+
 /**
  * Base sealed class for all statement nodes.
  */
@@ -25,7 +29,28 @@ public abstract sealed class Statement extends ASTNode permits
         ThrowStatement, TryStatement, SwitchStatement, WithStatement, DebuggerStatement, VariableDeclaration,
         LabeledStatement, Declaration {
 
+    protected List<VariableDeclarator> varDeclarators;
+
     protected Statement(SourceLocation location) {
         super(location);
+        this.varDeclarators = null;
+    }
+
+    public boolean containsVarArguments() {
+        for (VariableDeclarator declarator : getVarDeclarators()) {
+            if (declarator != null
+                    && declarator.getId() instanceof Identifier identifier
+                    && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = List.of();
+        }
+        return varDeclarators;
     }
 }

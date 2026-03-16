@@ -16,26 +16,21 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.List;
+public final class VariableDeclarator extends ASTNode {
+    private final Pattern id;
+    private final Expression init;
 
-/**
- * Represents a do-while statement.
- */
-public final class DoWhileStatement extends Statement {
-    private final Statement body;
-    private final Expression test;
-
-    public DoWhileStatement(Statement body, Expression test, SourceLocation location) {
-        super(location);
-        this.body = body;
-        this.test = test;
+    public VariableDeclarator(Pattern id, Expression init) {
+        super(id != null ? id.getLocation() : (init != null ? init.getLocation() : new SourceLocation(0, 0, 0, 0)));
+        this.id = id;
+        this.init = init;
     }
 
     @Override
     public boolean containsAwait() {
         if (awaitInside == null) {
-            awaitInside = body != null && body.containsAwait();
-            if (!awaitInside && test != null && test.containsAwait()) {
+            awaitInside = id != null && id.containsAwait();
+            if (!awaitInside && init != null && init.containsAwait()) {
                 awaitInside = true;
             }
         }
@@ -45,28 +40,19 @@ public final class DoWhileStatement extends Statement {
     @Override
     public boolean containsYield() {
         if (yieldInside == null) {
-            yieldInside = body != null && body.containsYield();
-            if (!yieldInside && test != null && test.containsYield()) {
+            yieldInside = id != null && id.containsYield();
+            if (!yieldInside && init != null && init.containsYield()) {
                 yieldInside = true;
             }
         }
         return yieldInside;
     }
 
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
+    public Pattern getId() {
+        return id;
     }
 
-    public Statement getBody() {
-        return body;
+    public Expression getInit() {
+        return init;
     }
-
-    public Expression getTest() {
-        return test;
-    }
-
 }

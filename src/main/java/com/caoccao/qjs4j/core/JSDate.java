@@ -142,9 +142,9 @@ public final class JSDate extends JSObject {
     public static int getDateFields(double timeValue, double[] fields, boolean isLocal, boolean force) {
         long d;
         long days;
-        long wd;
-        long y;
-        int tz = 0;
+        long weekday;
+        long year;
+        int timezone = 0;
 
         if (Double.isNaN(timeValue)) {
             if (!force) {
@@ -154,30 +154,30 @@ public final class JSDate extends JSObject {
         } else {
             d = (long) timeValue;
             if (isLocal) {
-                tz = -getTimezoneOffset(d);
-                d += (long) tz * 60_000L;
+                timezone = -getTimezoneOffset(d);
+                d += (long) timezone * 60_000L;
             }
         }
 
         long h = mathMod(d, MILLIS_PER_DAY);
         days = (d - h) / MILLIS_PER_DAY;
-        int ms = (int) (h % 1000);
-        h = (h - ms) / 1000;
-        int s = (int) (h % 60);
-        h = (h - s) / 60;
-        int m = (int) (h % 60);
-        int hour = (int) ((h - m) / 60);
-        wd = mathMod(days + 4, 7);
+        int milliseconds = (int) (h % 1000);
+        h = (h - milliseconds) / 1000;
+        int seconds = (int) (h % 60);
+        h = (h - seconds) / 60;
+        int minutes = (int) (h % 60);
+        int hour = (int) ((h - minutes) / 60);
+        weekday = mathMod(days + 4, 7);
 
         YearFromDaysResult yearResult = yearFromDays(days);
-        y = yearResult.year;
+        year = yearResult.year;
         days = yearResult.remainingDays;
 
         int month;
         for (month = 0; month < 11; month++) {
             int monthDays = MONTH_DAYS[month];
             if (month == 1) {
-                monthDays += daysInYear(y) - 365;
+                monthDays += daysInYear(year) - 365;
             }
             if (days < monthDays) {
                 break;
@@ -185,15 +185,15 @@ public final class JSDate extends JSObject {
             days -= monthDays;
         }
 
-        fields[FIELD_YEAR] = y;
+        fields[FIELD_YEAR] = year;
         fields[FIELD_MONTH] = month;
         fields[FIELD_DATE] = days + 1;
         fields[FIELD_HOURS] = hour;
-        fields[FIELD_MINUTES] = m;
-        fields[FIELD_SECONDS] = s;
-        fields[FIELD_MILLISECONDS] = ms;
-        fields[FIELD_DAY] = wd;
-        fields[FIELD_TIMEZONE_OFFSET] = tz;
+        fields[FIELD_MINUTES] = minutes;
+        fields[FIELD_SECONDS] = seconds;
+        fields[FIELD_MILLISECONDS] = milliseconds;
+        fields[FIELD_DAY] = weekday;
+        fields[FIELD_TIMEZONE_OFFSET] = timezone;
         return 1;
     }
 

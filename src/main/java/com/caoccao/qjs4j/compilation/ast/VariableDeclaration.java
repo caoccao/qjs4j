@@ -63,53 +63,22 @@ public final class VariableDeclaration extends Statement {
         return yieldInside;
     }
 
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = kind == VariableKind.VAR && declarations != null
+                    ? declarations
+                    : List.of();
+        }
+        return varDeclarators;
+    }
+
     public List<VariableDeclarator> getDeclarations() {
         return declarations;
     }
 
     public VariableKind getKind() {
         return kind;
-    }
-
-    public static final class VariableDeclarator extends ASTNode {
-        private final Pattern id;
-        private final Expression init;
-
-        public VariableDeclarator(Pattern id, Expression init) {
-            super(id != null ? id.getLocation() : (init != null ? init.getLocation() : new SourceLocation(0, 0, 0, 0)));
-            this.id = id;
-            this.init = init;
-        }
-
-        @Override
-        public boolean containsAwait() {
-            if (awaitInside == null) {
-                awaitInside = id != null && id.containsAwait();
-                if (!awaitInside && init != null && init.containsAwait()) {
-                    awaitInside = true;
-                }
-            }
-            return awaitInside;
-        }
-
-        @Override
-        public boolean containsYield() {
-            if (yieldInside == null) {
-                yieldInside = id != null && id.containsYield();
-                if (!yieldInside && init != null && init.containsYield()) {
-                    yieldInside = true;
-                }
-            }
-            return yieldInside;
-        }
-
-        public Pattern getId() {
-            return id;
-        }
-
-        public Expression getInit() {
-            return init;
-        }
     }
 
 }

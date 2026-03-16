@@ -38,10 +38,10 @@ final class CompilerAnalysis {
     }
 
     void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
-        for (Statement s : body) {
-            if (s instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
-                    collectPatternBindingNames(d.getId(), lexicals);
+        for (Statement statement : body) {
+            if (statement instanceof VariableDeclaration variableDeclaration && variableDeclaration.getKind() != VariableKind.VAR) {
+                for (VariableDeclarator variableDeclarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBindingNames(variableDeclarator.getId(), lexicals);
                 }
             }
         }
@@ -78,12 +78,12 @@ final class CompilerAnalysis {
      */
     void collectVarNamesFromStatement(Statement stmt, Set<String> varNames) {
         if (stmt instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-            for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+            for (VariableDeclarator d : varDecl.getDeclarations()) {
                 collectPatternBindingNames(d.getId(), varNames);
             }
         } else if (stmt instanceof ForStatement forStmt) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                for (VariableDeclarator d : varDecl.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), varNames);
                 }
             }
@@ -92,7 +92,7 @@ final class CompilerAnalysis {
             }
         } else if (stmt instanceof ForInStatement forInStmt) {
             if (forInStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                for (VariableDeclarator d : varDecl.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), varNames);
                 }
             }
@@ -101,7 +101,7 @@ final class CompilerAnalysis {
             }
         } else if (stmt instanceof ForOfStatement forOfStmt) {
             if (forOfStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                for (VariableDeclarator d : varDecl.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), varNames);
                 }
             }
@@ -183,7 +183,7 @@ final class CompilerAnalysis {
             // Collect top-level let/const names (don't recurse — they're block-scoped)
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
                 Set<String> declarationNames = new HashSet<>();
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                for (VariableDeclarator d : vd.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), declarationNames);
                 }
                 lexicalNames.addAll(declarationNames);
@@ -242,7 +242,7 @@ final class CompilerAnalysis {
         Set<String> alreadyDeclared = new HashSet<>();
         for (Statement stmt : body) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                for (VariableDeclarator d : vd.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), topLevelLexicals);
                 }
             }
@@ -293,7 +293,7 @@ final class CompilerAnalysis {
         Set<String> blockFuncNames = new HashSet<>();
         for (Statement s : body) {
             if (s instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                for (VariableDeclarator d : vd.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), blockLexicals);
                 }
             } else if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
@@ -325,7 +325,7 @@ final class CompilerAnalysis {
         Set<String> candidates = new HashSet<>();
         for (Statement stmt : programBody) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                for (VariableDeclarator d : vd.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), topLevelLexicals);
                 }
             }
@@ -408,7 +408,7 @@ final class CompilerAnalysis {
                 // an early error (conflict with let/const), the Annex B extension is skipped.
                 Set<String> forLexicals = new HashSet<>(lexicalBindings);
                 if (forStmt.getInit() instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                    for (VariableDeclarator d : vd.getDeclarations()) {
                         collectPatternBindingNames(d.getId(), forLexicals);
                     }
                 }
@@ -421,7 +421,7 @@ final class CompilerAnalysis {
         } else if (stmt instanceof ForInStatement forInStmt) {
             Set<String> forInLexicals = new HashSet<>(lexicalBindings);
             if (forInStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                for (VariableDeclarator d : varDecl.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), forInLexicals);
                 }
             }
@@ -429,7 +429,7 @@ final class CompilerAnalysis {
         } else if (stmt instanceof ForOfStatement forOfStmt) {
             Set<String> forOfLexicals = new HashSet<>(lexicalBindings);
             if (forOfStmt.getLeft() instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                for (VariableDeclarator d : varDecl.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), forOfLexicals);
                 }
             }

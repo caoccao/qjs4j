@@ -2200,7 +2200,7 @@ public final class JSGlobalObject {
             }
             if (statement instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
                     collectPatternNames(declaration.getId(), names);
                 }
                 return;
@@ -2219,7 +2219,7 @@ public final class JSGlobalObject {
             if (statement instanceof ForStatement forStatement) {
                 if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
                         collectPatternNames(declaration.getId(), names);
                     }
                 }
@@ -2229,7 +2229,7 @@ public final class JSGlobalObject {
             if (statement instanceof ForInStatement forInStatement) {
                 if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
                         collectPatternNames(declaration.getId(), names);
                     }
                 }
@@ -2239,7 +2239,7 @@ public final class JSGlobalObject {
             if (statement instanceof ForOfStatement forOfStatement) {
                 if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
                         collectPatternNames(declaration.getId(), names);
                     }
                 }

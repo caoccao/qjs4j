@@ -109,7 +109,7 @@ public class StatementContainsAwaitYieldTest {
     @Test
     public void testVariableDeclarationContainsAwaitAndYieldFromPatternDefaults() {
         VariableDeclaration awaitDeclaration = new VariableDeclaration(
-                List.of(new VariableDeclaration.VariableDeclarator(
+                List.of(new VariableDeclarator(
                         new AssignmentPattern(
                                 new Identifier("value", LOCATION),
                                 new AwaitExpression(new Literal(1, LOCATION), LOCATION),
@@ -118,7 +118,7 @@ public class StatementContainsAwaitYieldTest {
                 VariableKind.CONST,
                 LOCATION);
         VariableDeclaration yieldDeclaration = new VariableDeclaration(
-                List.of(new VariableDeclaration.VariableDeclarator(
+                List.of(new VariableDeclarator(
                         new AssignmentPattern(
                                 new Identifier("value", LOCATION),
                                 new YieldExpression(new Literal(1, LOCATION), false, LOCATION),

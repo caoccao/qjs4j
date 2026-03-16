@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -60,6 +61,24 @@ public final class BlockStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            if (body == null) {
+                varDeclarators = List.of();
+            } else {
+                List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+                for (Statement statement : body) {
+                    if (statement != null) {
+                        collectedVarDeclarators.addAll(statement.getVarDeclarators());
+                    }
+                }
+                varDeclarators = collectedVarDeclarators;
+            }
+        }
+        return varDeclarators;
     }
 
     public List<Statement> getBody() {

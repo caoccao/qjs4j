@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Represents a labeled statement: label: statement
  */
@@ -43,6 +45,14 @@ public final class LabeledStatement extends Statement {
             yieldInside = body != null && body.containsYield();
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
+        }
+        return varDeclarators;
     }
 
     public Statement getBody() {

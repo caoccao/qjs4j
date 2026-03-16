@@ -864,7 +864,7 @@ final class ExpressionAssignmentParser {
             if (statement instanceof VariableDeclaration variableDeclaration
                     && (variableDeclaration.getKind() == VariableKind.LET
                     || variableDeclaration.getKind() == VariableKind.CONST)) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     for (String declaredName : extractBoundNames(declarator.getId())) {
                         if (paramNames.contains(declaredName)) {
                             throw new JSSyntaxErrorException("invalid redefinition of parameter name");

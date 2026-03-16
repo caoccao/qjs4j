@@ -458,15 +458,15 @@ public final class JSONObject {
             StringifyContext stringifyContext,
             StringBuilder sb,
             JSValue holder,
-            JSValue val,
+            JSValue jsValue,
             String currentIndent,
             String keyInParent) {
 
         // Handle wrapper objects: unwrap using proper ToNumber/ToString/etc.
-        if (val instanceof JSObject obj && !(val instanceof JSFunction) && !(val instanceof JSArray)) {
-            if (obj instanceof JSStringObject) {
+        if (jsValue instanceof JSObject jsObject && !(jsValue instanceof JSFunction) && !(jsValue instanceof JSArray)) {
+            if (jsObject instanceof JSStringObject) {
                 try {
-                    val = JSTypeConversions.toString(context, val);
+                    jsValue = JSTypeConversions.toString(context, jsValue);
                 } catch (JSVirtualMachineException e) {
                     convertVMException(e);
                     return false;
@@ -474,9 +474,9 @@ public final class JSONObject {
                 if (context.hasPendingException()) {
                     return false;
                 }
-            } else if (obj instanceof JSNumberObject) {
+            } else if (jsObject instanceof JSNumberObject) {
                 try {
-                    val = JSTypeConversions.toNumber(context, val);
+                    jsValue = JSTypeConversions.toNumber(context, jsValue);
                 } catch (JSVirtualMachineException e) {
                     convertVMException(e);
                     return false;
@@ -484,15 +484,15 @@ public final class JSONObject {
                 if (context.hasPendingException()) {
                     return false;
                 }
-            } else if (obj instanceof JSBooleanObject boolObj) {
-                val = boolObj.getPrimitiveValue();
-            } else if (obj instanceof JSBigIntObject bigIntObj) {
-                val = bigIntObj.getPrimitiveValue();
+            } else if (jsObject instanceof JSBooleanObject boolObj) {
+                jsValue = boolObj.getPrimitiveValue();
+            } else if (jsObject instanceof JSBigIntObject bigIntObj) {
+                jsValue = bigIntObj.getPrimitiveValue();
             }
         }
 
         // Handle rawJSON objects
-        if (val instanceof JSObject rawObj && isRawJSONObject(rawObj)) {
+        if (jsValue instanceof JSObject rawObj && isRawJSONObject(rawObj)) {
             JSValue rawValue = rawObj.get("rawJSON");
             if (rawValue instanceof JSString rawStr) {
                 sb.append(rawStr.value());
@@ -501,73 +501,73 @@ public final class JSONObject {
         }
 
         // Handle primitives
-        if (val instanceof JSNull) {
+        if (jsValue instanceof JSNull) {
             sb.append("null");
             return true;
         }
 
-        if (val instanceof JSBoolean b) {
-            sb.append(b.value() ? "true" : "false");
+        if (jsValue instanceof JSBoolean jsBoolean) {
+            sb.append(jsBoolean.value() ? "true" : "false");
             return true;
         }
 
-        if (val instanceof JSNumber n) {
-            double d = n.value();
-            if (Double.isNaN(d) || Double.isInfinite(d)) {
+        if (jsValue instanceof JSNumber jsNumber) {
+            double doubleValue = jsNumber.value();
+            if (Double.isNaN(doubleValue) || Double.isInfinite(doubleValue)) {
                 sb.append("null");
-            } else if (d == Math.floor(d) && !Double.isInfinite(d) && Math.abs(d) < (1L << 53)) {
-                sb.append((long) d);
+            } else if (doubleValue == Math.floor(doubleValue) && !Double.isInfinite(doubleValue) && Math.abs(doubleValue) < (1L << 53)) {
+                sb.append((long) doubleValue);
             } else {
-                sb.append(n);
+                sb.append(jsNumber);
             }
             return true;
         }
 
-        if (val instanceof JSString s) {
-            sb.append(stringifyString(s.value()));
+        if (jsValue instanceof JSString jsString) {
+            sb.append(stringifyString(jsString.value()));
             return true;
         }
 
-        if (val instanceof JSBigInt) {
+        if (jsValue instanceof JSBigInt) {
             // BigInt cannot be serialized in JSON
             context.throwTypeError("Do not know how to serialize a BigInt");
             return false;
         }
 
-        if (val instanceof JSUndefined) {
+        if (jsValue instanceof JSUndefined) {
             // Should not happen normally (filtered by jsonCheck), but handle gracefully
             return false;
         }
 
         // Handle objects and arrays
-        if (val instanceof JSObject && !(val instanceof JSFunction)) {
+        if (jsValue instanceof JSObject && !(jsValue instanceof JSFunction)) {
             // Check for circular reference using identity comparison
-            if (stringifyContext.stack.containsKey(val)) {
-                context.throwTypeError(buildCircularReferenceMessage(stringifyContext, val, keyInParent));
+            if (stringifyContext.stack.containsKey(jsValue)) {
+                context.throwTypeError(buildCircularReferenceMessage(stringifyContext, jsValue, keyInParent));
                 return false;
             }
 
-            stringifyContext.stack.put(val, Boolean.TRUE);
-            stringifyContext.cyclePath.add(new CycleEntry(keyInParent, val));
+            stringifyContext.stack.put(jsValue, Boolean.TRUE);
+            stringifyContext.cyclePath.add(new CycleEntry(keyInParent, jsValue));
 
             String newIndent = currentIndent + stringifyContext.gap;
 
             // Use IsArray with proxy unwrapping
-            int isArray = JSTypeChecking.isArray(context, val);
+            int isArray = JSTypeChecking.isArray(context, jsValue);
             if (isArray < 0) {
-                stringifyContext.stack.remove(val);
+                stringifyContext.stack.remove(jsValue);
                 stringifyContext.cyclePath.remove(stringifyContext.cyclePath.size() - 1);
                 return false; // exception
             }
 
             boolean result;
             if (isArray == 1) {
-                result = stringifyArrayWithContext(stringifyContext, sb, (JSObject) val, currentIndent, newIndent);
+                result = stringifyArrayWithContext(stringifyContext, sb, (JSObject) jsValue, currentIndent, newIndent);
             } else {
-                result = stringifyObjectWithContext(stringifyContext, sb, (JSObject) val, currentIndent, newIndent);
+                result = stringifyObjectWithContext(stringifyContext, sb, (JSObject) jsValue, currentIndent, newIndent);
             }
 
-            stringifyContext.stack.remove(val);
+            stringifyContext.stack.remove(jsValue);
             stringifyContext.cyclePath.remove(stringifyContext.cyclePath.size() - 1);
             return result;
         }
@@ -602,7 +602,7 @@ public final class JSONObject {
         }
         String text = textString.value();
 
-        JSValue obj;
+        JSValue jsValue;
         ParseContext parseContext;
         try {
             parseContext = new ParseContext(text);
@@ -611,7 +611,7 @@ public final class JSONObject {
             if (end != parseContext.text.length()) {
                 throw new JSONParseException("Unexpected data after JSON " + parseContext.getPositionInfo(end));
             }
-            obj = parseResult.value;
+            jsValue = parseResult.value;
         } catch (JSONParseException e) {
             return context.throwSyntaxError(e.getMessage());
         }
@@ -620,7 +620,7 @@ public final class JSONObject {
         if (args.length > 1 && args[1] instanceof JSFunction reviver) {
             // Create root with CreateDataPropertyOrThrow (not [[Set]])
             JSObject root = context.createJSObject();
-            root.defineProperty(PropertyKey.fromString(""), obj, PropertyDescriptor.DataState.All);
+            root.defineProperty(PropertyKey.fromString(""), jsValue, PropertyDescriptor.DataState.All);
             JSValue result = internalizeJSONProperty(root, "", reviver, parseContext);
             if (result == null || context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -628,7 +628,7 @@ public final class JSONObject {
             return result;
         }
 
-        return obj;
+        return jsValue;
     }
 
     private ParseResult parseArray(ParseContext parseContext, int start) {

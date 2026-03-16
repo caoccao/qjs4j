@@ -21,7 +21,7 @@ package com.caoccao.qjs4j.compilation.ast;
  */
 public abstract sealed class ASTNode permits
         Pattern, Statement, ModuleItem, Program, RestParameter,
-        VariableDeclaration.VariableDeclarator, TryStatement.CatchClause,
+        VariableDeclarator, TryStatement.CatchClause,
         SwitchStatement.SwitchCase, ClassElement, ObjectPatternProperty,
         ObjectExpressionProperty, ImportSpecifier, ExportSpecifier {
     private final SourceLocation location;

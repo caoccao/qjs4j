@@ -78,7 +78,7 @@ final class StatementCompiler {
         // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : vd.getDeclarations()) {
+                for (VariableDeclarator d : vd.getDeclarations()) {
                     Set<String> names = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(d.getId(), names);
                     for (String name : names) {
@@ -324,12 +324,12 @@ final class StatementCompiler {
             }
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), hoistedVarNames);
                     }
                 } else {
                     Set<String> lexicalNames = new HashSet<>();
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
                     }
                     for (String lexicalName : lexicalNames) {
@@ -436,7 +436,7 @@ final class StatementCompiler {
                 if (compilerContext.predeclareProgramLexicalsAsLocals
                         && variableDeclaration.getKind() != VariableKind.VAR) {
                     Set<String> lexicalNames = new HashSet<>();
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
                     }
                     for (String lexicalName : lexicalNames) {
@@ -451,7 +451,7 @@ final class StatementCompiler {
                     }
                 }
                 // Register non-deletable global bindings for all variable declarations
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     delegates.analysis.collectPatternBindingNames(declarator.getId(), compilerContext.nonDeletableGlobalBindings);
                 }
                 // Collect var names for hoisting
@@ -735,7 +735,7 @@ final class StatementCompiler {
             for (Statement statement : switchCase.getConsequent()) {
                 if (statement instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() != VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         Set<String> declarationNames = new HashSet<>();
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
                         for (String declarationName : declarationNames) {
@@ -966,7 +966,7 @@ final class StatementCompiler {
         for (Statement statement : body) {
             if (statement instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     Set<String> declarationNames = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
                     for (String declarationName : declarationNames) {
@@ -1183,7 +1183,7 @@ final class StatementCompiler {
         if ((varDecl.getKind() == VariableKind.CONST || isUsingDeclaration)
                 && !compilerContext.inGlobalScope
                 && !compilerContext.varInGlobalProgram) {
-            for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+            for (VariableDeclarator declarator : varDecl.getDeclarations()) {
                 Set<String> constNames = new HashSet<>();
                 delegates.analysis.collectPatternBindingNames(declarator.getId(), constNames);
                 for (String constName : constNames) {
@@ -1197,7 +1197,7 @@ final class StatementCompiler {
         if (compilerContext.isGlobalProgram && varDecl.getKind() == VariableKind.VAR) {
             compilerContext.varInGlobalProgram = true;
         }
-        for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+        for (VariableDeclarator declarator : varDecl.getDeclarations()) {
             if (compilerContext.inGlobalScope || compilerContext.varInGlobalProgram) {
                 delegates.analysis.collectPatternBindingNames(declarator.getId(), compilerContext.nonDeletableGlobalBindings);
             }

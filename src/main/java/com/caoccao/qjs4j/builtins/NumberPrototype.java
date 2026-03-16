@@ -50,8 +50,8 @@ public final class NumberPrototype {
         if (!(value instanceof JSNumber n)) {
             return JSBoolean.FALSE;
         }
-        double d = n.value();
-        return JSBoolean.valueOf(Double.isFinite(d) && d == Math.floor(d));
+        double doubleValue = n.value();
+        return JSBoolean.valueOf(Double.isFinite(doubleValue) && doubleValue == Math.floor(doubleValue));
     }
 
     /**
@@ -78,11 +78,11 @@ public final class NumberPrototype {
         if (!(value instanceof JSNumber n)) {
             return JSBoolean.FALSE;
         }
-        double d = n.value();
+        double doubleValue = n.value();
         return JSBoolean.valueOf(
-                Double.isFinite(d) &&
-                        d == Math.floor(d) &&
-                        Math.abs(d) <= MAX_SAFE_INTEGER
+                Double.isFinite(doubleValue) &&
+                        doubleValue == Math.floor(doubleValue) &&
+                        Math.abs(doubleValue) <= MAX_SAFE_INTEGER
         );
     }
 

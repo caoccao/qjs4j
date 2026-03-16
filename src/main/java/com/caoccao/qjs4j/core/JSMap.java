@@ -355,17 +355,17 @@ public final class JSMap extends JSObject {
             // Must ensure that values that are equal according to sameValueZero
             // have the same hash code
             if (value instanceof JSNumber num) {
-                double d = num.value();
+                double doubleValue = num.value();
                 // Normalize NaN to a canonical value
-                if (Double.isNaN(d)) {
+                if (Double.isNaN(doubleValue)) {
                     return Double.hashCode(Double.NaN);
                 }
                 // Normalize -0.0 to +0.0 for hash code consistency
                 // (SameValueZero treats +0 and -0 as equal)
-                if (d == 0.0) {
+                if (doubleValue == 0.0) {
                     return Double.hashCode(0.0);
                 }
-                return Double.hashCode(d);
+                return Double.hashCode(doubleValue);
             }
             if (value instanceof JSString str) {
                 return str.value().hashCode();

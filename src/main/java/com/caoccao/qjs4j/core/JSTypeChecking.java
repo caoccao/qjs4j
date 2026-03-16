@@ -178,8 +178,8 @@ public final class JSTypeChecking {
         if (!(value instanceof JSNumber n)) {
             return false;
         }
-        double d = n.value();
-        return Double.isFinite(d) && d == Math.floor(d);
+        double doubleValue = n.value();
+        return Double.isFinite(doubleValue) && doubleValue == Math.floor(doubleValue);
     }
 
     /**

@@ -254,7 +254,7 @@ public final class Parser {
         for (Statement stmt : body) {
             if (stmt instanceof VariableDeclaration varDecl) {
                 boolean isVar = varDecl.getKind() == VariableKind.VAR;
-                for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+                for (VariableDeclarator declarator : varDecl.getDeclarations()) {
                     collectModulePatternNames(declarator.getId(), name -> {
                         allBoundNames.add(name);
                         if (isVar) {

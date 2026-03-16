@@ -68,7 +68,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         if (decl instanceof VariableDeclaration varDecl) {
-            for (VariableDeclaration.VariableDeclarator declarator : varDecl.getDeclarations()) {
+            for (VariableDeclarator declarator : varDecl.getDeclarations()) {
                 collectPatternNames(declarator.getId(), name -> {
                     addModuleExportedName(name);
                 });
@@ -180,7 +180,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     private void collectVarDeclaredNames(Statement statement, Set<String> varNames) {
         if (statement instanceof VariableDeclaration variableDeclaration) {
             if (variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
@@ -209,7 +209,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (statement instanceof ForInStatement forInStatement) {
             if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
@@ -219,7 +219,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (statement instanceof ForOfStatement forOfStatement) {
             if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     collectPatternBoundNames(declarator.getId(), varNames);
                 }
             }
@@ -292,7 +292,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (kind != VariableKind.USING && kind != VariableKind.AWAIT_USING) {
             return false;
         }
-        for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+        for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
             if (declarator != null && declarator.getInit() != null) {
                 return true;
             }
@@ -1420,7 +1420,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
 
     VariableDeclaration parseVariableDeclarationBody(VariableKind kind, SourceLocation location, boolean consumeSemi) {
         boolean isUsingKind = kind == VariableKind.USING || kind == VariableKind.AWAIT_USING;
-        List<VariableDeclaration.VariableDeclarator> declarations = new ArrayList<>();
+        List<VariableDeclarator> declarations = new ArrayList<>();
 
         do {
             if (parserContext.match(TokenType.COMMA)) {
@@ -1459,7 +1459,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 throw new JSSyntaxErrorException("Missing initializer in using declaration");
             }
 
-            declarations.add(new VariableDeclaration.VariableDeclarator(id, init));
+            declarations.add(new VariableDeclarator(id, init));
         } while (parserContext.match(TokenType.COMMA));
 
         if (consumeSemi) {
@@ -1578,7 +1578,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     Set<String> names = new HashSet<>();
                     collectPatternBoundNames(declarator.getId(), names);
                     for (String name : names) {
@@ -1629,7 +1629,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         for (Statement statement : catchBody.getBody()) {
             if (statement instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                     collectPatternBoundNames(declarator.getId(), lexicalNames);
                 }
             } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
@@ -1650,7 +1650,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (variableDeclaration == null || variableDeclaration.getDeclarations().isEmpty()) {
             return;
         }
-        VariableDeclaration.VariableDeclarator declarator = variableDeclaration.getDeclarations().get(0);
+        VariableDeclarator declarator = variableDeclaration.getDeclarations().get(0);
         if (declarator.getInit() == null) {
             return;
         }
@@ -1667,7 +1667,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         Set<String> boundNames = new HashSet<>();
-        for (VariableDeclaration.VariableDeclarator declarator : declaration.getDeclarations()) {
+        for (VariableDeclarator declarator : declaration.getDeclarations()) {
             collectPatternBoundNames(declarator.getId(), boundNames);
         }
         Set<String> varNames = new HashSet<>();
@@ -1684,7 +1684,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             return;
         }
         Set<String> boundNames = new HashSet<>();
-        for (VariableDeclaration.VariableDeclarator declarator : declaration.getDeclarations()) {
+        for (VariableDeclarator declarator : declaration.getDeclarations()) {
             collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), boundNames);
         }
     }
@@ -1752,11 +1752,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         for (Statement statement : statements) {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         collectPatternBoundNames(declarator.getId(), varNames);
                     }
                 } else {
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         Set<String> names = new HashSet<>();
                         collectPatternBoundNames(declarator.getId(), names);
                         for (String name : names) {
@@ -1805,7 +1805,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                         throw new JSSyntaxErrorException(
                                 "using declarations are not allowed directly in case/default clauses");
                     }
-                    for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
                         Set<String> declarationNames = new HashSet<>();
                         collectPatternBoundNamesAndCheckDuplicates(declarator.getId(), declarationNames);
                         for (String declarationName : declarationNames) {

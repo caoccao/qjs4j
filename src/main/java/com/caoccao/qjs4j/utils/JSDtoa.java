@@ -63,8 +63,8 @@ public final class JSDtoa {
         }
     }
 
-    private static char digitChar(int d) {
-        return (char) (d < 10 ? '0' + d : 'a' + d - 10);
+    private static char digitChar(int digit) {
+        return (char) (digit < 10 ? '0' + digit : 'a' + digit - 10);
     }
 
     private static String findShortest(long mantissa, int e, int radix) {

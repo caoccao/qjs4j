@@ -733,11 +733,11 @@ public final class ArrayPrototype {
 
         int depth;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            double d = JSTypeConversions.toInteger(context, args[0]);
+            double doubleValue = JSTypeConversions.toInteger(context, args[0]);
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
-            depth = d >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(d, 0);
+            depth = doubleValue >= Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) Math.max(doubleValue, 0);
         } else {
             depth = 1;
         }

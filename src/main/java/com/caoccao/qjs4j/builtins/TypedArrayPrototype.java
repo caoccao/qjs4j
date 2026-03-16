@@ -1211,11 +1211,11 @@ public final class TypedArrayPrototype {
                         hasError[0] = true;
                         return 0;
                     }
-                    double d = JSTypeConversions.toNumber(context, result).value();
-                    if (Double.isNaN(d)) {
+                    double doubleValue = JSTypeConversions.toNumber(context, result).value();
+                    if (Double.isNaN(doubleValue)) {
                         return 0;
                     }
-                    return (int) Math.signum(d);
+                    return (int) Math.signum(doubleValue);
                 }
                 return compareTypedArrayElements(a, b);
             });

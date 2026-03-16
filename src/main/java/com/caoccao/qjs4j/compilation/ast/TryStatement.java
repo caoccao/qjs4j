@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a try statement.
  */
@@ -57,6 +60,24 @@ public final class TryStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (block != null) {
+                collectedVarDeclarators.addAll(block.getVarDeclarators());
+            }
+            if (handler != null && handler.getBody() != null) {
+                collectedVarDeclarators.addAll(handler.getBody().getVarDeclarators());
+            }
+            if (finalizer != null) {
+                collectedVarDeclarators.addAll(finalizer.getVarDeclarators());
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
     public BlockStatement getBlock() {

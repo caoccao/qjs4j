@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a for-of statement: for (variable of iterable) { ... }
  * * or async for-of: for await (variable of iterable) { ... }
@@ -66,6 +69,22 @@ public final class ForOfStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (left instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
+            }
+            if (body != null) {
+                collectedVarDeclarators.addAll(body.getVarDeclarators());
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
     public Statement getBody() {

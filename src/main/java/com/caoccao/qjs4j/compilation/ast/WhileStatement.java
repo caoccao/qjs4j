@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Represents a while statement.
  */
@@ -49,6 +51,14 @@ public final class WhileStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
+        }
+        return varDeclarators;
     }
 
     public Statement getBody() {

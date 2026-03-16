@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Represents a for statement.
  */
@@ -65,6 +68,22 @@ public final class ForStatement extends Statement {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (init instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
+            }
+            if (body != null) {
+                collectedVarDeclarators.addAll(body.getVarDeclarators());
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
     public Statement getBody() {

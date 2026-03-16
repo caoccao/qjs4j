@@ -34,7 +34,8 @@ public final class AstUtils {
             paramNames.addAll(extractBoundNames(param));
         }
         if (!paramNames.contains(JSKeyword.ARGUMENTS)) {
-            boolean hasVarArguments = containsVarArgumentsDeclaration(body);
+            boolean hasVarArguments = body != null
+                    && body.stream().anyMatch(Statement::containsVarArguments);
             if (!hasVarArguments) {
                 paramNames.add(JSKeyword.ARGUMENTS);
             }
@@ -45,25 +46,8 @@ public final class AstUtils {
     private static void collectBlockLexicals(List<Statement> stmts, Set<String> lexicals) {
         for (Statement s : stmts) {
             if (s instanceof VariableDeclaration varDecl && varDecl.getKind() != VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
-                    collectPatternNames(d.getId(), lexicals);
-                }
-            }
-        }
-    }
-
-    /**
-     * Collect top-level const declaration names from a parsed program.
-     *
-     * @param program    The parsed program AST
-     * @param constDecls Output: const names declared by this program
-     */
-    public static void collectGlobalConstDeclarations(Program program, Set<String> constDecls) {
-        for (Statement stmt : program.getBody()) {
-            if (stmt instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.CONST) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    collectPatternNames(declarator.getId(), constDecls);
+                for (VariableDeclarator variableDeclarator : varDecl.getDeclarations()) {
+                    collectPatternNames(variableDeclarator.getId(), lexicals);
                 }
             }
         }
@@ -124,7 +108,7 @@ public final class AstUtils {
                 if (varDecl.getKind() != VariableKind.VAR) {
                     boolean isConstDeclaration = varDecl.getKind() == VariableKind.CONST;
                     // let or const
-                    for (VariableDeclaration.VariableDeclarator d : varDecl.getDeclarations()) {
+                    for (VariableDeclarator d : varDecl.getDeclarations()) {
                         collectPatternNames(d.getId(), lexDecls, isConstDeclaration ? constDecls : null);
                     }
                 }
@@ -142,7 +126,9 @@ public final class AstUtils {
             }
         }
         for (Statement statement : body) {
-            collectVarScopedNames(statement, varDecls);
+            for (VariableDeclarator declarator : statement.getVarDeclarators()) {
+                collectPatternNames(declarator.getId(), varDecls);
+            }
         }
 
         // Also collect Annex B function hoisting candidates (functions in blocks/if/switch)
@@ -182,105 +168,6 @@ public final class AstUtils {
         }
     }
 
-    /**
-     * Collect var-scoped declarations from a statement subtree.
-     * Recurses through statement forms that do not create function scope and
-     * skips descending into function/class bodies.
-     */
-    private static void collectVarScopedNames(Statement statement, Set<String> varDecls) {
-        if (statement instanceof VariableDeclaration variableDeclaration
-                && variableDeclaration.getKind() == VariableKind.VAR) {
-            for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                collectPatternNames(declarator.getId(), varDecls);
-            }
-            return;
-        }
-        if (statement instanceof ForStatement forStatement) {
-            if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    collectPatternNames(declarator.getId(), varDecls);
-                }
-            }
-            if (forStatement.getBody() != null) {
-                collectVarScopedNames(forStatement.getBody(), varDecls);
-            }
-            return;
-        }
-        if (statement instanceof ForInStatement forInStatement) {
-            if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    collectPatternNames(declarator.getId(), varDecls);
-                }
-            }
-            if (forInStatement.getBody() != null) {
-                collectVarScopedNames(forInStatement.getBody(), varDecls);
-            }
-            return;
-        }
-        if (statement instanceof ForOfStatement forOfStatement) {
-            if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (VariableDeclaration.VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    collectPatternNames(declarator.getId(), varDecls);
-                }
-            }
-            if (forOfStatement.getBody() != null) {
-                collectVarScopedNames(forOfStatement.getBody(), varDecls);
-            }
-            return;
-        }
-        if (statement instanceof BlockStatement blockStatement) {
-            for (Statement nestedStatement : blockStatement.getBody()) {
-                collectVarScopedNames(nestedStatement, varDecls);
-            }
-            return;
-        }
-        if (statement instanceof IfStatement ifStatement) {
-            collectVarScopedNames(ifStatement.getConsequent(), varDecls);
-            if (ifStatement.getAlternate() != null) {
-                collectVarScopedNames(ifStatement.getAlternate(), varDecls);
-            }
-            return;
-        }
-        if (statement instanceof WhileStatement whileStatement) {
-            collectVarScopedNames(whileStatement.getBody(), varDecls);
-            return;
-        }
-        if (statement instanceof DoWhileStatement doWhileStatement) {
-            collectVarScopedNames(doWhileStatement.getBody(), varDecls);
-            return;
-        }
-        if (statement instanceof TryStatement tryStatement) {
-            for (Statement nestedStatement : tryStatement.getBlock().getBody()) {
-                collectVarScopedNames(nestedStatement, varDecls);
-            }
-            if (tryStatement.getHandler() != null) {
-                for (Statement nestedStatement : tryStatement.getHandler().getBody().getBody()) {
-                    collectVarScopedNames(nestedStatement, varDecls);
-                }
-            }
-            if (tryStatement.getFinalizer() != null) {
-                for (Statement nestedStatement : tryStatement.getFinalizer().getBody()) {
-                    collectVarScopedNames(nestedStatement, varDecls);
-                }
-            }
-            return;
-        }
-        if (statement instanceof SwitchStatement switchStatement) {
-            for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
-                for (Statement nestedStatement : switchCase.getConsequent()) {
-                    collectVarScopedNames(nestedStatement, varDecls);
-                }
-            }
-            return;
-        }
-        if (statement instanceof LabeledStatement labeledStatement) {
-            collectVarScopedNames(labeledStatement.getBody(), varDecls);
-        }
-    }
-
     public static int computeDefinedArgCount(List<Pattern> params, List<Expression> defaults, boolean hasRest) {
         if (defaults == null) {
             return params.size();
@@ -293,15 +180,6 @@ public final class AstUtils {
             count++;
         }
         return count;
-    }
-
-    public static boolean containsVarArgumentsDeclaration(List<Statement> statements) {
-        for (Statement statement : statements) {
-            if (statementContainsVarArguments(statement)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     public static List<String> extractBoundNames(Pattern pattern) {
@@ -462,74 +340,4 @@ public final class AstUtils {
         }
     }
 
-    public static boolean statementContainsVarArguments(Statement statement) {
-        if (statement instanceof VariableDeclaration variableDeclaration
-                && variableDeclaration.getKind() == VariableKind.VAR) {
-            for (var declarator : variableDeclaration.getDeclarations()) {
-                if (declarator.getId() instanceof Identifier identifier
-                        && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
-                    return true;
-                }
-            }
-        }
-        if (statement instanceof BlockStatement blockStatement) {
-            return containsVarArgumentsDeclaration(blockStatement.getBody());
-        }
-        if (statement instanceof IfStatement ifStatement) {
-            if (statementContainsVarArguments(ifStatement.getConsequent())) {
-                return true;
-            }
-            if (ifStatement.getAlternate() != null) {
-                return statementContainsVarArguments(ifStatement.getAlternate());
-            }
-        }
-        if (statement instanceof ForStatement forStatement) {
-            if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                for (var declarator : variableDeclaration.getDeclarations()) {
-                    if (declarator.getId() instanceof Identifier identifier
-                            && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
-                        return true;
-                    }
-                }
-            }
-            return statementContainsVarArguments(forStatement.getBody());
-        }
-        if (statement instanceof WhileStatement whileStatement) {
-            return statementContainsVarArguments(whileStatement.getBody());
-        }
-        if (statement instanceof DoWhileStatement doWhileStatement) {
-            return statementContainsVarArguments(doWhileStatement.getBody());
-        }
-        if (statement instanceof ForInStatement forInStatement) {
-            return statementContainsVarArguments(forInStatement.getBody());
-        }
-        if (statement instanceof ForOfStatement forOfStatement) {
-            return statementContainsVarArguments(forOfStatement.getBody());
-        }
-        if (statement instanceof SwitchStatement switchStatement) {
-            for (var switchCase : switchStatement.getCases()) {
-                if (containsVarArgumentsDeclaration(switchCase.getConsequent())) {
-                    return true;
-                }
-            }
-        }
-        if (statement instanceof TryStatement tryStatement) {
-            if (containsVarArgumentsDeclaration(tryStatement.getBlock().getBody())) {
-                return true;
-            }
-            if (tryStatement.getHandler() != null
-                    && containsVarArgumentsDeclaration(tryStatement.getHandler().getBody().getBody())) {
-                return true;
-            }
-            if (tryStatement.getFinalizer() != null
-                    && containsVarArgumentsDeclaration(tryStatement.getFinalizer().getBody())) {
-                return true;
-            }
-        }
-        if (statement instanceof LabeledStatement labeledStatement) {
-            return statementContainsVarArguments(labeledStatement.getBody());
-        }
-        return false;
-    }
 }
