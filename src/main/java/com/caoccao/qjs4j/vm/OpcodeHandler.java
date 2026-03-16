@@ -3270,7 +3270,7 @@ public final class OpcodeHandler {
         if (existingThisValue instanceof JSObject) {
             executionContext.virtualMachine.pendingException =
                     executionContext.virtualMachine.context.throwReferenceError(
-                            "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                            "Super constructor may only be called once");
             executionContext.virtualMachine.context.clearPendingException();
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
@@ -3282,12 +3282,29 @@ public final class OpcodeHandler {
             if (capturedThis instanceof JSObject) {
                 executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwReferenceError(
-                                "Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                                "Super constructor may only be called once");
                 executionContext.virtualMachine.context.clearPendingException();
                 executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
                 executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
                 executionContext.pc += op.getSize();
                 return;
+            }
+            // Also check the shared derivedThisRef VarRef which tracks the real initialization
+            // state across calls. When an arrow escapes the constructor and calls super() again,
+            // capturedThisArg may still appear uninitialized but the VarRef has been updated.
+            VarRef arrowDerivedThisRef = executionContext.virtualMachine.currentFrame.getDerivedThisRef();
+            if (arrowDerivedThisRef != null) {
+                JSValue derivedThisValue = arrowDerivedThisRef.get();
+                if (derivedThisValue instanceof JSObject) {
+                    executionContext.virtualMachine.pendingException =
+                            executionContext.virtualMachine.context.throwReferenceError(
+                                    "Super constructor may only be called once");
+                    executionContext.virtualMachine.context.clearPendingException();
+                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                    executionContext.pc += op.getSize();
+                    return;
+                }
             }
         }
 
@@ -3309,9 +3326,10 @@ public final class OpcodeHandler {
             if (derivedThisRef != null) {
                 derivedThisRef.set(jsObject);
             }
-            // For arrow functions inside derived constructors, propagate the initialized this
-            // back to the enclosing constructor frame if it's still on the call stack.
+            // For arrow functions inside derived constructors, update the captured this
+            // and propagate the initialized this back to the enclosing constructor frame.
             if (currentFunction instanceof JSBytecodeFunction arrowBf && arrowBf.isArrow()) {
+                arrowBf.setCapturedThisArg(jsObject);
                 StackFrame callerFrame = executionContext.virtualMachine.currentFrame.getCaller();
                 while (callerFrame != null) {
                     JSFunction callerFunc = callerFrame.getFunction();

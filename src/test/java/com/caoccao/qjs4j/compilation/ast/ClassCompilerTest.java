@@ -673,6 +673,57 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDerivedConstructorArrowEscapeDoubleSuperThrows() {
+        // When an arrow capturing super() escapes the derived constructor,
+        // calling it a second time must throw ReferenceError (this already initialized).
+        assertErrorWithJavet("""
+                let superArrow;
+                class base { constructor() { return {}; } }
+                class foo extends base {
+                    constructor() { superArrow = (() => super()); }
+                }
+                try { new foo(); } catch(e) {}
+                superArrow();
+                superArrow()""");
+    }
+
+    @Test
+    public void testDerivedConstructorArrowEscapeSuperInitializesThis() {
+        // After calling escaped superArrow(), thisArrow() must return the initialized this.
+        assertBooleanWithJavet("""
+                let superArrow; let thisArrow; let thisStash;
+                class base { constructor() { if (!thisStash) thisStash = {prop:45}; return thisStash; } }
+                class foo extends base {
+                    constructor() { superArrow = (() => super()); thisArrow = () => this; }
+                }
+                try { new foo(); } catch(e) {}
+                superArrow();
+                thisArrow() === thisStash""");
+    }
+
+    @Test
+    public void testDerivedConstructorNoSuperThrows() {
+        // Exiting a derived constructor without calling super() must throw ReferenceError.
+        assertErrorWithJavet("""
+                class base {}
+                class foo extends base { constructor() {} }
+                new foo()""");
+    }
+
+    @Test
+    public void testDerivedConstructorThisBeforeSuperThrows() {
+        // Accessing this before super() in an arrow that escapes the constructor must throw.
+        assertErrorWithJavet("""
+                let thisArrow;
+                class base {}
+                class foo extends base {
+                    constructor() { thisArrow = () => this; }
+                }
+                try { new foo(); } catch(e) {}
+                thisArrow()""");
+    }
+
+    @Test
     public void testPrivateInOperatorOutsideClassThrows() {
         assertThatThrownBy(() -> resetContext().eval("#x in ({})"))
                 .isInstanceOf(JSException.class)
