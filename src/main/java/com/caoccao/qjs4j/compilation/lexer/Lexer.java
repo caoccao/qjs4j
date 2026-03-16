@@ -138,7 +138,10 @@ public final class Lexer {
                  LPAREN, LBRACKET, LBRACE, COMMA, SEMICOLON, COLON, QUESTION,
                  ARROW,
                  // After keywords that start expressions
-                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW, AWAIT,
+                 // Note: AWAIT is intentionally excluded — in non-async context await is
+                 // an identifier and '/' is division. In async context, the parser's
+                 // rescanAsRegex() path in parsePrimaryExpression handles the DIV→REGEX rescan.
+                 RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
                  IF, WHILE, FOR, CASE, YIELD -> true;
             default -> false;
         };
@@ -298,27 +301,6 @@ public final class Lexer {
     }
 
     // Character utilities
-
-    /**
-     * Re-scan a REGEX token as a division operator.
-     * Called by the parser when 'await' is used as an identifier (non-async context)
-     * and the lexer incorrectly tokenized the following '/' as a regex literal
-     * (because expectRegex() returns true after AWAIT).
-     */
-    public Token rescanAsDivision(Token regexToken) {
-        int startPos = regexToken.offset();
-        int startLine = regexToken.line();
-        int startColumn = regexToken.column();
-        position = startPos;
-        line = startLine;
-        column = startColumn;
-        // Set lastTokenType to IDENTIFIER so expectRegex() returns false
-        lastTokenType = TokenType.IDENTIFIER;
-        lookahead = null;
-        Token divToken = scanToken();
-        lastTokenType = divToken.type();
-        return divToken;
-    }
 
     /**
      * Re-scan a DIV or DIV_ASSIGN token as a regex literal.

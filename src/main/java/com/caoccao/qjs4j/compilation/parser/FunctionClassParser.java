@@ -703,14 +703,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             enterFunctionContext(isAsync, isGenerator);
             boolean savedInClassStaticInit = parserContext.inClassStaticInit;
             parserContext.inClassStaticInit = false;
+            boolean savedInFunctionBody = parserContext.inFunctionBody;
             try {
-                boolean savedInFunctionBody = parserContext.inFunctionBody;
                 if (isAsync || isGenerator) {
                     parserContext.inFunctionBody = false;
                 }
                 parserContext.expect(TokenType.LPAREN);
                 FunctionParams funcParams = parseFunctionParameters();
-                parserContext.inFunctionBody = savedInFunctionBody;
+                parserContext.inFunctionBody = true;
                 BlockStatement body = parseFunctionBody(funcParams, id);
                 boolean needsArguments = parserContext.needsArguments;
                 SourceLocation fullLocation = new SourceLocation(
@@ -719,6 +719,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(),
                         funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
             } finally {
+                parserContext.inFunctionBody = savedInFunctionBody;
                 parserContext.inClassStaticInit = savedInClassStaticInit;
                 exitFunctionContext(isAsync, isGenerator);
             }
@@ -729,14 +730,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
+        boolean savedInFunctionBody = parserContext.inFunctionBody;
         try {
-            boolean savedInFunctionBody = parserContext.inFunctionBody;
             if (isAsync || isGenerator) {
                 parserContext.inFunctionBody = false;
             }
             parserContext.expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters();
-            parserContext.inFunctionBody = savedInFunctionBody;
+            parserContext.inFunctionBody = true;
             BlockStatement body = parseFunctionBody(funcParams, defaultId);
             boolean needsArguments = parserContext.needsArguments;
             SourceLocation fullLocation = new SourceLocation(
@@ -745,6 +746,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             return new FunctionDeclaration(defaultId, funcParams.params(), funcParams.defaults(),
                     funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
+            parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
         }
@@ -842,10 +844,10 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
+        boolean savedInFunctionBody = parserContext.inFunctionBody;
         try {
             // Per QuickJS: in_function_body == FALSE prevents yield/await during
             // the parsing of the arguments in generator/async functions.
-            boolean savedInFunctionBody = parserContext.inFunctionBody;
             if (isAsync || isGenerator) {
                 parserContext.inFunctionBody = false;
             }
@@ -853,7 +855,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters();
 
-            parserContext.inFunctionBody = savedInFunctionBody;
+            parserContext.inFunctionBody = true;
 
             // Parse body with "use strict" detection and parameter validation
             BlockStatement body = parseFunctionBody(funcParams, id);
@@ -870,6 +872,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             return new FunctionDeclaration(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
+            parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
         }
@@ -894,6 +897,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         enterFunctionContext(isAsync, isGenerator);
         boolean savedInClassStaticInit = parserContext.inClassStaticInit;
         parserContext.inClassStaticInit = false;
+        boolean savedInFunctionBody = parserContext.inFunctionBody;
         try {
             Identifier id = null;
             if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
@@ -903,7 +907,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             // Per QuickJS: in_function_body == FALSE prevents yield/await during
             // the parsing of the arguments in generator/async functions.
-            boolean savedInFunctionBody = parserContext.inFunctionBody;
             if (isAsync || isGenerator) {
                 parserContext.inFunctionBody = false;
             }
@@ -911,7 +914,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.expect(TokenType.LPAREN);
             FunctionParams funcParams = parseFunctionParameters();
 
-            parserContext.inFunctionBody = savedInFunctionBody;
+            parserContext.inFunctionBody = true;
 
             // Parse body with "use strict" detection and parameter validation
             BlockStatement body = parseFunctionBody(funcParams, id);
@@ -928,6 +931,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
             return new FunctionExpression(id, funcParams.params(), funcParams.defaults(), funcParams.restParameter(), body, isAsync, isGenerator, needsArguments, fullLocation);
         } finally {
+            parserContext.inFunctionBody = savedInFunctionBody;
             parserContext.inClassStaticInit = savedInClassStaticInit;
             exitFunctionContext(isAsync, isGenerator);
         }
@@ -1043,7 +1047,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
             }
 
-            parserContext.inFunctionBody = savedInFunctionBody;
+            parserContext.inFunctionBody = true;
 
             // Per QuickJS js_parse_function_check_names: methods always reject duplicate parameters
             checkDuplicateParameters(funcParams);

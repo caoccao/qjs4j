@@ -75,8 +75,9 @@ public class StatementContainsAwaitYieldTest {
                 false,
                 LOCATION);
 
-        assertThat(functionDeclaration.containsAwait()).isTrue();
-        assertThat(functionDeclaration.containsYield()).isTrue();
+        // ES2024 8.1.4: Contains always returns false for function boundaries.
+        assertThat(functionDeclaration.containsAwait()).isFalse();
+        assertThat(functionDeclaration.containsYield()).isFalse();
     }
 
     @Test

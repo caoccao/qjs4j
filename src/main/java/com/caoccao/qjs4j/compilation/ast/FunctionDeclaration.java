@@ -45,62 +45,14 @@ public final class FunctionDeclaration extends Declaration {
 
     @Override
     public boolean containsAwait() {
-        if (awaitInside == null) {
-            awaitInside = false;
-            if (params != null) {
-                for (Pattern pattern : params) {
-                    if (pattern != null && pattern.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!awaitInside && defaults != null) {
-                for (Expression defaultValue : defaults) {
-                    if (defaultValue != null && defaultValue.containsAwait()) {
-                        awaitInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!awaitInside && restParameter != null && restParameter.containsAwait()) {
-                awaitInside = true;
-            }
-            if (!awaitInside && body != null && body.containsAwait()) {
-                awaitInside = true;
-            }
-        }
-        return awaitInside;
+        // ES2024 8.1.4: Contains always returns false for function boundaries.
+        return false;
     }
 
     @Override
     public boolean containsYield() {
-        if (yieldInside == null) {
-            yieldInside = false;
-            if (params != null) {
-                for (Pattern pattern : params) {
-                    if (pattern != null && pattern.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!yieldInside && defaults != null) {
-                for (Expression defaultValue : defaults) {
-                    if (defaultValue != null && defaultValue.containsYield()) {
-                        yieldInside = true;
-                        break;
-                    }
-                }
-            }
-            if (!yieldInside && restParameter != null && restParameter.containsYield()) {
-                yieldInside = true;
-            }
-            if (!yieldInside && body != null && body.containsYield()) {
-                yieldInside = true;
-            }
-        }
-        return yieldInside;
+        // ES2024 8.1.4: Contains always returns false for function boundaries.
+        return false;
     }
 
     public BlockStatement getBody() {

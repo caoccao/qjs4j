@@ -259,12 +259,67 @@ public class AsyncTest extends BaseJavetTest {
     }
 
     @Test
+    void testAwaitIdentifierInNonAsyncNestedInAsyncBody() {
+        // await as identifier inside non-async function nested in async function body
+        assertBooleanWithJavet(
+                "async function f() { let a = function(a = await) {}; } typeof f === 'function'",
+                "async function* f() { let a = function(a = await) {}; } typeof f === 'function'");
+    }
+
+    @Test
+    void testAwaitIdentifierWithDivision() {
+        // In non-async context, await is an identifier and / is division
+        assertIntegerWithJavet(
+                "var await = 10; await / 2",
+                "var await = 10; await / 5 + await / 2");
+    }
+
+    @Test
+    void testAwaitIdentifierWithDivisionInFunction() {
+        assertIntegerWithJavet(
+                "function f() { var await = 6; return await / 3; } f()");
+    }
+
+    @Test
+    void testAwaitInAsyncFunctionParameterDefaultsRejected() {
+        assertErrorWithJavet(
+                "async function f(a = await) {}",
+                "async function* f(a = await) {}",
+                "let f = async function(a = await) {}",
+                "let f = async function*(a = await) {}");
+    }
+
+    @Test
     void testAwaitInExpression() {
         assertIntegerWithJavet("""
                 async function test() {
                     return (await 5) + (await 10);
                 }
                 test();""");
+    }
+
+    @Test
+    void testAwaitInNestedAsyncArrowBodyAllowed() {
+        // await in nested async arrow body within async arrow parameter defaults is allowed
+        assertBooleanWithJavet(
+                "typeof (async (a = async () => { await 1; }) => {}) === 'function'");
+    }
+
+    @Test
+    void testAwaitInNestedAsyncFunctionBodyAllowed() {
+        // await in nested async function body within async parameter defaults is allowed
+        assertBooleanWithJavet(
+                "async function f(a = async function() { await 1; }) {} typeof f === 'function'",
+                "async function* f(a = async function*() { await 1; }) {} typeof f === 'function'");
+    }
+
+    @Test
+    void testAwaitInNestedAsyncFunctionParameterDefaultsRejected() {
+        assertErrorWithJavet(
+                "function f(a = async function(a = await) {}) {}",
+                "function f() { a = async function(a = await) {}; }",
+                "async function f() { a = async function(a = await) {}; }",
+                "async function* f() { a = async function*(a = await) {}; }");
     }
 
     @Test
@@ -316,6 +371,13 @@ public class AsyncTest extends BaseJavetTest {
                     return value;
                 }
                 test();""");
+    }
+
+    @Test
+    void testAwaitWithRegexInAsyncContext() {
+        // In async context, await /regex/ correctly rescans / as regex
+        assertStringWithJavet(
+                "async function f() { return typeof (await /test/g); } f()");
     }
 
     @Test

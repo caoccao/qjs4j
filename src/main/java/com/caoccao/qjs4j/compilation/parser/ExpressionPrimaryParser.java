@@ -903,17 +903,10 @@ final class ExpressionPrimaryParser {
                 throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
             }
             if (!parserContext.inFunctionBody && parserContext.isAwaitExpressionAllowed()) {
-                throw new JSSyntaxErrorException("'await' expression not allowed in formal parameters of an async function");
+                throw new JSSyntaxErrorException("Illegal await-expression in formal parameters of async function");
             }
             if (!parserContext.isAwaitExpressionAllowed()) {
                 if (parserContext.isAwaitIdentifierAllowed()) {
-                    // When await is used as an identifier, the lexer may have incorrectly
-                    // tokenized '/' as regex (since expectRegex() returns true after AWAIT).
-                    // Rescan it as division.
-                    if (parserContext.nextToken.type() == TokenType.REGEX) {
-                        Token divToken = parserContext.lexer.rescanAsDivision(parserContext.nextToken);
-                        parserContext.nextToken = divToken;
-                    }
                     return parsePostfixExpression();
                 }
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");

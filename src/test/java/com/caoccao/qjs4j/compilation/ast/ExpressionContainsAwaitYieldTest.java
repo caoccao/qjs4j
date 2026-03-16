@@ -96,10 +96,11 @@ public class ExpressionContainsAwaitYieldTest {
                 false,
                 LOCATION);
 
-        assertThat(functionExpression.containsAwait()).isTrue();
-        assertThat(functionExpression.containsYield()).isTrue();
-        assertThat(arrowFunctionExpression.containsAwait()).isTrue();
-        assertThat(arrowFunctionExpression.containsYield()).isTrue();
+        // ES2024 8.1.4: Contains always returns false for function boundaries.
+        assertThat(functionExpression.containsAwait()).isFalse();
+        assertThat(functionExpression.containsYield()).isFalse();
+        assertThat(arrowFunctionExpression.containsAwait()).isFalse();
+        assertThat(arrowFunctionExpression.containsYield()).isFalse();
     }
 
     @Test
@@ -132,9 +133,10 @@ public class ExpressionContainsAwaitYieldTest {
                 false,
                 LOCATION);
 
-        assertThat(functionExpression.containsAwait()).isTrue();
-        assertThat(functionExpression.containsYield()).isTrue();
-        assertThat(arrowFunctionExpression.containsAwait()).isTrue();
-        assertThat(arrowFunctionExpression.containsYield()).isTrue();
+        // ES2024 8.1.4: Contains always returns false for function boundaries.
+        assertThat(functionExpression.containsAwait()).isFalse();
+        assertThat(functionExpression.containsYield()).isFalse();
+        assertThat(arrowFunctionExpression.containsAwait()).isFalse();
+        assertThat(arrowFunctionExpression.containsYield()).isFalse();
     }
 }
