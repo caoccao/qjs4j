@@ -47,20 +47,20 @@ public final class LabeledStatement extends Statement {
         return yieldInside;
     }
 
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
-    }
-
     public Statement getBody() {
         return body;
     }
 
     public Identifier getLabel() {
         return label;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
+        }
+        return varDeclarators;
     }
 
 }

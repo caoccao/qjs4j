@@ -166,19 +166,6 @@ final class FunctionClassCompiler {
                 false);
     }
 
-    private static boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
-    }
-
     /**
      * Convert a pattern to a string representation for source generation.
      * Used when generating synthetic source for Function constructor.
@@ -276,13 +263,13 @@ final class FunctionClassCompiler {
                 arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter());
         boolean hasArgumentsParameterBinding = false;
         for (Pattern parameter : arrowExpr.getParams()) {
-            if (AstUtils.extractBoundNames(parameter).contains(JSArguments.NAME)) {
+            if (parameter.getBoundNames().contains(JSArguments.NAME)) {
                 hasArgumentsParameterBinding = true;
                 break;
             }
         }
         if (!hasArgumentsParameterBinding && arrowExpr.getRestParameter() != null) {
-            hasArgumentsParameterBinding = AstUtils.extractBoundNames(arrowExpr.getRestParameter().getArgument())
+            hasArgumentsParameterBinding = arrowExpr.getRestParameter().getArgument().getBoundNames()
                     .contains(JSArguments.NAME);
         }
         boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.getDefaults());
@@ -403,9 +390,7 @@ final class FunctionClassCompiler {
             }
 
             localCount = functionContext.currentScope().getLocalCount();
-            localVarNames = AstUtils.extractLocalVarNames(
-                    functionContext.scopes.stream().map(CompilerScope::getLocalNamesByIndex).toList(),
-                    localCount);
+            localVarNames = functionContext.getLocalVarNames();
         }
         if (enteredBodyScope) {
             functionContext.exitScope();
@@ -1186,9 +1171,7 @@ final class FunctionClassCompiler {
         }
 
         int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = AstUtils.extractLocalVarNames(
-                functionContext.currentScope().getLocalNamesByIndex(),
-                functionContext.currentScope().getLocalCount());
+        String[] localVarNames = functionContext.getLocalVarNames();
         functionContext.exitScope();
 
         // Build the function bytecode
@@ -1356,11 +1339,11 @@ final class FunctionClassCompiler {
             boolean conflictsWithParameter = false;
             Set<String> allParamNames = new HashSet<>();
             for (Pattern param : functionExpression.getParams()) {
-                allParamNames.addAll(AstUtils.extractBoundNames(param));
+                allParamNames.addAll(param.getBoundNames());
             }
             conflictsWithParameter = allParamNames.contains(functionExpression.getId().getName());
             if (!conflictsWithParameter && functionExpression.getRestParameter() != null) {
-                List<String> restBoundNames = AstUtils.extractBoundNames(functionExpression.getRestParameter().getArgument());
+                List<String> restBoundNames = functionExpression.getRestParameter().getArgument().getBoundNames();
                 conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
             }
             if (!conflictsWithParameter) {
@@ -1454,9 +1437,7 @@ final class FunctionClassCompiler {
             functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.getId().getName());
         }
         int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = AstUtils.extractLocalVarNames(
-                functionContext.currentScope().getLocalNamesByIndex(),
-                functionContext.currentScope().getLocalCount());
+        String[] localVarNames = functionContext.getLocalVarNames();
         functionContext.exitScope();
 
         // Build the function bytecode
@@ -1524,37 +1505,37 @@ final class FunctionClassCompiler {
             boolean isConstructor) {
         // Pass parent captureResolver so class methods can capture outer scope variables (closures)
         BytecodeCompiler methodCompiler = new BytecodeCompiler(true, compilerContext.captureResolver, compilerContext.context);
-        CompilerContext methodCtx = methodCompiler.context();
+        CompilerContext functionContext = methodCompiler.context();
         CompilerDelegates methodDelegates = methodCompiler.delegates();
-        methodCtx.sourceCode = compilerContext.sourceCode;
-        methodCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
-        methodCtx.privateSymbols = privateSymbols;  // Make private symbols available in method
-        inheritVisibleWithObjectBindings(methodCtx);
+        functionContext.sourceCode = compilerContext.sourceCode;
+        functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        functionContext.privateSymbols = privateSymbols;  // Make private symbols available in method
+        inheritVisibleWithObjectBindings(functionContext);
 
         FunctionExpression functionExpression = method.getValue();
 
         // Enter function scope and add parameters as locals
-        methodCtx.enterScope();
-        methodCtx.inGlobalScope = false;
-        methodCtx.isInAsyncFunction = functionExpression.isAsync();
-        methodCtx.isInGeneratorFunction = functionExpression.isGenerator();
+        functionContext.enterScope();
+        functionContext.inGlobalScope = false;
+        functionContext.isInAsyncFunction = functionExpression.isAsync();
+        functionContext.isInGeneratorFunction = functionExpression.isGenerator();
 
         // Force-capture the class inner name binding so eval() inside
         // constructor/method body can resolve it at runtime.
         if (isConstructor && methodName != null && !methodName.isEmpty()) {
-            methodCtx.captureResolver.resolveCapturedBindingIndex(methodName);
+            functionContext.captureResolver.resolveCapturedBindingIndex(methodName);
             // Propagate to nested functions (arrows, etc.) so they also capture the name.
-            methodCtx.classInnerNameToCapture = methodName;
+            functionContext.classInnerNameToCapture = methodName;
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> methodDestructuringParams = declareParameters(
                 functionExpression.getParams(),
-                methodCtx,
+                functionContext,
                 methodDelegates,
                 parameterSlotIndexes);
         if (method.getValue().needsArguments()) {
-            declareAndInitializeImplicitArgumentsBinding(methodCtx);
+            declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
         // For base constructors, instance private methods/fields are initialized before
@@ -1585,24 +1566,24 @@ final class FunctionClassCompiler {
         // Handle rest parameter if present
         if (functionExpression.getRestParameter() != null) {
             int firstRestIndex = functionExpression.getParams().size();
-            methodCtx.emitter.emitOpcode(Opcode.REST);
-            methodCtx.emitter.emitU16(firstRestIndex);
-            emitRestParameterBinding(functionExpression.getRestParameter(), methodCtx, methodDelegates);
+            functionContext.emitter.emitOpcode(Opcode.REST);
+            functionContext.emitter.emitU16(firstRestIndex);
+            emitRestParameterBinding(functionExpression.getRestParameter(), functionContext, methodDelegates);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        emitParameterDestructuring(functionExpression.getParams(), methodDestructuringParams, methodCtx, methodDelegates);
+        emitParameterDestructuring(functionExpression.getParams(), methodDestructuringParams, functionContext, methodDelegates);
 
         // If this is a generator method, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
-            methodCtx.emitter.emitOpcode(Opcode.INITIAL_YIELD);
+            functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
         }
 
         // For constructors, initialize private methods then fields.
         // For derived constructors, defer until after super() (INIT_CTOR) per ES spec 14.6.13 step 11.
         if (isConstructor) {
             if (isDerivedConstructor) {
-                methodCtx.pendingPostSuperInitialization = () -> {
+                functionContext.pendingPostSuperInitialization = () -> {
                     if (!privateInstanceMethodFunctions.isEmpty()) {
                         methodDelegates.functions.compilePrivateMethodInitialization(privateInstanceMethodFunctions, privateSymbols);
                     }
@@ -1635,22 +1616,20 @@ final class FunctionClassCompiler {
         // If body doesn't end with return, add implicit return undefined
         List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
-            methodCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = methodCtx.currentScope().declareLocal("$method_return_" + methodCtx.emitter.currentOffset());
-            methodCtx.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
+            functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            int returnValueIndex = functionContext.currentScope().declareLocal("$method_return_" + functionContext.emitter.currentOffset());
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             methodDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            methodCtx.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-            methodCtx.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+            functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
+            functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = methodCtx.currentScope().getLocalCount();
-        String[] localVarNames = AstUtils.extractLocalVarNames(
-                methodCtx.scopes.stream().map(CompilerScope::getLocalNamesByIndex).toList(),
-                localCount);
-        methodCtx.exitScope();
+        int localCount = functionContext.currentScope().getLocalCount();
+        String[] localVarNames = functionContext.getLocalVarNames();
+        functionContext.exitScope();
 
         // Build the method bytecode
-        Bytecode methodBytecode = methodCtx.emitter.build(localCount, localVarNames);
+        Bytecode methodBytecode = functionContext.emitter.build(localCount, localVarNames);
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
@@ -1852,7 +1831,7 @@ final class FunctionClassCompiler {
             initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             initCtx.emitter.emitOpcode(Opcode.SWAP);
             // Set function name from private symbol (e.g., "#field") for anonymous functions
-            if (field.getValue() != null && isAnonymousFunctionDefinition(field.getValue())) {
+            if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
                 initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
             }
             initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
@@ -1870,7 +1849,7 @@ final class FunctionClassCompiler {
 
             initCtx.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
             initCtx.emitter.emitOpcode(Opcode.SWAP);
-            if (field.getValue() != null && isAnonymousFunctionDefinition(field.getValue())) {
+            if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
                 initCtx.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
             }
             initCtx.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);

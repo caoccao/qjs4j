@@ -1245,7 +1245,7 @@ final class StatementCompiler {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
 
                 delegates.expressions.compileExpression(declarator.getInit());
-                if (isAnonymousFunctionDefinition(declarator.getInit())) {
+                if (declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preResolvedObjectLocalIndex);
@@ -1265,7 +1265,7 @@ final class StatementCompiler {
                 }
                 delegates.expressions.compileExpression(declarator.getInit());
                 if (declarator.getId() instanceof Identifier targetId
-                        && isAnonymousFunctionDefinition(declarator.getInit())) {
+                        && declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
                 }
                 compilerContext.inferredClassName = null;
@@ -1317,19 +1317,6 @@ final class StatementCompiler {
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
-    }
-
-    private boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
     }
 
 }

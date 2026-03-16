@@ -63,6 +63,14 @@ public final class VariableDeclaration extends Statement {
         return yieldInside;
     }
 
+    public List<VariableDeclarator> getDeclarations() {
+        return declarations;
+    }
+
+    public VariableKind getKind() {
+        return kind;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -71,14 +79,6 @@ public final class VariableDeclaration extends Statement {
                     : List.of();
         }
         return varDeclarators;
-    }
-
-    public List<VariableDeclarator> getDeclarations() {
-        return declarations;
-    }
-
-    public VariableKind getKind() {
-        return kind;
     }
 
 }

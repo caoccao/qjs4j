@@ -16,12 +16,19 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Base class for destructuring patterns.
  */
 public abstract sealed class Pattern extends ASTNode permits
         Expression, ObjectPattern, ArrayPattern, RestElement, AssignmentPattern {
+    protected List<String> boundNames;
+
     protected Pattern(SourceLocation location) {
         super(location);
+        this.boundNames = null;
     }
+
+    public abstract List<String> getBoundNames();
 }

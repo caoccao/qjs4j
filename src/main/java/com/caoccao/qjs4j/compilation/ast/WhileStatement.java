@@ -53,20 +53,20 @@ public final class WhileStatement extends Statement {
         return yieldInside;
     }
 
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
-        }
-        return varDeclarators;
-    }
-
     public Statement getBody() {
         return body;
     }
 
     public Expression getTest() {
         return test;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            varDeclarators = body != null ? body.getVarDeclarators() : List.of();
+        }
+        return varDeclarators;
     }
 
 }

@@ -75,6 +75,19 @@ final class CompilerScope {
         return index;
     }
 
+    void fillLocalVarNames(String[] names) {
+        final int localCount = names.length;
+        if (localCount > 0) {
+            for (var entry : localNamesByIndex.entrySet()) {
+                int index = entry.getKey();
+                String name = entry.getValue();
+                if (index >= 0 && index < localCount) {
+                    names[index] = name;
+                }
+            }
+        }
+    }
+
     Integer getLocal(String name) {
         return locals.get(name);
     }

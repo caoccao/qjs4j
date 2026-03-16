@@ -65,6 +65,18 @@ public final class ForInStatement extends Statement {
         return yieldInside;
     }
 
+    public Statement getBody() {
+        return body;
+    }
+
+    public ASTNode getLeft() {
+        return left;
+    }
+
+    public Expression getRight() {
+        return right;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -79,18 +91,6 @@ public final class ForInStatement extends Statement {
             varDeclarators = collectedVarDeclarators;
         }
         return varDeclarators;
-    }
-
-    public Statement getBody() {
-        return body;
-    }
-
-    public ASTNode getLeft() {
-        return left;
-    }
-
-    public Expression getRight() {
-        return right;
     }
 
 }

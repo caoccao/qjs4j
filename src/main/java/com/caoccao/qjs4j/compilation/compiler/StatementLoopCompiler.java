@@ -34,19 +34,6 @@ final class StatementLoopCompiler {
         this.delegates = delegates;
     }
 
-    private static boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
-    }
-
     void compileBreakStatement(BreakStatement breakStmt) {
         if (compilerContext.finallySubroutineDepth > 0) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -186,7 +173,7 @@ final class StatementLoopCompiler {
             compilerContext.enterScope();
             delegates.patterns.declarePatternVariables(declarationPattern);
             if (declarationPattern != null) {
-                for (String boundName : AstUtils.extractBoundNames(declarationPattern)) {
+                for (String boundName : declarationPattern.getBoundNames()) {
                     Integer localIndex = compilerContext.currentScope().getLocal(boundName);
                     if (localIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
@@ -218,7 +205,7 @@ final class StatementLoopCompiler {
                 }
                 delegates.expressions.compileExpression(initializer);
                 if (declarationPattern instanceof Identifier identifier
-                        && isAnonymousFunctionDefinition(initializer)) {
+                        && initializer.isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
                 }
                 compilerContext.inferredClassName = null;
@@ -316,7 +303,7 @@ final class StatementLoopCompiler {
         if (hasHeadTdzScope && pattern != null) {
             compilerContext.enterScope();
             delegates.patterns.declarePatternVariables(pattern);
-            for (String boundName : AstUtils.extractBoundNames(pattern)) {
+            for (String boundName : pattern.getBoundNames()) {
                 Integer localIndex = compilerContext.currentScope().getLocal(boundName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);

@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.ASTNode;
-import com.caoccao.qjs4j.compilation.ast.AstUtils;
 import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
@@ -73,14 +72,14 @@ public final class BytecodeCompiler {
         } else {
             throw new JSCompilerException("Expected Program node");
         }
-        int localCount = compilerContext.scopes.isEmpty()
-                ? compilerContext.maxLocalCount
-                : compilerContext.currentScope().getLocalCount();
-        String[] localVarNames = compilerContext.scopes.isEmpty()
-                ? null
-                : AstUtils.extractLocalVarNames(
-                compilerContext.currentScope().getLocalNamesByIndex(),
-                compilerContext.currentScope().getLocalCount());
+
+        int localCount;
+        if (compilerContext.scopes.isEmpty()) {
+            localCount = compilerContext.maxLocalCount;
+        } else {
+            localCount = compilerContext.currentScope().getLocalCount();
+        }
+        String[] localVarNames = compilerContext.getLocalVarNames();
         return compilerContext.emitter.build(localCount, localVarNames);
     }
 

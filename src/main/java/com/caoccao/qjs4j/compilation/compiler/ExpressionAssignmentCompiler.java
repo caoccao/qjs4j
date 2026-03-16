@@ -62,7 +62,7 @@ final class ExpressionAssignmentCompiler {
 
         if (operator != AssignmentOperator.ASSIGN) {
             if (left instanceof MemberExpression memberExpr) {
-                if (AstUtils.isSuperMemberExpression(memberExpr)) {
+                if (memberExpr.getObject().isSuperIdentifier()) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(4);
@@ -113,7 +113,7 @@ final class ExpressionAssignmentCompiler {
             // ASSIGN operator — ensure correct LHS-before-RHS evaluation order
             // for computed member expressions and super member expressions (spec 13.15.2)
             if (left instanceof MemberExpression memberExpr) {
-                if (AstUtils.isSuperMemberExpression(memberExpr)) {
+                if (memberExpr.getObject().isSuperIdentifier()) {
                     // Evaluate super reference and property key before RHS
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -156,7 +156,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 }
             } else {
-                if (AstUtils.isSuperMemberExpression(memberExpr)) {
+                if (memberExpr.getObject().isSuperIdentifier()) {
                     // Stack: [this, superObj, key, newValue] → PUT_SUPER_VALUE pops value from top
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 } else if (memberExpr.isComputed()) {
@@ -210,7 +210,7 @@ final class ExpressionAssignmentCompiler {
             owner.compileExpression(assignExpr.getRight());
             if (operator == AssignmentOperator.ASSIGN
                     && assignExpr.isLhsIdentifierRef()
-                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                    && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
             }
             if (operator != AssignmentOperator.ASSIGN) {
@@ -288,7 +288,7 @@ final class ExpressionAssignmentCompiler {
 
         if (operator == AssignmentOperator.ASSIGN
                 && assignExpr.isLhsIdentifierRef()
-                && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, name);
         }
 
@@ -323,7 +323,7 @@ final class ExpressionAssignmentCompiler {
         if (left instanceof Identifier) {
             depthLvalue = 0;
         } else if (left instanceof MemberExpression memberExpr) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 depthLvalue = 3;
             } else if (memberExpr.isComputed()) {
                 depthLvalue = 2;
@@ -355,7 +355,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(4);
@@ -400,7 +400,7 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         owner.compileExpression(assignExpr.getRight());
         if (left instanceof Identifier identifier
-                && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
 
@@ -447,7 +447,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
@@ -600,16 +600,4 @@ final class ExpressionAssignmentCompiler {
         return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
     }
 
-    private boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
-    }
 }

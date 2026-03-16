@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Represents a rest element in array/object destructuring (...rest).
  */
@@ -45,5 +47,13 @@ public final class RestElement extends Pattern {
 
     public Pattern getArgument() {
         return argument;
+    }
+
+    @Override
+    public List<String> getBoundNames() {
+        if (boundNames == null) {
+            boundNames = argument == null ? List.of() : argument.getBoundNames();
+        }
+        return boundNames;
     }
 }

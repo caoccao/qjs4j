@@ -16,7 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
+import com.caoccao.qjs4j.compilation.ast.PropertyDefinition;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
@@ -32,22 +33,6 @@ final class FunctionClassFieldCompiler {
     FunctionClassFieldCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
-    }
-
-    private static boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression == null) {
-            return false;
-        }
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
     }
 
     void compileComputedFieldNameCache(
@@ -104,7 +89,7 @@ final class FunctionClassFieldCompiler {
                 if (symbol != null) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                    if (isAnonymousFunctionDefinition(field.getValue())) {
+                    if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
                         compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
                     }
                     compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);
@@ -127,7 +112,7 @@ final class FunctionClassFieldCompiler {
 
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, backingSymbol);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
-                if (isAnonymousFunctionDefinition(field.getValue())) {
+                if (field.getValue() != null && field.getValue().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
                 }
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_PRIVATE_FIELD);

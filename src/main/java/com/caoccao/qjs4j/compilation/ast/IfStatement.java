@@ -62,6 +62,18 @@ public final class IfStatement extends Statement {
         return yieldInside;
     }
 
+    public Statement getAlternate() {
+        return alternate;
+    }
+
+    public Statement getConsequent() {
+        return consequent;
+    }
+
+    public Expression getTest() {
+        return test;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -75,18 +87,6 @@ public final class IfStatement extends Statement {
             varDeclarators = collectedVarDeclarators;
         }
         return varDeclarators;
-    }
-
-    public Statement getAlternate() {
-        return alternate;
-    }
-
-    public Statement getConsequent() {
-        return consequent;
-    }
-
-    public Expression getTest() {
-        return test;
     }
 
 }

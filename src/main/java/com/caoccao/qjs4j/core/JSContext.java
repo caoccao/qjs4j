@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.compilation.ast.AstUtils;
+import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
@@ -1592,16 +1592,11 @@ public final class JSContext implements AutoCloseable {
                 func = compileResult.function();
 
                 // Collect new declarations from this script
-                Set<String> newConstDecls = new HashSet<>();
-                Set<String> newVarDecls = new HashSet<>();
-                Set<String> newLexDecls = new HashSet<>();
-                globalScriptFunctionNames = new LinkedHashSet<>();
-                AstUtils.collectGlobalDeclarations(
-                        compileResult.ast(),
-                        newVarDecls,
-                        newLexDecls,
-                        newConstDecls,
-                        globalScriptFunctionNames);
+                Program.GlobalDeclarations globalDeclarations = compileResult.ast().getGlobalDeclarations();
+                Set<String> newConstDecls = globalDeclarations.constDeclarations();
+                Set<String> newVarDecls = globalDeclarations.varDeclarations();
+                Set<String> newLexDecls = globalDeclarations.lexicalDeclarations();
+                globalScriptFunctionNames = globalDeclarations.functionDeclarations();
 
                 // Check: let/const names must not collide with existing lex declarations
                 // or restricted global properties (non-configurable or script-level var)
@@ -1690,15 +1685,9 @@ public final class JSContext implements AutoCloseable {
             // Following QuickJS js_closure2 first-pass check with JS_CheckDefineGlobalVar.
             Set<String> globalEvalFunctionNames = null;
             if (!isModule && isDirectEval) {
-                Set<String> evalVarDeclarations = new HashSet<>();
-                Set<String> evalLexDeclarations = new HashSet<>();
-                globalEvalFunctionNames = new LinkedHashSet<>();
-                AstUtils.collectGlobalDeclarations(
-                        compileResult.ast(),
-                        evalVarDeclarations,
-                        evalLexDeclarations,
-                        null,
-                        globalEvalFunctionNames);
+                Program.GlobalDeclarations globalDeclarations = compileResult.ast().getGlobalDeclarations();
+                Set<String> evalVarDeclarations = globalDeclarations.varDeclarations();
+                globalEvalFunctionNames = globalDeclarations.functionDeclarations();
                 for (String functionName : globalEvalFunctionNames) {
                     PropertyKey key = PropertyKey.fromString(functionName);
                     PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);

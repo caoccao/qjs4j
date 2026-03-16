@@ -183,7 +183,7 @@ final class PatternCompiler {
             if (memberExpr.isOptional()) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 // Stack starts with [value]
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -241,7 +241,7 @@ final class PatternCompiler {
             delegates.expressions.compileExpression(assignExpr.getRight());
             // Set function name for anonymous function definitions
             if (assignExpr.getLeft() instanceof Identifier targetId
-                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                    && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
@@ -463,7 +463,6 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 // Stack: [source, target, target]
                 compilerContext.emitter.emitOpcode(Opcode.ROT3L);
-                // Stack: [target, target, source]
                 compilerContext.emitter.emitOpcode(Opcode.NULL);
                 // Stack: [target, target, source, null]
                 // COPY_DATA_PROPERTIES mask=7: target@sp-4, source@sp-2, exclude@sp-1
@@ -813,7 +812,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(assignPattern.getRight());
             if (assignPattern.getLeft() instanceof Identifier identifier
-                    && isAnonymousFunctionDefinition(assignPattern.getRight())) {
+                    && assignPattern.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
             }
             // Patch jump target
@@ -890,7 +889,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             delegates.expressions.compileExpression(assignExpr.getRight());
             if (assignExpr.getLeft() instanceof Identifier targetId
-                    && isAnonymousFunctionDefinition(assignExpr.getRight())) {
+                    && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
             }
             compilerContext.emitter.patchJump(jumpNotUndefined, compilerContext.emitter.currentOffset());
@@ -901,7 +900,7 @@ final class PatternCompiler {
         // Now assign using the pre-evaluated references
         // Stack: [pre-eval-values...] value
         if (target instanceof MemberExpression memberExpr) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_SUPER_VALUE leaves value
@@ -1034,19 +1033,6 @@ final class PatternCompiler {
         return null;
     }
 
-    private boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
-    }
-
     void markPatternConstBindings(Pattern pattern) {
         if (pattern instanceof Identifier id) {
             compilerContext.currentScope().markConstLocal(id.getName());
@@ -1119,7 +1105,7 @@ final class PatternCompiler {
             return 0; // hole
         }
         if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 // Pre-evaluate super reference: this, superObj, key
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);

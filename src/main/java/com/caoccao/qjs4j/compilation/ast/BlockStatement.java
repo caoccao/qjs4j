@@ -63,6 +63,10 @@ public final class BlockStatement extends Statement {
         return yieldInside;
     }
 
+    public List<Statement> getBody() {
+        return body;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -79,10 +83,6 @@ public final class BlockStatement extends Statement {
             }
         }
         return varDeclarators;
-    }
-
-    public List<Statement> getBody() {
-        return body;
     }
 
     public boolean hasUseStrictDirective() {

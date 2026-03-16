@@ -71,6 +71,11 @@ public final class ArrowFunctionExpression extends Expression {
         return restParameter;
     }
 
+    @Override
+    public boolean isAnonymousFunction() {
+        return true;
+    }
+
     public boolean isAsync() {
         return isAsync;
     }

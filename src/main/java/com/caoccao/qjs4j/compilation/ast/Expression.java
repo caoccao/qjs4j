@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.List;
+
 /**
  * Base sealed class for all expression nodes.
  */
@@ -29,6 +33,22 @@ public abstract sealed class Expression extends Pattern permits
 
     protected Expression(SourceLocation location) {
         super(location);
+    }
+
+    @Override
+    public List<String> getBoundNames() {
+        if (boundNames == null) {
+            boundNames = List.of();
+        }
+        return boundNames;
+    }
+
+    public boolean isAnonymousFunction() {
+        return false;
+    }
+
+    public boolean isSuperIdentifier() {
+        return this instanceof Identifier identifier && JSKeyword.SUPER.equals(identifier.getName());
     }
 
 }

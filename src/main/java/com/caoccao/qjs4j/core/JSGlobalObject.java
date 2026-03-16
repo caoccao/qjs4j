@@ -2727,15 +2727,10 @@ public final class JSGlobalObject {
                     try {
                         Compiler evalCompiler = new Compiler(code, "<eval>").setContext(realmContext);
                         Program evalAst = evalCompiler.parse(false);
-                        evalVarDeclarations = new HashSet<>();
-                        evalLexDeclarations = new HashSet<>();
-                        evalFunctionDeclarations = new LinkedHashSet<>();
-                        AstUtils.collectGlobalDeclarations(
-                                evalAst,
-                                evalVarDeclarations,
-                                evalLexDeclarations,
-                                null,
-                                evalFunctionDeclarations);
+                        Program.GlobalDeclarations globalDeclarations = evalAst.getGlobalDeclarations();
+                        evalVarDeclarations = globalDeclarations.varDeclarations();
+                        evalLexDeclarations = globalDeclarations.lexicalDeclarations();
+                        evalFunctionDeclarations = globalDeclarations.functionDeclarations();
                         parsedEvalDeclarations = true;
                         evalCodeStrict = evalCodeStrict || evalAst.isStrict();
                     } catch (Exception ignored) {

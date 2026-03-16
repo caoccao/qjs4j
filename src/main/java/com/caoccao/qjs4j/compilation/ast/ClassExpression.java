@@ -81,4 +81,9 @@ public final class ClassExpression extends Expression {
     public Expression getSuperClass() {
         return superClass;
     }
+
+    @Override
+    public boolean isAnonymousFunction() {
+        return id == null;
+    }
 }

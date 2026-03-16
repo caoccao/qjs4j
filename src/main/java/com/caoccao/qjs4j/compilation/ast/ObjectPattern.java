@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -68,6 +69,25 @@ public final class ObjectPattern extends Pattern {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<String> getBoundNames() {
+        if (boundNames == null) {
+            List<String> collectedBoundNames = new ArrayList<>();
+            if (properties != null) {
+                for (ObjectPatternProperty property : properties) {
+                    if (property != null && property.getValue() != null) {
+                        collectedBoundNames.addAll(property.getValue().getBoundNames());
+                    }
+                }
+            }
+            if (restElement != null && restElement.getArgument() != null) {
+                collectedBoundNames.addAll(restElement.getArgument().getBoundNames());
+            }
+            boundNames = List.copyOf(collectedBoundNames);
+        }
+        return boundNames;
     }
 
     public List<ObjectPatternProperty> getProperties() {

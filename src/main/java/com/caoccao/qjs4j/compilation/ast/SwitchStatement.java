@@ -64,6 +64,14 @@ public final class SwitchStatement extends Statement {
         return yieldInside;
     }
 
+    public List<SwitchCase> getCases() {
+        return cases;
+    }
+
+    public Expression getDiscriminant() {
+        return discriminant;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -82,14 +90,6 @@ public final class SwitchStatement extends Statement {
             varDeclarators = collectedVarDeclarators;
         }
         return varDeclarators;
-    }
-
-    public List<SwitchCase> getCases() {
-        return cases;
-    }
-
-    public Expression getDiscriminant() {
-        return discriminant;
     }
 
     public static final class SwitchCase extends ASTNode {

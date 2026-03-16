@@ -211,6 +211,15 @@ final class CompilerContext {
         return new ArrayList<>(withObjectLocalStack);
     }
 
+    String[] getLocalVarNames() {
+        int localCount = currentScope().getLocalCount();
+        String[] localVarNames = localCount == 0 ? null : new String[localCount];
+        if (localCount > 0) {
+            scopes.forEach(scope -> scope.fillLocalVarNames(localVarNames));
+        }
+        return localVarNames;
+    }
+
     String getMethodName(MethodDefinition method) {
         Expression key = method.getKey();
         if (key instanceof Identifier id) {

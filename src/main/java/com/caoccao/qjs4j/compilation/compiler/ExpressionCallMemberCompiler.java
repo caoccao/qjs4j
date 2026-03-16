@@ -80,7 +80,7 @@ final class ExpressionCallMemberCompiler {
         }
 
         if (callExpr.getCallee() instanceof MemberExpression memberExpr
-                && AstUtils.isSuperMemberExpression(memberExpr)
+                && memberExpr.getObject().isSuperIdentifier()
                 && (callExpr.isOptional() || memberExpr.isOptional())) {
             compileOptionalSuperMemberCallExpression(callExpr, memberExpr, isTailCall);
             return;
@@ -99,7 +99,7 @@ final class ExpressionCallMemberCompiler {
         if (callExpr.getCallee() instanceof MemberExpression memberExpr) {
             Opcode callMethodOpcode = isTailCall ? Opcode.TAIL_CALL_METHOD : Opcode.CALL_METHOD;
 
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 delegates.emitHelpers.emitGetSuperValue(memberExpr, true);
                 // Stack: [this, func] → SWAP → [func, this]
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -181,7 +181,7 @@ final class ExpressionCallMemberCompiler {
             return;
         }
         if (callExpr.getCallee() instanceof MemberExpression memberExpr) {
-            if (AstUtils.isSuperMemberExpression(memberExpr)) {
+            if (memberExpr.getObject().isSuperIdentifier()) {
                 delegates.emitHelpers.emitGetSuperValue(memberExpr, true);
                 delegates.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());
                 compilerContext.emitter.emitOpcodeU16(Opcode.APPLY, 0);
@@ -225,7 +225,7 @@ final class ExpressionCallMemberCompiler {
     }
 
     void compileMemberExpression(MemberExpression memberExpr) {
-        if (AstUtils.isSuperMemberExpression(memberExpr)) {
+        if (memberExpr.getObject().isSuperIdentifier()) {
             delegates.emitHelpers.emitGetSuperValue(memberExpr, false);
             return;
         }

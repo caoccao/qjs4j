@@ -70,22 +70,6 @@ public final class ForStatement extends Statement {
         return yieldInside;
     }
 
-    @Override
-    public List<VariableDeclarator> getVarDeclarators() {
-        if (varDeclarators == null) {
-            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
-            if (init instanceof VariableDeclaration variableDeclaration
-                    && variableDeclaration.getKind() == VariableKind.VAR) {
-                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
-            }
-            if (body != null) {
-                collectedVarDeclarators.addAll(body.getVarDeclarators());
-            }
-            varDeclarators = collectedVarDeclarators;
-        }
-        return varDeclarators;
-    }
-
     public Statement getBody() {
         return body;
     }
@@ -100,6 +84,22 @@ public final class ForStatement extends Statement {
 
     public Expression getUpdate() {
         return update;
+    }
+
+    @Override
+    public List<VariableDeclarator> getVarDeclarators() {
+        if (varDeclarators == null) {
+            List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();
+            if (init instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                collectedVarDeclarators.addAll(variableDeclaration.getDeclarations());
+            }
+            if (body != null) {
+                collectedVarDeclarators.addAll(body.getVarDeclarators());
+            }
+            varDeclarators = collectedVarDeclarators;
+        }
+        return varDeclarators;
     }
 
 }

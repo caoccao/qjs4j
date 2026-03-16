@@ -62,6 +62,18 @@ public final class TryStatement extends Statement {
         return yieldInside;
     }
 
+    public BlockStatement getBlock() {
+        return block;
+    }
+
+    public BlockStatement getFinalizer() {
+        return finalizer;
+    }
+
+    public CatchClause getHandler() {
+        return handler;
+    }
+
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
@@ -78,18 +90,6 @@ public final class TryStatement extends Statement {
             varDeclarators = collectedVarDeclarators;
         }
         return varDeclarators;
-    }
-
-    public BlockStatement getBlock() {
-        return block;
-    }
-
-    public BlockStatement getFinalizer() {
-        return finalizer;
-    }
-
-    public CatchClause getHandler() {
-        return handler;
     }
 
     public static final class CatchClause extends ASTNode {

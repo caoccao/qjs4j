@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.List;
+
 /**
  * Represents an identifier.
  * Identifiers can be used as expressions and as patterns in destructuring.
@@ -46,6 +48,14 @@ public final class Identifier extends Expression {
             }
         }
         return yieldInside;
+    }
+
+    @Override
+    public List<String> getBoundNames() {
+        if (boundNames == null) {
+            boundNames = List.of(name);
+        }
+        return boundNames;
     }
 
     public String getName() {

@@ -84,6 +84,11 @@ public final class FunctionExpression extends Expression {
         return restParameter;
     }
 
+    @Override
+    public boolean isAnonymousFunction() {
+        return id == null;
+    }
+
     public boolean isAsync() {
         return isAsync;
     }

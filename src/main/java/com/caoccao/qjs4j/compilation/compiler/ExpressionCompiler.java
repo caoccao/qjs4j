@@ -533,7 +533,7 @@ final class ExpressionCompiler {
                     } else if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
                         // Non-computed identifier key: use DEFINE_FIELD with atom
                         compileExpression(prop.getValue());
-                        if (isAnonymousFunctionDefinition(prop.getValue())) {
+                        if (prop.getValue().isAnonymousFunction()) {
                             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
                         }
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_FIELD, id.getName());
@@ -543,7 +543,7 @@ final class ExpressionCompiler {
                         compileExpression(prop.getKey());
                         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         compileExpression(prop.getValue());
-                        if (isAnonymousFunctionDefinition(prop.getValue())) {
+                        if (prop.getValue().isAnonymousFunction()) {
                             compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
                         }
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
@@ -816,7 +816,7 @@ final class ExpressionCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
-                if (AstUtils.isSuperMemberExpression(memberExpr)) {
+                if (memberExpr.getObject().isSuperIdentifier()) {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -1521,19 +1521,6 @@ final class ExpressionCompiler {
 
         compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
         return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
-    }
-
-    private boolean isAnonymousFunctionDefinition(Expression expression) {
-        if (expression instanceof ArrowFunctionExpression) {
-            return true;
-        }
-        if (expression instanceof FunctionExpression functionExpression) {
-            return functionExpression.getId() == null;
-        }
-        if (expression instanceof ClassExpression classExpression) {
-            return classExpression.getId() == null;
-        }
-        return false;
     }
 
     private boolean isProtoDataProperty(ObjectExpressionProperty property) {
