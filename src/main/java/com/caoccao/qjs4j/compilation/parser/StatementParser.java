@@ -85,96 +85,30 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private void collectPatternBoundNames(Pattern pattern, Set<String> names) {
-        if (pattern instanceof Identifier identifier) {
-            if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(identifier.getName())) {
-                throw new JSSyntaxErrorException("Unexpected 'await' keyword");
-            }
-            names.add(identifier.getName());
-            return;
-        }
-        if (pattern instanceof ArrayPattern arrayPattern) {
-            for (Pattern element : arrayPattern.getElements()) {
-                if (element != null) {
-                    collectPatternBoundNames(element, names);
+        List<String> boundNames = pattern.getBoundNames();
+        if (parserContext.inClassStaticInit) {
+            for (String name : boundNames) {
+                if (JSKeyword.AWAIT.equals(name)) {
+                    throw new JSSyntaxErrorException("Unexpected 'await' keyword");
                 }
             }
-            return;
         }
-        if (pattern instanceof ObjectPattern objectPattern) {
-            for (ObjectPatternProperty property : objectPattern.getProperties()) {
-                collectPatternBoundNames(property.getValue(), names);
-            }
-            if (objectPattern.getRestElement() != null) {
-                collectPatternBoundNames(objectPattern.getRestElement().getArgument(), names);
-            }
-            return;
-        }
-        if (pattern instanceof RestElement restElement) {
-            collectPatternBoundNames(restElement.getArgument(), names);
-        }
+        names.addAll(boundNames);
     }
 
     private void collectPatternBoundNamesAndCheckDuplicates(Pattern pattern, Set<String> names) {
-        if (pattern instanceof Identifier identifier) {
-            String name = identifier.getName();
+        for (String name : pattern.getBoundNames()) {
             if (parserContext.inClassStaticInit && JSKeyword.AWAIT.equals(name)) {
                 throw new JSSyntaxErrorException("Unexpected 'await' keyword");
             }
             if (!names.add(name)) {
                 throw new JSSyntaxErrorException("Identifier '" + name + "' has already been declared");
             }
-            return;
-        }
-        if (pattern instanceof ArrayPattern arrayPattern) {
-            for (Pattern element : arrayPattern.getElements()) {
-                if (element != null) {
-                    collectPatternBoundNamesAndCheckDuplicates(element, names);
-                }
-            }
-            return;
-        }
-        if (pattern instanceof ObjectPattern objectPattern) {
-            for (ObjectPatternProperty property : objectPattern.getProperties()) {
-                collectPatternBoundNamesAndCheckDuplicates(property.getValue(), names);
-            }
-            if (objectPattern.getRestElement() != null) {
-                collectPatternBoundNamesAndCheckDuplicates(objectPattern.getRestElement().getArgument(), names);
-            }
-            return;
-        }
-        if (pattern instanceof AssignmentPattern assignmentPattern) {
-            collectPatternBoundNamesAndCheckDuplicates(assignmentPattern.getLeft(), names);
-            return;
-        }
-        if (pattern instanceof RestElement restElement) {
-            collectPatternBoundNamesAndCheckDuplicates(restElement.getArgument(), names);
         }
     }
 
-    /**
-     * Collect binding names from a pattern (identifier, array, object destructuring).
-     */
     private void collectPatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
-        if (pattern instanceof Identifier id) {
-            consumer.accept(id.getName());
-        } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPatternProperty prop : objPat.getProperties()) {
-                collectPatternNames(prop.getValue(), consumer);
-            }
-            if (objPat.getRestElement() != null) {
-                collectPatternNames(objPat.getRestElement(), consumer);
-            }
-        } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.getElements()) {
-                if (elem != null) {
-                    collectPatternNames(elem, consumer);
-                }
-            }
-        } else if (pattern instanceof RestElement rest) {
-            collectPatternNames(rest.getArgument(), consumer);
-        } else if (pattern instanceof AssignmentPattern assign) {
-            collectPatternNames(assign.getLeft(), consumer);
-        }
+        pattern.getBoundNames().forEach(consumer);
     }
 
     private void collectVarDeclaredNames(Statement statement, Set<String> varNames) {

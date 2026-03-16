@@ -169,29 +169,6 @@ public final class Parser {
         this.delegates = new ParserDelegates(parserContext);
     }
 
-    private void collectModulePatternNames(Pattern pattern, java.util.function.Consumer<String> consumer) {
-        if (pattern instanceof Identifier id) {
-            consumer.accept(id.getName());
-        } else if (pattern instanceof ObjectPattern objPat) {
-            for (ObjectPatternProperty prop : objPat.getProperties()) {
-                collectModulePatternNames(prop.getValue(), consumer);
-            }
-            if (objPat.getRestElement() != null) {
-                collectModulePatternNames(objPat.getRestElement(), consumer);
-            }
-        } else if (pattern instanceof ArrayPattern arrayPat) {
-            for (Pattern elem : arrayPat.getElements()) {
-                if (elem != null) {
-                    collectModulePatternNames(elem, consumer);
-                }
-            }
-        } else if (pattern instanceof RestElement rest) {
-            collectModulePatternNames(rest.getArgument(), consumer);
-        } else if (pattern instanceof AssignmentPattern assign) {
-            collectModulePatternNames(assign.getLeft(), consumer);
-        }
-    }
-
     // Package-private: used by LiteralParser for nested template expression parsing
     Token currentToken() {
         return parserContext.currentToken;
@@ -255,7 +232,7 @@ public final class Parser {
             if (stmt instanceof VariableDeclaration varDecl) {
                 boolean isVar = varDecl.getKind() == VariableKind.VAR;
                 for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-                    collectModulePatternNames(declarator.getId(), name -> {
+                    declarator.getId().getBoundNames().forEach(name -> {
                         allBoundNames.add(name);
                         if (isVar) {
                             if (lexicalNames.contains(name)) {

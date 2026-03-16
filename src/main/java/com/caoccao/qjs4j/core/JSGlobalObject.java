@@ -2126,10 +2126,10 @@ public final class JSGlobalObject {
             Set<String> functionVarEnvironmentNames = new HashSet<>();
             if (functionLikeExpression instanceof FunctionExpression functionExpression) {
                 for (Pattern parameter : functionExpression.getParams()) {
-                    collectPatternNames(parameter, functionVarEnvironmentNames);
+                    functionVarEnvironmentNames.addAll(parameter.getBoundNames());
                 }
                 if (functionExpression.getRestParameter() != null) {
-                    collectPatternNames(functionExpression.getRestParameter().getArgument(), functionVarEnvironmentNames);
+                    functionVarEnvironmentNames.addAll(functionExpression.getRestParameter().getArgument().getBoundNames());
                 }
                 collectVarEnvironmentNamesFromStatements(functionExpression.getBody().getBody(), bodyVarNames);
                 functionVarEnvironmentNames.addAll(bodyVarNames);
@@ -2137,10 +2137,10 @@ public final class JSGlobalObject {
             }
             if (functionLikeExpression instanceof ArrowFunctionExpression arrowFunctionExpression) {
                 for (Pattern parameter : arrowFunctionExpression.getParams()) {
-                    collectPatternNames(parameter, functionVarEnvironmentNames);
+                    functionVarEnvironmentNames.addAll(parameter.getBoundNames());
                 }
                 if (arrowFunctionExpression.getRestParameter() != null) {
-                    collectPatternNames(arrowFunctionExpression.getRestParameter().getArgument(), functionVarEnvironmentNames);
+                    functionVarEnvironmentNames.addAll(arrowFunctionExpression.getRestParameter().getArgument().getBoundNames());
                 }
                 if (arrowFunctionExpression.getBody() instanceof BlockStatement blockStatement) {
                     collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), bodyVarNames);
@@ -2170,29 +2170,6 @@ public final class JSGlobalObject {
             return -1;
         }
 
-        private static void collectPatternNames(Pattern pattern, Set<String> names) {
-            if (pattern instanceof Identifier identifier) {
-                names.add(identifier.getName());
-            } else if (pattern instanceof ArrayPattern arrayPattern) {
-                for (Pattern element : arrayPattern.getElements()) {
-                    if (element != null) {
-                        collectPatternNames(element, names);
-                    }
-                }
-            } else if (pattern instanceof ObjectPattern objectPattern) {
-                for (ObjectPatternProperty property : objectPattern.getProperties()) {
-                    collectPatternNames(property.getValue(), names);
-                }
-                if (objectPattern.getRestElement() != null) {
-                    collectPatternNames(objectPattern.getRestElement().getArgument(), names);
-                }
-            } else if (pattern instanceof RestElement restElement) {
-                collectPatternNames(restElement.getArgument(), names);
-            } else if (pattern instanceof AssignmentPattern assignmentPattern) {
-                collectPatternNames(assignmentPattern.getLeft(), names);
-            }
-        }
-
         private static void collectVarEnvironmentNamesFromStatement(Statement statement, Set<String> names) {
             if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
                 names.add(functionDeclaration.getId().getName());
@@ -2201,7 +2178,7 @@ public final class JSGlobalObject {
             if (statement instanceof VariableDeclaration variableDeclaration
                     && variableDeclaration.getKind() == VariableKind.VAR) {
                 for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                    collectPatternNames(declaration.getId(), names);
+                    names.addAll(declaration.getId().getBoundNames());
                 }
                 return;
             }
@@ -2220,7 +2197,7 @@ public final class JSGlobalObject {
                 if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
                     for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        collectPatternNames(declaration.getId(), names);
+                        names.addAll(declaration.getId().getBoundNames());
                     }
                 }
                 collectVarEnvironmentNamesFromStatement(forStatement.getBody(), names);
@@ -2230,7 +2207,7 @@ public final class JSGlobalObject {
                 if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
                     for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        collectPatternNames(declaration.getId(), names);
+                        names.addAll(declaration.getId().getBoundNames());
                     }
                 }
                 collectVarEnvironmentNamesFromStatement(forInStatement.getBody(), names);
@@ -2240,7 +2217,7 @@ public final class JSGlobalObject {
                 if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
                         && variableDeclaration.getKind() == VariableKind.VAR) {
                     for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
-                        collectPatternNames(declaration.getId(), names);
+                        names.addAll(declaration.getId().getBoundNames());
                     }
                 }
                 collectVarEnvironmentNamesFromStatement(forOfStatement.getBody(), names);
@@ -2264,7 +2241,7 @@ public final class JSGlobalObject {
                 collectVarEnvironmentNamesFromStatements(tryStatement.getBlock().getBody(), names);
                 if (tryStatement.getHandler() != null) {
                     if (tryStatement.getHandler().getParam() != null) {
-                        collectPatternNames(tryStatement.getHandler().getParam(), names);
+                        names.addAll(tryStatement.getHandler().getParam().getBoundNames());
                     }
                     collectVarEnvironmentNamesFromStatements(tryStatement.getHandler().getBody().getBody(), names);
                 }

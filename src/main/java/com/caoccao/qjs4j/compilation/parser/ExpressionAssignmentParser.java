@@ -50,6 +50,37 @@ final class ExpressionAssignmentParser {
         this.expressions = expressions;
     }
 
+    /**
+     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
+     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
+     * LexicallyDeclaredNames of AsyncFunctionBody / ConciseBody."
+     */
+    static void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern pattern : params) {
+            paramNames.addAll(pattern.getBoundNames());
+        }
+        if (restParameter != null) {
+            paramNames.addAll(restParameter.getArgument().getBoundNames());
+        }
+        if (paramNames.isEmpty()) {
+            return;
+        }
+        for (Statement statement : body) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && (variableDeclaration.getKind() == VariableKind.LET
+                    || variableDeclaration.getKind() == VariableKind.CONST)) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    for (String declaredName : declarator.getId().getBoundNames()) {
+                        if (paramNames.contains(declaredName)) {
+                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private ArrayPattern convertArrowArrayExpressionToPattern(ArrayExpression arrayExpression) {
         List<Pattern> elements = new ArrayList<>();
         for (int elementIndex = 0; elementIndex < arrayExpression.getElements().size(); elementIndex++) {
@@ -157,38 +188,6 @@ final class ExpressionAssignmentParser {
         return expression;
     }
 
-    private List<String> extractBoundNames(Pattern pattern) {
-        if (pattern instanceof Identifier identifier) {
-            return List.of(identifier.getName());
-        }
-        if (pattern instanceof ObjectPattern objectPattern) {
-            List<String> names = new ArrayList<>();
-            for (ObjectPatternProperty property : objectPattern.getProperties()) {
-                names.addAll(extractBoundNames(property.getValue()));
-            }
-            if (objectPattern.getRestElement() != null) {
-                names.addAll(extractBoundNames(objectPattern.getRestElement().getArgument()));
-            }
-            return names;
-        }
-        if (pattern instanceof ArrayPattern arrayPattern) {
-            List<String> names = new ArrayList<>();
-            for (Pattern element : arrayPattern.getElements()) {
-                if (element != null) {
-                    names.addAll(extractBoundNames(element));
-                }
-            }
-            return names;
-        }
-        if (pattern instanceof AssignmentPattern assignmentPattern) {
-            return extractBoundNames(assignmentPattern.getLeft());
-        }
-        if (pattern instanceof RestElement restElement) {
-            return extractBoundNames(restElement.getArgument());
-        }
-        return List.of();
-    }
-
     private boolean hasTrailingCommaAfterRestElement(ArrayExpression arrayExpression, int assignmentOperatorOffset) {
         String source = parserContext.lexer.getSource();
         int startOffset = arrayExpression.getLocation().offset();
@@ -279,23 +278,6 @@ final class ExpressionAssignmentParser {
         return false;
     }
 
-    private boolean isSimpleParameterList(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
-        if (restParameter != null) {
-            return false;
-        }
-        for (Pattern pattern : params) {
-            if (!(pattern instanceof Identifier)) {
-                return false;
-            }
-        }
-        for (Expression defaultExpression : defaults) {
-            if (defaultExpression != null) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private void parseArrowParameterExpression(
             Expression expression,
             List<Pattern> params,
@@ -379,7 +361,9 @@ final class ExpressionAssignmentParser {
                     List<Expression> singleDefault = new ArrayList<>();
                     singleDefault.add(null);
                     validateArrowParameters(List.of(param), singleDefault, null, body);
-                    validateFormalsBodyDuplicate(List.of(param), null, body);
+                    if (body instanceof BlockStatement blockBody) {
+                        validateFormalsBodyDuplicate(List.of(param), null, blockBody.getBody());
+                    }
 
                     SourceLocation fullLocation = new SourceLocation(
                             asyncLocation.line(),
@@ -409,7 +393,9 @@ final class ExpressionAssignmentParser {
                         // Async arrows have the same early errors as regular arrows (spec 15.8.1)
                         validateArrowParameters(funcParams.params(), funcParams.defaults(),
                                 funcParams.restParameter(), body);
-                        validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), body);
+                        if (body instanceof BlockStatement blockBody) {
+                            validateFormalsBodyDuplicate(funcParams.params(), funcParams.restParameter(), blockBody.getBody());
+                        }
 
                         SourceLocation fullLocation = new SourceLocation(
                                 location.line(),
@@ -755,7 +741,7 @@ final class ExpressionAssignmentParser {
         boolean strictParameters = parserContext.strictMode || bodyHasUseStrict;
         Set<String> seen = new HashSet<>();
         for (Pattern pattern : params) {
-            for (String parameterName : extractBoundNames(pattern)) {
+            for (String parameterName : pattern.getBoundNames()) {
                 if (!seen.add(parameterName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
@@ -765,7 +751,7 @@ final class ExpressionAssignmentParser {
             }
         }
         if (restParameter != null) {
-            for (String restName : extractBoundNames(restParameter.getArgument())) {
+            for (String restName : restParameter.getArgument().getBoundNames()) {
                 if (!seen.add(restName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
                 }
@@ -774,7 +760,7 @@ final class ExpressionAssignmentParser {
                 }
             }
         }
-        if (bodyHasUseStrict && !isSimpleParameterList(params, defaults, restParameter)) {
+        if (bodyHasUseStrict && AstUtils.hasNonSimpleParameters(params, defaults, restParameter)) {
             throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
         }
     }
@@ -839,40 +825,6 @@ final class ExpressionAssignmentParser {
             return;
         }
         validateAssignmentPatternTarget(expression, assignmentBoundaryOffset);
-    }
-
-    /**
-     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
-     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
-     * LexicallyDeclaredNames of AsyncFunctionBody / ConciseBody."
-     */
-    private void validateFormalsBodyDuplicate(List<Pattern> params, RestParameter restParameter, ASTNode body) {
-        if (!(body instanceof BlockStatement blockStatement)) {
-            return;
-        }
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern pattern : params) {
-            paramNames.addAll(extractBoundNames(pattern));
-        }
-        if (restParameter != null) {
-            paramNames.addAll(extractBoundNames(restParameter.getArgument()));
-        }
-        if (paramNames.isEmpty()) {
-            return;
-        }
-        for (Statement statement : blockStatement.getBody()) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && (variableDeclaration.getKind() == VariableKind.LET
-                    || variableDeclaration.getKind() == VariableKind.CONST)) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    for (String declaredName : extractBoundNames(declarator.getId())) {
-                        if (paramNames.contains(declaredName)) {
-                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
-                        }
-                    }
-                }
-            }
-        }
     }
 
     private void validateObjectAssignmentPatternTarget(ObjectExpression objectExpression, int assignmentOperatorOffset) {

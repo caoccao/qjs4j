@@ -29,38 +29,6 @@ import java.util.*;
  * Extracted from the monolithic Parser class as part of the parser refactoring.
  */
 record FunctionClassParser(ParserContext parserContext, ParserDelegates delegates) {
-    /**
-     * Extract all bound identifier names from a pattern.
-     * Used for strict mode parameter validation.
-     */
-    private static List<String> extractBoundNames(Pattern pattern) {
-        if (pattern instanceof Identifier id) {
-            return List.of(id.getName());
-        } else if (pattern instanceof ObjectPattern objPattern) {
-            List<String> names = new ArrayList<>();
-            for (ObjectPatternProperty prop : objPattern.getProperties()) {
-                names.addAll(extractBoundNames(prop.getValue()));
-            }
-            if (objPattern.getRestElement() != null) {
-                names.addAll(extractBoundNames(objPattern.getRestElement().getArgument()));
-            }
-            return names;
-        } else if (pattern instanceof ArrayPattern arrPattern) {
-            List<String> names = new ArrayList<>();
-            for (Pattern element : arrPattern.getElements()) {
-                if (element != null) {
-                    names.addAll(extractBoundNames(element));
-                }
-            }
-            return names;
-        } else if (pattern instanceof AssignmentPattern assignPattern) {
-            return extractBoundNames(assignPattern.getLeft());
-        } else if (pattern instanceof RestElement restElement) {
-            return extractBoundNames(restElement.getArgument());
-        }
-        return List.of();
-    }
-
     private static String getSimpleClassElementName(Expression key) {
         if (key instanceof Identifier identifier) {
             return identifier.getName();
@@ -92,7 +60,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
     private void checkDuplicateParameters(FunctionParams funcParams) {
         Set<String> seen = new HashSet<>();
         for (Pattern param : funcParams.params()) {
-            List<String> boundNames = extractBoundNames(param);
+            List<String> boundNames = param.getBoundNames();
             for (String paramName : boundNames) {
                 if (!seen.add(paramName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
@@ -100,7 +68,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
         if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().getArgument());
+            List<String> restBoundNames = funcParams.restParameter().getArgument().getBoundNames();
             for (String restName : restBoundNames) {
                 if (!seen.add(restName)) {
                     throw new JSSyntaxErrorException("duplicate argument name not allowed in this context");
@@ -129,7 +97,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
 
         // Check parameter names for reserved names
         for (Pattern param : funcParams.params()) {
-            List<String> boundNames = extractBoundNames(param);
+            List<String> boundNames = param.getBoundNames();
             for (String paramName : boundNames) {
                 if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
@@ -137,7 +105,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             }
         }
         if (funcParams.restParameter() != null) {
-            List<String> restBoundNames = extractBoundNames(funcParams.restParameter().getArgument());
+            List<String> restBoundNames = funcParams.restParameter().getArgument().getBoundNames();
             for (String restName : restBoundNames) {
                 if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
@@ -192,22 +160,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.functionNesting--;
     }
 
-    private boolean isSimpleParameterList(FunctionParams funcParams) {
-        if (funcParams.restParameter() != null) {
-            return false;
-        }
-        for (Pattern param : funcParams.params()) {
-            if (!(param instanceof Identifier)) {
-                return false;
-            }
-        }
-        for (Expression defaultExpression : funcParams.defaults()) {
-            if (defaultExpression != null) {
-                return false;
-            }
-        }
-        return true;
-    }
 
     /**
      * Parse a class declaration or expression.
@@ -765,7 +717,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Validate parameters when in strict mode (either from outer context or "use strict" directive)
         if (hasUseStrict || savedStrictMode) {
             checkStrictModeParameters(funcParams, funcName);
-        } else if (!isSimpleParameterList(funcParams)) {
+        } else if (AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter())) {
             // Per ES2024 15.2.1: It is a Syntax Error if IsSimpleParameterList is false
             // and BoundNames contains any duplicate elements.
             // Following QuickJS js_parse_function_check_names: duplicates are always
@@ -774,7 +726,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // Non-simple parameter list with "use strict" directive is always an error (spec 15.2.1)
-        if (hasUseStrict && !isSimpleParameterList(funcParams)) {
+        if (hasUseStrict && AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter())) {
             throw new JSSyntaxErrorException(
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
@@ -1046,7 +998,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
         // is a SyntaxError. Methods are already strict (class bodies are strict mode),
         // but we must still check for the explicit directive + non-simple params combo.
-        if (!isSimpleParameterList(funcParams) && body.hasUseStrictDirective()) {
+        if (AstUtils.hasNonSimpleParameters(funcParams.params(), funcParams.defaults(), funcParams.restParameter()) && body.hasUseStrictDirective()) {
             throw new JSSyntaxErrorException(
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }
@@ -1175,34 +1127,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
     }
 
-    /**
-     * Check that parameter BoundNames do not also appear in the LexicallyDeclaredNames of the body.
-     * Per spec: "It is a Syntax Error if BoundNames of FormalParameters also occurs in the
-     * LexicallyDeclaredNames of FunctionBody."
-     */
     private void validateFormalsBodyDuplicate(FunctionParams funcParams, List<Statement> body) {
-        Set<String> paramNames = new HashSet<>();
-        for (Pattern param : funcParams.params()) {
-            paramNames.addAll(extractBoundNames(param));
-        }
-        if (funcParams.restParameter() != null) {
-            paramNames.addAll(extractBoundNames(funcParams.restParameter().getArgument()));
-        }
-        if (paramNames.isEmpty()) {
-            return;
-        }
-        for (Statement statement : body) {
-            if (statement instanceof VariableDeclaration variableDeclaration
-                    && (variableDeclaration.getKind() == VariableKind.LET
-                    || variableDeclaration.getKind() == VariableKind.CONST)) {
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    for (String declaredName : extractBoundNames(declarator.getId())) {
-                        if (paramNames.contains(declaredName)) {
-                            throw new JSSyntaxErrorException("invalid redefinition of parameter name");
-                        }
-                    }
-                }
-            }
-        }
+        ExpressionAssignmentParser.validateFormalsBodyDuplicate(
+                funcParams.params(), funcParams.restParameter(), body);
     }
 }
