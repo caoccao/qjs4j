@@ -219,12 +219,12 @@ final class EmitHelpers {
             throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters");
         }
 
-        boolean hasNonSimpleParameters = CompilerContext.hasNonSimpleParameters(params, defaults, restParameter);
+        boolean hasNonSimpleParameters = AstUtils.hasNonSimpleParameters(params, defaults, restParameter);
         Set<String> originalTdzLocals = new HashSet<>(functionCompiler.context().tdzLocals);
         List<Set<String>> parameterBoundNames = new ArrayList<>(params.size());
         Set<String> pendingParameterTdzNames = new HashSet<>();
         for (Pattern pattern : params) {
-            Set<String> parameterNames = new HashSet<>(CompilerContext.extractBoundNames(pattern));
+            Set<String> parameterNames = new HashSet<>(AstUtils.extractBoundNames(pattern));
             parameterBoundNames.add(parameterNames);
             pendingParameterTdzNames.addAll(parameterNames);
         }

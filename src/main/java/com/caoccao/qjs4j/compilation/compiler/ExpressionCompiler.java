@@ -720,7 +720,7 @@ final class ExpressionCompiler {
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
                 boolean isLocalBinding = compilerContext.findLocalInScopes(id.getName()) != null
-                        || compilerContext.resolveCapturedBindingIndex(id.getName()) != null
+                        || compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName()) != null
                         || (JSArguments.NAME.equals(id.getName()) && !compilerContext.inGlobalScope)
                         || compilerContext.nonDeletableGlobalBindings.contains(id.getName());
                 if (isLocalBinding) {
@@ -787,7 +787,7 @@ final class ExpressionCompiler {
                     return;
                 }
 
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(id.getName());
+                Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName());
                 if (capturedIndex != null) {
                     // Captured binding.
                     compileExpression(operand);
@@ -816,7 +816,7 @@ final class ExpressionCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
                 }
             } else if (operand instanceof MemberExpression memberExpr) {
-                if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                if (AstUtils.isSuperMemberExpression(memberExpr)) {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -955,7 +955,7 @@ final class ExpressionCompiler {
                         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                     }
                 } else {
-                    Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+                    Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                     if (capturedIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                     } else {
@@ -1005,7 +1005,7 @@ final class ExpressionCompiler {
     }
 
     private void emitCapturedOrGlobalIdentifierLookup(String name) {
-        Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+        Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
         } else {
@@ -1087,7 +1087,7 @@ final class ExpressionCompiler {
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
-            Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
+            Integer withCapturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(withBindingName);
             if (withCapturedIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
             } else {
@@ -1151,7 +1151,7 @@ final class ExpressionCompiler {
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
-            Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
+            Integer withCapturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(withBindingName);
             if (withCapturedIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
             } else {
@@ -1223,7 +1223,7 @@ final class ExpressionCompiler {
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
-            Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
+            Integer withCapturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(withBindingName);
             if (withCapturedIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
             } else {

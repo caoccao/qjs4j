@@ -1727,6 +1727,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return capturedVarNames[captureSlot];
     }
 
+    public String[] getCapturedVarNames() {
+        return capturedVarNames;
+    }
+
     public IdentityHashMap<JSSymbol, JSSymbol> getClassPrivateSymbolRemap() {
         return classPrivateSymbolRemap;
     }

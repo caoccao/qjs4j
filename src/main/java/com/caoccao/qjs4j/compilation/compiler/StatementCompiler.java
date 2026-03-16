@@ -1303,7 +1303,7 @@ final class StatementCompiler {
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
-        compilerContext.pushWithObjectLocal(withObjectLocalIndex);
+        compilerContext.withObjectLocalStack.push(withObjectLocalIndex);
         try {
             if (withStmt.getBody() != null) {
                 compileStatement(withStmt.getBody());
@@ -1312,7 +1312,7 @@ final class StatementCompiler {
             // Do NOT clear the with-object local to undefined here.
             // Closures defined inside the with block capture a VarRef to this local
             // and need the with-object to remain accessible after the block exits.
-            compilerContext.popWithObjectLocal();
+            compilerContext.withObjectLocalStack.pop();
         }
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();

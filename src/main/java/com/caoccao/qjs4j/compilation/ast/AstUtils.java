@@ -16,9 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.*;
 
 /**
  * Utility methods for AST analysis.
@@ -26,6 +26,20 @@ import java.util.Set;
 public final class AstUtils {
 
     private AstUtils() {
+    }
+
+    public static Set<String> buildParameterNames(List<Pattern> params, List<Statement> body) {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern param : params) {
+            paramNames.addAll(extractBoundNames(param));
+        }
+        if (!paramNames.contains(JSKeyword.ARGUMENTS)) {
+            boolean hasVarArguments = containsVarArgumentsDeclaration(body);
+            if (!hasVarArguments) {
+                paramNames.add(JSKeyword.ARGUMENTS);
+            }
+        }
+        return paramNames;
     }
 
     private static void collectBlockLexicals(List<Statement> stmts, Set<String> lexicals) {
@@ -267,10 +281,240 @@ public final class AstUtils {
         }
     }
 
+    public static int computeDefinedArgCount(List<Pattern> params, List<Expression> defaults, boolean hasRest) {
+        if (defaults == null) {
+            return params.size();
+        }
+        int count = 0;
+        for (int i = 0; i < params.size(); i++) {
+            if (i < defaults.size() && defaults.get(i) != null) {
+                break;
+            }
+            count++;
+        }
+        return count;
+    }
+
+    public static boolean containsVarArgumentsDeclaration(List<Statement> statements) {
+        for (Statement statement : statements) {
+            if (statementContainsVarArguments(statement)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static List<String> extractBoundNames(Pattern pattern) {
+        if (pattern instanceof Identifier id) {
+            return List.of(id.getName());
+        } else if (pattern instanceof ObjectPattern objPattern) {
+            List<String> names = new ArrayList<>();
+            for (ObjectPatternProperty prop : objPattern.getProperties()) {
+                names.addAll(extractBoundNames(prop.getValue()));
+            }
+            if (objPattern.getRestElement() != null) {
+                names.addAll(extractBoundNames(objPattern.getRestElement().getArgument()));
+            }
+            return names;
+        } else if (pattern instanceof ArrayPattern arrPattern) {
+            List<String> names = new ArrayList<>();
+            for (Pattern element : arrPattern.getElements()) {
+                if (element != null) {
+                    names.addAll(extractBoundNames(element));
+                }
+            }
+            return names;
+        } else if (pattern instanceof AssignmentPattern assignPattern) {
+            return extractBoundNames(assignPattern.getLeft());
+        } else if (pattern instanceof RestElement restElement) {
+            return extractBoundNames(restElement.getArgument());
+        }
+        return List.of();
+    }
+
+    public static String[] extractLocalVarNames(Map<Integer, String> localNamesByIndex, int count) {
+        if (count == 0) {
+            return null;
+        }
+        String[] names = new String[count];
+        for (var entry : localNamesByIndex.entrySet()) {
+            int index = entry.getKey();
+            String name = entry.getValue();
+            if (index >= 0 && index < count) {
+                names[index] = name;
+            }
+        }
+        return names;
+    }
+
+    public static String[] extractLocalVarNames(Collection<Map<Integer, String>> localNamesByIndexList, int localCount) {
+        if (localCount == 0) {
+            return null;
+        }
+        String[] names = new String[localCount];
+        for (Map<Integer, String> localNamesByIndex : localNamesByIndexList) {
+            for (var entry : localNamesByIndex.entrySet()) {
+                int index = entry.getKey();
+                String name = entry.getValue();
+                if (index >= 0 && index < localCount) {
+                    names[index] = name;
+                }
+            }
+        }
+        return names;
+    }
+
+    public static boolean hasNonSimpleParameters(List<Pattern> params, List<Expression> defaults, RestParameter restParameter) {
+        if (restParameter != null) {
+            return true;
+        }
+        if (defaults != null) {
+            for (Expression d : defaults) {
+                if (d != null) {
+                    return true;
+                }
+            }
+        }
+        if (params != null) {
+            for (Pattern param : params) {
+                if (!(param instanceof Identifier)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasUseStrictDirective(BlockStatement block, String sourceCode) {
+        if (block == null || block.getBody().isEmpty()) {
+            return false;
+        }
+
+        for (int statementIndex = 0; statementIndex < block.getBody().size(); statementIndex++) {
+            Statement statement = block.getBody().get(statementIndex);
+            if (!(statement instanceof ExpressionStatement expressionStatement)) {
+                break;
+            }
+            if (!(expressionStatement.getExpression() instanceof Literal literal)) {
+                break;
+            }
+            if (!(literal.getValue() instanceof String)) {
+                break;
+            }
+            if (!JSKeyword.USE_STRICT.equals(literal.getValue())) {
+                continue;
+            }
+            if (statementIndex == 0 && !isDirectiveStartAtBlockStart(block, literal, sourceCode)) {
+                return false;
+            }
+            if (sourceCode == null) {
+                return true;
+            }
+            SourceLocation literalLocation = literal.getLocation();
+            if (literalLocation != null && isRawUseStrictDirectiveAt(literalLocation.offset(), sourceCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static boolean isAnnexBSimpleFunctionDeclaration(FunctionDeclaration functionDeclaration) {
         return functionDeclaration != null
                 && !functionDeclaration.isAsync()
                 && !functionDeclaration.isGenerator();
+    }
+
+    private static boolean isDirectiveStartAtBlockStart(BlockStatement block, Literal literal, String sourceCode) {
+        if (sourceCode == null) {
+            return true;
+        }
+        SourceLocation blockLocation = block.getLocation();
+        SourceLocation literalLocation = literal.getLocation();
+        if (blockLocation == null || literalLocation == null) {
+            return true;
+        }
+        int scanStart = Math.max(0, blockLocation.offset() + 1);
+        int scanEnd = literalLocation.offset();
+        if (scanEnd < scanStart || scanEnd > sourceCode.length()) {
+            return true;
+        }
+        int index = scanStart;
+        while (index < scanEnd) {
+            char current = sourceCode.charAt(index);
+            if (Character.isWhitespace(current)) {
+                index++;
+                continue;
+            }
+            if (current == '/' && index + 1 < scanEnd) {
+                char next = sourceCode.charAt(index + 1);
+                if (next == '/') {
+                    index += 2;
+                    while (index < scanEnd) {
+                        char lineChar = sourceCode.charAt(index);
+                        if (lineChar == '\n' || lineChar == '\r') {
+                            break;
+                        }
+                        index++;
+                    }
+                    continue;
+                }
+                if (next == '*') {
+                    index += 2;
+                    while (index + 1 < scanEnd) {
+                        if (sourceCode.charAt(index) == '*' && sourceCode.charAt(index + 1) == '/') {
+                            index += 2;
+                            break;
+                        }
+                        index++;
+                    }
+                    continue;
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isRawUseStrictDirectiveAt(int offset, String sourceCode) {
+        if (offset < 0 || offset >= sourceCode.length()) {
+            return false;
+        }
+
+        char quote = sourceCode.charAt(offset);
+        if (quote != '\'' && quote != '"') {
+            return false;
+        }
+
+        final String strictDirective = JSKeyword.USE_STRICT;
+        int sourceIndex = offset + 1;
+        int directiveIndex = 0;
+        while (sourceIndex < sourceCode.length()) {
+            char current = sourceCode.charAt(sourceIndex);
+            if (current == quote) {
+                return directiveIndex == strictDirective.length();
+            }
+            if (current == '\\'
+                    || current == '\n'
+                    || current == '\r'
+                    || current == '\u2028'
+                    || current == '\u2029') {
+                return false;
+            }
+            if (directiveIndex >= strictDirective.length() || current != strictDirective.charAt(directiveIndex)) {
+                return false;
+            }
+            sourceIndex++;
+            directiveIndex++;
+        }
+        return false;
+    }
+
+    public static boolean isSuperIdentifier(Expression expression) {
+        return expression instanceof Identifier id && JSKeyword.SUPER.equals(id.getName());
+    }
+
+    public static boolean isSuperMemberExpression(MemberExpression memberExpression) {
+        return isSuperIdentifier(memberExpression.getObject());
     }
 
     /**
@@ -336,5 +580,76 @@ public final class AstUtils {
                 }
             }
         }
+    }
+
+    public static boolean statementContainsVarArguments(Statement statement) {
+        if (statement instanceof VariableDeclaration variableDeclaration
+                && variableDeclaration.getKind() == VariableKind.VAR) {
+            for (var declarator : variableDeclaration.getDeclarations()) {
+                if (declarator.getId() instanceof Identifier identifier
+                        && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
+                    return true;
+                }
+            }
+        }
+        if (statement instanceof BlockStatement blockStatement) {
+            return containsVarArgumentsDeclaration(blockStatement.getBody());
+        }
+        if (statement instanceof IfStatement ifStatement) {
+            if (statementContainsVarArguments(ifStatement.getConsequent())) {
+                return true;
+            }
+            if (ifStatement.getAlternate() != null) {
+                return statementContainsVarArguments(ifStatement.getAlternate());
+            }
+        }
+        if (statement instanceof ForStatement forStatement) {
+            if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.VAR) {
+                for (var declarator : variableDeclaration.getDeclarations()) {
+                    if (declarator.getId() instanceof Identifier identifier
+                            && JSKeyword.ARGUMENTS.equals(identifier.getName())) {
+                        return true;
+                    }
+                }
+            }
+            return statementContainsVarArguments(forStatement.getBody());
+        }
+        if (statement instanceof WhileStatement whileStatement) {
+            return statementContainsVarArguments(whileStatement.getBody());
+        }
+        if (statement instanceof DoWhileStatement doWhileStatement) {
+            return statementContainsVarArguments(doWhileStatement.getBody());
+        }
+        if (statement instanceof ForInStatement forInStatement) {
+            return statementContainsVarArguments(forInStatement.getBody());
+        }
+        if (statement instanceof ForOfStatement forOfStatement) {
+            return statementContainsVarArguments(forOfStatement.getBody());
+        }
+        if (statement instanceof SwitchStatement switchStatement) {
+            for (var switchCase : switchStatement.getCases()) {
+                if (containsVarArgumentsDeclaration(switchCase.getConsequent())) {
+                    return true;
+                }
+            }
+        }
+        if (statement instanceof TryStatement tryStatement) {
+            if (containsVarArgumentsDeclaration(tryStatement.getBlock().getBody())) {
+                return true;
+            }
+            if (tryStatement.getHandler() != null
+                    && containsVarArgumentsDeclaration(tryStatement.getHandler().getBody().getBody())) {
+                return true;
+            }
+            if (tryStatement.getFinalizer() != null
+                    && containsVarArgumentsDeclaration(tryStatement.getFinalizer().getBody())) {
+                return true;
+            }
+        }
+        if (statement instanceof LabeledStatement labeledStatement) {
+            return statementContainsVarArguments(labeledStatement.getBody());
+        }
+        return false;
     }
 }

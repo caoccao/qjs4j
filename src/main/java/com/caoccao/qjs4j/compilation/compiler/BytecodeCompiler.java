@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.ASTNode;
+import com.caoccao.qjs4j.compilation.ast.AstUtils;
 import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
@@ -77,7 +78,9 @@ public final class BytecodeCompiler {
                 : compilerContext.currentScope().getLocalCount();
         String[] localVarNames = compilerContext.scopes.isEmpty()
                 ? null
-                : CompilerContext.extractLocalVarNames(compilerContext.currentScope());
+                : AstUtils.extractLocalVarNames(
+                compilerContext.currentScope().getLocalNamesByIndex(),
+                compilerContext.currentScope().getLocalCount());
         return compilerContext.emitter.build(localCount, localVarNames);
     }
 

@@ -166,7 +166,7 @@ final class PatternCompiler {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 }
             } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+                Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
                     if (compilerContext.isCapturedBindingConst(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
@@ -183,7 +183,7 @@ final class PatternCompiler {
             if (memberExpr.isOptional()) {
                 throw new JSSyntaxErrorException("Invalid destructuring assignment target");
             }
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 // Stack starts with [value]
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -901,7 +901,7 @@ final class PatternCompiler {
         // Now assign using the pre-evaluated references
         // Stack: [pre-eval-values...] value
         if (target instanceof MemberExpression memberExpr) {
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP); // PUT_SUPER_VALUE leaves value
@@ -1119,7 +1119,7 @@ final class PatternCompiler {
             return 0; // hole
         }
         if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 // Pre-evaluate super reference: this, superObj, key
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);

@@ -179,7 +179,6 @@ final class FunctionClassCompiler {
         return false;
     }
 
-
     /**
      * Convert a pattern to a string representation for source generation.
      * Used when generating synthetic source for Function constructor.
@@ -255,6 +254,8 @@ final class FunctionClassCompiler {
         // eval('arguments') should throw SyntaxError)
         functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext
                 || compilerContext.inClassFieldInitializer;
+        // Inherit class inner name so eval() inside nested arrows can resolve it.
+        inheritClassInnerNameCapture(functionContext);
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -266,21 +267,22 @@ final class FunctionClassCompiler {
         }
 
         // Check for "use strict" directive if body is a block statement
-        if (arrowExpr.getBody() instanceof BlockStatement block && compilerContext.hasUseStrictDirective(block)) {
+        if (arrowExpr.getBody() instanceof BlockStatement block
+            && AstUtils.hasUseStrictDirective(block, compilerContext.sourceCode)) {
             functionContext.strictMode = true;
         }
 
-        boolean hasNonSimpleParameters = CompilerContext.hasNonSimpleParameters(
+        boolean hasNonSimpleParameters = AstUtils.hasNonSimpleParameters(
                 arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter());
         boolean hasArgumentsParameterBinding = false;
         for (Pattern parameter : arrowExpr.getParams()) {
-            if (CompilerContext.extractBoundNames(parameter).contains(JSArguments.NAME)) {
+            if (AstUtils.extractBoundNames(parameter).contains(JSArguments.NAME)) {
                 hasArgumentsParameterBinding = true;
                 break;
             }
         }
         if (!hasArgumentsParameterBinding && arrowExpr.getRestParameter() != null) {
-            hasArgumentsParameterBinding = CompilerContext.extractBoundNames(arrowExpr.getRestParameter().getArgument())
+            hasArgumentsParameterBinding = AstUtils.extractBoundNames(arrowExpr.getRestParameter().getArgument())
                     .contains(JSArguments.NAME);
         }
         boolean hasDirectEvalVarArgumentsInDefaults = containsDirectEvalVarArguments(arrowExpr.getDefaults());
@@ -361,7 +363,7 @@ final class FunctionClassCompiler {
                     // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
                     // into function var bindings when allowed.
                     Set<String> declarationParameterNames =
-                            CompilerContext.buildParameterNames(arrowExpr.getParams(), block.getBody());
+                            AstUtils.buildParameterNames(arrowExpr.getParams(), block.getBody());
                     funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(
                             block.getBody(), declarationParameterNames);
 
@@ -401,7 +403,9 @@ final class FunctionClassCompiler {
             }
 
             localCount = functionContext.currentScope().getLocalCount();
-            localVarNames = CompilerContext.extractLocalVarNames(functionContext.scopes, localCount);
+            localVarNames = AstUtils.extractLocalVarNames(
+                    functionContext.scopes.stream().map(CompilerScope::getLocalNamesByIndex).toList(),
+                    localCount);
         }
         if (enteredBodyScope) {
             functionContext.exitScope();
@@ -419,7 +423,7 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction
         // Arrow functions cannot be constructors
-        int definedArgCount = CompilerContext.computeDefinedArgCount(arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter() != null);
+        int definedArgCount = AstUtils.computeDefinedArgCount(arrowExpr.getParams(), arrowExpr.getDefaults(), arrowExpr.getRestParameter() != null);
         JSBytecodeFunction function = new JSBytecodeFunction(
                 compilerContext.context,
                 functionBytecode,
@@ -1091,10 +1095,12 @@ final class FunctionClassCompiler {
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
+        // Inherit class inner name so eval() inside nested functions can resolve it.
+        inheritClassInnerNameCapture(functionContext);
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (compilerContext.hasUseStrictDirective(funcDecl.getBody())) {
+        if (AstUtils.hasUseStrictDirective(funcDecl.getBody(), compilerContext.sourceCode)) {
             functionContext.strictMode = true;
         }
 
@@ -1156,7 +1162,7 @@ final class FunctionClassCompiler {
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        Set<String> declParamNames = CompilerContext.buildParameterNames(funcDecl.getParams(), funcDecl.getBody().getBody());
+        Set<String> declParamNames = AstUtils.buildParameterNames(funcDecl.getParams(), funcDecl.getBody().getBody());
         funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(), declParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
@@ -1180,7 +1186,9 @@ final class FunctionClassCompiler {
         }
 
         int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        String[] localVarNames = AstUtils.extractLocalVarNames(
+                functionContext.currentScope().getLocalNamesByIndex(),
+                functionContext.currentScope().getLocalCount());
         functionContext.exitScope();
 
         // Build the function bytecode
@@ -1190,7 +1198,8 @@ final class FunctionClassCompiler {
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(funcDecl.getBody());
+        boolean isStrict = functionContext.strictMode
+            || AstUtils.hasUseStrictDirective(funcDecl.getBody(), compilerContext.sourceCode);
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(funcDecl.getLocation());
@@ -1237,7 +1246,7 @@ final class FunctionClassCompiler {
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
-        int definedArgCount = CompilerContext.computeDefinedArgCount(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter() != null);
+        int definedArgCount = AstUtils.computeDefinedArgCount(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter() != null);
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators are NOT constructable
         boolean isFuncConstructor = !funcDecl.isAsync() && !funcDecl.isGenerator();
@@ -1256,7 +1265,7 @@ final class FunctionClassCompiler {
                 functionSource,  // source code for toString()
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter()));
+        function.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(funcDecl.getParams(), funcDecl.getDefaults(), funcDecl.getRestParameter()));
 
         delegates.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool
@@ -1324,10 +1333,12 @@ final class FunctionClassCompiler {
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = functionExpression.isAsync();
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
+        // Inherit class inner name so eval() inside nested functions can resolve it.
+        inheritClassInnerNameCapture(functionContext);
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (compilerContext.hasUseStrictDirective(functionExpression.getBody())) {
+        if (AstUtils.hasUseStrictDirective(functionExpression.getBody(), compilerContext.sourceCode)) {
             functionContext.strictMode = true;
         }
 
@@ -1345,11 +1356,11 @@ final class FunctionClassCompiler {
             boolean conflictsWithParameter = false;
             Set<String> allParamNames = new HashSet<>();
             for (Pattern param : functionExpression.getParams()) {
-                allParamNames.addAll(CompilerContext.extractBoundNames(param));
+                allParamNames.addAll(AstUtils.extractBoundNames(param));
             }
             conflictsWithParameter = allParamNames.contains(functionExpression.getId().getName());
             if (!conflictsWithParameter && functionExpression.getRestParameter() != null) {
-                List<String> restBoundNames = CompilerContext.extractBoundNames(functionExpression.getRestParameter().getArgument());
+                List<String> restBoundNames = AstUtils.extractBoundNames(functionExpression.getRestParameter().getArgument());
                 conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
             }
             if (!conflictsWithParameter) {
@@ -1415,7 +1426,7 @@ final class FunctionClassCompiler {
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
-        Set<String> exprParamNames = CompilerContext.buildParameterNames(functionExpression.getParams(), functionExpression.getBody().getBody());
+        Set<String> exprParamNames = AstUtils.buildParameterNames(functionExpression.getParams(), functionExpression.getBody().getBody());
         funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
@@ -1443,7 +1454,9 @@ final class FunctionClassCompiler {
             functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.getId().getName());
         }
         int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(functionContext.currentScope());
+        String[] localVarNames = AstUtils.extractLocalVarNames(
+                functionContext.currentScope().getLocalNamesByIndex(),
+                functionContext.currentScope().getLocalCount());
         functionContext.exitScope();
 
         // Build the function bytecode
@@ -1454,13 +1467,14 @@ final class FunctionClassCompiler {
 
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
-        boolean isStrict = functionContext.strictMode || compilerContext.hasUseStrictDirective(functionExpression.getBody());
+        boolean isStrict = functionContext.strictMode
+            || AstUtils.hasUseStrictDirective(functionExpression.getBody(), compilerContext.sourceCode);
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());
 
         // Create JSBytecodeFunction
-        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
+        int definedArgCount = AstUtils.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
         // Per ES spec FunctionAllocate: async functions, generator functions,
         // async generators, and getter/setter methods are NOT constructable
         boolean isFuncConstructor = !forceNonConstructor
@@ -1480,7 +1494,7 @@ final class FunctionClassCompiler {
                 isStrict,        // strict - detected from "use strict" directive in function body
                 functionSource   // source code for toString()
         );
-        function.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
+        function.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
         if (functionExpressionSelfLocalIndex != null) {
             function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
         }
@@ -1524,6 +1538,14 @@ final class FunctionClassCompiler {
         methodCtx.inGlobalScope = false;
         methodCtx.isInAsyncFunction = functionExpression.isAsync();
         methodCtx.isInGeneratorFunction = functionExpression.isGenerator();
+
+        // Force-capture the class inner name binding so eval() inside
+        // constructor/method body can resolve it at runtime.
+        if (isConstructor && methodName != null && !methodName.isEmpty()) {
+            methodCtx.captureResolver.resolveCapturedBindingIndex(methodName);
+            // Propagate to nested functions (arrows, etc.) so they also capture the name.
+            methodCtx.classInnerNameToCapture = methodName;
+        }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
         List<int[]> methodDestructuringParams = declareParameters(
@@ -1622,7 +1644,9 @@ final class FunctionClassCompiler {
         }
 
         int localCount = methodCtx.currentScope().getLocalCount();
-        String[] localVarNames = CompilerContext.extractLocalVarNames(methodCtx.scopes, localCount);
+        String[] localVarNames = AstUtils.extractLocalVarNames(
+                methodCtx.scopes.stream().map(CompilerScope::getLocalNamesByIndex).toList(),
+                localCount);
         methodCtx.exitScope();
 
         // Build the method bytecode
@@ -1630,7 +1654,7 @@ final class FunctionClassCompiler {
 
         // Create JSBytecodeFunction for the method
         // Private symbols are accessed via PUSH_CONST (bytecode constants), not closureVars
-        int definedArgCount = CompilerContext.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
+        int definedArgCount = AstUtils.computeDefinedArgCount(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter() != null);
 
         // Extract method source code from original source for Function.prototype.toString
         String methodSource = compilerContext.extractSourceCode(functionExpression.getLocation());
@@ -1650,7 +1674,7 @@ final class FunctionClassCompiler {
                 true,            // strict - classes are always strict mode
                 methodSource     // source code for toString()
         );
-        methodFunc.setHasParameterExpressions(CompilerContext.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
+        methodFunc.setHasParameterExpressions(AstUtils.hasNonSimpleParameters(functionExpression.getParams(), functionExpression.getDefaults(), functionExpression.getRestParameter()));
 
         // Set up capture source infos for outer variable closure capture
         delegates.emitHelpers.emitCapturedValues(methodCompiler, methodFunc);
@@ -1730,6 +1754,13 @@ final class FunctionClassCompiler {
         blockCtx.enterScope();
         blockCtx.inGlobalScope = false;
 
+        // Force-capture the class inner name binding so eval() inside the
+        // static block can resolve it at runtime.
+        if (className != null && !className.isEmpty()) {
+            blockCtx.captureResolver.resolveCapturedBindingIndex(className);
+            blockCtx.classInnerNameToCapture = className;
+        }
+
         // Compile all statements in the static block
         for (Statement stmt : staticBlock.getBody()) {
             blockDelegates.statements.compileStatement(stmt);
@@ -1789,6 +1820,14 @@ final class FunctionClassCompiler {
 
         initCtx.enterScope();
         initCtx.inGlobalScope = false;
+
+        // Force-capture the class inner name binding so eval() inside the
+        // initializer can resolve it at runtime (QuickJS: resolve_scope_var
+        // walks the parent scope chain for eval closures).
+        if (className != null && !className.isEmpty()) {
+            initCtx.captureResolver.resolveCapturedBindingIndex(className);
+            initCtx.classInnerNameToCapture = className;
+        }
 
         // Stack: this
         initCtx.emitter.emitOpcode(Opcode.PUSH_THIS);
@@ -1909,6 +1948,13 @@ final class FunctionClassCompiler {
 
         ctorCtx.enterScope();
         ctorCtx.inGlobalScope = false;
+
+        // Force-capture the class inner name binding so eval() inside the
+        // default constructor can resolve it at runtime.
+        if (className != null && !className.isEmpty()) {
+            ctorCtx.captureResolver.resolveCapturedBindingIndex(className);
+            ctorCtx.classInnerNameToCapture = className;
+        }
 
         // Default derived constructor semantics:
         // constructor(...args) { super(...args); }
@@ -2070,6 +2116,14 @@ final class FunctionClassCompiler {
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
             funcDelegates.patterns.compilePatternAssignment(restParameter.getArgument());
+        }
+    }
+
+    private void inheritClassInnerNameCapture(CompilerContext targetContext) {
+        String classInnerName = compilerContext.classInnerNameToCapture;
+        if (classInnerName != null) {
+            targetContext.classInnerNameToCapture = classInnerName;
+            targetContext.captureResolver.resolveCapturedBindingIndex(classInnerName);
         }
     }
 

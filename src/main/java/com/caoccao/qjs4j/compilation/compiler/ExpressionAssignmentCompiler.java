@@ -62,7 +62,7 @@ final class ExpressionAssignmentCompiler {
 
         if (operator != AssignmentOperator.ASSIGN) {
             if (left instanceof MemberExpression memberExpr) {
-                if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                if (AstUtils.isSuperMemberExpression(memberExpr)) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(4);
@@ -113,7 +113,7 @@ final class ExpressionAssignmentCompiler {
             // ASSIGN operator — ensure correct LHS-before-RHS evaluation order
             // for computed member expressions and super member expressions (spec 13.15.2)
             if (left instanceof MemberExpression memberExpr) {
-                if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                if (AstUtils.isSuperMemberExpression(memberExpr)) {
                     // Evaluate super reference and property key before RHS
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
@@ -156,7 +156,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 }
             } else {
-                if (compilerContext.isSuperMemberExpression(memberExpr)) {
+                if (AstUtils.isSuperMemberExpression(memberExpr)) {
                     // Stack: [this, superObj, key, newValue] → PUT_SUPER_VALUE pops value from top
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 } else if (memberExpr.isComputed()) {
@@ -190,7 +190,7 @@ final class ExpressionAssignmentCompiler {
         String name = identifier.getName();
         AssignmentOperator operator = assignExpr.getOperator();
         Integer localIndex = compilerContext.findLocalInScopes(name);
-        Integer capturedIndex = localIndex == null ? compilerContext.resolveCapturedBindingIndex(name) : null;
+        Integer capturedIndex = localIndex == null ? compilerContext.captureResolver.resolveCapturedBindingIndex(name) : null;
         boolean isConstLocalBinding = localIndex != null && compilerContext.isLocalBindingConst(name);
         boolean isConstCapturedBinding = capturedIndex != null && compilerContext.isCapturedBindingConst(name);
 
@@ -323,7 +323,7 @@ final class ExpressionAssignmentCompiler {
         if (left instanceof Identifier) {
             depthLvalue = 0;
         } else if (left instanceof MemberExpression memberExpr) {
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 depthLvalue = 3;
             } else if (memberExpr.isComputed()) {
                 depthLvalue = 2;
@@ -347,7 +347,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
                 }
             } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+                Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF_CHECK, capturedIndex);
                 } else {
@@ -355,7 +355,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(4);
@@ -433,7 +433,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC, localIndex);
                 }
             } else {
-                Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+                Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
                     if (compilerContext.isCapturedBindingConst(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
@@ -447,7 +447,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
         } else if (left instanceof MemberExpression memberExpr) {
-            if (compilerContext.isSuperMemberExpression(memberExpr)) {
+            if (AstUtils.isSuperMemberExpression(memberExpr)) {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
@@ -493,7 +493,7 @@ final class ExpressionAssignmentCompiler {
             return;
         }
 
-        Integer capturedIndex = compilerContext.resolveCapturedBindingIndex(name);
+        Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
         if (capturedIndex != null) {
             emitScopedReference(Opcode.MAKE_VAR_REF_REF, name, capturedIndex);
             return;
@@ -532,7 +532,7 @@ final class ExpressionAssignmentCompiler {
                 emitWithCandidateReference(name, jumpToResolvedOffsets);
                 continue;
             }
-            Integer withCapturedIndex = compilerContext.resolveCapturedBindingIndex(withBindingName);
+            Integer withCapturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(withBindingName);
             if (withCapturedIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
                 emitWithCandidateReference(name, jumpToResolvedOffsets);

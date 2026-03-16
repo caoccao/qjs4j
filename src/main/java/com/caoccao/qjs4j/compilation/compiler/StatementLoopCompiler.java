@@ -186,7 +186,7 @@ final class StatementLoopCompiler {
             compilerContext.enterScope();
             delegates.patterns.declarePatternVariables(declarationPattern);
             if (declarationPattern != null) {
-                for (String boundName : CompilerContext.extractBoundNames(declarationPattern)) {
+                for (String boundName : AstUtils.extractBoundNames(declarationPattern)) {
                     Integer localIndex = compilerContext.currentScope().getLocal(boundName);
                     if (localIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
@@ -316,7 +316,7 @@ final class StatementLoopCompiler {
         if (hasHeadTdzScope && pattern != null) {
             compilerContext.enterScope();
             delegates.patterns.declarePatternVariables(pattern);
-            for (String boundName : CompilerContext.extractBoundNames(pattern)) {
+            for (String boundName : AstUtils.extractBoundNames(pattern)) {
                 Integer localIndex = compilerContext.currentScope().getLocal(boundName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);

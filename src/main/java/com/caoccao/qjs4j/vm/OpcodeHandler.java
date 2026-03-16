@@ -2764,9 +2764,12 @@ public final class OpcodeHandler {
         }
         String variableName = atomPool[atomIndex];
         PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
-        // Check dynamic var bindings in current frame and caller frames.
+        // Check dynamic var bindings and closure VarRefs in current frame and caller frames.
         // Variables introduced by eval("var x = ...") are stored in the caller frame's
         // dynamicVarBindings. Inner functions must be able to see these via the scope chain.
+        // VarRef-based closure variables are also checked so that eval() inside class
+        // member functions can resolve the class inner name binding (QuickJS: resolve_scope_var
+        // walks the parent scope chain including eval function closures).
         StackFrame checkFrame = executionContext.frame;
         while (checkFrame != null) {
             if (checkFrame.hasDynamicVarBinding(variableName)) {
@@ -2775,6 +2778,29 @@ public final class OpcodeHandler {
                 executionContext.sp = sp;
                 executionContext.pc = pc + op.getSize();
                 return;
+            }
+            JSFunction checkFunction = checkFrame.getFunction();
+            if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                if (closureVarRefs != null && closureVarNames != null) {
+                    for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                        if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                            JSValue closureValue = closureVarRefs[i].get();
+                            if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                executionContext.virtualMachine.pendingException =
+                                        executionContext.virtualMachine.context.throwReferenceError(
+                                                "Cannot access '" + variableName + "' before initialization");
+                                stack[sp++] = JSUndefined.INSTANCE;
+                            } else {
+                                stack[sp++] = closureValue;
+                            }
+                            executionContext.sp = sp;
+                            executionContext.pc = pc + op.getSize();
+                            return;
+                        }
+                    }
+                }
             }
             checkFrame = checkFrame.getCaller();
         }
@@ -2874,7 +2900,7 @@ public final class OpcodeHandler {
         String variableName = atomPool[atomIndex];
         PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
 
-        // Check dynamic var bindings in current frame and caller frames.
+        // Check dynamic var bindings and closure VarRefs in current frame and caller frames.
         StackFrame checkFrame = executionContext.frame;
         while (checkFrame != null) {
             if (checkFrame.hasDynamicVarBinding(variableName)) {
@@ -2883,6 +2909,29 @@ public final class OpcodeHandler {
                 executionContext.sp = sp;
                 executionContext.pc = pc + op.getSize();
                 return;
+            }
+            JSFunction checkFunction = checkFrame.getFunction();
+            if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                if (closureVarRefs != null && closureVarNames != null) {
+                    for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                        if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                            JSValue closureValue = closureVarRefs[i].get();
+                            if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                executionContext.virtualMachine.pendingException =
+                                        executionContext.virtualMachine.context.throwReferenceError(
+                                                "Cannot access '" + variableName + "' before initialization");
+                                stack[sp++] = JSUndefined.INSTANCE;
+                            } else {
+                                stack[sp++] = closureValue;
+                            }
+                            executionContext.sp = sp;
+                            executionContext.pc = pc + op.getSize();
+                            return;
+                        }
+                    }
+                }
             }
             checkFrame = checkFrame.getCaller();
         }
