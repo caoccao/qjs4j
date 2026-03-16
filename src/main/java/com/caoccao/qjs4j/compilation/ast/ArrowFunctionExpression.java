@@ -16,7 +16,9 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Represents an arrow function expression.
@@ -59,6 +61,14 @@ public final class ArrowFunctionExpression extends Expression {
 
     public FunctionParams getFunctionParams() {
         return functionParams;
+    }
+
+    public Set<String> getParameterNames() {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern param : functionParams.params()) {
+            paramNames.addAll(param.getBoundNames());
+        }
+        return paramNames;
     }
 
     public List<Pattern> getParams() {

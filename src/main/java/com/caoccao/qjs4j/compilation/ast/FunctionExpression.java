@@ -16,7 +16,11 @@
 
 package com.caoccao.qjs4j.compilation.ast;
 
+import com.caoccao.qjs4j.core.JSKeyword;
+
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Represents a function expression.
@@ -72,6 +76,20 @@ public final class FunctionExpression extends Expression {
 
     public Identifier getId() {
         return id;
+    }
+
+    public Set<String> getParameterNames() {
+        Set<String> paramNames = new HashSet<>();
+        for (Pattern param : functionParams.params()) {
+            paramNames.addAll(param.getBoundNames());
+        }
+        if (!paramNames.contains(JSKeyword.ARGUMENTS)) {
+            boolean hasVarArguments = body.getBody().stream().anyMatch(Statement::containsVarArguments);
+            if (!hasVarArguments) {
+                paramNames.add(JSKeyword.ARGUMENTS);
+            }
+        }
+        return paramNames;
     }
 
     public List<Pattern> getParams() {

@@ -234,8 +234,7 @@ final class FunctionClassCompiler {
 
                     // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
                     // into function var bindings when allowed.
-                    Set<String> declarationParameterNames =
-                            AstUtils.buildParameterNames(arrowExpr.getParams(), block.getBody());
+                    Set<String> declarationParameterNames = arrowExpr.getParameterNames();
                     funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(
                             block.getBody(), declarationParameterNames);
 
@@ -1030,7 +1029,7 @@ final class FunctionClassCompiler {
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        Set<String> declParamNames = AstUtils.buildParameterNames(funcDecl.getParams(), funcDecl.getBody().getBody());
+        Set<String> declParamNames = funcDecl.getParameterNames();
         funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(), declParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
@@ -1290,7 +1289,7 @@ final class FunctionClassCompiler {
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
         // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
-        Set<String> exprParamNames = AstUtils.buildParameterNames(functionExpression.getParams(), functionExpression.getBody().getBody());
+        Set<String> exprParamNames = functionExpression.getParameterNames();
         funcDelegates.analysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
 
         // Phase 2: Compile non-FunctionDeclaration statements in source order
