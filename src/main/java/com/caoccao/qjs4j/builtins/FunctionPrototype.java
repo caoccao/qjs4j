@@ -147,8 +147,10 @@ public final class FunctionPrototype {
         JSBoundFunction boundFunc = new JSBoundFunction(targetFunction, boundThis, boundArgs,
                 computedLength, boundName);
 
-        // Set [[Prototype]] to Function.prototype
-        context.transferPrototype(boundFunc, JSFunction.NAME);
+        // ES2024 10.4.1.3 BoundFunctionCreate step 1-4:
+        // Set [[Prototype]] to targetFunction.[[GetPrototypeOf]]()
+        JSObject targetPrototype = callableObject.getPrototype();
+        boundFunc.setPrototype(targetPrototype);
         return boundFunc;
     }
 
