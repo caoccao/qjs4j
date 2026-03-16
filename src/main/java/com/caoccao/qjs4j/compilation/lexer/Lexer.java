@@ -16,9 +16,11 @@
 
 package com.caoccao.qjs4j.compilation.lexer;
 
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -34,7 +36,50 @@ import java.util.Map;
  * - Template literals (basic support)
  */
 public final class Lexer {
-    private static final Map<String, TokenType> KEYWORDS = LexerKeywords.KEYWORDS;
+    private static final Map<String, TokenType> KEYWORDS = new HashMap<>();
+
+    static {
+        KEYWORDS.put(JSKeyword.AS, TokenType.AS);
+        KEYWORDS.put(JSKeyword.ASYNC, TokenType.ASYNC);
+        KEYWORDS.put(JSKeyword.AWAIT, TokenType.AWAIT);
+        KEYWORDS.put(JSKeyword.BREAK, TokenType.BREAK);
+        KEYWORDS.put(JSKeyword.CASE, TokenType.CASE);
+        KEYWORDS.put(JSKeyword.CATCH, TokenType.CATCH);
+        KEYWORDS.put(JSKeyword.CLASS, TokenType.CLASS);
+        KEYWORDS.put(JSKeyword.CONST, TokenType.CONST);
+        KEYWORDS.put(JSKeyword.CONTINUE, TokenType.CONTINUE);
+        KEYWORDS.put(JSKeyword.DEFAULT, TokenType.DEFAULT);
+        KEYWORDS.put(JSKeyword.DELETE, TokenType.DELETE);
+        KEYWORDS.put(JSKeyword.DO, TokenType.DO);
+        KEYWORDS.put(JSKeyword.ELSE, TokenType.ELSE);
+        KEYWORDS.put(JSKeyword.EXPORT, TokenType.EXPORT);
+        KEYWORDS.put(JSKeyword.EXTENDS, TokenType.EXTENDS);
+        KEYWORDS.put(JSKeyword.FALSE, TokenType.FALSE);
+        KEYWORDS.put(JSKeyword.FINALLY, TokenType.FINALLY);
+        KEYWORDS.put(JSKeyword.FOR, TokenType.FOR);
+        KEYWORDS.put(JSKeyword.FROM, TokenType.FROM);
+        KEYWORDS.put(JSKeyword.FUNCTION, TokenType.FUNCTION);
+        KEYWORDS.put(JSKeyword.IF, TokenType.IF);
+        KEYWORDS.put(JSKeyword.IMPORT, TokenType.IMPORT);
+        KEYWORDS.put(JSKeyword.IN, TokenType.IN);
+        KEYWORDS.put(JSKeyword.INSTANCEOF, TokenType.INSTANCEOF);
+        KEYWORDS.put(JSKeyword.LET, TokenType.LET);
+        KEYWORDS.put(JSKeyword.NEW, TokenType.NEW);
+        KEYWORDS.put(JSKeyword.NULL, TokenType.NULL);
+        KEYWORDS.put(JSKeyword.OF, TokenType.OF);
+        KEYWORDS.put(JSKeyword.RETURN, TokenType.RETURN);
+        KEYWORDS.put(JSKeyword.SUPER, TokenType.SUPER);
+        KEYWORDS.put(JSKeyword.SWITCH, TokenType.SWITCH);
+        KEYWORDS.put(JSKeyword.THIS, TokenType.THIS);
+        KEYWORDS.put(JSKeyword.THROW, TokenType.THROW);
+        KEYWORDS.put(JSKeyword.TRUE, TokenType.TRUE);
+        KEYWORDS.put(JSKeyword.TRY, TokenType.TRY);
+        KEYWORDS.put(JSKeyword.TYPEOF, TokenType.TYPEOF);
+        KEYWORDS.put(JSKeyword.VAR, TokenType.VAR);
+        KEYWORDS.put(JSKeyword.VOID, TokenType.VOID);
+        KEYWORDS.put(JSKeyword.WHILE, TokenType.WHILE);
+        KEYWORDS.put(JSKeyword.YIELD, TokenType.YIELD);
+    }
 
     final String source;
     private final LexerTemplateScanner templateScanner;
@@ -253,6 +298,27 @@ public final class Lexer {
     }
 
     // Character utilities
+
+    /**
+     * Re-scan a REGEX token as a division operator.
+     * Called by the parser when 'await' is used as an identifier (non-async context)
+     * and the lexer incorrectly tokenized the following '/' as a regex literal
+     * (because expectRegex() returns true after AWAIT).
+     */
+    public Token rescanAsDivision(Token regexToken) {
+        int startPos = regexToken.offset();
+        int startLine = regexToken.line();
+        int startColumn = regexToken.column();
+        position = startPos;
+        line = startLine;
+        column = startColumn;
+        // Set lastTokenType to IDENTIFIER so expectRegex() returns false
+        lastTokenType = TokenType.IDENTIFIER;
+        lookahead = null;
+        Token divToken = scanToken();
+        lastTokenType = divToken.type();
+        return divToken;
+    }
 
     /**
      * Re-scan a DIV or DIV_ASSIGN token as a regex literal.

@@ -322,18 +322,6 @@ final class ParserContext {
         return token.type() == TokenType.IDENTIFIER && JSKeyword.USING.equals(token.value());
     }
 
-    boolean isValidContinuationAfterAwaitIdentifier() {
-        if (nextToken.line() > currentToken.line()) {
-            return true;
-        }
-        if (!isExpressionStartToken(nextToken.type())) {
-            return true;
-        }
-        return nextToken.type() == TokenType.LPAREN
-                || nextToken.type() == TokenType.LBRACKET
-                || nextToken.type() == TokenType.TEMPLATE;
-    }
-
     boolean isValidForInOfTarget(Expression expr) {
         if (expr instanceof Identifier identifier) {
             String name = identifier.getName();
