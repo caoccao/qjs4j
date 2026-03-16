@@ -268,7 +268,7 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive if body is a block statement
         if (arrowExpr.getBody() instanceof BlockStatement block
-            && AstUtils.hasUseStrictDirective(block, compilerContext.sourceCode)) {
+                && block.hasUseStrictDirective()) {
             functionContext.strictMode = true;
         }
 
@@ -1100,7 +1100,7 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (AstUtils.hasUseStrictDirective(funcDecl.getBody(), compilerContext.sourceCode)) {
+        if (funcDecl.getBody().hasUseStrictDirective()) {
             functionContext.strictMode = true;
         }
 
@@ -1199,7 +1199,7 @@ final class FunctionClassCompiler {
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
         boolean isStrict = functionContext.strictMode
-            || AstUtils.hasUseStrictDirective(funcDecl.getBody(), compilerContext.sourceCode);
+                || funcDecl.getBody().hasUseStrictDirective();
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(funcDecl.getLocation());
@@ -1338,7 +1338,7 @@ final class FunctionClassCompiler {
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
-        if (AstUtils.hasUseStrictDirective(functionExpression.getBody(), compilerContext.sourceCode)) {
+        if (functionExpression.getBody().hasUseStrictDirective()) {
             functionContext.strictMode = true;
         }
 
@@ -1468,7 +1468,7 @@ final class FunctionClassCompiler {
         // Detect "use strict" directive in function body
         // Combine inherited strict mode with local "use strict" directive
         boolean isStrict = functionContext.strictMode
-            || AstUtils.hasUseStrictDirective(functionExpression.getBody(), compilerContext.sourceCode);
+                || functionExpression.getBody().hasUseStrictDirective();
 
         // Extract function source code from original source
         String functionSource = compilerContext.extractSourceCode(functionExpression.getLocation());

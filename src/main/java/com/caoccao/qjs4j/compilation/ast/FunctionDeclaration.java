@@ -67,6 +67,10 @@ public final class FunctionDeclaration extends Declaration {
         return id;
     }
 
+    public boolean isAnnexBSimpleDeclaration() {
+        return !isAsync && !isGenerator;
+    }
+
     public List<Pattern> getParams() {
         return params;
     }

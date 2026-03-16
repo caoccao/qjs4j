@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 

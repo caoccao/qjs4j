@@ -385,130 +385,6 @@ public final class AstUtils {
         return false;
     }
 
-    public static boolean hasUseStrictDirective(BlockStatement block, String sourceCode) {
-        if (block == null || block.getBody().isEmpty()) {
-            return false;
-        }
-
-        for (int statementIndex = 0; statementIndex < block.getBody().size(); statementIndex++) {
-            Statement statement = block.getBody().get(statementIndex);
-            if (!(statement instanceof ExpressionStatement expressionStatement)) {
-                break;
-            }
-            if (!(expressionStatement.getExpression() instanceof Literal literal)) {
-                break;
-            }
-            if (!(literal.getValue() instanceof String)) {
-                break;
-            }
-            if (!JSKeyword.USE_STRICT.equals(literal.getValue())) {
-                continue;
-            }
-            if (statementIndex == 0 && !isDirectiveStartAtBlockStart(block, literal, sourceCode)) {
-                return false;
-            }
-            if (sourceCode == null) {
-                return true;
-            }
-            SourceLocation literalLocation = literal.getLocation();
-            if (literalLocation != null && isRawUseStrictDirectiveAt(literalLocation.offset(), sourceCode)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static boolean isAnnexBSimpleFunctionDeclaration(FunctionDeclaration functionDeclaration) {
-        return functionDeclaration != null
-                && !functionDeclaration.isAsync()
-                && !functionDeclaration.isGenerator();
-    }
-
-    private static boolean isDirectiveStartAtBlockStart(BlockStatement block, Literal literal, String sourceCode) {
-        if (sourceCode == null) {
-            return true;
-        }
-        SourceLocation blockLocation = block.getLocation();
-        SourceLocation literalLocation = literal.getLocation();
-        if (blockLocation == null || literalLocation == null) {
-            return true;
-        }
-        int scanStart = Math.max(0, blockLocation.offset() + 1);
-        int scanEnd = literalLocation.offset();
-        if (scanEnd < scanStart || scanEnd > sourceCode.length()) {
-            return true;
-        }
-        int index = scanStart;
-        while (index < scanEnd) {
-            char current = sourceCode.charAt(index);
-            if (Character.isWhitespace(current)) {
-                index++;
-                continue;
-            }
-            if (current == '/' && index + 1 < scanEnd) {
-                char next = sourceCode.charAt(index + 1);
-                if (next == '/') {
-                    index += 2;
-                    while (index < scanEnd) {
-                        char lineChar = sourceCode.charAt(index);
-                        if (lineChar == '\n' || lineChar == '\r') {
-                            break;
-                        }
-                        index++;
-                    }
-                    continue;
-                }
-                if (next == '*') {
-                    index += 2;
-                    while (index + 1 < scanEnd) {
-                        if (sourceCode.charAt(index) == '*' && sourceCode.charAt(index + 1) == '/') {
-                            index += 2;
-                            break;
-                        }
-                        index++;
-                    }
-                    continue;
-                }
-            }
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isRawUseStrictDirectiveAt(int offset, String sourceCode) {
-        if (offset < 0 || offset >= sourceCode.length()) {
-            return false;
-        }
-
-        char quote = sourceCode.charAt(offset);
-        if (quote != '\'' && quote != '"') {
-            return false;
-        }
-
-        final String strictDirective = JSKeyword.USE_STRICT;
-        int sourceIndex = offset + 1;
-        int directiveIndex = 0;
-        while (sourceIndex < sourceCode.length()) {
-            char current = sourceCode.charAt(sourceIndex);
-            if (current == quote) {
-                return directiveIndex == strictDirective.length();
-            }
-            if (current == '\\'
-                    || current == '\n'
-                    || current == '\r'
-                    || current == '\u2028'
-                    || current == '\u2029') {
-                return false;
-            }
-            if (directiveIndex >= strictDirective.length() || current != strictDirective.charAt(directiveIndex)) {
-                return false;
-            }
-            sourceIndex++;
-            directiveIndex++;
-        }
-        return false;
-    }
-
     public static boolean isSuperIdentifier(Expression expression) {
         return expression instanceof Identifier id && JSKeyword.SUPER.equals(id.getName());
     }
@@ -527,56 +403,60 @@ public final class AstUtils {
      * with the same name in an enclosing block scope.
      */
     private static void scanAnnexBForCollisionCheck(
-            Statement stmt, Set<String> lexicalBindings, Set<String> result) {
-        if (stmt instanceof BlockStatement block) {
+            Statement statement, Set<String> lexicalBindingNames, Set<String> annexBFunctionNames) {
+        if (statement instanceof BlockStatement blockStatement) {
             // Collect block-level lexical declarations
-            Set<String> blockLexicals = new HashSet<>(lexicalBindings);
-            collectBlockLexicals(block.getBody(), blockLexicals);
+            Set<String> blockLexicalNames = new HashSet<>(lexicalBindingNames);
+            collectBlockLexicals(blockStatement.getBody(), blockLexicalNames);
 
-            for (Statement s : block.getBody()) {
-                if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (isAnnexBSimpleFunctionDeclaration(fd)
-                            && !blockLexicals.contains(fd.getId().getName())) {
-                        result.add(fd.getId().getName());
+            for (Statement nestedStatement : blockStatement.getBody()) {
+                if (nestedStatement instanceof FunctionDeclaration functionDeclaration
+                        && functionDeclaration.getId() != null) {
+                    if (functionDeclaration.isAnnexBSimpleDeclaration()
+                            && !blockLexicalNames.contains(functionDeclaration.getId().getName())) {
+                        annexBFunctionNames.add(functionDeclaration.getId().getName());
                     }
                 }
-                scanAnnexBForCollisionCheck(s, blockLexicals, result);
+                scanAnnexBForCollisionCheck(nestedStatement, blockLexicalNames, annexBFunctionNames);
             }
-        } else if (stmt instanceof IfStatement ifStmt) {
-            if (ifStmt.getConsequent() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (isAnnexBSimpleFunctionDeclaration(fd)
-                        && !lexicalBindings.contains(fd.getId().getName())) {
-                    result.add(fd.getId().getName());
+        } else if (statement instanceof IfStatement ifStatement) {
+            if (ifStatement.getConsequent() instanceof FunctionDeclaration functionDeclaration
+                    && functionDeclaration.getId() != null) {
+                if (functionDeclaration.isAnnexBSimpleDeclaration()
+                        && !lexicalBindingNames.contains(functionDeclaration.getId().getName())) {
+                    annexBFunctionNames.add(functionDeclaration.getId().getName());
                 }
             } else {
-                scanAnnexBForCollisionCheck(ifStmt.getConsequent(), lexicalBindings, result);
+                scanAnnexBForCollisionCheck(ifStatement.getConsequent(), lexicalBindingNames, annexBFunctionNames);
             }
-            if (ifStmt.getAlternate() != null) {
-                if (ifStmt.getAlternate() instanceof FunctionDeclaration fd && fd.getId() != null) {
-                    if (isAnnexBSimpleFunctionDeclaration(fd)
-                            && !lexicalBindings.contains(fd.getId().getName())) {
-                        result.add(fd.getId().getName());
+            if (ifStatement.getAlternate() != null) {
+                if (ifStatement.getAlternate() instanceof FunctionDeclaration functionDeclaration
+                        && functionDeclaration.getId() != null) {
+                    if (functionDeclaration.isAnnexBSimpleDeclaration()
+                            && !lexicalBindingNames.contains(functionDeclaration.getId().getName())) {
+                        annexBFunctionNames.add(functionDeclaration.getId().getName());
                     }
                 } else {
-                    scanAnnexBForCollisionCheck(ifStmt.getAlternate(), lexicalBindings, result);
+                    scanAnnexBForCollisionCheck(ifStatement.getAlternate(), lexicalBindingNames, annexBFunctionNames);
                 }
             }
-        } else if (stmt instanceof SwitchStatement switchStmt) {
+        } else if (statement instanceof SwitchStatement switchStatement) {
             // Switch cases share a single scope for lexical declarations
-            Set<String> switchLexicals = new HashSet<>(lexicalBindings);
-            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
-                collectBlockLexicals(sc.getConsequent(), switchLexicals);
+            Set<String> switchLexicalNames = new HashSet<>(lexicalBindingNames);
+            for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
+                collectBlockLexicals(switchCase.getConsequent(), switchLexicalNames);
             }
 
-            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
-                for (Statement s : sc.getConsequent()) {
-                    if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                        if (isAnnexBSimpleFunctionDeclaration(fd)
-                                && !switchLexicals.contains(fd.getId().getName())) {
-                            result.add(fd.getId().getName());
+            for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
+                for (Statement nestedStatement : switchCase.getConsequent()) {
+                    if (nestedStatement instanceof FunctionDeclaration functionDeclaration
+                            && functionDeclaration.getId() != null) {
+                        if (functionDeclaration.isAnnexBSimpleDeclaration()
+                                && !switchLexicalNames.contains(functionDeclaration.getId().getName())) {
+                            annexBFunctionNames.add(functionDeclaration.getId().getName());
                         }
                     }
-                    scanAnnexBForCollisionCheck(s, switchLexicals, result);
+                    scanAnnexBForCollisionCheck(nestedStatement, switchLexicalNames, annexBFunctionNames);
                 }
             }
         }

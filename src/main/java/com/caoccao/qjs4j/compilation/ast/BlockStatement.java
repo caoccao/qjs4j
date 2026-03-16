@@ -23,6 +23,7 @@ import java.util.List;
  */
 public final class BlockStatement extends Statement {
     private final List<Statement> body;
+    private boolean hasUseStrictDirective;
 
     public BlockStatement(List<Statement> body, SourceLocation location) {
         super(location);
@@ -63,6 +64,14 @@ public final class BlockStatement extends Statement {
 
     public List<Statement> getBody() {
         return body;
+    }
+
+    public boolean hasUseStrictDirective() {
+        return hasUseStrictDirective;
+    }
+
+    public void setHasUseStrictDirective(boolean hasUseStrictDirective) {
+        this.hasUseStrictDirective = hasUseStrictDirective;
     }
 
 }

@@ -192,24 +192,6 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.functionNesting--;
     }
 
-    /**
-     * Check if a parameter list is simple (no defaults, no destructuring, no rest).
-     */
-    private boolean hasUseStrictDirective(BlockStatement blockStatement) {
-        for (Statement statement : blockStatement.getBody()) {
-            if (statement instanceof ExpressionStatement expressionStatement
-                    && expressionStatement.getExpression() instanceof Literal literal
-                    && literal.getValue() instanceof String literalString) {
-                if (JSKeyword.USE_STRICT.equals(literalString)) {
-                    return true;
-                }
-                continue;
-            }
-            break;
-        }
-        return false;
-    }
-
     private boolean isSimpleParameterList(FunctionParams funcParams) {
         if (funcParams.restParameter() != null) {
             return false;
@@ -815,7 +797,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         parserContext.lexer.setStrictMode(savedStrictMode);
 
         parserContext.expect(TokenType.RBRACE);
-        return new BlockStatement(body, location);
+        BlockStatement block = new BlockStatement(body, location);
+        block.setHasUseStrictDirective(hasUseStrict);
+        return block;
     }
 
     FunctionDeclaration parseFunctionDeclaration(boolean isAsync, boolean isGenerator) {
@@ -1062,7 +1046,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         // Per ES2024 15.2.1: "use strict" in method body with non-simple parameters
         // is a SyntaxError. Methods are already strict (class bodies are strict mode),
         // but we must still check for the explicit directive + non-simple params combo.
-        if (!isSimpleParameterList(funcParams) && hasUseStrictDirective(body)) {
+        if (!isSimpleParameterList(funcParams) && body.hasUseStrictDirective()) {
             throw new JSSyntaxErrorException(
                     "Illegal 'use strict' directive in function with non-simple parameter list");
         }

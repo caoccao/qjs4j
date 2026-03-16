@@ -386,6 +386,27 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         return new BlockStatement(body, location);
     }
 
+    BlockStatement parseBlockStatementAsBody() {
+        SourceLocation location = parserContext.getLocation();
+        parserContext.expect(TokenType.LBRACE);
+
+        List<Statement> body = new ArrayList<>();
+        boolean hasUseStrict = parserContext.parseDirectives(body);
+
+        while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
+            Statement stmt = parseStatement();
+            if (stmt != null) {
+                body.add(stmt);
+            }
+        }
+
+        validateBlockEarlyErrors(body);
+        parserContext.expect(TokenType.RBRACE);
+        BlockStatement block = new BlockStatement(body, location);
+        block.setHasUseStrictDirective(hasUseStrict);
+        return block;
+    }
+
     Statement parseBreakStatement() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.BREAK);

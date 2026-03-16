@@ -246,24 +246,6 @@ final class ExpressionAssignmentParser {
         return previousOffset >= startOffset && source.charAt(previousOffset) == ',';
     }
 
-    private boolean hasUseStrictDirective(ASTNode body) {
-        if (!(body instanceof BlockStatement blockStatement)) {
-            return false;
-        }
-        for (Statement statement : blockStatement.getBody()) {
-            if (statement instanceof ExpressionStatement expressionStatement
-                    && expressionStatement.getExpression() instanceof Literal literal
-                    && literal.getValue() instanceof String literalString) {
-                if (JSKeyword.USE_STRICT.equals(literalString)) {
-                    return true;
-                }
-                continue;
-            }
-            break;
-        }
-        return false;
-    }
-
     private boolean isArrowDestructuringParameterExpression(Expression expression) {
         if (expression instanceof ObjectExpression || expression instanceof ArrayExpression) {
             return true;
@@ -384,7 +366,7 @@ final class ExpressionAssignmentParser {
                     parserContext.inClassStaticInit = false;
                     try {
                         if (parserContext.match(TokenType.LBRACE)) {
-                            body = delegates.statements.parseBlockStatement();
+                            body = delegates.statements.parseBlockStatementAsBody();
                         } else {
                             body = parseAssignmentExpression();
                         }
@@ -419,7 +401,7 @@ final class ExpressionAssignmentParser {
 
                         ASTNode body;
                         if (parserContext.match(TokenType.LBRACE)) {
-                            body = delegates.statements.parseBlockStatement();
+                            body = delegates.statements.parseBlockStatementAsBody();
                         } else {
                             body = parseAssignmentExpression();
                         }
@@ -553,7 +535,7 @@ final class ExpressionAssignmentParser {
             parserContext.inClassStaticInit = false;
             try {
                 if (parserContext.match(TokenType.LBRACE)) {
-                    body = delegates.statements.parseBlockStatement();
+                    body = delegates.statements.parseBlockStatementAsBody();
                 } else {
                     body = parseAssignmentExpression();
                 }
@@ -769,7 +751,8 @@ final class ExpressionAssignmentParser {
                 }
             }
         }
-        boolean strictParameters = parserContext.strictMode || hasUseStrictDirective(body);
+        boolean bodyHasUseStrict = body instanceof BlockStatement blockBody && blockBody.hasUseStrictDirective();
+        boolean strictParameters = parserContext.strictMode || bodyHasUseStrict;
         Set<String> seen = new HashSet<>();
         for (Pattern pattern : params) {
             for (String parameterName : extractBoundNames(pattern)) {
@@ -791,7 +774,7 @@ final class ExpressionAssignmentParser {
                 }
             }
         }
-        if (hasUseStrictDirective(body) && !isSimpleParameterList(params, defaults, restParameter)) {
+        if (bodyHasUseStrict && !isSimpleParameterList(params, defaults, restParameter)) {
             throw new JSSyntaxErrorException("Illegal 'use strict' directive in function with non-simple parameter list");
         }
     }
