@@ -110,7 +110,7 @@ final class PatternCompiler {
             emitAssignmentFromPreEvaluated(restTarget, restTargetDepth);
         } else {
             // No rest element - use iterator with done tracking and IteratorClose
-            int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
+            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                     "$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
@@ -151,12 +151,12 @@ final class PatternCompiler {
         // Assign value to target and pop value from stack
         if (target instanceof Identifier id) {
             String name = id.getName();
-            Integer localIndex = compilerContext.findLocalInScopes(name);
+            Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex == null && JSArguments.NAME.equals(name)) {
                 localIndex = ensureImplicitArgumentsLocalBinding();
             }
             if (localIndex != null) {
-                if (compilerContext.isLocalBindingConst(name)) {
+                if (compilerContext.scopeManager.isLocalBindingConst(name)) {
                     emitConstAssignmentErrorForLocal(name, localIndex);
                     return;
                 }
@@ -168,7 +168,7 @@ final class PatternCompiler {
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    if (compilerContext.isCapturedBindingConst(name)) {
+                    if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
                         return;
                     }
@@ -259,13 +259,13 @@ final class PatternCompiler {
      */
     void compileForOfValueAssignment(Pattern pattern, boolean isVar) {
         if (isVar && pattern instanceof Identifier id) {
-            Integer localIndex = compilerContext.findLocalInScopes(id.getName());
+            Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             } else if (compilerContext.inGlobalScope) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, id.getName());
             } else {
-                int idx = compilerContext.currentScope().declareLocal(id.getName());
+                int idx = compilerContext.scopeManager.currentScope().declareLocal(id.getName());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, idx);
             }
         } else {
@@ -282,7 +282,7 @@ final class PatternCompiler {
      * The call is evaluated each iteration, then a ReferenceError is thrown.
      */
     void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         // Compile the iterable expression
         delegates.expressions.compileExpression(forOfStmt.getRight());
@@ -334,7 +334,7 @@ final class PatternCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
     void compileObjectDestructuringAssignment(ObjectExpression objExpr) {
@@ -367,7 +367,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 
-        int sourceLocalIndex = compilerContext.currentScope().declareLocal(
+        int sourceLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                 "$objectAssignSource" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, sourceLocalIndex);
 
@@ -375,7 +375,7 @@ final class PatternCompiler {
         int excludeListLocalIndex = -1;
         if (restTarget != null && !regularProperties.isEmpty()) {
             compilerContext.emitter.emitOpcode(Opcode.OBJECT);
-            excludeListLocalIndex = compilerContext.currentScope().declareLocal(
+            excludeListLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                     "$excludeList" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, excludeListLocalIndex);
         }
@@ -385,7 +385,7 @@ final class PatternCompiler {
             if (property.isComputed()) {
                 delegates.expressions.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                propertyKeyLocalIndex = compilerContext.currentScope().declareLocal(
+                propertyKeyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$objectAssignKey" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
             }
@@ -500,13 +500,13 @@ final class PatternCompiler {
             if (emitAssignmentUsingPreResolvedBindingReference(varName)) {
                 // Assignment consumed by a cached ResolveBinding reference.
             } else if (useExistingBindingInParentScopes
-                    && compilerContext.hasActiveWithObject()) {
+                    && compilerContext.withObjectManager.hasActiveWithObject()) {
                 delegates.expressions.emitIdentifierReference(varName);
                 compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
             } else if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: let/const was pre-declared as a local for TDZ enforcement
-                Integer tdzLocal = compilerContext.findLocalInScopes(varName);
+                Integer tdzLocal = compilerContext.scopeManager.findLocalInScopes(varName);
                 if (tdzLocal != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, tdzLocal);
                 } else {
@@ -518,7 +518,7 @@ final class PatternCompiler {
                 // var declaration in global program inside a block (for, try, if, etc.).
                 // var is global-scoped, so use PUT_VAR — UNLESS the name is already
                 // a local (e.g., catch parameter per ES B.3.5), in which case use PUT_LOCAL.
-                Integer existingLocal = compilerContext.findLocalInScopes(varName);
+                Integer existingLocal = compilerContext.scopeManager.findLocalInScopes(varName);
                 if (existingLocal != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, existingLocal);
                 } else {
@@ -533,16 +533,16 @@ final class PatternCompiler {
                         localIndex = varDeclarationScope.declareLocal(varName);
                     }
                 } else if (useExistingBindingInParentScopes) {
-                    localIndex = compilerContext.findLocalInScopes(varName);
+                    localIndex = compilerContext.scopeManager.findLocalInScopes(varName);
                     if (localIndex == null) {
-                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
                 } else {
                     // let/const declarations are lexical. They should resolve only against
                     // the current scope so block bindings shadow outer bindings.
-                    localIndex = compilerContext.currentScope().getLocal(varName);
+                    localIndex = compilerContext.scopeManager.currentScope().getLocal(varName);
                     if (localIndex == null) {
-                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
@@ -775,7 +775,7 @@ final class PatternCompiler {
             } else {
                 // Iterator-based array binding semantics.
                 compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-                int iteratorDoneLocalIndex = compilerContext.currentScope().declareLocal(
+                int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$arrayPatternIteratorDone" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
@@ -836,7 +836,7 @@ final class PatternCompiler {
     void declarePatternVariables(Pattern pattern) {
         if (pattern instanceof Identifier id) {
             // Simple identifier: declare it as a local variable
-            compilerContext.currentScope().declareLocal(id.getName());
+            compilerContext.scopeManager.currentScope().declareLocal(id.getName());
         } else if (pattern instanceof ArrayPattern arrPattern) {
             // Array destructuring: declare all element variables
             for (Pattern element : arrPattern.getElements()) {
@@ -978,7 +978,7 @@ final class PatternCompiler {
 
         int[] preservedLocalIndexes = new int[preservedValueCount];
         for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
-            int localIndex = compilerContext.currentScope().declareLocal(
+            int localIndex = compilerContext.scopeManager.currentScope().declareLocal(
                     "$iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             preservedLocalIndexes[valueIndex] = localIndex;
@@ -997,11 +997,11 @@ final class PatternCompiler {
         if (!compilerContext.hasEnclosingArgumentsBinding) {
             return null;
         }
-        Integer localIndex = compilerContext.findLocalInScopes(JSArguments.NAME);
+        Integer localIndex = compilerContext.scopeManager.findLocalInScopes(JSArguments.NAME);
         if (localIndex != null) {
             return localIndex;
         }
-        CompilerScope currentScope = compilerContext.currentScope();
+        CompilerScope currentScope = compilerContext.scopeManager.currentScope();
         if (currentScope == null) {
             return null;
         }
@@ -1035,7 +1035,7 @@ final class PatternCompiler {
 
     void markPatternConstBindings(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            compilerContext.currentScope().markConstLocal(id.getName());
+            compilerContext.scopeManager.currentScope().markConstLocal(id.getName());
             return;
         }
         if (pattern instanceof ArrayPattern arrayPattern) {
@@ -1071,7 +1071,7 @@ final class PatternCompiler {
             return;
         }
 
-        if (!compilerContext.hasActiveWithObject()) {
+        if (!compilerContext.withObjectManager.hasActiveWithObject()) {
             delegates.expressions.compileIdentifier(bindingIdentifier);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
@@ -1080,11 +1080,11 @@ final class PatternCompiler {
         String bindingName = bindingIdentifier.getName();
         delegates.expressions.emitIdentifierReference(bindingName);
 
-        int propertyLocalIndex = compilerContext.currentScope().declareLocal(
+        int propertyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                 "$preResolvedRefProp" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyLocalIndex);
 
-        int objectLocalIndex = compilerContext.currentScope().declareLocal(
+        int objectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                 "$preResolvedRefObj" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, objectLocalIndex);
 

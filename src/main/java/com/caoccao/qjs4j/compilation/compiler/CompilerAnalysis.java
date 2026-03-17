@@ -172,8 +172,8 @@ final class CompilerAnalysis {
             if (stmt instanceof FunctionDeclaration functionDeclaration) {
                 if (functionDeclaration.getId() != null) {
                     String functionName = functionDeclaration.getId().getName();
-                    if (compilerContext.currentScope().getLocal(functionName) == null) {
-                        compilerContext.currentScope().declareLocal(functionName);
+                    if (compilerContext.scopeManager.currentScope().getLocal(functionName) == null) {
+                        compilerContext.scopeManager.currentScope().declareLocal(functionName);
                     }
                 }
                 continue;
@@ -197,17 +197,17 @@ final class CompilerAnalysis {
             }
         }
         for (String varName : varNames) {
-            if (compilerContext.currentScope().getLocal(varName) == null) {
-                compilerContext.currentScope().declareLocal(varName);
+            if (compilerContext.scopeManager.currentScope().getLocal(varName) == null) {
+                compilerContext.scopeManager.currentScope().declareLocal(varName);
             }
         }
         for (String lexicalName : lexicalNames) {
-            Integer localIndex = compilerContext.currentScope().getLocal(lexicalName);
+            Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(lexicalName);
             if (localIndex == null) {
-                localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                localIndex = compilerContext.scopeManager.currentScope().declareLocal(lexicalName);
             }
             if (constLexicalNames.contains(lexicalName)) {
-                compilerContext.currentScope().markConstLocal(lexicalName);
+                compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
             }
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
             compilerContext.tdzLocals.add(lexicalName);
@@ -267,13 +267,13 @@ final class CompilerAnalysis {
                 continue;
             }
             compilerContext.annexBFunctionNames.add(name);
-            Integer existingLocal = compilerContext.findLocalInScopes(name);
+            Integer existingLocal = compilerContext.scopeManager.findLocalInScopes(name);
             if (existingLocal != null) {
                 // Already exists (e.g., explicit var declaration)
                 compilerContext.annexBFunctionScopeLocals.put(name, existingLocal);
             } else if (!alreadyDeclared.contains(name)) {
                 // Create new local in function scope, initialized to undefined
-                int localIndex = compilerContext.currentScope().declareLocal(name);
+                int localIndex = compilerContext.scopeManager.currentScope().declareLocal(name);
                 compilerContext.annexBFunctionScopeLocals.put(name, localIndex);
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);

@@ -42,7 +42,7 @@ final class EmitHelpers {
     }
 
     void emitAbruptCompletionIteratorClose() {
-        for (LoopContext loopContext : compilerContext.loopStack) {
+        for (LoopContext loopContext : compilerContext.loopManager) {
             if (loopContext.hasIterator) {
                 compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
             }
@@ -176,7 +176,7 @@ final class EmitHelpers {
      */
     void emitCloseLocForPattern(Pattern pattern) {
         if (pattern instanceof Identifier id) {
-            Integer localIdx = compilerContext.findLocalInScopes(id.getName());
+            Integer localIdx = compilerContext.scopeManager.findLocalInScopes(id.getName());
             if (localIdx != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
             }
@@ -195,7 +195,7 @@ final class EmitHelpers {
     }
 
     void emitCurrentScopeUsingDisposal() {
-        emitScopeUsingDisposal(compilerContext.currentScope());
+        emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
     }
 
     void emitDefaultParameterInit(
@@ -300,7 +300,7 @@ final class EmitHelpers {
      * Following QuickJS close_scopes pattern for iterator cleanup.
      */
     void emitIteratorCloseForLoopsUntil(LoopContext target) {
-        for (LoopContext loopCtx : compilerContext.loopStack) {
+        for (LoopContext loopCtx : compilerContext.loopManager) {
             if (loopCtx == target) {
                 break;
             }
@@ -318,7 +318,7 @@ final class EmitHelpers {
     }
 
     void emitMethodCallWithSingleArgOnLocalObject(int localIndex, String methodName) {
-        int argLocalIndex = compilerContext.currentScope().declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
+        int argLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$using_arg_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, argLocalIndex);
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, localIndex);
@@ -382,7 +382,7 @@ final class EmitHelpers {
     }
 
     void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
-        for (CompilerScope scope : compilerContext.scopes) {
+        for (CompilerScope scope : compilerContext.scopeManager) {
             if (scope.getScopeDepth() > targetScopeDepth) {
                 emitScopeUsingDisposal(scope);
             }
@@ -390,7 +390,7 @@ final class EmitHelpers {
     }
 
     int ensureUsingStackLocal(boolean asyncUsingDeclaration) {
-        CompilerScope scope = compilerContext.currentScope();
+        CompilerScope scope = compilerContext.scopeManager.currentScope();
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
         if (existingLocalIndex != null) {
             if (asyncUsingDeclaration && !scope.isUsingStackAsync()) {

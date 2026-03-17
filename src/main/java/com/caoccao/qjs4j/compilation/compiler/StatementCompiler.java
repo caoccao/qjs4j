@@ -41,7 +41,7 @@ final class StatementCompiler {
 
     void compileBlockStatement(BlockStatement block) {
         compilerContext.pushState();
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
         // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
         for (Statement stmt : block.getBody()) {
@@ -50,14 +50,14 @@ final class StatementCompiler {
                     Set<String> names = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(d.getId(), names);
                     for (String name : names) {
-                        Integer localIndex = compilerContext.currentScope().getLocal(name);
+                        Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(name);
                         if (localIndex == null) {
-                            localIndex = compilerContext.currentScope().declareLocal(name);
+                            localIndex = compilerContext.scopeManager.currentScope().declareLocal(name);
                         }
                         if (vd.getKind() == VariableKind.CONST
                                 || vd.getKind() == VariableKind.USING
                                 || vd.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.currentScope().markConstLocal(name);
+                            compilerContext.scopeManager.currentScope().markConstLocal(name);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         compilerContext.tdzLocals.add(name);
@@ -65,9 +65,9 @@ final class StatementCompiler {
                 }
             } else if (stmt instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
                 String className = classDeclaration.getId().getName();
-                Integer localIndex = compilerContext.currentScope().getLocal(className);
+                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(className);
                 if (localIndex == null) {
-                    localIndex = compilerContext.currentScope().declareLocal(className);
+                    localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
@@ -90,7 +90,7 @@ final class StatementCompiler {
             compileStatement(stmt);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }
 
@@ -111,11 +111,11 @@ final class StatementCompiler {
      * Used for the GOSUB/RET path where the return address must remain on top of the stack.
      */
     private void compileFinallyBlockBody(BlockStatement block) {
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
         compilerContext.finallySubroutineDepth++;
         int savedEvalReturnLocalIndex = -1;
         if (compilerContext.evalReturnLocalIndex >= 0) {
-            savedEvalReturnLocalIndex = compilerContext.currentScope().declareLocal(
+            savedEvalReturnLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                     "$finally_eval_ret_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, compilerContext.evalReturnLocalIndex);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, savedEvalReturnLocalIndex);
@@ -134,7 +134,7 @@ final class StatementCompiler {
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
@@ -204,11 +204,11 @@ final class StatementCompiler {
         if (stmt instanceof FunctionDeclaration funcDecl && funcDecl.getId() != null) {
             // Per ES2024 B.3.3, function declarations in if-statement positions
             // are treated as if wrapped in a block scope.
-            compilerContext.enterScope();
-            compilerContext.currentScope().declareLocal(funcDecl.getId().getName());
+            compilerContext.scopeManager.enterScope();
+            compilerContext.scopeManager.currentScope().declareLocal(funcDecl.getId().getName());
             delegates.functions.compileFunctionDeclaration(funcDecl);
             delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-            compilerContext.exitScope();
+            compilerContext.scopeManager.exitScope();
         } else {
             compileStatement(stmt);
         }
@@ -220,9 +220,9 @@ final class StatementCompiler {
      */
     void compileLabeledLoop(String labelName, Statement loopStmt) {
         // We temporarily store the label name so the loop compilation methods can pick it up
-        compilerContext.pendingLoopLabel = labelName;
+        compilerContext.loopManager.setPendingLabel(labelName);
         compileStatement(loopStmt);
-        compilerContext.pendingLoopLabel = null;
+        compilerContext.loopManager.clearPendingLabel();
     }
 
     /**
@@ -250,9 +250,9 @@ final class StatementCompiler {
             compileLabeledLoop(labelName, body);
         } else {
             // Regular labeled statement: only 'break label;' is valid (not continue)
-            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeDepth, compilerContext.scopeDepth, labelName);
+            LoopContext labelContext = new LoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth(), labelName);
             labelContext.isRegularStmt = true;
-            compilerContext.loopStack.push(labelContext);
+            compilerContext.loopManager.pushLoop(labelContext);
 
             // Body can be null for empty statements (label: ;)
             if (body != null) {
@@ -264,7 +264,7 @@ final class StatementCompiler {
             for (int pos : labelContext.breakPositions) {
                 compilerContext.emitter.patchJump(pos, breakTarget);
             }
-            compilerContext.loopStack.pop();
+            compilerContext.loopManager.popLoop();
         }
     }
 
@@ -272,7 +272,7 @@ final class StatementCompiler {
         compilerContext.inGlobalScope = false;
         compilerContext.isGlobalProgram = false;
         compilerContext.strictMode = true;
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         List<Statement> body = program.getBody();
 
@@ -281,8 +281,8 @@ final class StatementCompiler {
         for (Statement statement : body) {
             if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
                 String className = classDeclaration.getId().getName();
-                if (compilerContext.currentScope().getLocal(className) == null) {
-                    int localIndex = compilerContext.currentScope().declareLocal(className);
+                if (compilerContext.scopeManager.currentScope().getLocal(className) == null) {
+                    int localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 }
                 // ES2024: Class declarations in modules create let-like bindings (mutable),
@@ -301,14 +301,14 @@ final class StatementCompiler {
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
                     }
                     for (String lexicalName : lexicalNames) {
-                        if (compilerContext.currentScope().getLocal(lexicalName) == null) {
-                            int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                        if (compilerContext.scopeManager.currentScope().getLocal(lexicalName) == null) {
+                            int localIndex = compilerContext.scopeManager.currentScope().declareLocal(lexicalName);
                             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         }
                         if (variableDeclaration.getKind() == VariableKind.CONST
                                 || variableDeclaration.getKind() == VariableKind.USING
                                 || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.currentScope().markConstLocal(lexicalName);
+                            compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
                         }
                         compilerContext.tdzLocals.add(lexicalName);
                     }
@@ -327,8 +327,8 @@ final class StatementCompiler {
             if (hoistedFunctionNames.contains(variableName)) {
                 continue;
             }
-            if (compilerContext.currentScope().getLocal(variableName) == null) {
-                int localIndex = compilerContext.currentScope().declareLocal(variableName);
+            if (compilerContext.scopeManager.currentScope().getLocal(variableName) == null) {
+                int localIndex = compilerContext.scopeManager.currentScope().declareLocal(variableName);
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
             }
@@ -360,17 +360,15 @@ final class StatementCompiler {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int programResultLocalIndex = compilerContext.currentScope().declareLocal(
+        int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                 "$program_result_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = compilerContext.currentScope().getLocalCount();
-        if (localCount > compilerContext.maxLocalCount) {
-            compilerContext.maxLocalCount = localCount;
-        }
+        int localCount = compilerContext.scopeManager.currentScope().getLocalCount();
+        compilerContext.scopeManager.updateMaxLocalCount(localCount);
         compilerContext.inGlobalScope = false;
     }
 
@@ -385,7 +383,7 @@ final class StatementCompiler {
                 compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
         compilerContext.inGlobalScope = !useLocalProgramScope;
         compilerContext.isGlobalProgram = !useLocalProgramScope;
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         List<Statement> body = program.getBody();
 
@@ -396,7 +394,7 @@ final class StatementCompiler {
             // Pre-declare class declarations as locals with TDZ (ES spec EvalDeclarationInstantiation step 14)
             if (stmt instanceof ClassDeclaration classDecl && classDecl.getId() != null) {
                 String className = classDecl.getId().getName();
-                int localIndex = compilerContext.currentScope().declareLocal(className);
+                int localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                 compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
                 compilerContext.nonDeletableGlobalBindings.add(className);
@@ -408,11 +406,11 @@ final class StatementCompiler {
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), lexicalNames);
                     }
                     for (String lexicalName : lexicalNames) {
-                        int localIndex = compilerContext.currentScope().declareLocal(lexicalName);
+                        int localIndex = compilerContext.scopeManager.currentScope().declareLocal(lexicalName);
                         if (variableDeclaration.getKind() == VariableKind.CONST
                                 || variableDeclaration.getKind() == VariableKind.USING
                                 || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.currentScope().markConstLocal(lexicalName);
+                            compilerContext.scopeManager.currentScope().markConstLocal(lexicalName);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         compilerContext.tdzLocals.add(lexicalName);
@@ -444,9 +442,9 @@ final class StatementCompiler {
         for (String varName : varNames) {
             if (!hoistedFunctionNames.contains(varName)) {
                 if (useLocalProgramScope) {
-                    Integer localIndex = compilerContext.currentScope().getLocal(varName);
+                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(varName);
                     if (localIndex == null) {
-                        localIndex = compilerContext.currentScope().declareLocal(varName);
+                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(varName);
                     }
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
@@ -467,7 +465,7 @@ final class StatementCompiler {
         if (compilerContext.evalMode) {
             // Eval mode: allocate a hidden local to track the eval completion value.
             // Every expression statement stores its result here (like QuickJS's eval_ret_idx).
-            int evalRetLocalIndex = compilerContext.currentScope().declareLocal("$eval_ret");
+            int evalRetLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$eval_ret");
             compilerContext.evalReturnLocalIndex = evalRetLocalIndex;
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, evalRetLocalIndex);
@@ -484,7 +482,7 @@ final class StatementCompiler {
             compilerContext.evalReturnLocalIndex = -1;
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, evalRetLocalIndex);
-            int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
             delegates.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
@@ -521,7 +519,7 @@ final class StatementCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
 
-            int programResultLocalIndex = compilerContext.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
+            int programResultLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$program_result_" + compilerContext.emitter.currentOffset());
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, programResultLocalIndex);
             delegates.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, programResultLocalIndex);
@@ -530,10 +528,8 @@ final class StatementCompiler {
         // Return the value on top of stack
         compilerContext.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = compilerContext.currentScope().getLocalCount();
-        if (localCount > compilerContext.maxLocalCount) {
-            compilerContext.maxLocalCount = localCount;
-        }
+        int localCount = compilerContext.scopeManager.currentScope().getLocalCount();
+        compilerContext.scopeManager.updateMaxLocalCount(localCount);
         compilerContext.inGlobalScope = false;
     }
 
@@ -547,7 +543,7 @@ final class StatementCompiler {
                 && compilerContext.strictMode
                 && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
-                && !compilerContext.hasActiveIteratorLoops()) {
+                && !compilerContext.loopManager.hasActiveIteratorLoops()) {
             // Direct call in tail position: TAIL_CALL handles the return entirely
             compilerContext.emitTailCalls = true;
             delegates.expressions.compileExpression(retStmt.getArgument());
@@ -563,7 +559,7 @@ final class StatementCompiler {
                 && compilerContext.strictMode
                 && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
-                && !compilerContext.hasActiveIteratorLoops();
+                && !compilerContext.loopManager.hasActiveIteratorLoops();
 
         if (retStmt.getArgument() != null) {
             if (enableTco) {
@@ -575,12 +571,12 @@ final class StatementCompiler {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
 
-        int returnValueIndex = compilerContext.currentScope().declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
+        int returnValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$return_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
 
         delegates.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
-        if (compilerContext.hasActiveIteratorLoops()) {
+        if (compilerContext.loopManager.hasActiveIteratorLoops()) {
             delegates.emitHelpers.emitAbruptCompletionIteratorClose();
         }
 
@@ -695,7 +691,7 @@ final class StatementCompiler {
         delegates.expressions.compileExpression(switchStmt.getDiscriminant());
 
         compilerContext.pushState();
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
 
         // Switch creates a lexical environment before evaluating case selectors.
@@ -707,14 +703,14 @@ final class StatementCompiler {
                         Set<String> declarationNames = new HashSet<>();
                         delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
                         for (String declarationName : declarationNames) {
-                            Integer localIndex = compilerContext.currentScope().getLocal(declarationName);
+                            Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(declarationName);
                             if (localIndex == null) {
-                                localIndex = compilerContext.currentScope().declareLocal(declarationName);
+                                localIndex = compilerContext.scopeManager.currentScope().declareLocal(declarationName);
                             }
                             if (variableDeclaration.getKind() == VariableKind.CONST
                                     || variableDeclaration.getKind() == VariableKind.USING
                                     || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                                compilerContext.currentScope().markConstLocal(declarationName);
+                                compilerContext.scopeManager.currentScope().markConstLocal(declarationName);
                             }
                             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                             compilerContext.tdzLocals.add(declarationName);
@@ -722,17 +718,17 @@ final class StatementCompiler {
                     }
                 } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
                     String className = classDeclaration.getId().getName();
-                    Integer localIndex = compilerContext.currentScope().getLocal(className);
+                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(className);
                     if (localIndex == null) {
-                        localIndex = compilerContext.currentScope().declareLocal(className);
+                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                     }
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                     compilerContext.tdzLocals.add(className);
                 } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
                     String functionName = functionDeclaration.getId().getName();
-                    Integer localIndex = compilerContext.currentScope().getLocal(functionName);
+                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(functionName);
                     if (localIndex == null) {
-                        localIndex = compilerContext.currentScope().declareLocal(functionName);
+                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
                     }
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                     compilerContext.tdzLocals.add(functionName);
@@ -780,9 +776,9 @@ final class StatementCompiler {
         // Jump to default or end
         int jumpToDefault = compilerContext.emitter.emitJump(Opcode.GOTO);
 
-        LoopContext loop = compilerContext.createLoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeDepth, compilerContext.scopeDepth);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(compilerContext.emitter.currentOffset(), compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         loop.isSwitchStatement = true;
-        compilerContext.loopStack.push(loop);
+        compilerContext.loopManager.pushLoop(loop);
 
         int defaultBodyStart = -1;
         for (int i = 0; i < switchStmt.getCases().size(); i++) {
@@ -822,16 +818,16 @@ final class StatementCompiler {
             compilerContext.emitter.patchJump(breakPos, switchEnd);
         }
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }
 
     void compileThrowStatement(ThrowStatement throwStmt) {
         delegates.expressions.compileExpression(throwStmt.getArgument());
-        int throwValueIndex = compilerContext.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
+        int throwValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 
         int disposalCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
@@ -843,7 +839,7 @@ final class StatementCompiler {
 
         compilerContext.emitter.patchJump(disposalCatchJump, compilerContext.emitter.currentOffset());
 
-        int disposalErrorIndex = compilerContext.currentScope().declareLocal("$disposal_error_" + compilerContext.emitter.currentOffset());
+        int disposalErrorIndex = compilerContext.scopeManager.currentScope().declareLocal("$disposal_error_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, disposalErrorIndex);
 
         compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "SuppressedError");
@@ -886,7 +882,7 @@ final class StatementCompiler {
             // Bind exception to parameter if present
             if (handler.getParam() != null) {
                 compilerContext.pushState();
-                compilerContext.enterScope();
+                compilerContext.scopeManager.enterScope();
                 // Catch block creates a local scope - variables should use GET_LOCAL
                 compilerContext.inGlobalScope = false;
 
@@ -895,8 +891,8 @@ final class StatementCompiler {
                 if (catchParam instanceof Identifier id) {
                     // Simple catch parameter: catch (e)
                     // Per B.3.5, simple catch parameters do not block Annex B var hoisting
-                    int localIndex = compilerContext.currentScope().declareLocal(id.getName());
-                    compilerContext.currentScope().markSimpleCatchParam(id.getName());
+                    int localIndex = compilerContext.scopeManager.currentScope().declareLocal(id.getName());
+                    compilerContext.scopeManager.currentScope().markSimpleCatchParam(id.getName());
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     // Destructuring catch parameter: catch ({ f }) or catch ([a, b])
@@ -908,7 +904,7 @@ final class StatementCompiler {
                 compileTryFinallyBlock(handler.getBody());
 
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                compilerContext.exitScope();
+                compilerContext.scopeManager.exitScope();
                 compilerContext.popState();
             } else {
                 // No parameter, compile catch body without binding
@@ -925,7 +921,7 @@ final class StatementCompiler {
      */
     void compileTryFinallyBlock(BlockStatement block) {
         compilerContext.pushState();
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
 
         List<Statement> body = block.getBody();
@@ -938,14 +934,14 @@ final class StatementCompiler {
                     Set<String> declarationNames = new HashSet<>();
                     delegates.analysis.collectPatternBindingNames(declarator.getId(), declarationNames);
                     for (String declarationName : declarationNames) {
-                        Integer localIndex = compilerContext.currentScope().getLocal(declarationName);
+                        Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(declarationName);
                         if (localIndex == null) {
-                            localIndex = compilerContext.currentScope().declareLocal(declarationName);
+                            localIndex = compilerContext.scopeManager.currentScope().declareLocal(declarationName);
                         }
                         if (variableDeclaration.getKind() == VariableKind.CONST
                                 || variableDeclaration.getKind() == VariableKind.USING
                                 || variableDeclaration.getKind() == VariableKind.AWAIT_USING) {
-                            compilerContext.currentScope().markConstLocal(declarationName);
+                            compilerContext.scopeManager.currentScope().markConstLocal(declarationName);
                         }
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         compilerContext.tdzLocals.add(declarationName);
@@ -953,9 +949,9 @@ final class StatementCompiler {
                 }
             } else if (statement instanceof ClassDeclaration classDeclaration && classDeclaration.getId() != null) {
                 String className = classDeclaration.getId().getName();
-                Integer localIndex = compilerContext.currentScope().getLocal(className);
+                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(className);
                 if (localIndex == null) {
-                    localIndex = compilerContext.currentScope().declareLocal(className);
+                    localIndex = compilerContext.scopeManager.currentScope().declareLocal(className);
                 }
                 compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                 compilerContext.tdzLocals.add(className);
@@ -1024,7 +1020,7 @@ final class StatementCompiler {
         }
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }
 
@@ -1067,12 +1063,12 @@ final class StatementCompiler {
             TryStatement.CatchClause handler = tryStmt.getHandler();
             if (handler.getParam() != null) {
                 compilerContext.pushState();
-                compilerContext.enterScope();
+                compilerContext.scopeManager.enterScope();
                 compilerContext.inGlobalScope = false;
                 Pattern catchParam = handler.getParam();
                 if (catchParam instanceof Identifier id) {
-                    int localIndex = compilerContext.currentScope().declareLocal(id.getName());
-                    compilerContext.currentScope().markSimpleCatchParam(id.getName());
+                    int localIndex = compilerContext.scopeManager.currentScope().declareLocal(id.getName());
+                    compilerContext.scopeManager.currentScope().markSimpleCatchParam(id.getName());
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     delegates.patterns.declarePatternVariables(catchParam);
@@ -1091,7 +1087,7 @@ final class StatementCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.THROW);
 
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-                compilerContext.exitScope();
+                compilerContext.scopeManager.exitScope();
                 compilerContext.popState();
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -1155,7 +1151,7 @@ final class StatementCompiler {
                 Set<String> constNames = new HashSet<>();
                 delegates.analysis.collectPatternBindingNames(declarator.getId(), constNames);
                 for (String constName : constNames) {
-                    compilerContext.currentScope().declareConstLocal(constName);
+                    compilerContext.scopeManager.currentScope().declareConstLocal(constName);
                 }
             }
         }
@@ -1185,7 +1181,7 @@ final class StatementCompiler {
             // instantiation (binding remains unchanged if already initialized).
             if (varDecl.getKind() == VariableKind.VAR && declarator.getInit() == null) {
                 if (declarator.getId() instanceof Identifier identifier
-                        && compilerContext.isLocalBindingFunctionName(identifier.getName())) {
+                        && compilerContext.scopeManager.isLocalBindingFunctionName(identifier.getName())) {
                     // Named function expressions create an immutable name binding in an outer
                     // function-name environment. A same-name `var` declaration in the body
                     // must initialize the function-scope binding to undefined.
@@ -1202,13 +1198,13 @@ final class StatementCompiler {
             if (varDecl.getKind() == VariableKind.VAR
                     && declarator.getId() instanceof Identifier identifier
                     && declarator.getInit() != null
-                    && compilerContext.hasActiveWithObject()) {
+                    && compilerContext.withObjectManager.hasActiveWithObject()) {
                 // Resolve binding before evaluating initializer (ES VariableDeclaration semantics).
                 delegates.expressions.emitIdentifierReference(identifier.getName());
-                int preResolvedPropertyLocalIndex = compilerContext.currentScope().declareLocal(
+                int preResolvedPropertyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$preResolvedVarProperty_" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedPropertyLocalIndex);
-                int preResolvedObjectLocalIndex = compilerContext.currentScope().declareLocal(
+                int preResolvedObjectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$preResolvedVarObject_" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
 
@@ -1265,13 +1261,13 @@ final class StatementCompiler {
             compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
         }
 
-        compilerContext.enterScope();
-        int withObjectLocalIndex = compilerContext.currentScope().declareLocal("$withObject" + compilerContext.scopeDepth);
+        compilerContext.scopeManager.enterScope();
+        int withObjectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$withObject" + compilerContext.scopeManager.getScopeDepth());
         delegates.expressions.compileExpression(withStmt.getObject());
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
-        compilerContext.withObjectLocalStack.push(withObjectLocalIndex);
+        compilerContext.withObjectManager.pushLocal(withObjectLocalIndex);
         try {
             if (withStmt.getBody() != null) {
                 compileStatement(withStmt.getBody());
@@ -1280,11 +1276,11 @@ final class StatementCompiler {
             // Do NOT clear the with-object local to undefined here.
             // Closures defined inside the with block capture a VarRef to this local
             // and need the with-object to remain accessible after the block exits.
-            compilerContext.withObjectLocalStack.pop();
+            compilerContext.withObjectManager.popLocal();
         }
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
 }

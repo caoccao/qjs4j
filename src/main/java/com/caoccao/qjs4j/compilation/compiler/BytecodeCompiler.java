@@ -74,12 +74,12 @@ public final class BytecodeCompiler {
         }
 
         int localCount;
-        if (compilerContext.scopes.isEmpty()) {
-            localCount = compilerContext.maxLocalCount;
+        if (compilerContext.scopeManager.isEmpty()) {
+            localCount = compilerContext.scopeManager.getMaxLocalCount();
         } else {
-            localCount = compilerContext.currentScope().getLocalCount();
+            localCount = compilerContext.scopeManager.currentScope().getLocalCount();
         }
-        String[] localVarNames = compilerContext.getLocalVarNames();
+        String[] localVarNames = compilerContext.scopeManager.getLocalVarNames();
         return compilerContext.emitter.build(localCount, localVarNames);
     }
 

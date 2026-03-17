@@ -352,7 +352,7 @@ final class ExpressionCompiler {
             return;
         }
 
-        if (compilerContext.hasActiveWithObject()) {
+        if (compilerContext.withObjectManager.hasActiveWithObject()) {
             emitWithAwareIdentifierLookup(name);
             return;
         }
@@ -718,18 +718,18 @@ final class ExpressionCompiler {
                 // Match QuickJS scope_delete_var lowering:
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
-                boolean isLocalBinding = compilerContext.findLocalInScopes(id.getName()) != null
+                boolean isLocalBinding = compilerContext.scopeManager.findLocalInScopes(id.getName()) != null
                         || compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName()) != null
                         || (JSArguments.NAME.equals(id.getName()) && !compilerContext.inGlobalScope)
                         || compilerContext.nonDeletableGlobalBindings.contains(id.getName());
                 if (isLocalBinding) {
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                 } else {
-                    List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+                    List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
                     if (!withObjectLocals.isEmpty()) {
                         emitWithAwareDeleteIdentifier(id.getName(), withObjectLocals, 0);
-                    } else if (!compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
-                        emitInheritedWithAwareDeleteIdentifier(id.getName(), compilerContext.inheritedWithObjectBindingNames, 0);
+                    } else if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
+                        emitInheritedWithAwareDeleteIdentifier(id.getName(), compilerContext.withObjectManager.getInheritedBindingNames(), 0);
                     } else {
                         compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.getName());
                     }
@@ -754,7 +754,7 @@ final class ExpressionCompiler {
             boolean isPrefix = unaryExpr.isPrefix();
 
             if (operand instanceof Identifier id) {
-                if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
+                if (compilerContext.withObjectManager.hasActiveWithObject() || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
                     // Use reference semantics so with-scope resolution happens before local/captured fallback.
                     assignmentCompiler.emitIdentifierReference(id.getName());
                     compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
@@ -772,13 +772,13 @@ final class ExpressionCompiler {
                     return;
                 }
 
-                Integer localIndex = compilerContext.findLocalInScopes(id.getName());
+                Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
                 if (localIndex != null) {
                     // Local binding.
                     compileExpression(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    if (compilerContext.isLocalBindingConst(id.getName())) {
+                    if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
                         emitConstAssignmentErrorForLocal(id.getName(), localIndex);
                     } else {
                         compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_LOC : Opcode.PUT_LOC, localIndex);
@@ -792,7 +792,7 @@ final class ExpressionCompiler {
                     compileExpression(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
-                    if (compilerContext.isCapturedBindingConst(id.getName())) {
+                    if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
                         emitConstAssignmentErrorForCaptured(id.getName(), capturedIndex);
                     } else {
                         compilerContext.emitter.emitOpcodeU16(isPrefix ? Opcode.SET_VAR_REF : Opcode.PUT_VAR_REF, capturedIndex);
@@ -940,11 +940,11 @@ final class ExpressionCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
             } else if (JSArguments.NAME.equals(name)
                     && compilerContext.hasEnclosingArgumentsBinding
-                    && compilerContext.findLocalInScopes(name) == null) {
+                    && compilerContext.scopeManager.findLocalInScopes(name) == null) {
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(0);
             } else {
-                Integer localIndex = compilerContext.findLocalInScopes(name);
+                Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
                 if (localIndex != null) {
                     // Use GET_LOC_CHECK for TDZ locals - typeof of an uninitialized
                     // lexical binding throws ReferenceError per ES spec
@@ -1037,7 +1037,7 @@ final class ExpressionCompiler {
         // This must happen BEFORE the 'arguments' special handling so that
         // explicit `var arguments` or `let arguments` declarations take precedence.
         // Following QuickJS: arguments is resolved through normal variable lookup first.
-        Integer localIndex = compilerContext.findLocalInScopes(name);
+        Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
 
         if (localIndex != null) {
             // Use GET_LOC_CHECK for TDZ locals (let/const/class in program scope)
@@ -1082,7 +1082,7 @@ final class ExpressionCompiler {
         }
 
         String withBindingName = withBindingNames.get(withDepth);
-        Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
+        Integer withLocalIndex = compilerContext.scopeManager.findLocalInScopes(withBindingName);
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
@@ -1132,10 +1132,10 @@ final class ExpressionCompiler {
     }
 
     private boolean emitInheritedWithAwareIdentifierLookup(String name) {
-        if (compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
+        if (compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             return false;
         }
-        emitInheritedWithAwareIdentifierLookup(name, compilerContext.inheritedWithObjectBindingNames, 0);
+        emitInheritedWithAwareIdentifierLookup(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0);
         return true;
     }
 
@@ -1146,7 +1146,7 @@ final class ExpressionCompiler {
         }
 
         String withBindingName = withBindingNames.get(withDepth);
-        Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
+        Integer withLocalIndex = compilerContext.scopeManager.findLocalInScopes(withBindingName);
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
@@ -1218,7 +1218,7 @@ final class ExpressionCompiler {
         }
 
         String withBindingName = withBindingNames.get(withDepth);
-        Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
+        Integer withLocalIndex = compilerContext.scopeManager.findLocalInScopes(withBindingName);
         if (withLocalIndex != null) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
         } else {
@@ -1342,7 +1342,7 @@ final class ExpressionCompiler {
     }
 
     private void emitWithAwareIdentifierLookup(String name) {
-        List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+        List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         emitWithAwareIdentifierLookup(name, withObjectLocals, 0);
     }
 
@@ -1412,13 +1412,13 @@ final class ExpressionCompiler {
      * Stack: ... -> ... value receiver
      */
     void emitWithAwareIdentifierLookupForCall(String name) {
-        List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+        List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         if (!withObjectLocals.isEmpty()) {
             emitWithAwareIdentifierLookupForCall(name, withObjectLocals, 0);
             return;
         }
-        if (!compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
-            emitInheritedWithAwareIdentifierLookupForCall(name, compilerContext.inheritedWithObjectBindingNames, 0);
+        if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
+            emitInheritedWithAwareIdentifierLookupForCall(name, compilerContext.withObjectManager.getInheritedBindingNames(), 0);
             return;
         }
         emitIdentifierLookupWithoutWith(name);

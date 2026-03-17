@@ -42,7 +42,7 @@ final class StatementLoopCompiler {
         if (breakStmt.getLabel() != null) {
             String labelName = breakStmt.getLabel().getName();
             LoopContext target = null;
-            for (LoopContext loopCtx : compilerContext.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopManager) {
                 if (labelName.equals(loopCtx.label)) {
                     target = loopCtx;
                     break;
@@ -57,11 +57,11 @@ final class StatementLoopCompiler {
             int jumpPos = compilerContext.emitter.emitJump(Opcode.GOTO);
             target.breakPositions.add(jumpPos);
         } else {
-            if (compilerContext.loopStack.isEmpty()) {
+            if (compilerContext.loopManager.isEmpty()) {
                 throw new JSCompilerException("Break statement outside of loop");
             }
             LoopContext loopContext = null;
-            for (LoopContext loopCtx : compilerContext.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopManager) {
                 if (!loopCtx.isRegularStmt) {
                     loopContext = loopCtx;
                     break;
@@ -85,7 +85,7 @@ final class StatementLoopCompiler {
         if (contStmt.getLabel() != null) {
             String labelName = contStmt.getLabel().getName();
             LoopContext target = null;
-            for (LoopContext loopCtx : compilerContext.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopManager) {
                 if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
                     target = loopCtx;
                     break;
@@ -101,7 +101,7 @@ final class StatementLoopCompiler {
             target.continuePositions.add(jumpPos);
         } else {
             LoopContext loopContext = null;
-            for (LoopContext loopCtx : compilerContext.loopStack) {
+            for (LoopContext loopCtx : compilerContext.loopManager) {
                 if (!loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
                     loopContext = loopCtx;
                     break;
@@ -121,8 +121,8 @@ final class StatementLoopCompiler {
         emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
-        compilerContext.loopStack.push(loop);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
+        compilerContext.loopManager.pushLoop(loop);
 
         emitEvalReturnUndefinedIfNeeded();
         owner.compileStatement(doWhileStmt.getBody());
@@ -145,7 +145,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.patchJump(continuePos, testStart);
         }
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
     }
 
     void compileForInStatement(ForInStatement forInStmt) {
@@ -170,11 +170,11 @@ final class StatementLoopCompiler {
 
         boolean hasHeadTdzScope = !isExpressionBased && !isVar;
         if (hasHeadTdzScope && declarationPattern != null) {
-            compilerContext.enterScope();
+            compilerContext.scopeManager.enterScope();
             delegates.patterns.declarePatternVariables(declarationPattern);
             if (declarationPattern != null) {
                 for (String boundName : declarationPattern.getBoundNames()) {
-                    Integer localIndex = compilerContext.currentScope().getLocal(boundName);
+                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(boundName);
                     if (localIndex != null) {
                         compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                         compilerContext.tdzLocals.add(boundName);
@@ -183,10 +183,10 @@ final class StatementLoopCompiler {
             }
             delegates.expressions.compileExpression(forInStmt.getRight());
             compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
-            compilerContext.exitScope();
+            compilerContext.scopeManager.exitScope();
         }
 
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         if (!isExpressionBased && !isVar && declarationPattern != null) {
             delegates.patterns.declarePatternVariables(declarationPattern);
@@ -219,8 +219,8 @@ final class StatementLoopCompiler {
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
-        compilerContext.loopStack.push(loop);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
+        compilerContext.loopManager.pushLoop(loop);
 
         compilerContext.emitter.emitOpcode(Opcode.FOR_IN_NEXT);
         compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -256,9 +256,9 @@ final class StatementLoopCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
     private void compileForOfExpressionTargetAssignment(Expression leftExpression) {
@@ -301,10 +301,10 @@ final class StatementLoopCompiler {
 
         boolean hasHeadTdzScope = !isExpressionBased && !isVar;
         if (hasHeadTdzScope && pattern != null) {
-            compilerContext.enterScope();
+            compilerContext.scopeManager.enterScope();
             delegates.patterns.declarePatternVariables(pattern);
             for (String boundName : pattern.getBoundNames()) {
-                Integer localIndex = compilerContext.currentScope().getLocal(boundName);
+                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(boundName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                     compilerContext.tdzLocals.add(boundName);
@@ -316,10 +316,10 @@ final class StatementLoopCompiler {
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
             }
-            compilerContext.exitScope();
+            compilerContext.scopeManager.exitScope();
         }
 
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         if (!isExpressionBased && !isVar) {
             delegates.patterns.declarePatternVariables(pattern);
@@ -339,9 +339,9 @@ final class StatementLoopCompiler {
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
         loop.hasIterator = true;
-        compilerContext.loopStack.push(loop);
+        compilerContext.loopManager.pushLoop(loop);
 
         int jumpToEnd;
 
@@ -393,10 +393,10 @@ final class StatementLoopCompiler {
             compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
 
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
     void compileForStatement(ForStatement forStmt) {
@@ -408,7 +408,7 @@ final class StatementLoopCompiler {
             initCompiled = true;
         }
 
-        compilerContext.enterScope();
+        compilerContext.scopeManager.enterScope();
 
         if (!initCompiled && forStmt.getInit() != null) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
@@ -433,8 +433,8 @@ final class StatementLoopCompiler {
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth - 1, compilerContext.scopeDepth);
-        compilerContext.loopStack.push(loop);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth() - 1, compilerContext.scopeManager.getScopeDepth());
+        compilerContext.loopManager.pushLoop(loop);
 
         int jumpToEnd = -1;
         if (forStmt.getTest() != null) {
@@ -474,17 +474,17 @@ final class StatementLoopCompiler {
             compilerContext.emitter.patchJump(continuePos, updateStart);
         }
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.exitScope();
+        compilerContext.scopeManager.exitScope();
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {
         emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
-        LoopContext loop = compilerContext.createLoopContext(loopStart, compilerContext.scopeDepth, compilerContext.scopeDepth);
-        compilerContext.loopStack.push(loop);
+        LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
+        compilerContext.loopManager.pushLoop(loop);
 
         delegates.expressions.compileExpression(whileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
@@ -506,7 +506,7 @@ final class StatementLoopCompiler {
             compilerContext.emitter.patchJump(continuePos, loopStart);
         }
 
-        compilerContext.loopStack.pop();
+        compilerContext.loopManager.popLoop();
     }
 
     private void emitActiveFinallyGosubs() {

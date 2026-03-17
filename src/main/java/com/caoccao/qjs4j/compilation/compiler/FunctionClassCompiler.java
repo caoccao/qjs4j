@@ -65,7 +65,7 @@ final class FunctionClassCompiler {
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
-        functionContext.enterScope();
+        functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = arrowExpr.isAsync();  // Track if this is an async function
         functionContext.isInGeneratorFunction = false;  // Arrow functions cannot be generators
@@ -123,8 +123,8 @@ final class FunctionClassCompiler {
         // For top-level arrows with parameter expressions, keep a local slot for dynamically
         // declared `arguments` from direct eval in parameter initializers.
         if (needsSyntheticEvalArgumentsBinding
-                && functionContext.findLocalInScopes(JSArguments.NAME) == null) {
-            int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
+                && functionContext.scopeManager.findLocalInScopes(JSArguments.NAME) == null) {
+            int argumentsLocalIndex = functionContext.scopeManager.currentScope().declareLocal(JSArguments.NAME);
             functionContext.tdzLocals.add(JSArguments.NAME);
             functionContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, argumentsLocalIndex);
         }
@@ -163,9 +163,9 @@ final class FunctionClassCompiler {
             // Arrow functions can have expression body or block statement body
             if (arrowExpr.getBody() instanceof BlockStatement block) {
                 if (needsSyntheticEvalArgumentsBinding) {
-                    functionContext.enterScope();
+                    functionContext.scopeManager.enterScope();
                     enteredBodyScope = true;
-                    functionContext.varDeclarationScopeOverride = functionContext.currentScope();
+                    functionContext.varDeclarationScopeOverride = functionContext.scopeManager.currentScope();
                 }
 
                 try {
@@ -198,7 +198,7 @@ final class FunctionClassCompiler {
                     List<Statement> bodyStatements = block.getBody();
                     if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
                         functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                        int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                        int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
                         functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                         funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
                         functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -213,7 +213,7 @@ final class FunctionClassCompiler {
             } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
                 funcDelegates.expressions.compileExpression(expr);
-                int returnValueIndex = functionContext.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
+                int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
                 functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                 funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
                 functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -221,13 +221,13 @@ final class FunctionClassCompiler {
                 functionContext.emitter.emitOpcode(arrowExpr.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
             }
 
-            localCount = functionContext.currentScope().getLocalCount();
-            localVarNames = functionContext.getLocalVarNames();
+            localCount = functionContext.scopeManager.currentScope().getLocalCount();
+            localVarNames = functionContext.scopeManager.getLocalVarNames();
         }
         if (enteredBodyScope) {
-            functionContext.exitScope();
+            functionContext.scopeManager.exitScope();
         }
-        functionContext.exitScope();
+        functionContext.scopeManager.exitScope();
 
         // Build the function bytecode
         Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
@@ -274,8 +274,8 @@ final class FunctionClassCompiler {
         boolean hasClassNameScope = classDecl.getId() != null;
         boolean classNameWasTDZ = hasClassNameScope && compilerContext.tdzLocals.contains(className);
         if (hasClassNameScope) {
-            compilerContext.enterScope();
-            classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
+            compilerContext.scopeManager.enterScope();
+            classNameLocalIndex = compilerContext.scopeManager.currentScope().declareConstLocal(className);
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
             compilerContext.tdzLocals.add(className);
         }
@@ -541,7 +541,7 @@ final class FunctionClassCompiler {
         }
 
         if (hasClassNameScope) {
-            compilerContext.exitScope();
+            compilerContext.scopeManager.exitScope();
             if (!classNameWasTDZ) {
                 compilerContext.tdzLocals.remove(className);
             }
@@ -551,14 +551,14 @@ final class FunctionClassCompiler {
         if (classDecl.getId() != null) {
             String varName = classDecl.getId().getName();
             if (!compilerContext.inGlobalScope) {
-                compilerContext.currentScope().declareLocal(varName);
-                Integer localIndex = compilerContext.currentScope().getLocal(varName);
+                compilerContext.scopeManager.currentScope().declareLocal(varName);
+                Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(varName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 }
             } else if (compilerContext.tdzLocals.contains(varName)) {
                 // TDZ local: class was pre-declared as a local for TDZ enforcement
-                Integer localIndex = compilerContext.findLocalInScopes(varName);
+                Integer localIndex = compilerContext.scopeManager.findLocalInScopes(varName);
                 if (localIndex != null) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                     // Direct eval creates an ephemeral lexical environment. When program
@@ -605,8 +605,8 @@ final class FunctionClassCompiler {
         boolean hasClassNameScope = classExpr.getId() != null;
         boolean classNameWasTDZ = hasClassNameScope && compilerContext.tdzLocals.contains(className);
         if (hasClassNameScope) {
-            compilerContext.enterScope();
-            classNameLocalIndex = compilerContext.currentScope().declareConstLocal(className);
+            compilerContext.scopeManager.enterScope();
+            classNameLocalIndex = compilerContext.scopeManager.currentScope().declareConstLocal(className);
             compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, classNameLocalIndex);
             compilerContext.tdzLocals.add(className);
         }
@@ -856,7 +856,7 @@ final class FunctionClassCompiler {
 
         // Exit the class name scope
         if (hasClassNameScope) {
-            compilerContext.exitScope();
+            compilerContext.scopeManager.exitScope();
             if (!classNameWasTDZ) {
                 compilerContext.tdzLocals.remove(className);
             }
@@ -904,8 +904,8 @@ final class FunctionClassCompiler {
         // a parameter). This prevents the function object from overwriting the parent binding.
         String functionName = funcDecl.getId().getName();
         if (!compilerContext.inGlobalScope) {
-            if (compilerContext.currentScope().getLocal(functionName) == null) {
-                compilerContext.currentScope().declareLocal(functionName);
+            if (compilerContext.scopeManager.currentScope().getLocal(functionName) == null) {
+                compilerContext.scopeManager.currentScope().declareLocal(functionName);
             }
         }
 
@@ -920,7 +920,7 @@ final class FunctionClassCompiler {
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
-        functionContext.enterScope();
+        functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
@@ -1004,7 +1004,7 @@ final class FunctionClassCompiler {
         List<Statement> bodyStatements = funcDecl.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -1012,9 +1012,9 @@ final class FunctionClassCompiler {
             functionContext.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = functionContext.getLocalVarNames();
-        functionContext.exitScope();
+        int localCount = functionContext.scopeManager.currentScope().getLocalCount();
+        String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
+        functionContext.scopeManager.exitScope();
 
         // Build the function bytecode
         Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
@@ -1067,7 +1067,7 @@ final class FunctionClassCompiler {
         // captures the local before the function is stored in it.
         // Following QuickJS var_refs pattern: the closure variable pointing to the function
         // itself is patched after creation via selfCaptureIndex metadata.
-        Integer selfCaptureIdx = functionContext.findCapturedBindingIndex(functionName);
+        Integer selfCaptureIdx = functionContext.captureResolver.findCapturedBindingIndex(functionName);
         int selfCaptureIndex = selfCaptureIdx != null ? selfCaptureIdx : -1;
 
         // Create JSBytecodeFunction
@@ -1103,8 +1103,8 @@ final class FunctionClassCompiler {
         boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
                 && !funcDecl.isAsync()
                 && !funcDecl.isGenerator()
-                && !compilerContext.hasEnclosingBlockScopeLocal(functionName);
-        Integer localIndex = compilerContext.findLocalInScopes(functionName);
+                && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
+        Integer localIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
         if (localIndex != null) {
             if (isAnnexB) {
                 // Annex B.3.3 runtime hook: store in both block scope and var scope
@@ -1121,7 +1121,7 @@ final class FunctionClassCompiler {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
             } else {
                 // Declare it as a local
-                localIndex = compilerContext.currentScope().declareLocal(functionName);
+                localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
                 if (isAnnexB) {
                     // Annex B.3.3 runtime hook: store in both block scope and var scope
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -1154,7 +1154,7 @@ final class FunctionClassCompiler {
         inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
-        functionContext.enterScope();
+        functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = functionExpression.isAsync();
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
@@ -1189,15 +1189,15 @@ final class FunctionClassCompiler {
                 conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
             }
             if (!conflictsWithParameter) {
-                functionContext.currentScope().declareLocal(functionExpression.getId().getName());
+                functionContext.scopeManager.currentScope().declareLocal(functionExpression.getId().getName());
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
                 // - In strict mode: mark as const so assignment throws TypeError
                 // - In non-strict mode: mark as function name so assignment is silently ignored
                 if (functionContext.strictMode) {
-                    functionContext.currentScope().markConstLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markConstLocal(functionExpression.getId().getName());
                 } else {
-                    functionContext.currentScope().markFunctionNameLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markFunctionNameLocal(functionExpression.getId().getName());
                 }
             }
         }
@@ -1265,7 +1265,7 @@ final class FunctionClassCompiler {
         List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
+            int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             funcDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
@@ -1274,11 +1274,11 @@ final class FunctionClassCompiler {
 
         Integer functionExpressionSelfLocalIndex = null;
         if (functionExpression.getId() != null) {
-            functionExpressionSelfLocalIndex = functionContext.currentScope().getLocal(functionExpression.getId().getName());
+            functionExpressionSelfLocalIndex = functionContext.scopeManager.currentScope().getLocal(functionExpression.getId().getName());
         }
-        int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = functionContext.getLocalVarNames();
-        functionContext.exitScope();
+        int localCount = functionContext.scopeManager.currentScope().getLocalCount();
+        String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
+        functionContext.scopeManager.exitScope();
 
         // Build the function bytecode
         Bytecode functionBytecode = functionContext.emitter.build(localCount, localVarNames);
@@ -1355,7 +1355,7 @@ final class FunctionClassCompiler {
         FunctionExpression functionExpression = method.getValue();
 
         // Enter function scope and add parameters as locals
-        functionContext.enterScope();
+        functionContext.scopeManager.enterScope();
         functionContext.inGlobalScope = false;
         functionContext.isInAsyncFunction = functionExpression.isAsync();
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
@@ -1455,16 +1455,16 @@ final class FunctionClassCompiler {
         List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            int returnValueIndex = functionContext.currentScope().declareLocal("$method_return_" + functionContext.emitter.currentOffset());
+            int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$method_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             methodDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
             functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
         }
 
-        int localCount = functionContext.currentScope().getLocalCount();
-        String[] localVarNames = functionContext.getLocalVarNames();
-        functionContext.exitScope();
+        int localCount = functionContext.scopeManager.currentScope().getLocalCount();
+        String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
+        functionContext.scopeManager.exitScope();
 
         // Build the method bytecode
         Bytecode methodBytecode = functionContext.emitter.build(localCount, localVarNames);
@@ -1568,7 +1568,7 @@ final class FunctionClassCompiler {
         blockCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         blockCtx.privateSymbols = privateSymbols;
 
-        blockCtx.enterScope();
+        blockCtx.scopeManager.enterScope();
         blockCtx.inGlobalScope = false;
 
         // Force-capture the class inner name binding so eval() inside the
@@ -1585,14 +1585,14 @@ final class FunctionClassCompiler {
 
         // Static blocks always return undefined
         blockCtx.emitter.emitOpcode(Opcode.UNDEFINED);
-        int returnValueIndex = blockCtx.currentScope().declareLocal("$static_block_return_" + blockCtx.emitter.currentOffset());
+        int returnValueIndex = blockCtx.scopeManager.currentScope().declareLocal("$static_block_return_" + blockCtx.emitter.currentOffset());
         blockCtx.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
         blockDelegates.emitHelpers.emitCurrentScopeUsingDisposal();
         blockCtx.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
         blockCtx.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = blockCtx.currentScope().getLocalCount();
-        blockCtx.exitScope();
+        int localCount = blockCtx.scopeManager.currentScope().getLocalCount();
+        blockCtx.scopeManager.exitScope();
 
         Bytecode blockBytecode = blockCtx.emitter.build(localCount);
 
@@ -1635,7 +1635,7 @@ final class FunctionClassCompiler {
         initCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         initCtx.privateSymbols = privateSymbols;
 
-        initCtx.enterScope();
+        initCtx.scopeManager.enterScope();
         initCtx.inGlobalScope = false;
 
         // Force-capture the class inner name binding so eval() inside the
@@ -1719,8 +1719,8 @@ final class FunctionClassCompiler {
         initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
         initCtx.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = initCtx.currentScope().getLocalCount();
-        initCtx.exitScope();
+        int localCount = initCtx.scopeManager.currentScope().getLocalCount();
+        initCtx.scopeManager.exitScope();
         Bytecode initializerBytecode = initCtx.emitter.build(localCount);
 
         JSBytecodeFunction initFunc = new JSBytecodeFunction(
@@ -1763,7 +1763,7 @@ final class FunctionClassCompiler {
         ctorCtx.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         ctorCtx.privateSymbols = privateSymbols;  // Make private symbols available
 
-        ctorCtx.enterScope();
+        ctorCtx.scopeManager.enterScope();
         ctorCtx.inGlobalScope = false;
 
         // Force-capture the class inner name binding so eval() inside the
@@ -1797,8 +1797,8 @@ final class FunctionClassCompiler {
         ctorCtx.emitter.emitOpcode(hasSuper ? Opcode.PUSH_THIS : Opcode.UNDEFINED);
         ctorCtx.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = ctorCtx.currentScope().getLocalCount();
-        ctorCtx.exitScope();
+        int localCount = ctorCtx.scopeManager.currentScope().getLocalCount();
+        ctorCtx.scopeManager.exitScope();
 
         Bytecode constructorBytecode = ctorCtx.emitter.build(localCount);
 
@@ -1860,11 +1860,11 @@ final class FunctionClassCompiler {
         if (functionContext.inGlobalScope || functionContext.isInArrowFunction) {
             return;
         }
-        if (functionContext.currentScope().getLocal(JSArguments.NAME) != null) {
+        if (functionContext.scopeManager.currentScope().getLocal(JSArguments.NAME) != null) {
             return;
         }
 
-        int argumentsLocalIndex = functionContext.currentScope().declareLocal(JSArguments.NAME);
+        int argumentsLocalIndex = functionContext.scopeManager.currentScope().declareLocal(JSArguments.NAME);
         functionContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
         functionContext.emitter.emitU8(0);
         functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
@@ -1889,11 +1889,11 @@ final class FunctionClassCompiler {
         for (int i = 0; i < params.size(); i++) {
             Pattern param = params.get(i);
             if (param instanceof Identifier id) {
-                int slotIndex = functionContext.currentScope().declareParameter(id.getName());
+                int slotIndex = functionContext.scopeManager.currentScope().declareParameter(id.getName());
                 parameterSlotIndexes.add(slotIndex);
             } else {
                 // Destructuring parameter: declare a synthetic slot for the argument
-                int slotIndex = functionContext.currentScope().declareParameter("$param_" + i);
+                int slotIndex = functionContext.scopeManager.currentScope().declareParameter("$param_" + i);
                 parameterSlotIndexes.add(slotIndex);
                 // Declare local variables for all bound names in the pattern
                 funcDelegates.patterns.declarePatternVariables(param);
@@ -1927,7 +1927,7 @@ final class FunctionClassCompiler {
         if (restParameter.getArgument() instanceof Identifier restId) {
             // Simple rest: ...args → declare local and store
             String restParamName = restId.getName();
-            int restLocalIndex = functionContext.currentScope().declareLocal(restParamName);
+            int restLocalIndex = functionContext.scopeManager.currentScope().declareLocal(restParamName);
             functionContext.emitter.emitOpcode(Opcode.PUT_LOC);
             functionContext.emitter.emitU16(restLocalIndex);
         } else {
@@ -1965,16 +1965,16 @@ final class FunctionClassCompiler {
         wrapperContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         wrapperContext.privateSymbols = compilerContext.privateSymbols;
         inheritVisibleWithObjectBindings(wrapperContext);
-        wrapperContext.enterScope();
+        wrapperContext.scopeManager.enterScope();
         wrapperContext.inGlobalScope = false;
 
         wrapperDelegates.expressions.compileExpression(expression);
         wrapperContext.emitter.emitOpcode(Opcode.RETURN);
 
-        int localCount = wrapperContext.scopes.isEmpty()
-                ? wrapperContext.maxLocalCount
-                : wrapperContext.currentScope().getLocalCount();
-        String[] localVarNames = wrapperContext.getLocalVarNames();
+        int localCount = wrapperContext.scopeManager.isEmpty()
+                ? wrapperContext.scopeManager.getMaxLocalCount()
+                : wrapperContext.scopeManager.currentScope().getLocalCount();
+        String[] localVarNames = wrapperContext.scopeManager.getLocalVarNames();
         Bytecode bytecode = wrapperContext.emitter.build(localCount, localVarNames);
 
         JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(
@@ -2004,8 +2004,8 @@ final class FunctionClassCompiler {
     }
 
     private void inheritVisibleWithObjectBindings(CompilerContext functionContext) {
-        functionContext.inheritedWithObjectBindingNames.addAll(
-                compilerContext.getVisibleWithObjectBindingNamesForNestedFunction());
+        functionContext.withObjectManager.addInheritedBindingNames(
+                compilerContext.withObjectManager.getVisibleBindingNamesForNestedFunction(compilerContext.scopeManager));
     }
 
     void installPrivateStaticMethods(

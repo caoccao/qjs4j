@@ -189,16 +189,16 @@ final class ExpressionAssignmentCompiler {
     private void compileIdentifierAssignmentExpression(AssignmentExpression assignExpr, Identifier identifier) {
         String name = identifier.getName();
         AssignmentOperator operator = assignExpr.getOperator();
-        Integer localIndex = compilerContext.findLocalInScopes(name);
+        Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
         Integer capturedIndex = localIndex == null ? compilerContext.captureResolver.resolveCapturedBindingIndex(name) : null;
-        boolean isConstLocalBinding = localIndex != null && compilerContext.isLocalBindingConst(name);
-        boolean isConstCapturedBinding = capturedIndex != null && compilerContext.isCapturedBindingConst(name);
+        boolean isConstLocalBinding = localIndex != null && compilerContext.scopeManager.isLocalBindingConst(name);
+        boolean isConstCapturedBinding = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingImmutable(name);
 
         // Per QuickJS: in non-strict mode, assignment to a named function expression's
         // BindingIdentifier is silently ignored. Evaluate the RHS for side effects
         // but do not store. The assignment expression result is the RHS value.
-        boolean isFunctionNameLocal = localIndex != null && compilerContext.isLocalBindingFunctionName(name);
-        boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.isCapturedBindingFunctionName(name);
+        boolean isFunctionNameLocal = localIndex != null && compilerContext.scopeManager.isLocalBindingFunctionName(name);
+        boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingFunctionName(name);
         if (isFunctionNameLocal || isFunctionNameCaptured) {
             if (operator != AssignmentOperator.ASSIGN) {
                 if (isFunctionNameLocal) {
@@ -339,7 +339,7 @@ final class ExpressionAssignmentCompiler {
 
         if (left instanceof Identifier id) {
             String name = id.getName();
-            Integer localIndex = compilerContext.findLocalInScopes(name);
+            Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex != null) {
                 if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
@@ -423,9 +423,9 @@ final class ExpressionAssignmentCompiler {
 
         if (left instanceof Identifier id) {
             String name = id.getName();
-            Integer localIndex = compilerContext.findLocalInScopes(name);
+            Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex != null) {
-                if (compilerContext.isLocalBindingConst(name)) {
+                if (compilerContext.scopeManager.isLocalBindingConst(name)) {
                     emitConstAssignmentErrorForLocal(name, localIndex);
                 } else if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
@@ -435,7 +435,7 @@ final class ExpressionAssignmentCompiler {
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    if (compilerContext.isCapturedBindingConst(name)) {
+                    if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     } else {
                         compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -487,7 +487,7 @@ final class ExpressionAssignmentCompiler {
     }
 
     private void emitDirectIdentifierReference(String name) {
-        Integer localIndex = compilerContext.findLocalInScopes(name);
+        Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
         if (localIndex != null) {
             emitScopedReference(Opcode.MAKE_LOC_REF, name, localIndex);
             return;
@@ -503,7 +503,7 @@ final class ExpressionAssignmentCompiler {
     }
 
     void emitIdentifierReference(String name) {
-        if (compilerContext.hasActiveWithObject() || !compilerContext.inheritedWithObjectBindingNames.isEmpty()) {
+        if (compilerContext.withObjectManager.hasActiveWithObject() || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             emitWithAwareIdentifierReference(name);
         } else {
             emitDirectIdentifierReference(name);
@@ -519,14 +519,14 @@ final class ExpressionAssignmentCompiler {
     private void emitWithAwareIdentifierReference(String name) {
         List<Integer> jumpToResolvedOffsets = new ArrayList<>();
 
-        List<Integer> withObjectLocals = compilerContext.getActiveWithObjectLocals();
+        List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
         for (int withObjectLocalIndex : withObjectLocals) {
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withObjectLocalIndex);
             emitWithCandidateReference(name, jumpToResolvedOffsets);
         }
 
-        for (String withBindingName : compilerContext.inheritedWithObjectBindingNames) {
-            Integer withLocalIndex = compilerContext.findLocalInScopes(withBindingName);
+        for (String withBindingName : compilerContext.withObjectManager.getInheritedBindingNames()) {
+            Integer withLocalIndex = compilerContext.scopeManager.findLocalInScopes(withBindingName);
             if (withLocalIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, withLocalIndex);
                 emitWithCandidateReference(name, jumpToResolvedOffsets);
