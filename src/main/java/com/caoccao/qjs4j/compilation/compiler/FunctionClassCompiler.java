@@ -419,13 +419,9 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
-        // Initialize inner immutable class-name binding used by class body/heritage closures.
-        if (hasClassNameScope) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
-        }
-
-        // Now compile methods and add them to the prototype
+        // Now compile methods and add them to the prototype.
+        // The class name binding is NOT yet initialized — computed property keys
+        // that reference the class name must see it as TDZ (ReferenceError).
         // After DEFINE_CLASS: Stack is proto constructor (constructor on TOP)
         // For simplicity, swap so proto is on top: constructor proto
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -496,6 +492,19 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
+        // Drop prototype, keep constructor (following QuickJS: proto is dropped before
+        // the class name is initialized and before static initializers run).
+        compilerContext.emitter.emitOpcode(Opcode.NIP);
+        // Stack: constructor
+
+        // Initialize inner immutable class-name binding. This must happen AFTER all
+        // method definitions and computed property key evaluation (so those see TDZ),
+        // but BEFORE static initializers (which need to access the class name).
+        if (hasClassNameScope) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
+        }
+
         // Execute static initializers (static fields and static blocks) in source order.
         // Each initializer runs with class constructor as `this`.
         for (ClassElement staticInitializer : staticInitializers) {
@@ -509,31 +518,22 @@ final class FunctionClassCompiler {
                 continue;
             }
 
-            // Stack: proto constructor
-            // DUP the constructor to use as 'this'
+            // Stack: constructor
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            // Stack: proto constructor constructor
+            // Stack: constructor constructor
 
-            // Static initializers must also be fresh closures per class evaluation.
             compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, staticInitializerFunc);
-            // Stack: proto constructor constructor func
+            // Stack: constructor constructor func
 
-            // SWAP so we have: proto constructor func constructor
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            // Stack: proto constructor func constructor
+            // Stack: constructor func constructor
 
-            // Call the function with 0 arguments, using constructor as 'this'
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
-            // Stack: proto constructor returnValue
+            // Stack: constructor returnValue
 
-            // Drop the return value
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            // Stack: proto constructor
+            // Stack: constructor
         }
-
-        // Drop prototype, keep constructor
-        compilerContext.emitter.emitOpcode(Opcode.NIP);
-        // Stack: constructor
 
         if (hasClassNameScope) {
             compilerContext.exitScope();
@@ -737,13 +737,8 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcodeAtom(Opcode.DEFINE_CLASS, className);
         // Stack: proto constructor
 
-        // Initialize the class name binding (ES2024 ClassDefinitionEvaluation step 22)
-        if (hasClassNameScope) {
-            compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
-        }
-
-        // Compile methods
+        // Compile methods. The class name binding is NOT yet initialized —
+        // computed property keys that reference the class name must see TDZ.
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: constructor proto
 
@@ -802,6 +797,19 @@ final class FunctionClassCompiler {
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         // Stack: proto constructor
 
+        // Drop prototype, keep constructor (following QuickJS: proto is dropped before
+        // the class name is initialized and before static initializers run).
+        compilerContext.emitter.emitOpcode(Opcode.NIP);
+        // Stack: constructor
+
+        // Initialize inner immutable class-name binding. This must happen AFTER all
+        // method definitions and computed property key evaluation (so those see TDZ),
+        // but BEFORE static initializers (which need to access the class name).
+        if (hasClassNameScope) {
+            compilerContext.emitter.emitOpcode(Opcode.DUP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, classNameLocalIndex);
+        }
+
         // Execute static initializers (static fields and static blocks) in source order.
         for (ClassElement staticInitializer : staticInitializers) {
             JSBytecodeFunction staticInitializerFunc;
@@ -814,31 +822,22 @@ final class FunctionClassCompiler {
                 continue;
             }
 
-            // Stack: proto constructor
-            // DUP the constructor to use as 'this'
+            // Stack: constructor
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            // Stack: proto constructor constructor
+            // Stack: constructor constructor
 
-            // Static initializers must also be fresh closures per class evaluation.
             compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, staticInitializerFunc);
-            // Stack: proto constructor constructor func
+            // Stack: constructor constructor func
 
-            // SWAP so we have: proto constructor func constructor
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
-            // Stack: proto constructor func constructor
+            // Stack: constructor func constructor
 
-            // Call the function with 0 arguments, using constructor as 'this'
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
-            // Stack: proto constructor returnValue
+            // Stack: constructor returnValue
 
-            // Drop the return value
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            // Stack: proto constructor
+            // Stack: constructor
         }
-
-        // Drop prototype, keep constructor on stack
-        compilerContext.emitter.emitOpcode(Opcode.NIP);
-        // Stack: constructor
 
         // Exit the class name scope
         if (hasClassNameScope) {
