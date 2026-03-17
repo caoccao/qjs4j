@@ -44,7 +44,7 @@ final class FunctionClassFieldCompiler {
             throw new JSCompilerException("Computed field key symbol not found");
         }
 
-        Map<String, JSSymbol> savedPrivateSymbols = compilerContext.privateSymbols;
+        compilerContext.pushState();
         compilerContext.privateSymbols = privateSymbols;
 
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
@@ -60,7 +60,7 @@ final class FunctionClassFieldCompiler {
             compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         } finally {
-            compilerContext.privateSymbols = savedPrivateSymbols;
+            compilerContext.popState();
         }
     }
 
@@ -74,7 +74,7 @@ final class FunctionClassFieldCompiler {
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
 
             // Track class field initializer context for ContainsArguments check in eval
-            boolean savedInClassFieldInitializer = compilerContext.inClassFieldInitializer;
+            compilerContext.pushState();
             compilerContext.inClassFieldInitializer = true;
 
             if (isPrivate) {
@@ -143,7 +143,7 @@ final class FunctionClassFieldCompiler {
                 compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
             }
 
-            compilerContext.inClassFieldInitializer = savedInClassFieldInitializer;
+            compilerContext.popState();
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }

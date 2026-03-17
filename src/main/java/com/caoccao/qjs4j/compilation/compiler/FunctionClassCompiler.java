@@ -283,7 +283,7 @@ final class FunctionClassCompiler {
         // Per ES2024 10.2.1, all parts of a class are strict mode code.
         // Set inClassBody so computed key expressions are compiled into strict
         // wrapper functions when the enclosing function is non-strict.
-        boolean savedInClassBody = compilerContext.inClassBody;
+        compilerContext.pushState();
         compilerContext.inClassBody = true;
 
         // Compile superclass expression or emit undefined.
@@ -580,7 +580,7 @@ final class FunctionClassCompiler {
             // For class declarations, we always have a name, so this shouldn't happen
         }
 
-        compilerContext.inClassBody = savedInClassBody;
+        compilerContext.popState();
     }
 
     /**
@@ -612,7 +612,7 @@ final class FunctionClassCompiler {
         }
 
         // Per ES2024 10.2.1, all parts of a class are strict mode code.
-        boolean savedInClassBody = compilerContext.inClassBody;
+        compilerContext.pushState();
         compilerContext.inClassBody = true;
 
         // Compile superclass expression or emit undefined.
@@ -865,7 +865,7 @@ final class FunctionClassCompiler {
         // For class expressions, we leave the constructor on the stack
         // (unlike class declarations which bind it to a variable)
 
-        compilerContext.inClassBody = savedInClassBody;
+        compilerContext.popState();
     }
 
     /**
@@ -1946,12 +1946,12 @@ final class FunctionClassCompiler {
         if (canUseStrictWrapper()) {
             emitStrictExpressionCall(expression);
         } else {
-            boolean savedStrictMode = compilerContext.strictMode;
+            compilerContext.pushState();
             compilerContext.strictMode = true;
             try {
                 delegates.expressions.compileExpression(expression);
             } finally {
-                compilerContext.strictMode = savedStrictMode;
+                compilerContext.popState();
             }
         }
     }

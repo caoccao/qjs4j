@@ -40,7 +40,7 @@ final class StatementCompiler {
     }
 
     void compileBlockStatement(BlockStatement block) {
-        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.pushState();
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
         // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
@@ -90,8 +90,8 @@ final class StatementCompiler {
             compileStatement(stmt);
         }
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
-        compilerContext.inGlobalScope = savedGlobalScope;
         compilerContext.exitScope();
+        compilerContext.popState();
     }
 
     void compileBreakStatement(BreakStatement breakStmt) {
@@ -694,7 +694,7 @@ final class StatementCompiler {
         // Compile discriminant
         delegates.expressions.compileExpression(switchStmt.getDiscriminant());
 
-        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.pushState();
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
 
@@ -824,9 +824,9 @@ final class StatementCompiler {
 
         compilerContext.loopStack.pop();
 
-        compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
+        compilerContext.popState();
     }
 
     void compileThrowStatement(ThrowStatement throwStmt) {
@@ -885,9 +885,9 @@ final class StatementCompiler {
 
             // Bind exception to parameter if present
             if (handler.getParam() != null) {
+                compilerContext.pushState();
                 compilerContext.enterScope();
                 // Catch block creates a local scope - variables should use GET_LOCAL
-                boolean savedGlobalScope = compilerContext.inGlobalScope;
                 compilerContext.inGlobalScope = false;
 
                 // Declare all pattern variables and assign the exception value
@@ -907,9 +907,9 @@ final class StatementCompiler {
                 // Catch body has its own block lexical environment nested under parameter scope.
                 compileTryFinallyBlock(handler.getBody());
 
-                compilerContext.inGlobalScope = savedGlobalScope;
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
                 compilerContext.exitScope();
+                compilerContext.popState();
             } else {
                 // No parameter, compile catch body without binding
                 compileTryFinallyBlock(handler.getBody());
@@ -924,7 +924,7 @@ final class StatementCompiler {
      * Compile a block for try/catch/finally, preserving the value of the last expression.
      */
     void compileTryFinallyBlock(BlockStatement block) {
-        boolean savedGlobalScope = compilerContext.inGlobalScope;
+        compilerContext.pushState();
         compilerContext.enterScope();
         compilerContext.inGlobalScope = false;
 
@@ -1023,9 +1023,9 @@ final class StatementCompiler {
             }
         }
 
-        compilerContext.inGlobalScope = savedGlobalScope;
         delegates.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.exitScope();
+        compilerContext.popState();
     }
 
     void compileTryStatement(TryStatement tryStmt) {
@@ -1066,8 +1066,8 @@ final class StatementCompiler {
 
             TryStatement.CatchClause handler = tryStmt.getHandler();
             if (handler.getParam() != null) {
+                compilerContext.pushState();
                 compilerContext.enterScope();
-                boolean savedGlobalScope = compilerContext.inGlobalScope;
                 compilerContext.inGlobalScope = false;
                 Pattern catchParam = handler.getParam();
                 if (catchParam instanceof Identifier id) {
@@ -1090,9 +1090,9 @@ final class StatementCompiler {
                 catchExceptionGosub = compilerContext.emitter.emitJump(Opcode.GOSUB);
                 compilerContext.emitter.emitOpcode(Opcode.THROW);
 
-                compilerContext.inGlobalScope = savedGlobalScope;
                 delegates.emitHelpers.emitCurrentScopeUsingDisposal();
                 compilerContext.exitScope();
+                compilerContext.popState();
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
 
@@ -1161,7 +1161,7 @@ final class StatementCompiler {
         }
         // Track whether this is a var declaration in global program scope
         // so compilePatternAssignment can use PUT_VAR for global-scoped vars.
-        boolean savedVarInGlobalProgram = compilerContext.varInGlobalProgram;
+        compilerContext.pushState();
         if (compilerContext.isGlobalProgram && varDecl.getKind() == VariableKind.VAR) {
             compilerContext.varInGlobalProgram = true;
         }
@@ -1247,7 +1247,7 @@ final class StatementCompiler {
                 delegates.patterns.compilePatternAssignment(declarator.getId());
             }
         }
-        compilerContext.varInGlobalProgram = savedVarInGlobalProgram;
+        compilerContext.popState();
     }
 
     void compileWhileStatement(WhileStatement whileStmt) {

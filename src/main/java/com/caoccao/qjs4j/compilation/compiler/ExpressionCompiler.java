@@ -164,10 +164,10 @@ final class ExpressionCompiler {
         switch (binExpr.getOperator()) {
             case LOGICAL_AND -> {
                 // left && right: if left is falsy, return left; otherwise evaluate and return right
-                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.getLeft());
-                compilerContext.emitTailCalls = savedTailCalls;
+                compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -177,10 +177,10 @@ final class ExpressionCompiler {
             }
             case LOGICAL_OR -> {
                 // left || right: if left is truthy, return left; otherwise evaluate and return right
-                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.getLeft());
-                compilerContext.emitTailCalls = savedTailCalls;
+                compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
@@ -190,10 +190,10 @@ final class ExpressionCompiler {
             }
             case NULLISH_COALESCING -> {
                 // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
-                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
                 compileExpression(binExpr.getLeft());
-                compilerContext.emitTailCalls = savedTailCalls;
+                compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
@@ -256,10 +256,10 @@ final class ExpressionCompiler {
 
     void compileConditionalExpression(ConditionalExpression condExpr) {
         // Compile test (not in tail position)
-        boolean savedTailCalls = compilerContext.emitTailCalls;
+        compilerContext.pushState();
         compilerContext.emitTailCalls = false;
         compileExpression(condExpr.getTest());
-        compilerContext.emitTailCalls = savedTailCalls;
+        compilerContext.popState();
 
         // Jump to alternate if false
         int jumpToAlternate = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
@@ -274,7 +274,6 @@ final class ExpressionCompiler {
         compilerContext.emitter.patchJump(jumpToAlternate, compilerContext.emitter.currentOffset());
 
         // Compile alternate (in tail position)
-        compilerContext.emitTailCalls = savedTailCalls;
         compileExpression(condExpr.getAlternate());
 
         // Patch jump to end
@@ -573,10 +572,10 @@ final class ExpressionCompiler {
         for (int i = 0; i < expressions.size(); i++) {
             if (i < expressions.size() - 1) {
                 // Non-last expressions are not in tail position
-                boolean savedTailCalls = compilerContext.emitTailCalls;
+                compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
                 compileExpression(expressions.get(i));
-                compilerContext.emitTailCalls = savedTailCalls;
+                compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
                 // Last expression inherits tail call context

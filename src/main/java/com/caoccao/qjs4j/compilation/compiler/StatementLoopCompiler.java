@@ -412,12 +412,12 @@ final class StatementLoopCompiler {
 
         if (!initCompiled && forStmt.getInit() != null) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
-                boolean savedInGlobalScope = compilerContext.inGlobalScope;
+                compilerContext.pushState();
                 if (compilerContext.inGlobalScope && varDecl.getKind() != VariableKind.VAR) {
                     compilerContext.inGlobalScope = false;
                 }
                 owner.compileVariableDeclaration(varDecl);
-                compilerContext.inGlobalScope = savedInGlobalScope;
+                compilerContext.popState();
             } else if (forStmt.getInit() instanceof Expression expr) {
                 delegates.expressions.compileExpression(expr);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);

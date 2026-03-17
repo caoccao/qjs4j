@@ -41,6 +41,7 @@ final class CompilerContext {
     final Deque<CompilerScope> scopes;
     final Set<String> tdzLocals;
     final Deque<Integer> withObjectLocalStack;
+    private final Deque<CompilerStateFrame> stateStack;
     boolean classFieldEvalContext;
     String classInnerNameToCapture;
     JSContext context;
@@ -81,6 +82,7 @@ final class CompilerContext {
     }
 
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
+        this.stateStack = new ArrayDeque<>();
         this.activeFinallyGosubPatches = new ArrayDeque<>();
         this.activeFinallyNipCatchCounts = new ArrayDeque<>();
         this.annexBFunctionNames = new HashSet<>();
@@ -275,7 +277,6 @@ final class CompilerContext {
         return captureResolver.isCapturedBindingFunctionName(name);
     }
 
-
     boolean isLocalBindingConst(String name) {
         for (CompilerScope scope : scopes) {
             Integer localIndex = scope.getLocal(name);
@@ -294,6 +295,25 @@ final class CompilerContext {
             }
         }
         return false;
+    }
+
+    void popState() {
+        CompilerStateFrame frame = stateStack.pop();
+        strictMode = frame.strictMode();
+        inGlobalScope = frame.inGlobalScope();
+        inClassBody = frame.inClassBody();
+        inClassFieldInitializer = frame.inClassFieldInitializer();
+        emitTailCalls = frame.emitTailCalls();
+        varInGlobalProgram = frame.varInGlobalProgram();
+        privateSymbols = frame.privateSymbols();
+        inferredClassName = frame.inferredClassName();
+    }
+
+    void pushState() {
+        stateStack.push(new CompilerStateFrame(
+                strictMode, inGlobalScope, inClassBody,
+                inClassFieldInitializer, emitTailCalls,
+                varInGlobalProgram, privateSymbols, inferredClassName));
     }
 
 }
