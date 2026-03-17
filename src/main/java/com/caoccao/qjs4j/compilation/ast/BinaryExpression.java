@@ -82,4 +82,14 @@ public final class BinaryExpression extends Expression {
         return right;
     }
 
+    @Override
+    public boolean hasTailCallInTailPosition() {
+        if (operator == BinaryOperator.NULLISH_COALESCING
+                || operator == BinaryOperator.LOGICAL_AND
+                || operator == BinaryOperator.LOGICAL_OR) {
+            return right.hasTailCallInTailPosition();
+        }
+        return false;
+    }
+
 }

@@ -73,6 +73,18 @@ public final class MethodDefinition extends ClassElement {
         return kind;
     }
 
+    public String getSimpleName() {
+        if (key instanceof Identifier id) {
+            return id.getName();
+        } else if (key instanceof Literal literal) {
+            return literal.getValue() != null ? literal.getValue().toString() : "null";
+        } else if (key instanceof PrivateIdentifier privateId) {
+            return privateId.getName();
+        } else {
+            return "[computed]";
+        }
+    }
+
     public FunctionExpression getValue() {
         return value;
     }

@@ -445,7 +445,7 @@ final class FunctionClassCompiler {
                 // Compile method. Static methods share the same private name scope.
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        compilerContext.getMethodName(method),
+                        method.getSimpleName(),
                         false,
                         List.of(),
                         privateSymbols,
@@ -455,7 +455,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = compilerContext.getMethodName(method);
+                String methodName = method.getSimpleName();
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor (method added to constructor)
 
@@ -469,7 +469,7 @@ final class FunctionClassCompiler {
                 // Pass private symbols to methods so they can access private fields
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        compilerContext.getMethodName(method),
+                        method.getSimpleName(),
                         false,
                         List.of(),
                         privateSymbols,
@@ -479,7 +479,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = compilerContext.getMethodName(method);
+                String methodName = method.getSimpleName();
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto (method added to proto)
             }
@@ -765,7 +765,7 @@ final class FunctionClassCompiler {
 
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        compilerContext.getMethodName(method),
+                        method.getSimpleName(),
                         false,
                         List.of(),
                         privateSymbols,
@@ -775,7 +775,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = compilerContext.getMethodName(method);
+                String methodName = method.getSimpleName();
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: proto constructor
 
@@ -785,7 +785,7 @@ final class FunctionClassCompiler {
             } else {
                 JSBytecodeFunction methodFunc = compileMethodAsFunction(
                         method,
-                        compilerContext.getMethodName(method),
+                        method.getSimpleName(),
                         false,
                         List.of(),
                         privateSymbols,
@@ -795,7 +795,7 @@ final class FunctionClassCompiler {
                         false
                 );
 
-                String methodName = compilerContext.getMethodName(method);
+                String methodName = method.getSimpleName();
                 delegates.emitHelpers.emitClassMethodDefinition(method, methodFunc, methodName);
                 // Stack: constructor proto
             }
@@ -1505,7 +1505,7 @@ final class FunctionClassCompiler {
             IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols) {
         List<PrivateMethodEntry> privateMethodEntries = new ArrayList<>();
         for (MethodDefinition method : privateMethods) {
-            String methodName = compilerContext.getMethodName(method);
+            String methodName = method.getSimpleName();
             JSBytecodeFunction methodFunc = compileMethodAsFunction(
                     method,
                     methodName,

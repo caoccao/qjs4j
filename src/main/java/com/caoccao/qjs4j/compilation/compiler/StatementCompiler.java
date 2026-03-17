@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
-import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
@@ -38,37 +37,6 @@ final class StatementCompiler {
         this.compilerContext = compilerContext;
         this.delegates = delegates;
         loopCompiler = new StatementLoopCompiler(this, compilerContext, delegates);
-    }
-
-    private static boolean hasTailCallInTailPosition(Expression expr) {
-        if (expr instanceof CallExpression callExpr) {
-            return isTailCallableCallExpression(callExpr);
-        }
-        if (expr instanceof TaggedTemplateExpression) {
-            return true;
-        }
-        if (expr instanceof BinaryExpression binExpr
-                && binExpr.getOperator() == BinaryOperator.NULLISH_COALESCING) {
-            return hasTailCallInTailPosition(binExpr.getRight());
-        }
-        if (expr instanceof ConditionalExpression condExpr) {
-            return hasTailCallInTailPosition(condExpr.getConsequent())
-                    || hasTailCallInTailPosition(condExpr.getAlternate());
-        }
-        if (expr instanceof BinaryExpression binExpr
-                && (binExpr.getOperator() == BinaryOperator.LOGICAL_AND
-                || binExpr.getOperator() == BinaryOperator.LOGICAL_OR)) {
-            return hasTailCallInTailPosition(binExpr.getRight());
-        }
-        if (expr instanceof SequenceExpression seqExpr && !seqExpr.getExpressions().isEmpty()) {
-            return hasTailCallInTailPosition(seqExpr.getExpressions().get(seqExpr.getExpressions().size() - 1));
-        }
-        return false;
-    }
-
-    private static boolean isTailCallableCallExpression(CallExpression callExpr) {
-        return callExpr.getArguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
-                && !(callExpr.getCallee() instanceof Identifier id && JSKeyword.SUPER.equals(id.getName()));
     }
 
     void compileBlockStatement(BlockStatement block) {
@@ -575,7 +543,7 @@ final class StatementCompiler {
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
         // Exclude spread calls (which use APPLY, not CALL) and super calls from TCO.
         if (retStmt.getArgument() instanceof CallExpression
-                && hasTailCallInTailPosition(retStmt.getArgument())
+                && retStmt.getArgument().hasTailCallInTailPosition()
                 && compilerContext.strictMode
                 && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()
@@ -591,7 +559,7 @@ final class StatementCompiler {
         // (e.g., return a ?? f(), return 0, f(), return a ? f() : g()),
         // set emitTailCalls and fall through to emit RETURN for non-tail paths.
         boolean enableTco = retStmt.getArgument() != null
-                && hasTailCallInTailPosition(retStmt.getArgument())
+                && retStmt.getArgument().hasTailCallInTailPosition()
                 && compilerContext.strictMode
                 && !compilerContext.isInAsyncFunction
                 && compilerContext.activeFinallyGosubPatches.isEmpty()

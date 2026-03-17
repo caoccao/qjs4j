@@ -85,6 +85,19 @@ public final class ObjectExpressionProperty extends ASTNode {
         return method;
     }
 
+    public boolean isProtoDataProperty() {
+        if (computed || shorthand || method || !"init".equals(kind)) {
+            return false;
+        }
+        if (key instanceof Identifier identifier) {
+            return "__proto__".equals(identifier.getName());
+        }
+        if (key instanceof Literal literal && literal.getValue() instanceof String stringValue) {
+            return "__proto__".equals(stringValue);
+        }
+        return false;
+    }
+
     public boolean isShorthand() {
         return shorthand;
     }

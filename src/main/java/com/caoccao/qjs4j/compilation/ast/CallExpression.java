@@ -97,7 +97,18 @@ public final class CallExpression extends Expression {
         return callee;
     }
 
+    @Override
+    public boolean hasTailCallInTailPosition() {
+        return getArguments().stream().noneMatch(arg -> arg instanceof SpreadElement)
+                && !(getCallee() instanceof Identifier id && JSKeyword.SUPER.equals(id.getName()));
+    }
+
     public boolean isOptional() {
         return optional;
+    }
+
+    @Override
+    public boolean isPartOfOptionalChain() {
+        return optional || callee.isPartOfOptionalChain();
     }
 }

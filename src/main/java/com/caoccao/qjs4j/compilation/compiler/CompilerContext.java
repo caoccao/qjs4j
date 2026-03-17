@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
@@ -219,19 +219,6 @@ final class CompilerContext {
             scopes.forEach(scope -> scope.fillLocalVarNames(localVarNames));
         }
         return localVarNames;
-    }
-
-    String getMethodName(MethodDefinition method) {
-        Expression key = method.getKey();
-        if (key instanceof Identifier id) {
-            return id.getName();
-        } else if (key instanceof Literal literal) {
-            return literal.getValue() != null ? literal.getValue().toString() : "null";
-        } else if (key instanceof PrivateIdentifier privateId) {
-            return privateId.getName();
-        } else {
-            return "[computed]";
-        }
     }
 
     List<String> getVisibleWithObjectBindingNamesForNestedFunction() {

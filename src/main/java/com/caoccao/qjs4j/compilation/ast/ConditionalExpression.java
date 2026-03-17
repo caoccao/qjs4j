@@ -90,4 +90,10 @@ public final class ConditionalExpression extends Expression {
     public Expression getTest() {
         return test;
     }
+
+    @Override
+    public boolean hasTailCallInTailPosition() {
+        return getConsequent().hasTailCallInTailPosition()
+                || getAlternate().hasTailCallInTailPosition();
+    }
 }

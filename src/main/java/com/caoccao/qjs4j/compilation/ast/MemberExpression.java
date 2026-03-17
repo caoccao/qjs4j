@@ -75,4 +75,9 @@ public final class MemberExpression extends Expression {
     public boolean isOptional() {
         return optional;
     }
+
+    @Override
+    public boolean isPartOfOptionalChain() {
+        return optional || object.isPartOfOptionalChain();
+    }
 }

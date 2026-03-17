@@ -461,7 +461,7 @@ final class ExpressionCompiler {
     void compileObjectExpression(ObjectExpression objExpr) {
         int protoDataPropertyCount = 0;
         for (ObjectExpressionProperty property : objExpr.getProperties()) {
-            if (isProtoDataProperty(property)) {
+            if (property.isProtoDataProperty()) {
                 protoDataPropertyCount++;
                 if (protoDataPropertyCount > 1) {
                     throw new JSCompilerException("Duplicate __proto__ fields are not allowed in object literals");
@@ -1523,16 +1523,4 @@ final class ExpressionCompiler {
         return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
     }
 
-    private boolean isProtoDataProperty(ObjectExpressionProperty property) {
-        if (property.isComputed() || property.isShorthand() || property.isMethod() || !"init".equals(property.getKind())) {
-            return false;
-        }
-        if (property.getKey() instanceof Identifier identifier) {
-            return "__proto__".equals(identifier.getName());
-        }
-        if (property.getKey() instanceof Literal literal && literal.getValue() instanceof String stringValue) {
-            return "__proto__".equals(stringValue);
-        }
-        return false;
-    }
 }

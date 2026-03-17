@@ -87,7 +87,7 @@ final class ExpressionCallMemberCompiler {
         }
 
         if (callExpr.getCallee() instanceof MemberExpression memberExpr
-                && (callExpr.isOptional() || memberExpr.isOptional() || isPartOfOptionalChain(memberExpr.getObject()))) {
+                && (callExpr.isOptional() || memberExpr.isOptional() || memberExpr.getObject().isPartOfOptionalChain())) {
             compileOptionalMemberCallExpression(callExpr, memberExpr, isTailCall);
             return;
         }
@@ -232,7 +232,7 @@ final class ExpressionCallMemberCompiler {
 
         // Detect non-optional continuation of an optional chain (e.g., `.#f` in `o?.c.#f`)
         // The entire chain after `?.` must short-circuit together.
-        if (!memberExpr.isOptional() && isPartOfOptionalChain(memberExpr.getObject())) {
+        if (!memberExpr.isOptional() && memberExpr.getObject().isPartOfOptionalChain()) {
             compileOptionalChainFull(memberExpr);
             return;
         }
@@ -503,13 +503,4 @@ final class ExpressionCallMemberCompiler {
         }
     }
 
-    private boolean isPartOfOptionalChain(Expression expr) {
-        if (expr instanceof MemberExpression mem) {
-            return mem.isOptional() || isPartOfOptionalChain(mem.getObject());
-        }
-        if (expr instanceof CallExpression callExpression) {
-            return callExpression.isOptional() || isPartOfOptionalChain(callExpression.getCallee());
-        }
-        return false;
-    }
 }

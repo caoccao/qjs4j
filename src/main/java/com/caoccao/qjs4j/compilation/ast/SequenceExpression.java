@@ -84,4 +84,12 @@ public final class SequenceExpression extends Expression {
     public List<Expression> getExpressions() {
         return expressions;
     }
+
+    @Override
+    public boolean hasTailCallInTailPosition() {
+        if (expressions.isEmpty()) {
+            return false;
+        }
+        return expressions.get(expressions.size() - 1).hasTailCallInTailPosition();
+    }
 }

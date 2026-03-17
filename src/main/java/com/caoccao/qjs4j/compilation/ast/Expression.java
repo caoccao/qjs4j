@@ -46,7 +46,15 @@ public abstract sealed class Expression extends Pattern permits
         return boundNames;
     }
 
+    public boolean hasTailCallInTailPosition() {
+        return false;
+    }
+
     public boolean isAnonymousFunction() {
+        return false;
+    }
+
+    public boolean isPartOfOptionalChain() {
         return false;
     }
 

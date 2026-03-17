@@ -62,4 +62,9 @@ public final class TaggedTemplateExpression extends Expression {
     public Expression getTag() {
         return tag;
     }
+
+    @Override
+    public boolean hasTailCallInTailPosition() {
+        return true;
+    }
 }
