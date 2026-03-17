@@ -51,7 +51,11 @@ final class FunctionClassFieldCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
         try {
-            delegates.expressions.compileExpression(field.getKey());
+            if (compilerContext.inClassBody) {
+                delegates.functions.emitStrictClassBodyExpression(field.getKey());
+            } else {
+                delegates.expressions.compileExpression(field.getKey());
+            }
             compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
             compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
             compilerContext.emitter.emitOpcode(Opcode.SWAP);

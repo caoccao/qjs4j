@@ -40,6 +40,19 @@ final class FunctionClassCompiler {
         fieldCompiler = new FunctionClassFieldCompiler(compilerContext, delegates);
     }
 
+    /**
+     * Returns true when a strict-mode wrapper function can safely be used
+     * around a class body expression. Wrapper functions introduce a new
+     * function boundary, which breaks yield/await semantics, so they must
+     * only be used when the enclosing context is a plain (non-generator,
+     * non-async) sloppy-mode function.
+     */
+    private boolean canUseStrictWrapper() {
+        return !compilerContext.strictMode
+                && !compilerContext.isInGeneratorFunction
+                && !compilerContext.isInAsyncFunction;
+    }
+
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -267,17 +280,18 @@ final class FunctionClassCompiler {
             compilerContext.tdzLocals.add(className);
         }
 
-        // Compile superclass expression or emit undefined
-        boolean savedStrictModeForHeritage = compilerContext.strictMode;
-        compilerContext.strictMode = true;
-        try {
-            if (classDecl.getSuperClass() != null) {
-                delegates.expressions.compileExpression(classDecl.getSuperClass());
-            } else {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-        } finally {
-            compilerContext.strictMode = savedStrictModeForHeritage;
+        // Per ES2024 10.2.1, all parts of a class are strict mode code.
+        // Set inClassBody so computed key expressions are compiled into strict
+        // wrapper functions when the enclosing function is non-strict.
+        boolean savedInClassBody = compilerContext.inClassBody;
+        compilerContext.inClassBody = true;
+
+        // Compile superclass expression or emit undefined.
+        // Per ES2024 10.2.1, heritage expressions are strict mode code.
+        if (classDecl.getSuperClass() != null) {
+            emitStrictClassBodyExpression(classDecl.getSuperClass());
+        } else {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         // Stack: superClass
 
@@ -565,7 +579,18 @@ final class FunctionClassCompiler {
             // Anonymous class expression - leave on stack
             // For class declarations, we always have a name, so this shouldn't happen
         }
+
+        compilerContext.inClassBody = savedInClassBody;
     }
+
+    /**
+     * Compile an expression into a strict-mode wrapper function and emit
+     * FCLOSURE + UNDEFINED + CALL to evaluate it. This ensures the expression
+     * executes in strict mode at runtime, as required by the ES spec for
+     * class body expressions (computed property keys, heritage expressions).
+     * Per ES2024 10.2.1: "All parts of a ClassDeclaration or ClassExpression
+     * are strict mode code."
+     */
 
     void compileClassExpression(ClassExpression classExpr) {
         // Class expressions are almost identical to class declarations,
@@ -586,17 +611,16 @@ final class FunctionClassCompiler {
             compilerContext.tdzLocals.add(className);
         }
 
-        // Compile superclass expression or emit undefined
-        boolean savedStrictModeForHeritage = compilerContext.strictMode;
-        compilerContext.strictMode = true;
-        try {
-            if (classExpr.getSuperClass() != null) {
-                delegates.expressions.compileExpression(classExpr.getSuperClass());
-            } else {
-                compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            }
-        } finally {
-            compilerContext.strictMode = savedStrictModeForHeritage;
+        // Per ES2024 10.2.1, all parts of a class are strict mode code.
+        boolean savedInClassBody = compilerContext.inClassBody;
+        compilerContext.inClassBody = true;
+
+        // Compile superclass expression or emit undefined.
+        // Per ES2024 10.2.1, heritage expressions are strict mode code.
+        if (classExpr.getSuperClass() != null) {
+            emitStrictClassBodyExpression(classExpr.getSuperClass());
+        } else {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
         // Stack: superClass
 
@@ -840,6 +864,8 @@ final class FunctionClassCompiler {
 
         // For class expressions, we leave the constructor on the stack
         // (unlike class declarations which bind it to a variable)
+
+        compilerContext.inClassBody = savedInClassBody;
     }
 
     /**
@@ -1908,6 +1934,65 @@ final class FunctionClassCompiler {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
             funcDelegates.patterns.compilePatternAssignment(restParameter.getArgument());
         }
+    }
+
+    /**
+     * Compile a class body expression ensuring it executes in strict mode.
+     * If the enclosing function is sloppy and not a generator/async, wraps
+     * the expression in a strict-mode wrapper function called inline.
+     * Otherwise, compiles inline with compile-time strict mode set.
+     */
+    void emitStrictClassBodyExpression(Expression expression) {
+        if (canUseStrictWrapper()) {
+            emitStrictExpressionCall(expression);
+        } else {
+            boolean savedStrictMode = compilerContext.strictMode;
+            compilerContext.strictMode = true;
+            try {
+                delegates.expressions.compileExpression(expression);
+            } finally {
+                compilerContext.strictMode = savedStrictMode;
+            }
+        }
+    }
+
+    private void emitStrictExpressionCall(Expression expression) {
+        BytecodeCompiler wrapperCompiler = new BytecodeCompiler(
+                true, compilerContext.captureResolver, compilerContext.context);
+        CompilerContext wrapperContext = wrapperCompiler.context();
+        CompilerDelegates wrapperDelegates = wrapperCompiler.delegates();
+        wrapperContext.sourceCode = compilerContext.sourceCode;
+        wrapperContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
+        wrapperContext.privateSymbols = compilerContext.privateSymbols;
+        inheritVisibleWithObjectBindings(wrapperContext);
+        wrapperContext.enterScope();
+        wrapperContext.inGlobalScope = false;
+
+        wrapperDelegates.expressions.compileExpression(expression);
+        wrapperContext.emitter.emitOpcode(Opcode.RETURN);
+
+        int localCount = wrapperContext.scopes.isEmpty()
+                ? wrapperContext.maxLocalCount
+                : wrapperContext.currentScope().getLocalCount();
+        String[] localVarNames = wrapperContext.getLocalVarNames();
+        Bytecode bytecode = wrapperContext.emitter.build(localCount, localVarNames);
+
+        JSBytecodeFunction wrapperFunction = new JSBytecodeFunction(
+                compilerContext.context,
+                bytecode,
+                "",
+                0,
+                JSValue.NO_ARGS,
+                null,
+                false, false, false, false,
+                true,
+                null
+        );
+        delegates.emitHelpers.emitCapturedValues(wrapperCompiler, wrapperFunction);
+
+        compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, wrapperFunction);
+        compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 0);
     }
 
     private void inheritClassInnerNameCapture(CompilerContext targetContext) {

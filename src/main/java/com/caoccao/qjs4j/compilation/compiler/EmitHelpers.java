@@ -132,7 +132,12 @@ final class EmitHelpers {
         // Class definitions must create fresh function objects per evaluation.
 
         if (isComputedKey) {
-            delegates.expressions.compileExpression(method.getKey());
+            // Per ES2024 10.2.1, all parts of a class are strict mode code.
+            if (compilerContext.inClassBody) {
+                delegates.functions.emitStrictClassBodyExpression(method.getKey());
+            } else {
+                delegates.expressions.compileExpression(method.getKey());
+            }
         } else if (method.getKey() instanceof Identifier) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
         } else {

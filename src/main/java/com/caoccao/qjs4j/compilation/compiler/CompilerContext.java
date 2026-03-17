@@ -49,6 +49,7 @@ final class CompilerContext {
     int evalReturnLocalIndex;
     int finallySubroutineDepth;
     boolean hasEnclosingArgumentsBinding;
+    boolean inClassBody;
     boolean inClassFieldInitializer;
     boolean inGlobalScope;
     String inferredClassName;

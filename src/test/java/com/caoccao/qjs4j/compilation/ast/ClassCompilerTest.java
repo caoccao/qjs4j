@@ -28,6 +28,40 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class ClassCompilerTest extends BaseJavetTest {
 
     @Test
+    public void testClassBodyComputedFieldKeyIsStrict() {
+        assertErrorWithJavet("""
+                function f() {
+                    class C {
+                        static [(Object.preventExtensions({}).prop = 4, 'x')] = 1;
+                    }
+                }
+                f()""");
+    }
+
+    @Test
+    public void testClassBodyComputedMethodKeyIsStrict() {
+        assertErrorWithJavet("""
+                function f() {
+                    class C {
+                        [Object.preventExtensions({}).prop = 4]() {}
+                        constructor() {}
+                    }
+                }
+                f()""");
+    }
+
+    @Test
+    public void testClassBodyHeritageExpressionIsStrict() {
+        assertErrorWithJavet("""
+                function f() {
+                    class C extends (Object.preventExtensions({}).prop = 4) {
+                        constructor() {}
+                    }
+                }
+                f()""");
+    }
+
+    @Test
     public void testClassComputedInstanceFieldDefaultInitializer() {
         assertBooleanWithJavet("""
                 let i = 0;
@@ -92,6 +126,17 @@ public class ClassCompilerTest extends BaseJavetTest {
                     static ['result'] = this.base + 1;
                 }
                 C.result""");
+    }
+
+    @Test
+    public void testClassConstructorBodyIsStrict() {
+        assertErrorWithJavet("""
+                class C {
+                    constructor() {
+                        Object.preventExtensions({}).prop = 0;
+                    }
+                }
+                new C()""");
     }
 
     @Test
@@ -187,6 +232,17 @@ public class ClassCompilerTest extends BaseJavetTest {
                 }
                 var o = new MyObj();
                 o.name === 'hello' && (o.name = 'world', o._name === 'world')""");
+    }
+
+    @Test
+    public void testClassMethodBodyIsStrict() {
+        assertErrorWithJavet("""
+                class C {
+                    m() {
+                        Object.preventExtensions({}).prop = 0;
+                    }
+                }
+                new C().m()""");
     }
 
     @Test
