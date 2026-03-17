@@ -361,7 +361,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 key = delegates.expressions.parsePropertyName();
             }
 
-            FunctionExpression method = parseClassMethod("method", methodStartLocation, true, isGenerator, isStatic, key);
+            FunctionExpression method = parseClassMethod("method", methodStartLocation, true, isGenerator, isStatic, computed, key);
             return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
@@ -381,7 +381,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                 key = delegates.expressions.parsePropertyName();
             }
 
-            FunctionExpression method = parseClassMethod("method", methodStartLocation, false, true, isStatic, key);
+            FunctionExpression method = parseClassMethod("method", methodStartLocation, false, true, isStatic, computed, key);
             return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
         }
 
@@ -433,7 +433,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     key = delegates.expressions.parsePropertyName();
                 }
 
-                FunctionExpression method = parseClassMethod(kind, methodStartLocation, false, false, isStatic, key);
+                FunctionExpression method = parseClassMethod(kind, methodStartLocation, false, false, isStatic, computed, key);
                 return new MethodDefinition(key, method, kind, computed, isStatic, isPrivate);
             }
         }
@@ -537,16 +537,20 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         return value;
     }
 
-    private FunctionExpression parseClassMethod(String kind,
-                                                SourceLocation methodStartLocation,
-                                                boolean isAsync,
-                                                boolean isGenerator,
-                                                boolean isStatic,
-                                                Expression key) {
+    private FunctionExpression parseClassMethod(
+            String kind,
+            SourceLocation methodStartLocation,
+            boolean isAsync,
+            boolean isGenerator,
+            boolean isStatic,
+            boolean isComputed,
+            Expression key) {
+        // Per ES2024 spec, only non-computed "constructor" is treated as the class constructor.
+        // Computed ["constructor"]() is a regular method, not the constructor.
+        String keyName = isComputed ? null : getSimpleClassElementName(key);
         boolean isConstructorMethod = !isStatic
                 && "method".equals(kind)
-                && key instanceof Identifier identifier
-                && JSKeyword.CONSTRUCTOR.equals(identifier.getName());
+                && JSKeyword.CONSTRUCTOR.equals(keyName);
         boolean savedInDerivedConstructor = parserContext.inDerivedConstructor;
         boolean savedSuperPropertyAllowed = parserContext.superPropertyAllowed;
         if (isConstructorMethod && parserContext.parsingClassWithSuper) {
@@ -1026,7 +1030,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         }
 
         // It's a method
-        FunctionExpression method = parseClassMethod("method", location, false, false, isStatic, key);
+        FunctionExpression method = parseClassMethod("method", location, false, false, isStatic, computed, key);
         return new MethodDefinition(key, method, "method", computed, isStatic, isPrivate);
     }
 

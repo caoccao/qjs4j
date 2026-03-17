@@ -62,6 +62,28 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassComputedConstructorIsNotRealConstructor() {
+        assertBooleanWithJavet("""
+                class C {
+                    ['constructor']() { return 1; }
+                }
+                C !== C.prototype.constructor && new C().constructor() === 1""");
+    }
+
+    @Test
+    public void testClassComputedConstructorOverwrittenByRealConstructor() {
+        assertBooleanWithJavet("""
+                var result = 0;
+                class A {
+                    ["constructor"]() { result += 1; }
+                    constructor() { result += 2; }
+                }
+                var inst = new A();
+                inst.constructor();
+                result === 3""");
+    }
+
+    @Test
     public void testClassComputedInstanceFieldDefaultInitializer() {
         assertBooleanWithJavet("""
                 let i = 0;
@@ -664,6 +686,41 @@ public class ClassCompilerTest extends BaseJavetTest {
     }
 
     @Test
+    public void testClassWithStringLiteralConstructor() {
+        assertBooleanWithJavet("""
+                class A {
+                    "constructor"() { return {}; }
+                }
+                new A() instanceof A === false""");
+    }
+
+    @Test
+    public void testClassWithStringLiteralConstructorDerived() {
+        assertBooleanWithJavet("""
+                class B extends class {} {
+                    "constructor"() { return {}; }
+                }
+                new B() instanceof B === false""");
+    }
+
+    @Test
+    public void testDefaultDerivedConstructorExtendsNull() {
+        assertThatThrownBy(() -> resetContext().eval("""
+                new (class extends null {})()"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
+    }
+
+    @Test
+    public void testDefaultDerivedConstructorExtendsProxy() {
+        assertBooleanWithJavet("""
+                function base() { this.calledBase = true; }
+                let p = new Proxy(base, {});
+                class C extends p {}
+                new C().calledBase""");
+    }
+
+    @Test
     public void testDefaultDerivedConstructorForwardsArgumentsToSuper() {
         assertBooleanWithJavet("""
                 class Parent {
@@ -755,6 +812,15 @@ public class ClassCompilerTest extends BaseJavetTest {
                 try { new foo(); } catch(e) {}
                 superArrow();
                 thisArrow() === thisStash""");
+    }
+
+    @Test
+    public void testDerivedConstructorExtendsNullExplicitSuper() {
+        assertThatThrownBy(() -> resetContext().eval("""
+                class A extends null { constructor() { super(); } }
+                new A()"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("TypeError");
     }
 
     @Test

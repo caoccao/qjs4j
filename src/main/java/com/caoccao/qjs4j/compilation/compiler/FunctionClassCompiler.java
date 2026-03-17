@@ -309,8 +309,8 @@ final class FunctionClassCompiler {
 
         for (ClassElement element : classDecl.getBody()) {
             if (element instanceof MethodDefinition method) {
-                // Check if it's a constructor
-                if (method.getKey() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.getName()) && !method.isStatic()) {
+                // Check if it's a constructor (handles both identifier and string literal "constructor")
+                if (method.isConstructor()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {
@@ -638,8 +638,8 @@ final class FunctionClassCompiler {
 
         for (ClassElement element : classExpr.getBody()) {
             if (element instanceof MethodDefinition method) {
-                // Check if it's a constructor
-                if (method.getKey() instanceof Identifier id && JSKeyword.CONSTRUCTOR.equals(id.getName()) && !method.isStatic()) {
+                // Check if it's a constructor (handles both identifier and string literal "constructor")
+                if (method.isConstructor()) {
                     constructor = method;
                 } else if (method.isPrivate()) {
                     if (method.isStatic()) {

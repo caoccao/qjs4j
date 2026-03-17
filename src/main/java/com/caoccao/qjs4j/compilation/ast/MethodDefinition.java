@@ -81,6 +81,23 @@ public final class MethodDefinition extends ClassElement {
         return computed;
     }
 
+    /**
+     * Per ES2024, only non-static, non-computed "constructor" defines
+     * a class constructor method.
+     */
+    public boolean isConstructor() {
+        if (isStatic || computed) {
+            return false;
+        }
+        if (key instanceof Identifier id) {
+            return "constructor".equals(id.getName());
+        }
+        if (key instanceof Literal literal && literal.getValue() instanceof String name) {
+            return "constructor".equals(name);
+        }
+        return false;
+    }
+
     public boolean isPrivate() {
         return isPrivate;
     }

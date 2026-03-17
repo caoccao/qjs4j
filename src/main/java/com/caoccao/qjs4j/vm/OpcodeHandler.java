@@ -3421,7 +3421,7 @@ public final class OpcodeHandler {
             // Default derived constructor path:
             // constructor(...args) { super(...args); }
             JSObject superConstructorObject = currentFunction.getPrototype();
-            if (!(superConstructorObject instanceof JSFunction superConstructor)) {
+            if (!JSTypeChecking.isConstructor(superConstructorObject)) {
                 executionContext.virtualMachine.pendingException =
                         executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
                 executionContext.virtualMachine.context.clearPendingException();
@@ -3431,7 +3431,26 @@ public final class OpcodeHandler {
                 return;
             }
 
-            JSValue superResult = executionContext.virtualMachine.constructFunction(superConstructor, executionContext.virtualMachine.currentFrame.getArguments(), frameNewTarget);
+            JSValue superResult;
+            if (superConstructorObject instanceof JSProxy superProxy) {
+                superResult = superProxy.construct(
+                        executionContext.virtualMachine.context,
+                        executionContext.virtualMachine.currentFrame.getArguments(),
+                        frameNewTarget);
+            } else if (superConstructorObject instanceof JSFunction superConstructor) {
+                superResult = executionContext.virtualMachine.constructFunction(
+                        superConstructor,
+                        executionContext.virtualMachine.currentFrame.getArguments(),
+                        frameNewTarget);
+            } else {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("parent class must be constructor");
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc += op.getSize();
+                return;
+            }
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 executionContext.virtualMachine.context.clearPendingException();
