@@ -29,26 +29,15 @@ import java.util.Map;
  * Compiles AST into bytecode.
  * <p>
  * This is the public facade that delegates to specialized compiler classes:
- * {@link ExpressionCompiler}, {@link StatementCompiler}, {@link FunctionClassCompiler},
- * {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}.
- * All shared mutable state is held in {@link CompilerContext}.
+ * {@link ExpressionCompiler}, {@link StatementCompiler}, {@link FunctionCompiler},
+ * {@link ClassDeclarationCompiler}, {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}.
+ * All shared mutable state and delegate references are held in {@link CompilerContext}.
  */
 public final class BytecodeCompiler {
     private final CompilerContext compilerContext;
-    private final CompilerDelegates delegates;
 
     public BytecodeCompiler() {
         this(false, null);
-    }
-
-    /**
-     * Create a BytecodeCompiler with inherited strict mode.
-     * Following QuickJS pattern where nested functions inherit parent's strict mode.
-     *
-     * @param inheritedStrictMode Strict mode inherited from parent function
-     */
-    public BytecodeCompiler(boolean inheritedStrictMode) {
-        this(inheritedStrictMode, null, null);
     }
 
     BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
@@ -56,8 +45,7 @@ public final class BytecodeCompiler {
     }
 
     BytecodeCompiler(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
-        this.compilerContext = new CompilerContext(inheritedStrictMode, parentCaptureResolver, context);
-        this.delegates = new CompilerDelegates(compilerContext);
+        compilerContext = new CompilerContext(inheritedStrictMode, parentCaptureResolver, context);
     }
 
     /**
@@ -68,7 +56,7 @@ public final class BytecodeCompiler {
      */
     public Bytecode compile(ASTNode ast) {
         if (ast instanceof Program program) {
-            delegates.statements.compileProgram(program);
+            compilerContext.statementCompiler.compileProgram(program);
         } else {
             throw new JSCompilerException("Expected Program node");
         }
@@ -89,14 +77,6 @@ public final class BytecodeCompiler {
      */
     CompilerContext context() {
         return compilerContext;
-    }
-
-    /**
-     * Get the CompilerDelegates for this compiler.
-     * Used by delegate classes to call methods on nested compiler delegates.
-     */
-    CompilerDelegates delegates() {
-        return delegates;
     }
 
     public void setClassFieldEvalContext(boolean classFieldEvalContext) {

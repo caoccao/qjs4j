@@ -34,11 +34,9 @@ import java.util.Set;
  */
 final class EmitHelpers {
     private final CompilerContext compilerContext;
-    private final CompilerDelegates delegates;
 
-    EmitHelpers(CompilerContext compilerContext, CompilerDelegates delegates) {
+    EmitHelpers(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
-        this.delegates = delegates;
     }
 
     void emitAbruptCompletionIteratorClose() {
@@ -79,10 +77,10 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
-                delegates.expressions.compileExpression(spreadElement.getArgument());
+                compilerContext.expressionCompiler.compileExpression(spreadElement.getArgument());
                 compilerContext.emitter.emitOpcode(Opcode.APPEND);
             } else {
-                delegates.expressions.compileExpression(arg);
+                compilerContext.expressionCompiler.compileExpression(arg);
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.INC);
             }
@@ -134,16 +132,16 @@ final class EmitHelpers {
         if (isComputedKey) {
             // Per ES2024 10.2.1, all parts of a class are strict mode code.
             if (compilerContext.inClassBody) {
-                delegates.functions.emitStrictClassBodyExpression(method.getKey());
+                compilerContext.functionCompiler.emitStrictClassBodyExpression(method.getKey());
             } else {
-                delegates.expressions.compileExpression(method.getKey());
+                compilerContext.expressionCompiler.compileExpression(method.getKey());
             }
         } else if (method.getKey() instanceof Identifier) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
         } else {
             // For Literal keys (numeric, null, string), compile the expression directly
             // to preserve the correct type (e.g., JSNumber for numeric property names)
-            delegates.expressions.compileExpression(method.getKey());
+            compilerContext.expressionCompiler.compileExpression(method.getKey());
         }
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
@@ -252,7 +250,7 @@ final class EmitHelpers {
                 // DROP - drop the duplicated arg value (it was undefined)
                 functionCompiler.context().emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
-                functionCompiler.delegates().expressions.compileExpression(defaultExpr);
+                functionCompiler.context().expressionCompiler.compileExpression(defaultExpr);
                 if (params.get(i) instanceof Identifier parameterIdentifier
                         && defaultExpr.isAnonymousFunction()) {
                     functionCompiler.context().emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
@@ -371,13 +369,13 @@ final class EmitHelpers {
 
     void emitSuperPropertyKey(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
-            delegates.expressions.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier) {
             throw new JSCompilerException("super private fields are not supported");
         } else {
-            delegates.expressions.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
         }
     }
 

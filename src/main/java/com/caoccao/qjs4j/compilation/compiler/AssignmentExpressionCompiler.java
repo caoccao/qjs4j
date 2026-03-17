@@ -25,30 +25,29 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.ArrayList;
 import java.util.List;
 
-final class ExpressionAssignmentCompiler {
+/**
+ * Handles compilation of assignment expressions.
+ */
+final class AssignmentExpressionCompiler {
     private final CompilerContext compilerContext;
-    private final CompilerDelegates delegates;
-    private final ExpressionCompiler owner;
 
-    ExpressionAssignmentCompiler(ExpressionCompiler owner, CompilerContext compilerContext, CompilerDelegates delegates) {
-        this.owner = owner;
+    AssignmentExpressionCompiler(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
-        this.delegates = delegates;
     }
 
     void compileAssignmentExpression(AssignmentExpression assignExpr) {
         Expression left = assignExpr.getLeft();
         AssignmentOperator operator = assignExpr.getOperator();
 
-        if (operator == AssignmentOperator.LOGICAL_AND_ASSIGN ||
-                operator == AssignmentOperator.LOGICAL_OR_ASSIGN ||
-                operator == AssignmentOperator.NULLISH_ASSIGN) {
+        if (operator == AssignmentOperator.LOGICAL_AND_ASSIGN
+                || operator == AssignmentOperator.LOGICAL_OR_ASSIGN
+                || operator == AssignmentOperator.NULLISH_ASSIGN) {
             compileLogicalAssignment(assignExpr);
             return;
         }
 
         if (left instanceof CallExpression) {
-            owner.compileExpression(left);
+            compilerContext.expressionCompiler.compileExpression(left);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
             compilerContext.emitter.emitU8(5);
@@ -67,14 +66,14 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(4);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     compilerContext.emitter.emitOpcode(Opcode.DUP3);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
                 } else {
-                    owner.compileExpression(memberExpr.getObject());
+                    compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
                     if (memberExpr.isComputed()) {
-                        owner.compileExpression(memberExpr.getProperty());
+                        compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
                         compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
                     } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                         String fieldName = privateId.getName();
@@ -92,7 +91,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
 
-            owner.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
 
             switch (operator) {
                 case PLUS_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.ADD);
@@ -110,38 +109,31 @@ final class ExpressionAssignmentCompiler {
                 default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
             }
         } else {
-            // ASSIGN operator — ensure correct LHS-before-RHS evaluation order
-            // for computed member expressions and super member expressions (spec 13.15.2)
             if (left instanceof MemberExpression memberExpr) {
                 if (memberExpr.getObject().isSuperIdentifier()) {
-                    // Evaluate super reference and property key before RHS
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(4);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
-                    owner.compileExpression(assignExpr.getRight());
-                    // Stack: [this, superObj, key, value] → PUT_SUPER_VALUE pops value from top
+                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                     return;
                 }
                 if (memberExpr.isComputed()) {
-                    // Evaluate object and computed property key before RHS
-                    owner.compileExpression(memberExpr.getObject());
-                    owner.compileExpression(memberExpr.getProperty());
-                    owner.compileExpression(assignExpr.getRight());
-                    // Stack: [obj, prop, value] → PUT_ARRAY_EL → [value]
+                    compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                     return;
                 }
             }
-            owner.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
         }
 
         if (left instanceof MemberExpression memberExpr) {
             if (operator == AssignmentOperator.ASSIGN) {
-                // Non-computed regular member expression (computed and super handled above)
-                owner.compileExpression(memberExpr.getObject());
+                compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
                 if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                     String fieldName = privateId.getName();
                     JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
@@ -157,10 +149,8 @@ final class ExpressionAssignmentCompiler {
                 }
             } else {
                 if (memberExpr.getObject().isSuperIdentifier()) {
-                    // Stack: [this, superObj, key, newValue] → PUT_SUPER_VALUE pops value from top
                     compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
                 } else if (memberExpr.isComputed()) {
-                    // Stack: [obj, prop, newValue] — already in QuickJS order
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                 } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                     String fieldName = privateId.getName();
@@ -172,17 +162,16 @@ final class ExpressionAssignmentCompiler {
                         compilerContext.emitter.emitOpcode(Opcode.DROP);
                     }
                 } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                    // Stack: [obj, newValue] — need [newValue, obj] for PUT_FIELD
                     compilerContext.emitter.emitOpcode(Opcode.SWAP);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_FIELD, propId.getName());
                 }
             }
         } else if (left instanceof ArrayExpression arrayExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            delegates.patterns.compileArrayDestructuringAssignment(arrayExpr);
+            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compileArrayDestructuringAssignment(arrayExpr);
         } else if (left instanceof ObjectExpression objExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            delegates.patterns.compileObjectDestructuringAssignment(objExpr);
+            compilerContext.patternCompiler.compileObjectDestructuringAssignment(objExpr);
         }
     }
 
@@ -194,9 +183,6 @@ final class ExpressionAssignmentCompiler {
         boolean isConstLocalBinding = localIndex != null && compilerContext.scopeManager.isLocalBindingConst(name);
         boolean isConstCapturedBinding = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingImmutable(name);
 
-        // Per QuickJS: in non-strict mode, assignment to a named function expression's
-        // BindingIdentifier is silently ignored. Evaluate the RHS for side effects
-        // but do not store. The assignment expression result is the RHS value.
         boolean isFunctionNameLocal = localIndex != null && compilerContext.scopeManager.isLocalBindingFunctionName(name);
         boolean isFunctionNameCaptured = capturedIndex != null && compilerContext.captureResolver.isCapturedBindingFunctionName(name);
         if (isFunctionNameLocal || isFunctionNameCaptured) {
@@ -207,7 +193,7 @@ final class ExpressionAssignmentCompiler {
                     compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, capturedIndex);
                 }
             }
-            owner.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
             if (operator == AssignmentOperator.ASSIGN
                     && assignExpr.isLhsIdentifierRef()
                     && assignExpr.getRight().isAnonymousFunction()) {
@@ -230,7 +216,6 @@ final class ExpressionAssignmentCompiler {
                     default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
                 }
             }
-            // Result is on stack but we don't store it — silently ignored
             return;
         }
 
@@ -243,7 +228,7 @@ final class ExpressionAssignmentCompiler {
                 }
             }
 
-            owner.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
 
             if (operator != AssignmentOperator.ASSIGN) {
                 switch (operator) {
@@ -276,14 +261,13 @@ final class ExpressionAssignmentCompiler {
             compilerContext.emitter.emitOpcode(Opcode.GET_REF_VALUE);
         }
 
-        // Pass inferred name to anonymous class expressions for NamedEvaluation
         if (operator == AssignmentOperator.ASSIGN
                 && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight() instanceof ClassExpression classExpr
                 && classExpr.getId() == null) {
             compilerContext.inferredClassName = name;
         }
-        owner.compileExpression(assignExpr.getRight());
+        compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
         compilerContext.inferredClassName = null;
 
         if (operator == AssignmentOperator.ASSIGN
@@ -360,14 +344,14 @@ final class ExpressionAssignmentCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(4);
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.DUP3);
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
             } else {
-                owner.compileExpression(memberExpr.getObject());
+                compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
                 if (memberExpr.isComputed()) {
-                    owner.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
                     compilerContext.emitter.emitOpcode(Opcode.DUP2);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
@@ -398,7 +382,7 @@ final class ExpressionAssignmentCompiler {
         }
 
         compilerContext.emitter.emitOpcode(Opcode.DROP);
-        owner.compileExpression(assignExpr.getRight());
+        compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
         if (left instanceof Identifier identifier
                 && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
@@ -409,15 +393,12 @@ final class ExpressionAssignmentCompiler {
             }
             case 1 -> compilerContext.emitter.emitOpcode(Opcode.SWAP);
             case 2 -> {
-                // Stack: [obj, prop, value] — already in QuickJS order for PUT_ARRAY_EL
             }
             case 3 -> {
-                // Stack: [this, superObj, key, newValue] — already in correct order for PUT_SUPER_VALUE
             }
             default -> throw new JSCompilerException("Invalid depth for logical assignment");
         }
         if (privateMemberAssignment) {
-            // PUT_PRIVATE_FIELD expects: [obj, value, privateSymbol]
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
         }
 
@@ -503,7 +484,8 @@ final class ExpressionAssignmentCompiler {
     }
 
     void emitIdentifierReference(String name) {
-        if (compilerContext.withObjectManager.hasActiveWithObject() || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
+        if (compilerContext.withObjectManager.hasActiveWithObject()
+                || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
             emitWithAwareIdentifierReference(name);
         } else {
             emitDirectIdentifierReference(name);
@@ -599,5 +581,4 @@ final class ExpressionAssignmentCompiler {
         compilerContext.emitter.patchJump(jumpToCheckBlockedWhenObject, compilerContext.emitter.currentOffset());
         return new int[]{jumpToResolveWithoutUnscopablesOnNullish, jumpToResolveWithoutUnscopablesOnPrimitive};
     }
-
 }

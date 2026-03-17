@@ -33,117 +33,11 @@ import java.util.*;
  */
 final class PatternCompiler {
     private final CompilerContext compilerContext;
-    private final CompilerDelegates delegates;
     private final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
 
-    PatternCompiler(CompilerContext compilerContext, CompilerDelegates delegates) {
+    PatternCompiler(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
-        this.delegates = delegates;
         this.preResolvedBindingReferences = new HashMap<>();
-    }
-
-    void compileArrayDestructuringAssignment(ArrayExpression arrayExpr) {
-        // Stack: [iterable]
-        // Use iterator protocol (FOR_OF_START/FOR_OF_NEXT/ITERATOR_CLOSE) per ES spec.
-        // Following QuickJS: pre-evaluate LHS references before calling next(),
-        // and the VM auto-closes iterators on exception via the JSCatchOffset(0) marker.
-
-        List<Expression> elements = arrayExpr.getElements();
-        boolean hasRest = false;
-        int restIndex = -1;
-        for (int i = 0; i < elements.size(); i++) {
-            if (elements.get(i) instanceof SpreadElement) {
-                hasRest = true;
-                restIndex = i;
-                break;
-            }
-        }
-
-        // Start iteration: iterable -> iter next catch_offset
-        compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
-
-        if (hasRest) {
-            // Process elements before rest
-            for (int i = 0; i < restIndex; i++) {
-                Expression element = elements.get(i);
-                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
-                int depth = preEvaluateAssignmentTarget(element);
-                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
-                // Stack: iter next catch_offset [pre-eval...] value done
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop done
-                // Stack: iter next catch_offset [pre-eval...] value
-                if (element != null) {
-                    emitAssignmentFromPreEvaluated(element, depth);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // skip hole
-                }
-            }
-
-            SpreadElement spreadElem = (SpreadElement) elements.get(restIndex);
-            Expression restTarget = spreadElem.getArgument();
-            int restTargetDepth = preEvaluateAssignmentTarget(restTarget);
-
-            // Collect remaining elements into array for rest
-            compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_I32);
-            compilerContext.emitter.emitI32(0);
-
-            int labelRestNext = compilerContext.emitter.currentOffset();
-            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 2 + restTargetDepth);
-            int jumpRestDone = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-            compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
-            compilerContext.emitter.emitOpcode(Opcode.INC);
-            compilerContext.emitter.emitOpcode(Opcode.GOTO);
-            int backJumpPos = compilerContext.emitter.currentOffset();
-            compilerContext.emitter.emitU32(labelRestNext - (backJumpPos + 4));
-
-            compilerContext.emitter.patchJump(jumpRestDone, compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // drop undefined
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // drop index
-
-            // Iterator is fully exhausted after rest collection. Remove iterator state
-            // before assigning the rest target so abrupt completions in nested patterns
-            // do not attempt an extra IteratorClose.
-            emitDropIteratorStatePreservingTopValues(restTargetDepth + 1);
-
-            // Assign collected array to rest target.
-            emitAssignmentFromPreEvaluated(restTarget, restTargetDepth);
-        } else {
-            // No rest element - use iterator with done tracking and IteratorClose
-            int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
-                    "$arrayAssignIterDone" + compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
-
-            for (Expression element : elements) {
-                // Pre-evaluate LHS, then call FOR_OF_NEXT with the appropriate depth
-                int depth = preEvaluateAssignmentTarget(element);
-                compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, depth);
-                // Stack: iter next catch_offset [pre-eval...] value done
-                compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, iteratorDoneLocalIndex);
-                compilerContext.emitter.emitOpcode(Opcode.DROP); // drop done
-                // Stack: iter next catch_offset [pre-eval...] value
-                if (element != null) {
-                    emitAssignmentFromPreEvaluated(element, depth);
-                } else {
-                    compilerContext.emitter.emitOpcode(Opcode.DROP); // skip hole
-                }
-            }
-
-            // Check if iterator was exhausted
-            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, iteratorDoneLocalIndex);
-            int skipIteratorCloseJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
-            // Not exhausted - call IteratorClose
-            compilerContext.emitter.emitOpcode(Opcode.ITERATOR_CLOSE);
-            int iteratorCloseDoneJump = compilerContext.emitter.emitJump(Opcode.GOTO);
-            // Exhausted - just drop iter state
-            compilerContext.emitter.patchJump(skipIteratorCloseJump, compilerContext.emitter.currentOffset());
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // catch_offset
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // next
-            compilerContext.emitter.emitOpcode(Opcode.DROP); // iter
-            compilerContext.emitter.patchJump(iteratorCloseDoneJump, compilerContext.emitter.currentOffset());
-        }
     }
 
     void compileAssignmentTarget(Expression target) {
@@ -189,16 +83,16 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                 compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
                 compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
+                compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
                 // Stack: [value, this, superObj, key] → ROT4L → [this, superObj, key, value]
                 compilerContext.emitter.emitOpcode(Opcode.ROT4L);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else {
                 // Stack: [value]
-                delegates.expressions.compileExpression(memberExpr.getObject());
+                compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
                 // Stack: [value, obj]
                 if (memberExpr.isComputed()) {
-                    delegates.expressions.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
                     // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
                     compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
@@ -221,7 +115,7 @@ final class PatternCompiler {
             // PUT_* leaves value on stack; drop it
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else if (target instanceof ArrayExpression nestedArray) {
-            compileArrayDestructuringAssignment(nestedArray);
+            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compileArrayDestructuringAssignment(nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
             compileObjectDestructuringAssignment(nestedObj);
         } else {
@@ -238,7 +132,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
             // Set function name for anonymous function definitions
             if (assignExpr.getLeft() instanceof Identifier targetId
                     && assignExpr.getRight().isAnonymousFunction()) {
@@ -285,7 +179,7 @@ final class PatternCompiler {
         compilerContext.scopeManager.enterScope();
 
         // Compile the iterable expression
-        delegates.expressions.compileExpression(forOfStmt.getRight());
+        compilerContext.expressionCompiler.compileExpression(forOfStmt.getRight());
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
@@ -317,7 +211,7 @@ final class PatternCompiler {
         // Drop the value - we can't assign it
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Evaluate the call expression (f() is called at runtime)
-        delegates.expressions.compileExpression(callExpr);
+        compilerContext.expressionCompiler.compileExpression(callExpr);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
         compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
@@ -333,7 +227,7 @@ final class PatternCompiler {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
 
-        delegates.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
     }
 
@@ -383,14 +277,14 @@ final class PatternCompiler {
         for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.isComputed()) {
-                delegates.expressions.compileExpression(property.getKey());
+                compilerContext.expressionCompiler.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 propertyKeyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$objectAssignKey" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, propertyKeyLocalIndex);
             }
 
-            int targetDepth = preEvaluateAssignmentTarget(property.getValue());
+            int targetDepth = compilerContext.expressionCompiler.preEvaluateAssignmentTarget(property.getValue());
 
             compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, sourceLocalIndex);
             if (property.isComputed()) {
@@ -414,7 +308,7 @@ final class PatternCompiler {
                     && literal.getValue() instanceof BigInteger bigIntegerValue) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
             } else {
-                delegates.expressions.compileExpression(property.getKey());
+                compilerContext.expressionCompiler.compileExpression(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             }
@@ -501,7 +395,7 @@ final class PatternCompiler {
                 // Assignment consumed by a cached ResolveBinding reference.
             } else if (useExistingBindingInParentScopes
                     && compilerContext.withObjectManager.hasActiveWithObject()) {
-                delegates.expressions.emitIdentifierReference(varName);
+                compilerContext.assignmentExpressionCompiler.emitIdentifierReference(varName);
                 compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
             } else if (compilerContext.inGlobalScope && compilerContext.tdzLocals.contains(varName)) {
@@ -593,7 +487,7 @@ final class PatternCompiler {
                     maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
                 } else {
-                    delegates.expressions.compileExpression(propertyKey);
+                    compilerContext.expressionCompiler.compileExpression(propertyKey);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
@@ -628,7 +522,7 @@ final class PatternCompiler {
                     } else {
                         // Computed property key: re-evaluate expression to get the key name
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
-                        delegates.expressions.compileExpression(propertyKey);
+                        compilerContext.expressionCompiler.compileExpression(propertyKey);
                         compilerContext.emitter.emitOpcode(Opcode.NULL);
                         compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
@@ -810,7 +704,7 @@ final class PatternCompiler {
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             // Value is undefined: drop it and use default
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignPattern.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignPattern.getRight());
             if (assignPattern.getLeft() instanceof Identifier identifier
                     && assignPattern.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
@@ -872,7 +766,7 @@ final class PatternCompiler {
      * Stack: [pre-eval-values...] value
      * After: all consumed (value assigned, pre-eval values consumed)
      */
-    private void emitAssignmentFromPreEvaluated(Expression element, int depth) {
+    void emitAssignmentFromPreEvaluated(Expression element, int depth) {
         if (depth == 0) {
             // No pre-evaluation was done; use normal path
             compileDestructuringAssignmentElement(element);
@@ -887,7 +781,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            delegates.expressions.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
             if (assignExpr.getLeft() instanceof Identifier targetId
                     && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
@@ -965,7 +859,7 @@ final class PatternCompiler {
         emitConstAssignmentError(name);
     }
 
-    private void emitDropIteratorStatePreservingTopValues(int preservedValueCount) {
+    void emitDropIteratorStatePreservingTopValues(int preservedValueCount) {
         if (preservedValueCount < 0) {
             throw new IllegalArgumentException("preservedValueCount must not be negative");
         }
@@ -1006,20 +900,6 @@ final class PatternCompiler {
             return null;
         }
         return currentScope.declareLocal(JSArguments.NAME);
-    }
-
-    /**
-     * Extract the actual assignment target from an element, unwrapping default values.
-     */
-    private Expression getAssignmentTarget(Expression element) {
-        if (element == null) {
-            return null;
-        }
-        if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
-            return assignExpr.getLeft();
-        }
-        return element;
     }
 
     private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
@@ -1072,13 +952,13 @@ final class PatternCompiler {
         }
 
         if (!compilerContext.withObjectManager.hasActiveWithObject()) {
-            delegates.expressions.compileIdentifier(bindingIdentifier);
+            compilerContext.identifierCompiler.compileIdentifier(bindingIdentifier.getName());
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
         }
 
         String bindingName = bindingIdentifier.getName();
-        delegates.expressions.emitIdentifierReference(bindingName);
+        compilerContext.assignmentExpressionCompiler.emitIdentifierReference(bindingName);
 
         int propertyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                 "$preResolvedRefProp" + compilerContext.emitter.currentOffset());
@@ -1091,40 +971,6 @@ final class PatternCompiler {
         preResolvedBindingReferences
                 .computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
                 .addLast(new PreResolvedReference(objectLocalIndex, propertyLocalIndex));
-    }
-
-    /**
-     * Pre-evaluate the LHS of a destructuring assignment element before calling FOR_OF_NEXT.
-     * Per spec (IteratorDestructuringAssignmentEvaluation step 1a): if the target is not
-     * a pattern, evaluate it first to get the reference.
-     * Returns the number of values pushed on the stack (the depth for FOR_OF_NEXT).
-     */
-    private int preEvaluateAssignmentTarget(Expression element) {
-        Expression target = getAssignmentTarget(element);
-        if (target == null) {
-            return 0; // hole
-        }
-        if (target instanceof MemberExpression memberExpr && !memberExpr.isOptional()) {
-            if (memberExpr.getObject().isSuperIdentifier()) {
-                // Pre-evaluate super reference: this, superObj, key
-                compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                delegates.emitHelpers.emitSuperPropertyKey(memberExpr);
-                return 3; // this, superObj, key on stack
-            }
-            // Pre-evaluate the object
-            delegates.expressions.compileExpression(memberExpr.getObject());
-            if (memberExpr.isComputed()) {
-                // Pre-evaluate the computed key
-                delegates.expressions.compileExpression(memberExpr.getProperty());
-                return 2; // obj + key on stack
-            }
-            return 1; // obj on stack
-        }
-        // Identifiers and nested patterns: no pre-evaluation needed
-        return 0;
     }
 
     private record PreResolvedReference(int objectLocalIndex, int propertyLocalIndex) {

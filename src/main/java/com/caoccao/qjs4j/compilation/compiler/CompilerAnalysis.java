@@ -30,11 +30,9 @@ import java.util.Set;
  */
 final class CompilerAnalysis {
     private final CompilerContext compilerContext;
-    private final CompilerDelegates delegates;
 
-    CompilerAnalysis(CompilerContext compilerContext, CompilerDelegates delegates) {
+    CompilerAnalysis(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
-        this.delegates = delegates;
     }
 
     void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
@@ -330,7 +328,7 @@ final class CompilerAnalysis {
             if (!declaredFuncVarNames.contains(name)) {
                 // Create initial var binding only if the property doesn't already exist
                 // on the global object (ES2024 CreateGlobalVarBinding semantics).
-                delegates.emitHelpers.emitConditionalVarInit(name);
+                compilerContext.emitHelpers.emitConditionalVarInit(name);
             }
         }
     }
