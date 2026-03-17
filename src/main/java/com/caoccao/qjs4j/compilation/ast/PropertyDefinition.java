@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.ast;
 import com.caoccao.qjs4j.core.JSKeyword;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Represents a field in a class (public or private).
@@ -54,6 +55,15 @@ public final class PropertyDefinition extends ClassElement {
         this.isStatic = isStatic;
         this.isPrivate = isPrivate;
         this.autoAccessor = autoAccessor;
+    }
+
+    public static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
+        String candidateName = "__auto_accessor_" + index;
+        while (existingNames.contains(candidateName)) {
+            index++;
+            candidateName = "__auto_accessor_" + index;
+        }
+        return candidateName;
     }
 
     @Override

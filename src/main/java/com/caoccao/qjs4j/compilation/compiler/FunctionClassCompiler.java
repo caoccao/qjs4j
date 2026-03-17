@@ -40,15 +40,6 @@ final class FunctionClassCompiler {
         fieldCompiler = new FunctionClassFieldCompiler(compilerContext, delegates);
     }
 
-    private static String createAutoAccessorBackingName(int index, Set<String> existingNames) {
-        String candidateName = "__auto_accessor_" + index;
-        while (existingNames.contains(candidateName)) {
-            index++;
-            candidateName = "__auto_accessor_" + index;
-        }
-        return candidateName;
-    }
-
     void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
@@ -331,7 +322,7 @@ final class FunctionClassCompiler {
                 }
 
                 if (field.isAutoAccessor() && !field.isPrivate()) {
-                    String backingName = createAutoAccessorBackingName(
+                    String backingName = PropertyDefinition.createAutoAccessorBackingName(
                             autoAccessorBackingNames.size() + 1,
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
@@ -650,7 +641,7 @@ final class FunctionClassCompiler {
                 }
 
                 if (field.isAutoAccessor() && !field.isPrivate()) {
-                    String backingName = createAutoAccessorBackingName(
+                    String backingName = PropertyDefinition.createAutoAccessorBackingName(
                             autoAccessorBackingNames.size() + 1,
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);

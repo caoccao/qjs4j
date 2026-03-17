@@ -70,6 +70,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private boolean evalSuperCallAllowed;
     private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
+    private boolean newTargetAllowed;
     private int selfLocalIndex;
     private String sourceCode;
     private VarRef[] varRefs;
@@ -1935,6 +1936,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return isGenerator;
     }
 
+    public boolean isNewTargetAllowed() {
+        return newTargetAllowed;
+    }
+
     /**
      * Check if this function is in strict mode.
      * Following QuickJS js_mode & JS_MODE_STRICT.
@@ -2035,6 +2040,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setHasParameterExpressions(boolean hasParameterExpressions) {
         this.hasParameterExpressions = hasParameterExpressions;
+    }
+
+    public void setNewTargetAllowed(boolean newTargetAllowed) {
+        this.newTargetAllowed = newTargetAllowed;
     }
 
     public void setSelfLocalIndex(int selfLocalIndex) {

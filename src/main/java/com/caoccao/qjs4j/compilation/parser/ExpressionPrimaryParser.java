@@ -194,12 +194,16 @@ final class ExpressionPrimaryParser {
                 if (parserContext.nextToken.escaped()) {
                     throw new JSSyntaxErrorException("Unexpected token IDENTIFIER");
                 }
-                if ((parserContext.isEval && !parserContext.allowNewTargetInEval)
-                        || (!parserContext.isEval
-                        && parserContext.newTargetNesting == 0
+                if (parserContext.newTargetNesting == 0
                         && !parserContext.inClassFieldInitializer
-                        && !parserContext.inClassStaticInit)) {
-                    throw new JSSyntaxErrorException("'new.target' keyword unexpected here");
+                        && !parserContext.inClassStaticInit) {
+                    if (parserContext.isEval) {
+                        if (!parserContext.allowNewTargetInEval) {
+                            throw new JSSyntaxErrorException("new.target expression is not allowed here");
+                        }
+                    } else {
+                        throw new JSSyntaxErrorException("new.target expression is not allowed here");
+                    }
                 }
                 parserContext.advance(); // consume '.'
                 parserContext.advance(); // consume 'target'

@@ -1517,7 +1517,7 @@ public final class JSContext implements AutoCloseable {
             compiler.setEval(true);
             if (directEvalCallerFrame != null
                     && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
-                allowNewTargetInEval = !callerBytecodeFunction.isArrow() && directEvalCallerFrame.getCaller() != null;
+                allowNewTargetInEval = callerBytecodeFunction.isNewTargetAllowed();
                 allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
                         && callerBytecodeFunction.getHomeObject() != null;
                 evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
@@ -1827,6 +1827,9 @@ public final class JSContext implements AutoCloseable {
                     if (callerDerivedThisRef != null) {
                         func.setCapturedDerivedThisRef(callerDerivedThisRef);
                     }
+                }
+                if (allowNewTargetInEval) {
+                    func.setNewTargetAllowed(true);
                 }
             }
             JSValue result;

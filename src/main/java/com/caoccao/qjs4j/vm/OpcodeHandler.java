@@ -1706,6 +1706,15 @@ public final class OpcodeHandler {
                     closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
                 }
             }
+            // Set newTargetAllowed: regular functions always allow new.target,
+            // arrows inherit from enclosing function (for eval() to check).
+            if (closureFunction.isArrow()) {
+                if (enclosingFunction instanceof JSBytecodeFunction enclosingBf) {
+                    closureFunction.setNewTargetAllowed(enclosingBf.isNewTargetAllowed());
+                }
+            } else {
+                closureFunction.setNewTargetAllowed(true);
+            }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;
         } else {
@@ -1793,6 +1802,15 @@ public final class OpcodeHandler {
                 } else {
                     closureFunction.setCapturedNewTarget(executionContext.frame.getNewTarget());
                 }
+            }
+            // Set newTargetAllowed: regular functions always allow new.target,
+            // arrows inherit from enclosing function (for eval() to check).
+            if (closureFunction.isArrow()) {
+                if (enclosingFunction instanceof JSBytecodeFunction enclosingBf) {
+                    closureFunction.setNewTargetAllowed(enclosingBf.isNewTargetAllowed());
+                }
+            } else {
+                closureFunction.setNewTargetAllowed(true);
             }
             closureFunction.initializePrototypeChain(executionContext.virtualMachine.context);
             stack[sp++] = closureFunction;
