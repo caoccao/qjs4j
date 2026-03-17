@@ -28,7 +28,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileArrayDestructuringAssignment(ArrayExpression arrayExpr) {
+    void compile(ArrayExpression arrayExpr) {
         // Stack: [iterable]
         // Use iterator protocol (FOR_OF_START/FOR_OF_NEXT/ITERATOR_CLOSE) per ES spec.
         // Following QuickJS: pre-evaluate LHS references before calling next(),

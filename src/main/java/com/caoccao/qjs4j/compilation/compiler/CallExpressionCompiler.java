@@ -31,7 +31,7 @@ final class CallExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileCallExpression(CallExpression callExpr) {
+    void compile(CallExpression callExpr) {
         boolean hasSpread = callExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
         if (hasSpread) {
             compileCallExpressionWithSpread(callExpr);

@@ -25,7 +25,10 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Delegate compiler for pattern matching and destructuring assignment compilation.
@@ -115,7 +118,7 @@ final class PatternCompiler {
             // PUT_* leaves value on stack; drop it
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         } else if (target instanceof ArrayExpression nestedArray) {
-            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compileArrayDestructuringAssignment(nestedArray);
+            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(nestedArray);
         } else if (target instanceof ObjectExpression nestedObj) {
             compileObjectDestructuringAssignment(nestedObj);
         } else {

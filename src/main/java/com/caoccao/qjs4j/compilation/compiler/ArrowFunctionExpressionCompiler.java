@@ -31,14 +31,14 @@ import java.util.Set;
 /**
  * Handles compilation of arrow function expressions.
  */
-final class ArrowFunctionCompiler {
+final class ArrowFunctionExpressionCompiler {
     private final CompilerContext compilerContext;
 
-    ArrowFunctionCompiler(CompilerContext compilerContext) {
+    ArrowFunctionExpressionCompiler(CompilerContext compilerContext) {
         this.compilerContext = compilerContext;
     }
 
-    void compileArrowFunctionExpression(ArrowFunctionExpression arrowExpr) {
+    void compile(ArrowFunctionExpression arrowExpr) {
         // Create a new compiler for the function body
         // Arrow functions inherit strict mode from parent (QuickJS behavior)
         BytecodeCompiler functionCompiler = new BytecodeCompiler(compilerContext.strictMode, compilerContext.captureResolver, compilerContext.context);

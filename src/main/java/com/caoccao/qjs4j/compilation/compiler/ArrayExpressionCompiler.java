@@ -28,7 +28,7 @@ final class ArrayExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileArrayExpression(ArrayExpression arrayExpr) {
+    void compile(ArrayExpression arrayExpr) {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 
         // Check if we have any spread elements or holes

@@ -16,7 +16,10 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.ast.Expression;
+import com.caoccao.qjs4j.compilation.ast.Identifier;
+import com.caoccao.qjs4j.compilation.ast.MemberExpression;
+import com.caoccao.qjs4j.compilation.ast.PrivateIdentifier;
 import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.vm.Opcode;

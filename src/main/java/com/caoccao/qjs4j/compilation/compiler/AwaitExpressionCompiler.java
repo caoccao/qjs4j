@@ -26,7 +26,7 @@ final class AwaitExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileAwaitExpression(AwaitExpression awaitExpr) {
+    void compile(AwaitExpression awaitExpr) {
         compilerContext.expressionCompiler.compileExpression(awaitExpr.getArgument());
         compilerContext.emitter.emitOpcode(Opcode.AWAIT);
     }

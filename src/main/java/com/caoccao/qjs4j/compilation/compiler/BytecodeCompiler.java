@@ -56,7 +56,7 @@ public final class BytecodeCompiler {
      */
     public Bytecode compile(ASTNode ast) {
         if (ast instanceof Program program) {
-            compilerContext.statementCompiler.compileProgram(program);
+            compilerContext.programCompiler.compileProgram(program);
         } else {
             throw new JSCompilerException("Expected Program node");
         }

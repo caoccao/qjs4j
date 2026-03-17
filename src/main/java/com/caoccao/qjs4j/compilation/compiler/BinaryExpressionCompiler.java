@@ -31,7 +31,7 @@ final class BinaryExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileBinaryExpression(BinaryExpression binExpr) {
+    void compile(BinaryExpression binExpr) {
         if (binExpr.getOperator() == BinaryOperator.IN &&
                 binExpr.getLeft() instanceof PrivateIdentifier privateIdentifier) {
             compilePrivateInExpression(privateIdentifier, binExpr.getRight());
@@ -120,7 +120,7 @@ final class BinaryExpressionCompiler {
         compilerContext.emitter.emitOpcode(op);
     }
 
-    void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
+    private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
         compilerContext.expressionCompiler.compileExpression(right);
 
         JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.getName()) : null;

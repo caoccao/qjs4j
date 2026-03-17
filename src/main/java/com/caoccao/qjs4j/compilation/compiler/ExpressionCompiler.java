@@ -39,15 +39,15 @@ final class ExpressionCompiler {
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
         } else if (expr instanceof BinaryExpression binExpr) {
-            compilerContext.binaryExpressionCompiler.compileBinaryExpression(binExpr);
+            compilerContext.binaryExpressionCompiler.compile(binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {
             compilerContext.unaryExpressionCompiler.compileUnaryExpression(unaryExpr);
         } else if (expr instanceof AssignmentExpression assignExpr) {
-            compilerContext.assignmentExpressionCompiler.compileAssignmentExpression(assignExpr);
+            compilerContext.assignmentExpressionCompiler.compile(assignExpr);
         } else if (expr instanceof ConditionalExpression condExpr) {
             compilerContext.conditionalExpressionCompiler.compileConditionalExpression(condExpr);
         } else if (expr instanceof CallExpression callExpr) {
-            compilerContext.callExpressionCompiler.compileCallExpression(callExpr);
+            compilerContext.callExpressionCompiler.compile(callExpr);
         } else if (expr instanceof MemberExpression memberExpr) {
             compilerContext.memberExpressionCompiler.compileMemberExpression(memberExpr);
         } else if (expr instanceof NewExpression newExpr) {
@@ -55,13 +55,13 @@ final class ExpressionCompiler {
         } else if (expr instanceof FunctionExpression functionExpression) {
             compilerContext.functionExpressionCompiler.compileFunctionExpression(functionExpression);
         } else if (expr instanceof ArrowFunctionExpression arrowExpr) {
-            compilerContext.arrowFunctionCompiler.compileArrowFunctionExpression(arrowExpr);
+            compilerContext.arrowFunctionExpressionCompiler.compile(arrowExpr);
         } else if (expr instanceof AwaitExpression awaitExpr) {
-            compilerContext.awaitExpressionCompiler.compileAwaitExpression(awaitExpr);
+            compilerContext.awaitExpressionCompiler.compile(awaitExpr);
         } else if (expr instanceof YieldExpression yieldExpr) {
             compilerContext.yieldExpressionCompiler.compileYieldExpression(yieldExpr);
         } else if (expr instanceof ArrayExpression arrayExpr) {
-            compilerContext.arrayExpressionCompiler.compileArrayExpression(arrayExpr);
+            compilerContext.arrayExpressionCompiler.compile(arrayExpr);
         } else if (expr instanceof ObjectExpression objExpr) {
             compilerContext.objectExpressionCompiler.compileObjectExpression(objExpr);
         } else if (expr instanceof TemplateLiteral templateLiteral) {
@@ -75,6 +75,29 @@ final class ExpressionCompiler {
         } else if (expr instanceof ImportExpression importExpr) {
             compilerContext.importExpressionCompiler.compileImportExpression(importExpr);
         }
+    }
+
+    void compileExpressionStatement(Expression expr) {
+        compileExpression(expr);
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        } else if (!compilerContext.isLastInProgram) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
+    }
+
+    /**
+     * Extract the actual assignment target from an element, unwrapping default values.
+     */
+    private Expression getAssignmentTarget(Expression element) {
+        if (element == null) {
+            return null;
+        }
+        if (element instanceof AssignmentExpression assignExpr
+                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
+            return assignExpr.getLeft();
+        }
+        return element;
     }
 
     /**
@@ -109,19 +132,5 @@ final class ExpressionCompiler {
         }
         // Identifiers and nested patterns: no pre-evaluation needed
         return 0;
-    }
-
-    /**
-     * Extract the actual assignment target from an element, unwrapping default values.
-     */
-    private Expression getAssignmentTarget(Expression element) {
-        if (element == null) {
-            return null;
-        }
-        if (element instanceof AssignmentExpression assignExpr
-                && assignExpr.getOperator() == AssignmentOperator.ASSIGN) {
-            return assignExpr.getLeft();
-        }
-        return element;
     }
 }

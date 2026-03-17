@@ -35,7 +35,7 @@ final class AssignmentExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileAssignmentExpression(AssignmentExpression assignExpr) {
+    void compile(AssignmentExpression assignExpr) {
         Expression left = assignExpr.getLeft();
         AssignmentOperator operator = assignExpr.getOperator();
 
@@ -168,7 +168,7 @@ final class AssignmentExpressionCompiler {
             }
         } else if (left instanceof ArrayExpression arrayExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compileArrayDestructuringAssignment(arrayExpr);
+            compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(arrayExpr);
         } else if (left instanceof ObjectExpression objExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
             compilerContext.patternCompiler.compileObjectDestructuringAssignment(objExpr);
@@ -298,7 +298,7 @@ final class AssignmentExpressionCompiler {
         compilerContext.emitter.emitOpcode(Opcode.PUT_REF_VALUE);
     }
 
-    void compileLogicalAssignment(AssignmentExpression assignExpr) {
+    private void compileLogicalAssignment(AssignmentExpression assignExpr) {
         Expression left = assignExpr.getLeft();
         AssignmentOperator operator = assignExpr.getOperator();
         boolean privateMemberAssignment = false;
