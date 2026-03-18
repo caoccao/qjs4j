@@ -149,7 +149,7 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
             compilerContext.emitter.emitU8(5);
             return;
         }
-        compilerContext.patternCompiler.compileAssignmentTarget(leftExpression);
+        compilerContext.expressionDestructuringAssignmentCompiler.compile(leftExpression);
     }
 
 }

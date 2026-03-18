@@ -64,7 +64,7 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
                 compilerContext.expressionCompiler.compile(declarator.getInit());
                 int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
-                compilerContext.patternCompiler.compilePatternAssignment(declarator.getId());
+                compilerContext.patternCompiler.compile(declarator.getId());
                 continue;
             }
 
@@ -131,7 +131,7 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
             if (varDecl.getKind() == VariableKind.VAR) {
                 compilerContext.patternCompiler.compileVarPatternAssignment(declarator.getId());
             } else {
-                compilerContext.patternCompiler.compilePatternAssignment(declarator.getId());
+                compilerContext.patternCompiler.compile(declarator.getId());
             }
         }
         compilerContext.popState();

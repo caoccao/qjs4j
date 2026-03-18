@@ -36,7 +36,7 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         if (isExpressionBased) {
             if (forOfStmt.getLeft() instanceof CallExpression callExpr) {
-                compilerContext.patternCompiler.compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
+                compileForOfWithCallExpressionTarget(forOfStmt, callExpr);
                 return;
             }
         } else {
@@ -164,6 +164,62 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             compilerContext.emitter.emitU8(5);
             return;
         }
-        compilerContext.patternCompiler.compileAssignmentTarget(leftExpression);
+        compilerContext.expressionDestructuringAssignmentCompiler.compile(leftExpression);
+    }
+
+    private void compileForOfWithCallExpressionTarget(ForOfStatement forOfStmt, CallExpression callExpr) {
+        compilerContext.scopeManager.enterScope();
+
+        // Compile the iterable expression
+        compilerContext.expressionCompiler.compile(forOfStmt.getRight());
+
+        // FOR_OF_START to get iterator
+        if (forOfStmt.isAsync()) {
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_START);
+        } else {
+            compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
+        }
+
+        // Stack: iter, next, catch_offset
+        int loopStart = compilerContext.emitter.currentOffset();
+
+        // FOR_OF_NEXT to get next value
+        if (forOfStmt.isAsync()) {
+            compilerContext.emitter.emitOpcode(Opcode.FOR_AWAIT_OF_NEXT);
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "done");
+        } else {
+            compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
+        }
+
+        // Stack: iter, next, catch_offset, value, done
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+        // Stack: iter, next, catch_offset, value (or result for async)
+
+        if (forOfStmt.isAsync()) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
+        }
+
+        // Drop the value - we can't assign it
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        // Evaluate the call expression (f() is called at runtime)
+        compilerContext.expressionCompiler.compile(callExpr);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        // Throw ReferenceError
+        compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+        compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
+
+        // End label (when done=true)
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+        // Drop remaining value on stack
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+        // Clean up iterator: drop catch_offset, next, iter
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        compilerContext.scopeManager.exitScope();
     }
 }

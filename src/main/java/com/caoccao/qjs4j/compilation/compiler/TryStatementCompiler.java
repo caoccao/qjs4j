@@ -112,7 +112,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     compilerContext.patternCompiler.declarePatternVariables(catchParam);
-                    compilerContext.patternCompiler.compilePatternAssignment(catchParam);
+                    compilerContext.patternCompiler.compile(catchParam);
                 }
 
                 compileTryFinallyBlock(handler.getBody());
@@ -272,7 +272,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     compilerContext.patternCompiler.declarePatternVariables(catchParam);
-                    compilerContext.patternCompiler.compilePatternAssignment(catchParam);
+                    compilerContext.patternCompiler.compile(catchParam);
                 }
 
                 int catchBodyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);

@@ -58,7 +58,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 // Stack: iter next catch_offset [pre-eval...] value
                 if (element != null) {
-                    compilerContext.patternCompiler.emitAssignmentFromPreEvaluated(element, depth);
+                    compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
                 }
@@ -89,10 +89,10 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             // Iterator is fully exhausted after rest collection. Remove iterator state
             // before assigning the rest target so abrupt completions in nested patterns
             // do not attempt an extra IteratorClose.
-            compilerContext.patternCompiler.emitDropIteratorStatePreservingTopValues(restTargetDepth + 1);
+            emitDropIteratorStatePreservingTopValues(restTargetDepth + 1);
 
             // Assign collected array to rest target.
-            compilerContext.patternCompiler.emitAssignmentFromPreEvaluated(restTarget, restTargetDepth);
+            compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(restTarget, restTargetDepth);
         } else {
             // No rest element - use iterator with done tracking and IteratorClose
             int iteratorDoneLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
@@ -110,7 +110,7 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 // Stack: iter next catch_offset [pre-eval...] value
                 if (element != null) {
-                    compilerContext.patternCompiler.emitAssignmentFromPreEvaluated(element, depth);
+                    compilerContext.expressionDestructuringAssignmentCompiler.compileFromPreEvaluated(element, depth);
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.DROP);
                 }
@@ -128,6 +128,34 @@ final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompil
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.patchJump(iteratorCloseDoneJump, compilerContext.emitter.currentOffset());
+        }
+    }
+
+    private void emitDropIteratorStatePreservingTopValues(int preservedValueCount) {
+        if (preservedValueCount < 0) {
+            throw new IllegalArgumentException("preservedValueCount must not be negative");
+        }
+        if (preservedValueCount == 0) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            return;
+        }
+
+        int[] preservedLocalIndexes = new int[preservedValueCount];
+        for (int valueIndex = preservedValueCount - 1; valueIndex >= 0; valueIndex--) {
+            int localIndex = compilerContext.scopeManager.currentScope().declareLocal(
+                    "$iter_preserve_" + valueIndex + "_" + compilerContext.emitter.currentOffset());
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
+            preservedLocalIndexes[valueIndex] = localIndex;
+        }
+
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+
+        for (int valueIndex = 0; valueIndex < preservedValueCount; valueIndex++) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, preservedLocalIndexes[valueIndex]);
         }
     }
 }

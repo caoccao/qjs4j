@@ -170,7 +170,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             compilerContext.arrayExpressionDestructuringAssignmentCompiler.compile(arrayExpr);
         } else if (left instanceof ObjectExpression objExpr) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.patternCompiler.compileObjectDestructuringAssignment(objExpr);
+            compilerContext.objectExpressionDestructuringAssignmentCompiler.compile(objExpr);
         }
     }
 

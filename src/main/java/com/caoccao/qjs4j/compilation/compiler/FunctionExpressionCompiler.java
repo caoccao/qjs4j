@@ -298,7 +298,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             // Push the argument value onto the stack
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, slotIndex);
             // Destructure and assign to local variables
-            functionContext.patternCompiler.compilePatternAssignment(pattern);
+            functionContext.patternCompiler.compile(pattern);
         }
     }
 
@@ -316,7 +316,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             functionContext.emitter.emitU16(restLocalIndex);
         } else {
             // Destructured rest: ...[a, b] or ...{a, b} → compile pattern assignment
-            functionContext.patternCompiler.compilePatternAssignment(restParameter.getArgument());
+            functionContext.patternCompiler.compile(restParameter.getArgument());
         }
     }
 

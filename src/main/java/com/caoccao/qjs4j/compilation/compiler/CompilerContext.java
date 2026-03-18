@@ -40,6 +40,8 @@ final class CompilerContext {
     final LoopManager loopManager;
     // TDZ and global bindings
     final Set<String> nonDeletableGlobalBindings;
+    // Pre-resolved binding references for with-statement var destructuring
+    final Map<String, Deque<PreResolvedReference>> preResolvedBindingReferences;
     final ScopeManager scopeManager;
     final Set<String> tdzLocals;
     final WithObjectManager withObjectManager;
@@ -48,8 +50,10 @@ final class CompilerContext {
     // Delegate compilers (initialized via initializeDelegates)
     ArrayExpressionCompiler arrayExpressionCompiler;
     ArrayExpressionDestructuringAssignmentCompiler arrayExpressionDestructuringAssignmentCompiler;
+    ArrayPatternCompiler arrayPatternCompiler;
     ArrowFunctionExpressionCompiler arrowFunctionExpressionCompiler;
     AssignmentExpressionCompiler assignmentExpressionCompiler;
+    AssignmentPatternCompiler assignmentPatternCompiler;
     AwaitExpressionCompiler awaitExpressionCompiler;
     BinaryExpressionCompiler binaryExpressionCompiler;
     BlockStatementCompiler blockStatementCompiler;
@@ -71,6 +75,7 @@ final class CompilerContext {
     boolean evalMode;
     int evalReturnLocalIndex;
     ExpressionCompiler expressionCompiler;
+    ExpressionDestructuringAssignmentCompiler expressionDestructuringAssignmentCompiler;
     int finallySubroutineDepth;
     ForInStatementCompiler forInStatementCompiler;
     ForOfStatementCompiler forOfStatementCompiler;
@@ -79,6 +84,8 @@ final class CompilerContext {
     FunctionExpressionCompiler functionExpressionCompiler;
     boolean hasEnclosingArgumentsBinding;
     IdentifierCompiler identifierCompiler;
+    IdentifierDestructuringAssignmentCompiler identifierDestructuringAssignmentCompiler;
+    IdentifierPatternCompiler identifierPatternCompiler;
     IfStatementCompiler ifStatementCompiler;
     ImportExpressionCompiler importExpressionCompiler;
     boolean inClassBody;
@@ -93,8 +100,11 @@ final class CompilerContext {
     LabeledStatementCompiler labeledStatementCompiler;
     LiteralCompiler literalCompiler;
     MemberExpressionCompiler memberExpressionCompiler;
+    MemberExpressionDestructuringAssignmentCompiler memberExpressionDestructuringAssignmentCompiler;
     NewExpressionCompiler newExpressionCompiler;
     ObjectExpressionCompiler objectExpressionCompiler;
+    ObjectExpressionDestructuringAssignmentCompiler objectExpressionDestructuringAssignmentCompiler;
+    ObjectPatternCompiler objectPatternCompiler;
     PatternCompiler patternCompiler;
     Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;
@@ -111,6 +121,7 @@ final class CompilerContext {
     ThrowStatementCompiler throwStatementCompiler;
     TryStatementCompiler tryStatementCompiler;
     UnaryExpressionCompiler unaryExpressionCompiler;
+    boolean useExistingBindingInParentScopes;
     CompilerScope varDeclarationScopeOverride;
     boolean varInGlobalProgram;
     VariableDeclarationCompiler variableDeclarationCompiler;
@@ -118,47 +129,36 @@ final class CompilerContext {
     WithStatementCompiler withStatementCompiler;
     YieldExpressionCompiler yieldExpressionCompiler;
 
-    CompilerContext() {
-        this(false, null, null);
-    }
-
-    CompilerContext(boolean inheritedStrictMode) {
-        this(inheritedStrictMode, null, null);
-    }
-
-    CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver) {
-        this(inheritedStrictMode, parentCaptureResolver, null);
-    }
-
     CompilerContext(boolean inheritedStrictMode, CaptureResolver parentCaptureResolver, JSContext context) {
-        this.stateStack = new ArrayDeque<>();
         this.scopeManager = new ScopeManager();
-        this.loopManager = new LoopManager();
-        this.withObjectManager = new WithObjectManager();
+
         this.activeFinallyGosubPatches = new ArrayDeque<>();
         this.activeFinallyNipCatchCounts = new ArrayDeque<>();
         this.annexBFunctionNames = new HashSet<>();
         this.annexBFunctionScopeLocals = new HashMap<>();
         this.captureResolver = new CaptureResolver(parentCaptureResolver, scopeManager::findBindingInScopes);
-        this.emitter = new BytecodeEmitter();
         this.context = context;
+        this.emitter = new BytecodeEmitter();
         this.evalMode = false;
         this.evalReturnLocalIndex = -1;
         this.finallySubroutineDepth = 0;
         this.inGlobalScope = false;
         this.isGlobalProgram = false;
-        this.isInAsyncFunction = false;
         this.isInArrowFunction = false;
+        this.isInAsyncFunction = false;
         this.isLastInProgram = false;
+        this.loopManager = new LoopManager();
         this.nonDeletableGlobalBindings = new HashSet<>();
-        this.tdzLocals = new HashSet<>();
-        this.sourceCode = null;
-        this.privateSymbols = Map.of();
+        this.preResolvedBindingReferences = new HashMap<>();
         this.predeclareProgramLexicalsAsLocals = false;
+        this.privateSymbols = Map.of();
+        this.sourceCode = null;
+        this.stateStack = new ArrayDeque<>();
         this.strictMode = inheritedStrictMode;
-        this.varInGlobalProgram = false;
+        this.tdzLocals = new HashSet<>();
         this.varDeclarationScopeOverride = null;
-        this.classExpressionCompiler = new ClassExpressionCompiler(this);
+        this.varInGlobalProgram = false;
+        this.withObjectManager = new WithObjectManager();
         initializeDelegates();
     }
 
@@ -178,49 +178,58 @@ final class CompilerContext {
     }
 
     private void initializeDelegates() {
-        this.expressionCompiler = new ExpressionCompiler(this);
         this.arrayExpressionCompiler = new ArrayExpressionCompiler(this);
         this.arrayExpressionDestructuringAssignmentCompiler = new ArrayExpressionDestructuringAssignmentCompiler(this);
+        this.arrayPatternCompiler = new ArrayPatternCompiler(this);
         this.arrowFunctionExpressionCompiler = new ArrowFunctionExpressionCompiler(this);
         this.assignmentExpressionCompiler = new AssignmentExpressionCompiler(this);
+        this.assignmentPatternCompiler = new AssignmentPatternCompiler(this);
         this.awaitExpressionCompiler = new AwaitExpressionCompiler(this);
         this.binaryExpressionCompiler = new BinaryExpressionCompiler(this);
         this.blockStatementCompiler = new BlockStatementCompiler(this);
         this.breakStatementCompiler = new BreakStatementCompiler(this);
         this.callExpressionCompiler = new CallExpressionCompiler(this);
         this.classDeclarationCompiler = new ClassDeclarationCompiler(this);
+        this.classExpressionCompiler = new ClassExpressionCompiler(this);
         this.compilerAnalysis = new CompilerAnalysis(this);
-        this.continueStatementCompiler = new ContinueStatementCompiler(this);
         this.conditionalExpressionCompiler = new ConditionalExpressionCompiler(this);
+        this.continueStatementCompiler = new ContinueStatementCompiler(this);
         this.doWhileStatementCompiler = new DoWhileStatementCompiler(this);
         this.emitHelpers = new EmitHelpers(this);
-        this.functionDeclarationCompiler = new FunctionDeclarationCompiler(this);
-        this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
+        this.expressionCompiler = new ExpressionCompiler(this);
+        this.expressionDestructuringAssignmentCompiler = new ExpressionDestructuringAssignmentCompiler(this);
         this.forInStatementCompiler = new ForInStatementCompiler(this);
         this.forOfStatementCompiler = new ForOfStatementCompiler(this);
         this.forStatementCompiler = new ForStatementCompiler(this);
-        this.ifStatementCompiler = new IfStatementCompiler(this);
-        this.labeledStatementCompiler = new LabeledStatementCompiler(this);
-        this.returnStatementCompiler = new ReturnStatementCompiler(this);
-        this.variableDeclarationCompiler = new VariableDeclarationCompiler(this);
-        this.whileStatementCompiler = new WhileStatementCompiler(this);
-        this.withStatementCompiler = new WithStatementCompiler(this);
+        this.functionDeclarationCompiler = new FunctionDeclarationCompiler(this);
+        this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
         this.identifierCompiler = new IdentifierCompiler(this);
+        this.identifierDestructuringAssignmentCompiler = new IdentifierDestructuringAssignmentCompiler(this);
+        this.identifierPatternCompiler = new IdentifierPatternCompiler(this);
+        this.ifStatementCompiler = new IfStatementCompiler(this);
         this.importExpressionCompiler = new ImportExpressionCompiler(this);
+        this.labeledStatementCompiler = new LabeledStatementCompiler(this);
         this.literalCompiler = new LiteralCompiler(this);
         this.memberExpressionCompiler = new MemberExpressionCompiler(this);
+        this.memberExpressionDestructuringAssignmentCompiler = new MemberExpressionDestructuringAssignmentCompiler(this);
         this.newExpressionCompiler = new NewExpressionCompiler(this);
         this.objectExpressionCompiler = new ObjectExpressionCompiler(this);
+        this.objectExpressionDestructuringAssignmentCompiler = new ObjectExpressionDestructuringAssignmentCompiler(this);
+        this.objectPatternCompiler = new ObjectPatternCompiler(this);
         this.patternCompiler = new PatternCompiler(this);
         this.programCompiler = new ProgramCompiler(this);
+        this.returnStatementCompiler = new ReturnStatementCompiler(this);
         this.sequenceExpressionCompiler = new SequenceExpressionCompiler(this);
         this.statementCompiler = new StatementCompiler(this);
         this.switchStatementCompiler = new SwitchStatementCompiler(this);
-        this.throwStatementCompiler = new ThrowStatementCompiler(this);
-        this.tryStatementCompiler = new TryStatementCompiler(this);
         this.taggedTemplateExpressionCompiler = new TaggedTemplateExpressionCompiler(this);
         this.templateLiteralCompiler = new TemplateLiteralCompiler(this);
+        this.throwStatementCompiler = new ThrowStatementCompiler(this);
+        this.tryStatementCompiler = new TryStatementCompiler(this);
         this.unaryExpressionCompiler = new UnaryExpressionCompiler(this);
+        this.variableDeclarationCompiler = new VariableDeclarationCompiler(this);
+        this.whileStatementCompiler = new WhileStatementCompiler(this);
+        this.withStatementCompiler = new WithStatementCompiler(this);
         this.yieldExpressionCompiler = new YieldExpressionCompiler(this);
     }
 
@@ -241,5 +250,8 @@ final class CompilerContext {
                 strictMode, inGlobalScope, inClassBody,
                 inClassFieldInitializer, emitTailCalls,
                 varInGlobalProgram, privateSymbols, inferredClassName));
+    }
+
+    record PreResolvedReference(int objectLocalIndex, int propertyLocalIndex) {
     }
 }
