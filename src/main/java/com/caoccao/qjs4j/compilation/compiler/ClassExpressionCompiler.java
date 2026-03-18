@@ -34,7 +34,7 @@ final class ClassExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileClassExpression(ClassExpression classExpr) {
+    void compile(ClassExpression classExpr) {
         String className = classExpr.getId() != null ? classExpr.getId().getName()
                 : (compilerContext.inferredClassName != null ? compilerContext.inferredClassName : "");
 
@@ -52,7 +52,7 @@ final class ClassExpressionCompiler {
         compilerContext.inClassBody = true;
 
         if (classExpr.getSuperClass() != null) {
-            compilerContext.functionCompiler.emitStrictClassBodyExpression(classExpr.getSuperClass());
+            compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(classExpr.getSuperClass());
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
@@ -130,10 +130,12 @@ final class ClassExpressionCompiler {
                 autoAccessorBackingSymbols.put(entry.getKey(), backingSymbol);
             }
         }
-        List<ClassDeclarationCompiler.PrivateMethodEntry> privateInstanceMethodFunctions = compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
-                privateInstanceMethods, privateSymbols, computedFieldSymbols);
-        List<ClassDeclarationCompiler.PrivateMethodEntry> privateStaticMethodFunctions = compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
-                privateStaticMethods, privateSymbols, computedFieldSymbols);
+        List<ClassDeclarationCompiler.PrivateMethodEntry> privateInstanceMethodFunctions =
+                compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
+                        privateInstanceMethods, privateSymbols, computedFieldSymbols);
+        List<ClassDeclarationCompiler.PrivateMethodEntry> privateStaticMethodFunctions =
+                compilerContext.classDeclarationCompiler.compilePrivateMethodFunctions(
+                        privateStaticMethods, privateSymbols, computedFieldSymbols);
 
         JSBytecodeFunction constructorFunc;
         if (constructor != null) {

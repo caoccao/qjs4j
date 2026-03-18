@@ -33,7 +33,7 @@ final class VariableDeclarationCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileVariableDeclaration(VariableDeclaration varDecl) {
+    void compile(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;
         if ((varDecl.getKind() == VariableKind.CONST || isUsingDeclaration)
@@ -62,7 +62,7 @@ final class VariableDeclarationCompiler {
                     throw new JSCompilerException(varDecl.getKind() + " declaration requires an initializer");
                 }
 
-                compilerContext.expressionCompiler.compileExpression(declarator.getInit());
+                compilerContext.expressionCompiler.compile(declarator.getInit());
                 int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
                 compilerContext.patternCompiler.compilePatternAssignment(declarator.getId());
@@ -100,7 +100,7 @@ final class VariableDeclarationCompiler {
                         "$preResolvedVarObject_" + compilerContext.emitter.currentOffset());
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, preResolvedObjectLocalIndex);
 
-                compilerContext.expressionCompiler.compileExpression(declarator.getInit());
+                compilerContext.expressionCompiler.compile(declarator.getInit());
                 if (declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
                 }
@@ -119,7 +119,7 @@ final class VariableDeclarationCompiler {
                         && classExpr.getId() == null) {
                     compilerContext.inferredClassName = targetId.getName();
                 }
-                compilerContext.expressionCompiler.compileExpression(declarator.getInit());
+                compilerContext.expressionCompiler.compile(declarator.getInit());
                 if (declarator.getId() instanceof Identifier targetId
                         && declarator.getInit().isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());

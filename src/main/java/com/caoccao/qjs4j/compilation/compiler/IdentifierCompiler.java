@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
+import com.caoccao.qjs4j.compilation.ast.Identifier;
 import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSString;
@@ -35,7 +36,8 @@ final class IdentifierCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileIdentifier(String name) {
+    void compile(Identifier identifier) {
+        String name = identifier.getName();
         // Handle 'this' keyword
         if (JSKeyword.THIS.equals(name)) {
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);

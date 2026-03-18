@@ -37,7 +37,7 @@ final class UnaryExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileUnaryExpression(UnaryExpression unaryExpr) {
+    void compile(UnaryExpression unaryExpr) {
         // DELETE operator needs special handling - it doesn't evaluate the operand,
         // but instead emits object and property separately
         if (unaryExpr.getOperator() == UnaryExpression.UnaryOperator.DELETE) {
@@ -45,11 +45,11 @@ final class UnaryExpressionCompiler {
 
             if (operand instanceof MemberExpression memberExpr) {
                 // delete obj.prop or delete obj[expr]
-                compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+                compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
                 if (memberExpr.isComputed()) {
                     // obj[expr]
-                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                 } else if (memberExpr.getProperty() instanceof Identifier propId) {
                     // obj.prop
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
@@ -78,7 +78,7 @@ final class UnaryExpressionCompiler {
                 }
             } else {
                 // delete non-reference expression => evaluate for side effects, then true
-                compilerContext.expressionCompiler.compileExpression(operand);
+                compilerContext.expressionCompiler.compile(operand);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
             }
@@ -117,7 +117,7 @@ final class UnaryExpressionCompiler {
                 Integer localIndex = compilerContext.scopeManager.findLocalInScopes(id.getName());
                 if (localIndex != null) {
                     // Local binding.
-                    compilerContext.expressionCompiler.compileExpression(operand);
+                    compilerContext.expressionCompiler.compile(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
                     if (compilerContext.scopeManager.isLocalBindingConst(id.getName())) {
@@ -131,7 +131,7 @@ final class UnaryExpressionCompiler {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName());
                 if (capturedIndex != null) {
                     // Captured binding.
-                    compilerContext.expressionCompiler.compileExpression(operand);
+                    compilerContext.expressionCompiler.compile(operand);
                     compilerContext.emitter.emitOpcode(isPrefix ? (isInc ? Opcode.INC : Opcode.DEC)
                             : (isInc ? Opcode.POST_INC : Opcode.POST_DEC));
                     if (compilerContext.captureResolver.isCapturedBindingImmutable(id.getName())) {
@@ -182,8 +182,8 @@ final class UnaryExpressionCompiler {
                 }
                 if (memberExpr.isComputed()) {
                     // Array element: obj[prop]
-                    compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
-                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
+                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL3);
 
                     if (isPrefix) {
@@ -203,7 +203,7 @@ final class UnaryExpressionCompiler {
                 } else {
                     // Object property: obj.prop or obj.#field
                     if (memberExpr.getProperty() instanceof Identifier propId) {
-                        compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+                        compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.prop - returns new value
@@ -232,7 +232,7 @@ final class UnaryExpressionCompiler {
                             throw new JSCompilerException("Private field not found: #" + fieldName);
                         }
 
-                        compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+                        compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
                         if (isPrefix) {
                             // Prefix: ++obj.#field - returns new value
@@ -260,7 +260,7 @@ final class UnaryExpressionCompiler {
                 }
             } else if (operand instanceof CallExpression) {
                 // Annex B: CallExpression as increment/decrement target throws ReferenceError at runtime.
-                compilerContext.expressionCompiler.compileExpression(operand);
+                compilerContext.expressionCompiler.compile(operand);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
                 compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
@@ -274,7 +274,7 @@ final class UnaryExpressionCompiler {
                 && unaryExpr.getOperand() instanceof Identifier id) {
             String name = id.getName();
             if ("import.meta".equals(name) || "new.target".equals(name)) {
-                compilerContext.expressionCompiler.compileExpression(unaryExpr.getOperand());
+                compilerContext.expressionCompiler.compile(unaryExpr.getOperand());
                 compilerContext.emitter.emitOpcode(Opcode.TYPEOF);
                 return;
             }
@@ -308,7 +308,7 @@ final class UnaryExpressionCompiler {
             return;
         }
 
-        compilerContext.expressionCompiler.compileExpression(unaryExpr.getOperand());
+        compilerContext.expressionCompiler.compile(unaryExpr.getOperand());
 
         Opcode op = switch (unaryExpr.getOperator()) {
             case BIT_NOT -> Opcode.NOT;

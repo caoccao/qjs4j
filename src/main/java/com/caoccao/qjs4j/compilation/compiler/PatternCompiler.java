@@ -92,10 +92,10 @@ final class PatternCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);
             } else {
                 // Stack: [value]
-                compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+                compilerContext.expressionCompiler.compile(memberExpr.getObject());
                 // Stack: [value, obj]
                 if (memberExpr.isComputed()) {
-                    compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                     // Stack: [value, obj, prop] → ROT3L → [obj, prop, value]
                     compilerContext.emitter.emitOpcode(Opcode.ROT3L);
                     compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
@@ -135,7 +135,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compile(assignExpr.getRight());
             // Set function name for anonymous function definitions
             if (assignExpr.getLeft() instanceof Identifier targetId
                     && assignExpr.getRight().isAnonymousFunction()) {
@@ -182,7 +182,7 @@ final class PatternCompiler {
         compilerContext.scopeManager.enterScope();
 
         // Compile the iterable expression
-        compilerContext.expressionCompiler.compileExpression(forOfStmt.getRight());
+        compilerContext.expressionCompiler.compile(forOfStmt.getRight());
 
         // FOR_OF_START to get iterator
         if (forOfStmt.isAsync()) {
@@ -214,7 +214,7 @@ final class PatternCompiler {
         // Drop the value - we can't assign it
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Evaluate the call expression (f() is called at runtime)
-        compilerContext.expressionCompiler.compileExpression(callExpr);
+        compilerContext.expressionCompiler.compile(callExpr);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         // Throw ReferenceError
         compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
@@ -280,7 +280,7 @@ final class PatternCompiler {
         for (ObjectExpressionProperty property : regularProperties) {
             int propertyKeyLocalIndex = -1;
             if (property.isComputed()) {
-                compilerContext.expressionCompiler.compileExpression(property.getKey());
+                compilerContext.expressionCompiler.compile(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 propertyKeyLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
                         "$objectAssignKey" + compilerContext.emitter.currentOffset());
@@ -311,7 +311,7 @@ final class PatternCompiler {
                     && literal.getValue() instanceof BigInteger bigIntegerValue) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
             } else {
-                compilerContext.expressionCompiler.compileExpression(property.getKey());
+                compilerContext.expressionCompiler.compile(property.getKey());
                 compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             }
@@ -490,7 +490,7 @@ final class PatternCompiler {
                     maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
                     compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, bigIntegerValue.toString());
                 } else {
-                    compilerContext.expressionCompiler.compileExpression(propertyKey);
+                    compilerContext.expressionCompiler.compile(propertyKey);
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     Identifier bindingIdentifier = getBindingIdentifierForPreResolve(prop.getValue());
                     maybePreResolveBindingIdentifierReference(bindingIdentifier, useExistingBindingInParentScopes);
@@ -525,7 +525,7 @@ final class PatternCompiler {
                     } else {
                         // Computed property key: re-evaluate expression to get the key name
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null
-                        compilerContext.expressionCompiler.compileExpression(propertyKey);
+                        compilerContext.expressionCompiler.compile(propertyKey);
                         compilerContext.emitter.emitOpcode(Opcode.NULL);
                         compilerContext.emitter.emitOpcode(Opcode.PUT_ARRAY_EL);
                         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop null value
@@ -707,7 +707,7 @@ final class PatternCompiler {
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             // Value is undefined: drop it and use default
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compileExpression(assignPattern.getRight());
+            compilerContext.expressionCompiler.compile(assignPattern.getRight());
             if (assignPattern.getLeft() instanceof Identifier identifier
                     && assignPattern.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
@@ -784,7 +784,7 @@ final class PatternCompiler {
             compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED);
             int jumpNotUndefined = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compileExpression(assignExpr.getRight());
+            compilerContext.expressionCompiler.compile(assignExpr.getRight());
             if (assignExpr.getLeft() instanceof Identifier targetId
                     && assignExpr.getRight().isAnonymousFunction()) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
@@ -955,7 +955,7 @@ final class PatternCompiler {
         }
 
         if (!compilerContext.withObjectManager.hasActiveWithObject()) {
-            compilerContext.identifierCompiler.compileIdentifier(bindingIdentifier.getName());
+            compilerContext.identifierCompiler.compile(bindingIdentifier);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             return;
         }

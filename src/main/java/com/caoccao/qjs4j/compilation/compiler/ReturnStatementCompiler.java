@@ -33,7 +33,7 @@ final class ReturnStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileReturnStatement(ReturnStatement retStmt) {
+    void compile(ReturnStatement retStmt) {
         // Tail call optimization: when the return argument has a call in tail position
         // in strict mode, with no active finally blocks, iterators, or async context,
         // emit TAIL_CALL instead of CALL + RETURN (ES2015 14.6.1 HasCallInTailPosition).
@@ -46,7 +46,7 @@ final class ReturnStatementCompiler {
                 && !compilerContext.loopManager.hasActiveIteratorLoops()) {
             // Direct call in tail position: TAIL_CALL handles the return entirely
             compilerContext.emitTailCalls = true;
-            compilerContext.expressionCompiler.compileExpression(retStmt.getArgument());
+            compilerContext.expressionCompiler.compile(retStmt.getArgument());
             compilerContext.emitTailCalls = false;
             return;
         }
@@ -65,7 +65,7 @@ final class ReturnStatementCompiler {
             if (enableTco) {
                 compilerContext.emitTailCalls = true;
             }
-            compilerContext.expressionCompiler.compileExpression(retStmt.getArgument());
+            compilerContext.expressionCompiler.compile(retStmt.getArgument());
             compilerContext.emitTailCalls = false;
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);

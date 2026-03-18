@@ -33,7 +33,7 @@ final class MemberExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileMemberExpression(MemberExpression memberExpr) {
+    void compile(MemberExpression memberExpr) {
         if (memberExpr.getObject().isSuperIdentifier()) {
             compilerContext.emitHelpers.emitGetSuperValue(memberExpr, false);
             return;
@@ -46,7 +46,7 @@ final class MemberExpressionCompiler {
             return;
         }
 
-        compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+        compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
         if (memberExpr.isOptional()) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -86,7 +86,7 @@ final class MemberExpressionCompiler {
 
         MemberExpression optionalRoot = chain.get(0);
 
-        compilerContext.expressionCompiler.compileExpression(optionalRoot.getObject());
+        compilerContext.expressionCompiler.compile(optionalRoot.getObject());
 
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
@@ -107,7 +107,7 @@ final class MemberExpressionCompiler {
 
     private void emitPropertyAccess(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
             String fieldName = privateId.getName();

@@ -30,7 +30,15 @@ final class ProgramCompiler {
         this.compilerContext = compilerContext;
     }
 
-    private void compileModuleProgram(Program program) {
+    void compile(Program program) {
+        if (program.isModule()) {
+            compileModule(program);
+        } else {
+            compileScript(program);
+        }
+    }
+
+    private void compileModule(Program program) {
         compilerContext.inGlobalScope = false;
         compilerContext.isGlobalProgram = false;
         compilerContext.strictMode = true;
@@ -79,7 +87,7 @@ final class ProgramCompiler {
             }
             if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
                 hoistedFunctionNames.add(functionDeclaration.getId().getName());
-                compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(functionDeclaration);
+                compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
                 continue;
             }
             compilerContext.compilerAnalysis.collectVarNamesFromStatement(statement, hoistedVarNames);
@@ -116,7 +124,7 @@ final class ProgramCompiler {
                 lastProducesValue = true;
             }
             compilerContext.isLastInProgram = isLast;
-            compilerContext.statementCompiler.compileStatement(statement);
+            compilerContext.statementCompiler.compile(statement);
         }
 
         if (!lastProducesValue) {
@@ -135,12 +143,7 @@ final class ProgramCompiler {
         compilerContext.inGlobalScope = false;
     }
 
-    void compileProgram(Program program) {
-        if (program.isModule()) {
-            compileModuleProgram(program);
-            return;
-        }
-
+    private void compileScript(Program program) {
         compilerContext.strictMode = program.isStrict();  // Set strict mode from program directive
         boolean useLocalProgramScope =
                 compilerContext.predeclareProgramLexicalsAsLocals && compilerContext.strictMode;
@@ -192,7 +195,7 @@ final class ProgramCompiler {
                     hoistedFunctionNames.add(funcDecl.getId().getName());
                     compilerContext.nonDeletableGlobalBindings.add(funcDecl.getId().getName());
                 }
-                compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(funcDecl);
+                compilerContext.functionDeclarationCompiler.compile(funcDecl);
             } else {
                 // Collect var names from other statements (for, try, if, etc.)
                 compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
@@ -239,7 +242,7 @@ final class ProgramCompiler {
                 if (stmt instanceof FunctionDeclaration) {
                     continue; // Already hoisted in Phase 1
                 }
-                compilerContext.statementCompiler.compileStatement(stmt);
+                compilerContext.statementCompiler.compile(stmt);
             }
 
             compilerContext.evalReturnLocalIndex = -1;
@@ -275,7 +278,7 @@ final class ProgramCompiler {
                 }
 
                 compilerContext.isLastInProgram = isLast;
-                compilerContext.statementCompiler.compileStatement(stmt);
+                compilerContext.statementCompiler.compile(stmt);
             }
 
             // If last statement didn't produce a value, push undefined

@@ -68,7 +68,7 @@ final class BlockStatementCompiler {
         // so nested function bodies resolve captures against block-scoped names.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof FunctionDeclaration funcDecl) {
-                compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(funcDecl);
+                compilerContext.functionDeclarationCompiler.compile(funcDecl);
             }
         }
 
@@ -77,7 +77,7 @@ final class BlockStatementCompiler {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted
             }
-            compilerContext.statementCompiler.compileStatement(stmt);
+            compilerContext.statementCompiler.compile(stmt);
         }
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();

@@ -27,10 +27,10 @@ final class ImportExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileImportExpression(ImportExpression importExpr) {
-        compilerContext.expressionCompiler.compileExpression(importExpr.getSource());
+    void compile(ImportExpression importExpr) {
+        compilerContext.expressionCompiler.compile(importExpr.getSource());
         if (importExpr.getOptions() != null) {
-            compilerContext.expressionCompiler.compileExpression(importExpr.getOptions());
+            compilerContext.expressionCompiler.compile(importExpr.getOptions());
         } else if (importExpr.isDefer()) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, JSImportDeferMarker.VALUE);
         } else {

@@ -27,19 +27,7 @@ final class ForInStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    private void compileForInExpressionTargetAssignment(Expression leftExpression) {
-        if (leftExpression instanceof CallExpression) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.expressionCompiler.compileExpression(leftExpression);
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
-            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
-            compilerContext.emitter.emitU8(5);
-            return;
-        }
-        compilerContext.patternCompiler.compileAssignmentTarget(leftExpression);
-    }
-
-    void compileForInStatement(ForInStatement forInStmt) {
+    void compile(ForInStatement forInStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         boolean isExpressionBased = forInStmt.getLeft() instanceof Expression;
@@ -70,7 +58,7 @@ final class ForInStatementCompiler {
                     compilerContext.tdzLocals.add(boundName);
                 }
             }
-            compilerContext.expressionCompiler.compileExpression(forInStmt.getRight());
+            compilerContext.expressionCompiler.compile(forInStmt.getRight());
             compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
             compilerContext.scopeManager.exitScope();
         }
@@ -92,7 +80,7 @@ final class ForInStatementCompiler {
                         && classExpression.getId() == null) {
                     compilerContext.inferredClassName = identifier.getName();
                 }
-                compilerContext.expressionCompiler.compileExpression(initializer);
+                compilerContext.expressionCompiler.compile(initializer);
                 if (declarationPattern instanceof Identifier identifier
                         && initializer.isAnonymousFunction()) {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
@@ -103,7 +91,7 @@ final class ForInStatementCompiler {
         }
 
         if (!hasHeadTdzScope) {
-            compilerContext.expressionCompiler.compileExpression(forInStmt.getRight());
+            compilerContext.expressionCompiler.compile(forInStmt.getRight());
             compilerContext.emitter.emitOpcode(Opcode.FOR_IN_START);
         }
 
@@ -126,7 +114,7 @@ final class ForInStatementCompiler {
             compilerContext.patternCompiler.compileForOfValueAssignment(declarationPattern, isVar);
         }
 
-        compilerContext.statementCompiler.compileStatement(forInStmt.getBody());
+        compilerContext.statementCompiler.compile(forInStmt.getBody());
 
         if (!isExpressionBased && !isVar && declarationPattern != null) {
             compilerContext.emitHelpers.emitCloseLocForPattern(declarationPattern);
@@ -151,6 +139,18 @@ final class ForInStatementCompiler {
         compilerContext.loopManager.popLoop();
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
+    }
+
+    private void compileForInExpressionTargetAssignment(Expression leftExpression) {
+        if (leftExpression instanceof CallExpression) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.expressionCompiler.compile(leftExpression);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid assignment left-hand side");
+            compilerContext.emitter.emitU8(5);
+            return;
+        }
+        compilerContext.patternCompiler.compileAssignmentTarget(leftExpression);
     }
 
 }

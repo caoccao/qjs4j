@@ -47,7 +47,7 @@ final class ArrowFunctionExpressionCompiler {
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         functionContext.privateSymbols = compilerContext.privateSymbols;
-        compilerContext.functionCompiler.inheritVisibleWithObjectBindings(functionContext);
+        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
         functionContext.scopeManager.enterScope();
@@ -60,7 +60,7 @@ final class ArrowFunctionExpressionCompiler {
         functionContext.classFieldEvalContext = compilerContext.classFieldEvalContext
                 || compilerContext.inClassFieldInitializer;
         // Inherit class inner name so eval() inside nested arrows can resolve it.
-        compilerContext.functionCompiler.inheritClassInnerNameCapture(functionContext);
+        compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
         // If the parent is also an arrow, inherit whatever it has.
@@ -99,7 +99,7 @@ final class ArrowFunctionExpressionCompiler {
                 && !hasArgumentsParameterBinding;
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = compilerContext.functionCompiler.declareParameters(
+        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler.declareParameters(
                 arrowExpr.getParams(),
                 functionContext,
                 parameterSlotIndexes);
@@ -132,11 +132,11 @@ final class ArrowFunctionExpressionCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            compilerContext.functionCompiler.emitRestParameterBinding(arrowExpr.getRestParameter(), functionContext);
+            compilerContext.functionExpressionCompiler.emitRestParameterBinding(arrowExpr.getRestParameter(), functionContext);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionCompiler.emitParameterDestructuring(arrowExpr.getParams(), destructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.emitParameterDestructuring(arrowExpr.getParams(), destructuringParams, functionContext);
 
         boolean enteredBodyScope = false;
         CompilerScope savedVarDeclarationScopeOverride = functionContext.varDeclarationScopeOverride;
@@ -160,7 +160,7 @@ final class ArrowFunctionExpressionCompiler {
                     // Phase 1: Hoist top-level function declarations before executing body statements.
                     for (Statement statement : block.getBody()) {
                         if (statement instanceof FunctionDeclaration functionDeclaration) {
-                            functionContext.functionDeclarationCompiler.compileFunctionDeclaration(functionDeclaration);
+                            functionContext.functionDeclarationCompiler.compile(functionDeclaration);
                         }
                     }
 
@@ -175,7 +175,7 @@ final class ArrowFunctionExpressionCompiler {
                         if (stmt instanceof FunctionDeclaration) {
                             continue;
                         }
-                        functionContext.statementCompiler.compileStatement(stmt);
+                        functionContext.statementCompiler.compile(stmt);
                     }
 
                     // If body doesn't end with return, add implicit return undefined
@@ -196,7 +196,7 @@ final class ArrowFunctionExpressionCompiler {
                 }
             } else if (arrowExpr.getBody() instanceof Expression expr) {
                 // Expression body - implicitly returns the expression value
-                functionContext.expressionCompiler.compileExpression(expr);
+                functionContext.expressionCompiler.compile(expr);
                 int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$arrow_return_" + functionContext.emitter.currentOffset());
                 functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
                 functionContext.emitHelpers.emitCurrentScopeUsingDisposal();

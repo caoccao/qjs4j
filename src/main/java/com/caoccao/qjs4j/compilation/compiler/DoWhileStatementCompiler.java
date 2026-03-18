@@ -26,7 +26,7 @@ final class DoWhileStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileDoWhileStatement(DoWhileStatement doWhileStmt) {
+    void compile(DoWhileStatement doWhileStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -37,10 +37,10 @@ final class DoWhileStatementCompiler {
         compilerContext.loopManager.pushLoop(loop);
 
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
-        compilerContext.statementCompiler.compileStatement(doWhileStmt.getBody());
+        compilerContext.statementCompiler.compile(doWhileStmt.getBody());
 
         int testStart = compilerContext.emitter.currentOffset();
-        compilerContext.expressionCompiler.compileExpression(doWhileStmt.getTest());
+        compilerContext.expressionCompiler.compile(doWhileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);

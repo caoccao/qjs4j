@@ -26,12 +26,12 @@ final class ForStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileForStatement(ForStatement forStmt) {
+    void compile(ForStatement forStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         boolean initCompiled = false;
         if (forStmt.getInit() instanceof VariableDeclaration varDecl && varDecl.getKind() == VariableKind.VAR) {
-            compilerContext.variableDeclarationCompiler.compileVariableDeclaration(varDecl);
+            compilerContext.variableDeclarationCompiler.compile(varDecl);
             initCompiled = true;
         }
 
@@ -43,13 +43,13 @@ final class ForStatementCompiler {
                 if (compilerContext.inGlobalScope && varDecl.getKind() != VariableKind.VAR) {
                     compilerContext.inGlobalScope = false;
                 }
-                compilerContext.variableDeclarationCompiler.compileVariableDeclaration(varDecl);
+                compilerContext.variableDeclarationCompiler.compile(varDecl);
                 compilerContext.popState();
             } else if (forStmt.getInit() instanceof Expression expr) {
-                compilerContext.expressionCompiler.compileExpression(expr);
+                compilerContext.expressionCompiler.compile(expr);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else if (forStmt.getInit() instanceof ExpressionStatement exprStmt) {
-                compilerContext.expressionCompiler.compileExpression(exprStmt.getExpression());
+                compilerContext.expressionCompiler.compile(exprStmt.getExpression());
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             }
         }
@@ -65,12 +65,12 @@ final class ForStatementCompiler {
 
         int jumpToEnd = -1;
         if (forStmt.getTest() != null) {
-            compilerContext.expressionCompiler.compileExpression(forStmt.getTest());
+            compilerContext.expressionCompiler.compile(forStmt.getTest());
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         }
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
-        compilerContext.statementCompiler.compileStatement(forStmt.getBody());
+        compilerContext.statementCompiler.compile(forStmt.getBody());
 
         if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
                 && varDeclForClose.getKind() != VariableKind.VAR) {
@@ -80,7 +80,7 @@ final class ForStatementCompiler {
         int updateStart = compilerContext.emitter.currentOffset();
 
         if (forStmt.getUpdate() != null) {
-            compilerContext.expressionCompiler.compileExpression(forStmt.getUpdate());
+            compilerContext.expressionCompiler.compile(forStmt.getUpdate());
             compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
 

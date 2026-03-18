@@ -39,7 +39,7 @@ final class FunctionDeclarationCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileFunctionDeclaration(FunctionDeclaration funcDecl) {
+    void compile(FunctionDeclaration funcDecl) {
         // Pre-declare function name as a local in the current scope (if non-global and not
         // already declared). This must happen BEFORE creating the child compiler so the
         // function body can capture the name via closure for self-reference.
@@ -61,7 +61,7 @@ final class FunctionDeclarationCompiler {
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         functionContext.privateSymbols = compilerContext.privateSymbols;
-        compilerContext.functionCompiler.inheritVisibleWithObjectBindings(functionContext);
+        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
 
         // Enter function scope and add parameters as locals
         functionContext.scopeManager.enterScope();
@@ -69,7 +69,7 @@ final class FunctionDeclarationCompiler {
         functionContext.isInAsyncFunction = funcDecl.isAsync();  // Track if this is an async function
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
-        compilerContext.functionCompiler.inheritClassInnerNameCapture(functionContext);
+        compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -78,12 +78,12 @@ final class FunctionDeclarationCompiler {
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> destructuringParams = compilerContext.functionCompiler.declareParameters(
+        List<int[]> destructuringParams = compilerContext.functionExpressionCompiler.declareParameters(
                 funcDecl.getParams(),
                 functionContext,
                 parameterSlotIndexes);
         if (funcDecl.needsArguments()) {
-            compilerContext.functionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
+            compilerContext.functionExpressionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -104,11 +104,11 @@ final class FunctionDeclarationCompiler {
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
 
-            compilerContext.functionCompiler.emitRestParameterBinding(funcDecl.getRestParameter(), functionContext);
+            compilerContext.functionExpressionCompiler.emitRestParameterBinding(funcDecl.getRestParameter(), functionContext);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionCompiler.emitParameterDestructuring(funcDecl.getParams(), destructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.emitParameterDestructuring(funcDecl.getParams(), destructuringParams, functionContext);
 
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (funcDecl.isGenerator()) {
@@ -126,7 +126,7 @@ final class FunctionDeclarationCompiler {
         // declarations to be initialized before any code executes).
         for (Statement stmt : funcDecl.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration innerFuncDecl) {
-                functionContext.functionDeclarationCompiler.compileFunctionDeclaration(innerFuncDecl);
+                functionContext.functionDeclarationCompiler.compile(innerFuncDecl);
             }
         }
 
@@ -140,7 +140,7 @@ final class FunctionDeclarationCompiler {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted in Phase 1
             }
-            functionContext.statementCompiler.compileStatement(stmt);
+            functionContext.statementCompiler.compile(stmt);
         }
 
         // If body doesn't end with return, add implicit return undefined

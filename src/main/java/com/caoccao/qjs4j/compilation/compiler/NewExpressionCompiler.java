@@ -28,10 +28,10 @@ final class NewExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileNewExpression(NewExpression newExpr) {
+    void compile(NewExpression newExpr) {
         boolean hasSpread = newExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
 
-        compilerContext.expressionCompiler.compileExpression(newExpr.getCallee());
+        compilerContext.expressionCompiler.compile(newExpr.getCallee());
 
         if (hasSpread) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -41,7 +41,7 @@ final class NewExpressionCompiler {
         }
 
         for (Expression arg : newExpr.getArguments()) {
-            compilerContext.expressionCompiler.compileExpression(arg);
+            compilerContext.expressionCompiler.compile(arg);
         }
         compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, newExpr.getArguments().size());
     }

@@ -30,7 +30,7 @@ final class ContinueStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileContinueStatement(ContinueStatement contStmt) {
+    void compile(ContinueStatement contStmt) {
         if (compilerContext.finallySubroutineDepth > 0) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);

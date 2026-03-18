@@ -77,10 +77,10 @@ final class EmitHelpers {
         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
         for (Expression arg : arguments) {
             if (arg instanceof SpreadElement spreadElement) {
-                compilerContext.expressionCompiler.compileExpression(spreadElement.getArgument());
+                compilerContext.expressionCompiler.compile(spreadElement.getArgument());
                 compilerContext.emitter.emitOpcode(Opcode.APPEND);
             } else {
-                compilerContext.expressionCompiler.compileExpression(arg);
+                compilerContext.expressionCompiler.compile(arg);
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.INC);
             }
@@ -132,16 +132,16 @@ final class EmitHelpers {
         if (isComputedKey) {
             // Per ES2024 10.2.1, all parts of a class are strict mode code.
             if (compilerContext.inClassBody) {
-                compilerContext.functionCompiler.emitStrictClassBodyExpression(method.getKey());
+                compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(method.getKey());
             } else {
-                compilerContext.expressionCompiler.compileExpression(method.getKey());
+                compilerContext.expressionCompiler.compile(method.getKey());
             }
         } else if (method.getKey() instanceof Identifier) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(methodName));
         } else {
             // For Literal keys (numeric, null, string), compile the expression directly
             // to preserve the correct type (e.g., JSNumber for numeric property names)
-            compilerContext.expressionCompiler.compileExpression(method.getKey());
+            compilerContext.expressionCompiler.compile(method.getKey());
         }
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.FCLOSURE, methodFunc);
@@ -250,7 +250,7 @@ final class EmitHelpers {
                 // DROP - drop the duplicated arg value (it was undefined)
                 functionCompiler.context().emitter.emitOpcode(Opcode.DROP);
                 // Compile the default expression
-                functionCompiler.context().expressionCompiler.compileExpression(defaultExpr);
+                functionCompiler.context().expressionCompiler.compile(defaultExpr);
                 if (params.get(i) instanceof Identifier parameterIdentifier
                         && defaultExpr.isAnonymousFunction()) {
                     functionCompiler.context().emitter.emitOpcodeAtom(Opcode.SET_NAME, parameterIdentifier.getName());
@@ -369,13 +369,13 @@ final class EmitHelpers {
 
     void emitSuperPropertyKey(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier) {
             throw new JSCompilerException("super private fields are not supported");
         } else {
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         }
     }
 

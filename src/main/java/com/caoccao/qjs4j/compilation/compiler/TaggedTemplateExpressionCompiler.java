@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
@@ -28,7 +29,7 @@ final class TaggedTemplateExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileTaggedTemplateExpression(TaggedTemplateExpression taggedTemplate) {
+    void compile(TaggedTemplateExpression taggedTemplate) {
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
 
@@ -46,12 +47,12 @@ final class TaggedTemplateExpressionCompiler {
             // We need to preserve obj as the 'this' value
 
             // Push object (receiver)
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+            compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
             // Get the method while keeping the object on the stack
             if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.getProperty() instanceof Identifier propId) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
@@ -62,7 +63,7 @@ final class TaggedTemplateExpressionCompiler {
         } else {
             // Regular function call: func`template`
             // Compile the tag function first (will be the callee)
-            compilerContext.expressionCompiler.compileExpression(taggedTemplate.getTag());
+            compilerContext.expressionCompiler.compile(taggedTemplate.getTag());
 
             // Add undefined as receiver/thisArg
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -70,11 +71,11 @@ final class TaggedTemplateExpressionCompiler {
 
         // QuickJS behavior: each call site uses a stable, frozen template object.
         // Build it once in the constant pool and pass it as the first argument.
-        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, compilerContext.functionCompiler.createTaggedTemplateObject(template));
+        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, createTaggedTemplateObject(template));
 
         // Add substitution expressions as additional arguments
         for (Expression expr : expressions) {
-            compilerContext.expressionCompiler.compileExpression(expr);
+            compilerContext.expressionCompiler.compile(expr);
         }
 
         // Call the tag function
@@ -90,5 +91,38 @@ final class TaggedTemplateExpressionCompiler {
                     isTailCall ? Opcode.TAIL_CALL : Opcode.CALL,
                     argCount);
         }
+    }
+
+    private JSArray createTaggedTemplateObject(TemplateLiteral template) {
+        List<String> cookedQuasis = template.getQuasis();
+        List<String> rawQuasis = template.getRawQuasis();
+        int segmentCount = rawQuasis.size();
+
+        JSArray templateObject = new JSArray(compilerContext.context);
+        JSArray rawArray = new JSArray(compilerContext.context);
+
+        for (int i = 0; i < segmentCount; i++) {
+            JSString rawValue = new JSString(rawQuasis.get(i));
+            rawArray.set(i, rawValue);
+            rawArray.defineProperty(
+                    PropertyKey.fromIndex(i),
+                    PropertyDescriptor.dataDescriptor(rawValue, PropertyDescriptor.DataState.Enumerable));
+
+            String cookedQuasi = cookedQuasis.get(i);
+            JSValue cookedValue = cookedQuasi == null ? JSUndefined.INSTANCE : new JSString(cookedQuasi);
+            templateObject.set(i, cookedValue);
+            templateObject.defineProperty(
+                    PropertyKey.fromIndex(i),
+                    PropertyDescriptor.dataDescriptor(cookedValue, PropertyDescriptor.DataState.Enumerable));
+        }
+
+        // QuickJS/spec attributes for template objects.
+        rawArray.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.fromString("length"), JSNumber.of(segmentCount), PropertyDescriptor.DataState.None);
+        templateObject.defineProperty(PropertyKey.fromString("raw"), rawArray, PropertyDescriptor.DataState.None);
+
+        rawArray.freeze();
+        templateObject.freeze();
+        return templateObject;
     }
 }

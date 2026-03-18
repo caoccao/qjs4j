@@ -31,7 +31,7 @@ final class TemplateLiteralCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileTemplateLiteral(TemplateLiteral templateLiteral) {
+    void compile(TemplateLiteral templateLiteral) {
         // For untagged template literals, concatenate strings and expressions
         // Example: `Hello ${name}!` becomes "Hello " + name + "!"
 
@@ -57,7 +57,7 @@ final class TemplateLiteralCompiler {
             // Call String(expr) to ensure ToString semantics.
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "String");
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.expressionCompiler.compileExpression(expressions.get(i));
+            compilerContext.expressionCompiler.compile(expressions.get(i));
             compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
 
             // Concatenate using ADD after explicit ToString on the substitution.

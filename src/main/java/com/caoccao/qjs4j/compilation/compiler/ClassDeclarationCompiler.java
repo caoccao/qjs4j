@@ -38,7 +38,7 @@ final class ClassDeclarationCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileClassDeclaration(ClassDeclaration classDecl) {
+    void compile(ClassDeclaration classDecl) {
         // Following QuickJS implementation in quickjs.c:24700-25200
 
         String className = classDecl.getId() != null ? classDecl.getId().getName() : "";
@@ -61,7 +61,7 @@ final class ClassDeclarationCompiler {
         // Compile superclass expression or emit undefined.
         // Per ES2024 10.2.1, heritage expressions are strict mode code.
         if (classDecl.getSuperClass() != null) {
-            compilerContext.functionCompiler.emitStrictClassBodyExpression(classDecl.getSuperClass());
+            compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(classDecl.getSuperClass());
         } else {
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         }
@@ -376,9 +376,9 @@ final class ClassDeclarationCompiler {
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, computedFieldSymbol);
         try {
             if (compilerContext.inClassBody) {
-                compilerContext.functionCompiler.emitStrictClassBodyExpression(field.getKey());
+                compilerContext.functionExpressionCompiler.emitStrictClassBodyExpression(field.getKey());
             } else {
-                compilerContext.expressionCompiler.compileExpression(field.getKey());
+                compilerContext.expressionCompiler.compile(field.getKey());
             }
             compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
             compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
@@ -393,10 +393,11 @@ final class ClassDeclarationCompiler {
      * Emits code to set each field on 'this' with its initializer value.
      * For private fields, uses the symbol from privateSymbols map.
      */
-    void compileFieldInitialization(List<PropertyDefinition> fields,
-                                    Map<String, JSSymbol> privateSymbols,
-                                    IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
-                                    IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
+    private void compileFieldInitialization(
+            List<PropertyDefinition> fields,
+            Map<String, JSSymbol> privateSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> computedFieldSymbols,
+            IdentityHashMap<PropertyDefinition, JSSymbol> autoAccessorBackingSymbols) {
         for (PropertyDefinition field : fields) {
             boolean isPrivate = field.isPrivate();
 
@@ -413,7 +414,7 @@ final class ClassDeclarationCompiler {
                 String fieldName = privateId.getName();
 
                 if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compileExpression(field.getValue());
+                    compilerContext.expressionCompiler.compile(field.getValue());
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
@@ -438,7 +439,7 @@ final class ClassDeclarationCompiler {
                 }
 
                 if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compileExpression(field.getValue());
+                    compilerContext.expressionCompiler.compile(field.getValue());
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
@@ -464,7 +465,7 @@ final class ClassDeclarationCompiler {
                 }
 
                 if (field.getValue() != null) {
-                    compilerContext.expressionCompiler.compileExpression(field.getValue());
+                    compilerContext.expressionCompiler.compile(field.getValue());
                 } else {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                 }
@@ -499,7 +500,7 @@ final class ClassDeclarationCompiler {
         functionContext.sourceCode = compilerContext.sourceCode;
         functionContext.nonDeletableGlobalBindings.addAll(compilerContext.nonDeletableGlobalBindings);
         functionContext.privateSymbols = privateSymbols;  // Make private symbols available in method
-        compilerContext.functionCompiler.inheritVisibleWithObjectBindings(functionContext);
+        compilerContext.functionExpressionCompiler.inheritVisibleWithObjectBindings(functionContext);
 
         FunctionExpression functionExpression = method.getValue();
 
@@ -518,12 +519,12 @@ final class ClassDeclarationCompiler {
         }
 
         List<Integer> parameterSlotIndexes = new ArrayList<>();
-        List<int[]> methodDestructuringParams = compilerContext.functionCompiler.declareParameters(
+        List<int[]> methodDestructuringParams = compilerContext.functionExpressionCompiler.declareParameters(
                 functionExpression.getParams(),
                 functionContext,
                 parameterSlotIndexes);
         if (method.getValue().needsArguments()) {
-            compilerContext.functionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
+            compilerContext.functionExpressionCompiler.declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
         // For base constructors, instance private methods/fields are initialized before
@@ -554,11 +555,11 @@ final class ClassDeclarationCompiler {
             int firstRestIndex = functionExpression.getParams().size();
             functionContext.emitter.emitOpcode(Opcode.REST);
             functionContext.emitter.emitU16(firstRestIndex);
-            compilerContext.functionCompiler.emitRestParameterBinding(functionExpression.getRestParameter(), functionContext);
+            compilerContext.functionExpressionCompiler.emitRestParameterBinding(functionExpression.getRestParameter(), functionContext);
         }
 
         // Emit destructuring for pattern parameters after defaults and rest
-        compilerContext.functionCompiler.emitParameterDestructuring(functionExpression.getParams(), methodDestructuringParams, functionContext);
+        compilerContext.functionExpressionCompiler.emitParameterDestructuring(functionExpression.getParams(), methodDestructuringParams, functionContext);
 
         // If this is a generator method, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
@@ -588,7 +589,7 @@ final class ClassDeclarationCompiler {
 
         for (Statement stmt : functionExpression.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration functionDeclaration) {
-                functionContext.functionDeclarationCompiler.compileFunctionDeclaration(functionDeclaration);
+                functionContext.functionDeclarationCompiler.compile(functionDeclaration);
             }
         }
 
@@ -596,7 +597,7 @@ final class ClassDeclarationCompiler {
             if (stmt instanceof FunctionDeclaration) {
                 continue;
             }
-            functionContext.statementCompiler.compileStatement(stmt);
+            functionContext.statementCompiler.compile(stmt);
         }
 
         // If body doesn't end with return, add implicit return undefined
@@ -728,7 +729,7 @@ final class ClassDeclarationCompiler {
 
         // Compile all statements in the static block
         for (Statement stmt : staticBlock.getBody()) {
-            blockCtx.statementCompiler.compileStatement(stmt);
+            blockCtx.statementCompiler.compile(stmt);
         }
 
         // Static blocks always return undefined
@@ -808,7 +809,7 @@ final class ClassDeclarationCompiler {
             }
 
             if (field.getValue() != null) {
-                initCtx.expressionCompiler.compileExpression(field.getValue());
+                initCtx.expressionCompiler.compile(field.getValue());
             } else {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -828,7 +829,7 @@ final class ClassDeclarationCompiler {
             }
 
             if (field.getValue() != null) {
-                initCtx.expressionCompiler.compileExpression(field.getValue());
+                initCtx.expressionCompiler.compile(field.getValue());
             } else {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }
@@ -855,7 +856,7 @@ final class ClassDeclarationCompiler {
             }
 
             if (field.getValue() != null) {
-                initCtx.expressionCompiler.compileExpression(field.getValue());
+                initCtx.expressionCompiler.compile(field.getValue());
             } else {
                 initCtx.emitter.emitOpcode(Opcode.UNDEFINED);
             }

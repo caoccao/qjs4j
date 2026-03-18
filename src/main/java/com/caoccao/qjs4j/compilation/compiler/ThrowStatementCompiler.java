@@ -27,8 +27,8 @@ final class ThrowStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileThrowStatement(ThrowStatement throwStmt) {
-        compilerContext.expressionCompiler.compileExpression(throwStmt.getArgument());
+    void compile(ThrowStatement throwStmt) {
+        compilerContext.expressionCompiler.compile(throwStmt.getArgument());
         int throwValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 

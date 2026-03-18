@@ -31,7 +31,7 @@ final class SwitchStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileSwitchStatement(SwitchStatement switchStmt) {
+    void compile(SwitchStatement switchStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default switch completion value is undefined.
             compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
@@ -39,7 +39,7 @@ final class SwitchStatementCompiler {
         }
 
         // Compile discriminant
-        compilerContext.expressionCompiler.compileExpression(switchStmt.getDiscriminant());
+        compilerContext.expressionCompiler.compile(switchStmt.getDiscriminant());
 
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
@@ -91,7 +91,7 @@ final class SwitchStatementCompiler {
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
             for (Statement statement : switchCase.getConsequent()) {
                 if (statement instanceof FunctionDeclaration functionDeclaration) {
-                    compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(functionDeclaration);
+                    compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
                 }
             }
         }
@@ -107,7 +107,7 @@ final class SwitchStatementCompiler {
             if (switchCase.getTest() != null) {
                 // Duplicate discriminant for comparison
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.expressionCompiler.compileExpression(switchCase.getTest());
+                compilerContext.expressionCompiler.compile(switchCase.getTest());
                 compilerContext.emitter.emitOpcode(Opcode.STRICT_EQ);
 
                 // If no match, skip to next test
@@ -146,7 +146,7 @@ final class SwitchStatementCompiler {
                 if (stmt instanceof FunctionDeclaration) {
                     continue; // already initialized by block declaration instantiation
                 }
-                compilerContext.statementCompiler.compileStatement(stmt);
+                compilerContext.statementCompiler.compile(stmt);
             }
         }
 

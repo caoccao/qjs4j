@@ -31,6 +31,15 @@ final class TryStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
+    void compile(TryStatement tryStmt) {
+        if (tryStmt.getFinalizer() == null) {
+            compileTryCatchWithoutFinally(tryStmt);
+        } else {
+            compileTryStatementWithFinally(tryStmt);
+        }
+        compileFinalizeTryStatementCompletion();
+    }
+
     private void compileFinalizeTryStatementCompletion() {
         // Try statements produce a value on the stack (the try/catch result).
         // When eval_ret_idx is active, store the completion value first.
@@ -61,7 +70,7 @@ final class TryStatementCompiler {
         }
         try {
             for (Statement stmt : block.getBody()) {
-                compilerContext.statementCompiler.compileStatement(stmt);
+                compilerContext.statementCompiler.compile(stmt);
             }
         } finally {
             compilerContext.finallySubroutineDepth--;
@@ -120,7 +129,7 @@ final class TryStatementCompiler {
         compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
     }
 
-    void compileTryFinallyBlock(BlockStatement block) {
+    private void compileTryFinallyBlock(BlockStatement block) {
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
@@ -162,7 +171,7 @@ final class TryStatementCompiler {
         // Phase 2: hoist function declarations.
         for (Statement statement : body) {
             if (statement instanceof FunctionDeclaration functionDeclaration) {
-                compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(functionDeclaration);
+                compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
             }
         }
 
@@ -183,7 +192,7 @@ final class TryStatementCompiler {
             boolean isLast = index == effectiveLastIndex;
 
             if (statement instanceof ExpressionStatement expressionStatement) {
-                compilerContext.expressionCompiler.compileExpression(expressionStatement.getExpression());
+                compilerContext.expressionCompiler.compile(expressionStatement.getExpression());
                 if (compilerContext.evalReturnLocalIndex >= 0) {
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
@@ -194,10 +203,10 @@ final class TryStatementCompiler {
             } else if (statement instanceof TryStatement tryStatement) {
                 boolean saved = compilerContext.isLastInProgram;
                 compilerContext.isLastInProgram = isLast;
-                compileTryStatement(tryStatement);
+                compile(tryStatement);
                 compilerContext.isLastInProgram = saved;
             } else {
-                compilerContext.statementCompiler.compileStatement(statement);
+                compilerContext.statementCompiler.compile(statement);
                 if (isLast) {
                     compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
                     if (compilerContext.evalReturnLocalIndex >= 0) {
@@ -219,15 +228,6 @@ final class TryStatementCompiler {
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
-    }
-
-    void compileTryStatement(TryStatement tryStmt) {
-        if (tryStmt.getFinalizer() == null) {
-            compileTryCatchWithoutFinally(tryStmt);
-        } else {
-            compileTryStatementWithFinally(tryStmt);
-        }
-        compileFinalizeTryStatementCompletion();
     }
 
     private void compileTryStatementWithFinally(TryStatement tryStmt) {

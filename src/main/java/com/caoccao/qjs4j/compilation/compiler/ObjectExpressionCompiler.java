@@ -32,7 +32,7 @@ final class ObjectExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileObjectExpression(ObjectExpression objExpr) {
+    void compile(ObjectExpression objExpr) {
         int protoDataPropertyCount = 0;
         for (ObjectExpressionProperty property : objExpr.getProperties()) {
             if (property.isProtoDataProperty()) {
@@ -51,7 +51,7 @@ final class ObjectExpressionCompiler {
             if ("spread".equals(kind)) {
                 // Object spread: {...expr}
                 // Stack: obj -> obj expr null -> obj (via COPY_DATA_PROPERTIES)
-                compilerContext.expressionCompiler.compileExpression(prop.getValue());
+                compilerContext.expressionCompiler.compile(prop.getValue());
                 compilerContext.emitter.emitOpcode(Opcode.NULL);
                 // mask=6: target@sp[-3](offset 2), source@sp[-2](offset 1), exclude@sp[-1](offset 0)
                 compilerContext.emitter.emitOpcodeU8(Opcode.COPY_DATA_PROPERTIES, 6);
@@ -65,17 +65,17 @@ final class ObjectExpressionCompiler {
                 // Stack: obj -> obj key method -> obj
                 // Push key
                 if (prop.isComputed()) {
-                    compilerContext.expressionCompiler.compileExpression(prop.getKey());
+                    compilerContext.expressionCompiler.compile(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 } else if (prop.getKey() instanceof Identifier id) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
                 } else {
-                    compilerContext.expressionCompiler.compileExpression(prop.getKey());
+                    compilerContext.expressionCompiler.compile(prop.getKey());
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                 }
 
                 // Compile the getter/setter function (not constructable per ES spec)
-                compilerContext.functionExpressionCompiler.compileFunctionExpression((FunctionExpression) prop.getValue(), true);
+                compilerContext.functionExpressionCompiler.compile((FunctionExpression) prop.getValue(), true);
 
                 // DEFINE_METHOD_COMPUTED with flags: kind (1=get, 2=set) | enumerable (4)
                 int methodKind = JSKeyword.GET.equals(kind) ? 1 : 2;
@@ -88,7 +88,7 @@ final class ObjectExpressionCompiler {
                         && prop.getKey() instanceof Identifier id
                         && "__proto__".equals(id.getName())) {
                     // Stack: obj -> obj proto -> obj
-                    compilerContext.expressionCompiler.compileExpression(prop.getValue());
+                    compilerContext.expressionCompiler.compile(prop.getValue());
                     compilerContext.emitter.emitOpcode(Opcode.SET_PROTO);
                 } else {
                     // Push value
@@ -97,16 +97,16 @@ final class ObjectExpressionCompiler {
                         if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
                             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(id.getName()));
                         } else {
-                            compilerContext.expressionCompiler.compileExpression(prop.getKey());
+                            compilerContext.expressionCompiler.compile(prop.getKey());
                             compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                         }
                         // Concise methods are not constructors per ES spec
-                        compilerContext.functionExpressionCompiler.compileFunctionExpression(methodFunc, true);
+                        compilerContext.functionExpressionCompiler.compile(methodFunc, true);
                         // Object literal methods are enumerable.
                         compilerContext.emitter.emitOpcodeU8(Opcode.DEFINE_METHOD_COMPUTED, 4);
                     } else if (prop.getKey() instanceof Identifier id && !prop.isComputed()) {
                         // Non-computed identifier key: use DEFINE_FIELD with atom
-                        compilerContext.expressionCompiler.compileExpression(prop.getValue());
+                        compilerContext.expressionCompiler.compile(prop.getValue());
                         if (prop.getValue().isAnonymousFunction()) {
                             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, id.getName());
                         }
@@ -114,9 +114,9 @@ final class ObjectExpressionCompiler {
                     } else {
                         // Computed or non-identifier key: define own data property directly.
                         // Stack: [obj] -> [obj, key, value] -> [obj]
-                        compilerContext.expressionCompiler.compileExpression(prop.getKey());
+                        compilerContext.expressionCompiler.compile(prop.getKey());
                         compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
-                        compilerContext.expressionCompiler.compileExpression(prop.getValue());
+                        compilerContext.expressionCompiler.compile(prop.getValue());
                         if (prop.getValue().isAnonymousFunction()) {
                             compilerContext.emitter.emitOpcode(Opcode.SET_NAME_COMPUTED);
                         }

@@ -32,7 +32,7 @@ final class IfStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileIfStatement(IfStatement ifStmt) {
+    void compile(IfStatement ifStmt) {
         // In strict mode, function declarations are not allowed as direct body of if/else
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
         if (compilerContext.strictMode) {
@@ -51,7 +51,7 @@ final class IfStatementCompiler {
         }
 
         // Compile condition
-        compilerContext.expressionCompiler.compileExpression(ifStmt.getTest());
+        compilerContext.expressionCompiler.compile(ifStmt.getTest());
 
         // Jump to else/end if condition is false
         int jumpToElse = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
@@ -89,11 +89,11 @@ final class IfStatementCompiler {
             // are treated as if wrapped in a block scope.
             compilerContext.scopeManager.enterScope();
             compilerContext.scopeManager.currentScope().declareLocal(funcDecl.getId().getName());
-            compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(funcDecl);
+            compilerContext.functionDeclarationCompiler.compile(funcDecl);
             compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
             compilerContext.scopeManager.exitScope();
         } else {
-            compilerContext.statementCompiler.compileStatement(stmt);
+            compilerContext.statementCompiler.compile(stmt);
         }
     }
 }

@@ -30,23 +30,12 @@ final class LabeledStatementCompiler {
     }
 
     /**
-     * Compile a labeled loop: the label is attached to the loop's LoopContext.
-     * This is needed so that 'break label;' and 'continue label;' work on the loop.
-     */
-    private void compileLabeledLoop(String labelName, Statement loopStmt) {
-        // We temporarily store the label name so the loop compilation methods can pick it up
-        compilerContext.loopManager.setPendingLabel(labelName);
-        compilerContext.statementCompiler.compileStatement(loopStmt);
-        compilerContext.loopManager.clearPendingLabel();
-    }
-
-    /**
      * Compile a labeled statement following QuickJS js_parse_statement_or_decl.
      * Creates a break entry so that 'break label;' jumps past the labeled body.
      * For labeled loops (while/for/for-in/for-of), the label is attached to the
      * loop's LoopContext so labeled break/continue work on the loop.
      */
-    void compileLabeledStatement(LabeledStatement labeledStmt) {
+    void compile(LabeledStatement labeledStmt) {
         String labelName = labeledStmt.getLabel().getName();
         Statement body = labeledStmt.getBody();
 
@@ -71,7 +60,7 @@ final class LabeledStatementCompiler {
 
             // Body can be null for empty statements (label: ;)
             if (body != null) {
-                compilerContext.statementCompiler.compileStatement(body);
+                compilerContext.statementCompiler.compile(body);
             }
 
             // Patch all break positions to jump here
@@ -81,5 +70,16 @@ final class LabeledStatementCompiler {
             }
             compilerContext.loopManager.popLoop();
         }
+    }
+
+    /**
+     * Compile a labeled loop: the label is attached to the loop's LoopContext.
+     * This is needed so that 'break label;' and 'continue label;' work on the loop.
+     */
+    private void compileLabeledLoop(String labelName, Statement loopStmt) {
+        // We temporarily store the label name so the loop compilation methods can pick it up
+        compilerContext.loopManager.setPendingLabel(labelName);
+        compilerContext.statementCompiler.compile(loopStmt);
+        compilerContext.loopManager.clearPendingLabel();
     }
 }

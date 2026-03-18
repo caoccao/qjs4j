@@ -44,12 +44,12 @@ final class BinaryExpressionCompiler {
                 // left && right: if left is falsy, return left; otherwise evaluate and return right
                 compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
-                compilerContext.expressionCompiler.compileExpression(binExpr.getLeft());
+                compilerContext.expressionCompiler.compile(binExpr.getLeft());
                 compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.expressionCompiler.compileExpression(binExpr.getRight());
+                compilerContext.expressionCompiler.compile(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -57,12 +57,12 @@ final class BinaryExpressionCompiler {
                 // left || right: if left is truthy, return left; otherwise evaluate and return right
                 compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
-                compilerContext.expressionCompiler.compileExpression(binExpr.getLeft());
+                compilerContext.expressionCompiler.compile(binExpr.getLeft());
                 compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.expressionCompiler.compileExpression(binExpr.getRight());
+                compilerContext.expressionCompiler.compile(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -70,13 +70,13 @@ final class BinaryExpressionCompiler {
                 // left ?? right: if left is not null/undefined, return left; otherwise evaluate and return right
                 compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
-                compilerContext.expressionCompiler.compileExpression(binExpr.getLeft());
+                compilerContext.expressionCompiler.compile(binExpr.getLeft());
                 compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
                 int jumpEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
-                compilerContext.expressionCompiler.compileExpression(binExpr.getRight());
+                compilerContext.expressionCompiler.compile(binExpr.getRight());
                 compilerContext.emitter.patchJump(jumpEnd, compilerContext.emitter.currentOffset());
                 return;
             }
@@ -86,8 +86,8 @@ final class BinaryExpressionCompiler {
         }
 
         // Compile operands
-        compilerContext.expressionCompiler.compileExpression(binExpr.getLeft());
-        compilerContext.expressionCompiler.compileExpression(binExpr.getRight());
+        compilerContext.expressionCompiler.compile(binExpr.getLeft());
+        compilerContext.expressionCompiler.compile(binExpr.getRight());
 
         // Emit operation
         Opcode op = switch (binExpr.getOperator()) {
@@ -121,7 +121,7 @@ final class BinaryExpressionCompiler {
     }
 
     private void compilePrivateInExpression(PrivateIdentifier privateIdentifier, Expression right) {
-        compilerContext.expressionCompiler.compileExpression(right);
+        compilerContext.expressionCompiler.compile(right);
 
         JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.getName()) : null;
         if (symbol == null) {

@@ -30,47 +30,56 @@ final class StatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileStatement(Statement stmt) {
+    void compile(Statement stmt) {
         if (stmt instanceof ExpressionStatement exprStmt) {
-            compilerContext.expressionCompiler.compileExpressionStatement(exprStmt.getExpression());
+            compileExpressionStatement(exprStmt.getExpression());
         } else if (stmt instanceof BlockStatement block) {
             compilerContext.blockStatementCompiler.compile(block);
         } else if (stmt instanceof IfStatement ifStmt) {
-            compilerContext.ifStatementCompiler.compileIfStatement(ifStmt);
+            compilerContext.ifStatementCompiler.compile(ifStmt);
         } else if (stmt instanceof WhileStatement whileStmt) {
-            compilerContext.whileStatementCompiler.compileWhileStatement(whileStmt);
+            compilerContext.whileStatementCompiler.compile(whileStmt);
         } else if (stmt instanceof DoWhileStatement doWhileStmt) {
-            compilerContext.doWhileStatementCompiler.compileDoWhileStatement(doWhileStmt);
+            compilerContext.doWhileStatementCompiler.compile(doWhileStmt);
         } else if (stmt instanceof ForStatement forStmt) {
-            compilerContext.forStatementCompiler.compileForStatement(forStmt);
+            compilerContext.forStatementCompiler.compile(forStmt);
         } else if (stmt instanceof ForInStatement forInStmt) {
-            compilerContext.forInStatementCompiler.compileForInStatement(forInStmt);
+            compilerContext.forInStatementCompiler.compile(forInStmt);
         } else if (stmt instanceof ForOfStatement forOfStmt) {
-            compilerContext.forOfStatementCompiler.compileForOfStatement(forOfStmt);
+            compilerContext.forOfStatementCompiler.compile(forOfStmt);
         } else if (stmt instanceof ReturnStatement retStmt) {
-            compilerContext.returnStatementCompiler.compileReturnStatement(retStmt);
+            compilerContext.returnStatementCompiler.compile(retStmt);
         } else if (stmt instanceof BreakStatement breakStmt) {
             compilerContext.breakStatementCompiler.compile(breakStmt);
         } else if (stmt instanceof ContinueStatement contStmt) {
-            compilerContext.continueStatementCompiler.compileContinueStatement(contStmt);
+            compilerContext.continueStatementCompiler.compile(contStmt);
         } else if (stmt instanceof ThrowStatement throwStmt) {
-            compilerContext.throwStatementCompiler.compileThrowStatement(throwStmt);
+            compilerContext.throwStatementCompiler.compile(throwStmt);
         } else if (stmt instanceof TryStatement tryStmt) {
-            compilerContext.tryStatementCompiler.compileTryStatement(tryStmt);
+            compilerContext.tryStatementCompiler.compile(tryStmt);
         } else if (stmt instanceof SwitchStatement switchStmt) {
-            compilerContext.switchStatementCompiler.compileSwitchStatement(switchStmt);
+            compilerContext.switchStatementCompiler.compile(switchStmt);
         } else if (stmt instanceof WithStatement withStmt) {
-            compilerContext.withStatementCompiler.compileWithStatement(withStmt);
+            compilerContext.withStatementCompiler.compile(withStmt);
         } else if (stmt instanceof DebuggerStatement) {
             // No-op in runtime unless a debugger is attached.
         } else if (stmt instanceof VariableDeclaration varDecl) {
-            compilerContext.variableDeclarationCompiler.compileVariableDeclaration(varDecl);
+            compilerContext.variableDeclarationCompiler.compile(varDecl);
         } else if (stmt instanceof FunctionDeclaration funcDecl) {
-            compilerContext.functionDeclarationCompiler.compileFunctionDeclaration(funcDecl);
+            compilerContext.functionDeclarationCompiler.compile(funcDecl);
         } else if (stmt instanceof ClassDeclaration classDecl) {
-            compilerContext.classDeclarationCompiler.compileClassDeclaration(classDecl);
+            compilerContext.classDeclarationCompiler.compile(classDecl);
         } else if (stmt instanceof LabeledStatement labeledStmt) {
-            compilerContext.labeledStatementCompiler.compileLabeledStatement(labeledStmt);
+            compilerContext.labeledStatementCompiler.compile(labeledStmt);
+        }
+    }
+
+    private void compileExpressionStatement(Expression expr) {
+        compilerContext.expressionCompiler.compile(expr);
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        } else if (!compilerContext.isLastInProgram) {
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
         }
     }
 

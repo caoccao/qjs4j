@@ -29,17 +29,17 @@ final class SequenceExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileSequenceExpression(SequenceExpression seqExpr) {
+    void compile(SequenceExpression seqExpr) {
         List<Expression> expressions = seqExpr.getExpressions();
         for (int i = 0; i < expressions.size(); i++) {
             if (i < expressions.size() - 1) {
                 compilerContext.pushState();
                 compilerContext.emitTailCalls = false;
-                compilerContext.expressionCompiler.compileExpression(expressions.get(i));
+                compilerContext.expressionCompiler.compile(expressions.get(i));
                 compilerContext.popState();
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
             } else {
-                compilerContext.expressionCompiler.compileExpression(expressions.get(i));
+                compilerContext.expressionCompiler.compile(expressions.get(i));
             }
         }
     }

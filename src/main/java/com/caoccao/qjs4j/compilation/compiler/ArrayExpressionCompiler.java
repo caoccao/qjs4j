@@ -41,7 +41,7 @@ final class ArrayExpressionCompiler {
             // Simple case: no spread elements, no holes
             compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, 0);
             for (Expression element : arrayExpr.getElements()) {
-                compilerContext.expressionCompiler.compileExpression(element);
+                compilerContext.expressionCompiler.compile(element);
                 compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                 compilerContext.emitter.emitOpcode(Opcode.INC);
             }
@@ -62,7 +62,7 @@ final class ArrayExpressionCompiler {
                         needsIndex = true;
                     }
                     // Compile the iterable expression
-                    compilerContext.expressionCompiler.compileExpression(spreadElement.getArgument());
+                    compilerContext.expressionCompiler.compile(spreadElement.getArgument());
                     // Emit APPEND to spread elements into the array
                     // Stack: array pos iterable -> array pos
                     compilerContext.emitter.emitOpcode(Opcode.APPEND);
@@ -71,7 +71,7 @@ final class ArrayExpressionCompiler {
                 } else if (element != null) {
                     if (needsIndex) {
                         // We have index on stack, use DEFINE_ARRAY_EL
-                        compilerContext.expressionCompiler.compileExpression(element);
+                        compilerContext.expressionCompiler.compile(element);
                         compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                         compilerContext.emitter.emitOpcode(Opcode.INC);
                         needsLength = false;
@@ -80,7 +80,7 @@ final class ArrayExpressionCompiler {
                         // Start using index-based assignment since we have holes or spread
                         compilerContext.emitter.emitOpcodeU32(Opcode.PUSH_I32, idx);
                         needsIndex = true;
-                        compilerContext.expressionCompiler.compileExpression(element);
+                        compilerContext.expressionCompiler.compile(element);
                         compilerContext.emitter.emitOpcode(Opcode.DEFINE_ARRAY_EL);
                         compilerContext.emitter.emitOpcode(Opcode.INC);
                         needsLength = false;

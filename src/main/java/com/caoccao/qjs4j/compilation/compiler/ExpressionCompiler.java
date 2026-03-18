@@ -31,58 +31,49 @@ final class ExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileExpression(Expression expr) {
+    void compile(Expression expr) {
         if (expr instanceof Literal literal) {
-            compilerContext.literalCompiler.compileLiteral(literal);
-        } else if (expr instanceof Identifier id) {
-            compilerContext.identifierCompiler.compileIdentifier(id.getName());
+            compilerContext.literalCompiler.compile(literal);
+        } else if (expr instanceof Identifier identifier) {
+            compilerContext.identifierCompiler.compile(identifier);
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
             throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
         } else if (expr instanceof BinaryExpression binExpr) {
             compilerContext.binaryExpressionCompiler.compile(binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {
-            compilerContext.unaryExpressionCompiler.compileUnaryExpression(unaryExpr);
+            compilerContext.unaryExpressionCompiler.compile(unaryExpr);
         } else if (expr instanceof AssignmentExpression assignExpr) {
             compilerContext.assignmentExpressionCompiler.compile(assignExpr);
         } else if (expr instanceof ConditionalExpression condExpr) {
-            compilerContext.conditionalExpressionCompiler.compileConditionalExpression(condExpr);
+            compilerContext.conditionalExpressionCompiler.compile(condExpr);
         } else if (expr instanceof CallExpression callExpr) {
             compilerContext.callExpressionCompiler.compile(callExpr);
         } else if (expr instanceof MemberExpression memberExpr) {
-            compilerContext.memberExpressionCompiler.compileMemberExpression(memberExpr);
+            compilerContext.memberExpressionCompiler.compile(memberExpr);
         } else if (expr instanceof NewExpression newExpr) {
-            compilerContext.newExpressionCompiler.compileNewExpression(newExpr);
+            compilerContext.newExpressionCompiler.compile(newExpr);
         } else if (expr instanceof FunctionExpression functionExpression) {
-            compilerContext.functionExpressionCompiler.compileFunctionExpression(functionExpression);
+            compilerContext.functionExpressionCompiler.compile(functionExpression);
         } else if (expr instanceof ArrowFunctionExpression arrowExpr) {
             compilerContext.arrowFunctionExpressionCompiler.compile(arrowExpr);
         } else if (expr instanceof AwaitExpression awaitExpr) {
             compilerContext.awaitExpressionCompiler.compile(awaitExpr);
         } else if (expr instanceof YieldExpression yieldExpr) {
-            compilerContext.yieldExpressionCompiler.compileYieldExpression(yieldExpr);
+            compilerContext.yieldExpressionCompiler.compile(yieldExpr);
         } else if (expr instanceof ArrayExpression arrayExpr) {
             compilerContext.arrayExpressionCompiler.compile(arrayExpr);
         } else if (expr instanceof ObjectExpression objExpr) {
-            compilerContext.objectExpressionCompiler.compileObjectExpression(objExpr);
+            compilerContext.objectExpressionCompiler.compile(objExpr);
         } else if (expr instanceof TemplateLiteral templateLiteral) {
-            compilerContext.templateLiteralCompiler.compileTemplateLiteral(templateLiteral);
+            compilerContext.templateLiteralCompiler.compile(templateLiteral);
         } else if (expr instanceof TaggedTemplateExpression taggedTemplate) {
-            compilerContext.taggedTemplateExpressionCompiler.compileTaggedTemplateExpression(taggedTemplate);
+            compilerContext.taggedTemplateExpressionCompiler.compile(taggedTemplate);
         } else if (expr instanceof ClassExpression classExpr) {
-            compilerContext.classExpressionCompiler.compileClassExpression(classExpr);
+            compilerContext.classExpressionCompiler.compile(classExpr);
         } else if (expr instanceof SequenceExpression seqExpr) {
-            compilerContext.sequenceExpressionCompiler.compileSequenceExpression(seqExpr);
+            compilerContext.sequenceExpressionCompiler.compile(seqExpr);
         } else if (expr instanceof ImportExpression importExpr) {
-            compilerContext.importExpressionCompiler.compileImportExpression(importExpr);
-        }
-    }
-
-    void compileExpressionStatement(Expression expr) {
-        compileExpression(expr);
-        if (compilerContext.evalReturnLocalIndex >= 0) {
-            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
-        } else if (!compilerContext.isLastInProgram) {
-            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.importExpressionCompiler.compile(importExpr);
         }
     }
 
@@ -122,10 +113,10 @@ final class ExpressionCompiler {
                 return 3; // this, superObj, key on stack
             }
             // Pre-evaluate the object
-            compileExpression(memberExpr.getObject());
+            compile(memberExpr.getObject());
             if (memberExpr.isComputed()) {
                 // Pre-evaluate the computed key
-                compileExpression(memberExpr.getProperty());
+                compile(memberExpr.getProperty());
                 return 2; // obj + key on stack
             }
             return 1; // obj on stack

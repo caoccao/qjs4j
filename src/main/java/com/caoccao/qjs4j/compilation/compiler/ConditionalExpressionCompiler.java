@@ -26,16 +26,16 @@ final class ConditionalExpressionCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileConditionalExpression(ConditionalExpression condExpr) {
+    void compile(ConditionalExpression condExpr) {
         compilerContext.pushState();
         compilerContext.emitTailCalls = false;
-        compilerContext.expressionCompiler.compileExpression(condExpr.getTest());
+        compilerContext.expressionCompiler.compile(condExpr.getTest());
         compilerContext.popState();
         int jumpToAlternate = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
-        compilerContext.expressionCompiler.compileExpression(condExpr.getConsequent());
+        compilerContext.expressionCompiler.compile(condExpr.getConsequent());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
         compilerContext.emitter.patchJump(jumpToAlternate, compilerContext.emitter.currentOffset());
-        compilerContext.expressionCompiler.compileExpression(condExpr.getAlternate());
+        compilerContext.expressionCompiler.compile(condExpr.getAlternate());
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
     }
 }

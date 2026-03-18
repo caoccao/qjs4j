@@ -59,9 +59,9 @@ final class CallExpressionCompiler {
         if (!callExpr.isOptional()
                 && callExpr.getCallee() instanceof Identifier calleeId
                 && JSKeyword.EVAL.equals(calleeId.getName())) {
-            compilerContext.expressionCompiler.compileExpression(callExpr.getCallee());
+            compilerContext.expressionCompiler.compile(callExpr.getCallee());
             for (Expression arg : callExpr.getArguments()) {
-                compilerContext.expressionCompiler.compileExpression(arg);
+                compilerContext.expressionCompiler.compile(arg);
             }
             compilerContext.emitter.emitOpcode(Opcode.EVAL);
             compilerContext.emitter.emitU16(callExpr.getArguments().size());
@@ -97,17 +97,17 @@ final class CallExpressionCompiler {
                 compilerContext.emitHelpers.emitGetSuperValue(memberExpr, true);
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
                 for (Expression arg : callExpr.getArguments()) {
-                    compilerContext.expressionCompiler.compileExpression(arg);
+                    compilerContext.expressionCompiler.compile(arg);
                 }
                 compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.getArguments().size());
                 return;
             }
 
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+            compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
             if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
@@ -125,7 +125,7 @@ final class CallExpressionCompiler {
 
             compilerContext.emitter.emitOpcode(Opcode.SWAP);
             for (Expression arg : callExpr.getArguments()) {
-                compilerContext.expressionCompiler.compileExpression(arg);
+                compilerContext.expressionCompiler.compile(arg);
             }
 
             compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.getArguments().size());
@@ -135,11 +135,11 @@ final class CallExpressionCompiler {
                     || !compilerContext.withObjectManager.getInheritedBindingNames().isEmpty())) {
                 compilerContext.identifierCompiler.emitWithAwareIdentifierLookupForCall(calleeId.getName());
             } else {
-                compilerContext.expressionCompiler.compileExpression(callExpr.getCallee());
+                compilerContext.expressionCompiler.compile(callExpr.getCallee());
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
             }
             for (Expression arg : callExpr.getArguments()) {
-                compilerContext.expressionCompiler.compileExpression(arg);
+                compilerContext.expressionCompiler.compile(arg);
             }
             Opcode callOpcode = isTailCall ? Opcode.TAIL_CALL : Opcode.CALL;
             compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.getArguments().size());
@@ -163,7 +163,7 @@ final class CallExpressionCompiler {
         if (!callExpr.isOptional()
                 && callExpr.getCallee() instanceof Identifier calleeId
                 && JSKeyword.EVAL.equals(calleeId.getName())) {
-            compilerContext.expressionCompiler.compileExpression(callExpr.getCallee());
+            compilerContext.expressionCompiler.compile(callExpr.getCallee());
             compilerContext.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY_EVAL, 0);
             return;
@@ -176,11 +176,11 @@ final class CallExpressionCompiler {
                 return;
             }
 
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getObject());
+            compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
             if (memberExpr.isComputed()) {
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
-                compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+                compilerContext.expressionCompiler.compile(memberExpr.getProperty());
                 compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             } else if (memberExpr.getProperty() instanceof Identifier propId) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
@@ -203,7 +203,7 @@ final class CallExpressionCompiler {
                 compilerContext.emitter.emitOpcode(Opcode.SWAP);
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-                compilerContext.expressionCompiler.compileExpression(callExpr.getCallee());
+                compilerContext.expressionCompiler.compile(callExpr.getCallee());
             }
         }
 
@@ -212,14 +212,14 @@ final class CallExpressionCompiler {
     }
 
     private void compileOptionalCallExpression(CallExpression callExpr, boolean isTailCall) {
-        compilerContext.expressionCompiler.compileExpression(callExpr.getCallee());
+        compilerContext.expressionCompiler.compile(callExpr.getCallee());
         compilerContext.emitter.emitOpcode(Opcode.DUP);
         compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
         int jumpToUndefined = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
 
         compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
         for (Expression arg : callExpr.getArguments()) {
-            compilerContext.expressionCompiler.compileExpression(arg);
+            compilerContext.expressionCompiler.compile(arg);
         }
         Opcode callOpcode = isTailCall ? Opcode.TAIL_CALL : Opcode.CALL;
         compilerContext.emitter.emitOpcodeU16(callOpcode, callExpr.getArguments().size());
@@ -254,7 +254,7 @@ final class CallExpressionCompiler {
         }
 
         boolean hasOptionalRoot = chain.get(0).isOptional();
-        compilerContext.expressionCompiler.compileExpression(chain.get(0).getObject());
+        compilerContext.expressionCompiler.compile(chain.get(0).getObject());
 
         int jumpToUndefinedFromOptionalRoot = -1;
         if (hasOptionalRoot) {
@@ -277,7 +277,7 @@ final class CallExpressionCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         for (Expression arg : callExpr.getArguments()) {
-            compilerContext.expressionCompiler.compileExpression(arg);
+            compilerContext.expressionCompiler.compile(arg);
         }
         compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpr.getArguments().size());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
@@ -325,7 +325,7 @@ final class CallExpressionCompiler {
 
         compilerContext.emitter.emitOpcode(Opcode.SWAP);
         for (Expression argument : callExpression.getArguments()) {
-            compilerContext.expressionCompiler.compileExpression(argument);
+            compilerContext.expressionCompiler.compile(argument);
         }
         compilerContext.emitter.emitOpcodeU16(callMethodOpcode, callExpression.getArguments().size());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
@@ -343,7 +343,7 @@ final class CallExpressionCompiler {
     private void emitMemberFunctionWithReceiver(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
             compilerContext.emitter.emitOpcode(Opcode.DUP);
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
             return;
         }
@@ -371,7 +371,7 @@ final class CallExpressionCompiler {
 
     private void emitPropertyAccess(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
-            compilerContext.expressionCompiler.compileExpression(memberExpr.getProperty());
+            compilerContext.expressionCompiler.compile(memberExpr.getProperty());
             compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
         } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateId) {
             String fieldName = privateId.getName();

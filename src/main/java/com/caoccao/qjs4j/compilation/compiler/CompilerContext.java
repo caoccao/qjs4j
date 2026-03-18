@@ -75,7 +75,6 @@ final class CompilerContext {
     ForInStatementCompiler forInStatementCompiler;
     ForOfStatementCompiler forOfStatementCompiler;
     ForStatementCompiler forStatementCompiler;
-    FunctionCompiler functionCompiler;
     FunctionDeclarationCompiler functionDeclarationCompiler;
     FunctionExpressionCompiler functionExpressionCompiler;
     boolean hasEnclosingArgumentsBinding;
@@ -195,7 +194,6 @@ final class CompilerContext {
         this.conditionalExpressionCompiler = new ConditionalExpressionCompiler(this);
         this.doWhileStatementCompiler = new DoWhileStatementCompiler(this);
         this.emitHelpers = new EmitHelpers(this);
-        this.functionCompiler = new FunctionCompiler(this);
         this.functionDeclarationCompiler = new FunctionDeclarationCompiler(this);
         this.functionExpressionCompiler = new FunctionExpressionCompiler(this);
         this.forInStatementCompiler = new ForInStatementCompiler(this);

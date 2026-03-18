@@ -35,7 +35,7 @@ final class LiteralCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileLiteral(Literal literal) {
+    void compile(Literal literal) {
         Object value = literal.getValue();
 
         if (value == null) {

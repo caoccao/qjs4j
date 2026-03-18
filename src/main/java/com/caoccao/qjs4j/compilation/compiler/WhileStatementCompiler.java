@@ -29,18 +29,18 @@ final class WhileStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileWhileStatement(WhileStatement whileStmt) {
+    void compile(WhileStatement whileStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
         int loopStart = compilerContext.emitter.currentOffset();
         LoopContext loop = compilerContext.loopManager.createLoopContext(loopStart, compilerContext.scopeManager.getScopeDepth(), compilerContext.scopeManager.getScopeDepth());
         compilerContext.loopManager.pushLoop(loop);
 
-        compilerContext.expressionCompiler.compileExpression(whileStmt.getTest());
+        compilerContext.expressionCompiler.compile(whileStmt.getTest());
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
-        compilerContext.statementCompiler.compileStatement(whileStmt.getBody());
+        compilerContext.statementCompiler.compile(whileStmt.getBody());
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
         int backJumpPos = compilerContext.emitter.currentOffset();

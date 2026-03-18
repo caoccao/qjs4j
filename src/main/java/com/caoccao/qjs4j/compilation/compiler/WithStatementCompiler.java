@@ -30,7 +30,7 @@ final class WithStatementCompiler {
         this.compilerContext = compilerContext;
     }
 
-    void compileWithStatement(WithStatement withStmt) {
+    void compile(WithStatement withStmt) {
         if (compilerContext.strictMode) {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
         }
@@ -43,14 +43,14 @@ final class WithStatementCompiler {
 
         compilerContext.scopeManager.enterScope();
         int withObjectLocalIndex = compilerContext.scopeManager.currentScope().declareLocal("$withObject" + compilerContext.scopeManager.getScopeDepth());
-        compilerContext.expressionCompiler.compileExpression(withStmt.getObject());
+        compilerContext.expressionCompiler.compile(withStmt.getObject());
         compilerContext.emitter.emitOpcode(Opcode.TO_OBJECT);
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
         compilerContext.withObjectManager.pushLocal(withObjectLocalIndex);
         try {
             if (withStmt.getBody() != null) {
-                compilerContext.statementCompiler.compileStatement(withStmt.getBody());
+                compilerContext.statementCompiler.compile(withStmt.getBody());
             }
         } finally {
             // Do NOT clear the with-object local to undefined here.
