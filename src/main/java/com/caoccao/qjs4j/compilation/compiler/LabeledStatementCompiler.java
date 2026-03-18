@@ -22,11 +22,9 @@ import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 /**
  * Compiles labeled statement AST nodes into bytecode.
  */
-final class LabeledStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
     LabeledStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
     /**
@@ -35,6 +33,7 @@ final class LabeledStatementCompiler {
      * For labeled loops (while/for/for-in/for-of), the label is attached to the
      * loop's LoopContext so labeled break/continue work on the loop.
      */
+    @Override
     void compile(LabeledStatement labeledStmt) {
         String labelName = labeledStmt.getLabel().getName();
         Statement body = labeledStmt.getBody();

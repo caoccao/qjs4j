@@ -23,13 +23,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.Iterator;
 import java.util.List;
 
-final class BreakStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
     BreakStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(BreakStatement breakStmt) {
         if (compilerContext.finallySubroutineDepth > 0) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);

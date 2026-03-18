@@ -24,13 +24,12 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class BinaryExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
     BinaryExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(BinaryExpression binExpr) {
         if (binExpr.getOperator() == BinaryOperator.IN &&
                 binExpr.getLeft() instanceof PrivateIdentifier privateIdentifier) {

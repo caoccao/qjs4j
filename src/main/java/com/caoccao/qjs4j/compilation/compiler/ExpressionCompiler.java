@@ -24,13 +24,12 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Compiles expression AST nodes into bytecode.
  * Dispatches to specialized expression compilers.
  */
-final class ExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class ExpressionCompiler extends AstNodeCompiler<Expression> {
     ExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(Expression expr) {
         if (expr instanceof Literal literal) {
             compilerContext.literalCompiler.compile(literal);

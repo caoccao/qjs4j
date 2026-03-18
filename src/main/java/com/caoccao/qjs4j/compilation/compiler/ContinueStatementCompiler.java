@@ -23,13 +23,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.Iterator;
 import java.util.List;
 
-final class ContinueStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement> {
     ContinueStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ContinueStatement contStmt) {
         if (compilerContext.finallySubroutineDepth > 0) {
             compilerContext.emitter.emitOpcode(Opcode.DROP);

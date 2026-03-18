@@ -20,13 +20,12 @@ import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ForInStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
     ForInStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ForInStatement forInStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 

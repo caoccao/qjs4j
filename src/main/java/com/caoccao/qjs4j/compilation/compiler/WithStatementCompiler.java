@@ -23,13 +23,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles with-statement AST nodes into bytecode.
  */
-final class WithStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class WithStatementCompiler extends AstNodeCompiler<WithStatement> {
     WithStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(WithStatement withStmt) {
         if (compilerContext.strictMode) {
             throw new JSSyntaxErrorException("Strict mode code may not include a with statement");

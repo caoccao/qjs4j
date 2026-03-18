@@ -21,13 +21,12 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ArrayExpressionDestructuringAssignmentCompiler {
-    private final CompilerContext compilerContext;
-
+final class ArrayExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<ArrayExpression> {
     ArrayExpressionDestructuringAssignmentCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ArrayExpression arrayExpr) {
         // Stack: [iterable]
         // Use iterator protocol (FOR_OF_START/FOR_OF_NEXT/ITERATOR_CLOSE) per ES spec.

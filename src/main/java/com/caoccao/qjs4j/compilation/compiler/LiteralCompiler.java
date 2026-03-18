@@ -28,13 +28,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.math.BigInteger;
 
-final class LiteralCompiler {
-    private final CompilerContext compilerContext;
-
+final class LiteralCompiler extends AstNodeCompiler<Literal> {
     LiteralCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(Literal literal) {
         Object value = literal.getValue();
 

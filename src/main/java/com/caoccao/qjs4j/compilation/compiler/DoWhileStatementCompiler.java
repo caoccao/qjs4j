@@ -19,13 +19,12 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.DoWhileStatement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class DoWhileStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class DoWhileStatementCompiler extends AstNodeCompiler<DoWhileStatement> {
     DoWhileStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(DoWhileStatement doWhileStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 

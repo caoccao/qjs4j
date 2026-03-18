@@ -24,13 +24,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class TryStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
     TryStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(TryStatement tryStmt) {
         if (tryStmt.getFinalizer() == null) {
             compileTryCatchWithoutFinally(tryStmt);

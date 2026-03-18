@@ -31,11 +31,9 @@ import java.util.Set;
 /**
  * Handles compilation of function expressions.
  */
-final class FunctionExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpression> {
     FunctionExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
     /**
@@ -55,6 +53,7 @@ final class FunctionExpressionCompiler {
         compileFunctionExpressionInternal(functionExpression, forceNonConstructor);
     }
 
+    @Override
     void compile(FunctionExpression functionExpression) {
         compileFunctionExpressionInternal(functionExpression, false);
     }

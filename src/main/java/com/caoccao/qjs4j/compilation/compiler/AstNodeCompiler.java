@@ -16,17 +16,14 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.AwaitExpression;
-import com.caoccao.qjs4j.vm.Opcode;
+import com.caoccao.qjs4j.compilation.ast.ASTNode;
 
-final class AwaitExpressionCompiler extends AstNodeCompiler<AwaitExpression> {
-    AwaitExpressionCompiler(CompilerContext compilerContext) {
-        super(compilerContext);
+abstract class AstNodeCompiler<T extends ASTNode> {
+    protected final CompilerContext compilerContext;
+
+    public AstNodeCompiler(CompilerContext compilerContext) {
+        this.compilerContext = compilerContext;
     }
 
-    @Override
-    void compile(AwaitExpression awaitExpr) {
-        compilerContext.expressionCompiler.compile(awaitExpr.getArgument());
-        compilerContext.emitter.emitOpcode(Opcode.AWAIT);
-    }
+    abstract void compile(T astNode);
 }

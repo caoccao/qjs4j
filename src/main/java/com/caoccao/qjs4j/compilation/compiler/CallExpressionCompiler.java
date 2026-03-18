@@ -24,13 +24,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
 
-final class CallExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
     CallExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(CallExpression callExpr) {
         boolean hasSpread = callExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
         if (hasSpread) {

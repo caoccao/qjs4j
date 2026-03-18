@@ -23,13 +23,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class ProgramCompiler {
-    private final CompilerContext compilerContext;
-
+final class ProgramCompiler extends AstNodeCompiler<Program> {
     ProgramCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(Program program) {
         if (program.isModule()) {
             compileModule(program);

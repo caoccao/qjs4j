@@ -22,13 +22,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
 
-final class TaggedTemplateExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class TaggedTemplateExpressionCompiler extends AstNodeCompiler<TaggedTemplateExpression> {
     TaggedTemplateExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(TaggedTemplateExpression taggedTemplate) {
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;

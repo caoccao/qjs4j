@@ -21,13 +21,12 @@ import com.caoccao.qjs4j.compilation.ast.NewExpression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class NewExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class NewExpressionCompiler extends AstNodeCompiler<NewExpression> {
     NewExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(NewExpression newExpr) {
         boolean hasSpread = newExpr.getArguments().stream().anyMatch(arg -> arg instanceof SpreadElement);
 

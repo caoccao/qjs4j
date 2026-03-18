@@ -22,13 +22,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 import java.util.HashSet;
 import java.util.Set;
 
-final class BlockStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
     BlockStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(BlockStatement block) {
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();

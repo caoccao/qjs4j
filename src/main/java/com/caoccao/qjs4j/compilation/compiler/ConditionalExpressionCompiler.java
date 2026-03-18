@@ -19,13 +19,12 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.ConditionalExpression;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ConditionalExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class ConditionalExpressionCompiler extends AstNodeCompiler<ConditionalExpression> {
     ConditionalExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ConditionalExpression condExpr) {
         compilerContext.pushState();
         compilerContext.emitTailCalls = false;

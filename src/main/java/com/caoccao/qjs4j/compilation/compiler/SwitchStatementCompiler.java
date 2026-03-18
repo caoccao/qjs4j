@@ -24,13 +24,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-final class SwitchStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
     SwitchStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(SwitchStatement switchStmt) {
         if (compilerContext.evalReturnLocalIndex >= 0) {
             // Default switch completion value is undefined.

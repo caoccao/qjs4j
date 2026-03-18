@@ -23,13 +23,12 @@ import com.caoccao.qjs4j.vm.Opcode;
  * Compiles statement AST nodes into bytecode.
  * Extracted from BytecodeCompiler to separate statement compilation concerns.
  */
-final class StatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class StatementCompiler extends AstNodeCompiler<Statement> {
     StatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(Statement stmt) {
         if (stmt instanceof ExpressionStatement exprStmt) {
             compileExpressionStatement(exprStmt.getExpression());

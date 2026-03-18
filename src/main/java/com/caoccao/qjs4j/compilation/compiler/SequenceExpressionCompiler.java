@@ -22,13 +22,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
 
-final class SequenceExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class SequenceExpressionCompiler extends AstNodeCompiler<SequenceExpression> {
     SequenceExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(SequenceExpression seqExpr) {
         List<Expression> expressions = seqExpr.getExpressions();
         for (int i = 0; i < expressions.size(); i++) {

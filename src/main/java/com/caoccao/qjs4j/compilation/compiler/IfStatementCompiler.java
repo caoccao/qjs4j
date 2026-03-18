@@ -25,13 +25,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles if-statement AST nodes into bytecode.
  */
-final class IfStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
     IfStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(IfStatement ifStmt) {
         // In strict mode, function declarations are not allowed as direct body of if/else
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.

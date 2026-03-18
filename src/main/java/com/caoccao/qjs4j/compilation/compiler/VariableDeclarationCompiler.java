@@ -26,13 +26,12 @@ import java.util.Set;
 /**
  * Compiles variable declaration AST nodes into bytecode.
  */
-final class VariableDeclarationCompiler {
-    private final CompilerContext compilerContext;
-
+final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclaration> {
     VariableDeclarationCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;

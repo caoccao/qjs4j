@@ -21,13 +21,12 @@ import com.caoccao.qjs4j.compilation.ast.Expression;
 import com.caoccao.qjs4j.compilation.ast.SpreadElement;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ArrayExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class ArrayExpressionCompiler extends AstNodeCompiler<ArrayExpression> {
     ArrayExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ArrayExpression arrayExpr) {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 

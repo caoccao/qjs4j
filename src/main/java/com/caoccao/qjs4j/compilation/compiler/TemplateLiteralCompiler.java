@@ -24,13 +24,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.List;
 
-final class TemplateLiteralCompiler {
-    private final CompilerContext compilerContext;
-
+final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
     TemplateLiteralCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(TemplateLiteral templateLiteral) {
         // For untagged template literals, concatenate strings and expressions
         // Example: `Hello ${name}!` becomes "Hello " + name + "!"

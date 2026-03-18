@@ -31,13 +31,12 @@ import java.util.*;
  * Handles compilation of class declarations, class expressions, and related
  * constructs (methods, fields, static blocks, private members, constructors).
  */
-final class ClassDeclarationCompiler {
-    private final CompilerContext compilerContext;
-
+final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
     ClassDeclarationCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ClassDeclaration classDecl) {
         // Following QuickJS implementation in quickjs.c:24700-25200
 

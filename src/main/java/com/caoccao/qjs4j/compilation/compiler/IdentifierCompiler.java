@@ -29,13 +29,12 @@ import java.util.List;
  * Handles compilation of identifier expressions and with-scope-aware
  * identifier resolution for reads, calls, and deletes.
  */
-final class IdentifierCompiler {
-    private final CompilerContext compilerContext;
-
+final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     IdentifierCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(Identifier identifier) {
         String name = identifier.getName();
         // Handle 'this' keyword

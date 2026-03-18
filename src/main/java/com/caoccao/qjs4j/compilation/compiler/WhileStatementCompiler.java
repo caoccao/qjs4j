@@ -22,13 +22,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 /**
  * Compiles while-statement AST nodes into bytecode.
  */
-final class WhileStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
     WhileStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(WhileStatement whileStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 

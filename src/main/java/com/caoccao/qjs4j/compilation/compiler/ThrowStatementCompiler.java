@@ -20,13 +20,12 @@ import com.caoccao.qjs4j.compilation.ast.ThrowStatement;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ThrowStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
     ThrowStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ThrowStatement throwStmt) {
         compilerContext.expressionCompiler.compile(throwStmt.getArgument());
         int throwValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());

@@ -30,13 +30,12 @@ import java.util.List;
  * Handles compilation of unary expressions including delete, typeof,
  * increment/decrement, and standard unary operators.
  */
-final class UnaryExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
     UnaryExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(UnaryExpression unaryExpr) {
         // DELETE operator needs special handling - it doesn't evaluate the operand,
         // but instead emits object and property separately

@@ -26,13 +26,12 @@ import com.caoccao.qjs4j.vm.Opcode;
 
 import java.util.ArrayList;
 
-final class MemberExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
     MemberExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(MemberExpression memberExpr) {
         if (memberExpr.getObject().isSuperIdentifier()) {
             compilerContext.emitHelpers.emitGetSuperValue(memberExpr, false);

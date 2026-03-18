@@ -19,13 +19,12 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ForStatementCompiler {
-    private final CompilerContext compilerContext;
-
+final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
     ForStatementCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ForStatement forStmt) {
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 

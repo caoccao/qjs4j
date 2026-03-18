@@ -28,13 +28,12 @@ import java.util.List;
 /**
  * Handles compilation of assignment expressions.
  */
-final class AssignmentExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpression> {
     AssignmentExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(AssignmentExpression assignExpr) {
         Expression left = assignExpr.getLeft();
         AssignmentOperator operator = assignExpr.getOperator();

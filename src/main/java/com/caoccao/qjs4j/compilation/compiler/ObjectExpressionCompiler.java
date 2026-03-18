@@ -25,13 +25,12 @@ import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
-final class ObjectExpressionCompiler {
-    private final CompilerContext compilerContext;
-
+final class ObjectExpressionCompiler extends AstNodeCompiler<ObjectExpression> {
     ObjectExpressionCompiler(CompilerContext compilerContext) {
-        this.compilerContext = compilerContext;
+        super(compilerContext);
     }
 
+    @Override
     void compile(ObjectExpression objExpr) {
         int protoDataPropertyCount = 0;
         for (ObjectExpressionProperty property : objExpr.getProperties()) {
