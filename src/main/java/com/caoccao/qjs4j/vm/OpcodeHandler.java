@@ -2746,15 +2746,10 @@ public final class OpcodeHandler {
         }
 
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, keyValue);
-        JSValue result;
-        if (receiverValue instanceof JSObject receiverObject) {
-            result = superObject.getWithReceiver(key, receiverObject);
-        } else {
-            JSObject boxedReceiver = executionContext.virtualMachine.toObject(receiverValue);
-            result = boxedReceiver != null
-                    ? superObject.getWithReceiver(key, boxedReceiver)
-                    : superObject.get(key);
-        }
+        // Pass receiver directly without boxing. Per ES spec, super property access
+        // should not auto-box primitive receivers. The getter receives the original
+        // primitive as 'this' (e.g., super.prop.call(3) should see this === 3).
+        JSValue result = superObject.getWithReceiver(key, receiverValue);
 
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();

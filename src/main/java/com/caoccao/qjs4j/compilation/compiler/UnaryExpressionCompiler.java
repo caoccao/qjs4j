@@ -174,10 +174,19 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     // Super property update follows super-reference semantics:
                     // [this, superObj, key] + GET_SUPER_VALUE -> old value -> update -> PUT_SUPER_VALUE
                     compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    if (memberExpr.isComputed()) {
+                        // Per ES spec: computed key evaluated before GetSuperBase()
+                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                        compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                        compilerContext.emitter.emitOpcode(Opcode.SWAP);
+                    } else {
+                        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                        compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                        compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    }
                     compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     compilerContext.emitter.emitOpcode(Opcode.DUP3);
                     compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);

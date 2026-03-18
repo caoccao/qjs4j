@@ -722,10 +722,6 @@ public non-sealed class JSObject implements JSValue {
      * Internal get method with receiver tracking for prototype chain getter invocation.
      * Protected to allow JSProxy to override with proper trap handling.
      */
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
-        return getWithReceiver(key, receiver, 0);
-    }
-
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
         long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
@@ -784,9 +780,11 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * Get a property value with an explicit receiver for getter invocation.
-     * Used by Reflect.get to pass a different receiver than the target.
+     * Used by Reflect.get and super property access to pass a different receiver
+     * than the target. Accepts JSValue to support primitive receivers (per ES spec,
+     * super property access should not box the receiver).
      */
-    public JSValue getWithReceiver(PropertyKey key, JSObject receiver) {
+    public JSValue getWithReceiver(PropertyKey key, JSValue receiver) {
         return getWithReceiver(key, receiver, 0);
     }
 

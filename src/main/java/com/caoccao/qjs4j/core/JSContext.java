@@ -1518,8 +1518,10 @@ public final class JSContext implements AutoCloseable {
             if (directEvalCallerFrame != null
                     && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
                 allowNewTargetInEval = callerBytecodeFunction.isNewTargetAllowed();
-                allowSuperPropertyInEval = !callerBytecodeFunction.isArrow()
-                        && callerBytecodeFunction.getHomeObject() != null;
+                // Arrow functions inherit super binding from their enclosing method.
+                // Following QuickJS: eval inherits super_allowed from the calling function
+                // regardless of whether it is an arrow function or not.
+                allowSuperPropertyInEval = callerBytecodeFunction.getHomeObject() != null;
                 evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
                 // Per QuickJS: direct eval inherits super_call_allowed from the calling function.
                 // This is true for derived constructors, arrows inside derived constructors,

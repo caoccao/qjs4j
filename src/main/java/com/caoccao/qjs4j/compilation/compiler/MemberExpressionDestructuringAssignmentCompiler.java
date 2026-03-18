@@ -42,10 +42,19 @@ final class MemberExpressionDestructuringAssignmentCompiler extends AstNodeCompi
         if (memberExpr.getObject().isSuperIdentifier()) {
             // Stack starts with [value]
             compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
-            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-            compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-            compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+            if (memberExpr.isComputed()) {
+                // Per ES spec: computed key evaluated before GetSuperBase()
+                compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            } else {
+                compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+            }
             // Stack: [value, this, superObj, key] → ROT4L → [this, superObj, key, value]
             compilerContext.emitter.emitOpcode(Opcode.ROT4L);
             compilerContext.emitter.emitOpcode(Opcode.PUT_SUPER_VALUE);

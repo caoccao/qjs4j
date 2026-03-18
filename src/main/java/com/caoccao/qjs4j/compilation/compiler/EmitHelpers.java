@@ -283,11 +283,24 @@ final class EmitHelpers {
             // Keep one copy of receiver for the eventual CALL/APPLY thisArg.
             compilerContext.emitter.emitOpcode(Opcode.DUP);
         }
-        // Resolve super base: [[HomeObject]].[[Prototype]]
-        compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
-        compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
-        compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
-        emitSuperPropertyKey(memberExpr);
+        if (memberExpr.isComputed()) {
+            // Per ES spec 13.4.1: for super[expr], the key expression is evaluated
+            // BEFORE GetSuperBase(). This ensures side effects in the key expression
+            // (e.g. modifying the prototype chain) are visible when the super base
+            // is resolved. Stack: [this] -> [this, key, superBase] -> SWAP -> [this, superBase, key]
+            emitSuperPropertyKey(memberExpr);
+            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+        } else {
+            // For non-computed super.prop, the key is a static identifier with no side effects.
+            // Resolve super base first, then push key.
+            compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+            compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+            compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+            emitSuperPropertyKey(memberExpr);
+        }
         compilerContext.emitter.emitOpcode(Opcode.GET_SUPER_VALUE);
     }
 
