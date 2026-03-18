@@ -14,7 +14,6 @@ final class ExecutionContext {
     final StackFrame previousFrame;
     final int restoreStackTop;
     final boolean savedStrictMode;
-    final JSStackValue[] stack;
     final VirtualMachine virtualMachine;
     boolean opcodeRequestedReturn;
     int pc;
@@ -40,10 +39,47 @@ final class ExecutionContext {
         this.restoreStackTop = restoreStackTop;
         this.savedStrictMode = savedStrictMode;
         this.locals = frame.getLocals();
-        this.stack = virtualMachine.valueStack.stack;
         this.pc = 0;
         this.opcodeRequestedReturn = false;
         this.returnValue = null;
         this.sp = 0;
+    }
+
+    JSValue peek(int offset) {
+        return (JSValue) virtualMachine.valueStack.stack[sp - 1 - offset];
+    }
+
+    JSValue pop() {
+        return (JSValue) virtualMachine.valueStack.stack[--sp];
+    }
+
+    JSStackValue popStackValue() {
+        return virtualMachine.valueStack.stack[--sp];
+    }
+
+    void push(JSValue value) {
+        CallStack valueStack = virtualMachine.valueStack;
+        if (sp >= valueStack.stack.length) {
+            valueStack.stackTop = sp;
+            valueStack.push(value);
+            sp = valueStack.stackTop;
+        } else {
+            valueStack.stack[sp++] = value;
+        }
+    }
+
+    void pushStackValue(JSStackValue value) {
+        CallStack valueStack = virtualMachine.valueStack;
+        if (sp >= valueStack.stack.length) {
+            valueStack.stackTop = sp;
+            valueStack.pushStackValue(value);
+            sp = valueStack.stackTop;
+        } else {
+            valueStack.stack[sp++] = value;
+        }
+    }
+
+    void set(int offset, JSValue value) {
+        virtualMachine.valueStack.stack[sp - 1 - offset] = value;
     }
 }

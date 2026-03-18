@@ -165,7 +165,7 @@ public final class VirtualMachine {
 
         boolean foundHandler = false;
         while (executionContext.virtualMachine.valueStack.stackTop > executionContext.frameStackBase) {
-            JSStackValue stackValue = executionContext.stack[--executionContext.virtualMachine.valueStack.stackTop];
+            JSStackValue stackValue = executionContext.virtualMachine.valueStack.stack[--executionContext.virtualMachine.valueStack.stackTop];
             if (stackValue instanceof JSCatchOffset catchOffset) {
                 if (catchOffset.isIteratorCloseMarker()) {
                     // Iterator enumerator marker (from FOR_OF_START). Following QuickJS:
@@ -174,7 +174,7 @@ public final class VirtualMachine {
                     executionContext.virtualMachine.valueStack.stackTop--; // pop next
                     int iterIdx = executionContext.virtualMachine.valueStack.stackTop - 1;
                     if (iterIdx >= executionContext.frameStackBase) {
-                        JSValue iteratorValue = (JSValue) executionContext.stack[iterIdx];
+                        JSValue iteratorValue = (JSValue) executionContext.virtualMachine.valueStack.stack[iterIdx];
                         executionContext.virtualMachine.valueStack.stackTop--; // pop iter
                         if (iteratorValue instanceof JSObject iteratorObj && !iteratorValue.isUndefined()) {
                             // For throw completions, suppress close errors.
@@ -188,7 +188,7 @@ public final class VirtualMachine {
                 if (executionContext.virtualMachine.generatorForceReturn && !catchOffset.isFinally()) {
                     continue;
                 }
-                executionContext.stack[executionContext.virtualMachine.valueStack.stackTop++] = exception;
+                executionContext.virtualMachine.valueStack.pushStackValue(exception);
                 executionContext.pc = catchOffset.offset();
                 foundHandler = true;
                 executionContext.virtualMachine.context.clearPendingException();
@@ -723,7 +723,7 @@ public final class VirtualMachine {
             valueStack.stackTop = frameStackBase;
             JSStackValue[] suspendedStackValues = generatorStateForExecution.getSuspendedStackValues();
             if (suspendedStackValues != null && suspendedStackValues.length > 0) {
-                System.arraycopy(suspendedStackValues, 0, executionContext.stack, frameStackBase, suspendedStackValues.length);
+                System.arraycopy(suspendedStackValues, 0, valueStack.stack, frameStackBase, suspendedStackValues.length);
             }
             executionContext.sp = frameStackBase + (suspendedStackValues == null ? 0 : suspendedStackValues.length);
             int suspendedProgramCounter = generatorStateForExecution.getSuspendedProgramCounter();
@@ -751,7 +751,7 @@ public final class VirtualMachine {
                     pendingException = pendingResumeRecord.value();
                     context.setPendingException(pendingResumeRecord.value());
                 } else {
-                    executionContext.stack[executionContext.sp++] = pendingResumeRecord.value();
+                    executionContext.push(pendingResumeRecord.value());
                 }
             }
         } else {
