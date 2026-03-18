@@ -124,7 +124,10 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             }
         }
 
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.statementCompiler.compile(forOfStmt.getBody());
+        compilerContext.isLastInProgram = savedIsLastInProgram;
 
         if (!isExpressionBased && !isVar) {
             compilerContext.emitHelpers.emitCloseLocForPattern(pattern);

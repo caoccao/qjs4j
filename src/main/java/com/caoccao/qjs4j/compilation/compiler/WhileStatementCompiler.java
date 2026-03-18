@@ -39,7 +39,10 @@ final class WhileStatementCompiler extends AstNodeCompiler<WhileStatement> {
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_FALSE);
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.statementCompiler.compile(whileStmt.getBody());
+        compilerContext.isLastInProgram = savedIsLastInProgram;
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
         int backJumpPos = compilerContext.emitter.currentOffset();

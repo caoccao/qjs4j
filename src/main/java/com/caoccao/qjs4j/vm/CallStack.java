@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.core.JSStackValue;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 /**
  * Represents the value stack for the VM.
@@ -25,11 +26,13 @@ import com.caoccao.qjs4j.core.JSValue;
  * Can store both JSValue and internal markers like CatchOffset.
  */
 public final class CallStack {
-    final JSStackValue[] stack;  // package-private for direct access from VirtualMachine
-    int stackTop;                // package-private for direct access from VirtualMachine
+    private static final int INITIAL_STACK_SIZE = 8192;
+    private static final int MAX_STACK_SIZE = 65536;
+    JSStackValue[] stack;  // package-private for direct access from VirtualMachine
+    int stackTop;          // package-private for direct access from VirtualMachine
 
     public CallStack() {
-        this.stack = new JSStackValue[1024];
+        this.stack = new JSStackValue[INITIAL_STACK_SIZE];
         this.stackTop = 0;
     }
 
@@ -42,6 +45,26 @@ public final class CallStack {
 
     public int getStackTop() {
         return stackTop;
+    }
+
+    private void grow() {
+        growTo(stack.length * 2);
+    }
+
+    private void growTo(int minCapacity) {
+        int newCapacity = stack.length;
+        while (newCapacity < minCapacity) {
+            newCapacity *= 2;
+        }
+        if (newCapacity > MAX_STACK_SIZE) {
+            if (minCapacity > MAX_STACK_SIZE) {
+                throw new JSVirtualMachineException("Stack overflow");
+            }
+            newCapacity = MAX_STACK_SIZE;
+        }
+        JSStackValue[] newStack = new JSStackValue[newCapacity];
+        System.arraycopy(stack, 0, newStack, 0, stackTop);
+        stack = newStack;
     }
 
     /**
@@ -82,6 +105,9 @@ public final class CallStack {
      * Push a value onto the stack (QuickJS: *sp++ = value).
      */
     public void push(JSValue value) {
+        if (stackTop >= stack.length) {
+            grow();
+        }
         stack[stackTop++] = value;
     }
 
@@ -89,6 +115,9 @@ public final class CallStack {
      * Push a stack value (including internal markers like CatchOffset).
      */
     public void pushStackValue(JSStackValue value) {
+        if (stackTop >= stack.length) {
+            grow();
+        }
         stack[stackTop++] = value;
     }
 

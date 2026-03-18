@@ -56,6 +56,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
      * Used for the GOSUB/RET path where the return address must remain on top of the stack.
      */
     private void compileFinallyBlockBody(BlockStatement block) {
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.scopeManager.enterScope();
         compilerContext.finallySubroutineDepth++;
         int savedEvalReturnLocalIndex = -1;
@@ -80,6 +82,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         }
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
+        compilerContext.isLastInProgram = savedIsLastInProgram;
     }
 
     private void compileTryCatchWithoutFinally(TryStatement tryStmt) {
@@ -129,6 +132,8 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
     }
 
     private void compileTryFinallyBlock(BlockStatement block) {
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
@@ -227,6 +232,7 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
+        compilerContext.isLastInProgram = savedIsLastInProgram;
     }
 
     private void compileTryStatementWithFinally(TryStatement tryStmt) {

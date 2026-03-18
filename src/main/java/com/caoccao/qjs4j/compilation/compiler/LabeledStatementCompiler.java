@@ -59,7 +59,10 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
 
             // Body can be null for empty statements (label: ;)
             if (body != null) {
+                boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+                compilerContext.isLastInProgram = false;
                 compilerContext.statementCompiler.compile(body);
+                compilerContext.isLastInProgram = savedIsLastInProgram;
             }
 
             // Patch all break positions to jump here

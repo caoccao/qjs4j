@@ -36,7 +36,10 @@ final class DoWhileStatementCompiler extends AstNodeCompiler<DoWhileStatement> {
         compilerContext.loopManager.pushLoop(loop);
 
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.statementCompiler.compile(doWhileStmt.getBody());
+        compilerContext.isLastInProgram = savedIsLastInProgram;
 
         int testStart = compilerContext.emitter.currentOffset();
         compilerContext.expressionCompiler.compile(doWhileStmt.getTest());

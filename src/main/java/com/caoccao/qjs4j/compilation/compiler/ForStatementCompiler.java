@@ -69,7 +69,10 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
         }
         compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
 
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.statementCompiler.compile(forStmt.getBody());
+        compilerContext.isLastInProgram = savedIsLastInProgram;
 
         if (forStmt.getInit() instanceof VariableDeclaration varDeclForClose
                 && varDeclForClose.getKind() != VariableKind.VAR) {

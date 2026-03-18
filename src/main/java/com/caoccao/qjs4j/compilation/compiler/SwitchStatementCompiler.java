@@ -141,12 +141,15 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
                 defaultBodyStart = compilerContext.emitter.currentOffset();
             }
 
+            boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+            compilerContext.isLastInProgram = false;
             for (Statement stmt : switchCase.getConsequent()) {
                 if (stmt instanceof FunctionDeclaration) {
                     continue; // already initialized by block declaration instantiation
                 }
                 compilerContext.statementCompiler.compile(stmt);
             }
+            compilerContext.isLastInProgram = savedIsLastInProgram;
         }
 
         int switchEnd = compilerContext.emitter.currentOffset();

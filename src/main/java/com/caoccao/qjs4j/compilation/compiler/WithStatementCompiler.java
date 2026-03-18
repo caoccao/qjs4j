@@ -47,11 +47,14 @@ final class WithStatementCompiler extends AstNodeCompiler<WithStatement> {
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, withObjectLocalIndex);
 
         compilerContext.withObjectManager.pushLocal(withObjectLocalIndex);
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         try {
             if (withStmt.getBody() != null) {
                 compilerContext.statementCompiler.compile(withStmt.getBody());
             }
         } finally {
+            compilerContext.isLastInProgram = savedIsLastInProgram;
             // Do NOT clear the with-object local to undefined here.
             // Closures defined inside the with block capture a VarRef to this local
             // and need the with-object to remain accessible after the block exits.

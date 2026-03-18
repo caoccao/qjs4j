@@ -72,12 +72,15 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         }
 
         // Phase 3: compile non-function statements in source order.
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof FunctionDeclaration) {
                 continue; // Already hoisted
             }
             compilerContext.statementCompiler.compile(stmt);
         }
+        compilerContext.isLastInProgram = savedIsLastInProgram;
         compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();

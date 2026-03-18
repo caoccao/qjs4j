@@ -113,7 +113,10 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
             compilerContext.patternCompiler.compileForOfValueAssignment(declarationPattern, isVar);
         }
 
+        boolean savedIsLastInProgram = compilerContext.isLastInProgram;
+        compilerContext.isLastInProgram = false;
         compilerContext.statementCompiler.compile(forInStmt.getBody());
+        compilerContext.isLastInProgram = savedIsLastInProgram;
 
         if (!isExpressionBased && !isVar && declarationPattern != null) {
             compilerContext.emitHelpers.emitCloseLocForPattern(declarationPattern);
