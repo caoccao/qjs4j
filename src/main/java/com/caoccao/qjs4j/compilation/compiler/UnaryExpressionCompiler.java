@@ -43,18 +43,32 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
             Expression operand = unaryExpr.getOperand();
 
             if (operand instanceof MemberExpression memberExpr) {
-                // delete obj.prop or delete obj[expr]
-                compilerContext.expressionCompiler.compile(memberExpr.getObject());
+                if (memberExpr.getObject().isSuperIdentifier()) {
+                    // delete super.prop / delete super[expr]
+                    // Per spec, the property expression must be evaluated for side effects,
+                    // then a ReferenceError is thrown. Following QuickJS: emit super setup +
+                    // property key evaluation, then THROW_ERROR instead of GET_SUPER_VALUE.
+                    compilerContext.emitter.emitOpcode(Opcode.PUSH_THIS);
+                    compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
+                    compilerContext.emitter.emitU8(4); // SPECIAL_OBJECT_HOME_OBJECT
+                    compilerContext.emitter.emitOpcode(Opcode.GET_SUPER);
+                    compilerContext.emitHelpers.emitSuperPropertyKey(memberExpr);
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
+                    compilerContext.emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
+                } else {
+                    // delete obj.prop or delete obj[expr]
+                    compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
-                if (memberExpr.isComputed()) {
-                    // obj[expr]
-                    compilerContext.expressionCompiler.compile(memberExpr.getProperty());
-                } else if (memberExpr.getProperty() instanceof Identifier propId) {
-                    // obj.prop
-                    compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
+                    if (memberExpr.isComputed()) {
+                        // obj[expr]
+                        compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                    } else if (memberExpr.getProperty() instanceof Identifier propId) {
+                        // obj.prop
+                        compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
+                    }
+
+                    compilerContext.emitter.emitOpcode(Opcode.DELETE);
                 }
-
-                compilerContext.emitter.emitOpcode(Opcode.DELETE);
             } else if (operand instanceof Identifier id) {
                 // Match QuickJS scope_delete_var lowering:
                 // - local/arg/closure/implicit arguments bindings => false
