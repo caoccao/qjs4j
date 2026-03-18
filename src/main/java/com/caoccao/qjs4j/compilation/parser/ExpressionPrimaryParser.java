@@ -83,6 +83,23 @@ final class ExpressionPrimaryParser {
         return doubleVal;
     }
 
+    /**
+     * Check if an ObjectExpression contains CoverInitializedName (shorthand property with default).
+     * Per spec 13.2.5.1: it is a SyntaxError if an ObjectLiteral that is not a destructuring
+     * pattern contains a CoverInitializedName.
+     */
+    private static void validateNoCoverInitializedName(Expression expr) {
+        if (expr instanceof ObjectExpression objectExpression) {
+            for (ObjectExpressionProperty property : objectExpression.getProperties()) {
+                if (property.isShorthand()
+                        && property.getValue() instanceof AssignmentExpression assignmentExpression
+                        && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+                    throw new JSSyntaxErrorException("Invalid shorthand property initializer");
+                }
+            }
+        }
+    }
+
     Expression parseCallExpression() {
         Expression expr = expressions.parseMemberExpression();
 
@@ -162,11 +179,13 @@ final class ExpressionPrimaryParser {
                     expr = new MemberExpression(expr, property, false, true, location);
                 }
             } else if (parserContext.match(TokenType.DOT)) {
+                validateNoCoverInitializedName(expr);
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = parseMemberPropertyName();
                 expr = new MemberExpression(expr, property, false, false, location);
             } else if (parserContext.match(TokenType.LBRACKET)) {
+                validateNoCoverInitializedName(expr);
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = expressions.parseExpression();
@@ -274,11 +293,13 @@ final class ExpressionPrimaryParser {
         Expression expr = expressions.parsePrimaryExpression();
         while (true) {
             if (parserContext.match(TokenType.DOT)) {
+                validateNoCoverInitializedName(expr);
                 parserContext.advance();
                 SourceLocation memberLocation = parserContext.getLocation();
                 Expression property = parseMemberPropertyName();
                 expr = new MemberExpression(expr, property, false, false, memberLocation);
             } else if (parserContext.match(TokenType.LBRACKET)) {
+                validateNoCoverInitializedName(expr);
                 parserContext.advance();
                 SourceLocation memberLocation = parserContext.getLocation();
                 Expression property = expressions.parseExpression();
