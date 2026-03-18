@@ -383,6 +383,12 @@ record LiteralParser(ParserContext parserContext, ParserDelegates delegates) {
                         && (parserContext.isAwaitExpressionAllowed() || parserContext.inClassStaticInit)) {
                     throw new JSSyntaxErrorException("Unexpected reserved word");
                 }
+                // Shorthand value is an IdentifierReference to the variable.
+                // If referencing 'arguments' or 'eval', the enclosing function needs
+                // the implicit arguments binding, same as parseIdentifierReference().
+                if (JSKeyword.ARGUMENTS.equals(keyId.getName()) || JSKeyword.EVAL.equals(keyId.getName())) {
+                    parserContext.needsArguments = true;
+                }
                 Expression value;
                 if (parserContext.match(TokenType.ASSIGN)) {
                     parserContext.advance();
