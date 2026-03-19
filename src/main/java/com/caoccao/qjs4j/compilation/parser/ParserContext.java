@@ -197,11 +197,23 @@ final class ParserContext {
     }
 
     boolean isAwaitExpressionAllowed() {
-        return asyncFunctionNesting > 0 || (moduleMode && functionNesting == 0);
+        if (inClassFieldInitializer || inClassStaticInit) {
+            return false;
+        } else {
+            return asyncFunctionNesting > 0 || (moduleMode && functionNesting == 0);
+        }
     }
 
     boolean isAwaitIdentifierAllowed() {
-        return !moduleMode && asyncFunctionNesting == 0 && !inClassStaticInit;
+        if (moduleMode) {
+            return false;
+        } else if (inClassStaticInit) {
+            return false;
+        } else if (inClassFieldInitializer) {
+            return true;
+        } else {
+            return asyncFunctionNesting == 0;
+        }
     }
 
     boolean isAwaitUsingDeclarationStart() {

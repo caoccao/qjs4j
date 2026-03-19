@@ -974,6 +974,13 @@ public final class VirtualMachine {
                 StackFrame frame = resumeGeneratorExecution
                         ? generatorStateForExecution.getSuspendedFrame()
                         : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
+                if (!resumeGeneratorExecution) {
+                    int currentFrameDepth = getCurrentFrameDepth(currentFrame);
+                    if (currentFrameDepth >= context.getMaxStackDepth()) {
+                        throw new JSVirtualMachineException(
+                                context.throwRangeError("Maximum call stack size exceeded"));
+                    }
+                }
                 // For derived constructors, set up this TDZ tracking via shared VarRef
                 if (!resumeGeneratorExecution) {
                     if (function.isDerivedConstructor()) {
@@ -1213,6 +1220,16 @@ public final class VirtualMachine {
 
     public StackFrame getCurrentFrame() {
         return currentFrame;
+    }
+
+    private int getCurrentFrameDepth(StackFrame frame) {
+        int frameDepth = 0;
+        StackFrame currentStackFrame = frame;
+        while (currentStackFrame != null) {
+            frameDepth++;
+            currentStackFrame = currentStackFrame.getCaller();
+        }
+        return frameDepth;
     }
 
     public JSValue getLastConstructorThisArg() {

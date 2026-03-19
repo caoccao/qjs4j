@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+import com.caoccao.qjs4j.vm.StackFrame;
 
 import java.util.*;
 
@@ -458,6 +459,17 @@ public non-sealed class JSObject implements JSValue {
         return false;
     }
 
+    private StackFrame findInnermostFrameForFunction(JSContext propertyAccessContext, JSFunction currentFunction) {
+        StackFrame currentFrame = propertyAccessContext.getVirtualMachine().getCurrentFrame();
+        while (currentFrame != null) {
+            if (currentFrame.getFunction() == currentFunction) {
+                return currentFrame;
+            }
+            currentFrame = currentFrame.getCaller();
+        }
+        return null;
+    }
+
     /**
      * Freeze this object.
      * Prevents adding new properties, deleting existing properties, and modifying existing properties.
@@ -746,20 +758,24 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.isAccessorDescriptor()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null) {
+                    JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
+                    if (propertyAccessContext == null) {
+                        propertyAccessContext = this.context;
+                    }
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(this.context, receiver, JSValue.NO_ARGS);
+                        JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
                         // Check if getter threw an exception - return the error value or undefined
-                        if (this.context.hasPendingException()) {
-                            return result != null ? result : this.context.getPendingException();
+                        if (propertyAccessContext.hasPendingException()) {
+                            return result != null ? result : propertyAccessContext.getPendingException();
                         }
                         return result;
                     } catch (JSVirtualMachineException e) {
                         // Getter threw - convert to pending exception so callers can handle it
                         JSValue exception = e.getJsError() != null ? e.getJsError()
                                 : e.getJsValue() != null ? e.getJsValue()
-                                : this.context.throwError(e.getMessage());
-                        this.context.setPendingException(exception);
+                                : propertyAccessContext.throwError(e.getMessage());
+                        propertyAccessContext.setPendingException(exception);
                         return JSUndefined.INSTANCE;
                     }
                 }
@@ -768,6 +784,54 @@ public non-sealed class JSObject implements JSValue {
             }
             // Regular property with value
             return propertyValues[offset];
+        }
+
+        // Legacy SpiderMonkey-style function.caller/arguments extension.
+        // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
+        // non-strict functions still report dynamic caller/arguments information.
+        if (key.isString()
+                && this instanceof JSFunction currentFunction
+                && isLegacyFunctionPropertyAccessible(currentFunction)) {
+            String propertyName = key.asString();
+            if (JSKeyword.ARGUMENTS.equals(propertyName)) {
+                JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
+                if (propertyAccessContext == null) {
+                    propertyAccessContext = this.context;
+                }
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
+                if (argumentsObject == null) {
+                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
+                    propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
+                    currentFunctionFrame.setArgumentsObject(false, argumentsObject);
+                }
+                return argumentsObject;
+            }
+            if ("caller".equals(propertyName)) {
+                JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
+                if (propertyAccessContext == null) {
+                    propertyAccessContext = this.context;
+                }
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                StackFrame callerFrame = currentFunctionFrame.getCaller();
+                while (callerFrame != null && shouldSkipLegacyCallerFrame(callerFrame)) {
+                    callerFrame = callerFrame.getCaller();
+                }
+                if (callerFrame == null || callerFrame.getCaller() == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSFunction callerFunction = callerFrame.getFunction();
+                if (!isLegacyFunctionPropertyAccessible(callerFunction)) {
+                    return JSNull.INSTANCE;
+                }
+                return callerFunction;
+            }
         }
 
         // Look in prototype chain with depth-based cycle detection
@@ -873,6 +937,17 @@ public non-sealed class JSObject implements JSValue {
         return htmlDDA;
     }
 
+    private boolean isLegacyFunctionPropertyAccessible(JSFunction currentFunction) {
+        if (currentFunction instanceof JSBytecodeFunction bytecodeFunction) {
+            return !bytecodeFunction.isStrict()
+                    && bytecodeFunction.isConstructor()
+                    && !bytecodeFunction.isArrow()
+                    && !bytecodeFunction.isAsync()
+                    && !bytecodeFunction.isGenerator();
+        }
+        return false;
+    }
+
     private boolean isPrivateSymbolKey(PropertyKey key) {
         if (key == null || !key.isSymbol()) {
             return false;
@@ -924,7 +999,6 @@ public non-sealed class JSObject implements JSValue {
         return true;
     }
 
-
     /**
      * Seal this object.
      * Prevents adding new properties and deleting existing properties.
@@ -957,14 +1031,14 @@ public non-sealed class JSObject implements JSValue {
         }
     }
 
-    // Prototype chain
-
     /**
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
         setInternal(key, value, this, true);
     }
+
+    // Prototype chain
 
     /**
      * Set the constructor type internal slot.
@@ -974,14 +1048,14 @@ public non-sealed class JSObject implements JSValue {
         constructorType = type;
     }
 
-    // Object integrity levels (ES5)
-
     /**
      * Set the [IsHTMLDDA] internal slot.
      */
     public void setHTMLDDA(boolean htmlDDA) {
         this.htmlDDA = htmlDDA;
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Mark this object as an immutable prototype exotic object.
@@ -1257,6 +1331,26 @@ public non-sealed class JSObject implements JSValue {
         // traverse the prototype chain looking for setters. If a setter is found,
         // call it with the primitive receiver. Otherwise return false.
         return setWithPrimitiveReceiver(key, value, receiver);
+    }
+
+    private boolean shouldSkipLegacyCallerFrame(StackFrame stackFrame) {
+        JSFunction stackFunction = stackFrame.getFunction();
+        if (stackFunction instanceof JSNativeFunction nativeFunction) {
+            String functionName = nativeFunction.getName();
+            return JSKeyword.EVAL.equals(functionName);
+        }
+        if (stackFunction instanceof JSBytecodeFunction bytecodeFunction) {
+            String functionName = bytecodeFunction.getName();
+            if ("<eval>".equals(functionName)) {
+                return true;
+            } else {
+                String importMetaFilename = bytecodeFunction.getImportMetaFilename();
+                return importMetaFilename != null
+                        && !importMetaFilename.isEmpty()
+                        && importMetaFilename.equals(functionName);
+            }
+        }
+        return false;
     }
 
     // JSValue implementation

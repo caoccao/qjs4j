@@ -1985,7 +1985,21 @@ public final class OpcodeHandler {
         }
 
         // Call the iterator method to get an iterator
-        JSValue iterator = callCallableValue(executionContext.virtualMachine.context, iteratorMethod, iterable, JSValue.NO_ARGS);
+        JSValue iterator;
+        try {
+            iterator = callCallableValue(executionContext.virtualMachine.context, iteratorMethod, iterable, JSValue.NO_ARGS);
+        } catch (JSException e) {
+            executionContext.virtualMachine.pendingException = e.getErrorValue();
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc += op.getSize();
+            return;
+        }
         if (executionContext.virtualMachine.context.hasPendingException()) {
             executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
             executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
@@ -2170,52 +2184,85 @@ public final class OpcodeHandler {
             if (!JSTypeChecking.isCallable(nextMethod)) {
                 String actualType = nextMethodStackValue == null ? "null" : nextMethodStackValue.getClass().getSimpleName();
                 String iterType = iteratorStackValue == null ? "null" : iteratorStackValue.getClass().getSimpleName();
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError(
                         "Next method must be a function in FOR_OF_NEXT (nextMethod="
-                                + actualType + ", iterator=" + iterType + ")"));
+                                + actualType + ", iterator=" + iterType + ")");
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
 
-            JSValue result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iterator, JSValue.NO_ARGS);
+            JSValue result;
+            try {
+                result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iterator, JSValue.NO_ARGS);
+            } catch (JSException e) {
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.pendingException = e.getErrorValue();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
+            } catch (JSVirtualMachineException e) {
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
 
             // Check for pending exception (e.g., TypedArray detachment during iteration)
             if (executionContext.virtualMachine.context.hasPendingException()) {
-                // Restore stack before throwing
-                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-                for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-                    executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
-                }
-                for (int i = depth - 1; i >= 0; i--) {
-                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                    executionContext.virtualMachine.forOfTempValues[i] = null;
-                }
-                JSValue pendingEx = executionContext.virtualMachine.context.getPendingException();
-                if (pendingEx instanceof JSError jsError) {
-                    throw new JSVirtualMachineException(jsError);
-                }
-                throw new JSVirtualMachineException("Iterator next threw", pendingEx);
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
 
             if (!(result instanceof JSObject resultObj)) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object");
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
 
             // Get the done property
             JSValue doneValue = resultObj.get(PropertyKey.DONE);
             if (executionContext.virtualMachine.context.hasPendingException()) {
-                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-                for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-                    executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
-                }
-                for (int i = depth - 1; i >= 0; i--) {
-                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                    executionContext.virtualMachine.forOfTempValues[i] = null;
-                }
-                JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-                if (pendingException instanceof JSError jsError) {
-                    throw new JSVirtualMachineException(jsError);
-                }
-                throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
+                restoreForOfStateWithoutIteratorCloseMarker(
+                        executionContext,
+                        preservedMarkers,
+                        preservedMarkerCount,
+                        depth);
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
             done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
             if (done) {
@@ -2228,19 +2275,16 @@ public final class OpcodeHandler {
                 }
                 value = resultObj.get(PropertyKey.VALUE);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-                    for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-                        executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
-                    }
-                    for (int i = depth - 1; i >= 0; i--) {
-                        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                        executionContext.virtualMachine.forOfTempValues[i] = null;
-                    }
-                    JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-                    if (pendingException instanceof JSError jsError) {
-                        throw new JSVirtualMachineException(jsError);
-                    }
-                    throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+                    restoreForOfStateWithoutIteratorCloseMarker(
+                            executionContext,
+                            preservedMarkers,
+                            preservedMarkerCount,
+                            depth);
+                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                    executionContext.virtualMachine.context.clearPendingException();
+                    executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                    executionContext.pc = pc + op.getSize();
+                    return;
                 }
                 if (value == null) {
                     value = JSUndefined.INSTANCE;
@@ -2266,6 +2310,7 @@ public final class OpcodeHandler {
     }
 
     static void handleForOfStart(Opcode op, ExecutionContext executionContext) {
+        int pc = executionContext.pc;
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
         // Pop the iterable from the stack
         JSValue iterable = executionContext.virtualMachine.valueStack.pop();
@@ -2278,8 +2323,11 @@ public final class OpcodeHandler {
             // Try to auto-box the primitive
             iterableObj = executionContext.virtualMachine.toObject(iterable);
             if (iterableObj == null) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwTypeError("Object is not iterable");
+                executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+                executionContext.pc = pc + op.getSize();
+                return;
             }
         }
 
@@ -2287,41 +2335,64 @@ public final class OpcodeHandler {
         JSValue iteratorMethod = iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Object is not iterable", pendingException);
+            executionContext.virtualMachine.pendingException = pendingException;
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         if (!JSTypeChecking.isCallable(iteratorMethod)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("Object is not iterable");
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         // Call the Symbol.iterator method to get an iterator
         // Use the original iterable value for the 'this' binding, not the boxed version
-        JSValue iterator = callCallableValue(executionContext.virtualMachine.context, iteratorMethod, iterable, JSValue.NO_ARGS);
+        JSValue iterator;
+        try {
+            iterator = callCallableValue(executionContext.virtualMachine.context, iteratorMethod, iterable, JSValue.NO_ARGS);
+        } catch (JSException e) {
+            executionContext.virtualMachine.pendingException = e.getErrorValue();
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
+        } catch (JSVirtualMachineException e) {
+            executionContext.virtualMachine.capturePendingExceptionFromVmOrContext(e);
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         if (executionContext.virtualMachine.context.hasPendingException()) {
             JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator method threw", pendingException);
+            executionContext.virtualMachine.pendingException = pendingException;
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         if (!(iterator instanceof JSObject iteratorObj)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
+            executionContext.virtualMachine.pendingException =
+                    executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object");
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         // Get the next() method from the iterator
         JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
         if (executionContext.virtualMachine.context.hasPendingException()) {
             JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator next lookup threw", pendingException);
+            executionContext.virtualMachine.pendingException = pendingException;
+            executionContext.virtualMachine.context.clearPendingException();
+            executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
 
         // Per spec (GetIterator step 5): store the next value as-is.
@@ -2335,7 +2406,7 @@ public final class OpcodeHandler {
         executionContext.virtualMachine.valueStack.push(nextMethod);       // next() method
         executionContext.virtualMachine.valueStack.pushStackValue(JSCatchOffset.ITERATOR_CLOSE_MARKER);
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
-        executionContext.pc += op.getSize();
+        executionContext.pc = pc + op.getSize();
     }
 
     static void handleGetArg(Opcode op, ExecutionContext executionContext) {
@@ -6277,6 +6348,10 @@ public final class OpcodeHandler {
                     } else {
                         stack[sp++] = result;
                     }
+                } catch (JSException e) {
+                    virtualMachine.pendingException = e.getErrorValue();
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
                 } catch (JSVirtualMachineException e) {
                     virtualMachine.capturePendingExceptionFromVmOrContext(e);
                     stack[sp++] = JSUndefined.INSTANCE;
@@ -6429,6 +6504,21 @@ public final class OpcodeHandler {
             return dynamicValue != null ? dynamicValue : JSUndefined.INSTANCE;
         }
         return executionContext.frame.getVarRef(varRefIndex);
+    }
+
+    private static void restoreForOfStateWithoutIteratorCloseMarker(
+            ExecutionContext executionContext,
+            JSStackValue[] preservedMarkers,
+            int preservedMarkerCount,
+            int depth) {
+        if (preservedMarkers != null) {
+            for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+            }
+        }
+        for (int valueOffset = 0; valueOffset < depth; valueOffset++) {
+            executionContext.virtualMachine.forOfTempValues[valueOffset] = null;
+        }
     }
 
     private static void writeVarRefValue(ExecutionContext executionContext, int varRefIndex, JSValue value) {

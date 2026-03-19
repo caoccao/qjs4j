@@ -92,6 +92,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             String name = funcName.getName();
             if (JSKeyword.EVAL.equals(name) || JSKeyword.ARGUMENTS.equals(name)) {
                 throw new JSSyntaxErrorException("invalid function name in strict code");
+            } else if (parserContext.isStrictReservedIdentifier(name)) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
             }
         }
 
@@ -101,6 +103,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             for (String paramName : boundNames) {
                 if (JSKeyword.EVAL.equals(paramName) || JSKeyword.ARGUMENTS.equals(paramName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+                } else if (parserContext.isStrictReservedIdentifier(paramName)) {
+                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
                 }
             }
         }
@@ -109,6 +113,8 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             for (String restName : restBoundNames) {
                 if (JSKeyword.EVAL.equals(restName) || JSKeyword.ARGUMENTS.equals(restName)) {
                     throw new JSSyntaxErrorException("Unexpected eval or arguments in strict mode");
+                } else if (parserContext.isStrictReservedIdentifier(restName)) {
+                    throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
                 }
             }
         }

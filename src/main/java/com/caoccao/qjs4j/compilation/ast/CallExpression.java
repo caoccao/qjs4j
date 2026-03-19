@@ -119,6 +119,16 @@ public final class CallExpression extends Expression {
                 && !(getCallee() instanceof Identifier id && JSKeyword.SUPER.equals(id.getName()));
     }
 
+    public boolean isDirectEvalCall() {
+        if (isOptional()) {
+            return false;
+        }
+        if (!(getCallee() instanceof Identifier calleeIdentifier)) {
+            return false;
+        }
+        return JSKeyword.EVAL.equals(calleeIdentifier.getName());
+    }
+
     public boolean isOptional() {
         return optional;
     }

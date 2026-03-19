@@ -683,39 +683,14 @@ public final class JSGlobalObject {
         functionPrototype.defineProperty(PropertyKey.fromString("call"), new JSNativeFunction(context, "call", 1, FunctionPrototype::call), PropertyDescriptor.DataState.ConfigurableWritable);
         functionPrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, FunctionPrototype::toString_), PropertyDescriptor.DataState.ConfigurableWritable);
 
-        // Add 'arguments' and 'caller' as accessor properties per QuickJS js_throw_type_error.
-        // For non-strict bytecode functions with prototype (regular sloppy functions),
-        // the getter returns undefined. For strict, arrow, async, generator functions
-        // or setter calls, it throws TypeError.
+        String restrictedFunctionPropertyMessage =
+                "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them";
+
+        // Shared %ThrowTypeError% intrinsic for strict arguments.callee and restricted accessors.
         JSNativeFunction throwTypeError = new JSNativeFunction(context, "",
                 0,
                 (childContext, thisObj, args) -> {
-                    if (thisObj instanceof JSBytecodeFunction bytecodeFunc) {
-                        if (!bytecodeFunc.isStrict() && bytecodeFunc.isConstructor() && args.length == 0) {
-                            StackFrame frame = childContext.getVirtualMachine().getCurrentFrame();
-                            while (frame != null && frame.getFunction() != bytecodeFunc) {
-                                frame = frame.getCaller();
-                            }
-                            if (frame == null || frame.getCaller() == null) {
-                                return JSNull.INSTANCE;
-                            }
-                            StackFrame callerFrame = frame.getCaller();
-                            if (callerFrame.getCaller() == null) {
-                                return JSNull.INSTANCE;
-                            }
-                            JSFunction callerFunction = callerFrame.getFunction();
-                            if (callerFunction instanceof JSBytecodeFunction callerBytecodeFunction
-                                    && !callerBytecodeFunction.isStrict()
-                                    && !callerBytecodeFunction.isArrow()
-                                    && !callerBytecodeFunction.isAsync()
-                                    && !callerBytecodeFunction.isGenerator()) {
-                                return callerBytecodeFunction;
-                            }
-                            return JSNull.INSTANCE;
-                        }
-                    }
-                    return childContext.throwTypeError(
-                            "'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them");
+                    return childContext.throwTypeError(restrictedFunctionPropertyMessage);
                 });
         // Per ES spec 10.2.4: %ThrowTypeError% is frozen with non-configurable length and name.
         throwTypeError.defineProperty(PropertyKey.LENGTH,
@@ -726,8 +701,16 @@ public final class JSGlobalObject {
         // Store as the %ThrowTypeError% intrinsic for sharing with strict arguments.callee
         context.setThrowTypeErrorIntrinsic(throwTypeError);
 
-        functionPrototype.defineProperty(PropertyKey.fromString("arguments"), throwTypeError, throwTypeError, PropertyDescriptor.AccessorState.Configurable);
-        functionPrototype.defineProperty(PropertyKey.fromString("caller"), throwTypeError, throwTypeError, PropertyDescriptor.AccessorState.Configurable);
+        functionPrototype.defineProperty(
+                PropertyKey.fromString("arguments"),
+                throwTypeError,
+                throwTypeError,
+                PropertyDescriptor.AccessorState.Configurable);
+        functionPrototype.defineProperty(
+                PropertyKey.fromString("caller"),
+                throwTypeError,
+                throwTypeError,
+                PropertyDescriptor.AccessorState.Configurable);
 
         // Function.prototype[Symbol.hasInstance] - implements OrdinaryHasInstance
         // Per ES spec 19.2.3.6: writable: false, enumerable: false, configurable: false
@@ -854,6 +837,10 @@ public final class JSGlobalObject {
         JSNativeFunction generatorFunctionConstructor = new JSNativeFunction(context, "GeneratorFunction", 1,
                 FunctionConstructor::callGenerator,
                 true);
+        JSValue functionConstructorValue = globalObject.get(PropertyKey.fromString(JSFunction.NAME));
+        if (functionConstructorValue instanceof JSObject functionConstructorObject) {
+            generatorFunctionConstructor.setPrototype(functionConstructorObject);
+        }
         generatorFunctionConstructor.defineProperty(PropertyKey.fromString("prototype"), generatorFunctionPrototype, PropertyDescriptor.DataState.None);
         generatorFunctionPrototype.defineProperty(
                 PropertyKey.CONSTRUCTOR,

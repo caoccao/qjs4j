@@ -118,6 +118,9 @@ public final class JSDataView extends JSObject {
                 return getPendingExceptionAsObject(context);
             }
             byteLength = convertedByteLength.intValue();
+            if (buffer.isDetached()) {
+                return context.throwTypeError("ArrayBuffer is detached");
+            }
             if ((long) byteOffset + byteLength > buffer.getByteLength()) {
                 return context.throwRangeError("byteOffset + byteLength out of range");
             }

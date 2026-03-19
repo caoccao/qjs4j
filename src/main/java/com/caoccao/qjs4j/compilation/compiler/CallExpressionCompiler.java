@@ -55,9 +55,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         boolean isTailCall = compilerContext.emitTailCalls;
         compilerContext.emitTailCalls = false;
 
-        if (!callExpr.isOptional()
-                && callExpr.getCallee() instanceof Identifier calleeId
-                && JSKeyword.EVAL.equals(calleeId.getName())) {
+        if (callExpr.isDirectEvalCall()) {
             compilerContext.expressionCompiler.compile(callExpr.getCallee());
             for (Expression arg : callExpr.getArguments()) {
                 compilerContext.expressionCompiler.compile(arg);
@@ -168,9 +166,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             emitPendingPostSuperInitialization();
             return;
         }
-        if (!callExpr.isOptional()
-                && callExpr.getCallee() instanceof Identifier calleeId
-                && JSKeyword.EVAL.equals(calleeId.getName())) {
+        if (callExpr.isDirectEvalCall()) {
             compilerContext.expressionCompiler.compile(callExpr.getCallee());
             compilerContext.emitHelpers.emitArgumentsArrayWithSpread(callExpr.getArguments());
             compilerContext.emitter.emitOpcodeU16(Opcode.APPLY_EVAL, 0);

@@ -141,8 +141,11 @@ public final class Lexer {
                  // Note: AWAIT is intentionally excluded — in non-async context await is
                  // an identifier and '/' is division. In async context, the parser's
                  // rescanAsRegex() path in parsePrimaryExpression handles the DIV→REGEX rescan.
+                 // Note: YIELD is intentionally excluded for the same reason in non-generator
+                 // sloppy code (`yield` may be an identifier, so '/' can be division).
+                 // Generator contexts that need a regex after yield use parser rescan.
                  RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
-                 IF, WHILE, FOR, CASE, YIELD -> true;
+                 IF, WHILE, FOR, CASE -> true;
             default -> false;
         };
     }

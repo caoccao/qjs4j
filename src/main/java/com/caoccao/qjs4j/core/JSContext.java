@@ -437,6 +437,30 @@ public final class JSContext implements AutoCloseable {
     private void captureStackTrace(JSObject error) {
         StringBuilder stackTrace = new StringBuilder();
 
+        StackFrame vmStackFrame = virtualMachine != null ? virtualMachine.getCurrentFrame() : null;
+        while (vmStackFrame != null) {
+            JSFunction frameFunction = vmStackFrame.getFunction();
+            String functionName = "<anonymous>";
+            if (frameFunction != null) {
+                String candidateFunctionName = frameFunction.getName();
+                if (candidateFunctionName != null && !candidateFunctionName.isEmpty()) {
+                    functionName = candidateFunctionName;
+                }
+            }
+            String filename = frameFunction != null ? frameFunction.getImportMetaFilename() : null;
+            if (filename == null || filename.isEmpty()) {
+                filename = "<eval>";
+            }
+            stackTrace.append("    at ")
+                    .append(functionName)
+                    .append(" (")
+                    .append(filename)
+                    .append(":")
+                    .append(1)
+                    .append(")\n");
+            vmStackFrame = vmStackFrame.getCaller();
+        }
+
         for (JSStackFrame frame : callStack) {
             stackTrace.append("    at ")
                     .append(frame.functionName())
@@ -447,7 +471,11 @@ public final class JSContext implements AutoCloseable {
                     .append(")\n");
         }
 
-        error.set(PropertyKey.STACK, new JSString(stackTrace.toString()));
+        error.defineProperty(
+                PropertyKey.STACK,
+                PropertyDescriptor.dataDescriptor(
+                        new JSString(stackTrace.toString()),
+                        PropertyDescriptor.DataState.ConfigurableWritable));
     }
 
     private void chainImportPromiseOntoAsyncDependencies(
@@ -727,6 +755,7 @@ public final class JSContext implements AutoCloseable {
     public JSAggregateError createJSAggregateError(String message) {
         JSAggregateError jsError = new JSAggregateError(this, message);
         transferPrototype(jsError, JSAggregateError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
@@ -968,12 +997,14 @@ public final class JSContext implements AutoCloseable {
     public JSError createJSError(String message) {
         JSError jsError = new JSError(this, message);
         transferPrototype(jsError, JSError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
     public JSEvalError createJSEvalError(String message) {
         JSEvalError jsError = new JSEvalError(this, message);
         transferPrototype(jsError, JSEvalError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
@@ -1112,12 +1143,14 @@ public final class JSContext implements AutoCloseable {
     public JSRangeError createJSRangeError(String message) {
         JSRangeError jsError = new JSRangeError(this, message);
         transferPrototype(jsError, JSRangeError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
     public JSReferenceError createJSReferenceError(String message) {
         JSReferenceError jsError = new JSReferenceError(this, message);
         transferPrototype(jsError, JSReferenceError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
@@ -1160,6 +1193,7 @@ public final class JSContext implements AutoCloseable {
     public JSSuppressedError createJSSuppressedError(String message) {
         JSSuppressedError jsError = new JSSuppressedError(this, message);
         transferPrototype(jsError, JSSuppressedError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
@@ -1172,18 +1206,21 @@ public final class JSContext implements AutoCloseable {
     public JSSyntaxError createJSSyntaxError(String message) {
         JSSyntaxError jsError = new JSSyntaxError(this, message);
         transferPrototype(jsError, JSSyntaxError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
     public JSTypeError createJSTypeError(String message) {
         JSTypeError jsError = new JSTypeError(this, message);
         transferPrototype(jsError, JSTypeError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
     public JSURIError createJSURIError(String message) {
         JSURIError jsError = new JSURIError(this, message);
         transferPrototype(jsError, JSURIError.NAME);
+        captureStackTrace(jsError);
         return jsError;
     }
 
@@ -2987,6 +3024,10 @@ public final class JSContext implements AutoCloseable {
 
     public JSGlobalObject getJSGlobalObject() {
         return jsGlobalObject;
+    }
+
+    public int getMaxStackDepth() {
+        return maxStackDepth;
     }
 
     /**

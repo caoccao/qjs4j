@@ -41,6 +41,15 @@ public final class ShadowRealmPrototype {
     private ShadowRealmPrototype() {
     }
 
+    private static void clearPendingExceptions(JSContext callerContext, JSContext targetContext) {
+        if (callerContext.hasPendingException()) {
+            callerContext.clearPendingException();
+        }
+        if (targetContext.hasPendingException()) {
+            targetContext.clearPendingException();
+        }
+    }
+
     private static void copyNameAndLength(JSContext callerContext, JSContext targetContext,
                                           JSValue targetCallable, JSNativeFunction wrappedFunction) {
         if (!(targetCallable instanceof JSObject targetObject)) {
@@ -50,9 +59,13 @@ public final class ShadowRealmPrototype {
         double wrappedLength = 0;
         try {
             if (targetObject.hasOwnProperty(PropertyKey.LENGTH)) {
+                if (callerContext.hasPendingException() || targetContext.hasPendingException()) {
+                    clearPendingExceptions(callerContext, targetContext);
+                    throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
+                }
                 JSValue targetLength = targetObject.get(PropertyKey.LENGTH);
-                if (targetContext.hasPendingException()) {
-                    targetContext.clearPendingException();
+                if (callerContext.hasPendingException() || targetContext.hasPendingException()) {
+                    clearPendingExceptions(callerContext, targetContext);
                     throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
                 }
                 if (targetLength instanceof JSNumber targetLengthNumber) {
@@ -73,8 +86,8 @@ public final class ShadowRealmPrototype {
             }
 
             JSValue targetName = targetObject.get(PropertyKey.NAME);
-            if (targetContext.hasPendingException()) {
-                targetContext.clearPendingException();
+            if (callerContext.hasPendingException() || targetContext.hasPendingException()) {
+                clearPendingExceptions(callerContext, targetContext);
                 throw new JSException(callerContext.throwTypeError("Cannot wrap callable"));
             }
             String wrappedName = targetName instanceof JSString targetNameString ? targetNameString.value() : "";

@@ -116,8 +116,11 @@ public class Test262Executor {
         return result;
     }
 
-    private TestResult executeAsync(JSContext context, JSRuntime runtime,
-                                    String code, Test262TestCase test) {
+    private TestResult executeAsync(
+            JSContext context,
+            JSRuntime runtime,
+            String code,
+            Test262TestCase test) {
         try {
             // Set execution deadline to prevent hangs in eval/runJobs
             if (syncTimeoutMs > 0) {
@@ -133,18 +136,18 @@ public class Test262Executor {
             boolean[] doneCalled = {false};
 
             JSNativeFunction doneFunction = new JSNativeFunction(context, "$DONE", 1,
-                    (ctx, thisArg, args) -> {
+                    (childContext, thisArg, args) -> {
                         doneCalled[0] = true;
                         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
                             // Error passed to $DONE
                             JSValue doneArg = args[0];
                             if (doneArg instanceof JSObject errorObject) {
                                 JSValue message = errorObject.get(PropertyKey.MESSAGE);
-                                if (!ctx.hasPendingException() && message != null && !(message instanceof JSUndefined)) {
+                                if (!childContext.hasPendingException() && message != null && !(message instanceof JSUndefined)) {
                                     doneResult[0] = message.toString();
                                 } else {
-                                    if (ctx.hasPendingException()) {
-                                        ctx.clearPendingException();
+                                    if (childContext.hasPendingException()) {
+                                        childContext.clearPendingException();
                                     }
                                     doneResult[0] = doneArg.toString();
                                 }
@@ -378,26 +381,32 @@ public class Test262Executor {
 
         host262.set("global", global);
         host262.set("evalScript", new JSNativeFunction(context, "evalScript", 1,
-                (ctx, thisArg, args) -> {
-                    String script = args.length > 0 ? JSTypeConversions.toString(ctx, args[0]).value() : "";
+                (childContext, thisArg, args) -> {
+                    String script = args.length > 0 ? JSTypeConversions.toString(childContext, args[0]).value() : "";
                     return context.eval(script, "<test262-evalScript>", false);
                 }));
 
         host262.set("detachArrayBuffer", new JSNativeFunction(context, "detachArrayBuffer", 1,
-                (ctx, thisArg, args) -> {
+                (childContext, thisArg, args) -> {
                     if (args.length > 0 && args[0] instanceof JSArrayBuffer jsArrayBuffer) {
                         jsArrayBuffer.detach();
                     }
                     return JSUndefined.INSTANCE;
                 }));
 
+        host262.set("gc", new JSNativeFunction(context, "gc", 0,
+                (childContext, thisArg, args) -> {
+                    childContext.getRuntime().gc();
+                    return JSUndefined.INSTANCE;
+                }));
+
         host262.set("createRealm", new JSNativeFunction(context, "createRealm", 0,
-                (ctx, thisArg, args) -> {
+                (childContext, thisArg, args) -> {
                     JSRuntime realmRuntime = context.getRuntime();
                     JSContext realmContext = realmRuntime.createContext();
                     install262Object(realmContext, realmRuntimes, agentHost, null);
 
-                    JSObject realm = ctx.createJSObject();
+                    JSObject realm = childContext.createJSObject();
                     JSObject realmGlobal = realmContext.getGlobalObject();
                     realm.set("global", realmGlobal);
                     realm.set("globalThis", realmGlobal);
@@ -416,7 +425,7 @@ public class Test262Executor {
                 }));
 
         JSNativeFunction isHTMLDDA = new JSNativeFunction(context, "IsHTMLDDA", 0,
-                (ctx, thisArg, args) -> JSNull.INSTANCE);
+                (childContext, thisArg, args) -> JSNull.INSTANCE);
         isHTMLDDA.setHTMLDDA(true);
         host262.set("IsHTMLDDA", isHTMLDDA);
         host262.set("agent", agentHost.createAgentObject(context, realmRuntimes, agent));
@@ -424,7 +433,8 @@ public class Test262Executor {
             global.set("setTimeout", agentHost.createSetTimeoutFunction(context));
         }
         if (global.get("print") instanceof JSUndefined) {
-            global.set("print", new JSNativeFunction(context, "print", 1, (ctx, thisArg, args) -> JSUndefined.INSTANCE));
+            global.set("print", new JSNativeFunction(context, "print", 1,
+                    (childContext, thisArg, args) -> JSUndefined.INSTANCE));
         }
 
         global.set("$262", host262);
