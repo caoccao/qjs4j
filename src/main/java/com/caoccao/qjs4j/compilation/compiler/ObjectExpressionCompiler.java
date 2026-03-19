@@ -83,9 +83,7 @@ final class ObjectExpressionCompiler extends AstNodeCompiler<ObjectExpression> {
             } else {
                 // Regular property: key: value
                 // ES2015 B.3.1: __proto__ in object literal sets prototype
-                if (!prop.isComputed() && !prop.isShorthand()
-                        && prop.getKey() instanceof Identifier id
-                        && "__proto__".equals(id.getName())) {
+                if (prop.isProtoDataProperty()) {
                     // Stack: obj -> obj proto -> obj
                     compilerContext.expressionCompiler.compile(prop.getValue());
                     compilerContext.emitter.emitOpcode(Opcode.SET_PROTO);

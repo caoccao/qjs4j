@@ -23,10 +23,7 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Handles compilation of function expressions.
@@ -76,6 +73,10 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         inheritClassInnerNameCapture(functionContext);
+        inheritVisibleLexicalCapturesForDirectEvalInBody(
+                functionContext,
+                functionExpression.getBody(),
+                functionExpression.getFunctionParams().hasNonSimpleParameters());
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -387,8 +388,50 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
     }
 
+    void inheritVisibleLexicalCapturesForDirectEvalInBody(
+            CompilerContext targetContext,
+            BlockStatement functionBody,
+            boolean hasNonSimpleParameters) {
+        if (hasNonSimpleParameters || !mayContainDirectEvalInBody(functionBody)) {
+            return;
+        }
+        Set<String> visibleOuterBindingNames = new LinkedHashSet<>();
+        for (CompilerScope compilerScope : compilerContext.scopeManager) {
+            for (String localName : compilerScope.getLocals().keySet()) {
+                if (localName == null || localName.startsWith("$")) {
+                    continue;
+                }
+                visibleOuterBindingNames.add(localName);
+            }
+        }
+        for (String bindingName : visibleOuterBindingNames) {
+            if (targetContext.scopeManager.findLocalInScopes(bindingName) != null) {
+                continue;
+            }
+            targetContext.captureResolver.resolveCapturedBindingIndex(bindingName);
+        }
+    }
+
     void inheritVisibleWithObjectBindings(CompilerContext functionContext) {
         functionContext.withObjectManager.addInheritedBindingNames(
                 compilerContext.withObjectManager.getVisibleBindingNamesForNestedFunction(compilerContext.scopeManager));
+    }
+
+    private boolean mayContainDirectEvalInBody(BlockStatement functionBody) {
+        if (compilerContext.sourceCode == null || functionBody == null || functionBody.getLocation() == null) {
+            return false;
+        }
+        int sourceLength = compilerContext.sourceCode.length();
+        int startOffset = Math.max(0, functionBody.getLocation().offset());
+        int endOffset = Math.min(sourceLength, Math.max(startOffset, functionBody.getLocation().endOffset()));
+        if (endOffset <= startOffset) {
+            return false;
+        }
+        String functionBodySourceSlice = compilerContext.sourceCode.substring(startOffset, endOffset);
+        if (functionBodySourceSlice.contains("eval(")) {
+            return true;
+        } else {
+            return functionBodySourceSlice.contains("eval (");
+        }
     }
 }

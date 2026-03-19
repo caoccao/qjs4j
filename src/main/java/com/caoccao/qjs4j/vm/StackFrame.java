@@ -37,6 +37,7 @@ public final class StackFrame {
     private final VarRef[] varRefs;
     private VarRef[] closedVarRefs;
     private VarRef derivedThisRef;
+    private Map<String, Integer> dynamicVarBindingLocalIndexes;
     private Map<String, JSValue> dynamicVarBindings;
     private VarRef[] localVarRefs;
     private JSArguments mappedArgumentsObject;
@@ -99,6 +100,7 @@ public final class StackFrame {
         this.programCounter = 0;
         this.caller = caller;
         this.dynamicVarBindings = null;
+        this.dynamicVarBindingLocalIndexes = null;
     }
 
     /**
@@ -151,6 +153,14 @@ public final class StackFrame {
     }
 
     public JSValue getDynamicVarBinding(String name) {
+        if (dynamicVarBindingLocalIndexes != null) {
+            Integer localIndex = dynamicVarBindingLocalIndexes.get(name);
+            if (localIndex != null
+                    && localIndex >= 0
+                    && localIndex < locals.length) {
+                return locals[localIndex];
+            }
+        }
         if (dynamicVarBindings == null) {
             return null;
         }
@@ -239,10 +249,20 @@ public final class StackFrame {
     }
 
     public boolean hasDynamicVarBinding(String name) {
+        if (dynamicVarBindingLocalIndexes != null && dynamicVarBindingLocalIndexes.containsKey(name)) {
+            return true;
+        }
         return dynamicVarBindings != null && dynamicVarBindings.containsKey(name);
     }
 
+    public boolean hasDynamicVarBindingAlias(String name) {
+        return dynamicVarBindingLocalIndexes != null && dynamicVarBindingLocalIndexes.containsKey(name);
+    }
+
     public boolean removeDynamicVarBinding(String name) {
+        if (hasDynamicVarBindingAlias(name)) {
+            return false;
+        }
         if (dynamicVarBindings == null) {
             return false;
         }
@@ -262,10 +282,29 @@ public final class StackFrame {
     }
 
     public void setDynamicVarBinding(String name, JSValue value) {
+        if (dynamicVarBindingLocalIndexes != null) {
+            Integer localIndex = dynamicVarBindingLocalIndexes.get(name);
+            if (localIndex != null
+                    && localIndex >= 0
+                    && localIndex < locals.length) {
+                locals[localIndex] = value;
+                return;
+            }
+        }
         if (dynamicVarBindings == null) {
             dynamicVarBindings = new HashMap<>();
         }
         dynamicVarBindings.put(name, value);
+    }
+
+    public void setDynamicVarBindingAlias(String name, int localIndex) {
+        if (localIndex < 0 || localIndex >= locals.length) {
+            return;
+        }
+        if (dynamicVarBindingLocalIndexes == null) {
+            dynamicVarBindingLocalIndexes = new HashMap<>();
+        }
+        dynamicVarBindingLocalIndexes.put(name, localIndex);
     }
 
     public void setProgramCounter(int pc) {

@@ -80,8 +80,17 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
         }
 
         if (callExpr.getCallee() instanceof MemberExpression memberExpr
-                && (callExpr.isOptional() || memberExpr.isOptional() || memberExpr.getObject().isPartOfOptionalChain())) {
+                && (callExpr.isOptional() || memberExpr.isPartOfOptionalChain())) {
             compileOptionalMemberCallExpression(callExpr, memberExpr, isTailCall);
+            return;
+        }
+        if (!callExpr.isOptional()
+                && !(callExpr.getCallee() instanceof MemberExpression)
+                && callExpr.isPartOfOptionalChain()) {
+            // Non-optional continuation call after an optional chain segment
+            // (for example, `a?.()()`): if the chained callee is nullish,
+            // the whole call expression short-circuits to undefined.
+            compileOptionalCallExpression(callExpr, isTailCall);
             return;
         }
         if (callExpr.isOptional()) {

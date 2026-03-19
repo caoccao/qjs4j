@@ -134,7 +134,9 @@ final class ExpressionBinaryParser {
         Expression left = expressions.parseUnaryExpression();
 
         if (parserContext.match(TokenType.EXP)) {
-            if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)) {
+            if (isDisallowedExponentiationUnaryBaseToken(firstTokenType)
+                    || (left instanceof AwaitExpression
+                    && !parserContext.isParenthesizedExpression(left))) {
                 throw new JSSyntaxErrorException("Unary operator used immediately before exponentiation expression");
             }
             SourceLocation location = parserContext.getLocation();

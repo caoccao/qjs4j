@@ -69,6 +69,10 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
+        compilerContext.functionExpressionCompiler.inheritVisibleLexicalCapturesForDirectEvalInBody(
+                functionContext,
+                funcDecl.getBody(),
+                funcDecl.getFunctionParams().hasNonSimpleParameters());
 
         // Check for "use strict" directive early and update strict mode
         // This ensures nested functions inherit the correct strict mode
@@ -259,7 +263,9 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         } else {
             // Declare the function as a global variable or in the current scope
             if (compilerContext.inGlobalScope) {
-                compilerContext.nonDeletableGlobalBindings.add(functionName);
+                if (!compilerContext.evalMode) {
+                    compilerContext.nonDeletableGlobalBindings.add(functionName);
+                }
                 compilerContext.emitter.emitOpcodeAtom(Opcode.PUT_VAR, functionName);
             } else {
                 // Declare it as a local

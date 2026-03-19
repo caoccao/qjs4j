@@ -151,6 +151,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         compilerContext.scopeManager.enterScope();
 
         List<Statement> body = program.getBody();
+        boolean deferFunctionHoistingUntilAfterVarLocals = useLocalProgramScope;
 
         // Single pass: pre-declare TDZ locals, register global bindings, and hoist functions
         Set<String> hoistedFunctionNames = new HashSet<>();
@@ -181,9 +182,14 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                         compilerContext.tdzLocals.add(lexicalName);
                     }
                 }
-                // Register non-deletable global bindings for all variable declarations
-                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
-                    compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), compilerContext.nonDeletableGlobalBindings);
+                // Script/global var bindings are non-deletable. Direct eval var/function
+                // bindings are handled dynamically in JSGlobalObject.eval().
+                if (!compilerContext.evalMode) {
+                    for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                        compilerContext.compilerAnalysis.collectPatternBindingNames(
+                                declarator.getId(),
+                                compilerContext.nonDeletableGlobalBindings);
+                    }
                 }
                 // Collect var names for hoisting
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
@@ -192,9 +198,13 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             } else if (stmt instanceof FunctionDeclaration funcDecl) {
                 if (funcDecl.getId() != null) {
                     hoistedFunctionNames.add(funcDecl.getId().getName());
-                    compilerContext.nonDeletableGlobalBindings.add(funcDecl.getId().getName());
+                    if (!compilerContext.evalMode) {
+                        compilerContext.nonDeletableGlobalBindings.add(funcDecl.getId().getName());
+                    }
                 }
-                compilerContext.functionDeclarationCompiler.compile(funcDecl);
+                if (!deferFunctionHoistingUntilAfterVarLocals) {
+                    compilerContext.functionDeclarationCompiler.compile(funcDecl);
+                }
             } else {
                 // Collect var names from other statements (for, try, if, etc.)
                 compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
@@ -215,6 +225,14 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                 } else {
                     compilerContext.emitHelpers.emitConditionalVarInit(varName);
+                }
+            }
+        }
+
+        if (deferFunctionHoistingUntilAfterVarLocals) {
+            for (Statement statement : body) {
+                if (statement instanceof FunctionDeclaration functionDeclaration) {
+                    compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
                 }
             }
         }

@@ -166,6 +166,17 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         }
     }
 
+    private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
+        if (pattern instanceof Identifier identifier) {
+            return identifier;
+        }
+        if (pattern instanceof AssignmentPattern assignmentPattern
+                && assignmentPattern.getLeft() instanceof Identifier identifier) {
+            return identifier;
+        }
+        return null;
+    }
+
     private void maybePreResolveBindingIdentifierReference(Identifier bindingIdentifier) {
         if (!compilerContext.useExistingBindingInParentScopes || bindingIdentifier == null) {
             return;
@@ -191,16 +202,5 @@ final class ObjectPatternCompiler extends AstNodeCompiler<ObjectPattern> {
         compilerContext.preResolvedBindingReferences
                 .computeIfAbsent(bindingName, ignored -> new ArrayDeque<>())
                 .addLast(new CompilerContext.PreResolvedReference(objectLocalIndex, propertyLocalIndex));
-    }
-
-    private Identifier getBindingIdentifierForPreResolve(Pattern pattern) {
-        if (pattern instanceof Identifier identifier) {
-            return identifier;
-        }
-        if (pattern instanceof AssignmentPattern assignmentPattern
-                && assignmentPattern.getLeft() instanceof Identifier identifier) {
-            return identifier;
-        }
-        return null;
     }
 }

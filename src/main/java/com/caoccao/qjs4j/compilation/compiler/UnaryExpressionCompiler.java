@@ -24,6 +24,7 @@ import com.caoccao.qjs4j.core.JSSymbol;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -56,6 +57,10 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "");
                     compilerContext.emitter.emitU8(3); // JS_THROW_ERROR_DELETE_SUPER
                 } else {
+                    if (memberExpr.isPartOfOptionalChain()) {
+                        compileDeleteOptionalMemberExpression(memberExpr);
+                        return;
+                    }
                     // delete obj.prop or delete obj[expr]
                     compilerContext.expressionCompiler.compile(memberExpr.getObject());
 
@@ -348,6 +353,56 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
         compilerContext.emitter.emitOpcode(op);
     }
 
+    private void compileDeleteOptionalMemberExpression(MemberExpression memberExpression) {
+        ArrayList<MemberExpression> memberChain = new ArrayList<>();
+        Expression currentExpression = memberExpression;
+        while (currentExpression instanceof MemberExpression currentMemberExpression) {
+            memberChain.add(0, currentMemberExpression);
+            if (currentMemberExpression.isOptional()) {
+                break;
+            }
+            currentExpression = currentMemberExpression.getObject();
+        }
+
+        if (memberChain.isEmpty()) {
+            compilerContext.expressionCompiler.compile(memberExpression);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
+            return;
+        }
+
+        MemberExpression optionalRootMemberExpression = memberChain.get(0);
+        compilerContext.expressionCompiler.compile(optionalRootMemberExpression.getObject());
+        compilerContext.emitter.emitOpcode(Opcode.DUP);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int jumpToTrueResult = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        for (int chainIndex = 0; chainIndex < memberChain.size() - 1; chainIndex++) {
+            emitMemberPropertyAccess(memberChain.get(chainIndex));
+        }
+
+        MemberExpression deleteTargetMemberExpression = memberChain.get(memberChain.size() - 1);
+        if (deleteTargetMemberExpression.isComputed()) {
+            compilerContext.expressionCompiler.compile(deleteTargetMemberExpression.getProperty());
+        } else if (deleteTargetMemberExpression.getProperty() instanceof Identifier propertyIdentifier) {
+            compilerContext.emitter.emitOpcodeConstant(
+                    Opcode.PUSH_CONST,
+                    new JSString(propertyIdentifier.getName()));
+        } else if (deleteTargetMemberExpression.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+            throw new JSCompilerException("Unexpected private field '#" + privateIdentifier.getName() + "'");
+        } else {
+            throw new JSCompilerException("Invalid delete target");
+        }
+        compilerContext.emitter.emitOpcode(Opcode.DELETE);
+        int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        compilerContext.emitter.patchJump(jumpToTrueResult, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcode(Opcode.DROP);
+        compilerContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
+
+        compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
+    }
+
     private void emitConstAssignmentError(String name) {
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, name);
@@ -364,5 +419,30 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC_CHECK, localIndex);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         emitConstAssignmentError(name);
+    }
+
+    private void emitMemberPropertyAccess(MemberExpression memberExpression) {
+        if (memberExpression.isComputed()) {
+            compilerContext.expressionCompiler.compile(memberExpression.getProperty());
+            compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
+            return;
+        }
+        if (memberExpression.getProperty() instanceof Identifier propertyIdentifier) {
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propertyIdentifier.getName());
+            return;
+        }
+        if (memberExpression.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+            String fieldName = privateIdentifier.getName();
+            JSSymbol symbol = compilerContext.privateSymbols != null
+                    ? compilerContext.privateSymbols.get(fieldName)
+                    : null;
+            if (symbol == null) {
+                throw new JSCompilerException("Unexpected private field '#" + fieldName + "'");
+            }
+            compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
+            compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
+            return;
+        }
+        throw new JSCompilerException("Invalid member property");
     }
 }

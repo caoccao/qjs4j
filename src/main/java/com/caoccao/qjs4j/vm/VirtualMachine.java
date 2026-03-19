@@ -35,6 +35,7 @@ public final class VirtualMachine {
     static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
     static final JSValue UNINITIALIZED_MARKER = new JSSymbol("UninitializedMarker");
     final JSContext context;
+    final Set<JSObject> exhaustedForOfIterators;
     final Set<JSObject> initializedConstantObjects;
     final StringBuilder propertyAccessChain;  // Track last property access for better error messages
     final boolean trackPropertyAccess;
@@ -62,6 +63,7 @@ public final class VirtualMachine {
         this.valueStack = new CallStack();
         this.context = context;
         this.activeGeneratorState = null;
+        this.exhaustedForOfIterators = Collections.newSetFromMap(new WeakHashMap<>());
         this.initializedConstantObjects = Collections.newSetFromMap(new IdentityHashMap<>());
         this.currentFrame = null;
         this.generatorResumeRecords = List.of();
@@ -406,6 +408,10 @@ public final class VirtualMachine {
         if (activeGeneratorState != null) {
             activeGeneratorState.clearSuspendedExecutionState();
         }
+    }
+
+    void clearForOfIteratorExhausted(JSObject iteratorObject) {
+        exhaustedForOfIterators.remove(iteratorObject);
     }
 
     /**
@@ -1282,8 +1288,16 @@ public final class VirtualMachine {
         return excludedKeys.contains(PropertyKey.fromString(Long.toString(canonicalIndex)));
     }
 
+    boolean isForOfIteratorExhausted(JSObject iteratorObject) {
+        return exhaustedForOfIterators.contains(iteratorObject);
+    }
+
     boolean isUninitialized(JSValue value) {
         return value == UNINITIALIZED_MARKER;
+    }
+
+    void markForOfIteratorExhausted(JSObject iteratorObject) {
+        exhaustedForOfIterators.add(iteratorObject);
     }
 
     NumericPair numericPair(JSValue left, JSValue right) {

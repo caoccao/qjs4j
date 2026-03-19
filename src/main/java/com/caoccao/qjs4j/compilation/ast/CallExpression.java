@@ -27,6 +27,7 @@ public final class CallExpression extends Expression {
     private final List<Expression> arguments;
     private final Expression callee;
     private final boolean optional;
+    private final boolean partOfOptionalChain;
     private Boolean directEvalVarArgumentsInside;
 
     public CallExpression(
@@ -34,10 +35,25 @@ public final class CallExpression extends Expression {
             List<Expression> arguments,
             boolean optional,
             SourceLocation location) {
+        this(
+                callee,
+                arguments,
+                optional,
+                optional || (callee != null && callee.isPartOfOptionalChain()),
+                location);
+    }
+
+    public CallExpression(
+            Expression callee,
+            List<Expression> arguments,
+            boolean optional,
+            boolean partOfOptionalChain,
+            SourceLocation location) {
         super(location);
         this.callee = callee;
         this.arguments = arguments;
         this.optional = optional;
+        this.partOfOptionalChain = partOfOptionalChain;
         directEvalVarArgumentsInside = null;
     }
 
@@ -109,6 +125,6 @@ public final class CallExpression extends Expression {
 
     @Override
     public boolean isPartOfOptionalChain() {
-        return optional || callee.isPartOfOptionalChain();
+        return partOfOptionalChain;
     }
 }

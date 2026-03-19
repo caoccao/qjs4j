@@ -53,7 +53,8 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
             compilerContext.varInGlobalProgram = true;
         }
         for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-            if (compilerContext.inGlobalScope || compilerContext.varInGlobalProgram) {
+            if ((compilerContext.inGlobalScope || compilerContext.varInGlobalProgram)
+                    && !compilerContext.evalMode) {
                 compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), compilerContext.nonDeletableGlobalBindings);
             }
             if (isUsingDeclaration) {

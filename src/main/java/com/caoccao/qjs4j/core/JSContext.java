@@ -109,6 +109,7 @@ public final class JSContext implements AutoCloseable {
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
     private JSValue currentThis;
+    private int evalOverlayLookupSuppressionDepth;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
     // Flag set by the VM's PUT_VAR handler before calling globalObject.set()
@@ -158,6 +159,7 @@ public final class JSContext implements AutoCloseable {
         this.runtime = runtime;
         this.unicodePropertyResolver = new UnicodePropertyResolver();
         this.asyncEvaluationOrderCounter = 0;
+        this.evalOverlayLookupSuppressionDepth = 0;
         this.inBareVariableAssignment = false;
         this.pendingDirectEvalCalls = 0;
         this.stackDepth = 0;
@@ -1983,6 +1985,7 @@ public final class JSContext implements AutoCloseable {
             stackDepth = callStack.size();
             inCatchHandler = false;
             currentThis = jsGlobalObject.getGlobalObject();
+            evalOverlayLookupSuppressionDepth = 0;
             clearPendingException();
             clearErrorStackTrace();
         }
@@ -3064,6 +3067,9 @@ public final class JSContext implements AutoCloseable {
     }
 
     public boolean hasEvalOverlayBinding(String name) {
+        if (evalOverlayLookupSuppressionDepth > 0) {
+            return false;
+        }
         for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
             if (evalOverlayFrame.savedGlobals().containsKey(name)
                     || evalOverlayFrame.absentKeys().contains(name)) {
@@ -3074,6 +3080,9 @@ public final class JSContext implements AutoCloseable {
     }
 
     public boolean hasEvalOverlayFrames() {
+        if (evalOverlayLookupSuppressionDepth > 0) {
+            return false;
+        }
         return !evalOverlayFrames.isEmpty();
     }
 
@@ -4427,6 +4436,12 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    public void popEvalOverlayLookupSuppression() {
+        if (evalOverlayLookupSuppressionDepth > 0) {
+            evalOverlayLookupSuppressionDepth--;
+        }
+    }
+
     /**
      * Pop the current stack frame.
      */
@@ -4492,6 +4507,10 @@ public final class JSContext implements AutoCloseable {
 
     public void pushEvalOverlay(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
         evalOverlayFrames.push(new EvalOverlayFrame(savedGlobals, absentKeys));
+    }
+
+    public void pushEvalOverlayLookupSuppression() {
+        evalOverlayLookupSuppressionDepth++;
     }
 
     /**

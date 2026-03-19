@@ -2502,6 +2502,14 @@ public final class JSGlobalObject {
          * @see <a href="https://tc39.es/ecma262/#sec-eval-x">ECMAScript eval</a>
          */
         public static JSValue eval(JSContext realmContext, JSContext callerContext, JSValue[] args) {
+            return eval(realmContext, callerContext, args, false);
+        }
+
+        public static JSValue eval(
+                JSContext realmContext,
+                JSContext callerContext,
+                JSValue[] args,
+                boolean forceDirectEvalCall) {
             JSValue x = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
             // If x is not a string, return it unchanged
@@ -2510,7 +2518,7 @@ public final class JSGlobalObject {
             }
 
             String code = ((JSString) x).value();
-            boolean isDirectEvalCall = callerContext.consumeScheduledDirectEvalCall();
+            boolean isDirectEvalCall = forceDirectEvalCall;
             boolean isSameRealm = (realmContext == callerContext);
             boolean shouldUseCallerFrameSemantics = isDirectEvalCall && isSameRealm;
 
@@ -2530,6 +2538,7 @@ public final class JSGlobalObject {
                     && callerFrame != null
                     && callerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction && bytecodeFunction.isStrict();
             String[] localVarNames = null;
+            Map<String, Integer> localVarNameToIndex = null;
             Set<String> localVarNameSet = null;
             Map<String, Integer> capturedVarOverlaySlots = null;
             Map<String, JSValue> savedGlobals = null;
@@ -2538,6 +2547,7 @@ public final class JSGlobalObject {
             Set<String> evalVarDeclarations = null;
             Set<String> evalLexDeclarations = null;
             Set<String> evalFunctionDeclarations = null;
+            Set<String> functionVarEnvironmentNames = null;
             boolean parsedEvalDeclarations = false;
             boolean evalCodeStrict = inheritedStrictMode;
             boolean overlayStatePushed = false;
@@ -2568,6 +2578,7 @@ public final class JSGlobalObject {
                     && callerBytecodeFunction != null
                     && callerBytecodeFunction.getBytecode().getLocalVarNames() != null) {
                 localVarNames = callerBytecodeFunction.getBytecode().getLocalVarNames();
+                localVarNameToIndex = new HashMap<>();
                 localVarNameSet = new HashSet<>();
                 capturedVarOverlaySlots = new LinkedHashMap<>();
                 savedGlobals = new HashMap<>();
@@ -2583,6 +2594,7 @@ public final class JSGlobalObject {
                         continue;
                     }
                     localVarNameSet.add(name);
+                    localVarNameToIndex.putIfAbsent(name, i);
                     overlayBinding(global, name, locals[i], savedGlobals, absentKeys, touchedOverlayKeys);
                     // Function name bindings are immutable: make the overlay property
                     // non-writable so PUT_VAR throws TypeError in strict mode and
@@ -2596,40 +2608,35 @@ public final class JSGlobalObject {
                         global.defineProperty(PropertyKey.fromString(name), fnDesc);
                     }
                 }
-                StackFrame lexicalFrame = callerFrame.getCaller();
-                while (lexicalFrame != null && lexicalFrame.getFunction() instanceof JSBytecodeFunction lexicalBytecodeFunction) {
-                    String[] lexicalLocalVarNames = lexicalBytecodeFunction.getBytecode().getLocalVarNames();
-                    JSValue[] lexicalLocals = lexicalFrame.getLocals();
-                    if (lexicalLocalVarNames != null && lexicalLocals != null) {
-                        for (int localIndex = 0;
-                             localIndex < lexicalLocalVarNames.length && localIndex < lexicalLocals.length;
-                             localIndex++) {
-                            String localName = lexicalLocalVarNames[localIndex];
-                            if (localName == null || localName.startsWith("$")) {
-                                continue;
-                            }
-                            if (localVarNameSet.contains(localName)
-                                    || touchedOverlayKeys.contains(localName)) {
-                                continue;
-                            }
-                            if (realmContext.hasEvalOverlayBinding(localName)) {
-                                continue;
-                            }
-                            JSValue lexicalValue = lexicalLocals[localIndex];
-                            if (lexicalValue instanceof JSSymbol symbolValue
-                                    && "UninitializedMarker".equals(symbolValue.getDescription())) {
-                                continue;
-                            }
-                            overlayBinding(
+                IdentityHashMap<StackFrame, Boolean> visitedLexicalFrames = new IdentityHashMap<>();
+                if (callerBytecodeFunction.isEvalDynamicScopeLookupEnabled()
+                        && callerBytecodeFunction.getEvalDynamicScopeFrame() != null) {
+                    StackFrame evalScopeFrame = callerBytecodeFunction.getEvalDynamicScopeFrame();
+                    while (evalScopeFrame != null && visitedLexicalFrames.put(evalScopeFrame, Boolean.TRUE) == null) {
+                        if (evalScopeFrame != callerFrame) {
+                            overlayFrameLocals(
+                                    realmContext,
                                     global,
-                                    localName,
-                                    lexicalValue,
+                                    evalScopeFrame,
+                                    localVarNameSet,
                                     savedGlobals,
                                     absentKeys,
                                     touchedOverlayKeys);
+                            Map<String, JSValue> evalScopeDynamicBindings = evalScopeFrame.getDynamicVarBindings();
+                            if (evalScopeDynamicBindings != null) {
+                                for (Map.Entry<String, JSValue> entry : evalScopeDynamicBindings.entrySet()) {
+                                    overlayBinding(
+                                            global,
+                                            entry.getKey(),
+                                            entry.getValue(),
+                                            savedGlobals,
+                                            absentKeys,
+                                            touchedOverlayKeys);
+                                }
+                            }
                         }
+                        evalScopeFrame = evalScopeFrame.getCaller();
                     }
-                    lexicalFrame = lexicalFrame.getCaller();
                 }
                 VarRef[] callerVarRefs = callerBytecodeFunction.getVarRefs();
                 if (callerVarRefs != null) {
@@ -2769,7 +2776,6 @@ public final class JSGlobalObject {
                         && parsedEvalDeclarations
                         && evalVarDeclarations != null
                         && (callerBytecodeFunction == null || !callerBytecodeFunction.isStrict())) {
-                    Set<String> functionVarEnvironmentNames = null;
                     if (callerBytecodeFunction != null
                             && callerFrame != null
                             && callerFrame.getCaller() != null) {
@@ -2817,7 +2823,20 @@ public final class JSGlobalObject {
                         && absentKeys != null
                         && touchedOverlayKeys != null) {
                     for (String declarationName : evalVarDeclarations) {
-                        if (localVarNameSet != null && localVarNameSet.contains(declarationName)) {
+                        boolean shadowsCallerLocal = localVarNameSet != null
+                                && localVarNameSet.contains(declarationName);
+                        if (shadowsCallerLocal) {
+                            if (!evalCodeStrict
+                                    && callerFrame != null
+                                    && localVarNameToIndex != null) {
+                                Integer localIndex = localVarNameToIndex.get(declarationName);
+                                if (localIndex != null
+                                        && functionVarEnvironmentNames != null
+                                        && functionVarEnvironmentNames.contains(declarationName)
+                                        && (functionNameLocalIndex < 0 || localIndex != functionNameLocalIndex)) {
+                                    callerFrame.setDynamicVarBindingAlias(declarationName, localIndex);
+                                }
+                            }
                             continue;
                         }
                         PropertyKey declarationKey = PropertyKey.fromString(declarationName);
@@ -2832,6 +2851,9 @@ public final class JSGlobalObject {
                                     : JSUndefined.INSTANCE;
                         }
                         overlayBinding(global, declarationName, initialValue, savedGlobals, absentKeys, touchedOverlayKeys);
+                        if (!evalCodeStrict && callerFrame != null) {
+                            callerFrame.setDynamicVarBinding(declarationName, initialValue);
+                        }
                     }
                 }
 
@@ -2882,6 +2904,7 @@ public final class JSGlobalObject {
                 EvalOverlaySnapshot suspendedOverlaySnapshot = null;
                 if (!isDirectEvalCall) {
                     suspendedOverlaySnapshot = realmContext.suspendEvalOverlays();
+                    realmContext.pushEvalOverlayLookupSuppression();
                 }
                 String evalFilename = "<eval>";
                 JSStackFrame callerStackFrame = callerContext.getCurrentStackFrame();
@@ -2896,6 +2919,9 @@ public final class JSGlobalObject {
                             ? realmContext.evalDirect(code, evalFilename, inheritedStrictMode)
                             : realmContext.evalIndirect(code, evalFilename);
                 } finally {
+                    if (!isDirectEvalCall) {
+                        realmContext.popEvalOverlayLookupSuppression();
+                    }
                     if (suspendedOverlaySnapshot != null) {
                         realmContext.resumeEvalOverlays(suspendedOverlaySnapshot);
                     }
@@ -3201,6 +3227,53 @@ public final class JSGlobalObject {
                 }
             }
             global.set(PropertyKey.fromString(name), value != null ? value : JSUndefined.INSTANCE);
+        }
+
+        private static void overlayFrameLocals(
+                JSContext realmContext,
+                JSObject global,
+                StackFrame frame,
+                Set<String> localVarNameSet,
+                Map<String, JSValue> savedGlobals,
+                Set<String> absentKeys,
+                Set<String> touchedOverlayKeys) {
+            if (frame == null || !(frame.getFunction() instanceof JSBytecodeFunction lexicalBytecodeFunction)) {
+                return;
+            }
+            String[] lexicalLocalVarNames = lexicalBytecodeFunction.getBytecode().getLocalVarNames();
+            JSValue[] lexicalLocals = frame.getLocals();
+            if (lexicalLocalVarNames == null || lexicalLocals == null) {
+                return;
+            }
+            for (int localIndex = 0;
+                 localIndex < lexicalLocalVarNames.length && localIndex < lexicalLocals.length;
+                 localIndex++) {
+                String localName = lexicalLocalVarNames[localIndex];
+                if (localName == null || localName.startsWith("$")) {
+                    continue;
+                }
+                if (localVarNameSet != null && localVarNameSet.contains(localName)) {
+                    continue;
+                }
+                if (touchedOverlayKeys != null && touchedOverlayKeys.contains(localName)) {
+                    continue;
+                }
+                if (realmContext.hasEvalOverlayBinding(localName)) {
+                    continue;
+                }
+                JSValue lexicalValue = lexicalLocals[localIndex];
+                if (lexicalValue instanceof JSSymbol symbolValue
+                        && "UninitializedMarker".equals(symbolValue.getDescription())) {
+                    continue;
+                }
+                overlayBinding(
+                        global,
+                        localName,
+                        lexicalValue,
+                        savedGlobals,
+                        absentKeys,
+                        touchedOverlayKeys);
+            }
         }
 
         private static int parseFixedHex(String str, int start, int length) {

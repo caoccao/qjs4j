@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.Bytecode;
+import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
 import com.caoccao.qjs4j.vm.YieldResult;
 
@@ -67,6 +68,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap;
     private Set<JSSymbol> classPrivateSymbols;
     private boolean derivedConstructor;
+    private StackFrame evalDynamicScopeFrame;
+    private boolean evalDynamicScopeLookupEnabled;
     private boolean evalSuperCallAllowed;
     private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
@@ -1629,6 +1632,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedVarNames = this.capturedVarNames;
         copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
         copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
+        copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
+        copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
         return copiedFunction;
     }
 
@@ -1664,6 +1669,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedVarNames = this.capturedVarNames;
         copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
         copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
+        copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
+        copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
         return copiedFunction;
     }
 
@@ -1753,6 +1760,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public JSObject getConstructorPrototype() {
         return prototype;
+    }
+
+    public StackFrame getEvalDynamicScopeFrame() {
+        return evalDynamicScopeFrame;
     }
 
     @Override
@@ -1886,6 +1897,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedNewTarget = capturedNewTarget;
         copiedFunction.capturedThisArg = capturedThisArg;
         copiedFunction.capturedVarNames = capturedVarNames;
+        copiedFunction.evalDynamicScopeFrame = evalDynamicScopeFrame;
+        copiedFunction.evalDynamicScopeLookupEnabled = evalDynamicScopeLookupEnabled;
         return copiedFunction;
     }
 
@@ -1923,6 +1936,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public boolean isDerivedConstructor() {
         return derivedConstructor;
+    }
+
+    public boolean isEvalDynamicScopeLookupEnabled() {
+        return evalDynamicScopeLookupEnabled;
     }
 
     public boolean isEvalSuperCallAllowed() {
@@ -2025,6 +2042,14 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setDerivedConstructor(boolean derivedConstructor) {
         this.derivedConstructor = derivedConstructor;
+    }
+
+    public void setEvalDynamicScopeFrame(StackFrame evalDynamicScopeFrame) {
+        this.evalDynamicScopeFrame = evalDynamicScopeFrame;
+    }
+
+    public void setEvalDynamicScopeLookupEnabled(boolean evalDynamicScopeLookupEnabled) {
+        this.evalDynamicScopeLookupEnabled = evalDynamicScopeLookupEnabled;
     }
 
     public void setEvalSuperCallAllowed(boolean evalSuperCallAllowed) {

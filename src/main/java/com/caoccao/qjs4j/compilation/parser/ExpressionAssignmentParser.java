@@ -543,7 +543,7 @@ final class ExpressionAssignmentParser {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
             // Parenthesized ObjectExpression/ArrayExpression are not valid destructuring targets (spec 13.15.1)
-            if (startTokenType == TokenType.LPAREN
+            if (parserContext.isParenthesizedExpression(left)
                     && (left instanceof ObjectExpression || left instanceof ArrayExpression)) {
                 throw new JSSyntaxErrorException("Invalid left-hand side in assignment");
             }
@@ -705,6 +705,11 @@ final class ExpressionAssignmentParser {
             if (seenRestElement) {
                 throw new JSSyntaxErrorException("Rest element must be last element");
             }
+            if (parserContext.isParenthesizedExpression(elementExpression)
+                    && elementExpression instanceof AssignmentExpression assignmentExpression
+                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            }
             validateAssignmentPatternTarget(extractAssignmentTarget(elementExpression), assignmentOperatorOffset);
         }
         if (seenRestElement
@@ -761,6 +766,11 @@ final class ExpressionAssignmentParser {
     }
 
     private void validateAssignmentPatternTarget(Expression expression, int assignmentOperatorOffset) {
+        if (parserContext.isParenthesizedExpression(expression)) {
+            if (expression instanceof ArrayExpression || expression instanceof ObjectExpression) {
+                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            }
+        }
         if (expression instanceof Identifier identifier) {
             if ("import.meta".equals(identifier.getName())
                     || "new.target".equals(identifier.getName())
@@ -845,7 +855,13 @@ final class ExpressionAssignmentParser {
             if (seenRestElement) {
                 throw new JSSyntaxErrorException("Rest element must be last element");
             }
-            validateAssignmentPatternTarget(extractAssignmentTarget(property.getValue()), assignmentOperatorOffset);
+            Expression propertyValue = property.getValue();
+            if (parserContext.isParenthesizedExpression(propertyValue)
+                    && propertyValue instanceof AssignmentExpression assignmentExpression
+                    && assignmentExpression.getOperator() == AssignmentOperator.ASSIGN) {
+                throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            }
+            validateAssignmentPatternTarget(extractAssignmentTarget(propertyValue), assignmentOperatorOffset);
         }
     }
 }

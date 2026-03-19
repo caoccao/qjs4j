@@ -130,15 +130,30 @@ public final class OpcodeHandler {
     }
 
     private static StackFrame findDynamicVarBindingFrame(ExecutionContext executionContext, String variableName) {
-        if (variableName == null) {
+        if (variableName == null || executionContext.frame == null) {
             return null;
         }
-        StackFrame checkFrame = executionContext.frame;
-        while (checkFrame != null) {
-            if (checkFrame.hasDynamicVarBinding(variableName)) {
-                return checkFrame;
+        StackFrame currentFrame = executionContext.frame;
+        if (currentFrame.hasDynamicVarBinding(variableName)) {
+            return currentFrame;
+        }
+        StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrameForCurrentFunction(executionContext);
+        if (evalDynamicScopeFrame != null
+                && evalDynamicScopeFrame != currentFrame
+                && evalDynamicScopeFrame.hasDynamicVarBinding(variableName)) {
+            return evalDynamicScopeFrame;
+        }
+        JSContext context = executionContext.virtualMachine.context;
+        if (!context.hasEvalOverlayFrames() && evalDynamicScopeFrame == null) {
+            return null;
+        }
+        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
+        StackFrame callerFrame = currentFrame.getCaller();
+        while (callerFrame != null && visitedFrames.put(callerFrame, Boolean.TRUE) == null) {
+            if (callerFrame.hasDynamicVarBinding(variableName)) {
+                return callerFrame;
             }
-            checkFrame = checkFrame.getCaller();
+            callerFrame = callerFrame.getCaller();
         }
         return null;
     }
@@ -153,28 +168,61 @@ public final class OpcodeHandler {
         if (!context.hasEvalOverlayFrames()) {
             return null;
         }
+        boolean hasOverlayBinding = context.hasEvalOverlayBinding(variableName);
+        boolean allowEvalScopedLookup = hasOverlayBinding;
+        if (!allowEvalScopedLookup) {
+            JSFunction currentFunction = executionContext.frame != null ? executionContext.frame.getFunction() : null;
+            if (currentFunction instanceof JSBytecodeFunction currentBytecodeFunction) {
+                allowEvalScopedLookup = currentBytecodeFunction.isEvalDynamicScopeLookupEnabled();
+            }
+        }
+        if (!allowEvalScopedLookup) {
+            return null;
+        }
         StackFrame immediateCallerFrame = executionContext.frame.getCaller();
-        StackFrame checkFrame = immediateCallerFrame;
-        while (checkFrame != null) {
-            if (checkFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
-                String[] localVarNames = bytecodeFunction.getBytecode().getLocalVarNames();
-                JSValue[] localValues = checkFrame.getLocals();
-                if (localVarNames != null && localValues != null) {
-                    for (int localIndex = 0; localIndex < localVarNames.length && localIndex < localValues.length; localIndex++) {
-                        String localVarName = localVarNames[localIndex];
-                        if (!variableName.equals(localVarName)) {
-                            continue;
-                        }
-                        JSValue localValue = localValues[localIndex];
-                        if (localValue == VirtualMachine.UNINITIALIZED_MARKER
-                                && checkFrame != immediateCallerFrame) {
-                            break;
-                        }
-                        return new EvalScopedLocalBinding(checkFrame, localIndex, localValue);
+        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
+        if (immediateCallerFrame != null
+                && visitedFrames.put(immediateCallerFrame, Boolean.TRUE) == null
+                && immediateCallerFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
+            String[] localVarNames = bytecodeFunction.getBytecode().getLocalVarNames();
+            JSValue[] localValues = immediateCallerFrame.getLocals();
+            if (localVarNames != null && localValues != null) {
+                for (int localIndex = 0; localIndex < localVarNames.length && localIndex < localValues.length; localIndex++) {
+                    String localVarName = localVarNames[localIndex];
+                    if (!variableName.equals(localVarName)) {
+                        continue;
                     }
+                    JSValue localValue = localValues[localIndex];
+                    return new EvalScopedLocalBinding(immediateCallerFrame, localIndex, localValue);
                 }
             }
-            checkFrame = checkFrame.getCaller();
+        }
+        if (immediateCallerFrame != null
+                && immediateCallerFrame.getFunction() instanceof JSBytecodeFunction immediateCallerFunction
+                && immediateCallerFunction.isEvalDynamicScopeLookupEnabled()
+                && immediateCallerFunction.getEvalDynamicScopeFrame() != null) {
+            StackFrame evalScopeFrame = immediateCallerFunction.getEvalDynamicScopeFrame();
+            while (evalScopeFrame != null && visitedFrames.put(evalScopeFrame, Boolean.TRUE) == null) {
+                if (evalScopeFrame.getFunction() instanceof JSBytecodeFunction bytecodeFunction) {
+                    String[] localVarNames = bytecodeFunction.getBytecode().getLocalVarNames();
+                    JSValue[] localValues = evalScopeFrame.getLocals();
+                    if (localVarNames != null && localValues != null) {
+                        for (int localIndex = 0; localIndex < localVarNames.length && localIndex < localValues.length; localIndex++) {
+                            String localVarName = localVarNames[localIndex];
+                            if (!variableName.equals(localVarName)) {
+                                continue;
+                            }
+                            JSValue localValue = localValues[localIndex];
+                            if (localValue == VirtualMachine.UNINITIALIZED_MARKER
+                                    && evalScopeFrame != immediateCallerFrame) {
+                                break;
+                            }
+                            return new EvalScopedLocalBinding(evalScopeFrame, localIndex, localValue);
+                        }
+                    }
+                }
+                evalScopeFrame = evalScopeFrame.getCaller();
+            }
         }
         return null;
     }
@@ -1433,9 +1481,20 @@ public final class OpcodeHandler {
         String variableName = executionContext.bytecode.getAtoms()[atomIndex];
         boolean deleted;
         JSContext context = executionContext.virtualMachine.context;
-        if (executionContext.frame.hasDynamicVarBinding(variableName)) {
-            // Eval-created function-scope var bindings are not deletable.
-            deleted = false;
+        StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+        if (dynamicBindingFrame != null) {
+            deleted = internalDeleteDynamicVarBinding(dynamicBindingFrame, variableName);
+            if (deleted
+                    && context.hasEvalOverlayFrames()
+                    && context.hasEvalOverlayBinding(variableName)) {
+                JSObject globalObject = context.getGlobalObject();
+                PropertyKey variableKey = PropertyKey.fromString(variableName);
+                globalObject.delete(variableKey);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                }
+            }
         } else if (context.hasGlobalLexicalBinding(variableName)) {
             // Global lexical bindings are never deletable.
             deleted = false;
@@ -1580,6 +1639,12 @@ public final class OpcodeHandler {
             }
             executionContext.sp = sp;
             internalHandleCall(executionContext, argumentCount, true);
+            if (executionContext.virtualMachine.pendingException != null) {
+                // Let the main execution loop route the pending exception through
+                // catch/finally handlers instead of forcing an early return.
+                executionContext.pc = pc + op.getSize();
+                return;
+            }
             sp = executionContext.sp;
             JSValue result = (JSValue) stack[--sp];
             executionContext.sp = sp;
@@ -1671,6 +1736,16 @@ public final class OpcodeHandler {
             }
             if (symbolRemap != null && !symbolRemap.isEmpty()) {
                 closureFunction.setClassPrivateSymbolRemap(symbolRemap);
+            }
+            StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrame(executionContext);
+            if (evalDynamicScopeFrame == null
+                    && internalHasDirectEvalCall(closureTemplate)
+                    && executionContext.frame != null) {
+                evalDynamicScopeFrame = executionContext.frame;
+            }
+            if (evalDynamicScopeFrame != null) {
+                closureFunction.setEvalDynamicScopeLookupEnabled(true);
+                closureFunction.setEvalDynamicScopeFrame(evalDynamicScopeFrame);
             }
             String importMetaFilename = null;
             JSFunction enclosingFunction = executionContext.frame.getFunction();
@@ -1773,6 +1848,16 @@ public final class OpcodeHandler {
             }
             if (symbolRemap != null && !symbolRemap.isEmpty()) {
                 closureFunction.setClassPrivateSymbolRemap(symbolRemap);
+            }
+            StackFrame evalDynamicScopeFrame = internalResolveEvalDynamicScopeFrame(executionContext);
+            if (evalDynamicScopeFrame == null
+                    && internalHasDirectEvalCall(closureTemplate)
+                    && executionContext.frame != null) {
+                evalDynamicScopeFrame = executionContext.frame;
+            }
+            if (evalDynamicScopeFrame != null) {
+                closureFunction.setEvalDynamicScopeLookupEnabled(true);
+                closureFunction.setEvalDynamicScopeFrame(evalDynamicScopeFrame);
             }
             String importMetaFilename = null;
             JSFunction enclosingFunction = executionContext.frame.getFunction();
@@ -1995,6 +2080,7 @@ public final class OpcodeHandler {
             });
         }
 
+        executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObj);
         // Push iterator, next method, and catch offset (0) onto the stack
         executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
         executionContext.virtualMachine.valueStack.push(nextMethodForStack);       // next() method
@@ -2074,62 +2160,48 @@ public final class OpcodeHandler {
         JSValue nextMethod = nextMethodStackValue instanceof JSValue jsValue ? jsValue : null;
         JSValue iterator = iteratorStackValue instanceof JSValue jsValue ? jsValue : null;
 
-        // Call iterator.next()
-        if (!JSTypeChecking.isCallable(nextMethod)) {
-            String actualType = nextMethodStackValue == null ? "null" : nextMethodStackValue.getClass().getSimpleName();
-            String iterType = iteratorStackValue == null ? "null" : iteratorStackValue.getClass().getSimpleName();
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
-                    "Next method must be a function in FOR_OF_NEXT (nextMethod="
-                            + actualType + ", iterator=" + iterType + ")"));
-        }
-
-        JSValue result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iterator, JSValue.NO_ARGS);
-
-        // Check for pending exception (e.g., TypedArray detachment during iteration)
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            // Restore stack before throwing
-            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-            for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-                executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
-            }
-            for (int i = depth - 1; i >= 0; i--) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                executionContext.virtualMachine.forOfTempValues[i] = null;
-            }
-            JSValue pendingEx = executionContext.virtualMachine.context.getPendingException();
-            if (pendingEx instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator next threw", pendingEx);
-        }
-
-        if (!(result instanceof JSObject resultObj)) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
-        }
-
-        // Get the done property
-        JSValue doneValue = resultObj.get(PropertyKey.DONE);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
-            for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
-                executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
-            }
-            for (int i = depth - 1; i >= 0; i--) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
-                executionContext.virtualMachine.forOfTempValues[i] = null;
-            }
-            JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
-            if (pendingException instanceof JSError jsError) {
-                throw new JSVirtualMachineException(jsError);
-            }
-            throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
-        }
-        boolean done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
-
+        boolean done = false;
         JSValue value = JSUndefined.INSTANCE;
-        if (!done) {
-            value = resultObj.get(PropertyKey.VALUE);
+        boolean iteratorAlreadyDone = iterator instanceof JSObject iteratorObject
+                && executionContext.virtualMachine.isForOfIteratorExhausted(iteratorObject);
+
+        if (!iteratorAlreadyDone) {
+            // Call iterator.next()
+            if (!JSTypeChecking.isCallable(nextMethod)) {
+                String actualType = nextMethodStackValue == null ? "null" : nextMethodStackValue.getClass().getSimpleName();
+                String iterType = iteratorStackValue == null ? "null" : iteratorStackValue.getClass().getSimpleName();
+                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                        "Next method must be a function in FOR_OF_NEXT (nextMethod="
+                                + actualType + ", iterator=" + iterType + ")"));
+            }
+
+            JSValue result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iterator, JSValue.NO_ARGS);
+
+            // Check for pending exception (e.g., TypedArray detachment during iteration)
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                // Restore stack before throwing
+                executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+                for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                    executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+                }
+                for (int i = depth - 1; i >= 0; i--) {
+                    executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                    executionContext.virtualMachine.forOfTempValues[i] = null;
+                }
+                JSValue pendingEx = executionContext.virtualMachine.context.getPendingException();
+                if (pendingEx instanceof JSError jsError) {
+                    throw new JSVirtualMachineException(jsError);
+                }
+                throw new JSVirtualMachineException("Iterator next threw", pendingEx);
+            }
+
+            if (!(result instanceof JSObject resultObj)) {
+                throw new JSVirtualMachineException(
+                        executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+            }
+
+            // Get the done property
+            JSValue doneValue = resultObj.get(PropertyKey.DONE);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
                 for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
@@ -2143,11 +2215,39 @@ public final class OpcodeHandler {
                 if (pendingException instanceof JSError jsError) {
                     throw new JSVirtualMachineException(jsError);
                 }
-                throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+                throw new JSVirtualMachineException("Iterator done lookup threw", pendingException);
             }
-            if (value == null) {
-                value = JSUndefined.INSTANCE;
+            done = JSTypeConversions.toBoolean(doneValue) == JSBoolean.TRUE;
+            if (done) {
+                if (iterator instanceof JSObject iteratorObject) {
+                    executionContext.virtualMachine.markForOfIteratorExhausted(iteratorObject);
+                }
+            } else {
+                if (iterator instanceof JSObject iteratorObject) {
+                    executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObject);
+                }
+                value = resultObj.get(PropertyKey.VALUE);
+                if (executionContext.virtualMachine.context.hasPendingException()) {
+                    executionContext.virtualMachine.valueStack.pushStackValue(catchOffset);
+                    for (int markerOffset = preservedMarkerCount - 1; markerOffset >= 0; markerOffset--) {
+                        executionContext.virtualMachine.valueStack.pushStackValue(preservedMarkers[markerOffset]);
+                    }
+                    for (int i = depth - 1; i >= 0; i--) {
+                        executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.forOfTempValues[i]);
+                        executionContext.virtualMachine.forOfTempValues[i] = null;
+                    }
+                    JSValue pendingException = executionContext.virtualMachine.context.getPendingException();
+                    if (pendingException instanceof JSError jsError) {
+                        throw new JSVirtualMachineException(jsError);
+                    }
+                    throw new JSVirtualMachineException("Iterator value lookup threw", pendingException);
+                }
+                if (value == null) {
+                    value = JSUndefined.INSTANCE;
+                }
             }
+        } else {
+            done = true;
         }
 
         // Push catch_offset back, then restore temp values, then push value and done
@@ -2229,6 +2329,7 @@ public final class OpcodeHandler {
             nextMethod = JSUndefined.INSTANCE;
         }
 
+        executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObj);
         // Push iterator, next method, and catch offset onto the stack.
         executionContext.virtualMachine.valueStack.push(iterator);         // Iterator object
         executionContext.virtualMachine.valueStack.push(nextMethod);       // next() method
@@ -2790,21 +2891,20 @@ public final class OpcodeHandler {
         }
         String variableName = atomPool[atomIndex];
         PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
-        // Check dynamic var bindings and closure VarRefs in current frame and caller frames.
-        // Variables introduced by eval("var x = ...") are stored in the caller frame's
-        // dynamicVarBindings. Inner functions must be able to see these via the scope chain.
-        // VarRef-based closure variables are also checked so that eval() inside class
-        // member functions can resolve the class inner name binding (QuickJS: resolve_scope_var
-        // walks the parent scope chain including eval function closures).
+        StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+        if (dynamicBindingFrame != null) {
+            JSValue variableValue = dynamicBindingFrame.getDynamicVarBinding(variableName);
+            stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
+        // Check closure VarRefs in current frame and caller frames.
+        // VarRef-based closure variables are checked so that eval() inside class
+        // member functions can resolve the class inner name binding.
         StackFrame checkFrame = executionContext.frame;
-        while (checkFrame != null) {
-            if (checkFrame.hasDynamicVarBinding(variableName)) {
-                JSValue variableValue = checkFrame.getDynamicVarBinding(variableName);
-                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
+        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
+        while (checkFrame != null && visitedFrames.put(checkFrame, Boolean.TRUE) == null) {
             JSFunction checkFunction = checkFrame.getFunction();
             if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
                 VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
@@ -2847,6 +2947,20 @@ public final class OpcodeHandler {
                 executionContext.pc = pc + op.getSize();
                 return;
             }
+        }
+        EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
+        if (localBinding != null) {
+            if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwReferenceError(
+                                "Cannot access '" + variableName + "' before initialization");
+                stack[sp++] = JSUndefined.INSTANCE;
+            } else {
+                stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
+            }
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
         if (context.hasGlobalLexicalBinding(variableName)) {
             if (!context.isGlobalLexicalBindingInitialized(variableName)) {
@@ -2925,17 +3039,19 @@ public final class OpcodeHandler {
         }
         String variableName = atomPool[atomIndex];
         PropertyKey propertyKey = executionContext.bytecode.getCachedPropertyKey(atomIndex);
+        StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+        if (dynamicBindingFrame != null) {
+            JSValue variableValue = dynamicBindingFrame.getDynamicVarBinding(variableName);
+            stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
 
-        // Check dynamic var bindings and closure VarRefs in current frame and caller frames.
+        // Check closure VarRefs in current frame and caller frames.
         StackFrame checkFrame = executionContext.frame;
-        while (checkFrame != null) {
-            if (checkFrame.hasDynamicVarBinding(variableName)) {
-                JSValue variableValue = checkFrame.getDynamicVarBinding(variableName);
-                stack[sp++] = variableValue != null ? variableValue : JSUndefined.INSTANCE;
-                executionContext.sp = sp;
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
+        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
+        while (checkFrame != null && visitedFrames.put(checkFrame, Boolean.TRUE) == null) {
             JSFunction checkFunction = checkFrame.getFunction();
             if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
                 VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
@@ -2961,7 +3077,6 @@ public final class OpcodeHandler {
             }
             checkFrame = checkFrame.getCaller();
         }
-
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();
         if (context.hasEvalOverlayBinding(variableName)) {
@@ -2973,6 +3088,20 @@ public final class OpcodeHandler {
                 executionContext.pc = pc + op.getSize();
                 return;
             }
+        }
+        EvalScopedLocalBinding localBinding = findEvalScopedLocalBinding(executionContext, variableName);
+        if (localBinding != null) {
+            if (localBinding.value() == VirtualMachine.UNINITIALIZED_MARKER) {
+                executionContext.virtualMachine.pendingException =
+                        executionContext.virtualMachine.context.throwReferenceError(
+                                "Cannot access '" + variableName + "' before initialization");
+                stack[sp++] = JSUndefined.INSTANCE;
+            } else {
+                stack[sp++] = localBinding.value() != null ? localBinding.value() : JSUndefined.INSTANCE;
+            }
+            executionContext.sp = sp;
+            executionContext.pc = pc + op.getSize();
+            return;
         }
         if (context.hasGlobalLexicalBinding(variableName)) {
             if (!context.isGlobalLexicalBindingInitialized(variableName)) {
@@ -3721,6 +3850,7 @@ public final class OpcodeHandler {
         }
 
         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
+            executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObject);
             JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 if (originalPendingException == null) {
@@ -4616,6 +4746,7 @@ public final class OpcodeHandler {
         JSValue setValue = (JSValue) stack[--sp];
         JSValue propertyValue = (JSValue) stack[--sp];
         JSValue objectValue = (JSValue) stack[--sp];
+        JSContext context = executionContext.virtualMachine.context;
         PropertyKey key = PropertyKey.fromValue(executionContext.virtualMachine.context, propertyValue);
         String variableName = key != null && key.isString() ? key.asString() : null;
 
@@ -4623,6 +4754,15 @@ public final class OpcodeHandler {
             StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
             if (bindingFrame != null) {
                 bindingFrame.setDynamicVarBinding(variableName, setValue);
+                if (context.hasEvalOverlayFrames()
+                        && context.hasEvalOverlayBinding(variableName)) {
+                    JSObject globalObject = context.getGlobalObject();
+                    globalObject.set(key, setValue);
+                    if (context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = context.getPendingException();
+                        context.clearPendingException();
+                    }
+                }
                 executionContext.sp = sp;
                 executionContext.pc = pc + op.getSize();
                 return;
@@ -4648,11 +4788,18 @@ public final class OpcodeHandler {
             return;
         }
 
-        JSContext context = executionContext.virtualMachine.context;
         if (targetObject == context.getGlobalObject() && variableName != null) {
             StackFrame bindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
             if (bindingFrame != null) {
                 bindingFrame.setDynamicVarBinding(variableName, setValue);
+                if (context.hasEvalOverlayFrames()
+                        && context.hasEvalOverlayBinding(variableName)) {
+                    targetObject.set(key, setValue);
+                    if (context.hasPendingException()) {
+                        executionContext.virtualMachine.pendingException = context.getPendingException();
+                        context.clearPendingException();
+                    }
+                }
                 executionContext.sp = sp;
                 executionContext.pc = pc + op.getSize();
                 return;
@@ -4768,17 +4915,23 @@ public final class OpcodeHandler {
         }
         String variableName = atomPool[atomIndex];
         JSValue value = executionContext.pop();
-        // Check dynamic var bindings in current frame and caller frames
-        StackFrame checkFrame = executionContext.frame;
-        while (checkFrame != null) {
-            if (checkFrame.hasDynamicVarBinding(variableName)) {
-                checkFrame.setDynamicVarBinding(variableName, value);
-                executionContext.pc = pc + op.getSize();
-                return;
-            }
-            checkFrame = checkFrame.getCaller();
-        }
         JSContext context = executionContext.virtualMachine.context;
+        StackFrame dynamicBindingFrame = findDynamicVarBindingFrame(executionContext, variableName);
+        if (dynamicBindingFrame != null) {
+            dynamicBindingFrame.setDynamicVarBinding(variableName, value);
+            if (context.hasEvalOverlayFrames()
+                    && context.hasEvalOverlayBinding(variableName)) {
+                JSObject globalObject = context.getGlobalObject();
+                PropertyKey variableKey = PropertyKey.fromString(variableName);
+                globalObject.set(variableKey, value);
+                if (context.hasPendingException()) {
+                    executionContext.virtualMachine.pendingException = context.getPendingException();
+                    context.clearPendingException();
+                }
+            }
+            executionContext.pc = pc + op.getSize();
+            return;
+        }
         PropertyKey variableKey = PropertyKey.fromString(variableName);
         JSObject globalObject = context.getGlobalObject();
         if (context.hasEvalOverlayBinding(variableName) && globalObject.has(variableKey)) {
@@ -5959,6 +6112,13 @@ public final class OpcodeHandler {
         return varRefs;
     }
 
+    private static boolean internalDeleteDynamicVarBinding(StackFrame stackFrame, String variableName) {
+        if (stackFrame.hasDynamicVarBindingAlias(variableName)) {
+            return false;
+        }
+        return stackFrame.removeDynamicVarBinding(variableName);
+    }
+
     private static IdentityHashMap<JSSymbol, JSSymbol> internalGetActivePrivateSymbolRemap(
             ExecutionContext executionContext,
             int sp) {
@@ -6042,10 +6202,19 @@ public final class OpcodeHandler {
                 return;
             }
             try {
+                JSValue result;
                 if (directEvalSyntax && JSKeyword.EVAL.equals(nativeFunc.getName())) {
-                    context.scheduleDirectEvalCall();
+                    JSContext evalRealmContext = nativeFunc.getRealmContext() != null
+                            ? nativeFunc.getRealmContext()
+                            : context;
+                    result = JSGlobalObject.GlobalFunction.eval(
+                            evalRealmContext,
+                            context,
+                            args,
+                            true);
+                } else {
+                    result = nativeFunc.call(context, receiver, args);
                 }
-                JSValue result = nativeFunc.call(context, receiver, args);
                 if (context.hasPendingException()) {
                     virtualMachine.pendingException = context.getPendingException();
                     stack[sp++] = JSUndefined.INSTANCE;
@@ -6158,6 +6327,49 @@ public final class OpcodeHandler {
 
         executionContext.sp = sp;
         virtualMachine.valueStack.stackTop = sp;
+    }
+
+    private static boolean internalHasDirectEvalCall(JSBytecodeFunction bytecodeFunction) {
+        if (bytecodeFunction == null || bytecodeFunction.getBytecode() == null) {
+            return false;
+        }
+        Opcode[] decodedOpcodes = bytecodeFunction.getBytecode().getDecodedOpcodes();
+        if (decodedOpcodes == null) {
+            return false;
+        }
+        for (Opcode decodedOpcode : decodedOpcodes) {
+            if (decodedOpcode == Opcode.EVAL || decodedOpcode == Opcode.APPLY_EVAL) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static StackFrame internalResolveEvalDynamicScopeFrame(ExecutionContext executionContext) {
+        if (executionContext.frame == null
+                || !(executionContext.frame.getFunction() instanceof JSBytecodeFunction currentBytecodeFunction)) {
+            return null;
+        }
+        JSContext context = executionContext.virtualMachine.context;
+        if (context.hasEvalOverlayFrames()) {
+            StackFrame callerFrame = executionContext.frame != null ? executionContext.frame.getCaller() : null;
+            if (callerFrame != null) {
+                return callerFrame;
+            }
+        }
+        if (currentBytecodeFunction.isEvalDynamicScopeLookupEnabled()) {
+            return currentBytecodeFunction.getEvalDynamicScopeFrame();
+        }
+        return null;
+    }
+
+    private static StackFrame internalResolveEvalDynamicScopeFrameForCurrentFunction(ExecutionContext executionContext) {
+        if (executionContext.frame == null
+                || !(executionContext.frame.getFunction() instanceof JSBytecodeFunction currentBytecodeFunction)
+                || !currentBytecodeFunction.isEvalDynamicScopeLookupEnabled()) {
+            return null;
+        }
+        return currentBytecodeFunction.getEvalDynamicScopeFrame();
     }
 
     private static IdentityHashMap<JSSymbol, JSSymbol> internalResolvePrivateSymbolRemap(

@@ -100,6 +100,27 @@ final class ExpressionPrimaryParser {
         }
     }
 
+    private CallExpression createCallExpression(
+            Expression callee,
+            List<Expression> arguments,
+            boolean optional,
+            SourceLocation location) {
+        boolean partOfOptionalChain = optional
+                || (isOptionalChainExpression(callee) && !parserContext.isParenthesizedExpression(callee));
+        return new CallExpression(callee, arguments, optional, partOfOptionalChain, location);
+    }
+
+    private MemberExpression createMemberExpression(
+            Expression object,
+            Expression property,
+            boolean computed,
+            boolean optional,
+            SourceLocation location) {
+        boolean partOfOptionalChain = optional
+                || (isOptionalChainExpression(object) && !parserContext.isParenthesizedExpression(object));
+        return new MemberExpression(object, property, computed, optional, partOfOptionalChain, location);
+    }
+
     Expression parseCallExpression() {
         Expression expr = expressions.parseMemberExpression();
 
@@ -139,7 +160,7 @@ final class ExpressionPrimaryParser {
                 }
 
                 parserContext.expect(TokenType.RPAREN);
-                expr = new CallExpression(expr, args, false, location);
+                expr = createCallExpression(expr, args, false, location);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
@@ -166,31 +187,31 @@ final class ExpressionPrimaryParser {
                         } while (parserContext.match(TokenType.COMMA));
                     }
                     parserContext.expect(TokenType.RPAREN);
-                    expr = new CallExpression(expr, args, true, location);
+                    expr = createCallExpression(expr, args, true, location);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     // Optional computed member: expr?.[prop]
                     parserContext.advance();
                     Expression property = expressions.parseExpression();
                     parserContext.expect(TokenType.RBRACKET);
-                    expr = new MemberExpression(expr, property, true, true, location);
+                    expr = createMemberExpression(expr, property, true, true, location);
                 } else {
                     // Optional member: expr?.prop
                     Expression property = parseMemberPropertyName();
-                    expr = new MemberExpression(expr, property, false, true, location);
+                    expr = createMemberExpression(expr, property, false, true, location);
                 }
             } else if (parserContext.match(TokenType.DOT)) {
                 validateNoCoverInitializedName(expr);
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = parseMemberPropertyName();
-                expr = new MemberExpression(expr, property, false, false, location);
+                expr = createMemberExpression(expr, property, false, false, location);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
                 SourceLocation location = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = expressions.parseExpression();
                 parserContext.expect(TokenType.RBRACKET);
-                expr = new MemberExpression(expr, property, true, false, location);
+                expr = createMemberExpression(expr, property, true, false, location);
             } else {
                 break;
             }
@@ -244,13 +265,13 @@ final class ExpressionPrimaryParser {
                     parserContext.advance();
                     SourceLocation memberLocation = parserContext.getLocation();
                     Expression property = parseMemberPropertyName();
-                    callee = new MemberExpression(callee, property, false, false, memberLocation);
+                    callee = createMemberExpression(callee, property, false, false, memberLocation);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     parserContext.advance();
                     SourceLocation memberLocation = parserContext.getLocation();
                     Expression property = expressions.parseExpression();
                     parserContext.expect(TokenType.RBRACKET);
-                    callee = new MemberExpression(callee, property, true, false, memberLocation);
+                    callee = createMemberExpression(callee, property, true, false, memberLocation);
                 } else if (parserContext.match(TokenType.TEMPLATE)) {
                     if (isOptionalChainExpression(callee)) {
                         throw new JSSyntaxErrorException("Invalid tagged template on optional chain");
@@ -261,6 +282,9 @@ final class ExpressionPrimaryParser {
                 } else {
                     break;
                 }
+            }
+            if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
+                throw new JSSyntaxErrorException("Invalid optional chain from new expression");
             }
 
             List<Expression> args = new ArrayList<>();
@@ -297,14 +321,14 @@ final class ExpressionPrimaryParser {
                 parserContext.advance();
                 SourceLocation memberLocation = parserContext.getLocation();
                 Expression property = parseMemberPropertyName();
-                expr = new MemberExpression(expr, property, false, false, memberLocation);
+                expr = createMemberExpression(expr, property, false, false, memberLocation);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 validateNoCoverInitializedName(expr);
                 parserContext.advance();
                 SourceLocation memberLocation = parserContext.getLocation();
                 Expression property = expressions.parseExpression();
                 parserContext.expect(TokenType.RBRACKET);
-                expr = new MemberExpression(expr, property, true, false, memberLocation);
+                expr = createMemberExpression(expr, property, true, false, memberLocation);
             } else {
                 break;
             }
@@ -376,7 +400,7 @@ final class ExpressionPrimaryParser {
                     } while (parserContext.match(TokenType.COMMA));
                 }
                 parserContext.expect(TokenType.RPAREN);
-                expr = new CallExpression(expr, args, false, loc);
+                expr = createCallExpression(expr, args, false, loc);
             } else if (parserContext.match(TokenType.OPTIONAL_CHAINING)) {
                 SourceLocation loc = parserContext.getLocation();
                 parserContext.advance();
@@ -402,27 +426,27 @@ final class ExpressionPrimaryParser {
                         } while (parserContext.match(TokenType.COMMA));
                     }
                     parserContext.expect(TokenType.RPAREN);
-                    expr = new CallExpression(expr, args, true, loc);
+                    expr = createCallExpression(expr, args, true, loc);
                 } else if (parserContext.match(TokenType.LBRACKET)) {
                     parserContext.advance();
                     Expression property = expressions.parseExpression();
                     parserContext.expect(TokenType.RBRACKET);
-                    expr = new MemberExpression(expr, property, true, true, loc);
+                    expr = createMemberExpression(expr, property, true, true, loc);
                 } else {
                     Expression property = parseMemberPropertyName();
-                    expr = new MemberExpression(expr, property, false, true, loc);
+                    expr = createMemberExpression(expr, property, false, true, loc);
                 }
             } else if (parserContext.match(TokenType.DOT)) {
                 SourceLocation loc = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = parseMemberPropertyName();
-                expr = new MemberExpression(expr, property, false, false, loc);
+                expr = createMemberExpression(expr, property, false, false, loc);
             } else if (parserContext.match(TokenType.LBRACKET)) {
                 SourceLocation loc = parserContext.getLocation();
                 parserContext.advance();
                 Expression property = expressions.parseAssignmentExpression();
                 parserContext.expect(TokenType.RBRACKET);
-                expr = new MemberExpression(expr, property, true, false, loc);
+                expr = createMemberExpression(expr, property, true, false, loc);
             } else {
                 break;
             }
@@ -632,6 +656,7 @@ final class ExpressionPrimaryParser {
                             // Single expression in parens
                             parserContext.inOperatorAllowed = savedIn;
                             parserContext.expect(TokenType.RPAREN);
+                            parserContext.markParenthesizedExpression(firstExpr);
                             yield firstExpr;
                         }
 
@@ -688,6 +713,7 @@ final class ExpressionPrimaryParser {
                     Expression expr = expressions.parseExpression();
                     parserContext.inOperatorAllowed = savedIn;
                     parserContext.expect(TokenType.RPAREN);
+                    parserContext.markParenthesizedExpression(expr);
                     yield expr;
                 }
             }

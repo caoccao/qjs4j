@@ -40,7 +40,7 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
 
         // Detect non-optional continuation of an optional chain (e.g., `.#f` in `o?.c.#f`)
         // The entire chain after `?.` must short-circuit together.
-        if (!memberExpr.isOptional() && memberExpr.getObject().isPartOfOptionalChain()) {
+        if (!memberExpr.isOptional() && memberExpr.isPartOfOptionalChain()) {
             compileOptionalChainFull(memberExpr);
             return;
         }

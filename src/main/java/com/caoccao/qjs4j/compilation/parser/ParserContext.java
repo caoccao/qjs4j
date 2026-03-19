@@ -80,6 +80,7 @@ final class ParserContext {
     final Set<String> moduleLexicalNames = new HashSet<>();
     final boolean moduleMode;
     final Set<String> moduleVarNames = new HashSet<>();
+    final Set<Expression> parenthesizedExpressions;
     final List<String> pendingExportBindings = new ArrayList<>();
     final Deque<int[]> savedFunctionNestingStack = new ArrayDeque<>();
     int asyncFunctionNesting;
@@ -122,6 +123,7 @@ final class ParserContext {
         this.newTargetNesting = newTargetNesting;
         this.superPropertyAllowed = initialSuperPropertyAllowed;
         this.evalPrivateNames = evalPrivateNames != null ? Set.copyOf(evalPrivateNames) : Set.of();
+        this.parenthesizedExpressions = Collections.newSetFromMap(new IdentityHashMap<>());
         lexer.setModuleMode(moduleMode);
         this.currentToken = lexer.nextToken();
         this.nextToken = lexer.nextToken();
@@ -247,6 +249,10 @@ final class ParserContext {
         return c == '\n' || c == '\r' || c == '\u2028' || c == '\u2029';
     }
 
+    boolean isParenthesizedExpression(Expression expression) {
+        return expression != null && parenthesizedExpressions.contains(expression);
+    }
+
     boolean isPatternStartToken(TokenType tokenType) {
         return tokenType == TokenType.IDENTIFIER
                 || tokenType == TokenType.LBRACE
@@ -338,6 +344,12 @@ final class ParserContext {
 
     boolean isYieldIdentifierAllowed() {
         return !strictMode && generatorFunctionNesting == 0;
+    }
+
+    void markParenthesizedExpression(Expression expression) {
+        if (expression != null) {
+            parenthesizedExpressions.add(expression);
+        }
     }
 
     boolean match(TokenType type) {

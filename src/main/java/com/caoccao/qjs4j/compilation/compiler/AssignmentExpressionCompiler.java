@@ -378,6 +378,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 compilerContext.expressionCompiler.compile(memberExpr.getObject());
                 if (memberExpr.isComputed()) {
                     compilerContext.expressionCompiler.compile(memberExpr.getProperty());
+                    compilerContext.emitter.emitOpcode(Opcode.TO_PROPKEY);
                     compilerContext.emitter.emitOpcode(Opcode.DUP2);
                     compilerContext.emitter.emitOpcode(Opcode.GET_ARRAY_EL);
                 } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
@@ -410,6 +411,7 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
         compilerContext.emitter.emitOpcode(Opcode.DROP);
         compilerContext.expressionCompiler.compile(assignExpr.getRight());
         if (left instanceof Identifier identifier
+                && assignExpr.isLhsIdentifierRef()
                 && assignExpr.getRight().isAnonymousFunction()) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, identifier.getName());
         }
@@ -432,7 +434,11 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             String name = id.getName();
             Integer localIndex = compilerContext.scopeManager.findLocalInScopes(name);
             if (localIndex != null) {
-                if (compilerContext.scopeManager.isLocalBindingConst(name)) {
+                if (compilerContext.scopeManager.isLocalBindingFunctionName(name)) {
+                    if (compilerContext.strictMode) {
+                        emitConstAssignmentErrorForLocal(name, localIndex);
+                    }
+                } else if (compilerContext.scopeManager.isLocalBindingConst(name)) {
                     emitConstAssignmentErrorForLocal(name, localIndex);
                 } else if (compilerContext.tdzLocals.contains(name)) {
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_CHECK, localIndex);
@@ -442,7 +448,11 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             } else {
                 Integer capturedIndex = compilerContext.captureResolver.resolveCapturedBindingIndex(name);
                 if (capturedIndex != null) {
-                    if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
+                    if (compilerContext.captureResolver.isCapturedBindingFunctionName(name)) {
+                        if (compilerContext.strictMode) {
+                            emitConstAssignmentErrorForCaptured(name, capturedIndex);
+                        }
+                    } else if (compilerContext.captureResolver.isCapturedBindingImmutable(name)) {
                         emitConstAssignmentErrorForCaptured(name, capturedIndex);
                     } else {
                         compilerContext.emitter.emitOpcode(Opcode.DUP);
