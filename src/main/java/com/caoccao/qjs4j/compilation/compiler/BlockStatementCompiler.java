@@ -67,19 +67,27 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         // so nested function bodies resolve captures against block-scoped names.
         // Also handles labeled function declarations (e.g., "l: function f() {}")
         // per Annex B.3.2.
+        // Suppress Annex B var store during hoisting — it's deferred to the source position.
+        compilerContext.suppressAnnexBVarStore = true;
         for (Statement stmt : block.getBody()) {
             FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
             if (funcDecl != null) {
                 compilerContext.functionDeclarationCompiler.compile(funcDecl);
             }
         }
+        compilerContext.suppressAnnexBVarStore = false;
 
         // Phase 3: compile non-function statements in source order.
+        // For function declarations, emit the Annex B var store at the source position
+        // (the function itself was already hoisted in Phase 2).
         boolean savedIsLastInProgram = compilerContext.isLastInProgram;
         compilerContext.isLastInProgram = false;
         for (Statement stmt : block.getBody()) {
-            if (stmt.unwrapLabeledFunctionDeclaration() != null) {
-                continue; // Already hoisted
+            FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
+            if (hoistedFunction != null) {
+                // Per Annex B.3.3: emit the var store at the source position
+                compilerContext.emitHelpers.emitDeferredAnnexBVarStore(hoistedFunction);
+                continue;
             }
             compilerContext.statementCompiler.compile(stmt);
         }

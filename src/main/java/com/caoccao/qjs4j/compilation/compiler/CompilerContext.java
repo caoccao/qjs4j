@@ -97,6 +97,7 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     boolean isInGeneratorFunction;
     boolean isLastInProgram;
+    boolean suppressAnnexBVarStore;
     LabeledStatementCompiler labeledStatementCompiler;
     LiteralCompiler literalCompiler;
     MemberExpressionCompiler memberExpressionCompiler;

@@ -61,6 +61,9 @@ public final class CharacterProperties {
             case 0x1FBE -> 0x03B9; // GREEK PROSGEGRAMMENI → GREEK SMALL LETTER IOTA
             case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN → small (Unicode 15.0)
             case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE → small (Unicode 15.0)
+            case 0xA7D0 -> 0xA7D1; // LATIN CAPITAL LETTER CLOSED INSULAR G → small (Unicode 15.0)
+            case 0xA7D6 -> 0xA7D7; // LATIN CAPITAL LETTER MIDDLE SCOTS S → small (Unicode 15.0)
+            case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S → small (Unicode 15.0)
             case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA → small (Unicode 15.0)
             case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE → small (Unicode 16.0)
             case 0x212A -> 0x006B; // KELVIN SIGN → k

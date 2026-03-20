@@ -91,6 +91,8 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
 
         // BlockDeclarationInstantiation for switch case block: initialize function declarations.
         // Also handles labeled function declarations (e.g., "l: function f() {}").
+        // Suppress Annex B var store during hoisting — it's deferred to the source position.
+        compilerContext.suppressAnnexBVarStore = true;
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
             for (Statement statement : switchCase.getConsequent()) {
                 FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
@@ -99,6 +101,7 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
                 }
             }
         }
+        compilerContext.suppressAnnexBVarStore = false;
 
         List<Integer> caseJumps = new ArrayList<>();
         List<Integer> caseBodyStarts = new ArrayList<>();
@@ -149,8 +152,11 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
             boolean savedIsLastInProgram = compilerContext.isLastInProgram;
             compilerContext.isLastInProgram = false;
             for (Statement stmt : switchCase.getConsequent()) {
-                if (stmt.unwrapLabeledFunctionDeclaration() != null) {
-                    continue; // already initialized by block declaration instantiation
+                FunctionDeclaration hoistedFunction = stmt.unwrapLabeledFunctionDeclaration();
+                if (hoistedFunction != null) {
+                    // Per Annex B.3.3: emit the var store at the source position
+                    compilerContext.emitHelpers.emitDeferredAnnexBVarStore(hoistedFunction);
+                    continue;
                 }
                 compilerContext.statementCompiler.compile(stmt);
             }

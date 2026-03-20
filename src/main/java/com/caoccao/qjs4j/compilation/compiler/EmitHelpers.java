@@ -67,6 +67,31 @@ final class EmitHelpers {
         }
     }
 
+    /**
+     * Emit the Annex B.3.3 var store at the function declaration's source position.
+     * This copies the block-scoped function value to the enclosing var-scope binding.
+     * Per spec, this happens when the FunctionDeclaration is evaluated, not when hoisted.
+     */
+    void emitDeferredAnnexBVarStore(FunctionDeclaration functionDeclaration) {
+        if (functionDeclaration.getId() == null) {
+            return;
+        }
+        String functionName = functionDeclaration.getId().getName();
+        boolean isAnnexB = compilerContext.annexBFunctionNames.contains(functionName)
+                && !functionDeclaration.isAsync()
+                && !functionDeclaration.isGenerator()
+                && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
+        if (!isAnnexB) {
+            return;
+        }
+        // Load the function from its block-scope local, then store in var scope
+        Integer blockLocalIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
+        if (blockLocalIndex != null) {
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, blockLocalIndex);
+            emitAnnexBVarStore(functionName);
+        }
+    }
+
     void emitArgumentsArrayWithSpread(List<Expression> arguments) {
         compilerContext.emitter.emitOpcodeU16(Opcode.ARRAY_FROM, 0);
 

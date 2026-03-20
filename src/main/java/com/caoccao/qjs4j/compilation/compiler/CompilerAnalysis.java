@@ -441,6 +441,9 @@ final class CompilerAnalysis {
             } else {
                 scanAnnexBStatement(labeledStmt.getBody(), lexicalBindings, result);
             }
+        } else if (stmt instanceof WithStatement withStatement) {
+            // Per Annex B.3.3: function declarations inside with statements are Annex B eligible
+            scanAnnexBStatement(withStatement.getBody(), lexicalBindings, result);
         }
     }
 

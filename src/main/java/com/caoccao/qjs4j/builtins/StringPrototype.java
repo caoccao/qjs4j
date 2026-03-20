@@ -458,6 +458,9 @@ public final class StringPrototype {
             case 0xA7CB -> 0x0264; // LATIN CAPITAL LETTER RAMS HORN -> small (Unicode 15.0)
             case 0x1C89 -> 0x1C8A; // CYRILLIC CAPITAL LETTER TJE -> small (Unicode 15.0)
             case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
+            case 0xA7D0 -> 0xA7D1; // LATIN CAPITAL LETTER CLOSED INSULAR G -> small (Unicode 15.0)
+            case 0xA7D6 -> 0xA7D7; // LATIN CAPITAL LETTER MIDDLE SCOTS S -> small (Unicode 15.0)
+            case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S -> small (Unicode 15.0)
             case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
             default -> {
                 // Vithkuqi capital -> small (Unicode 15.0, offset 0x27)
@@ -480,6 +483,9 @@ public final class StringPrototype {
             case 0x0264 -> 0xA7CB; // LATIN SMALL LETTER RAMS HORN -> CAPITAL (Unicode 15.0)
             case 0x1C8A -> 0x1C89; // CYRILLIC SMALL LETTER TJE -> CAPITAL (Unicode 15.0)
             case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
+            case 0xA7D1 -> 0xA7D0; // LATIN SMALL LETTER CLOSED INSULAR G -> CAPITAL (Unicode 15.0)
+            case 0xA7D7 -> 0xA7D6; // LATIN SMALL LETTER MIDDLE SCOTS S -> CAPITAL (Unicode 15.0)
+            case 0xA7D9 -> 0xA7D8; // LATIN SMALL LETTER SIGMOID S -> CAPITAL (Unicode 15.0)
             case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
             default -> {
                 // Vithkuqi small -> capital (Unicode 15.0, offset 0x27)

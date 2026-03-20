@@ -252,7 +252,7 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
                 && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
         if (localIndex != null) {
-            if (isAnnexB) {
+            if (isAnnexB && !compilerContext.suppressAnnexBVarStore) {
                 // Annex B.3.3 runtime hook: store in both block scope and var scope
                 compilerContext.emitter.emitOpcode(Opcode.DUP);
                 compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
@@ -270,8 +270,7 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
             } else {
                 // Declare it as a local
                 localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
-                if (isAnnexB) {
-                    // Annex B.3.3 runtime hook: store in both block scope and var scope
+                if (isAnnexB && !compilerContext.suppressAnnexBVarStore) {
                     compilerContext.emitter.emitOpcode(Opcode.DUP);
                     compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, localIndex);
                     compilerContext.emitHelpers.emitAnnexBVarStore(functionName);
