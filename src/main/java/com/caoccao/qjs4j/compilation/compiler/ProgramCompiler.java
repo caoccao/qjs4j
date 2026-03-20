@@ -28,6 +28,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
         super(compilerContext);
     }
 
+
     @Override
     void compile(Program program) {
         if (program.isModule()) {
@@ -84,7 +85,8 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 }
                 continue;
             }
-            if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
+            FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
+            if (functionDeclaration != null && functionDeclaration.getId() != null) {
                 hoistedFunctionNames.add(functionDeclaration.getId().getName());
                 compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
                 continue;
@@ -105,7 +107,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
         int effectiveLastIndex = -1;
         for (int statementIndex = body.size() - 1; statementIndex >= 0; statementIndex--) {
-            if (!(body.get(statementIndex) instanceof FunctionDeclaration)) {
+            if (body.get(statementIndex).unwrapLabeledFunctionDeclaration() == null) {
                 effectiveLastIndex = statementIndex;
                 break;
             }
@@ -114,7 +116,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
         for (int statementIndex = 0; statementIndex < body.size(); statementIndex++) {
             Statement statement = body.get(statementIndex);
-            if (statement instanceof FunctionDeclaration) {
+            if (statement.unwrapLabeledFunctionDeclaration() != null) {
                 continue;
             }
 
@@ -195,19 +197,22 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
                 if (variableDeclaration.getKind() == VariableKind.VAR) {
                     compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
                 }
-            } else if (stmt instanceof FunctionDeclaration funcDecl) {
-                if (funcDecl.getId() != null) {
-                    hoistedFunctionNames.add(funcDecl.getId().getName());
-                    if (!compilerContext.evalMode) {
-                        compilerContext.nonDeletableGlobalBindings.add(funcDecl.getId().getName());
-                    }
-                }
-                if (!deferFunctionHoistingUntilAfterVarLocals) {
-                    compilerContext.functionDeclarationCompiler.compile(funcDecl);
-                }
             } else {
-                // Collect var names from other statements (for, try, if, etc.)
-                compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
+                FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
+                if (funcDecl != null) {
+                    if (funcDecl.getId() != null) {
+                        hoistedFunctionNames.add(funcDecl.getId().getName());
+                        if (!compilerContext.evalMode) {
+                            compilerContext.nonDeletableGlobalBindings.add(funcDecl.getId().getName());
+                        }
+                    }
+                    if (!deferFunctionHoistingUntilAfterVarLocals) {
+                        compilerContext.functionDeclarationCompiler.compile(funcDecl);
+                    }
+                } else {
+                    // Collect var names from other statements (for, try, if, etc.)
+                    compilerContext.compilerAnalysis.collectVarNamesFromStatement(stmt, varNames);
+                }
             }
         }
 
@@ -231,8 +236,9 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
         if (deferFunctionHoistingUntilAfterVarLocals) {
             for (Statement statement : body) {
-                if (statement instanceof FunctionDeclaration functionDeclaration) {
-                    compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
+                FunctionDeclaration deferredFuncDecl = statement.unwrapLabeledFunctionDeclaration();
+                if (deferredFuncDecl != null) {
+                    compilerContext.functionDeclarationCompiler.compile(deferredFuncDecl);
                 }
             }
         }
@@ -256,7 +262,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             // Phase 2: Compile all non-FunctionDeclaration statements in source order.
             for (int i = 0; i < body.size(); i++) {
                 Statement stmt = body.get(i);
-                if (stmt instanceof FunctionDeclaration) {
+                if (stmt.unwrapLabeledFunctionDeclaration() != null) {
                     continue; // Already hoisted in Phase 1
                 }
                 compilerContext.statementCompiler.compile(stmt);
@@ -273,7 +279,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
             // Script mode: preserve value of the last expression/try statement.
             int effectiveLastIndex = -1;
             for (int i = body.size() - 1; i >= 0; i--) {
-                if (!(body.get(i) instanceof FunctionDeclaration)) {
+                if (body.get(i).unwrapLabeledFunctionDeclaration() == null) {
                     effectiveLastIndex = i;
                     break;
                 }
@@ -282,7 +288,7 @@ final class ProgramCompiler extends AstNodeCompiler<Program> {
 
             for (int i = 0; i < body.size(); i++) {
                 Statement stmt = body.get(i);
-                if (stmt instanceof FunctionDeclaration) {
+                if (stmt.unwrapLabeledFunctionDeclaration() != null) {
                     continue; // Already hoisted in Phase 1
                 }
 

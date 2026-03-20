@@ -67,6 +67,11 @@ public final class CharacterProperties {
             case 0x212B -> 0x00E5; // ANGSTROM SIGN → a with ring
             case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st
             default -> {
+                // Vithkuqi capital → small (Unicode 15.0, offset 0x27)
+                if (codePoint >= 0x10570 && codePoint <= 0x10595
+                        && codePoint != 0x1057B && codePoint != 0x1058B) {
+                    yield codePoint + 0x27;
+                }
                 // Garay script uppercase → lowercase (Unicode 16.0)
                 if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
                     yield codePoint + 0x20;

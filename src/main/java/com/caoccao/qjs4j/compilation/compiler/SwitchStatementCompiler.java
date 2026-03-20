@@ -74,22 +74,27 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
                     }
                     compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
                     compilerContext.tdzLocals.add(className);
-                } else if (statement instanceof FunctionDeclaration functionDeclaration && functionDeclaration.getId() != null) {
-                    String functionName = functionDeclaration.getId().getName();
-                    Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(functionName);
-                    if (localIndex == null) {
-                        localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
+                } else {
+                    FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
+                    if (functionDeclaration != null && functionDeclaration.getId() != null) {
+                        String functionName = functionDeclaration.getId().getName();
+                        Integer localIndex = compilerContext.scopeManager.currentScope().getLocal(functionName);
+                        if (localIndex == null) {
+                            localIndex = compilerContext.scopeManager.currentScope().declareLocal(functionName);
+                        }
+                        compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
+                        compilerContext.tdzLocals.add(functionName);
                     }
-                    compilerContext.emitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, localIndex);
-                    compilerContext.tdzLocals.add(functionName);
                 }
             }
         }
 
         // BlockDeclarationInstantiation for switch case block: initialize function declarations.
+        // Also handles labeled function declarations (e.g., "l: function f() {}").
         for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
             for (Statement statement : switchCase.getConsequent()) {
-                if (statement instanceof FunctionDeclaration functionDeclaration) {
+                FunctionDeclaration functionDeclaration = statement.unwrapLabeledFunctionDeclaration();
+                if (functionDeclaration != null) {
                     compilerContext.functionDeclarationCompiler.compile(functionDeclaration);
                 }
             }
@@ -144,7 +149,7 @@ final class SwitchStatementCompiler extends AstNodeCompiler<SwitchStatement> {
             boolean savedIsLastInProgram = compilerContext.isLastInProgram;
             compilerContext.isLastInProgram = false;
             for (Statement stmt : switchCase.getConsequent()) {
-                if (stmt instanceof FunctionDeclaration) {
+                if (stmt.unwrapLabeledFunctionDeclaration() != null) {
                     continue; // already initialized by block declaration instantiation
                 }
                 compilerContext.statementCompiler.compile(stmt);

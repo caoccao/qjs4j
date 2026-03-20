@@ -170,7 +170,8 @@ final class EmitHelpers {
 
     /**
      * Emit CLOSE_LOC opcodes for variables in a pattern.
-     * Handles Identifier patterns and can be extended for destructuring.
+     * Recursively handles Identifier, ArrayPattern, ObjectPattern,
+     * AssignmentPattern, and RestElement.
      */
     void emitCloseLocForPattern(Pattern pattern) {
         if (pattern instanceof Identifier id) {
@@ -178,8 +179,28 @@ final class EmitHelpers {
             if (localIdx != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.CLOSE_LOC, localIdx);
             }
+        } else if (pattern instanceof ArrayPattern arrayPattern) {
+            for (Pattern element : arrayPattern.getElements()) {
+                if (element != null) {
+                    emitCloseLocForPattern(element);
+                }
+            }
+        } else if (pattern instanceof ObjectPattern objectPattern) {
+            for (ObjectPatternProperty property : objectPattern.getProperties()) {
+                if (property.getValue() != null) {
+                    emitCloseLocForPattern(property.getValue());
+                }
+            }
+            if (objectPattern.getRestElement() != null) {
+                emitCloseLocForPattern(objectPattern.getRestElement());
+            }
+        } else if (pattern instanceof AssignmentPattern assignmentPattern) {
+            emitCloseLocForPattern(assignmentPattern.getLeft());
+        } else if (pattern instanceof RestElement restElement) {
+            if (restElement.getArgument() != null) {
+                emitCloseLocForPattern(restElement.getArgument());
+            }
         }
-        // Destructuring patterns would need recursive handling here
     }
 
     void emitConditionalVarInit(String name) {

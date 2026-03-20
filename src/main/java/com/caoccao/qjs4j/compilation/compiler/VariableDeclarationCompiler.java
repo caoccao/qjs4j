@@ -35,14 +35,18 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
     void compile(VariableDeclaration varDecl) {
         boolean isUsingDeclaration = varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING;
         boolean isAwaitUsingDeclaration = varDecl.getKind() == VariableKind.AWAIT_USING;
-        if ((varDecl.getKind() == VariableKind.CONST || isUsingDeclaration)
+        if ((varDecl.getKind() == VariableKind.CONST || varDecl.getKind() == VariableKind.LET || isUsingDeclaration)
                 && !compilerContext.inGlobalScope
                 && !compilerContext.varInGlobalProgram) {
             for (VariableDeclarator declarator : varDecl.getDeclarations()) {
-                Set<String> constNames = new HashSet<>();
-                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), constNames);
-                for (String constName : constNames) {
-                    compilerContext.scopeManager.currentScope().declareConstLocal(constName);
+                Set<String> bindingNames = new HashSet<>();
+                compilerContext.compilerAnalysis.collectPatternBindingNames(declarator.getId(), bindingNames);
+                for (String bindingName : bindingNames) {
+                    if (varDecl.getKind() == VariableKind.CONST || isUsingDeclaration) {
+                        compilerContext.scopeManager.currentScope().declareConstLocal(bindingName);
+                    } else {
+                        compilerContext.scopeManager.currentScope().declareLocal(bindingName);
+                    }
                 }
             }
         }

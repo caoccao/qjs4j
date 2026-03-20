@@ -1069,6 +1069,12 @@ public final class VirtualMachine {
                         throw new JSVirtualMachineException(jsError);
                     }
                     throw new JSVirtualMachineException(e.getMessage(), errorValue);
+                } catch (StackOverflowError stackOverflow) {
+                    // Convert JVM StackOverflowError to JS RangeError
+                    restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);
+                    JSValue rangeError = context.throwRangeError("Maximum call stack size exceeded");
+                    context.clearPendingException();
+                    throw new JSVirtualMachineException("Maximum call stack size exceeded", rangeError);
                 } catch (Exception e) {
                     // Restore stack and strict mode on exception
                     restoreExecuteFailureState(restoreStackTop, previousFrame, savedStrictMode);

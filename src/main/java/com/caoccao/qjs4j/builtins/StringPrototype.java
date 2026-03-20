@@ -460,8 +460,14 @@ public final class StringPrototype {
             case 0xA7CC -> 0xA7CD; // LATIN CAPITAL LETTER S WITH DIAGONAL STROKE -> small (Unicode 15.0)
             case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
             default -> {
+                // Vithkuqi capital -> small (Unicode 15.0, offset 0x27)
+                if (codePoint >= 0x10570 && codePoint <= 0x10595
+                        && codePoint != 0x1057B && codePoint != 0x1058B) {
+                    yield codePoint + 0x27;
+                }
+                // Garay uppercase -> lowercase (Unicode 16.0, offset 0x20)
                 if (codePoint >= 0x10D50 && codePoint <= 0x10D65) {
-                    yield codePoint + 0x20; // Garay uppercase -> lowercase (Unicode 16.0)
+                    yield codePoint + 0x20;
                 }
                 yield codePoint;
             }
@@ -476,8 +482,14 @@ public final class StringPrototype {
             case 0xA7CD -> 0xA7CC; // LATIN SMALL LETTER S WITH DIAGONAL STROKE -> CAPITAL (Unicode 15.0)
             case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
             default -> {
+                // Vithkuqi small -> capital (Unicode 15.0, offset 0x27)
+                if (codePoint >= 0x10597 && codePoint <= 0x105BC
+                        && codePoint != 0x105A2 && codePoint != 0x105B2) {
+                    yield codePoint - 0x27;
+                }
+                // Garay lowercase -> uppercase (Unicode 16.0, offset 0x20)
                 if (codePoint >= 0x10D70 && codePoint <= 0x10D85) {
-                    yield codePoint - 0x20; // Garay lowercase -> uppercase (Unicode 16.0)
+                    yield codePoint - 0x20;
                 }
                 yield codePoint;
             }

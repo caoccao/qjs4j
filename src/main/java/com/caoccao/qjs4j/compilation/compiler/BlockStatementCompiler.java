@@ -65,8 +65,11 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
 
         // Phase 2: hoist function declarations after lexical bindings exist,
         // so nested function bodies resolve captures against block-scoped names.
+        // Also handles labeled function declarations (e.g., "l: function f() {}")
+        // per Annex B.3.2.
         for (Statement stmt : block.getBody()) {
-            if (stmt instanceof FunctionDeclaration funcDecl) {
+            FunctionDeclaration funcDecl = stmt.unwrapLabeledFunctionDeclaration();
+            if (funcDecl != null) {
                 compilerContext.functionDeclarationCompiler.compile(funcDecl);
             }
         }
@@ -75,7 +78,7 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         boolean savedIsLastInProgram = compilerContext.isLastInProgram;
         compilerContext.isLastInProgram = false;
         for (Statement stmt : block.getBody()) {
-            if (stmt instanceof FunctionDeclaration) {
+            if (stmt.unwrapLabeledFunctionDeclaration() != null) {
                 continue; // Already hoisted
             }
             compilerContext.statementCompiler.compile(stmt);

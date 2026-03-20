@@ -53,4 +53,20 @@ public abstract sealed class Statement extends ASTNode permits
         }
         return varDeclarators;
     }
+
+    /**
+     * Unwrap nested labeled statements to find a FunctionDeclaration.
+     * Per Annex B.3.2, labeled function declarations in sloppy mode are
+     * hoisted like regular function declarations.
+     * Returns null if the statement is not a (possibly labeled) function declaration.
+     */
+    public FunctionDeclaration unwrapLabeledFunctionDeclaration() {
+        if (this instanceof FunctionDeclaration functionDeclaration) {
+            return functionDeclaration;
+        }
+        if (this instanceof LabeledStatement labeledStatement && labeledStatement.getBody() != null) {
+            return labeledStatement.getBody().unwrapLabeledFunctionDeclaration();
+        }
+        return null;
+    }
 }

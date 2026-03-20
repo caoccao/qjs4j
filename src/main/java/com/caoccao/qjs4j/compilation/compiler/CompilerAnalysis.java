@@ -288,8 +288,11 @@ final class CompilerAnalysis {
                 for (VariableDeclarator d : vd.getDeclarations()) {
                     collectPatternBindingNames(d.getId(), blockLexicals);
                 }
-            } else if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                blockFuncNames.add(fd.getId().getName());
+            } else {
+                FunctionDeclaration unwrappedFunction = s.unwrapLabeledFunctionDeclaration();
+                if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
+                    blockFuncNames.add(unwrappedFunction.getId().getName());
+                }
             }
         }
         // Per B.3.3.1: block-scoped function declarations create lexical bindings.
@@ -297,9 +300,10 @@ final class CompilerAnalysis {
         Set<String> blockLexicalsWithFuncs = new HashSet<>(blockLexicals);
         blockLexicalsWithFuncs.addAll(blockFuncNames);
         for (Statement s : body) {
-            if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                if (fd.isAnnexBSimpleDeclaration() && !blockLexicals.contains(fd.getId().getName())) {
-                    result.add(fd.getId().getName());
+            FunctionDeclaration unwrappedFunction = s.unwrapLabeledFunctionDeclaration();
+            if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
+                if (unwrappedFunction.isAnnexBSimpleDeclaration() && !blockLexicals.contains(unwrappedFunction.getId().getName())) {
+                    result.add(unwrappedFunction.getId().getName());
                 }
             }
             scanAnnexBStatement(s, blockLexicalsWithFuncs, result);
@@ -383,14 +387,15 @@ final class CompilerAnalysis {
             for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
                 collectLexicalBindings(sc.getConsequent(), switchLexicals);
             }
-            for (SwitchStatement.SwitchCase sc : switchStmt.getCases()) {
-                for (Statement s : sc.getConsequent()) {
-                    if (s instanceof FunctionDeclaration fd && fd.getId() != null) {
-                        if (fd.isAnnexBSimpleDeclaration() && !switchLexicals.contains(fd.getId().getName())) {
-                            result.add(fd.getId().getName());
+            for (SwitchStatement.SwitchCase switchCase : switchStmt.getCases()) {
+                for (Statement caseStatement : switchCase.getConsequent()) {
+                    FunctionDeclaration unwrappedFunction = caseStatement.unwrapLabeledFunctionDeclaration();
+                    if (unwrappedFunction != null && unwrappedFunction.getId() != null) {
+                        if (unwrappedFunction.isAnnexBSimpleDeclaration() && !switchLexicals.contains(unwrappedFunction.getId().getName())) {
+                            result.add(unwrappedFunction.getId().getName());
                         }
                     }
-                    scanAnnexBStatement(s, switchLexicals, result);
+                    scanAnnexBStatement(caseStatement, switchLexicals, result);
                 }
             }
         } else if (stmt instanceof ForStatement forStmt) {
@@ -426,6 +431,17 @@ final class CompilerAnalysis {
                 }
             }
             scanAnnexBStatement(forOfStmt.getBody(), forOfLexicals, result);
+        } else if (stmt instanceof LabeledStatement labeledStmt && labeledStmt.getBody() != null) {
+            // Per Annex B.3.2: labeled function declarations are Annex B eligible
+            FunctionDeclaration labeledFunction = labeledStmt.getBody().unwrapLabeledFunctionDeclaration();
+            if (labeledFunction != null && labeledFunction.getId() != null) {
+                if (labeledFunction.isAnnexBSimpleDeclaration() && !lexicalBindings.contains(labeledFunction.getId().getName())) {
+                    result.add(labeledFunction.getId().getName());
+                }
+            } else {
+                scanAnnexBStatement(labeledStmt.getBody(), lexicalBindings, result);
+            }
         }
     }
+
 }
