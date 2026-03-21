@@ -2180,6 +2180,13 @@ public final class JSContext implements AutoCloseable {
                 if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
                     continue;
                 }
+                Map<String, String> importAttributes = extractImportAttributes(bindingMatcher.group(0));
+                if (importAttributes != null) {
+                    String importType = importAttributes.get("type");
+                    if ("text".equals(importType) || "bytes".equals(importType)) {
+                        continue;
+                    }
+                }
                 String specifier = bindingMatcher.group(3);
                 String resolvedSpec;
                 try {
@@ -3388,6 +3395,17 @@ public final class JSContext implements AutoCloseable {
         return !Character.isLetterOrDigit(nextChar) && nextChar != '_' && nextChar != '$';
     }
 
+    private String getDynamicImportCacheKey(String resolvedSpecifier, Map<String, String> importAttributes) {
+        if (importAttributes == null) {
+            return resolvedSpecifier;
+        }
+        String importType = importAttributes.get("type");
+        if ("text".equals(importType) || "bytes".equals(importType)) {
+            return resolvedSpecifier + "\u0000type=" + importType;
+        }
+        return resolvedSpecifier;
+    }
+
     /**
      * Check if in strict mode.
      */
@@ -3423,8 +3441,9 @@ public final class JSContext implements AutoCloseable {
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
+        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
         // Check if the module was pre-loaded (deferred) but not yet evaluated.
-        JSDynamicImportModule preloaded = dynamicImportModuleCache.get(resolvedSpecifier);
+        JSDynamicImportModule preloaded = dynamicImportModuleCache.get(moduleCacheKey);
         if (preloaded != null && preloaded.status() == JSDynamicImportModule.Status.LOADING
                 && preloaded.deferredPreload()) {
             try {
@@ -3488,12 +3507,13 @@ public final class JSContext implements AutoCloseable {
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
         String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
-        JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpecifier);
+        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
+        JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(moduleCacheKey);
         if (moduleRecord == null) {
             moduleRecord = new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
             moduleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
             moduleRecord.setDeferredPreload(true);
-            dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
+            dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
             try {
                 String importType = importAttributes != null ? importAttributes.get("type") : null;
                 // Handle type: 'text' import attribute
@@ -3542,17 +3562,17 @@ public final class JSContext implements AutoCloseable {
                 try {
                     new Compiler(sourceCode, resolvedSpecifier).setContext(this).parse(true);
                 } catch (JSSyntaxErrorException syntaxError) {
-                    dynamicImportModuleCache.remove(resolvedSpecifier);
+                    dynamicImportModuleCache.remove(moduleCacheKey);
                     throw new JSException(throwSyntaxError(syntaxError.getMessage()));
                 } catch (JSCompilerException compilerError) {
-                    dynamicImportModuleCache.remove(resolvedSpecifier);
+                    dynamicImportModuleCache.remove(moduleCacheKey);
                     throw new JSException(throwSyntaxError(compilerError.getMessage()));
                 }
             } catch (IOException ioException) {
-                dynamicImportModuleCache.remove(resolvedSpecifier);
+                dynamicImportModuleCache.remove(moduleCacheKey);
                 throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
             } catch (JSException jsException) {
-                dynamicImportModuleCache.remove(resolvedSpecifier);
+                dynamicImportModuleCache.remove(moduleCacheKey);
                 throw jsException;
             }
         }
@@ -3661,7 +3681,8 @@ public final class JSContext implements AutoCloseable {
             String resolvedSpecifier,
             Set<String> importResolutionStack,
             Map<String, String> importAttributes) {
-        JSDynamicImportModule cachedRecord = dynamicImportModuleCache.get(resolvedSpecifier);
+        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
+        JSDynamicImportModule cachedRecord = dynamicImportModuleCache.get(moduleCacheKey);
         if (cachedRecord != null) {
             if (cachedRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
                 return cachedRecord;
@@ -3679,7 +3700,7 @@ public final class JSContext implements AutoCloseable {
         JSDynamicImportModule moduleRecord =
                 new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
         moduleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-        dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
+        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
 
         try {
             String importType = importAttributes != null ? importAttributes.get("type") : null;
@@ -3793,7 +3814,7 @@ public final class JSContext implements AutoCloseable {
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw jsException;
         } catch (Exception exception) {
-            dynamicImportModuleCache.remove(resolvedSpecifier);
+            dynamicImportModuleCache.remove(moduleCacheKey);
             throw new JSException(throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
     }

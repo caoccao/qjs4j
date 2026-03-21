@@ -85,6 +85,19 @@ public final class ArrayBufferPrototype {
     }
 
     /**
+     * get ArrayBuffer.prototype.immutable
+     * ES2025 immutable ArrayBuffer proposal.
+     * Returns true if the ArrayBuffer is immutable.
+     */
+    public static JSValue getImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArrayBuffer buffer)) {
+            return context.throwTypeError("get ArrayBuffer.prototype.immutable called on non-ArrayBuffer");
+        }
+
+        return JSBoolean.valueOf(buffer.isImmutable());
+    }
+
+    /**
      * get ArrayBuffer.prototype[@@toStringTag]
      * ES2020 24.1.4.4
      * Returns "ArrayBuffer".

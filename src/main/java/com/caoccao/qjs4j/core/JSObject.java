@@ -1137,6 +1137,10 @@ public non-sealed class JSObject implements JSValue {
     }
 
     private boolean setOnReceiver(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
+        if (receiver instanceof JSImportNamespaceObject || receiver instanceof JSDeferredModuleNamespace) {
+            return failSet(key, throwOnFailure);
+        }
+
         // ES2024 OrdinarySetWithOwnDescriptor steps 2c-2e:
         // Use the virtual [[GetOwnPropertyDescriptor]] and [[DefineOwnProperty]]
         // methods on the receiver so that proxy traps are correctly invoked when

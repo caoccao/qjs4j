@@ -887,6 +887,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
         if ("roc".equals(calendar)) {
             return isoYear >= 1912 ? "Minguo" : "Before R.O.C.";
         }
+        if ("islamic-civil".equals(calendar)
+                || "islamic-tbla".equals(calendar)
+                || "islamic-umalqura".equals(calendar)
+                || "islamic".equals(calendar)
+                || "islamic-rgsa".equals(calendar)) {
+            return isoYear >= 622 ? "AH" : "Before AH";
+        }
         if ("buddhist".equals(calendar)
                 || "ethioaa".equals(calendar)
                 || "hebrew".equals(calendar)

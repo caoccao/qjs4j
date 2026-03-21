@@ -114,6 +114,9 @@ public final class JSGlobalObject {
         initializeMathObject();
         initializeJSONObject();
         initializeIntlObject();
+        if (context.getRuntime().getOptions().isTemporalEnabled()) {
+            initializeTemporalObject();
+        }
         initializeReflectObject();
         initializeProxyConstructor();
         initializePromiseConstructor();
@@ -178,6 +181,7 @@ public final class JSGlobalObject {
         // Define getter properties
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("byteLength"), new JSNativeFunction(context, "get byteLength", 0, ArrayBufferPrototype::getByteLength), PropertyDescriptor.AccessorState.Configurable);
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("detached"), new JSNativeFunction(context, "get detached", 0, ArrayBufferPrototype::getDetached), PropertyDescriptor.AccessorState.Configurable);
+        arrayBufferPrototype.defineProperty(PropertyKey.fromString("immutable"), new JSNativeFunction(context, "get immutable", 0, ArrayBufferPrototype::getImmutable), PropertyDescriptor.AccessorState.Configurable);
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("maxByteLength"), new JSNativeFunction(context, "get maxByteLength", 0, ArrayBufferPrototype::getMaxByteLength), PropertyDescriptor.AccessorState.Configurable);
         arrayBufferPrototype.defineProperty(PropertyKey.fromString("resizable"), new JSNativeFunction(context, "get resizable", 0, ArrayBufferPrototype::getResizable), PropertyDescriptor.AccessorState.Configurable);
         arrayBufferPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSArrayBuffer.NAME), PropertyDescriptor.DataState.Configurable);
@@ -1091,6 +1095,166 @@ public final class JSGlobalObject {
         intlObject.defineProperty(PropertyKey.fromString("Locale"), localeConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         globalObject.defineProperty(PropertyKey.fromString("Intl"), intlObject, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    private void initializeTemporalObject() {
+        JSObject temporalObject = context.createJSObject();
+        temporalObject.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Temporal"),
+                PropertyDescriptor.DataState.Configurable);
+
+        JSObject plainMonthDayPrototype = context.createJSObject();
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromString("toLocaleString"),
+                new JSNativeFunction(context, "toLocaleString", 2, this::temporalPlainMonthDayToLocaleString),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Temporal.PlainMonthDay"),
+                PropertyDescriptor.DataState.Configurable);
+
+        JSNativeFunction plainMonthDayConstructor = new JSNativeFunction(
+                context,
+                "PlainMonthDay",
+                2,
+                this::temporalPlainMonthDayConstructorCall,
+                true,
+                true);
+        plainMonthDayConstructor.defineProperty(
+                PropertyKey.fromString("from"),
+                new JSNativeFunction(context, "from", 1, (childContext, thisArg, args) ->
+                        temporalPlainMonthDayFrom(childContext, plainMonthDayPrototype, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        plainMonthDayConstructor.defineProperty(
+                PropertyKey.fromString("prototype"),
+                plainMonthDayPrototype,
+                PropertyDescriptor.DataState.None);
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromString("constructor"),
+                plainMonthDayConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+
+        temporalObject.defineProperty(
+                PropertyKey.fromString("PlainMonthDay"),
+                plainMonthDayConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(
+                PropertyKey.fromString("Temporal"),
+                temporalObject,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    private int parseTemporalPlainMonthDayMonth(JSContext childContext, String monthCode) {
+        if (monthCode == null || monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
+            childContext.throwTypeError("Invalid Temporal.PlainMonthDay value");
+            return -1;
+        }
+        char tens = monthCode.charAt(1);
+        char ones = monthCode.charAt(2);
+        if (!Character.isDigit(tens) || !Character.isDigit(ones)) {
+            childContext.throwTypeError("Invalid Temporal.PlainMonthDay value");
+            return -1;
+        }
+        int month = Integer.parseInt(monthCode.substring(1));
+        if (month < 1 || month > 12) {
+            childContext.throwRangeError("Invalid Temporal.PlainMonthDay value");
+            return -1;
+        }
+        return month;
+    }
+
+    private JSValue temporalPlainMonthDayConstructorCall(JSContext childContext, JSValue thisArg, JSValue[] args) {
+        return childContext.throwTypeError("Temporal.PlainMonthDay constructor cannot be called directly");
+    }
+
+    private JSValue temporalPlainMonthDayFrom(JSContext childContext, JSObject plainMonthDayPrototype, JSValue[] args) {
+        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (!(item instanceof JSObject itemObject)) {
+            return childContext.throwTypeError("Temporal.PlainMonthDay.from requires an object");
+        }
+
+        JSValue monthCodeValue = itemObject.get(PropertyKey.fromString("monthCode"));
+        if (!(monthCodeValue instanceof JSString monthCodeString)) {
+            return childContext.throwTypeError("Invalid Temporal.PlainMonthDay value");
+        }
+        int month = parseTemporalPlainMonthDayMonth(childContext, monthCodeString.value());
+        if (childContext.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue dayValue = itemObject.get(PropertyKey.fromString("day"));
+        double dayNumeric = JSTypeConversions.toNumber(childContext, dayValue).value();
+        if (childContext.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!Double.isFinite(dayNumeric) || Math.floor(dayNumeric) != dayNumeric) {
+            return childContext.throwRangeError("Invalid Temporal.PlainMonthDay value");
+        }
+        int day = (int) dayNumeric;
+        if (day < 1 || day > 31) {
+            return childContext.throwRangeError("Invalid Temporal.PlainMonthDay value");
+        }
+
+        JSValue calendarValue = itemObject.get(PropertyKey.fromString("calendar"));
+        String calendar = "iso8601";
+        if (!(calendarValue instanceof JSUndefined)) {
+            calendar = JSTypeConversions.toString(childContext, calendarValue).value();
+            if (childContext.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        try {
+            java.time.LocalDate.of(1972, month, day);
+        } catch (java.time.DateTimeException e) {
+            return childContext.throwRangeError("Invalid Temporal.PlainMonthDay value");
+        }
+
+        JSObject plainMonthDay = childContext.createJSObject();
+        plainMonthDay.setPrototype(plainMonthDayPrototype);
+        plainMonthDay.set(PropertyKey.fromString("monthCode"), new JSString(String.format(Locale.ROOT, "M%02d", month)));
+        plainMonthDay.set(PropertyKey.fromString("day"), JSNumber.of(day));
+        plainMonthDay.set(PropertyKey.fromString("calendar"), new JSString(calendar));
+        plainMonthDay.defineProperty(
+                PropertyKey.fromString(JSIntlObject.TEMPORAL_PLAIN_MONTH_DAY_BRAND_PROPERTY),
+                JSBoolean.TRUE,
+                PropertyDescriptor.DataState.None);
+        return plainMonthDay;
+    }
+
+    private JSValue temporalPlainMonthDayToLocaleString(JSContext childContext, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSObject thisObject)) {
+            return childContext.throwTypeError("Temporal.PlainMonthDay.prototype.toLocaleString called on incompatible receiver");
+        }
+        JSValue brandValue = thisObject.get(PropertyKey.fromString(JSIntlObject.TEMPORAL_PLAIN_MONTH_DAY_BRAND_PROPERTY));
+        if (!(brandValue instanceof JSBoolean jsBoolean) || !jsBoolean.value()) {
+            return childContext.throwTypeError("Temporal.PlainMonthDay.prototype.toLocaleString called on incompatible receiver");
+        }
+
+        JSValue intlValue = childContext.getGlobalObject().get(PropertyKey.fromString("Intl"));
+        if (!(intlValue instanceof JSObject intlObject)) {
+            return childContext.throwTypeError("Intl is not available");
+        }
+        JSValue dateTimeFormatValue = intlObject.get(PropertyKey.fromString("DateTimeFormat"));
+        if (!(dateTimeFormatValue instanceof JSObject dateTimeFormatObject)) {
+            return childContext.throwTypeError("Intl.DateTimeFormat is not available");
+        }
+        JSValue dateTimeFormatPrototypeValue = dateTimeFormatObject.get(PropertyKey.PROTOTYPE);
+        if (!(dateTimeFormatPrototypeValue instanceof JSObject dateTimeFormatPrototype)) {
+            return childContext.throwTypeError("Intl.DateTimeFormat.prototype is not available");
+        }
+
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
+                childContext,
+                dateTimeFormatPrototype,
+                new JSValue[]{locales, options});
+        if (childContext.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.dateTimeFormatFormat(childContext, dateTimeFormat, new JSValue[]{thisArg});
     }
 
     /**

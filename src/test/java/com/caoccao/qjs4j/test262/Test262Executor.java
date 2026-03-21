@@ -62,7 +62,9 @@ public class Test262Executor {
         List<JSRuntime> realmRuntimes = new ArrayList<>();
         Test262AgentHost agentHost = new Test262AgentHost(this);
         TestResult result;
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true))) {
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
+                .setShadowRealmEnabled(true)
+                .setTemporalEnabled(true))) {
             try (JSContext context = runtime.createContext()) {
                 agentHost.setSharedAtomicsObject(runtime.getOptions().getAtomicsObject());
                 context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
@@ -460,7 +462,9 @@ public class Test262Executor {
      */
     public long prewarm() {
         long startTime = System.currentTimeMillis();
-        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setShadowRealmEnabled(true));
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
+                .setShadowRealmEnabled(true)
+                .setTemporalEnabled(true));
              JSContext context = runtime.createContext()) {
             context.clearAllPendingExceptions();
         } catch (Exception ignored) {

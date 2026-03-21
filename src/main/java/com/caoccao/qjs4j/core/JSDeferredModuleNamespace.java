@@ -223,7 +223,25 @@ final class JSDeferredModuleNamespace extends JSObject {
 
     @Override
     public void set(PropertyKey key, JSValue value) {
-        // Namespace objects are immutable; no-op without evaluation
+        setWithReceiverAndException(key, value, this);
+    }
+
+    @Override
+    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
+        if (context.isStrictMode()) {
+            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+        }
+        return false;
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
+        return false;
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return false;
     }
 
     private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {

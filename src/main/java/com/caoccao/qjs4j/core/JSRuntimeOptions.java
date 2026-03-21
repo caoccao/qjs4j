@@ -30,12 +30,14 @@ public class JSRuntimeOptions {
     protected long maxMemoryUsage;
     protected long maxStackSize;
     protected boolean shadowRealmEnabled;
+    protected boolean temporalEnabled;
 
     public JSRuntimeOptions() {
         atomicsObject = new AtomicsObject();
         maxMemoryUsage = DEFAULT_MAX_MEMORY_USAGE;
         maxStackSize = DEFAULT_MAX_STACK_SIZE;
         shadowRealmEnabled = false;
+        temporalEnabled = false;
     }
 
     public AtomicsObject getAtomicsObject() {
@@ -52,6 +54,10 @@ public class JSRuntimeOptions {
 
     public boolean isShadowRealmEnabled() {
         return shadowRealmEnabled;
+    }
+
+    public boolean isTemporalEnabled() {
+        return temporalEnabled;
     }
 
     public JSRuntimeOptions setAtomicsObject(AtomicsObject atomicsObject) {
@@ -71,6 +77,11 @@ public class JSRuntimeOptions {
 
     public JSRuntimeOptions setShadowRealmEnabled(boolean shadowRealmEnabled) {
         this.shadowRealmEnabled = shadowRealmEnabled;
+        return this;
+    }
+
+    public JSRuntimeOptions setTemporalEnabled(boolean temporalEnabled) {
+        this.temporalEnabled = temporalEnabled;
         return this;
     }
 }

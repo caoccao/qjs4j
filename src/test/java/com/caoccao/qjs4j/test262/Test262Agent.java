@@ -86,7 +86,9 @@ final class Test262Agent implements AutoCloseable {
 
     private void run() {
         List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
-        try (JSRuntime agentRuntime = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(host.getSharedAtomicsObject()));
+        try (JSRuntime agentRuntime = new JSRuntime(new JSRuntimeOptions()
+                .setAtomicsObject(host.getSharedAtomicsObject())
+                .setTemporalEnabled(true));
              JSContext agentContext = agentRuntime.createContext()) {
             runtime = agentRuntime;
             test262Executor.install262Object(agentContext, agentRealmRuntimes, host, this);
