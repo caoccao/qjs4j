@@ -168,6 +168,14 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         Set<String> exprParamNames = functionExpression.getParameterNames();
         functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
 
+        // Set up CATCH for exception-safe using disposal in function body
+        boolean bodyHasUsing = EmitHelpers.hasUsingDeclarations(functionExpression.getBody().getBody());
+        int functionUsingCatchJump = -1;
+        if (bodyHasUsing) {
+            functionUsingCatchJump = functionContext.emitter.emitJump(Opcode.CATCH);
+            functionContext.scopeManager.currentScope().setUsingCatchJumpPosition(functionUsingCatchJump);
+        }
+
         // Phase 2: Compile non-FunctionDeclaration statements in source order
         for (Statement stmt : functionExpression.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration) {
@@ -180,12 +188,30 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // Check if last statement is a return statement
         List<Statement> bodyStatements = functionExpression.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+            if (bodyHasUsing) {
+                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                functionContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                functionContext.emitter.emitOpcode(Opcode.DROP);
+            }
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
             functionContext.emitter.emitOpcode(functionExpression.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+        }
+
+        // Emit exception handler for function body using disposal
+        if (bodyHasUsing) {
+            if (!bodyStatements.isEmpty() && bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement) {
+                // Return already handled NIP_CATCH via emitUsingDisposalsForScopeDepthGreaterThan
+                // But we still need to handle exceptions that bypass the return
+                // The exception handler catches any unhandled exception in the body
+            }
+            int jumpOverCatch = functionContext.emitter.emitJump(Opcode.GOTO);
+            functionContext.emitter.patchJump(functionUsingCatchJump, functionContext.emitter.currentOffset());
+            functionContext.emitHelpers.emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
+            functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
         Integer functionExpressionSelfLocalIndex = null;

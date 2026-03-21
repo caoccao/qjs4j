@@ -52,7 +52,8 @@ public final class AsyncDisposableStackPrototype {
             rejectedPromise.reject(error);
             return rejectedPromise;
         }
-        return stack.disposeAsync(context);
+        JSValue completionError = args.length > 0 && !args[0].isUndefined() ? args[0] : null;
+        return stack.disposeAsync(context, completionError);
     }
 
     public static JSValue getDisposed(JSContext context, JSValue thisArg, JSValue[] args) {

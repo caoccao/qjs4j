@@ -2143,6 +2143,16 @@ public final class JSContext implements AutoCloseable {
                                         "JSON modules do not support named exports");
                             }
                         }
+                        if (importAttributes != null) {
+                            String attrType = importAttributes.get("type");
+                            if ("text".equals(attrType) || "bytes".equals(attrType)) {
+                                if (hasNonDefaultNamedBindings(importClause)) {
+                                    throw new JSSyntaxErrorException(
+                                            (("text".equals(attrType)) ? "Text" : "Bytes")
+                                                    + " modules do not support named exports");
+                                }
+                            }
+                        }
                         JSObject namespaceObject = loadDynamicImportModule(specifier, filename, importAttributes);
                         applyImportClauseBindings(
                                 globalObject,
@@ -3485,10 +3495,36 @@ public final class JSContext implements AutoCloseable {
             moduleRecord.setDeferredPreload(true);
             dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
             try {
+                String importType = importAttributes != null ? importAttributes.get("type") : null;
+                // Handle type: 'text' import attribute
+                if ("text".equals(importType)) {
+                    String sourceCode = Files.readString(Path.of(resolvedSpecifier));
+                    moduleRecord.setRawSource(sourceCode);
+                    defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
+                    moduleRecord.explicitExportNames().add("default");
+                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                    moduleRecord.namespace().finalizeNamespace();
+                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                    return moduleRecord.namespace();
+                }
+                // Handle type: 'bytes' import attribute
+                if ("bytes".equals(importType)) {
+                    byte[] fileBytes = Files.readAllBytes(Path.of(resolvedSpecifier));
+                    moduleRecord.setRawSource("");
+                    JSArrayBuffer arrayBuffer = new JSArrayBuffer(this, fileBytes);
+                    transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
+                    arrayBuffer.setImmutable(true);
+                    JSUint8Array uint8Array = createJSUint8Array(arrayBuffer, 0, fileBytes.length);
+                    defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
+                    moduleRecord.explicitExportNames().add("default");
+                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                    moduleRecord.namespace().finalizeNamespace();
+                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                    return moduleRecord.namespace();
+                }
                 String sourceCode = Files.readString(Path.of(resolvedSpecifier));
                 moduleRecord.setRawSource(sourceCode);
                 if (resolvedSpecifier.endsWith(".json")) {
-                    String importType = importAttributes != null ? importAttributes.get("type") : null;
                     if (!"json".equals(importType)) {
                         throw new JSException(throwTypeError("Import attribute type must be 'json'"));
                     }
@@ -3646,10 +3682,36 @@ public final class JSContext implements AutoCloseable {
         dynamicImportModuleCache.put(resolvedSpecifier, moduleRecord);
 
         try {
+            String importType = importAttributes != null ? importAttributes.get("type") : null;
+            // Handle type: 'text' import attribute
+            if ("text".equals(importType)) {
+                String sourceCode = Files.readString(Path.of(resolvedSpecifier));
+                moduleRecord.setRawSource(sourceCode);
+                defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
+                moduleRecord.explicitExportNames().add("default");
+                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                moduleRecord.namespace().finalizeNamespace();
+                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                return moduleRecord;
+            }
+            // Handle type: 'bytes' import attribute
+            if ("bytes".equals(importType)) {
+                byte[] fileBytes = Files.readAllBytes(Path.of(resolvedSpecifier));
+                moduleRecord.setRawSource("");
+                JSArrayBuffer arrayBuffer = new JSArrayBuffer(this, fileBytes);
+                transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
+                arrayBuffer.setImmutable(true);
+                JSUint8Array uint8Array = createJSUint8Array(arrayBuffer, 0, fileBytes.length);
+                defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
+                moduleRecord.explicitExportNames().add("default");
+                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
+                moduleRecord.namespace().finalizeNamespace();
+                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
+                return moduleRecord;
+            }
             String sourceCode = Files.readString(Path.of(resolvedSpecifier));
             moduleRecord.setRawSource(sourceCode);
             if (resolvedSpecifier.endsWith(".json")) {
-                String importType = importAttributes != null ? importAttributes.get("type") : null;
                 if (!"json".equals(importType)) {
                     throw new JSException(throwTypeError("Import attribute type must be 'json'"));
                 }

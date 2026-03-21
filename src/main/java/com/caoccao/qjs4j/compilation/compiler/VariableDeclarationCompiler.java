@@ -66,7 +66,17 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
                     throw new JSCompilerException(varDecl.getKind() + " declaration requires an initializer");
                 }
 
+                if (declarator.getId() instanceof Identifier targetId
+                        && declarator.getInit() instanceof ClassExpression classExpr
+                        && classExpr.getId() == null) {
+                    compilerContext.inferredClassName = targetId.getName();
+                }
                 compilerContext.expressionCompiler.compile(declarator.getInit());
+                if (declarator.getId() instanceof Identifier targetId
+                        && declarator.getInit().isAnonymousFunction()) {
+                    compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
+                }
+                compilerContext.inferredClassName = null;
                 int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
                 compilerContext.patternCompiler.compile(declarator.getId());

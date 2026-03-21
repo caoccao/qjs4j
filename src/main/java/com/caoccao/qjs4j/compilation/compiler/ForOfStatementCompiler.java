@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.compilation.compiler;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.core.JSAsyncDisposableStack;
+import com.caoccao.qjs4j.core.JSDisposableStack;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import com.caoccao.qjs4j.vm.Opcode;
 
@@ -74,6 +76,10 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         compilerContext.scopeManager.enterScope();
 
+        boolean isUsingForOf = varDecl != null
+                && (varDecl.getKind() == VariableKind.USING || varDecl.getKind() == VariableKind.AWAIT_USING);
+        boolean isAwaitUsingForOf = varDecl != null && varDecl.getKind() == VariableKind.AWAIT_USING;
+
         if (!isExpressionBased && !isVar) {
             compilerContext.patternCompiler.declarePatternVariables(pattern);
             if (varDecl != null && (varDecl.getKind() == VariableKind.CONST
@@ -89,6 +95,15 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             } else {
                 compilerContext.emitter.emitOpcode(Opcode.FOR_OF_START);
             }
+        }
+
+        // Declare a local for the per-iteration DisposableStack if needed
+        int forOfUsingStackLocal = -1;
+        if (isUsingForOf) {
+            boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
+            forOfUsingStackLocal = compilerContext.scopeManager.currentScope().declareLocal(
+                    "$forof_using_stack_" + compilerContext.emitter.currentOffset());
+            compilerContext.scopeManager.currentScope().setUsingStackLocal(forOfUsingStackLocal, useAsyncStack);
         }
 
         int loopStart = compilerContext.emitter.currentOffset();
@@ -108,20 +123,28 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, "value");
             compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
-            if (isExpressionBased) {
-                compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
-            } else {
-                compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
-            }
         } else {
             compilerContext.emitter.emitOpcodeU8(Opcode.FOR_OF_NEXT, 0);
             jumpToEnd = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
             compilerContext.statementCompiler.emitEvalReturnUndefinedIfNeeded();
-            if (isExpressionBased) {
-                compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
-            } else {
-                compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
-            }
+        }
+
+        if (isUsingForOf) {
+            // Create a NEW DisposableStack for each iteration
+            boolean useAsyncStack = isAwaitUsingForOf || compilerContext.isInAsyncFunction;
+            String constructorName = useAsyncStack ? JSAsyncDisposableStack.NAME : JSDisposableStack.NAME;
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, constructorName);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL_CONSTRUCTOR, 0);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, forOfUsingStackLocal);
+
+            // Call stack.use(value) - value is on the stack
+            compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(forOfUsingStackLocal, "use");
+        }
+
+        if (isExpressionBased) {
+            compileForOfExpressionTargetAssignment((Expression) forOfStmt.getLeft());
+        } else {
+            compilerContext.patternCompiler.compileForOfValueAssignment(pattern, isVar);
         }
 
         boolean savedIsLastInProgram = compilerContext.isLastInProgram;
@@ -131,6 +154,11 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         if (!isExpressionBased && !isVar) {
             compilerContext.emitHelpers.emitCloseLocForPattern(pattern);
+        }
+
+        // Per-iteration disposal for using/await-using
+        if (isUsingForOf) {
+            compilerContext.emitHelpers.emitScopeUsingDisposal(compilerContext.scopeManager.currentScope());
         }
 
         compilerContext.emitter.emitOpcode(Opcode.GOTO);
@@ -154,7 +182,9 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
 
         compilerContext.loopManager.popLoop();
 
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        if (!isUsingForOf) {
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        }
         compilerContext.scopeManager.exitScope();
     }
 

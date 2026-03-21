@@ -179,6 +179,14 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             }
         }
 
+        // Set up CATCH for exception-safe using disposal
+        boolean blockHasUsing = EmitHelpers.hasUsingDeclarations(body);
+        int usingCatchJump = -1;
+        if (blockHasUsing) {
+            usingCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(usingCatchJump);
+        }
+
         // Phase 3: compile non-function statements and preserve block completion value.
         int effectiveLastIndex = -1;
         for (int index = body.size() - 1; index >= 0; index--) {
@@ -229,7 +237,21 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
             }
         }
 
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        if (blockHasUsing) {
+            // Normal path: NIP_CATCH handles the block completion value
+            // The try-block leaves a value on the stack. NIP_CATCH preserves it.
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+            int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+            // Exception path: caught exception is on the stack
+            compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+
+            compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
+        } else {
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        }
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
         compilerContext.isLastInProgram = savedIsLastInProgram;

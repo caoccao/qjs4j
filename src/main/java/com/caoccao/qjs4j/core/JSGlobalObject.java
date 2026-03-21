@@ -281,12 +281,7 @@ public final class JSGlobalObject {
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.ASYNC_DISPOSE), disposeAsyncFunction, PropertyDescriptor.DataState.ConfigurableWritable);
 
         asyncDisposableStackPrototype.defineProperty(PropertyKey.fromString("disposed"), new JSNativeFunction(context, "get disposed", 0, AsyncDisposableStackPrototype::getDisposed), PropertyDescriptor.AccessorState.Configurable);
-        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSNativeFunction(context, "get [Symbol.toStringTag]", 0, (childContext, thisObj, args) -> {
-            if (!(thisObj instanceof JSAsyncDisposableStack)) {
-                return childContext.throwTypeError("get AsyncDisposableStack.prototype[Symbol.toStringTag] called on non-AsyncDisposableStack");
-            }
-            return new JSString(JSAsyncDisposableStack.NAME);
-        }), PropertyDescriptor.AccessorState.Configurable);
+        asyncDisposableStackPrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString(JSAsyncDisposableStack.NAME), PropertyDescriptor.DataState.Configurable);
 
         JSNativeFunction asyncDisposableStackConstructor = new JSNativeFunction(context, JSAsyncDisposableStack.NAME, 0, AsyncDisposableStackConstructor::call, true, true);
         asyncDisposableStackConstructor.defineProperty(PropertyKey.fromString("prototype"), asyncDisposableStackPrototype, PropertyDescriptor.DataState.None);
@@ -1515,7 +1510,9 @@ public final class JSGlobalObject {
 
         // Static methods
         promiseConstructor.defineProperty(PropertyKey.fromString("all"), new JSNativeFunction(context, "all", 1, PromiseConstructor::all), PropertyDescriptor.DataState.ConfigurableWritable);
+        promiseConstructor.defineProperty(PropertyKey.fromString("allKeyed"), new JSNativeFunction(context, "allKeyed", 1, PromiseConstructor::allKeyed), PropertyDescriptor.DataState.ConfigurableWritable);
         promiseConstructor.defineProperty(PropertyKey.fromString("allSettled"), new JSNativeFunction(context, "allSettled", 1, PromiseConstructor::allSettled), PropertyDescriptor.DataState.ConfigurableWritable);
+        promiseConstructor.defineProperty(PropertyKey.fromString("allSettledKeyed"), new JSNativeFunction(context, "allSettledKeyed", 1, PromiseConstructor::allSettledKeyed), PropertyDescriptor.DataState.ConfigurableWritable);
         promiseConstructor.defineProperty(PropertyKey.fromString("any"), new JSNativeFunction(context, "any", 1, PromiseConstructor::any), PropertyDescriptor.DataState.ConfigurableWritable);
         promiseConstructor.defineProperty(PropertyKey.fromString("race"), new JSNativeFunction(context, "race", 1, PromiseConstructor::race), PropertyDescriptor.DataState.ConfigurableWritable);
         promiseConstructor.defineProperty(PropertyKey.fromString("reject"), new JSNativeFunction(context, "reject", 1, PromiseConstructor::reject), PropertyDescriptor.DataState.ConfigurableWritable);

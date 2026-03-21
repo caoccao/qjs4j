@@ -32,9 +32,15 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;
+
+        boolean hasUsingDeclarations = false;
+
         // Phase 1: pre-declare lexical bindings for TDZ before compiling any hoisted functions.
         for (Statement stmt : block.getBody()) {
             if (stmt instanceof VariableDeclaration vd && vd.getKind() != VariableKind.VAR) {
+                if (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING) {
+                    hasUsingDeclarations = true;
+                }
                 for (VariableDeclarator d : vd.getDeclarations()) {
                     Set<String> names = new HashSet<>();
                     compilerContext.compilerAnalysis.collectPatternBindingNames(d.getId(), names);
@@ -77,6 +83,16 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
         }
         compilerContext.suppressAnnexBVarStore = false;
 
+        // Set up CATCH handler for exception-safe using disposal.
+        // The CATCH is emitted BEFORE Phase 3 so the CatchOffset is below all
+        // statement values. Each statement is net-zero stack effect, so the
+        // CatchOffset stays at the bottom.
+        int usingCatchJump = -1;
+        if (hasUsingDeclarations) {
+            usingCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(usingCatchJump);
+        }
+
         // Phase 3: compile non-function statements in source order.
         // For function declarations, emit the Annex B var store at the source position
         // (the function itself was already hoisted in Phase 2).
@@ -92,7 +108,23 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
             compilerContext.statementCompiler.compile(stmt);
         }
         compilerContext.isLastInProgram = savedIsLastInProgram;
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+
+        if (hasUsingDeclarations) {
+            // Normal path: remove CATCH handler, dispose, skip over exception handler
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+            int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+            // Exception path: caught exception is on the stack
+            compilerContext.emitter.patchJump(usingCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+
+            compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
+        } else {
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        }
         compilerContext.scopeManager.exitScope();
         compilerContext.popState();
     }

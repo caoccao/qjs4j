@@ -138,6 +138,14 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         Set<String> declParamNames = funcDecl.getParameterNames();
         functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(funcDecl.getBody().getBody(), declParamNames);
 
+        // Set up CATCH for exception-safe using disposal in function body
+        boolean bodyHasUsing = EmitHelpers.hasUsingDeclarations(funcDecl.getBody().getBody());
+        int functionUsingCatchJump = -1;
+        if (bodyHasUsing) {
+            functionUsingCatchJump = functionContext.emitter.emitJump(Opcode.CATCH);
+            functionContext.scopeManager.currentScope().setUsingCatchJumpPosition(functionUsingCatchJump);
+        }
+
         // Phase 2: Compile non-FunctionDeclaration statements in source order
         for (Statement stmt : funcDecl.getBody().getBody()) {
             if (stmt instanceof FunctionDeclaration) {
@@ -149,13 +157,25 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         // If body doesn't end with return, add implicit return undefined
         List<Statement> bodyStatements = funcDecl.getBody().getBody();
         if (bodyStatements.isEmpty() || !(bodyStatements.get(bodyStatements.size() - 1) instanceof ReturnStatement)) {
+            if (bodyHasUsing) {
+                functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                functionContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                functionContext.emitter.emitOpcode(Opcode.DROP);
+            }
             functionContext.emitter.emitOpcode(Opcode.UNDEFINED);
             int returnValueIndex = functionContext.scopeManager.currentScope().declareLocal("$function_return_" + functionContext.emitter.currentOffset());
             functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, returnValueIndex);
             functionContext.emitHelpers.emitCurrentScopeUsingDisposal();
             functionContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);
-            // Emit RETURN_ASYNC for async functions, RETURN for sync functions
             functionContext.emitter.emitOpcode(funcDecl.isAsync() ? Opcode.RETURN_ASYNC : Opcode.RETURN);
+        }
+
+        // Emit exception handler for function body using disposal
+        if (bodyHasUsing) {
+            int jumpOverCatch = functionContext.emitter.emitJump(Opcode.GOTO);
+            functionContext.emitter.patchJump(functionUsingCatchJump, functionContext.emitter.currentOffset());
+            functionContext.emitHelpers.emitScopeUsingDisposalWithException(functionContext.scopeManager.currentScope());
+            functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
         int localCount = functionContext.scopeManager.currentScope().getLocalCount();

@@ -462,6 +462,11 @@ public final class StringPrototype {
             case 0xA7D6 -> 0xA7D7; // LATIN CAPITAL LETTER MIDDLE SCOTS S -> small (Unicode 15.0)
             case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S -> small (Unicode 15.0)
             case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA -> small (Unicode 15.0)
+            case 0x2C2F -> 0x2C5F; // GLAGOLITIC CAPITAL LETTER CAUDATE CHRIVI -> small (Unicode 14.0)
+            case 0xA7C0 -> 0xA7C1; // LATIN CAPITAL LETTER OLD POLISH O -> small (Unicode 14.0)
+            case 0xA7CE -> 0xA7CF; // LATIN CAPITAL LETTER PHARYNGEAL VOICED FRICATIVE -> small (Unicode 15.0)
+            case 0xA7D2 -> 0xA7D3; // LATIN CAPITAL LETTER DOUBLE THORN -> small (Unicode 15.0)
+            case 0xA7D4 -> 0xA7D5; // LATIN CAPITAL LETTER HALF H -> small (Unicode 15.0)
             default -> {
                 // Vithkuqi capital -> small (Unicode 15.0, offset 0x27)
                 if (codePoint >= 0x10570 && codePoint <= 0x10595
@@ -487,6 +492,11 @@ public final class StringPrototype {
             case 0xA7D7 -> 0xA7D6; // LATIN SMALL LETTER MIDDLE SCOTS S -> CAPITAL (Unicode 15.0)
             case 0xA7D9 -> 0xA7D8; // LATIN SMALL LETTER SIGMOID S -> CAPITAL (Unicode 15.0)
             case 0xA7DB -> 0xA7DA; // LATIN SMALL LETTER LAMBDA -> CAPITAL (Unicode 15.0)
+            case 0x2C5F -> 0x2C2F; // GLAGOLITIC SMALL LETTER CAUDATE CHRIVI -> CAPITAL (Unicode 14.0)
+            case 0xA7C1 -> 0xA7C0; // LATIN SMALL LETTER OLD POLISH O -> CAPITAL (Unicode 14.0)
+            case 0xA7CF -> 0xA7CE; // LATIN SMALL LETTER PHARYNGEAL VOICED FRICATIVE -> CAPITAL (Unicode 15.0)
+            case 0xA7D3 -> 0xA7D2; // LATIN SMALL LETTER DOUBLE THORN -> CAPITAL (Unicode 15.0)
+            case 0xA7D5 -> 0xA7D4; // LATIN SMALL LETTER HALF H -> CAPITAL (Unicode 15.0)
             default -> {
                 // Vithkuqi small -> capital (Unicode 15.0, offset 0x27)
                 if (codePoint >= 0x10597 && codePoint <= 0x105BC

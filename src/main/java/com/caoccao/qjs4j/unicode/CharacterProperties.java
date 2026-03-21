@@ -66,6 +66,11 @@ public final class CharacterProperties {
             case 0xA7D8 -> 0xA7D9; // LATIN CAPITAL LETTER SIGMOID S → small (Unicode 15.0)
             case 0xA7DA -> 0xA7DB; // LATIN CAPITAL LETTER LAMBDA → small (Unicode 15.0)
             case 0xA7DC -> 0x019B; // LATIN CAPITAL LETTER LAMBDA WITH STROKE → small (Unicode 16.0)
+            case 0x2C2F -> 0x2C5F; // GLAGOLITIC CAPITAL LETTER CAUDATE CHRIVI → small (Unicode 14.0)
+            case 0xA7C0 -> 0xA7C1; // LATIN CAPITAL LETTER OLD POLISH O → small (Unicode 14.0)
+            case 0xA7CE -> 0xA7CF; // LATIN CAPITAL LETTER PHARYNGEAL VOICED FRICATIVE → small (Unicode 15.0)
+            case 0xA7D2 -> 0xA7D3; // LATIN CAPITAL LETTER DOUBLE THORN → small (Unicode 15.0)
+            case 0xA7D4 -> 0xA7D5; // LATIN CAPITAL LETTER HALF H → small (Unicode 15.0)
             case 0x212A -> 0x006B; // KELVIN SIGN → k
             case 0x212B -> 0x00E5; // ANGSTROM SIGN → a with ring
             case 0xFB05, 0xFB06 -> 0xFB06; // Latin ligatures long-s-t / st

@@ -28,6 +28,26 @@ final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
     @Override
     void compile(ThrowStatement throwStmt) {
         compilerContext.expressionCompiler.compile(throwStmt.getArgument());
+
+        // Check if any scope in the disposal path has a CATCH handler for using declarations.
+        // If so, just throw directly - the CATCH handler will handle disposal with the error
+        // and compose SuppressedErrors per ES spec DisposeResources algorithm.
+        boolean hasScopeUsingCatch = false;
+        for (CompilerScope scope : compilerContext.scopeManager) {
+            if (scope.getScopeDepth() > 0 && scope.getUsingStackLocalIndex() != null
+                    && scope.getUsingCatchJumpPosition() >= 0) {
+                hasScopeUsingCatch = true;
+                break;
+            }
+        }
+
+        if (hasScopeUsingCatch) {
+            // Just throw - the block/function CATCH handler will dispose with the error
+            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            return;
+        }
+
+        // Legacy path: when no block-level CATCH protects using declarations
         int throwValueIndex = compilerContext.scopeManager.currentScope().declareLocal("$throw_value_" + compilerContext.emitter.currentOffset());
         compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, throwValueIndex);
 

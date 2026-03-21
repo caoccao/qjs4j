@@ -69,8 +69,12 @@ public final class JSDisposableStack extends JSObject {
     }
 
     public JSValue dispose(JSContext context) {
-        JSValue initialError = null;
-        if (context.hasPendingException()) {
+        return dispose(context, null);
+    }
+
+    public JSValue dispose(JSContext context, JSValue completionError) {
+        JSValue initialError = completionError;
+        if (initialError == null && context.hasPendingException()) {
             initialError = context.getPendingException();
             context.clearPendingException();
         }
@@ -84,30 +88,24 @@ public final class JSDisposableStack extends JSObject {
         }
         disposed = true;
 
-        JSValue disposalError = null;
+        // Follow ES spec DisposeResources: fold each disposal error with the
+        // current completion value. This ensures correct SuppressedError nesting:
+        // SuppressedError(lastDisposalError, SuppressedError(prevDisposalError, initialError))
+        JSValue completion = initialError;
         for (int i = disposeRecords.size() - 1; i >= 0; i--) {
             DisposeRecord record = disposeRecords.get(i);
             JSValue error = invokeDisposer(context, record);
             if (error != null) {
-                disposalError = disposalError == null
+                completion = completion == null
                         ? error
-                        : composeSuppressedError(context, error, disposalError);
+                        : composeSuppressedError(context, error, completion);
             }
         }
         disposeRecords.clear();
 
-        JSValue finalError = disposalError;
-        if (initialError != null) {
-            if (finalError == null) {
-                finalError = initialError;
-            } else {
-                finalError = composeSuppressedError(context, finalError, initialError);
-            }
-        }
-
-        if (finalError != null) {
-            context.setPendingException(finalError);
-            return finalError;
+        if (completion != null) {
+            context.setPendingException(completion);
+            return completion;
         }
         return JSUndefined.INSTANCE;
     }

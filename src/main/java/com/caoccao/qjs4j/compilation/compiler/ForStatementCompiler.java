@@ -36,6 +36,16 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
 
         compilerContext.scopeManager.enterScope();
 
+        boolean hasUsingInit = !initCompiled
+                && forStmt.getInit() instanceof VariableDeclaration usingCheck
+                && (usingCheck.getKind() == VariableKind.USING || usingCheck.getKind() == VariableKind.AWAIT_USING);
+
+        int forUsingCatchJump = -1;
+        if (hasUsingInit) {
+            forUsingCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
+            compilerContext.scopeManager.currentScope().setUsingCatchJumpPosition(forUsingCatchJump);
+        }
+
         if (!initCompiled && forStmt.getInit() != null) {
             if (forStmt.getInit() instanceof VariableDeclaration varDecl) {
                 compilerContext.pushState();
@@ -96,15 +106,34 @@ final class ForStatementCompiler extends AstNodeCompiler<ForStatement> {
             compilerContext.emitter.patchJump(jumpToEnd, loopEnd);
         }
 
-        for (int breakPos : loop.breakPositions) {
-            compilerContext.emitter.patchJump(breakPos, loopEnd);
-        }
         for (int continuePos : loop.continuePositions) {
             compilerContext.emitter.patchJump(continuePos, updateStart);
         }
 
         compilerContext.loopManager.popLoop();
-        compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+
+        if (hasUsingInit) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+            int jumpOverCatch = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+            compilerContext.emitter.patchJump(forUsingCatchJump, compilerContext.emitter.currentOffset());
+            compilerContext.emitHelpers.emitScopeUsingDisposalWithException(compilerContext.scopeManager.currentScope());
+
+            compilerContext.emitter.patchJump(jumpOverCatch, compilerContext.emitter.currentOffset());
+        } else {
+            compilerContext.emitHelpers.emitCurrentScopeUsingDisposal();
+        }
+
+        // Patch break positions AFTER disposal code, since break already handles
+        // its own disposal via emitUsingDisposalsForScopeDepthGreaterThan
+        int exitPoint = compilerContext.emitter.currentOffset();
+        for (int breakPos : loop.breakPositions) {
+            compilerContext.emitter.patchJump(breakPos, exitPoint);
+        }
+
         compilerContext.scopeManager.exitScope();
     }
 }

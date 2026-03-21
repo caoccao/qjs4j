@@ -426,6 +426,63 @@ final class EmitHelpers {
         }
     }
 
+
+    /**
+     * Emit disposal with a caught exception passed as an argument.
+     * Stack on entry: [caught_exception]
+     * The caught exception is passed to dispose/disposeAsync so it can compose SuppressedErrors.
+     */
+    void emitScopeUsingDisposalWithException(CompilerScope scope) {
+        Integer usingStackLocalIndex = scope.getUsingStackLocalIndex();
+        if (usingStackLocalIndex == null) {
+            // No using stack - just re-throw the caught exception
+            compilerContext.emitter.emitOpcode(Opcode.THROW);
+            return;
+        }
+
+        // Stack: [caught_exception]
+        // Save exception to a temp local so we can pass it as an argument
+        int exceptionLocalIndex = compilerContext.scopeManager.currentScope().declareLocal(
+                "$using_exception_" + compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, exceptionLocalIndex);
+
+        // Check if the using stack was actually initialized at runtime.
+        // If the exception occurred before the `using` declaration executed,
+        // the stack local is still uninitialized - just re-throw.
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.IS_UNDEFINED_OR_NULL);
+        int skipDisposeJump = compilerContext.emitter.emitJump(Opcode.IF_TRUE);
+
+        if (scope.isUsingStackAsync()) {
+            // Call disposeAsync(caughtException)
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "disposeAsync");
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
+            compilerContext.emitter.emitOpcode(Opcode.AWAIT);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        } else {
+            // Call dispose(caughtException)
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, usingStackLocalIndex);
+            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "dispose");
+            compilerContext.emitter.emitOpcode(Opcode.SWAP);
+            compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
+            compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
+        // After dispose/disposeAsync, the pending exception is set (either original or composed SuppressedError)
+        // The VM will detect it and unwind automatically
+        int skipRethrowJump = compilerContext.emitter.emitJump(Opcode.GOTO);
+
+        // Stack local was uninitialized - just re-throw the original exception
+        compilerContext.emitter.patchJump(skipDisposeJump, compilerContext.emitter.currentOffset());
+        compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, exceptionLocalIndex);
+        compilerContext.emitter.emitOpcode(Opcode.THROW);
+
+        compilerContext.emitter.patchJump(skipRethrowJump, compilerContext.emitter.currentOffset());
+    }
+
     void emitSuperPropertyKey(MemberExpression memberExpr) {
         if (memberExpr.isComputed()) {
             compilerContext.expressionCompiler.compile(memberExpr.getProperty());
@@ -441,9 +498,26 @@ final class EmitHelpers {
     void emitUsingDisposalsForScopeDepthGreaterThan(int targetScopeDepth) {
         for (CompilerScope scope : compilerContext.scopeManager) {
             if (scope.getScopeDepth() > targetScopeDepth) {
+                // If scope has a CATCH handler on the stack (from using declaration),
+                // remove it before calling dispose (we're leaving via control flow)
+                if (scope.getUsingCatchJumpPosition() >= 0 && scope.getUsingStackLocalIndex() != null) {
+                    compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+                    compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);
+                    compilerContext.emitter.emitOpcode(Opcode.DROP);
+                }
                 emitScopeUsingDisposal(scope);
             }
         }
+    }
+
+    static boolean hasUsingDeclarations(java.util.List<Statement> statements) {
+        for (Statement stmt : statements) {
+            if (stmt instanceof VariableDeclaration vd
+                    && (vd.getKind() == VariableKind.USING || vd.getKind() == VariableKind.AWAIT_USING)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     int ensureUsingStackLocal(boolean asyncUsingDeclaration) {

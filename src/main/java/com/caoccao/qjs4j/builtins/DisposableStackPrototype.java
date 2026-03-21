@@ -46,7 +46,8 @@ public final class DisposableStackPrototype {
         if (!(thisArg instanceof JSDisposableStack stack)) {
             return context.throwTypeError("DisposableStack.prototype.dispose called on non-DisposableStack");
         }
-        return stack.dispose(context);
+        JSValue completionError = args.length > 0 && !args[0].isUndefined() ? args[0] : null;
+        return stack.dispose(context, completionError);
     }
 
     public static JSValue getDisposed(JSContext context, JSValue thisArg, JSValue[] args) {
