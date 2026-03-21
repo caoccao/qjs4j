@@ -32,7 +32,6 @@ import java.util.stream.Collectors;
  * Implementation of Intl object and Intl.* prototype methods.
  */
 public final class JSIntlObject {
-    public static final String TEMPORAL_PLAIN_MONTH_DAY_BRAND_PROPERTY = "$$TemporalPlainMonthDayBrand$$";
     private static final Set<String> AVAILABLE_LOCALE_LANGUAGES;
     private static final String[] FORMAT_STYLE_VALUES = {"short", "medium", "long", "full"};
     // ---- CLDR Language Alias Data ----
@@ -5860,8 +5859,8 @@ public final class JSIntlObject {
         double epochMillis;
         if (value instanceof JSDate jsDate) {
             epochMillis = jsDate.getTimeValue();
-        } else if (value instanceof JSObject objectValue && isTemporalPlainMonthDayValue(objectValue)) {
-            epochMillis = temporalPlainMonthDayToEpochMillis(context, objectValue);
+        } else if (value instanceof JSObject objectValue && JSTemporalObject.isTemporalPlainMonthDayValue(objectValue)) {
+            epochMillis = JSTemporalObject.temporalPlainMonthDayToEpochMillis(context, objectValue);
             if (context.hasPendingException()) {
                 return Double.NaN;
             }
@@ -5877,72 +5876,6 @@ public final class JSIntlObject {
             return Double.NaN;
         }
         return epochMillis;
-    }
-
-    private static boolean isTemporalPlainMonthDayValue(JSObject objectValue) {
-        JSValue brand = objectValue.get(PropertyKey.fromString(TEMPORAL_PLAIN_MONTH_DAY_BRAND_PROPERTY));
-        return brand instanceof JSBoolean jsBoolean && jsBoolean.value();
-    }
-
-    private static int parseTemporalMonthCode(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
-            context.throwTypeError("Invalid Temporal.PlainMonthDay value");
-            return -1;
-        }
-        char tens = monthCode.charAt(1);
-        char ones = monthCode.charAt(2);
-        if (!Character.isDigit(tens) || !Character.isDigit(ones)) {
-            context.throwTypeError("Invalid Temporal.PlainMonthDay value");
-            return -1;
-        }
-        int month = Integer.parseInt(monthCode.substring(1));
-        if (month < 1 || month > 12) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return -1;
-        }
-        return month;
-    }
-
-    private static double temporalPlainMonthDayToEpochMillis(JSContext context, JSObject plainMonthDayObject) {
-        JSValue monthCodeValue = plainMonthDayObject.get(PropertyKey.fromString("monthCode"));
-        if (!(monthCodeValue instanceof JSString monthCodeString)) {
-            context.throwTypeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-        int month = parseTemporalMonthCode(context, monthCodeString.value());
-        if (context.hasPendingException()) {
-            return Double.NaN;
-        }
-
-        JSValue dayValue = plainMonthDayObject.get(PropertyKey.fromString("day"));
-        int day;
-        if (dayValue instanceof JSNumber dayNumber) {
-            double numericDay = dayNumber.value();
-            if (!Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
-                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-                return Double.NaN;
-            }
-            day = (int) numericDay;
-        } else {
-            double numericDay = JSTypeConversions.toNumber(context, dayValue).value();
-            if (context.hasPendingException() || !Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
-                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-                return Double.NaN;
-            }
-            day = (int) numericDay;
-        }
-        if (day < 1 || day > 31) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-
-        try {
-            LocalDate referenceDate = LocalDate.of(1972, month, day);
-            return referenceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
     }
 
     /**
