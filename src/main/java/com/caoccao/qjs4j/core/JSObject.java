@@ -34,6 +34,8 @@ import java.util.*;
  */
 public non-sealed class JSObject implements JSValue {
     public static final String NAME = "Object";
+    private static final JSShape EMPTY_SHAPE = new JSShape();
+    private static final int INITIAL_PROPERTY_VALUE_CAPACITY = 4;
     private static final int MAX_PROTOTYPE_DEPTH = 10000;
     protected final JSContext context;
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
@@ -56,7 +58,7 @@ public non-sealed class JSObject implements JSValue {
      */
     public JSObject(JSContext context) {
         this.context = Objects.requireNonNull(context, "context");
-        this.shape = new JSShape();  // Each object gets its own shape
+        this.shape = EMPTY_SHAPE;
         this.propertyValues = JSValue.NO_ARGS;
         this.sparseProperties = null;
         this.prototype = null;
@@ -270,22 +272,20 @@ public non-sealed class JSObject implements JSValue {
         }
 
         // Add new property to shape
+        if (shape == EMPTY_SHAPE) {
+            shape = new JSShape();
+        }
         shape.addProperty(key, descriptor);
 
-        // Grow property values array
         int newCount = shape.getPropertyCount();
-        JSValue[] newValues = Arrays.copyOf(propertyValues, newCount);
-
-        // Set the new property value
+        ensurePropertyValueCapacity(newCount);
+        int newOffset = newCount - 1;
         if (descriptor.hasValue()) {
-            newValues[newCount - 1] = descriptor.getValue();
+            propertyValues[newOffset] = descriptor.getValue();
         } else {
-            newValues[newCount - 1] = JSUndefined.INSTANCE;
+            propertyValues[newOffset] = JSUndefined.INSTANCE;
         }
-
-        this.propertyValues = newValues;
     }
-
 
     /**
      * Delete a property.
@@ -363,6 +363,25 @@ public non-sealed class JSObject implements JSValue {
         }
 
         return true;
+    }
+
+    private void ensurePropertyValueCapacity(int requiredCapacity) {
+        if (propertyValues.length >= requiredCapacity) {
+            return;
+        }
+        int newCapacity;
+        if (propertyValues.length > 0) {
+            newCapacity = propertyValues.length;
+            while (newCapacity < requiredCapacity) {
+                newCapacity <<= 1;
+            }
+        } else {
+            newCapacity = INITIAL_PROPERTY_VALUE_CAPACITY;
+            while (newCapacity < requiredCapacity) {
+                newCapacity <<= 1;
+            }
+        }
+        propertyValues = Arrays.copyOf(propertyValues, newCapacity);
     }
 
     /**

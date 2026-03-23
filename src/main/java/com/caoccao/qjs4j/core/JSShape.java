@@ -38,7 +38,7 @@ public final class JSShape {
     private static final PropertyDescriptor[] EMPTY_DESCRIPTORS = new PropertyDescriptor[0];
     private static final PropertyKey[] EMPTY_KEYS = new PropertyKey[0];
     private static final int INDEX_THRESHOLD = 6;
-
+    private static final int INITIAL_CAPACITY = 4;
     private int deletedPropCount;
     private PropertyDescriptor[] descriptors;
     private Object lastLookupIndexKey;
@@ -111,32 +111,17 @@ public final class JSShape {
             return;
         }
 
-        // Grow arrays
-        PropertyKey[] newKeys = new PropertyKey[propertyCount + 1];
-        PropertyDescriptor[] newDescriptors = new PropertyDescriptor[propertyCount + 1];
-
-        // Copy existing properties
-        System.arraycopy(propertyKeys, 0, newKeys, 0, propertyCount);
-        System.arraycopy(descriptors, 0, newDescriptors, 0, propertyCount);
-
-        // Add new property
-        newKeys[propertyCount] = key;
-        newDescriptors[propertyCount] = descriptor;
-
-        this.propertyKeys = newKeys;
-        this.descriptors = newDescriptors;
-
-        // Update index
+        int newPropertyCount = propertyCount + 1;
+        ensureCapacity(newPropertyCount);
+        propertyKeys[propertyCount] = key;
+        descriptors[propertyCount] = descriptor;
         if (propertyIndex != null) {
             propertyIndex.put(key.getValue(), propertyCount);
-        } else if (propertyCount + 1 > INDEX_THRESHOLD) {
-            this.propertyCount++;
-            onShapeMutated();
-            buildIndex();
-            return;
         }
-
-        this.propertyCount++;
+        propertyCount = newPropertyCount;
+        if (propertyIndex == null && propertyCount > INDEX_THRESHOLD) {
+            buildIndex();
+        }
         onShapeMutated();
     }
 
@@ -159,21 +144,21 @@ public final class JSShape {
             return; // Nothing to compact
         }
 
-        List<PropertyKey> newKeys = new ArrayList<>(propertyCount - deletedPropCount);
-        List<PropertyDescriptor> newDescriptors = new ArrayList<>(propertyCount - deletedPropCount);
-
-        // Copy non-null properties
+        int keptPropertyCount = propertyCount - deletedPropCount;
+        PropertyKey[] compactedPropertyKeys = new PropertyKey[keptPropertyCount];
+        PropertyDescriptor[] compactedPropertyDescriptors = new PropertyDescriptor[keptPropertyCount];
+        int newOffset = 0;
         for (int i = 0; i < propertyCount; i++) {
             if (propertyKeys[i] != null) {
-                newKeys.add(propertyKeys[i]);
-                newDescriptors.add(descriptors[i]);
+                compactedPropertyKeys[newOffset] = propertyKeys[i];
+                compactedPropertyDescriptors[newOffset] = descriptors[i];
+                newOffset++;
             }
         }
 
-        // Update arrays
-        this.propertyKeys = newKeys.toArray(new PropertyKey[0]);
-        this.descriptors = newDescriptors.toArray(new PropertyDescriptor[0]);
-        this.propertyCount = newKeys.size();
+        propertyKeys = compactedPropertyKeys;
+        descriptors = compactedPropertyDescriptors;
+        propertyCount = keptPropertyCount;
         this.deletedPropCount = 0;
         onShapeMutated();
 
@@ -190,6 +175,33 @@ public final class JSShape {
      */
     public JSShape copy() {
         return new JSShape(this);
+    }
+
+    private void ensureCapacity(int requiredCapacity) {
+        int currentCapacity = propertyKeys.length;
+        if (currentCapacity >= requiredCapacity) {
+            return;
+        }
+        int newCapacity;
+        if (currentCapacity > 0) {
+            newCapacity = currentCapacity;
+            while (newCapacity < requiredCapacity) {
+                newCapacity <<= 1;
+            }
+        } else {
+            newCapacity = INITIAL_CAPACITY;
+            while (newCapacity < requiredCapacity) {
+                newCapacity <<= 1;
+            }
+        }
+        PropertyKey[] newPropertyKeys = new PropertyKey[newCapacity];
+        PropertyDescriptor[] newPropertyDescriptors = new PropertyDescriptor[newCapacity];
+        if (propertyCount > 0) {
+            System.arraycopy(propertyKeys, 0, newPropertyKeys, 0, propertyCount);
+            System.arraycopy(descriptors, 0, newPropertyDescriptors, 0, propertyCount);
+        }
+        propertyKeys = newPropertyKeys;
+        descriptors = newPropertyDescriptors;
     }
 
     /**
