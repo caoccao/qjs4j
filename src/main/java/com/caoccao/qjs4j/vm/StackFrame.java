@@ -31,6 +31,7 @@ public final class StackFrame {
     private final StackFrame caller;
     private final JSValue[] closureVars;
     private final JSFunction function;
+    private final int frameDepth;
     private final JSValue[] locals;
     private final JSValue newTarget;
     private final int stackBase;
@@ -51,6 +52,11 @@ public final class StackFrame {
         this.newTarget = newTarget;
         this.stackBase = stackBase;
         this.arguments = args;  // Store original arguments for arguments object
+        if (caller == null) {
+            frameDepth = 1;
+        } else {
+            frameDepth = caller.frameDepth + 1;
+        }
 
         // Allocate locals array based on function's local count
         // For bytecode functions, get local count from bytecode metadata
@@ -173,6 +179,10 @@ public final class StackFrame {
 
     public JSFunction getFunction() {
         return function;
+    }
+
+    public int getFrameDepth() {
+        return frameDepth;
     }
 
     public JSValue[] getLocals() {

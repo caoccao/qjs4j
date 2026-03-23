@@ -419,6 +419,16 @@ public final class DatePrototype {
             return context.getPendingException();
         }
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (arg instanceof JSNumber numberArgument) {
+            double numericValue = numberArgument.value();
+            double clippedValue = JSDate.timeClip(numericValue);
+            date.setTimeValue(clippedValue);
+            if (Double.doubleToRawLongBits(numericValue) == Double.doubleToRawLongBits(clippedValue)) {
+                return numberArgument;
+            } else {
+                return JSNumber.of(clippedValue);
+            }
+        }
         JSNumber number = toNumberOrThrow(context, arg);
         if (number == null) {
             return context.getPendingException();

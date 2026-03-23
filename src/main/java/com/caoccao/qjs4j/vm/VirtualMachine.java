@@ -975,7 +975,12 @@ public final class VirtualMachine {
                         ? generatorStateForExecution.getSuspendedFrame()
                         : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
                 if (!resumeGeneratorExecution) {
-                    int currentFrameDepth = getCurrentFrameDepth(currentFrame);
+                    int currentFrameDepth;
+                    if (currentFrame == null) {
+                        currentFrameDepth = 0;
+                    } else {
+                        currentFrameDepth = currentFrame.getFrameDepth();
+                    }
                     if (currentFrameDepth >= context.getMaxStackDepth()) {
                         throw new JSVirtualMachineException(
                                 context.throwRangeError("Maximum call stack size exceeded"));
@@ -1226,16 +1231,6 @@ public final class VirtualMachine {
 
     public StackFrame getCurrentFrame() {
         return currentFrame;
-    }
-
-    private int getCurrentFrameDepth(StackFrame frame) {
-        int frameDepth = 0;
-        StackFrame currentStackFrame = frame;
-        while (currentStackFrame != null) {
-            frameDepth++;
-            currentStackFrame = currentStackFrame.getCaller();
-        }
-        return frameDepth;
     }
 
     public JSValue getLastConstructorThisArg() {

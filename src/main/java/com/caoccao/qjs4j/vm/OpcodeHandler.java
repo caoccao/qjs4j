@@ -278,9 +278,6 @@ public final class OpcodeHandler {
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         JSValue rightValue = executionContext.pop();
         JSValue leftValue = executionContext.locals[localIndex];
-        if (leftValue == null) {
-            leftValue = JSUndefined.INSTANCE;
-        }
         try {
             executionContext.locals[localIndex] = executionContext.virtualMachine.addValues(leftValue, rightValue);
             if (executionContext.virtualMachine.context.hasPendingException()) {
@@ -857,66 +854,73 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         byte[] instructions = executionContext.instructions;
         int argumentCount = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
-        executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
+        VirtualMachine virtualMachine = executionContext.virtualMachine;
+        JSContext context = virtualMachine.context;
+        JSStackValue[] stack = virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+
         // Pop arguments
         JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
         for (int i = argumentCount - 1; i >= 0; i--) {
-            args[i] = executionContext.virtualMachine.valueStack.pop();
+            args[i] = (JSValue) stack[--sp];
         }
         // Pop constructor
-        JSValue constructor = executionContext.virtualMachine.valueStack.pop();
+        JSValue constructor = (JSValue) stack[--sp];
+        virtualMachine.valueStack.stackTop = sp;
+
         // Handle proxy construct trap (QuickJS: js_proxy_call_constructor)
         if (constructor instanceof JSProxy jsProxy) {
             // Following QuickJS JS_CallConstructorInternal:
             // Check if target is a constructor BEFORE checking for construct trap
             JSValue target = jsProxy.getTarget();
             if (JSTypeChecking.isConstructor(target)) {
-                executionContext.virtualMachine.valueStack.push(executionContext.virtualMachine.proxyConstruct(jsProxy, args, jsProxy));
+                stack[sp++] = virtualMachine.proxyConstruct(jsProxy, args, jsProxy);
             } else {
-                executionContext.virtualMachine.context.throwTypeError("proxy is not a constructor");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                context.throwTypeError("proxy is not a constructor");
+                virtualMachine.pendingException = context.getPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
             }
         } else if (constructor instanceof JSFunction jsFunction) {
             // Check if the function is constructable
             if (!JSTypeChecking.isConstructor(jsFunction)) {
-                executionContext.virtualMachine.context.throwTypeError(jsFunction.getName() + " is not a constructor");
-                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                context.throwTypeError(jsFunction.getName() + " is not a constructor");
+                virtualMachine.pendingException = context.getPendingException();
+                stack[sp++] = JSUndefined.INSTANCE;
             } else {
                 JSValue result;
                 try {
-                    result = executionContext.virtualMachine.constructFunction(jsFunction, args, jsFunction);
+                    result = virtualMachine.constructFunction(jsFunction, args, jsFunction);
                 } catch (JSVirtualMachineException e) {
                     if (e.getJsValue() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsValue();
+                        virtualMachine.pendingException = e.getJsValue();
                     } else if (e.getJsError() != null) {
-                        executionContext.virtualMachine.pendingException = e.getJsError();
-                    } else if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        virtualMachine.pendingException = e.getJsError();
+                    } else if (context.hasPendingException()) {
+                        virtualMachine.pendingException = context.getPendingException();
                     } else {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwError(
+                        virtualMachine.pendingException = context.throwError(
                                 e.getMessage() != null ? e.getMessage() : "Unhandled exception");
                     }
-                    executionContext.virtualMachine.context.clearPendingException();
-                    executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    context.clearPendingException();
+                    stack[sp++] = JSUndefined.INSTANCE;
                     result = null;
                 }
                 if (result != null) {
-                    if (executionContext.virtualMachine.context.hasPendingException()) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                        executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+                    if (context.hasPendingException()) {
+                        virtualMachine.pendingException = context.getPendingException();
+                        stack[sp++] = JSUndefined.INSTANCE;
                     } else {
-                        executionContext.virtualMachine.valueStack.push(result);
+                        stack[sp++] = result;
                     }
                 }
             }
         } else {
-            executionContext.virtualMachine.context.throwTypeError("not a constructor");
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-            executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            context.throwTypeError("not a constructor");
+            virtualMachine.pendingException = context.getPendingException();
+            stack[sp++] = JSUndefined.INSTANCE;
         }
-        executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
+        executionContext.sp = sp;
+        virtualMachine.valueStack.stackTop = sp;
         executionContext.pc = pc + op.getSize();
     }
 
@@ -968,9 +972,6 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         JSValue localValue = executionContext.locals[localIndex];
-        if (localValue == null) {
-            localValue = JSUndefined.INSTANCE;
-        }
         executionContext.locals[localIndex] = executionContext.virtualMachine.incrementValue(localValue, -1);
         executionContext.pc = pc + op.getSize();
     }
@@ -2681,31 +2682,46 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int localIndex = ((instructions[pc + 1] & 0xFF) << 8) | (instructions[pc + 2] & 0xFF);
         JSValue localValue = executionContext.locals[localIndex];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc0(Opcode op, ExecutionContext executionContext) {
         JSValue localValue = executionContext.locals[0];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc1(Opcode op, ExecutionContext executionContext) {
         JSValue localValue = executionContext.locals[1];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc2(Opcode op, ExecutionContext executionContext) {
         JSValue localValue = executionContext.locals[2];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
     static void handleGetLoc3(Opcode op, ExecutionContext executionContext) {
         JSValue localValue = executionContext.locals[3];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
@@ -2713,7 +2729,10 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         JSValue localValue = executionContext.locals[localIndex];
-        executionContext.push(localValue != null ? localValue : JSUndefined.INSTANCE);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc += op.getSize();
     }
 
@@ -2724,7 +2743,10 @@ public final class OpcodeHandler {
         if (executionContext.virtualMachine.isUninitialized(localValue)) {
             executionContext.virtualMachine.throwVariableUninitializedReferenceError();
         }
-        executionContext.push(localValue);
+        JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
+        int sp = executionContext.sp;
+        stack[sp++] = localValue;
+        executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
 
@@ -3591,9 +3613,6 @@ public final class OpcodeHandler {
         int pc = executionContext.pc;
         int localIndex = executionContext.instructions[pc + 1] & 0xFF;
         JSValue localValue = executionContext.locals[localIndex];
-        if (localValue == null) {
-            localValue = JSUndefined.INSTANCE;
-        }
         executionContext.locals[localIndex] = executionContext.virtualMachine.incrementValue(localValue, 1);
         executionContext.pc = pc + op.getSize();
     }
