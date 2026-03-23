@@ -1097,54 +1097,6 @@ public final class JSGlobalObject {
         globalObject.defineProperty(PropertyKey.fromString("Intl"), intlObject, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
-    private void initializeTemporalObject() {
-        JSObject temporalObject = context.createJSObject();
-        temporalObject.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Temporal"),
-                PropertyDescriptor.DataState.Configurable);
-
-        JSObject plainMonthDayPrototype = context.createJSObject();
-        plainMonthDayPrototype.defineProperty(
-                PropertyKey.fromString("toLocaleString"),
-                new JSNativeFunction(context, "toLocaleString", 2, JSTemporalObject::plainMonthDayToLocaleString),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        plainMonthDayPrototype.defineProperty(
-                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
-                new JSString("Temporal.PlainMonthDay"),
-                PropertyDescriptor.DataState.Configurable);
-
-        JSNativeFunction plainMonthDayConstructor = new JSNativeFunction(
-                context,
-                "PlainMonthDay",
-                2,
-                JSTemporalObject::plainMonthDayConstructorCall,
-                true,
-                true);
-        plainMonthDayConstructor.defineProperty(
-                PropertyKey.fromString("from"),
-                new JSNativeFunction(context, "from", 1, (childContext, thisArg, args) ->
-                        JSTemporalObject.plainMonthDayFrom(childContext, plainMonthDayPrototype, args)),
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        plainMonthDayConstructor.defineProperty(
-                PropertyKey.fromString("prototype"),
-                plainMonthDayPrototype,
-                PropertyDescriptor.DataState.None);
-        plainMonthDayPrototype.defineProperty(
-                PropertyKey.fromString("constructor"),
-                plainMonthDayConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-
-        temporalObject.defineProperty(
-                PropertyKey.fromString("PlainMonthDay"),
-                plainMonthDayConstructor,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-        globalObject.defineProperty(
-                PropertyKey.fromString("Temporal"),
-                temporalObject,
-                PropertyDescriptor.DataState.ConfigurableWritable);
-    }
-
     /**
      * Initialize Iterator constructor and prototype.
      * Based on ECMAScript 2024 Iterator specification.
@@ -1943,6 +1895,54 @@ public final class JSGlobalObject {
         symbolConstructor.defineProperty(PropertyKey.fromString("asyncDispose"), JSSymbol.ASYNC_DISPOSE, PropertyDescriptor.DataState.None);
 
         globalObject.defineProperty(PropertyKey.fromString(JSSymbol.NAME), symbolConstructor, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    private void initializeTemporalObject() {
+        JSObject temporalObject = context.createJSObject();
+        temporalObject.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Temporal"),
+                PropertyDescriptor.DataState.Configurable);
+
+        JSObject plainMonthDayPrototype = context.createJSObject();
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromString("toLocaleString"),
+                new JSNativeFunction(context, "toLocaleString", 2, JSTemporalObject::plainMonthDayToLocaleString),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG),
+                new JSString("Temporal.PlainMonthDay"),
+                PropertyDescriptor.DataState.Configurable);
+
+        JSNativeFunction plainMonthDayConstructor = new JSNativeFunction(
+                context,
+                "PlainMonthDay",
+                2,
+                JSTemporalObject::plainMonthDayConstructorCall,
+                true,
+                true);
+        plainMonthDayConstructor.defineProperty(
+                PropertyKey.fromString("from"),
+                new JSNativeFunction(context, "from", 1, (childContext, thisArg, args) ->
+                        JSTemporalObject.plainMonthDayFrom(childContext, plainMonthDayPrototype, args)),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        plainMonthDayConstructor.defineProperty(
+                PropertyKey.fromString("prototype"),
+                plainMonthDayPrototype,
+                PropertyDescriptor.DataState.None);
+        plainMonthDayPrototype.defineProperty(
+                PropertyKey.fromString("constructor"),
+                plainMonthDayConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+
+        temporalObject.defineProperty(
+                PropertyKey.fromString("PlainMonthDay"),
+                plainMonthDayConstructor,
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        globalObject.defineProperty(
+                PropertyKey.fromString("Temporal"),
+                temporalObject,
+                PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**

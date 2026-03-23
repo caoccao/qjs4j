@@ -35,48 +35,6 @@ public final class JSTemporalObject {
         return brand instanceof JSBoolean jsBoolean && jsBoolean.value();
     }
 
-    public static double temporalPlainMonthDayToEpochMillis(JSContext context, JSObject plainMonthDayObject) {
-        JSValue monthCodeValue = plainMonthDayObject.get(PropertyKey.fromString("monthCode"));
-        if (!(monthCodeValue instanceof JSString monthCodeString)) {
-            context.throwTypeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-        int month = parseTemporalPlainMonthDayMonth(context, monthCodeString.value());
-        if (context.hasPendingException()) {
-            return Double.NaN;
-        }
-
-        JSValue dayValue = plainMonthDayObject.get(PropertyKey.fromString("day"));
-        int day;
-        if (dayValue instanceof JSNumber dayNumber) {
-            double numericDay = dayNumber.value();
-            if (!Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
-                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-                return Double.NaN;
-            }
-            day = (int) numericDay;
-        } else {
-            double numericDay = JSTypeConversions.toNumber(context, dayValue).value();
-            if (context.hasPendingException() || !Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
-                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-                return Double.NaN;
-            }
-            day = (int) numericDay;
-        }
-        if (day < 1 || day > 31) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-
-        try {
-            LocalDate referenceDate = LocalDate.of(1972, month, day);
-            return referenceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
-        } catch (DateTimeException e) {
-            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
-            return Double.NaN;
-        }
-    }
-
     private static int parseTemporalPlainMonthDayMonth(JSContext context, String monthCode) {
         if (monthCode == null || monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
             context.throwTypeError("Invalid Temporal.PlainMonthDay value");
@@ -187,5 +145,47 @@ public final class JSTemporalObject {
             return JSUndefined.INSTANCE;
         }
         return JSIntlObject.dateTimeFormatFormat(childContext, dateTimeFormat, new JSValue[]{thisArg});
+    }
+
+    public static double temporalPlainMonthDayToEpochMillis(JSContext context, JSObject plainMonthDayObject) {
+        JSValue monthCodeValue = plainMonthDayObject.get(PropertyKey.fromString("monthCode"));
+        if (!(monthCodeValue instanceof JSString monthCodeString)) {
+            context.throwTypeError("Invalid Temporal.PlainMonthDay value");
+            return Double.NaN;
+        }
+        int month = parseTemporalPlainMonthDayMonth(context, monthCodeString.value());
+        if (context.hasPendingException()) {
+            return Double.NaN;
+        }
+
+        JSValue dayValue = plainMonthDayObject.get(PropertyKey.fromString("day"));
+        int day;
+        if (dayValue instanceof JSNumber dayNumber) {
+            double numericDay = dayNumber.value();
+            if (!Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
+                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
+                return Double.NaN;
+            }
+            day = (int) numericDay;
+        } else {
+            double numericDay = JSTypeConversions.toNumber(context, dayValue).value();
+            if (context.hasPendingException() || !Double.isFinite(numericDay) || Math.floor(numericDay) != numericDay) {
+                context.throwRangeError("Invalid Temporal.PlainMonthDay value");
+                return Double.NaN;
+            }
+            day = (int) numericDay;
+        }
+        if (day < 1 || day > 31) {
+            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
+            return Double.NaN;
+        }
+
+        try {
+            LocalDate referenceDate = LocalDate.of(1972, month, day);
+            return referenceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
+            return Double.NaN;
+        }
     }
 }

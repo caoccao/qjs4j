@@ -36,17 +36,17 @@ public final class PromiseConstructor {
     }
 
     /**
-     * Promise.allSettled(iterable)
-     */
-    public static JSValue allSettled(JSContext context, JSValue thisArg, JSValue[] args) {
-        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED);
-    }
-
-    /**
      * Promise.allKeyed(dictionary)
      */
     public static JSValue allKeyed(JSContext context, JSValue thisArg, JSValue[] args) {
         return performPromiseKeyedCombinator(context, thisArg, args, PromiseCombinatorMode.ALL);
+    }
+
+    /**
+     * Promise.allSettled(iterable)
+     */
+    public static JSValue allSettled(JSContext context, JSValue thisArg, JSValue[] args) {
+        return performPromiseCombinator(context, thisArg, args, PromiseCombinatorMode.ALL_SETTLED);
     }
 
     /**
@@ -460,6 +460,128 @@ public final class PromiseConstructor {
         }
     }
 
+    private static JSValue performPromiseKeyedCombinator(
+            JSContext context,
+            JSValue thisArg,
+            JSValue[] args,
+            PromiseCombinatorMode mode) {
+        String methodName = mode == PromiseCombinatorMode.ALL ? "Promise.allKeyed" : "Promise.allSettledKeyed";
+        if (!JSTypeChecking.isConstructor(thisArg)) {
+            return context.throwTypeError(methodName + " called on non-constructor");
+        }
+
+        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
+        if (promiseCapability == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
+        if (context.hasPendingException()) {
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+        if (!JSTypeChecking.isCallable(promiseResolve)) {
+            context.throwTypeError(methodName + " resolve is not callable");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSValue dictionary = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        if (dictionary.isNullOrUndefined()) {
+            context.throwTypeError("Cannot convert undefined or null to object");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSObject dictionaryObject;
+        if (dictionary instanceof JSObject obj) {
+            dictionaryObject = obj;
+        } else {
+            context.throwTypeError(methodName + " requires an object argument");
+            return rejectAbruptPromise(context, promiseCapability);
+        }
+
+        JSObject resultObject = context.createJSObject();
+        PropertyKey[] propertyKeys = dictionaryObject.enumerableKeys();
+        String[] keys = new String[propertyKeys.length];
+        for (int i = 0; i < propertyKeys.length; i++) {
+            keys[i] = propertyKeys[i].toString();
+        }
+        int[] remainingCount = {keys.length};
+
+        if (keys.length == 0) {
+            callCallable(context, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+            return promiseCapability.promise();
+        }
+
+        for (String key : keys) {
+            JSValue value = dictionaryObject.get(PropertyKey.fromString(key));
+            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{value});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+
+            String capturedKey = key;
+            JSNativeFunction onFulfilled;
+            if (mode == PromiseCombinatorMode.ALL) {
+                onFulfilled = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
+                    JSValue resolvedValue = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
+                    resultObject.set(PropertyKey.fromString(capturedKey), resolvedValue);
+                    remainingCount[0]--;
+                    if (remainingCount[0] == 0) {
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+            } else {
+                onFulfilled = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
+                    JSValue resolvedValue = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
+                    JSObject settledResult = ctx.createJSObject();
+                    settledResult.set(PropertyKey.fromString("status"), new JSString("fulfilled"));
+                    settledResult.set(PropertyKey.fromString("value"), resolvedValue);
+                    resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
+                    remainingCount[0]--;
+                    if (remainingCount[0] == 0) {
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+            }
+
+            JSNativeFunction onRejected;
+            if (mode == PromiseCombinatorMode.ALL) {
+                onRejected = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
+                    JSValue reason = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
+                    callCallable(ctx, promiseCapability.reject(), JSUndefined.INSTANCE, new JSValue[]{reason});
+                    return JSUndefined.INSTANCE;
+                });
+            } else {
+                onRejected = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
+                    JSValue reason = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
+                    JSObject settledResult = ctx.createJSObject();
+                    settledResult.set(PropertyKey.fromString("status"), new JSString("rejected"));
+                    settledResult.set(PropertyKey.fromString("reason"), reason);
+                    resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
+                    remainingCount[0]--;
+                    if (remainingCount[0] == 0) {
+                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
+                    }
+                    return JSUndefined.INSTANCE;
+                });
+            }
+
+            context.transferPrototype(onFulfilled, JSFunction.NAME);
+            context.transferPrototype(onRejected, JSFunction.NAME);
+            JSValue thenFn = callGet(context, nextPromise, PropertyKey.fromString("then"));
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+            callCallable(context, thenFn, nextPromise, new JSValue[]{onFulfilled, onRejected});
+            if (context.hasPendingException()) {
+                return rejectAbruptPromise(context, promiseCapability);
+            }
+        }
+
+        return promiseCapability.promise();
+    }
+
     /**
      * Promise.race(iterable)
      */
@@ -716,128 +838,6 @@ public final class PromiseConstructor {
         result.set(PropertyKey.RESOLVE, promiseCapability.resolve());
         result.set(PropertyKey.REJECT, promiseCapability.reject());
         return result;
-    }
-
-    private static JSValue performPromiseKeyedCombinator(
-            JSContext context,
-            JSValue thisArg,
-            JSValue[] args,
-            PromiseCombinatorMode mode) {
-        String methodName = mode == PromiseCombinatorMode.ALL ? "Promise.allKeyed" : "Promise.allSettledKeyed";
-        if (!JSTypeChecking.isConstructor(thisArg)) {
-            return context.throwTypeError(methodName + " called on non-constructor");
-        }
-
-        PromiseCapability promiseCapability = newPromiseCapability(context, thisArg);
-        if (promiseCapability == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue promiseResolve = callGet(context, thisArg, PropertyKey.RESOLVE);
-        if (context.hasPendingException()) {
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-        if (!JSTypeChecking.isCallable(promiseResolve)) {
-            context.throwTypeError(methodName + " resolve is not callable");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSValue dictionary = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (dictionary.isNullOrUndefined()) {
-            context.throwTypeError("Cannot convert undefined or null to object");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSObject dictionaryObject;
-        if (dictionary instanceof JSObject obj) {
-            dictionaryObject = obj;
-        } else {
-            context.throwTypeError(methodName + " requires an object argument");
-            return rejectAbruptPromise(context, promiseCapability);
-        }
-
-        JSObject resultObject = context.createJSObject();
-        PropertyKey[] propertyKeys = dictionaryObject.enumerableKeys();
-        String[] keys = new String[propertyKeys.length];
-        for (int i = 0; i < propertyKeys.length; i++) {
-            keys[i] = propertyKeys[i].toString();
-        }
-        int[] remainingCount = {keys.length};
-
-        if (keys.length == 0) {
-            callCallable(context, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
-            return promiseCapability.promise();
-        }
-
-        for (String key : keys) {
-            JSValue value = dictionaryObject.get(PropertyKey.fromString(key));
-            JSValue nextPromise = callCallable(context, promiseResolve, thisArg, new JSValue[]{value});
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-
-            String capturedKey = key;
-            JSNativeFunction onFulfilled;
-            if (mode == PromiseCombinatorMode.ALL) {
-                onFulfilled = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
-                    JSValue resolvedValue = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
-                    resultObject.set(PropertyKey.fromString(capturedKey), resolvedValue);
-                    remainingCount[0]--;
-                    if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-            } else {
-                onFulfilled = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
-                    JSValue resolvedValue = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
-                    JSObject settledResult = ctx.createJSObject();
-                    settledResult.set(PropertyKey.fromString("status"), new JSString("fulfilled"));
-                    settledResult.set(PropertyKey.fromString("value"), resolvedValue);
-                    resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
-                    remainingCount[0]--;
-                    if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-            }
-
-            JSNativeFunction onRejected;
-            if (mode == PromiseCombinatorMode.ALL) {
-                onRejected = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
-                    JSValue reason = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
-                    callCallable(ctx, promiseCapability.reject(), JSUndefined.INSTANCE, new JSValue[]{reason});
-                    return JSUndefined.INSTANCE;
-                });
-            } else {
-                onRejected = new JSNativeFunction(context, "", 1, (ctx, ta, a) -> {
-                    JSValue reason = a.length > 0 ? a[0] : JSUndefined.INSTANCE;
-                    JSObject settledResult = ctx.createJSObject();
-                    settledResult.set(PropertyKey.fromString("status"), new JSString("rejected"));
-                    settledResult.set(PropertyKey.fromString("reason"), reason);
-                    resultObject.set(PropertyKey.fromString(capturedKey), settledResult);
-                    remainingCount[0]--;
-                    if (remainingCount[0] == 0) {
-                        callCallable(ctx, promiseCapability.resolve(), JSUndefined.INSTANCE, new JSValue[]{resultObject});
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-            }
-
-            context.transferPrototype(onFulfilled, JSFunction.NAME);
-            context.transferPrototype(onRejected, JSFunction.NAME);
-            JSValue thenFn = callGet(context, nextPromise, PropertyKey.fromString("then"));
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-            callCallable(context, thenFn, nextPromise, new JSValue[]{onFulfilled, onRejected});
-            if (context.hasPendingException()) {
-                return rejectAbruptPromise(context, promiseCapability);
-            }
-        }
-
-        return promiseCapability.promise();
     }
 
     private enum PromiseCombinatorMode {

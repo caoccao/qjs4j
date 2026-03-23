@@ -2972,37 +2972,39 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-        // Check closure VarRefs in current frame and caller frames.
-        // VarRef-based closure variables are checked so that eval() inside class
-        // member functions can resolve the class inner name binding.
-        StackFrame checkFrame = executionContext.frame;
-        int scannedFrameCount = 0;
-        while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-            JSFunction checkFunction = checkFrame.getFunction();
-            if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                if (closureVarRefs != null && closureVarNames != null) {
-                    for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                        if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                            JSValue closureValue = closureVarRefs[i].get();
-                            if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                executionContext.virtualMachine.pendingException =
-                                        executionContext.virtualMachine.context.throwReferenceError(
-                                                "Cannot access '" + variableName + "' before initialization");
-                                stack[sp++] = JSUndefined.INSTANCE;
-                            } else {
-                                stack[sp++] = closureValue;
+        if (shouldScanClosureVarRefsForGetVar(executionContext)) {
+            // Check closure VarRefs in current frame and caller frames.
+            // VarRef-based closure variables are checked so that eval() inside class
+            // member functions can resolve the class inner name binding.
+            StackFrame checkFrame = executionContext.frame;
+            int scannedFrameCount = 0;
+            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
+                JSFunction checkFunction = checkFrame.getFunction();
+                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                    if (closureVarRefs != null && closureVarNames != null) {
+                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                                JSValue closureValue = closureVarRefs[i].get();
+                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                    executionContext.virtualMachine.pendingException =
+                                            executionContext.virtualMachine.context.throwReferenceError(
+                                                    "Cannot access '" + variableName + "' before initialization");
+                                    stack[sp++] = JSUndefined.INSTANCE;
+                                } else {
+                                    stack[sp++] = closureValue;
+                                }
+                                executionContext.sp = sp;
+                                executionContext.pc = pc + op.getSize();
+                                return;
                             }
-                            executionContext.sp = sp;
-                            executionContext.pc = pc + op.getSize();
-                            return;
                         }
                     }
                 }
+                checkFrame = checkFrame.getCaller();
+                scannedFrameCount++;
             }
-            checkFrame = checkFrame.getCaller();
-            scannedFrameCount++;
         }
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();
@@ -3053,6 +3055,37 @@ public final class OpcodeHandler {
             hasProperty = true;
         } else {
             hasProperty = globalObject.has(propertyKey);
+        }
+        if (!hasProperty && !shouldScanClosureVarRefsForGetVar(executionContext)) {
+            StackFrame checkFrame = executionContext.frame;
+            int scannedFrameCount = 0;
+            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
+                JSFunction checkFunction = checkFrame.getFunction();
+                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                    if (closureVarRefs != null && closureVarNames != null) {
+                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                                JSValue closureValue = closureVarRefs[i].get();
+                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                    executionContext.virtualMachine.pendingException =
+                                            executionContext.virtualMachine.context.throwReferenceError(
+                                                    "Cannot access '" + variableName + "' before initialization");
+                                    stack[sp++] = JSUndefined.INSTANCE;
+                                } else {
+                                    stack[sp++] = closureValue;
+                                }
+                                executionContext.sp = sp;
+                                executionContext.pc = pc + op.getSize();
+                                return;
+                            }
+                        }
+                    }
+                }
+                checkFrame = checkFrame.getCaller();
+                scannedFrameCount++;
+            }
         }
         if (!hasProperty) {
             executionContext.virtualMachine.pendingException = context.throwReferenceError(variableName + " is not defined");
@@ -3121,36 +3154,37 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-
-        // Check closure VarRefs in current frame and caller frames.
-        StackFrame checkFrame = executionContext.frame;
-        int scannedFrameCount = 0;
-        while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
-            JSFunction checkFunction = checkFrame.getFunction();
-            if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
-                VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
-                String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
-                if (closureVarRefs != null && closureVarNames != null) {
-                    for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
-                        if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
-                            JSValue closureValue = closureVarRefs[i].get();
-                            if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
-                                executionContext.virtualMachine.pendingException =
-                                        executionContext.virtualMachine.context.throwReferenceError(
-                                                "Cannot access '" + variableName + "' before initialization");
-                                stack[sp++] = JSUndefined.INSTANCE;
-                            } else {
-                                stack[sp++] = closureValue;
+        if (shouldScanClosureVarRefsForGetVar(executionContext)) {
+            // Check closure VarRefs in current frame and caller frames.
+            StackFrame checkFrame = executionContext.frame;
+            int scannedFrameCount = 0;
+            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
+                JSFunction checkFunction = checkFrame.getFunction();
+                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                    if (closureVarRefs != null && closureVarNames != null) {
+                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                                JSValue closureValue = closureVarRefs[i].get();
+                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                    executionContext.virtualMachine.pendingException =
+                                            executionContext.virtualMachine.context.throwReferenceError(
+                                                    "Cannot access '" + variableName + "' before initialization");
+                                    stack[sp++] = JSUndefined.INSTANCE;
+                                } else {
+                                    stack[sp++] = closureValue;
+                                }
+                                executionContext.sp = sp;
+                                executionContext.pc = pc + op.getSize();
+                                return;
                             }
-                            executionContext.sp = sp;
-                            executionContext.pc = pc + op.getSize();
-                            return;
                         }
                     }
                 }
+                checkFrame = checkFrame.getCaller();
+                scannedFrameCount++;
             }
-            checkFrame = checkFrame.getCaller();
-            scannedFrameCount++;
         }
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();
@@ -3191,7 +3225,45 @@ public final class OpcodeHandler {
             return;
         }
 
-        stack[sp++] = globalObject.get(propertyKey);
+        JSValue globalValue = globalObject.get(propertyKey);
+        boolean hasGlobalProperty;
+        if (!(globalValue instanceof JSUndefined)) {
+            hasGlobalProperty = true;
+        } else {
+            hasGlobalProperty = globalObject.has(propertyKey);
+        }
+        if (!hasGlobalProperty && !shouldScanClosureVarRefsForGetVar(executionContext)) {
+            StackFrame checkFrame = executionContext.frame;
+            int scannedFrameCount = 0;
+            while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
+                JSFunction checkFunction = checkFrame.getFunction();
+                if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
+                    VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
+                    String[] closureVarNames = checkBytecodeFunction.getCapturedVarNames();
+                    if (closureVarRefs != null && closureVarNames != null) {
+                        for (int i = 0; i < closureVarNames.length && i < closureVarRefs.length; i++) {
+                            if (variableName.equals(closureVarNames[i]) && closureVarRefs[i] != null) {
+                                JSValue closureValue = closureVarRefs[i].get();
+                                if (closureValue == VirtualMachine.UNINITIALIZED_MARKER) {
+                                    executionContext.virtualMachine.pendingException =
+                                            executionContext.virtualMachine.context.throwReferenceError(
+                                                    "Cannot access '" + variableName + "' before initialization");
+                                    stack[sp++] = JSUndefined.INSTANCE;
+                                } else {
+                                    stack[sp++] = closureValue;
+                                }
+                                executionContext.sp = sp;
+                                executionContext.pc = pc + op.getSize();
+                                return;
+                            }
+                        }
+                    }
+                }
+                checkFrame = checkFrame.getCaller();
+                scannedFrameCount++;
+            }
+        }
+        stack[sp++] = globalValue;
         executionContext.sp = sp;
         executionContext.pc = pc + op.getSize();
     }
@@ -6522,6 +6594,20 @@ public final class OpcodeHandler {
         }
         for (int valueOffset = 0; valueOffset < depth; valueOffset++) {
             executionContext.virtualMachine.forOfTempValues[valueOffset] = null;
+        }
+    }
+
+    private static boolean shouldScanClosureVarRefsForGetVar(ExecutionContext executionContext) {
+        JSContext context = executionContext.virtualMachine.context;
+        if (context.hasEvalOverlayFrames()) {
+            return true;
+        } else {
+            JSFunction currentFunction = executionContext.frame != null ? executionContext.frame.getFunction() : null;
+            if (currentFunction instanceof JSBytecodeFunction currentBytecodeFunction) {
+                return currentBytecodeFunction.isEvalDynamicScopeLookupEnabled();
+            } else {
+                return false;
+            }
         }
     }
 

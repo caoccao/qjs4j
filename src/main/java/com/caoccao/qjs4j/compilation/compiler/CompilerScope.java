@@ -32,8 +32,8 @@ final class CompilerScope {
     private final int scopeDepth;
     private final Set<String> simpleCatchParams = new HashSet<>();
     private int nextLocalIndex;
-    private boolean usingStackAsync;
     private int usingCatchJumpPosition = -1;
+    private boolean usingStackAsync;
     private Integer usingStackLocalIndex;
 
     CompilerScope() {
@@ -109,6 +109,10 @@ final class CompilerScope {
         return scopeDepth;
     }
 
+    int getUsingCatchJumpPosition() {
+        return usingCatchJumpPosition;
+    }
+
     Integer getUsingStackLocalIndex() {
         return usingStackLocalIndex;
     }
@@ -155,16 +159,12 @@ final class CompilerScope {
         this.nextLocalIndex = count;
     }
 
+    void setUsingCatchJumpPosition(int position) {
+        this.usingCatchJumpPosition = position;
+    }
+
     void setUsingStackLocal(int usingStackLocalIndex, boolean usingStackAsync) {
         this.usingStackLocalIndex = usingStackLocalIndex;
         this.usingStackAsync = usingStackAsync;
-    }
-
-    int getUsingCatchJumpPosition() {
-        return usingCatchJumpPosition;
-    }
-
-    void setUsingCatchJumpPosition(int position) {
-        this.usingCatchJumpPosition = position;
     }
 }

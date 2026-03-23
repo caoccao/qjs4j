@@ -54,6 +54,19 @@ public final class ArrayBufferPrototype {
     }
 
     /**
+     * get ArrayBuffer.prototype.immutable
+     * ES2025 immutable ArrayBuffer proposal.
+     * Returns true if the ArrayBuffer is immutable.
+     */
+    public static JSValue getImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
+        if (!(thisArg instanceof JSArrayBuffer buffer)) {
+            return context.throwTypeError("get ArrayBuffer.prototype.immutable called on non-ArrayBuffer");
+        }
+
+        return JSBoolean.valueOf(buffer.isImmutable());
+    }
+
+    /**
      * get ArrayBuffer.prototype.maxByteLength
      * ES2024 25.1.5.2
      * Returns the maximum byte length that the ArrayBuffer can be resized to.
@@ -82,19 +95,6 @@ public final class ArrayBufferPrototype {
         }
 
         return JSBoolean.valueOf(buffer.isResizable());
-    }
-
-    /**
-     * get ArrayBuffer.prototype.immutable
-     * ES2025 immutable ArrayBuffer proposal.
-     * Returns true if the ArrayBuffer is immutable.
-     */
-    public static JSValue getImmutable(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (!(thisArg instanceof JSArrayBuffer buffer)) {
-            return context.throwTypeError("get ArrayBuffer.prototype.immutable called on non-ArrayBuffer");
-        }
-
-        return JSBoolean.valueOf(buffer.isImmutable());
     }
 
     /**

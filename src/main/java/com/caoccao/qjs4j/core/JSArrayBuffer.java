@@ -240,13 +240,6 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
-     * Mark this ArrayBuffer as immutable.
-     */
-    public void setImmutable(boolean immutable) {
-        this.immutable = immutable;
-    }
-
-    /**
      * Check if this ArrayBuffer is resizable.
      *
      * @return true if resizable, false otherwise
@@ -289,6 +282,13 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             // Zero newly accessible bytes per ES2024 spec
             Arrays.fill(buffer.array(), oldByteLength, newByteLength, (byte) 0);
         }
+    }
+
+    /**
+     * Mark this ArrayBuffer as immutable.
+     */
+    public void setImmutable(boolean immutable) {
+        this.immutable = immutable;
     }
 
     /**

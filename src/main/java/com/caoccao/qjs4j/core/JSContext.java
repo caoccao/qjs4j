@@ -2814,6 +2814,17 @@ public final class JSContext implements AutoCloseable {
         return currentThis;
     }
 
+    private String getDynamicImportCacheKey(String resolvedSpecifier, Map<String, String> importAttributes) {
+        if (importAttributes == null) {
+            return resolvedSpecifier;
+        }
+        String importType = importAttributes.get("type");
+        if ("text".equals(importType) || "bytes".equals(importType)) {
+            return resolvedSpecifier + "\u0000type=" + importType;
+        }
+        return resolvedSpecifier;
+    }
+
     private String getDynamicImportModuleExport(
             JSDynamicImportModule moduleRecord,
             String exportName,
@@ -3393,17 +3404,6 @@ public final class JSContext implements AutoCloseable {
         }
         char nextChar = trimmedLine.charAt("import".length());
         return !Character.isLetterOrDigit(nextChar) && nextChar != '_' && nextChar != '$';
-    }
-
-    private String getDynamicImportCacheKey(String resolvedSpecifier, Map<String, String> importAttributes) {
-        if (importAttributes == null) {
-            return resolvedSpecifier;
-        }
-        String importType = importAttributes.get("type");
-        if ("text".equals(importType) || "bytes".equals(importType)) {
-            return resolvedSpecifier + "\u0000type=" + importType;
-        }
-        return resolvedSpecifier;
     }
 
     /**

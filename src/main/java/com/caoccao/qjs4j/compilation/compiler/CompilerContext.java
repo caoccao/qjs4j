@@ -97,7 +97,6 @@ final class CompilerContext {
     boolean isInAsyncFunction;
     boolean isInGeneratorFunction;
     boolean isLastInProgram;
-    boolean suppressAnnexBVarStore;
     LabeledStatementCompiler labeledStatementCompiler;
     LiteralCompiler literalCompiler;
     MemberExpressionCompiler memberExpressionCompiler;
@@ -116,6 +115,7 @@ final class CompilerContext {
     String sourceCode;
     StatementCompiler statementCompiler;
     boolean strictMode;
+    boolean suppressAnnexBVarStore;
     SwitchStatementCompiler switchStatementCompiler;
     TaggedTemplateExpressionCompiler taggedTemplateExpressionCompiler;
     TemplateLiteralCompiler templateLiteralCompiler;

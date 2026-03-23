@@ -226,24 +226,6 @@ final class JSDeferredModuleNamespace extends JSObject {
         setWithReceiverAndException(key, value, this);
     }
 
-    @Override
-    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
-        if (context.isStrictMode()) {
-            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
-        }
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
-        return false;
-    }
-
-    @Override
-    public boolean setWithResult(PropertyKey key, JSValue value) {
-        return false;
-    }
-
     private void setEvaluationPendingException(JSContext callerContext, JSException jsException) {
         JSValue errorValue = jsException.getErrorValue();
         if (errorValue != null) {
@@ -262,5 +244,23 @@ final class JSDeferredModuleNamespace extends JSObject {
             super.setPrototype(null);
         }
         // Setting non-null prototype on namespace is a no-op per spec
+    }
+
+    @Override
+    public boolean setWithReceiverAndException(PropertyKey key, JSValue value, JSObject receiver) {
+        if (context.isStrictMode()) {
+            context.throwTypeError("Cannot assign to read only property '" + key.toPropertyString() + "' of [object Module]");
+        }
+        return false;
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value, JSObject receiver) {
+        return false;
+    }
+
+    @Override
+    public boolean setWithResult(PropertyKey key, JSValue value) {
+        return false;
     }
 }
