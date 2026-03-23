@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.Set;
 
 public final class OpcodeHandler {
+    private static final int MAX_CLOSURE_SCAN_FRAME_COUNT = 65_536;
+
     private OpcodeHandler() {
     }
 
@@ -2974,8 +2976,8 @@ public final class OpcodeHandler {
         // VarRef-based closure variables are checked so that eval() inside class
         // member functions can resolve the class inner name binding.
         StackFrame checkFrame = executionContext.frame;
-        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
-        while (checkFrame != null && visitedFrames.put(checkFrame, Boolean.TRUE) == null) {
+        int scannedFrameCount = 0;
+        while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
             JSFunction checkFunction = checkFrame.getFunction();
             if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
                 VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
@@ -3000,6 +3002,7 @@ public final class OpcodeHandler {
                 }
             }
             checkFrame = checkFrame.getCaller();
+            scannedFrameCount++;
         }
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();
@@ -3121,8 +3124,8 @@ public final class OpcodeHandler {
 
         // Check closure VarRefs in current frame and caller frames.
         StackFrame checkFrame = executionContext.frame;
-        IdentityHashMap<StackFrame, Boolean> visitedFrames = new IdentityHashMap<>();
-        while (checkFrame != null && visitedFrames.put(checkFrame, Boolean.TRUE) == null) {
+        int scannedFrameCount = 0;
+        while (checkFrame != null && scannedFrameCount < MAX_CLOSURE_SCAN_FRAME_COUNT) {
             JSFunction checkFunction = checkFrame.getFunction();
             if (checkFunction instanceof JSBytecodeFunction checkBytecodeFunction) {
                 VarRef[] closureVarRefs = checkBytecodeFunction.getVarRefs();
@@ -3147,6 +3150,7 @@ public final class OpcodeHandler {
                 }
             }
             checkFrame = checkFrame.getCaller();
+            scannedFrameCount++;
         }
         JSContext context = executionContext.virtualMachine.context;
         JSObject globalObject = context.getGlobalObject();
