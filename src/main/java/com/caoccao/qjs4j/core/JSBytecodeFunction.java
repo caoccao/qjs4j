@@ -983,8 +983,28 @@ public final class JSBytecodeFunction extends JSFunction {
         }
     }
 
-    @Override
+    /**
+     * Call with an explicit argument count.  When {@code args} comes from a
+     * reusable buffer, {@code argCount} may be less than {@code args.length}.
+     * For generators/async the buffer is copied to a right-sized array
+     * before being stored in the long-lived {@link JSGeneratorState}.
+     */
+    public JSValue call(JSContext context, JSValue thisArg, JSValue[] args, int argCount) {
+        // For generators and async functions that persist args in JSGeneratorState,
+        // ensure we own a right-sized copy so the shared buffer can be reused.
+        if ((isGenerator || isAsync) && args.length != argCount) {
+            JSValue[] owned = new JSValue[argCount];
+            System.arraycopy(args, 0, owned, 0, argCount);
+            return call(context, thisArg, owned);
+        }
+        return callInternal(context, thisArg, args, argCount);
+    }
+
     public JSValue call(JSContext context, JSValue thisArg, JSValue[] args) {
+        return callInternal(context, thisArg, args, args.length);
+    }
+
+    private JSValue callInternal(JSContext context, JSValue thisArg, JSValue[] args, int argCount) {
         // Per ES spec, each function has a [[Realm]] internal slot. When called cross-realm,
         // the function should execute in its own realm, not the caller's realm.
         JSContext executionContext = getHomeContext() != null
@@ -1592,9 +1612,9 @@ public final class JSBytecodeFunction extends JSFunction {
         // For non-async functions, execute normally and let exceptions propagate
         // Arrow functions pass their captured new.target to the frame
         if (isArrow && capturedNewTarget != null) {
-            return executionContext.getVirtualMachine().execute(this, thisArg, args, capturedNewTarget);
+            return executionContext.getVirtualMachine().execute(this, thisArg, args, argCount, capturedNewTarget);
         }
-        return executionContext.getVirtualMachine().execute(this, thisArg, args);
+        return executionContext.getVirtualMachine().execute(this, thisArg, args, argCount, JSUndefined.INSTANCE);
     }
 
     public JSBytecodeFunction copyTemplateWithRemappedPrivateSymbols(

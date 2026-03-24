@@ -635,7 +635,7 @@ public final class OpcodeHandler {
                             context.throwTypeError("iterator return is not a function"));
                 }
 
-                JSValue result = callCallableValue(context, returnMethodValue, asyncYieldStarIteratorObj, new JSValue[]{returnValue});
+                JSValue result = callCallableValue(context, returnMethodValue, asyncYieldStarIteratorObj, executionContext.virtualMachine.singleArg(returnValue));
                 checkPendingException(context);
                 if (!(result instanceof JSObject returnResultObj)) {
                     throw new JSVirtualMachineException(
@@ -677,7 +677,7 @@ public final class OpcodeHandler {
                         context.throwTypeError("iterator throw is not a function"));
             }
 
-            JSValue result = callCallableValue(context, throwMethodValue, asyncYieldStarIteratorObj, new JSValue[]{throwValue});
+            JSValue result = callCallableValue(context, throwMethodValue, asyncYieldStarIteratorObj, executionContext.virtualMachine.singleArg(throwValue));
             checkPendingException(context);
             if (!(result instanceof JSObject)) {
                 throw new JSVirtualMachineException(
@@ -859,7 +859,7 @@ public final class OpcodeHandler {
         JSStackValue[] stack = virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
 
-        // Pop arguments
+        // Pop arguments (constructors pass args to native/bytecode functions that rely on args.length)
         JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
         for (int i = argumentCount - 1; i >= 0; i--) {
             args[i] = (JSValue) stack[--sp];
@@ -1607,8 +1607,8 @@ public final class OpcodeHandler {
             JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
             int sp = executionContext.sp;
 
-            // Pop arguments
-            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+            // Pop arguments into reusable buffer
+            JSValue[] args = executionContext.virtualMachine.borrowArgsBuffer(argumentCount);
             for (int i = argumentCount - 1; i >= 0; i--) {
                 args[i] = (JSValue) stack[--sp];
             }
@@ -1628,7 +1628,7 @@ public final class OpcodeHandler {
             if (canTrampoline) {
                 executionContext.virtualMachine.resetPropertyAccessTracking();
                 executionContext.virtualMachine.tailCallPending =
-                        new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, JSUndefined.INSTANCE, args);
+                        new VirtualMachine.TailCallRequest((JSBytecodeFunction) callee, JSUndefined.INSTANCE, args, argumentCount);
                 executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
                 executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
                 executionContext.opcodeRequestedReturn = true;
@@ -1637,8 +1637,8 @@ public final class OpcodeHandler {
 
             // Not eligible for trampoline: push values back and call normally, then return
             stack[sp++] = callee;
-            for (JSValue arg : args) {
-                stack[sp++] = arg;
+            for (int i = 0; i < argumentCount; i++) {
+                stack[sp++] = args[i];
             }
             executionContext.sp = sp;
             internalHandleCall(executionContext, argumentCount, true);
@@ -3738,12 +3738,12 @@ public final class OpcodeHandler {
             if (superConstructorObject instanceof JSProxy superProxy) {
                 superResult = superProxy.construct(
                         executionContext.virtualMachine.context,
-                        executionContext.virtualMachine.currentFrame.getArguments(),
+                        executionContext.frame.getArguments(),
                         frameNewTarget);
             } else if (superConstructorObject instanceof JSFunction superConstructor) {
                 superResult = executionContext.virtualMachine.constructFunction(
                         superConstructor,
-                        executionContext.virtualMachine.currentFrame.getArguments(),
+                        executionContext.frame.getArguments(),
                         frameNewTarget);
             } else {
                 executionContext.virtualMachine.pendingException =
@@ -3875,7 +3875,7 @@ public final class OpcodeHandler {
                 executionContext.pc += op.getSize();
                 return;
             }
-            JSValue result = hasInstanceFunction.call(executionContext.virtualMachine.context, right, new JSValue[]{left});
+            JSValue result = hasInstanceFunction.call(executionContext.virtualMachine.context, right, executionContext.virtualMachine.singleArg(left));
             if (executionContext.virtualMachine.context.hasPendingException()) {
                 executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                 executionContext.virtualMachine.context.clearPendingException();
@@ -3966,7 +3966,7 @@ public final class OpcodeHandler {
             }
             JSValue callResult = (flags & 2) != 0
                     ? callCallableValue(executionContext.virtualMachine.context, methodValue, iteratorObject, JSValue.NO_ARGS)
-                    : callCallableValue(executionContext.virtualMachine.context, methodValue, iteratorObject, new JSValue[]{argumentValue});
+                    : callCallableValue(executionContext.virtualMachine.context, methodValue, iteratorObject, executionContext.virtualMachine.singleArg(argumentValue));
             stack[sp - 1] = callResult;
         }
         stack[sp++] = JSBoolean.valueOf(noMethod);
@@ -4085,7 +4085,7 @@ public final class OpcodeHandler {
         if (!JSTypeChecking.isCallable(nextMethodValue)) {
             throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator next is not a function"));
         }
-        JSValue nextResult = callCallableValue(executionContext.virtualMachine.context, nextMethodValue, iteratorValue, new JSValue[]{argumentValue});
+        JSValue nextResult = callCallableValue(executionContext.virtualMachine.context, nextMethodValue, iteratorValue, executionContext.virtualMachine.singleArg(argumentValue));
         stack[sp - 1] = nextResult;
         stack[sp - 2] = catchOffsetValue;
         executionContext.pc += op.getSize();
@@ -4880,7 +4880,7 @@ public final class OpcodeHandler {
                 setterFunction.call(
                         executionContext.virtualMachine.context,
                         object,
-                        new JSValue[]{value});
+                        executionContext.virtualMachine.singleArg(value));
             } else {
                 if (!descriptor.isWritable()) {
                     executionContext.virtualMachine.pendingException =
@@ -5697,8 +5697,8 @@ public final class OpcodeHandler {
         }
 
         if (canTrampoline) {
-            // Pop arguments, receiver, callee for trampoline
-            JSValue[] args = argumentCount == 0 ? JSValue.NO_ARGS : new JSValue[argumentCount];
+            // Pop arguments into reusable buffer — StackFrame copies on next execute()
+            JSValue[] args = executionContext.virtualMachine.borrowArgsBuffer(argumentCount);
             for (int i = argumentCount - 1; i >= 0; i--) {
                 args[i] = executionContext.virtualMachine.valueStack.pop();
             }
@@ -5722,7 +5722,7 @@ public final class OpcodeHandler {
 
             // Store the tail call request for the trampoline loop in execute()
             executionContext.virtualMachine.tailCallPending =
-                    new VirtualMachine.TailCallRequest(tailCallee, receiver, args);
+                    new VirtualMachine.TailCallRequest(tailCallee, receiver, args, argumentCount);
             // Clean up the current frame (same as RETURN)
             executionContext.virtualMachine.lastConstructorThisArg = executionContext.frame.getThisArg();
             executionContext.virtualMachine.finalizeExecuteReturn(executionContext);
@@ -6009,7 +6009,7 @@ public final class OpcodeHandler {
                     }
 
                     // Call iterator.return(value)
-                    JSValue result = callCallableValue(executionContext.virtualMachine.context, returnMethodValue, iteratorObj, new JSValue[]{returnValue});
+                    JSValue result = callCallableValue(executionContext.virtualMachine.context, returnMethodValue, iteratorObj, executionContext.virtualMachine.singleArg(returnValue));
                     if (executionContext.virtualMachine.context.hasPendingException()) {
                         throw new JSVirtualMachineException(
                                 executionContext.virtualMachine.context.getPendingException().toString(),
@@ -6089,7 +6089,7 @@ public final class OpcodeHandler {
                 }
 
                 // Call iterator.throw(value)
-                JSValue result = callCallableValue(executionContext.virtualMachine.context, throwMethodValue, iteratorObj, new JSValue[]{throwValue});
+                JSValue result = callCallableValue(executionContext.virtualMachine.context, throwMethodValue, iteratorObj, executionContext.virtualMachine.singleArg(throwValue));
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     throw new JSVirtualMachineException(
                             executionContext.virtualMachine.context.getPendingException().toString(),
@@ -6313,8 +6313,18 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
 
         // Stack layout (bottom to top): method, receiver, arg1, arg2, ...
-        // Pop arguments from stack
-        JSValue[] args = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
+        // Peek at callee to decide buffer strategy (callee is below receiver and args)
+        int calleeIndex = directEvalSyntax ? (sp - argCount - 1) : (sp - argCount - 2);
+        JSValue calleePreview = (JSValue) stack[calleeIndex];
+        boolean useBorrowedBuffer = calleePreview instanceof JSBytecodeFunction;
+
+        // Pop arguments from stack — reuse buffer for bytecode functions
+        JSValue[] args;
+        if (useBorrowedBuffer) {
+            args = virtualMachine.borrowArgsBuffer(argCount);
+        } else {
+            args = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
+        }
         for (int i = argCount - 1; i >= 0; i--) {
             args[i] = (JSValue) stack[--sp];
         }
@@ -6435,8 +6445,10 @@ public final class OpcodeHandler {
 
             if (function instanceof JSBytecodeFunction bytecodeFunc) {
                 try {
-                    // Call through the function's call method to handle async wrapping
-                    JSValue result = bytecodeFunc.call(context, receiver, args);
+                    // Call through the function's call method to handle async wrapping.
+                    // Pass argCount so the borrowed buffer (which may be oversized) is
+                    // handled correctly by StackFrame and generator/async paths.
+                    JSValue result = bytecodeFunc.call(context, receiver, args, argCount);
                     if (context.hasPendingException()) {
                         virtualMachine.pendingException = context.getPendingException();
                         stack[sp++] = JSUndefined.INSTANCE;

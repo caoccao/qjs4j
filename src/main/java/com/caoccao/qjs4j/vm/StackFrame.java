@@ -27,11 +27,11 @@ import java.util.Map;
 public final class StackFrame {
     private static final VarRef[] EMPTY_VARREFS = new VarRef[0];
 
-    private final JSValue[] arguments;  // Original arguments passed to function
+    private final JSValue[] arguments;
     private final StackFrame caller;
     private final JSValue[] closureVars;
-    private final JSFunction function;
     private final int frameDepth;
+    private final JSFunction function;
     private final JSValue[] locals;
     private final JSValue newTarget;
     private final int stackBase;
@@ -40,18 +40,26 @@ public final class StackFrame {
     private VarRef derivedThisRef;
     private Map<String, Integer> dynamicVarBindingLocalIndexes;
     private Map<String, JSValue> dynamicVarBindings;
+    private Map<String, VarRef> evalScopeVarRefs;
     private VarRef[] localVarRefs;
     private JSArguments mappedArgumentsObject;
     private int programCounter;
     private JSValue thisArg;
     private JSArguments unmappedArgumentsObject;
 
-    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, StackFrame caller, JSValue newTarget, int stackBase) {
+    /**
+     * Create a stack frame for a function call.
+     *
+     * @param args     argument values — may be a reusable buffer; values are copied
+     *                 into arguments and locals, so the caller can reuse the array after this returns.
+     * @param argCount the actual number of arguments (may be &lt; args.length when
+     *                 a shared buffer is used)
+     */
+    public StackFrame(JSFunction function, JSValue thisArg, JSValue[] args, int argCount, StackFrame caller, JSValue newTarget, int stackBase) {
         this.function = function;
         this.thisArg = thisArg;
         this.newTarget = newTarget;
         this.stackBase = stackBase;
-        this.arguments = args;  // Store original arguments for arguments object
         if (caller == null) {
             frameDepth = 1;
         } else {
@@ -67,11 +75,16 @@ public final class StackFrame {
         }
 
         if (localCount > 0) {
+            // Create owned copy of arguments from the (possibly shared) buffer.
+            // Arguments and locals are separate arrays: GET_ARG reads arguments,
+            // GET_LOC reads locals. SET_LOC_UNINITIALIZED may overwrite locals
+            // for default-parameter TDZ, but arguments must retain original values.
+            this.arguments = new JSValue[argCount];
+            System.arraycopy(args, 0, this.arguments, 0, argCount);
             this.locals = new JSValue[localCount];
-            // Copy args into the first slots
-            System.arraycopy(args, 0, this.locals, 0, Math.min(args.length, localCount));
+            System.arraycopy(args, 0, this.locals, 0, Math.min(argCount, localCount));
             // Initialize remaining locals to undefined
-            for (int i = args.length; i < localCount; i++) {
+            for (int i = argCount; i < localCount; i++) {
                 this.locals[i] = JSUndefined.INSTANCE;
             }
             if (function instanceof JSBytecodeFunction bytecodeFunction) {
@@ -81,7 +94,9 @@ public final class StackFrame {
                 }
             }
         } else {
-            // For native functions or functions with no locals
+            // For native functions or functions with no locals.
+            // args is always an owned array for native functions (allocated in CALL handler).
+            this.arguments = args;
             this.locals = args;
         }
 
@@ -142,6 +157,31 @@ public final class StackFrame {
         closedVarRefs[index] = ref;
     }
 
+    /**
+     * Read a single argument value by index.
+     * Reads from the arguments array (not locals), so TDZ markers set by
+     * SET_LOC_UNINITIALIZED do not affect the result.
+     */
+    public JSValue getArgument(int index) {
+        if (index >= 0 && index < arguments.length) {
+            JSValue value = arguments[index];
+            return value != null ? value : JSUndefined.INSTANCE;
+        }
+        return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Return the argument count (number of arguments actually passed to this call).
+     */
+    public int getArgumentCount() {
+        return arguments.length;
+    }
+
+    /**
+     * Return the original arguments array.
+     * For bytecode functions this is a separate owned copy that is never modified
+     * by LOC opcodes, preserving pre-default-parameter values.
+     */
     public JSValue[] getArguments() {
         return arguments;
     }
@@ -177,12 +217,12 @@ public final class StackFrame {
         return dynamicVarBindings;
     }
 
-    public JSFunction getFunction() {
-        return function;
-    }
-
     public int getFrameDepth() {
         return frameDepth;
+    }
+
+    public JSFunction getFunction() {
+        return function;
     }
 
     public JSValue[] getLocals() {
@@ -277,6 +317,19 @@ public final class StackFrame {
             return false;
         }
         return dynamicVarBindings.remove(name) != null;
+    }
+
+    /**
+     * Write a single argument value by index.
+     * Writes to both arguments and locals to keep them in sync for PUT_ARG.
+     */
+    public void setArgument(int index, JSValue value) {
+        if (index >= 0 && index < arguments.length) {
+            arguments[index] = value;
+            if (index < locals.length) {
+                locals[index] = value;
+            }
+        }
     }
 
     public void setArgumentsObject(boolean mapped, JSArguments argumentsObject) {

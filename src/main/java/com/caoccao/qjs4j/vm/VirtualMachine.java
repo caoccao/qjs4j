@@ -33,11 +33,14 @@ public final class VirtualMachine {
     static final BigInteger BIGINT_ONE = BigInteger.ONE;
     static final BigInteger BIGINT_ZERO = BigInteger.ZERO;
     static final int INTERRUPT_CHECK_INTERVAL = 0xFFFF; // Check every ~65K opcodes
+    static final int SMALL_ARGS_BUFFER_SIZE = 8;
     static final JSValue UNINITIALIZED_MARKER = new JSSymbol("UninitializedMarker");
     final JSContext context;
     final Set<JSObject> exhaustedForOfIterators;
     final Set<JSObject> initializedConstantObjects;
     final StringBuilder propertyAccessChain;  // Track last property access for better error messages
+    final JSValue[] singleArgBuffer = new JSValue[1];   // Reusable 1-element args buffer
+    final JSValue[] smallArgsBuffer = new JSValue[SMALL_ARGS_BUFFER_SIZE]; // Reusable small args buffer
     final boolean trackPropertyAccess;
     final CallStack valueStack;
     JSGeneratorState activeGeneratorState;
@@ -303,6 +306,24 @@ public final class VirtualMachine {
         } else if (indexValue instanceof JSSymbol symbolValue) {
             propertyAccessChain.append("[Symbol.").append(symbolValue.getDescription()).append("]");
         }
+    }
+
+    /**
+     * Return a reusable args buffer for the given argument count.
+     * For 0 args, returns JSValue.NO_ARGS (shared empty).
+     * For 1-8 args, returns smallArgsBuffer (caller fills it).
+     * For >8 args, allocates a new array.
+     * The returned buffer (except NO_ARGS) is owned by this VM — callers must
+     * finish using it before the next call that uses this method.
+     */
+    JSValue[] borrowArgsBuffer(int argCount) {
+        if (argCount == 0) {
+            return JSValue.NO_ARGS;
+        }
+        if (argCount <= SMALL_ARGS_BUFFER_SIZE) {
+            return smallArgsBuffer;
+        }
+        return new JSValue[argCount];
     }
 
     JSValue[] buildApplyArguments(JSValue argsArrayValue, boolean allowNullOrUndefined) {
@@ -927,10 +948,18 @@ public final class VirtualMachine {
      * Execute a bytecode function.
      */
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args) {
-        return execute(function, thisArg, args, JSUndefined.INSTANCE);
+        return execute(function, thisArg, args, args.length, JSUndefined.INSTANCE);
     }
 
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, JSValue newTarget) {
+        return execute(function, thisArg, args, args.length, newTarget);
+    }
+
+    /**
+     * Execute a bytecode function with an explicit argument count.
+     * When args comes from a reusable buffer, argCount may be less than args.length.
+     */
+    public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, int argCount, JSValue newTarget) {
         // Skip ThreadLocal push/pop for nested calls (same context already active).
         // This avoids expensive ThreadLocal get/set on every bytecode function call.
         boolean isOuterCall = (currentFrame == null);
@@ -973,7 +1002,7 @@ public final class VirtualMachine {
                 // Create or restore stack frame
                 StackFrame frame = resumeGeneratorExecution
                         ? generatorStateForExecution.getSuspendedFrame()
-                        : new StackFrame(function, thisArg, args, currentFrame, newTarget, callerStackTop);
+                        : new StackFrame(function, thisArg, args, argCount, currentFrame, newTarget, callerStackTop);
                 if (!resumeGeneratorExecution) {
                     int currentFrameDepth;
                     if (currentFrame == null) {
@@ -1054,6 +1083,7 @@ public final class VirtualMachine {
                                 function = req.function();
                                 thisArg = req.receiver();
                                 args = req.args();
+                                argCount = req.argCount();
                                 newTarget = JSUndefined.INSTANCE;
                                 continue tailCallLoop;
                             }
@@ -1195,12 +1225,7 @@ public final class VirtualMachine {
     }
 
     JSValue getArgumentValue(int index) {
-        JSValue[] arguments = currentFrame.getArguments();
-        if (index >= 0 && index < arguments.length) {
-            JSValue value = arguments[index];
-            return value != null ? value : JSUndefined.INSTANCE;
-        }
-        return JSUndefined.INSTANCE;
+        return currentFrame.getArgument(index);
     }
 
     JSString getComputedNameString(JSValue keyValue) {
@@ -1497,10 +1522,10 @@ public final class VirtualMachine {
                 referenceValue = frame.getLocals()[refIndex];
             }
             case MAKE_ARG_REF -> {
-                if (refIndex < 0 || refIndex >= frame.getArguments().length) {
+                if (refIndex < 0 || refIndex >= frame.getArgumentCount()) {
                     return JSUndefined.INSTANCE;
                 }
-                referenceValue = frame.getArguments()[refIndex];
+                referenceValue = frame.getArgument(refIndex);
             }
             case MAKE_VAR_REF_REF -> referenceValue = frame.getVarRef(refIndex);
             default -> {
@@ -1614,12 +1639,8 @@ public final class VirtualMachine {
     }
 
     void setArgumentValue(int index, JSValue value) {
-        JSValue[] arguments = currentFrame.getArguments();
-        if (index >= 0 && index < arguments.length) {
-            arguments[index] = value;
-        }
-        // Keep local mirror in sync for argument slots copied into locals.
-        setLocalValue(index, value);
+        // setArgument writes to both arguments[] and locals[] to keep them in sync.
+        currentFrame.setArgument(index, value);
     }
 
     /**
@@ -1701,6 +1722,15 @@ public final class VirtualMachine {
                 && !bytecodeFunction.hasParameterExpressions();
     }
 
+    /**
+     * Return a reusable 1-element args array containing the given value.
+     * The returned array is owned by this VM — callers must not retain it.
+     */
+    JSValue[] singleArg(JSValue value) {
+        singleArgBuffer[0] = value;
+        return singleArgBuffer;
+    }
+
     JSValue throwMixedBigIntTypeError() {
         pendingException = context.throwTypeError("Cannot mix BigInt and other types");
         return JSUndefined.INSTANCE;
@@ -1762,8 +1792,8 @@ public final class VirtualMachine {
                 }
             }
             case MAKE_ARG_REF -> {
-                if (refIndex >= 0 && refIndex < frame.getArguments().length) {
-                    frame.getArguments()[refIndex] = value;
+                if (refIndex >= 0 && refIndex < frame.getArgumentCount()) {
+                    frame.setArgument(refIndex, value);
                 }
             }
             case MAKE_VAR_REF_REF -> {
@@ -1789,7 +1819,7 @@ public final class VirtualMachine {
     /**
      * Tail call request used for trampoline-based tail call optimization.
      */
-    record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args) {
+    record TailCallRequest(JSBytecodeFunction function, JSValue receiver, JSValue[] args, int argCount) {
     }
 
 }
