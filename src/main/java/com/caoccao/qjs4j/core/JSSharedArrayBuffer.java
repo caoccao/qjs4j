@@ -71,8 +71,9 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         if (maxByteLength < byteLength) {
             throw new IllegalArgumentException("Invalid array buffer max length");
         }
-        // Use direct buffer for sharing across threads
-        this.buffer = ByteBuffer.allocateDirect(maxByteLength);
+        // Use heap buffer so backing byte[] is accessible for VarHandle atomics
+        // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
+        this.buffer = ByteBuffer.allocate((maxByteLength + 3) & ~3);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.byteLength = byteLength;
         this.maxByteLength = maxByteLength;

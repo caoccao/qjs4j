@@ -60,7 +60,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         if (maxByteLength != -1 && maxByteLength < byteLength) {
             throw new IllegalArgumentException("ArrayBuffer maxByteLength must be >= byteLength");
         }
-        this.buffer = ByteBuffer.allocate(maxByteLength != -1 ? maxByteLength : byteLength);
+        int rawSize = maxByteLength != -1 ? maxByteLength : byteLength;
+        // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
+        this.buffer = ByteBuffer.allocate((rawSize + 3) & ~3);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.buffer.limit(byteLength);
         this.detached = false;
@@ -75,7 +77,16 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public JSArrayBuffer(JSContext context, byte[] bytes) {
         super(context);
-        this.buffer = ByteBuffer.wrap(bytes);
+        // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
+        int allocSize = (bytes.length + 3) & ~3;
+        if (allocSize > bytes.length) {
+            byte[] padded = new byte[allocSize];
+            System.arraycopy(bytes, 0, padded, 0, bytes.length);
+            this.buffer = ByteBuffer.wrap(padded);
+            this.buffer.limit(bytes.length);
+        } else {
+            this.buffer = ByteBuffer.wrap(bytes);
+        }
         this.buffer.order(ByteOrder.LITTLE_ENDIAN);
         this.detached = false;
         this.resizable = false;
