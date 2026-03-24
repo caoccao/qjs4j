@@ -47,7 +47,6 @@ import java.util.regex.Pattern;
  * from the others (separate globals, separate module namespaces).
  */
 public final class JSContext implements AutoCloseable {
-    private static final ThreadLocal<JSContext> CURRENT_EXECUTION_CONTEXT = new ThreadLocal<>();
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
@@ -76,6 +75,7 @@ public final class JSContext implements AutoCloseable {
     // Stack trace capture
     private final List<StackTraceElement> errorStackTrace;
     private final Deque<EvalOverlayFrame> evalOverlayFrames;
+    private final List<JSFinalizationRegistry> finalizationRegistries;
     // Global declaration tracking for cross-script collision detection
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
     private final Set<String> globalConstDeclarations;
@@ -149,6 +149,7 @@ public final class JSContext implements AutoCloseable {
         this.waitable = true;
         this.inCatchHandler = false;
         this.evalOverlayFrames = new ArrayDeque<>();
+        this.finalizationRegistries = new ArrayList<>();
         this.iteratorPrototypes = new HashMap<>();
         this.jsGlobalObject = new JSGlobalObject(this);
         this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
@@ -171,10 +172,6 @@ public final class JSContext implements AutoCloseable {
         initializeGlobalObject();
     }
 
-    public static JSContext getCurrentExecutionContext() {
-        return CURRENT_EXECUTION_CONTEXT.get();
-    }
-
     private static int parseHex(String text) {
         if (text == null || text.isEmpty()) {
             return -1;
@@ -193,19 +190,6 @@ public final class JSContext implements AutoCloseable {
         return value;
     }
 
-    public static void popCurrentExecutionContext(JSContext previousContext) {
-        if (previousContext == null) {
-            CURRENT_EXECUTION_CONTEXT.remove();
-        } else {
-            CURRENT_EXECUTION_CONTEXT.set(previousContext);
-        }
-    }
-
-    public static JSContext pushCurrentExecutionContext(JSContext context) {
-        JSContext previousContext = CURRENT_EXECUTION_CONTEXT.get();
-        CURRENT_EXECUTION_CONTEXT.set(context);
-        return previousContext;
-    }
 
     private void appendDynamicImportDefaultExportNameFixup(
             StringBuilder transformedSourceBuilder,
@@ -4627,6 +4611,10 @@ public final class JSContext implements AutoCloseable {
      */
     public void processMicrotasks() {
         microtaskQueue.processMicrotasks();
+        // Poll finalization registries for collected targets
+        for (int i = 0; i < finalizationRegistries.size(); i++) {
+            finalizationRegistries.get(i).pollCleanups();
+        }
     }
 
     public void pushEvalOverlay(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
@@ -4753,6 +4741,10 @@ public final class JSContext implements AutoCloseable {
         asyncModulePromise.addReactions(
                 new JSPromise.ReactionRecord(onFulfill, this, null, null),
                 new JSPromise.ReactionRecord(onReject, this, null, null));
+    }
+
+    public void registerFinalizationRegistry(JSFinalizationRegistry registry) {
+        finalizationRegistries.add(registry);
     }
 
     private void registerImportedBinding(

@@ -960,11 +960,14 @@ public final class VirtualMachine {
      * When args comes from a reusable buffer, argCount may be less than args.length.
      */
     public JSValue execute(JSBytecodeFunction function, JSValue thisArg, JSValue[] args, int argCount, JSValue newTarget) {
-        // Skip ThreadLocal push/pop for nested calls (same context already active).
-        // This avoids expensive ThreadLocal get/set on every bytecode function call.
+        // Track executing context on runtime for cross-realm proxy support.
+        // Uses a plain field (not ThreadLocal) — just a pointer write per outermost call.
         boolean isOuterCall = (currentFrame == null);
-        JSContext previousExecutionContext = isOuterCall
-                ? JSContext.pushCurrentExecutionContext(context) : null;
+        JSContext previousExecutingContext = null;
+        if (isOuterCall) {
+            previousExecutingContext = context.getRuntime().getCurrentExecutingContext();
+            context.getRuntime().setCurrentExecutingContext(context);
+        }
         try {
             pendingException = null;
             context.clearPendingException();
@@ -1118,7 +1121,7 @@ public final class VirtualMachine {
             }
         } finally {
             if (isOuterCall) {
-                JSContext.popCurrentExecutionContext(previousExecutionContext);
+                context.getRuntime().setCurrentExecutingContext(previousExecutingContext);
             }
         }
     }

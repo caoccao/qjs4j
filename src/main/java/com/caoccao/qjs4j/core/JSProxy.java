@@ -1088,11 +1088,8 @@ public final class JSProxy extends JSObject {
         if (explicitContext != null) {
             return explicitContext;
         }
-        JSContext currentExecutionContext = JSContext.getCurrentExecutionContext();
-        if (currentExecutionContext != null) {
-            return currentExecutionContext;
-        }
-        return context;
+        JSContext current = context.getRuntime().getCurrentExecutingContext();
+        return current != null ? current : context;
     }
 
     /**

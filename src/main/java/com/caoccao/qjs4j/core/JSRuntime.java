@@ -48,8 +48,10 @@ public final class JSRuntime implements AutoCloseable {
     private final List<JSContext> contexts;
     private final GarbageCollector gc;
     private final Map<String, JSSymbol> globalSymbolRegistry;
+    private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
     private final JSRuntimeOptions options;
+    private JSContext currentExecutingContext;
 
     /**
      * Create a new runtime with default options.
@@ -70,6 +72,7 @@ public final class JSRuntime implements AutoCloseable {
         this.atoms = new AtomTable();
         this.jobQueue = new ConcurrentLinkedQueue<>();
         this.globalSymbolRegistry = new HashMap<>();
+        this.globalSymbolReverseRegistry = new HashMap<>();
         this.options = options;
     }
 
@@ -130,6 +133,10 @@ public final class JSRuntime implements AutoCloseable {
         return new ArrayList<>(contexts);
     }
 
+    public JSContext getCurrentExecutingContext() {
+        return currentExecutingContext;
+    }
+
     /**
      * Get the garbage collector.
      */
@@ -142,13 +149,8 @@ public final class JSRuntime implements AutoCloseable {
      */
     public String getGlobalSymbolKey(JSSymbol symbol) {
         synchronized (globalSymbolRegistry) {
-            for (Map.Entry<String, JSSymbol> entry : globalSymbolRegistry.entrySet()) {
-                if (entry.getValue() == symbol) {
-                    return entry.getKey();
-                }
-            }
+            return globalSymbolReverseRegistry.get(symbol);
         }
-        return null;
     }
 
     /**
@@ -163,7 +165,14 @@ public final class JSRuntime implements AutoCloseable {
      */
     public JSSymbol getOrCreateGlobalSymbol(String key) {
         synchronized (globalSymbolRegistry) {
-            return globalSymbolRegistry.computeIfAbsent(key, k -> new JSSymbol(k, true));
+            JSSymbol existing = globalSymbolRegistry.get(key);
+            if (existing != null) {
+                return existing;
+            }
+            JSSymbol symbol = new JSSymbol(key, true);
+            globalSymbolRegistry.put(key, symbol);
+            globalSymbolReverseRegistry.put(symbol, key);
+            return symbol;
         }
     }
 
@@ -196,6 +205,10 @@ public final class JSRuntime implements AutoCloseable {
      * Check if execution should be interrupted.
      * Called periodically during bytecode execution.
      */
+    public void setCurrentExecutingContext(JSContext context) {
+        this.currentExecutingContext = context;
+    }
+
     public boolean shouldInterrupt() {
         // In full implementation, this would check:
         // - Timeout limits

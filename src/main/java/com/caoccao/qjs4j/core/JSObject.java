@@ -777,10 +777,7 @@ public non-sealed class JSObject implements JSValue {
             if (desc != null && desc.isAccessorDescriptor()) {
                 JSFunction getter = desc.getGetter();
                 if (getter != null) {
-                    JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
-                    if (propertyAccessContext == null) {
-                        propertyAccessContext = this.context;
-                    }
+                    JSContext propertyAccessContext = this.context;
                     try {
                         // Call the getter with the ORIGINAL receiver as 'this', not the prototype
                         JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
@@ -813,10 +810,7 @@ public non-sealed class JSObject implements JSValue {
                 && isLegacyFunctionPropertyAccessible(currentFunction)) {
             String propertyName = key.asString();
             if (JSKeyword.ARGUMENTS.equals(propertyName)) {
-                JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
-                if (propertyAccessContext == null) {
-                    propertyAccessContext = this.context;
-                }
+                JSContext propertyAccessContext = this.context;
                 StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
                 if (currentFunctionFrame == null) {
                     return JSNull.INSTANCE;
@@ -830,10 +824,7 @@ public non-sealed class JSObject implements JSValue {
                 return argumentsObject;
             }
             if ("caller".equals(propertyName)) {
-                JSContext propertyAccessContext = JSContext.getCurrentExecutionContext();
-                if (propertyAccessContext == null) {
-                    propertyAccessContext = this.context;
-                }
+                JSContext propertyAccessContext = this.context;
                 StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
                 if (currentFunctionFrame == null) {
                     return JSNull.INSTANCE;

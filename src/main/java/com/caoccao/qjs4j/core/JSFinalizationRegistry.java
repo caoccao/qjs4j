@@ -19,8 +19,8 @@ package com.caoccao.qjs4j.core;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a FinalizationRegistry object in JavaScript.
@@ -35,11 +35,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class JSFinalizationRegistry extends JSObject {
     public static final String NAME = "FinalizationRegistry";
     private final JSFunction cleanupCallback;
-    private final Thread cleanupThread;
     private final JSContext context;
     private final ReferenceQueue<Object> referenceQueue;
     private final Map<PhantomReference<Object>, RegistrationRecord> registrations;
-    private volatile boolean running;
 
     /**
      * Create a new FinalizationRegistry.
@@ -52,13 +50,8 @@ public final class JSFinalizationRegistry extends JSObject {
         this.cleanupCallback = cleanupCallback;
         this.context = context;
         this.referenceQueue = new ReferenceQueue<>();
-        this.registrations = new ConcurrentHashMap<>();
-        this.running = true;
-
-        // Start cleanup thread to monitor the reference queue
-        this.cleanupThread = new Thread(this::cleanupLoop, "FinalizationRegistry-Cleanup");
-        this.cleanupThread.setDaemon(true);
-        this.cleanupThread.start();
+        this.registrations = new HashMap<>();
+        context.registerFinalizationRegistry(this);
     }
 
     public static JSObject create(JSContext context, JSValue... args) {
@@ -72,44 +65,6 @@ public final class JSFinalizationRegistry extends JSObject {
     }
 
     /**
-     * Cleanup loop that monitors the reference queue.
-     * Runs in a background thread.
-     */
-    private void cleanupLoop() {
-        while (running) {
-            try {
-                // Wait for a reference to be enqueued (blocking)
-                Reference<?> ref = referenceQueue.remove();
-
-                // Get the registration record
-                RegistrationRecord record = registrations.remove(ref);
-
-                if (record != null) {
-                    // Call cleanup callback as a microtask
-                    context.enqueueMicrotask(() -> {
-                        try {
-                            cleanupCallback.call(context, JSUndefined.INSTANCE,
-                                    new JSValue[]{record.heldValue});
-                        } catch (Exception e) {
-                            // Cleanup callback errors should not crash the program
-                            System.err.println("FinalizationRegistry cleanup error: " + e.getMessage());
-                        }
-                    });
-                }
-
-                // Clear the phantom reference
-                ref.clear();
-            } catch (InterruptedException e) {
-                // Thread interrupted, exit loop
-                break;
-            } catch (Exception e) {
-                // Log error but continue running
-                System.err.println("FinalizationRegistry cleanup loop error: " + e.getMessage());
-            }
-        }
-    }
-
-    /**
      * Get the number of active registrations.
      * For debugging/testing purposes.
      *
@@ -117,6 +72,26 @@ public final class JSFinalizationRegistry extends JSObject {
      */
     public int getRegistrationCount() {
         return registrations.size();
+    }
+
+    /**
+     * Poll the reference queue for collected targets and invoke cleanup callbacks.
+     * Called lazily from processMicrotasks() — no background thread needed.
+     */
+    public void pollCleanups() {
+        Reference<?> ref;
+        while ((ref = referenceQueue.poll()) != null) {
+            RegistrationRecord record = registrations.remove(ref);
+            if (record != null) {
+                try {
+                    cleanupCallback.call(context, JSUndefined.INSTANCE,
+                            new JSValue[]{record.heldValue});
+                } catch (Exception e) {
+                    // Cleanup callback errors should not crash the program
+                }
+            }
+            ref.clear();
+        }
     }
 
     /**
@@ -136,16 +111,6 @@ public final class JSFinalizationRegistry extends JSObject {
         // Store registration
         RegistrationRecord record = new RegistrationRecord(heldValue, unregisterToken);
         registrations.put(phantomRef, record);
-    }
-
-    /**
-     * Stop the cleanup thread and clear all registrations.
-     * Called when the registry is no longer needed.
-     */
-    public void shutdown() {
-        running = false;
-        cleanupThread.interrupt();
-        registrations.clear();
     }
 
     @Override
