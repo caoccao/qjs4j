@@ -24,9 +24,7 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -43,6 +41,13 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public final class AtomicsObject {
 
+    // Shared thread pool for Atomics.waitAsync() — reuses threads instead of creating one per call.
+    // Cached pool: idle threads are terminated after 60s, new threads created on demand.
+    private final ExecutorService waitAsyncExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "qjs4j-atomics-waitAsync");
+        t.setDaemon(true);
+        return t;
+    });
     // Wait lists indexed by SharedArrayBuffer + index, scoped per runtime (agent cluster)
     private final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
 
@@ -1078,7 +1083,7 @@ public final class AtomicsObject {
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
             CountDownLatch waiterRegisteredLatch = new CountDownLatch(1);
-            Thread waitThread = new Thread(() -> {
+            waitAsyncExecutor.execute(() -> {
                 try {
                     String waitResult = waitList.await(timeoutMillis, waiterRegisteredLatch);
                     promise.fulfill(new JSString(waitResult));
@@ -1087,12 +1092,7 @@ public final class AtomicsObject {
                     waiterRegisteredLatch.countDown();
                     promise.fulfill(new JSString("timed-out"));
                 }
-                // Do NOT call runJobs()/processMicrotasks() here.
-                // promise.fulfill() enqueues microtasks thread-safely;
-                // the main event loop will process them.
-            }, "qjs4j-atomics-waitAsync");
-            waitThread.setDaemon(true);
-            waitThread.start();
+            });
             try {
                 waiterRegisteredLatch.await();
             } catch (InterruptedException e) {
