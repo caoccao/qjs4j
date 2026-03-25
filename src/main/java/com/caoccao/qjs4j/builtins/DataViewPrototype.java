@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 /**
  * Implementation of DataView.prototype methods.
@@ -27,11 +26,21 @@ public final class DataViewPrototype {
     private DataViewPrototype() {
     }
 
-    private static JSValue convertDataViewException(JSContext context, RuntimeException e) {
-        if (e instanceof JSRangeErrorException) {
-            return context.throwRangeError(e.getMessage());
+    /**
+     * Pre-validate a DataView access. Returns null on success, or a JS error value on failure.
+     */
+    private static JSValue checkAccess(JSContext context, JSDataView dataView, int byteOffset, int size) {
+        if (((IJSArrayBuffer) dataView.getBuffer()).isDetached()) {
+            return context.throwTypeError("ArrayBuffer is detached");
         }
-        return context.throwTypeError(e.getMessage());
+        if (dataView.isOutOfBounds()) {
+            return context.throwTypeError("DataView is out of bounds");
+        }
+        int effectiveByteLength = dataView.getByteLength();
+        if (byteOffset < 0 || (long) byteOffset + size > effectiveByteLength) {
+            return context.throwRangeError("DataView offset out of range");
+        }
+        return null;
     }
 
     public static JSValue getBigInt64(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -44,11 +53,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return dataView.getBigInt64(byteOffset, littleEndian);
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        return dataView.getBigInt64(byteOffset, littleEndian);
     }
 
     public static JSValue getBigUint64(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -61,11 +70,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return dataView.getBigUint64(byteOffset, littleEndian);
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        return dataView.getBigUint64(byteOffset, littleEndian);
     }
 
     /**
@@ -117,11 +126,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getFloat16(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getFloat16(byteOffset, littleEndian));
     }
 
     // Float32 methods
@@ -135,11 +144,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getFloat32(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getFloat32(byteOffset, littleEndian));
     }
 
     // Float64 methods
@@ -153,11 +162,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getFloat64(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getFloat64(byteOffset, littleEndian));
     }
 
     // Int16 methods
@@ -171,11 +180,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getInt16(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getInt16(byteOffset, littleEndian));
     }
 
     // Int32 methods
@@ -189,11 +198,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getInt32(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getInt32(byteOffset, littleEndian));
     }
 
     // Int8 methods
@@ -206,11 +215,11 @@ public final class DataViewPrototype {
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        try {
-            return JSNumber.of(dataView.getInt8(byteOffset));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getInt8(byteOffset));
     }
 
     public static JSValue getUint16(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -223,11 +232,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getUint16(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getUint16(byteOffset, littleEndian));
     }
 
     public static JSValue getUint32(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -240,11 +249,11 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        try {
-            return JSNumber.of(dataView.getUint32(byteOffset, littleEndian));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getUint32(byteOffset, littleEndian));
     }
 
     // Uint8 methods
@@ -257,11 +266,11 @@ public final class DataViewPrototype {
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        try {
-            return JSNumber.of(dataView.getUint8(byteOffset));
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        if (error != null) {
+            return error;
         }
+        return JSNumber.of(dataView.getUint8(byteOffset));
     }
 
     private static JSBigInt parseBigInt(JSContext context, String value) {
@@ -298,12 +307,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setBigInt64(byteOffset, value, littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        dataView.setBigInt64(byteOffset, value, littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setBigUint64(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -323,12 +332,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setBigUint64(byteOffset, value, littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        dataView.setBigUint64(byteOffset, value, littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setFloat16(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -348,12 +357,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setFloat16(byteOffset, numberValue.value(), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        dataView.setFloat16(byteOffset, numberValue.value(), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setFloat32(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -373,12 +382,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setFloat32(byteOffset, (float) numberValue.value(), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        dataView.setFloat32(byteOffset, (float) numberValue.value(), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setFloat64(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -398,12 +407,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setFloat64(byteOffset, numberValue.value(), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 8);
+        if (error != null) {
+            return error;
         }
+        dataView.setFloat64(byteOffset, numberValue.value(), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setInt16(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -423,12 +432,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setInt16(byteOffset, (short) (uint32Value & 0xFFFF), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        dataView.setInt16(byteOffset, (short) (uint32Value & 0xFFFF), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setInt32(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -448,12 +457,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setInt32(byteOffset, (int) (uint32Value & 0xFFFFFFFFL), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        dataView.setInt32(byteOffset, (int) (uint32Value & 0xFFFFFFFFL), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setInt8(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -472,12 +481,12 @@ public final class DataViewPrototype {
         if (uint32Value == null) {
             return context.getPendingException();
         }
-        try {
-            dataView.setInt8(byteOffset, (byte) (uint32Value & 0xFF));
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        if (error != null) {
+            return error;
         }
+        dataView.setInt8(byteOffset, (byte) (uint32Value & 0xFF));
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setUint16(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -497,12 +506,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setUint16(byteOffset, (int) (uint32Value & 0xFFFF), littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 2);
+        if (error != null) {
+            return error;
         }
+        dataView.setUint16(byteOffset, (int) (uint32Value & 0xFFFF), littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setUint32(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -522,12 +531,12 @@ public final class DataViewPrototype {
             return context.getPendingException();
         }
         boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        try {
-            dataView.setUint32(byteOffset, uint32Value, littleEndian);
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 4);
+        if (error != null) {
+            return error;
         }
+        dataView.setUint32(byteOffset, uint32Value, littleEndian);
+        return JSUndefined.INSTANCE;
     }
 
     public static JSValue setUint8(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -546,12 +555,12 @@ public final class DataViewPrototype {
         if (uint32Value == null) {
             return context.getPendingException();
         }
-        try {
-            dataView.setUint8(byteOffset, (int) (uint32Value & 0xFF));
-            return JSUndefined.INSTANCE;
-        } catch (RuntimeException e) {
-            return convertDataViewException(context, e);
+        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        if (error != null) {
+            return error;
         }
+        dataView.setUint8(byteOffset, (int) (uint32Value & 0xFF));
+        return JSUndefined.INSTANCE;
     }
 
     private static JSBigInt toBigInt(JSContext context, JSValue value) {
