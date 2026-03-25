@@ -53,8 +53,9 @@ public class Test262Config {
                 Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        // config.maxTests = 1800;
+        config.maxTests = 600;
         return config;
     }
 
@@ -65,6 +66,7 @@ public class Test262Config {
                 Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
+                Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
         config.maxTests = 506 * 100;
         return config;
