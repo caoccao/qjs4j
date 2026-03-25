@@ -3633,7 +3633,13 @@ public final class OpcodeHandler {
             executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
         } else {
             boolean result = jsObj.has(key);
-            executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            if (executionContext.virtualMachine.context.hasPendingException()) {
+                executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                executionContext.virtualMachine.context.clearPendingException();
+                executionContext.virtualMachine.valueStack.push(JSUndefined.INSTANCE);
+            } else {
+                executionContext.virtualMachine.valueStack.push(JSBoolean.valueOf(result));
+            }
         }
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
