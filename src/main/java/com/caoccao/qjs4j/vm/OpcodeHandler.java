@@ -53,6 +53,16 @@ public final class OpcodeHandler {
         throw new JSVirtualMachineException(context.throwTypeError("not a function"));
     }
 
+    private static boolean capturePendingException(ExecutionContext executionContext) {
+        JSContext context = executionContext.virtualMachine.context;
+        if (context.hasPendingException()) {
+            executionContext.virtualMachine.pendingException = context.getPendingException();
+            context.clearPendingException();
+            return true;
+        }
+        return false;
+    }
+
     private static void captureVmExceptionAsPending(ExecutionContext executionContext, JSVirtualMachineException e) {
         JSValue errorValue = e.getJsValue() != null ? e.getJsValue() : e.getJsError();
         if (errorValue != null) {
@@ -62,13 +72,6 @@ public final class OpcodeHandler {
                     executionContext.virtualMachine.context.throwError(
                             e.getMessage() != null ? e.getMessage() : "Unknown error");
             executionContext.virtualMachine.context.clearPendingException();
-        }
-    }
-
-    private static void checkPendingException(JSContext context) {
-        if (context.hasPendingException()) {
-            JSValue exception = context.getPendingException();
-            throw new JSVirtualMachineException(exception.toString(), exception);
         }
     }
 
@@ -564,15 +567,17 @@ public final class OpcodeHandler {
         } else {
             asyncYieldStarIterableObj = executionContext.virtualMachine.toObject(asyncYieldStarIterable);
             if (asyncYieldStarIterableObj == null) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError(asyncYieldStarIterable + " is not iterable"));
+                setErrorAsPending(executionContext, context.throwTypeError(asyncYieldStarIterable + " is not iterable"));
+                return;
             }
         }
 
         // GetIterator(obj, async):
         // Step 1: Try Symbol.asyncIterator (using context-aware get to trigger getters)
         JSValue asyncIteratorMethod = asyncYieldStarIterableObj.get(PropertyKey.SYMBOL_ASYNC_ITERATOR);
-        checkPendingException(context);
+        if (capturePendingException(executionContext)) {
+            return;
+        }
 
         JSObject asyncYieldStarIteratorObj;
         boolean isNativeAsyncIterator;
@@ -580,34 +585,40 @@ public final class OpcodeHandler {
         if (!asyncIteratorMethod.isNullOrUndefined()) {
             // Symbol.asyncIterator exists -- must be callable (GetMethod step 3)
             if (!JSTypeChecking.isCallable(asyncIteratorMethod)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
+                setErrorAsPending(executionContext, context.throwTypeError("is not a function"));
+                return;
             }
             JSValue asyncYieldStarIterator = callCallableValue(context, asyncIteratorMethod, asyncYieldStarIterable, JSValue.NO_ARGS);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (!(asyncYieldStarIterator instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
+                setErrorAsPending(executionContext, context.throwTypeError("Result of the Symbol.asyncIterator method is not an object"));
+                return;
             }
             asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
             isNativeAsyncIterator = true;
         } else {
             // Step 2: Fall back to Symbol.iterator
             JSValue iteratorMethod = asyncYieldStarIterableObj.get(PropertyKey.SYMBOL_ITERATOR);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (iteratorMethod.isNullOrUndefined()) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
+                setErrorAsPending(executionContext, context.throwTypeError("is not a function"));
+                return;
             }
             if (!JSTypeChecking.isCallable(iteratorMethod)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
+                setErrorAsPending(executionContext, context.throwTypeError("is not a function"));
+                return;
             }
             JSValue asyncYieldStarIterator = callCallableValue(context, iteratorMethod, asyncYieldStarIterable, JSValue.NO_ARGS);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (!(asyncYieldStarIterator instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("Result of the Symbol.iterator method is not an object"));
+                setErrorAsPending(executionContext, context.throwTypeError("Result of the Symbol.iterator method is not an object"));
+                return;
             }
             asyncYieldStarIteratorObj = (JSObject) asyncYieldStarIterator;
             isNativeAsyncIterator = false;
@@ -624,29 +635,37 @@ public final class OpcodeHandler {
             JSValue returnValue = asyncYieldStarResumeRecord.value();
 
             JSValue returnMethodValue = asyncYieldStarIteratorObj.get(PropertyKey.RETURN);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
 
             if (noReturnMethod) {
                 executionContext.virtualMachine.valueStack.push(returnValue);
             } else {
                 if (!JSTypeChecking.isCallable(returnMethodValue)) {
-                    throw new JSVirtualMachineException(
-                            context.throwTypeError("iterator return is not a function"));
+                    setErrorAsPending(executionContext, context.throwTypeError("iterator return is not a function"));
+                    return;
                 }
 
                 JSValue result = callCallableValue(context, returnMethodValue, asyncYieldStarIteratorObj, executionContext.virtualMachine.singleArg(returnValue));
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
                 if (!(result instanceof JSObject returnResultObj)) {
-                    throw new JSVirtualMachineException(
-                            context.throwTypeError("iterator must return an object"));
+                    setErrorAsPending(executionContext, context.throwTypeError("iterator must return an object"));
+                    return;
                 }
 
                 JSValue doneValue = returnResultObj.get(PropertyKey.DONE);
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
                     JSValue value = returnResultObj.get(PropertyKey.VALUE);
-                    checkPendingException(context);
+                    if (capturePendingException(executionContext)) {
+                        return;
+                    }
                     executionContext.virtualMachine.valueStack.push(value);
                 } else {
                     executionContext.virtualMachine.yieldResult =
@@ -660,7 +679,9 @@ public final class OpcodeHandler {
             JSValue throwValue = asyncYieldStarResumeRecord.value();
 
             JSValue throwMethodValue = asyncYieldStarIteratorObj.get(PropertyKey.THROW);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
 
             if (noThrowMethod) {
@@ -668,27 +689,33 @@ public final class OpcodeHandler {
                 if (JSTypeChecking.isCallable(closeMethod)) {
                     callCallableValue(context, closeMethod, asyncYieldStarIteratorObj, JSValue.NO_ARGS);
                 }
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator does not have a throw method"));
+                setErrorAsPending(executionContext, context.throwTypeError("iterator does not have a throw method"));
+                return;
             }
 
             if (!JSTypeChecking.isCallable(throwMethodValue)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator throw is not a function"));
+                setErrorAsPending(executionContext, context.throwTypeError("iterator throw is not a function"));
+                return;
             }
 
             JSValue result = callCallableValue(context, throwMethodValue, asyncYieldStarIteratorObj, executionContext.virtualMachine.singleArg(throwValue));
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (!(result instanceof JSObject)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("iterator must return an object"));
+                setErrorAsPending(executionContext, context.throwTypeError("iterator must return an object"));
+                return;
             }
 
             JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (JSTypeConversions.toBoolean(doneValue).value()) {
                 JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
                 executionContext.virtualMachine.valueStack.push(value);
             } else {
                 executionContext.virtualMachine.yieldResult =
@@ -699,10 +726,12 @@ public final class OpcodeHandler {
         } else {
             // Default: NEXT protocol -- call iterator.next()
             JSValue nextMethod = asyncYieldStarIteratorObj.get(PropertyKey.NEXT);
-            checkPendingException(context);
+            if (capturePendingException(executionContext)) {
+                return;
+            }
             if (!JSTypeChecking.isCallable(nextMethod)) {
-                throw new JSVirtualMachineException(
-                        context.throwTypeError("is not a function"));
+                setErrorAsPending(executionContext, context.throwTypeError("is not a function"));
+                return;
             }
 
             // Per ES2024 spec: Invoke(iterator, "next", << received.[[Value]] >>)
@@ -712,16 +741,22 @@ public final class OpcodeHandler {
             boolean asyncInnerExhausted = false;
             while (executionContext.virtualMachine.yieldSkipCount > 0) {
                 JSValue skipResult = callCallableValue(context, nextMethod, asyncYieldStarIteratorObj, nextArgs);
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
                 if (!(skipResult instanceof JSObject)) {
-                    throw new JSVirtualMachineException(
-                            context.throwTypeError("Iterator result must be an object"));
+                    setErrorAsPending(executionContext, context.throwTypeError("Iterator result must be an object"));
+                    return;
                 }
                 JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
                 if (JSTypeConversions.toBoolean(skipDone).value()) {
                     JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
-                    checkPendingException(context);
+                    if (capturePendingException(executionContext)) {
+                        return;
+                    }
                     executionContext.virtualMachine.valueStack.push(value);
                     asyncInnerExhausted = true;
                     break;
@@ -731,11 +766,13 @@ public final class OpcodeHandler {
 
             if (!asyncInnerExhausted) {
                 JSValue result = callCallableValue(context, nextMethod, asyncYieldStarIteratorObj, nextArgs);
-                checkPendingException(context);
+                if (capturePendingException(executionContext)) {
+                    return;
+                }
 
                 if (!(result instanceof JSObject resultObj)) {
-                    throw new JSVirtualMachineException(
-                            context.throwTypeError("Iterator result must be an object"));
+                    setErrorAsPending(executionContext, context.throwTypeError("Iterator result must be an object"));
+                    return;
                 }
 
                 executionContext.virtualMachine.yieldResult =
@@ -1188,9 +1225,9 @@ public final class OpcodeHandler {
                     fieldKey,
                     PropertyDescriptor.dataDescriptor(value, PropertyDescriptor.DataState.All));
             if (!defineSucceeded) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError(
-                                "Cannot redefine property: " + fieldKey.toPropertyString()));
+                setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                        "Cannot redefine property: " + fieldKey.toPropertyString()));
+                return;
             }
         }
 
@@ -1219,9 +1256,9 @@ public final class OpcodeHandler {
                             methodValue,
                             PropertyDescriptor.DataState.ConfigurableWritable));
             if (!defineSucceeded) {
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError(
-                                "Cannot redefine property: " + methodKey.toPropertyString()));
+                setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                        "Cannot redefine property: " + methodKey.toPropertyString()));
+                return;
             }
         }
 
@@ -1288,14 +1325,14 @@ public final class OpcodeHandler {
             if (methodKind == 0) {
                 if (isPrivateSymbolKey && isProxyPrivateTarget
                         && ((JSProxy) object).hasOwnPrivatePropertyDirect(key)) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.throwTypeError(
-                                    "Cannot initialize the same private elements twice on an object"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot initialize the same private elements twice on an object"));
+                    return;
                 }
                 if (isPrivateSymbolKey && !isProxyPrivateTarget && object.hasOwnProperty(key)) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.throwTypeError(
-                                    "Cannot initialize the same private elements twice on an object"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                            "Cannot initialize the same private elements twice on an object"));
+                    return;
                 }
                 PropertyDescriptor.DataState dataState;
                 if (nonWritable) {
@@ -1324,9 +1361,9 @@ public final class OpcodeHandler {
                         : object.getOwnPropertyDescriptor(key);
                 if (isPrivateSymbolKey && descriptor != null) {
                     if (descriptor.isDataDescriptor() || descriptor.getGetter() != null) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.throwTypeError(
-                                        "Cannot initialize the same private elements twice on an object"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot initialize the same private elements twice on an object"));
+                        return;
                     }
                 }
                 if (descriptor != null && descriptor.hasSetter()) {
@@ -1360,9 +1397,9 @@ public final class OpcodeHandler {
                         : object.getOwnPropertyDescriptor(key);
                 if (isPrivateSymbolKey && descriptor != null) {
                     if (descriptor.isDataDescriptor() || descriptor.getSetter() != null) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.throwTypeError(
-                                        "Cannot initialize the same private elements twice on an object"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                                "Cannot initialize the same private elements twice on an object"));
+                        return;
                     }
                 }
                 if (descriptor != null && descriptor.hasGetter()) {
@@ -1394,8 +1431,9 @@ public final class OpcodeHandler {
 
             if (!defineSucceeded) {
                 String keyName = key != null ? key.toPropertyString() : "property";
-                throw new JSVirtualMachineException(
-                        executionContext.virtualMachine.context.throwTypeError("Cannot redefine property: " + keyName));
+                setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
+                        "Cannot redefine property: " + keyName));
+                return;
             }
         }
 
@@ -2155,8 +2193,8 @@ public final class OpcodeHandler {
             }
         }
         if (markerIndex < 2) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwError("Invalid iterator state in FOR_OF_NEXT"));
+            return;
         }
 
         int preservedMarkerCount = executionContext.virtualMachine.valueStack.stackTop - markerIndex - 1;
@@ -2169,8 +2207,8 @@ public final class OpcodeHandler {
 
         int stackTop = executionContext.virtualMachine.valueStack.stackTop;
         if (stackTop < 2) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwError("Invalid iterator stack depth in FOR_OF_NEXT"));
+            return;
         }
         JSStackValue nextMethodStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 1];
         JSStackValue iteratorStackValue = executionContext.virtualMachine.valueStack.stack[stackTop - 2];
@@ -3631,7 +3669,8 @@ public final class OpcodeHandler {
                     return;
                 }
             }
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("class constructors must be invoked with 'new'"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("class constructors must be invoked with 'new'"));
+            return;
         }
 
         // Per ES spec BindThisValue: if thisBindingStatus is "initialized", throw ReferenceError.
@@ -3947,22 +3986,22 @@ public final class OpcodeHandler {
         JSValue argumentValue = (JSValue) stack[sp - 1];
         JSValue iteratorValue = (JSValue) stack[sp - 4];
         if (!(iteratorValue instanceof JSObject iteratorObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator call target must be an object"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator call target must be an object"));
+            return;
         }
 
         String methodName = (flags & 1) != 0 ? "throw" : "return";
         JSValue methodValue = (flags & 1) != 0
                 ? iteratorObject.get(PropertyKey.THROW)
                 : iteratorObject.get(PropertyKey.RETURN);
-        if (executionContext.virtualMachine.context.hasPendingException()) {
-            throw new JSVirtualMachineException(
-                    executionContext.virtualMachine.context.getPendingException().toString(),
-                    executionContext.virtualMachine.context.getPendingException());
+        if (capturePendingException(executionContext)) {
+            return;
         }
         boolean noMethod = methodValue.isNullOrUndefined();
         if (!noMethod) {
             if (!JSTypeChecking.isCallable(methodValue)) {
-                throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator " + methodName + " is not a function"));
+                setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator " + methodName + " is not a function"));
+                return;
             }
             JSValue callResult = (flags & 2) != 0
                     ? callCallableValue(executionContext.virtualMachine.context, methodValue, iteratorObject, JSValue.NO_ARGS)
@@ -3977,7 +4016,8 @@ public final class OpcodeHandler {
     static void handleIteratorCheckObject(Opcode op, ExecutionContext executionContext) {
         JSValue iteratorResult = executionContext.peek(0);
         if (!(iteratorResult instanceof JSObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+            return;
         }
         executionContext.pc += op.getSize();
     }
@@ -4058,7 +4098,8 @@ public final class OpcodeHandler {
         int sp = executionContext.sp;
         JSValue iteratorResult = (JSValue) stack[sp - 1];
         if (!(iteratorResult instanceof JSObject iteratorResultObject)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+            return;
         }
 
         JSValue doneValue = iteratorResultObject.get(PropertyKey.DONE);
@@ -4083,7 +4124,8 @@ public final class OpcodeHandler {
         JSValue nextMethodValue = (JSValue) stack[sp - 3];
         JSValue iteratorValue = (JSValue) stack[sp - 4];
         if (!JSTypeChecking.isCallable(nextMethodValue)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator next is not a function"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator next is not a function"));
+            return;
         }
         JSValue nextResult = callCallableValue(executionContext.virtualMachine.context, nextMethodValue, iteratorValue, executionContext.virtualMachine.singleArg(argumentValue));
         stack[sp - 1] = nextResult;
@@ -4304,7 +4346,8 @@ public final class OpcodeHandler {
             }
         }
         if (!foundCatchMarker) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwError("nip_catch"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwError("nip_catch"));
+            return;
         }
         stack[sp++] = returnValue;
         executionContext.sp = sp;
@@ -4821,7 +4864,8 @@ public final class OpcodeHandler {
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue[] localValues = executionContext.frame.getLocals();
         if (!executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwReferenceError("'this' can be initialized only once"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwReferenceError("'this' can be initialized only once"));
+            return;
         }
         localValues[localIndex] = executionContext.pop();
         executionContext.pc = pc + op.getSize();
@@ -5197,7 +5241,8 @@ public final class OpcodeHandler {
         int varRefIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue currentValue = readVarRefValue(executionContext, varRefIndex);
         if (!executionContext.virtualMachine.isUninitialized(currentValue)) {
-            throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwReferenceError("variable is already initialized"));
+            setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwReferenceError("variable is already initialized"));
+            return;
         }
         writeVarRefValue(executionContext, varRefIndex, executionContext.pop());
         executionContext.pc = pc + op.getSize();
@@ -5959,7 +6004,8 @@ public final class OpcodeHandler {
                 } else {
                     iterableObj = executionContext.virtualMachine.toObject(iterable);
                     if (iterableObj == null) {
-                        throw new JSVirtualMachineException("Object is not iterable");
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+                        return;
                     }
                 }
 
@@ -5967,20 +6013,19 @@ public final class OpcodeHandler {
                 JSValue iteratorMethod =
                         iterableObj.get(PropertyKey.SYMBOL_ITERATOR);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
                 if (!JSTypeChecking.isCallable(iteratorMethod)) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Object is not iterable"));
+                    return;
                 }
 
                 // Call Symbol.iterator to get the iterator
                 JSValue iterator = callCallableValue(executionContext.virtualMachine.context, iteratorMethod, iterable, JSValue.NO_ARGS);
                 if (!(iterator instanceof JSObject iteratorObject)) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Iterator method must return an object"));
+                    return;
                 }
                 iteratorObj = iteratorObject;
             }
@@ -5992,9 +6037,8 @@ public final class OpcodeHandler {
                 // Get "return" method from iterator
                 JSValue returnMethodValue = iteratorObj.get(PropertyKey.RETURN);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
                 boolean noReturnMethod = returnMethodValue.isNullOrUndefined();
 
@@ -6005,35 +6049,34 @@ public final class OpcodeHandler {
                     return;
                 } else {
                     if (!JSTypeChecking.isCallable(returnMethodValue)) {
-                        throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator return is not a function"));
+                        return;
                     }
 
                     // Call iterator.return(value)
                     JSValue result = callCallableValue(executionContext.virtualMachine.context, returnMethodValue, iteratorObj, executionContext.virtualMachine.singleArg(returnValue));
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
 
                     // Check result is an object (per spec, TypeError if not)
                     if (!(result instanceof JSObject)) {
-                        throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                        return;
                     }
 
                     // Check done flag
                     JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     if (JSTypeConversions.toBoolean(doneValue).value()) {
                         JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
-                            throw new JSVirtualMachineException(
-                                    executionContext.virtualMachine.context.getPendingException().toString(),
-                                    executionContext.virtualMachine.context.getPendingException());
+                            capturePendingException(executionContext);
+                            return;
                         }
                         internalStartGeneratorReturnCompletion(executionContext, value);
                         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
@@ -6058,9 +6101,8 @@ public final class OpcodeHandler {
                 JSValue throwMethodValue =
                         iteratorObj.get(PropertyKey.THROW);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
                 boolean noThrowMethod = throwMethodValue.isNullOrUndefined();
 
@@ -6068,53 +6110,51 @@ public final class OpcodeHandler {
                     // No throw method - close iterator and throw TypeError
                     JSValue closeMethod = iteratorObj.get(PropertyKey.RETURN);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     if (JSTypeChecking.isCallable(closeMethod)) {
                         callCallableValue(executionContext.virtualMachine.context, closeMethod, iteratorObj, JSValue.NO_ARGS);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
-                            throw new JSVirtualMachineException(
-                                    executionContext.virtualMachine.context.getPendingException().toString(),
-                                    executionContext.virtualMachine.context.getPendingException());
+                            capturePendingException(executionContext);
+                            return;
                         }
                     }
-                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError(
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError(
                             "iterator does not have a throw method"));
+                    return;
                 }
 
                 if (!JSTypeChecking.isCallable(throwMethodValue)) {
-                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator throw is not a function"));
+                    return;
                 }
 
                 // Call iterator.throw(value)
                 JSValue result = callCallableValue(executionContext.virtualMachine.context, throwMethodValue, iteratorObj, executionContext.virtualMachine.singleArg(throwValue));
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
 
                 // Check result is an object
                 if (!(result instanceof JSObject)) {
-                    throw new JSVirtualMachineException(executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("iterator must return an object"));
+                    return;
                 }
 
                 // Check done flag
                 JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
                 if (JSTypeConversions.toBoolean(doneValue).value()) {
                     // Done - push value and complete the yield* expression
                     JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     executionContext.virtualMachine.valueStack.push(value);
                 } else {
@@ -6131,12 +6171,12 @@ public final class OpcodeHandler {
                 // Default: NEXT protocol - call iterator.next()
                 JSValue nextMethod = iteratorObj.get(PropertyKey.NEXT);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
-                    throw new JSVirtualMachineException(
-                            executionContext.virtualMachine.context.getPendingException().toString(),
-                            executionContext.virtualMachine.context.getPendingException());
+                    capturePendingException(executionContext);
+                    return;
                 }
                 if (!JSTypeChecking.isCallable(nextMethod)) {
-                    throw new JSVirtualMachineException("Iterator must have a next method");
+                    setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Iterator must have a next method"));
+                    return;
                 }
                 if (resumeRecord != null && resumeRecord.kind() == JSGeneratorState.ResumeKind.NEXT) {
                     executionContext.virtualMachine.generatorResumeIndex++;
@@ -6153,27 +6193,24 @@ public final class OpcodeHandler {
                 while (!reuseDelegateIterator && remainingYieldSkips > 0) {
                     JSValue skipResult = callCallableValue(executionContext.virtualMachine.context, nextMethod, iteratorObj, undefinedNextArgs);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     if (!(skipResult instanceof JSObject)) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                        return;
                     }
                     JSValue skipDone = ((JSObject) skipResult).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     if (JSTypeConversions.toBoolean(skipDone).value()) {
                         // Inner iterator exhausted during skip
                         JSValue value = ((JSObject) skipResult).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
-                            throw new JSVirtualMachineException(
-                                    executionContext.virtualMachine.context.getPendingException().toString(),
-                                    executionContext.virtualMachine.context.getPendingException());
+                            capturePendingException(executionContext);
+                            return;
                         }
                         executionContext.virtualMachine.valueStack.push(value);
                         innerExhausted = true;
@@ -6186,23 +6223,21 @@ public final class OpcodeHandler {
                 if (!innerExhausted) {
                     JSValue result = callCallableValue(executionContext.virtualMachine.context, nextMethod, iteratorObj, nextArgs);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
 
                     // The result should be an object (the iterator result)
                     if (!(result instanceof JSObject)) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                        setErrorAsPending(executionContext, executionContext.virtualMachine.context.throwTypeError("Iterator result must be an object"));
+                        return;
                     }
 
                     // Check if the inner iterator is done
                     JSValue doneValue = ((JSObject) result).get(PropertyKey.DONE);
                     if (executionContext.virtualMachine.context.hasPendingException()) {
-                        throw new JSVirtualMachineException(
-                                executionContext.virtualMachine.context.getPendingException().toString(),
-                                executionContext.virtualMachine.context.getPendingException());
+                        capturePendingException(executionContext);
+                        return;
                     }
                     if (JSTypeConversions.toBoolean(doneValue).value()) {
                         if (reuseDelegateIterator && executionContext.virtualMachine.yieldSkipCount > 0) {
@@ -6211,9 +6246,8 @@ public final class OpcodeHandler {
                         // Inner iterator done - yield* expression value is the final value
                         JSValue value = ((JSObject) result).get(PropertyKey.VALUE);
                         if (executionContext.virtualMachine.context.hasPendingException()) {
-                            throw new JSVirtualMachineException(
-                                    executionContext.virtualMachine.context.getPendingException().toString(),
-                                    executionContext.virtualMachine.context.getPendingException());
+                            capturePendingException(executionContext);
+                            return;
                         }
                         executionContext.virtualMachine.valueStack.push(value);
                         // Don't set yieldResult - the yield* expression completes
@@ -6626,6 +6660,11 @@ public final class OpcodeHandler {
         for (int valueOffset = 0; valueOffset < depth; valueOffset++) {
             executionContext.virtualMachine.forOfTempValues[valueOffset] = null;
         }
+    }
+
+    private static void setErrorAsPending(ExecutionContext executionContext, JSValue errorValue) {
+        executionContext.virtualMachine.pendingException = errorValue;
+        executionContext.virtualMachine.context.clearPendingException();
     }
 
     private static boolean shouldScanClosureVarRefsForGetVar(ExecutionContext executionContext) {
