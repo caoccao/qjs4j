@@ -928,27 +928,17 @@ public final class OpcodeHandler {
                 try {
                     result = virtualMachine.constructFunction(jsFunction, args, jsFunction);
                 } catch (JSVirtualMachineException e) {
-                    if (e.getJsValue() != null) {
-                        virtualMachine.pendingException = e.getJsValue();
-                    } else if (e.getJsError() != null) {
-                        virtualMachine.pendingException = e.getJsError();
-                    } else if (context.hasPendingException()) {
-                        virtualMachine.pendingException = context.getPendingException();
-                    } else {
-                        virtualMachine.pendingException = context.throwError(
-                                e.getMessage() != null ? e.getMessage() : "Unhandled exception");
-                    }
-                    context.clearPendingException();
-                    stack[sp++] = JSUndefined.INSTANCE;
+                    virtualMachine.captureVMException(e);
                     result = null;
                 }
-                if (result != null) {
-                    if (context.hasPendingException()) {
+                if (result == null || context.hasPendingException()) {
+                    if (virtualMachine.pendingException == null) {
                         virtualMachine.pendingException = context.getPendingException();
-                        stack[sp++] = JSUndefined.INSTANCE;
-                    } else {
-                        stack[sp++] = result;
+                        context.clearPendingException();
                     }
+                    stack[sp++] = JSUndefined.INSTANCE;
+                } else {
+                    stack[sp++] = result;
                 }
             }
         } else {

@@ -454,8 +454,7 @@ public final class VirtualMachine {
                         newTargetObject,
                         intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
-                    JSValue exception = context.getPendingException();
-                    throw new JSVirtualMachineException(exception.toString(), exception);
+                    return null;
                 }
                 if (resolvedPrototype != null) {
                     thisObject.setPrototype(resolvedPrototype);
@@ -463,8 +462,7 @@ public final class VirtualMachine {
             } else {
                 JSObject resolvedPrototype = context.getPrototypeFromConstructor(function, intrinsicDefaultPrototypeName);
                 if (context.hasPendingException()) {
-                    JSValue exception = context.getPendingException();
-                    throw new JSVirtualMachineException(exception.toString(), exception);
+                    return null;
                 }
                 if (resolvedPrototype != null) {
                     thisObject.setPrototype(resolvedPrototype);
@@ -495,15 +493,7 @@ public final class VirtualMachine {
                     constructorContext.setNativeConstructorNewTarget(newTarget);
                     result = nativeFunc.call(context, constructThis, args);
                     if (context.hasPendingException()) {
-                        JSValue exception = context.getPendingException();
-                        String errorMessage = "Unhandled exception in constructor";
-                        if (exception instanceof JSObject errorObj) {
-                            JSValue messageValue = errorObj.get(PropertyKey.MESSAGE);
-                            if (messageValue instanceof JSString messageString) {
-                                errorMessage = messageString.value();
-                            }
-                        }
-                        throw new JSVirtualMachineException(errorMessage);
+                        return null;
                     }
                 } else if (function instanceof JSBytecodeFunction bytecodeFunction) {
                     result = constructorContext.getVirtualMachine().execute(bytecodeFunction, constructThis, args, newTarget);
@@ -535,8 +525,8 @@ public final class VirtualMachine {
             if (isDerived) {
                 // ES spec step 13c: If result is not undefined, throw TypeError
                 if (!(result instanceof JSUndefined)) {
-                    throw new JSVirtualMachineException(
-                            context.throwTypeError("Derived constructors may only return object or undefined"));
+                    context.throwTypeError("Derived constructors may only return object or undefined");
+                    return null;
                 }
                 // ES spec step 15: Return GetThisBinding()
                 // If super() was never called, this is still uninitialized (JSUndefined)
@@ -546,14 +536,14 @@ public final class VirtualMachine {
                         ? lastConstructorThisArg
                         : constructorContext.getVirtualMachine().lastConstructorThisArg;
                 if (finalThis == null || finalThis instanceof JSUndefined) {
-                    throw new JSVirtualMachineException(
-                            context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+                    context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                    return null;
                 }
                 if (finalThis instanceof JSObject finalThisObj) {
                     return finalThisObj;
                 }
-                throw new JSVirtualMachineException(
-                        context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor"));
+                context.throwReferenceError("Must call super constructor in derived class before accessing 'this' or returning from derived constructor");
+                return null;
             }
             return thisObject;
         }
@@ -566,10 +556,11 @@ public final class VirtualMachine {
                     newTargetObject,
                     intrinsicDefaultPrototypeName);
             if (constructorContext.hasPendingException()) {
-                JSValue exception = constructorContext.getPendingException();
-                constructorContext.clearPendingException();
-                context.setPendingException(exception);
-                throw new JSVirtualMachineException(exception.toString(), exception);
+                if (constructorContext != context) {
+                    context.setPendingException(constructorContext.getPendingException());
+                    constructorContext.clearPendingException();
+                }
+                return null;
             }
         }
 
@@ -586,8 +577,8 @@ public final class VirtualMachine {
         try {
             result = constructorType.create(constructorContext, args);
         } catch (JSErrorException e) {
-            throw new JSVirtualMachineException(
-                    context.throwError(e));
+            context.throwError(e);
+            return null;
         } finally {
             constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
             if (constructorContext != context) {
@@ -600,8 +591,7 @@ public final class VirtualMachine {
             constructorContext.clearPendingException();
         }
         if (context.hasPendingException()) {
-            throw new JSVirtualMachineException(context.getPendingException().toString(),
-                    context.getPendingException());
+            return null;
         }
 
         // Resolve the prototype from newTarget after constructor argument processing
@@ -615,10 +605,11 @@ public final class VirtualMachine {
                         newTargetObject,
                         intrinsicDefaultPrototypeName);
                 if (constructorContext.hasPendingException()) {
-                    JSValue exception = constructorContext.getPendingException();
-                    constructorContext.clearPendingException();
-                    context.setPendingException(exception);
-                    throw new JSVirtualMachineException(exception.toString(), exception);
+                    if (constructorContext != context) {
+                        context.setPendingException(constructorContext.getPendingException());
+                        constructorContext.clearPendingException();
+                    }
+                    return null;
                 }
             }
             if (resolvedPrototype != null) {
@@ -627,8 +618,7 @@ public final class VirtualMachine {
                 constructorContext.transferPrototype(jsObject, function);
             }
             if (jsObject instanceof JSDataView dataView && !dataView.validateConstructorState(context)) {
-                throw new JSVirtualMachineException(context.getPendingException().toString(),
-                        context.getPendingException());
+                return null;
             }
         }
         return result;
@@ -1471,7 +1461,11 @@ public final class VirtualMachine {
                 return proxyConstruct(targetProxy, args, newTarget);
             }
             if (target instanceof JSFunction targetFunc) {
-                return constructFunction(targetFunc, args, newTarget);
+                JSValue result = constructFunction(targetFunc, args, newTarget);
+                if (result == null) {
+                    throw new JSException(context.getPendingException());
+                }
+                return result;
             }
             throw new JSException(context.throwTypeError("proxy target is not a constructor"));
         }
