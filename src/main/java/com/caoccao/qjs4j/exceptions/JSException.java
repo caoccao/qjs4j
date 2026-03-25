@@ -66,6 +66,11 @@ public class JSException extends RuntimeException {
         return error.toString();
     }
 
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+        return this;
+    }
+
     /**
      * Get the JavaScript error value.
      */

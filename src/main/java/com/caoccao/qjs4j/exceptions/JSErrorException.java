@@ -21,6 +21,11 @@ public class JSErrorException extends RuntimeException {
         super(message);
     }
 
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+        return this;
+    }
+
     public String getDetailedMessage() {
         return getErrorType().name() + ": " + getMessage();
     }

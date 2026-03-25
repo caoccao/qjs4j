@@ -56,6 +56,11 @@ public class JSVirtualMachineException extends RuntimeException {
         this.jsValue = null;
     }
 
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+        return this;
+    }
+
     public JSError getJsError() {
         return jsError;
     }

@@ -27,4 +27,9 @@ public class JSCompilerException extends RuntimeException {
     public JSCompilerException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+        return this;
+    }
 }
