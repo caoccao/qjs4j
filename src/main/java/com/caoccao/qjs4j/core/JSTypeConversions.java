@@ -91,26 +91,14 @@ public final class JSTypeConversions {
         // Object to primitive conversion (ES2020 7.2.14)
         // If one is object and other is primitive, convert object to primitive
         if (!isPrimitive(x) && isPrimitive(y)) {
-            JSValue px;
-            try {
-                px = toPrimitive(context, x, PreferredType.DEFAULT);
-            } catch (JSVirtualMachineException e) {
-                capturePendingException(context, e);
-                return false;
-            }
+            JSValue px = toPrimitive(context, x, PreferredType.DEFAULT);
             if (context.hasPendingException()) {
                 return false;
             }
             return abstractEquals(context, px, y);
         }
         if (isPrimitive(x) && !isPrimitive(y)) {
-            JSValue py;
-            try {
-                py = toPrimitive(context, y, PreferredType.DEFAULT);
-            } catch (JSVirtualMachineException e) {
-                capturePendingException(context, e);
-                return false;
-            }
+            JSValue py = toPrimitive(context, y, PreferredType.DEFAULT);
             if (context.hasPendingException()) {
                 return false;
             }
@@ -122,17 +110,6 @@ public final class JSTypeConversions {
             return true;
         }
         return y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined();
-    }
-
-    private static void capturePendingException(JSContext context, JSVirtualMachineException e) {
-        if (!context.hasPendingException()) {
-            JSValue jsValue = e.getJsValue();
-            if (jsValue != null) {
-                context.setPendingException(jsValue);
-            } else {
-                context.setPendingException(context.throwError(e.getMessage()));
-            }
-        }
     }
 
     private static int compareBigIntAndNumber(BigInteger bigInt, double number) {
