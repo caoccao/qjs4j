@@ -2949,18 +2949,22 @@ public final class JSGlobalObject {
                         && !callerStackFrame.filename().isEmpty()) {
                     evalFilename = callerStackFrame.filename();
                 }
-                JSValue result;
-                try {
-                    result = isDirectEvalCall
-                            ? realmContext.evalDirect(code, evalFilename, inheritedStrictMode)
-                            : realmContext.evalIndirect(code, evalFilename);
-                } finally {
-                    if (!isDirectEvalCall) {
-                        realmContext.popEvalOverlayLookupSuppression();
+                JSValue result = isDirectEvalCall
+                        ? realmContext.evalDirectInternal(code, evalFilename, inheritedStrictMode)
+                        : realmContext.evalIndirectInternal(code, evalFilename);
+                if (!isDirectEvalCall) {
+                    realmContext.popEvalOverlayLookupSuppression();
+                }
+                if (suspendedOverlaySnapshot != null) {
+                    realmContext.resumeEvalOverlays(suspendedOverlaySnapshot);
+                }
+                if (result == null) {
+                    JSValue error = realmContext.getPendingException();
+                    if (error != null) {
+                        realmContext.clearPendingException();
+                        callerContext.setPendingException(error);
                     }
-                    if (suspendedOverlaySnapshot != null) {
-                        realmContext.resumeEvalOverlays(suspendedOverlaySnapshot);
-                    }
+                    return JSUndefined.INSTANCE;
                 }
 
                 // Copy modified values back to caller's locals

@@ -1425,7 +1425,7 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
-        return eval(code, "<eval>", false, false);
+        return evalOrThrow(eval(code, "<eval>", false, false, false, false, false, false));
     }
 
     /**
@@ -1437,7 +1437,7 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
-        return eval(code, filename, isModule, false);
+        return evalOrThrow(eval(code, filename, isModule, false, false, false, false, false));
     }
 
     /**
@@ -1450,7 +1450,7 @@ public final class JSContext implements AutoCloseable {
      * @return the js value
      */
     public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
-        return eval(code, filename, isModule, isDirectEval, false, false, false, false);
+        return evalOrThrow(eval(code, filename, isModule, isDirectEval, false, false, false, false));
     }
 
     private JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
@@ -1575,6 +1575,7 @@ public final class JSContext implements AutoCloseable {
         if (predeclareProgramLexicalsAsLocals) {
             compiler.setPredeclareProgramLexicalsAsLocals(true);
         }
+        JSValue evalError = null;
         try {
             if (skipEvaluatedDynamicImportModule) {
                 processMicrotasks();
@@ -1602,7 +1603,8 @@ public final class JSContext implements AutoCloseable {
                     processMicrotasks();
                 }
                 if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                    throw new JSException(dynamicImportEvalModuleRecord.evaluationError());
+                    evalError = dynamicImportEvalModuleRecord.evaluationError();
+                    return null;
                 }
                 return JSUndefined.INSTANCE;
             }
@@ -1920,8 +1922,8 @@ public final class JSContext implements AutoCloseable {
 
             // Check if there's a pending exception
             if (hasPendingException()) {
-                JSValue exception = getPendingException();
-                throw new JSException(exception);
+                evalError = getPendingException();
+                return null;
             }
 
             // Process all pending microtasks before returning
@@ -1937,58 +1939,36 @@ public final class JSContext implements AutoCloseable {
 
             return result != null ? result : JSUndefined.INSTANCE;
         } catch (JSException e) {
-            if (dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            throw e;
+            evalError = e.getErrorValue();
+            return null;
         } catch (JSSyntaxErrorException e) {
-            if (dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            JSValue error = throwError("SyntaxError", e.getMessage());
-            throw new JSException(error);
+            evalError = throwError("SyntaxError", e.getMessage());
+            return null;
         } catch (JSCompilerException e) {
-            if (dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            JSValue error = throwError("SyntaxError", e.getMessage());
-            throw new JSException(error);
+            evalError = throwError("SyntaxError", e.getMessage());
+            return null;
         } catch (JSVirtualMachineException e) {
-            if (dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            // VM exception - check if it has a JSError, otherwise check pending exception
             if (e.getJsError() != null) {
-                throw new JSException(e.getJsError());
+                evalError = e.getJsError();
+            } else if (e.getJsValue() != null) {
+                evalError = e.getJsValue();
+            } else if (hasPendingException()) {
+                evalError = getPendingException();
+            } else {
+                evalError = throwError("VM error: " + e.getMessage());
             }
-            if (e.getJsValue() != null) {
-                throw new JSException(e.getJsValue());
-            }
-            if (hasPendingException()) {
-                JSValue exception = getPendingException();
-                throw new JSException(exception);
-            }
-            JSValue error = throwError("VM error: " + e.getMessage());
-            throw new JSException(error);
+            return null;
         } catch (JSErrorException e) {
-            if (dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            JSValue error = throwError(e);
-            throw new JSException(error);
+            evalError = throwError(e);
+            return null;
         } catch (Exception e) {
-            if (dynamicImportEvalModuleRecord != null
+            evalError = throwError("Execution error: " + e.getMessage());
+            return null;
+        } finally {
+            if (evalError != null && dynamicImportEvalModuleRecord != null
                     && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
                 dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
             }
-            JSValue error = throwError("Execution error: " + e.getMessage());
-            throw new JSException(error);
-        } finally {
             if (selfModuleRecord != null) {
                 if (removeSelfModuleRecordAfterEval) {
                     if (dynamicImportModuleCache.get(selfModuleRecord.resolvedSpecifier()) == selfModuleRecord
@@ -2009,19 +1989,43 @@ public final class JSContext implements AutoCloseable {
             evalOverlayLookupSuppressionDepth = 0;
             clearPendingException();
             clearErrorStackTrace();
+            if (evalError != null) {
+                setPendingException(evalError);
+            }
         }
     }
 
+    /**
+     * Convert a null return from the private eval() into a JSException throw.
+     * Used by all public eval methods to maintain the throwing API contract.
+     */
+    private JSValue evalOrThrow(JSValue result) {
+        if (result == null) {
+            JSValue error = getPendingException();
+            clearPendingException();
+            throw new JSException(error);
+        }
+        return result;
+    }
+
     public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
+        return evalOrThrow(eval(code, filename, false, true, false, false, inheritedStrictMode, true));
+    }
+
+    JSValue evalDirectInternal(String code, String filename, boolean inheritedStrictMode) {
         return eval(code, filename, false, true, false, false, inheritedStrictMode, true);
     }
 
     public JSValue evalIndirect(String code, String filename) {
+        return evalOrThrow(eval(code, filename, false, true, false, false, false, false));
+    }
+
+    JSValue evalIndirectInternal(String code, String filename) {
         return eval(code, filename, false, true, false, false, false, false);
     }
 
     public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
-        return eval(code, filename, isModule, false, true, true, false, false);
+        return evalOrThrow(eval(code, filename, isModule, false, true, true, false, false));
     }
 
     JSValue evaluateDynamicImportModule(JSDynamicImportModule moduleRecord) {
