@@ -164,7 +164,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
 
         // Annex B.3.3.1: Hoist function declarations from blocks/if-statements
         // to the function scope as var bindings (initialized to undefined).
-        // Build parameterNames set (BoundNames of argumentsList + "arguments" binding)
+        // Build parameterNames set (BoundNames of argumentsList).
         Set<String> exprParamNames = functionExpression.getParameterNames();
         functionContext.compilerAnalysis.hoistFunctionBodyAnnexBDeclarations(functionExpression.getBody().getBody(), exprParamNames);
 

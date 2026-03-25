@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.compilation.compiler;
 import com.caoccao.qjs4j.compilation.ast.FunctionDeclaration;
 import com.caoccao.qjs4j.compilation.ast.ReturnStatement;
 import com.caoccao.qjs4j.compilation.ast.Statement;
+import com.caoccao.qjs4j.core.JSArguments;
 import com.caoccao.qjs4j.core.JSBytecodeFunction;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.core.JSValue;
@@ -270,6 +271,9 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
                 && !funcDecl.isAsync()
                 && !funcDecl.isGenerator()
                 && !compilerContext.scopeManager.hasEnclosingBlockScopeLocal(functionName);
+        if (isAnnexB && JSArguments.NAME.equals(functionName)) {
+            function.setDisplaysAsArgumentsObjectInToString(true);
+        }
         Integer localIndex = compilerContext.scopeManager.findLocalInScopes(functionName);
         if (localIndex != null) {
             if (isAnnexB && !compilerContext.suppressAnnexBVarStore) {

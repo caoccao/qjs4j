@@ -184,7 +184,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
             Identifier id = null;
             if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD)) {
+                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
                 id = parserContext.parseIdentifier();
             }
 
@@ -468,7 +468,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             // Per ES spec 14.6: class definitions (including heritage and body) are strict mode code.
             Identifier id = null;
             if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD)) {
+                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
                 id = parserContext.parseIdentifier();
             }
 
@@ -845,7 +845,7 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
         try {
             Identifier id = null;
             if (parserContext.match(TokenType.IDENTIFIER) || parserContext.match(TokenType.AWAIT)
-                    || parserContext.match(TokenType.YIELD)) {
+                    || parserContext.match(TokenType.YIELD) || parserContext.match(TokenType.LET)) {
                 id = parserContext.parseIdentifier();
             }
 
@@ -986,9 +986,14 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
             parserContext.expect(TokenType.LPAREN);
             funcParams = parseFunctionParameters();
             int formalParameterCount = funcParams.params().size() + (funcParams.restParameter() != null ? 1 : 0);
-            if ((JSKeyword.GET.equals(kind) && formalParameterCount != 0)
-                    || (JSKeyword.SET.equals(kind) && formalParameterCount != 1)) {
-                throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
+            if (JSKeyword.GET.equals(kind)) {
+                if (formalParameterCount != 0) {
+                    throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
+                }
+            } else if (JSKeyword.SET.equals(kind)) {
+                if (funcParams.restParameter() != null || formalParameterCount != 1) {
+                    throw new JSSyntaxErrorException("invalid number of arguments for getter or setter");
+                }
             }
 
             parserContext.inFunctionBody = true;

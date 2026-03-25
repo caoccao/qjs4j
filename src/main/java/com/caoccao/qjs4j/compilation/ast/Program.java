@@ -101,6 +101,8 @@ public final class Program extends ASTNode {
                     scanAnnexBForCollisionCheck(nestedStatement, switchLexicalNames, annexBFunctionNames);
                 }
             }
+        } else if (statement instanceof WithStatement withStatement) {
+            scanAnnexBForCollisionCheck(withStatement.getBody(), lexicalBindingNames, annexBFunctionNames);
         }
     }
 

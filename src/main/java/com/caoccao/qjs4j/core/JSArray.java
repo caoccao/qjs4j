@@ -455,49 +455,79 @@ public final class JSArray extends JSObject {
     }
 
     private List<PropertyKey> getOwnPropertyKeysInternal(boolean enumerableOnly) {
-        Map<Long, JSValue> indexedValues = new HashMap<>();
+        List<Map.Entry<Long, PropertyKey>> numericKeys = new ArrayList<>();
+        Set<Long> seenNumericIndices = new HashSet<>();
+        List<PropertyKey> stringKeys = new ArrayList<>();
+        List<PropertyKey> symbolKeys = new ArrayList<>();
+        Set<PropertyKey> seenPropertyKeys = new HashSet<>();
+
         long denseLimit = Math.min(length, denseArray.length);
         for (int i = 0; i < denseLimit; i++) {
             JSValue value = denseArray[i];
             if (value != null) {
-                indexedValues.put((long) i, value);
+                long numericIndex = Integer.toUnsignedLong(i);
+                if (seenNumericIndices.add(numericIndex)) {
+                    numericKeys.add(Map.entry(numericIndex, PropertyKey.fromString(Long.toString(numericIndex))));
+                }
             }
         }
         if (sparseProperties != null) {
             for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
                 long index = entry.getKey();
                 if (index >= 0 && index < length) {
-                    indexedValues.put(index, entry.getValue());
+                    if (seenNumericIndices.add(index)) {
+                        numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                    }
                 }
             }
         }
 
-        List<PropertyKey> keys = new ArrayList<>(indexedValues.size() + shape.getPropertyCount());
-        indexedValues.keySet().stream()
-                .sorted()
-                .forEach(index -> keys.add(PropertyKey.fromString(Long.toString(index))));
-
         for (PropertyKey key : shape.getPropertyKeys()) {
             long index = key.toArrayIndex();
             if (index >= 0) {
-                if (!indexedValues.containsKey(index)) {
+                if (!seenNumericIndices.contains(index)) {
                     PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
                     if (descriptor != null && (!enumerableOnly || descriptor.isEnumerable())) {
-                        keys.add(PropertyKey.fromString(Long.toString(index)));
+                        if (seenNumericIndices.add(index)) {
+                            numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                        }
+                    }
+                }
+                continue;
+            }
+            if (key.isSymbol()) {
+                if (!enumerableOnly) {
+                    if (seenPropertyKeys.add(key)) {
+                        symbolKeys.add(key);
+                    }
+                } else {
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
+                        symbolKeys.add(key);
                     }
                 }
                 continue;
             }
             if (!enumerableOnly) {
-                keys.add(key);
-                continue;
-            }
-            PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
-            if (descriptor != null && descriptor.isEnumerable()) {
-                keys.add(key);
+                if (seenPropertyKeys.add(key)) {
+                    stringKeys.add(key);
+                }
+            } else {
+                PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
+                    stringKeys.add(key);
+                }
             }
         }
 
+        numericKeys.sort(Comparator.comparingLong(Map.Entry::getKey));
+
+        List<PropertyKey> keys = new ArrayList<>(numericKeys.size() + stringKeys.size() + symbolKeys.size());
+        for (Map.Entry<Long, PropertyKey> entry : numericKeys) {
+            keys.add(entry.getValue());
+        }
+        keys.addAll(stringKeys);
+        keys.addAll(symbolKeys);
         return keys;
     }
 

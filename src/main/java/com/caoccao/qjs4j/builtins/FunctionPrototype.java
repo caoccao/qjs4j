@@ -350,6 +350,9 @@ public final class FunctionPrototype {
         // For bytecode functions with source code, return the original source
         // (QuickJS: b->has_debug && b->debug.source)
         if (thisArg instanceof JSBytecodeFunction bytecodeFunc) {
+            if (bytecodeFunc.displaysAsArgumentsObjectInToString()) {
+                return new JSString("[object Arguments]");
+            }
             String source = bytecodeFunc.getSourceCode();
             if (source != null && !source.isEmpty()) {
                 return new JSString(source);

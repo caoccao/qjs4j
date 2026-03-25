@@ -3374,8 +3374,17 @@ public final class JSContext implements AutoCloseable {
                     importBinding.sourceSpecifier(),
                     moduleSpecifier,
                     importBinding.sourceSpecifier());
-            return Objects.equals(resolvedImportSpecifier, moduleSpecifier);
+            Path resolvedImportPath = Path.of(resolvedImportSpecifier).normalize().toAbsolutePath();
+            Path modulePath = Path.of(moduleSpecifier).normalize().toAbsolutePath();
+            String resolvedImportPathString = resolvedImportPath.toString();
+            String modulePathString = modulePath.toString();
+            if (resolvedImportPathString.equals(modulePathString)) {
+                return true;
+            }
+            return resolvedImportPathString.equalsIgnoreCase(modulePathString);
         } catch (JSException ignored) {
+            return false;
+        } catch (Exception ignored) {
             return false;
         }
     }

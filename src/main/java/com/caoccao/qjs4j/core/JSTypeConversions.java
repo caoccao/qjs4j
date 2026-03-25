@@ -921,7 +921,10 @@ public final class JSTypeConversions {
         } else if (value instanceof JSString s) {
             return s;
         } else if (value instanceof JSSymbol s) {
-            return new JSString(s.toString(context));
+            if (context != null) {
+                context.throwTypeError("Cannot convert a Symbol value to a string");
+            }
+            return new JSString("");
         }
 
         // For objects, call ToPrimitive with STRING hint

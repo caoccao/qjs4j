@@ -31,8 +31,11 @@ final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
 
     @Override
     void compile(TemplateLiteral templateLiteral) {
-        // For untagged template literals, concatenate strings and expressions
-        // Example: `Hello ${name}!` becomes "Hello " + name + "!"
+        // Follow QuickJS strategy for untagged templates:
+        // emit first cooked quasi, then call String.prototype.concat with
+        // interleaved substitutions and following quasis.
+        // This preserves template-substitution ToString behavior (including
+        // Symbol TypeError) without introducing a new opcode.
 
         List<String> quasis = templateLiteral.getQuasis();
         List<Expression> expressions = templateLiteral.getExpressions();
@@ -50,29 +53,30 @@ final class TemplateLiteralCompiler extends AstNodeCompiler<TemplateLiteral> {
         }
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(firstQuasi));
 
-        // Add each expression and subsequent quasi using string concatenation (ADD)
-        for (int i = 0; i < expressions.size(); i++) {
-            // Template substitutions use ToString coercion (not + operator default hint).
-            // Call String(expr) to ensure ToString semantics.
-            compilerContext.emitter.emitOpcodeAtom(Opcode.GET_VAR, "String");
-            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
-            compilerContext.expressionCompiler.compile(expressions.get(i));
-            compilerContext.emitter.emitOpcodeU16(Opcode.CALL, 1);
+        if (expressions.isEmpty()) {
+            return;
+        }
 
-            // Concatenate using ADD after explicit ToString on the substitution.
-            compilerContext.emitter.emitOpcode(Opcode.ADD);
+        compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, "concat");
+        compilerContext.emitter.emitOpcode(Opcode.SWAP);
 
-            // Add the next quasi if it exists
-            if (i + 1 < quasis.size()) {
-                String quasi = quasis.get(i + 1);
+        int argumentCount = 0;
+        for (int index = 0; index < expressions.size(); index++) {
+            compilerContext.expressionCompiler.compile(expressions.get(index));
+            argumentCount++;
+
+            if (index + 1 < quasis.size()) {
+                String quasi = quasis.get(index + 1);
                 if (quasi == null) {
                     throw new JSCompilerException("Invalid escape sequence in untagged template literal");
                 }
                 if (!quasi.isEmpty()) {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(quasi));
-                    compilerContext.emitter.emitOpcode(Opcode.ADD);
+                    argumentCount++;
                 }
             }
         }
+
+        compilerContext.emitter.emitOpcodeU16(Opcode.CALL_METHOD, argumentCount);
     }
 }

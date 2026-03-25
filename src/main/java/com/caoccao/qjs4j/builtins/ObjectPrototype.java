@@ -138,13 +138,12 @@ public final class ObjectPrototype {
      * Legacy method for looking up getter
      */
     public static JSValue __lookupGetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 1) {
-            return JSUndefined.INSTANCE;
-        }
-
         // ES B.2.2.4: Step 1: Let O be ? ToObject(this)
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__lookupGetter__ called on null or undefined");
+        }
+        if (args.length < 1) {
+            return JSUndefined.INSTANCE;
         }
         JSObject obj;
         if (thisArg instanceof JSObject jsObj) {
@@ -183,13 +182,12 @@ public final class ObjectPrototype {
      * Legacy method for looking up setter
      */
     public static JSValue __lookupSetter__(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length < 1) {
-            return JSUndefined.INSTANCE;
-        }
-
         // ES B.2.2.5: Step 1: Let O be ? ToObject(this)
         if (thisArg.isNullOrUndefined()) {
             return context.throwTypeError("__lookupSetter__ called on null or undefined");
+        }
+        if (args.length < 1) {
+            return JSUndefined.INSTANCE;
         }
         JSObject obj;
         if (thisArg instanceof JSObject jsObj) {

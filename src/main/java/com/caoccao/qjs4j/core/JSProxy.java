@@ -359,6 +359,14 @@ public final class JSProxy extends JSObject {
                     desc.isWritable() ? JSBoolean.TRUE : JSBoolean.FALSE);
         }
 
+        if (desc.hasGetter()) {
+            obj.set(PropertyKey.GET, desc.getGetter());
+        }
+
+        if (desc.hasSetter()) {
+            obj.set(PropertyKey.SET, desc.getSetter());
+        }
+
         if (desc.hasEnumerable()) {
             obj.set(PropertyKey.ENUMERABLE,
                     desc.isEnumerable() ? JSBoolean.TRUE : JSBoolean.FALSE);
@@ -367,14 +375,6 @@ public final class JSProxy extends JSObject {
         if (desc.hasConfigurable()) {
             obj.set(PropertyKey.CONFIGURABLE,
                     desc.isConfigurable() ? JSBoolean.TRUE : JSBoolean.FALSE);
-        }
-
-        if (desc.hasGetter()) {
-            obj.set(PropertyKey.GET, desc.getGetter());
-        }
-
-        if (desc.hasSetter()) {
-            obj.set(PropertyKey.SET, desc.getSetter());
         }
 
         return obj;

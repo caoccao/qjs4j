@@ -67,6 +67,7 @@ public final class JSBytecodeFunction extends JSFunction {
     private boolean classConstructor;
     private IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap;
     private Set<JSSymbol> classPrivateSymbols;
+    private boolean displaysAsArgumentsObjectInToString;
     private boolean derivedConstructor;
     private StackFrame evalDynamicScopeFrame;
     private boolean evalDynamicScopeLookupEnabled;
@@ -1652,6 +1653,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedVarNames = this.capturedVarNames;
         copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
         copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
+        copiedFunction.displaysAsArgumentsObjectInToString = this.displaysAsArgumentsObjectInToString;
         copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
         copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
         return copiedFunction;
@@ -1689,6 +1691,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.capturedVarNames = this.capturedVarNames;
         copiedFunction.classPrivateSymbols = this.classPrivateSymbols;
         copiedFunction.classPrivateSymbolRemap = this.classPrivateSymbolRemap;
+        copiedFunction.displaysAsArgumentsObjectInToString = this.displaysAsArgumentsObjectInToString;
         copiedFunction.evalDynamicScopeFrame = this.evalDynamicScopeFrame;
         copiedFunction.evalDynamicScopeLookupEnabled = this.evalDynamicScopeLookupEnabled;
         return copiedFunction;
@@ -1817,6 +1820,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return sourceCode;
     }
 
+    public boolean displaysAsArgumentsObjectInToString() {
+        return displaysAsArgumentsObjectInToString;
+    }
+
     /**
      * Get the VarRef array for closure variables (reference-based capture).
      * Returns null if this function uses value-based closureVars instead.
@@ -1907,6 +1914,7 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.classPrivateSymbols = classPrivateSymbols;
         copiedFunction.classConstructor = classConstructor;
         copiedFunction.derivedConstructor = derivedConstructor;
+        copiedFunction.displaysAsArgumentsObjectInToString = displaysAsArgumentsObjectInToString;
         copiedFunction.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
         copiedFunction.hasParameterExpressions = hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
@@ -2062,6 +2070,10 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public void setDerivedConstructor(boolean derivedConstructor) {
         this.derivedConstructor = derivedConstructor;
+    }
+
+    public void setDisplaysAsArgumentsObjectInToString(boolean displaysAsArgumentsObjectInToString) {
+        this.displaysAsArgumentsObjectInToString = displaysAsArgumentsObjectInToString;
     }
 
     public void setEvalDynamicScopeFrame(StackFrame evalDynamicScopeFrame) {

@@ -388,11 +388,10 @@ public final class ObjectConstructor {
      * Following QuickJS js_object_seal() implementation with freeze_flag=1.
      */
     public static JSValue freeze(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.freeze called on non-object");
+        if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(arg instanceof JSObject jsObject)) {
             return arg; // Primitives are returned as-is
         }
@@ -992,11 +991,7 @@ public final class ObjectConstructor {
      * Determines if an object is extensible (whether new properties can be added to it).
      */
     public static JSValue isExtensible(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.isExtensible called without arguments");
-        }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // Non-objects are not extensible
         if (!(arg instanceof JSObject obj)) {
@@ -1011,11 +1006,10 @@ public final class ObjectConstructor {
      * ES2020 19.1.2.12
      */
     public static JSValue isFrozen(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.isFrozen called without arguments");
+        if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(arg instanceof JSObject obj)) {
             return JSBoolean.TRUE; // Primitives are always frozen
         }
@@ -1028,11 +1022,10 @@ public final class ObjectConstructor {
      * ES2020 19.1.2.13
      */
     public static JSValue isSealed(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.isSealed called without arguments");
+        if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(arg instanceof JSObject obj)) {
             return JSBoolean.TRUE; // Primitives are always sealed
         }
@@ -1095,11 +1088,10 @@ public final class ObjectConstructor {
      * Prevents new properties from ever being added to an object.
      */
     public static JSValue preventExtensions(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.preventExtensions called without arguments");
+        if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
 
         // Non-objects are returned as-is
         if (!(arg instanceof JSObject obj)) {
@@ -1125,11 +1117,10 @@ public final class ObjectConstructor {
      * Following QuickJS js_object_seal() implementation with freeze_flag=0.
      */
     public static JSValue seal(JSContext context, JSValue thisArg, JSValue[] args) {
-        if (args.length == 0) {
-            return context.throwTypeError("Object.seal called on non-object");
+        if (args.length == 0 && context.getVirtualMachine().getCurrentFrame() == null) {
+            return context.throwTypeError("Cannot convert undefined or null to object");
         }
-
-        JSValue arg = args[0];
+        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         if (!(arg instanceof JSObject obj)) {
             return arg; // Primitives are returned as-is
         }
