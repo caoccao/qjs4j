@@ -783,6 +783,14 @@ public non-sealed class JSObject implements JSValue {
                         JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
                         // Check if getter threw an exception - return the error value or undefined
                         if (propertyAccessContext.hasPendingException()) {
+                            // Cross-realm: propagate exception to receiver's context
+                            if (receiver instanceof JSObject receiverObj
+                                    && receiverObj.context != null
+                                    && receiverObj.context != propertyAccessContext) {
+                                receiverObj.context.setPendingException(
+                                        propertyAccessContext.getPendingException());
+                                propertyAccessContext.clearPendingException();
+                            }
                             return result != null ? result : propertyAccessContext.getPendingException();
                         }
                         return result;
@@ -792,6 +800,13 @@ public non-sealed class JSObject implements JSValue {
                                 : e.getJsValue() != null ? e.getJsValue()
                                 : propertyAccessContext.throwError(e.getMessage());
                         propertyAccessContext.setPendingException(exception);
+                        // Cross-realm: propagate exception to receiver's context
+                        if (receiver instanceof JSObject receiverObj
+                                && receiverObj.context != null
+                                && receiverObj.context != propertyAccessContext) {
+                            receiverObj.context.setPendingException(exception);
+                            propertyAccessContext.clearPendingException();
+                        }
                         return JSUndefined.INSTANCE;
                     }
                 }
