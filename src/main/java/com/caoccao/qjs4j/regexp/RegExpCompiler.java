@@ -1947,7 +1947,16 @@ public final class RegExpCompiler {
                     }
                 }
             } else {
-                pos++;
+                // In non-unicode mode, codePoints may be UTF-16 code units.
+                // Combine surrogate pairs for group names (which use Unicode ID_Start/ID_Continue).
+                if (Character.isHighSurrogate((char) codePoint)
+                        && pos + 1 < codePoints.length
+                        && Character.isLowSurrogate((char) codePoints[pos + 1])) {
+                    codePoint = Character.toCodePoint((char) codePoint, (char) codePoints[pos + 1]);
+                    pos += 2;
+                } else {
+                    pos++;
+                }
             }
 
             if (name.isEmpty()) {

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.regexp.RegExpBytecode;
 import com.caoccao.qjs4j.regexp.RegExpCompiler;
 import com.caoccao.qjs4j.regexp.RegExpEngine;
@@ -56,7 +57,12 @@ public final class JSRegExp extends JSObject {
     public static JSObject create(JSContext context, JSValue... args) {
         JSValue[] rawArgs = extractRawArgs(context, args);
         if (rawArgs == null) {
-            return (JSObject) context.getPendingException();
+            if (context.hasPendingException()) {
+                JSValue exception = context.getPendingException();
+                context.clearPendingException();
+                throw new JSException(exception);
+            }
+            return context.throwTypeError("Invalid RegExp");
         }
         return createFromRawArgs(context, rawArgs[0], rawArgs[1]);
     }
@@ -71,13 +77,17 @@ public final class JSRegExp extends JSObject {
         if (!(patternValue instanceof JSUndefined)) {
             pattern = JSTypeConversions.toString(context, patternValue).value();
             if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
+                JSValue exception = context.getPendingException();
+                context.clearPendingException();
+                throw new JSException(exception);
             }
         }
         if (!(flagsValue instanceof JSUndefined)) {
             flags = JSTypeConversions.toString(context, flagsValue).value();
             if (context.hasPendingException()) {
-                return (JSObject) context.getPendingException();
+                JSValue exception = context.getPendingException();
+                context.clearPendingException();
+                throw new JSException(exception);
             }
         }
 

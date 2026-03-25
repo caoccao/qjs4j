@@ -282,7 +282,13 @@ public final class JSReflectObject {
             }
 
             // Step 7-9: ToString and compile
-            JSValue result = JSRegExp.createFromRawArgs(context, rawArgs[0], rawArgs[1]);
+            JSValue result;
+            try {
+                result = JSRegExp.createFromRawArgs(context, rawArgs[0], rawArgs[1]);
+            } catch (JSException e) {
+                context.setPendingException(e.getErrorValue());
+                return context.getPendingException();
+            }
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }

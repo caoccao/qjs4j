@@ -600,6 +600,8 @@ public final class VirtualMachine {
         } catch (JSErrorException e) {
             throw new JSVirtualMachineException(
                     context.throwError(e));
+        } catch (JSException e) {
+            throw new JSVirtualMachineException(e.getMessage(), e.getErrorValue());
         } finally {
             constructorContext.setNativeConstructorNewTarget(savedNativeConstructorContextNewTarget);
             if (constructorContext != context) {
