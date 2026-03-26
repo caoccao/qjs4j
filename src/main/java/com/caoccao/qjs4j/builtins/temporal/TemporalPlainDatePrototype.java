@@ -329,8 +329,8 @@ public final class TemporalPlainDatePrototype {
                 time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
             }
         }
-        // For Phase 1, return a string representation (PlainDateTime will be added in Phase 2)
-        return new JSString(plainDate.getIsoDate().toString() + "T" + time.toString());
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
+                new com.caoccao.qjs4j.core.temporal.IsoDateTime(plainDate.getIsoDate(), time), plainDate.getCalendarId());
     }
 
     public static JSValue toPlainMonthDay(JSContext context, JSValue thisArg, JSValue[] args) {

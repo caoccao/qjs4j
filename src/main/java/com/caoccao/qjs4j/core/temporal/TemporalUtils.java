@@ -274,6 +274,27 @@ public final class TemporalUtils {
     }
 
     /**
+     * Converts a JSValue to a finite integral long or throws a RangeError.
+     * Unlike toIntegerThrowOnInfinity, this rejects fractional values.
+     * Returns Long.MIN_VALUE if a pending exception was set.
+     */
+    public static long toLongIfIntegral(JSContext context, JSValue value) {
+        double num = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (!Double.isFinite(num)) {
+            context.throwRangeError("Temporal error: Expected finite integer.");
+            return Long.MIN_VALUE;
+        }
+        if (num != Math.floor(num)) {
+            context.throwRangeError("Temporal error: Expected finite integer.");
+            return Long.MIN_VALUE;
+        }
+        return (long) num;
+    }
+
+    /**
      * Validates that a calendar value is a string, matching V8's error message.
      */
     public static String validateCalendar(JSContext context, JSValue calendarValue) {
