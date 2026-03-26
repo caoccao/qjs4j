@@ -1611,7 +1611,19 @@ public final class JSGlobalObject {
                 if (thisArg != regexpConstructor) {
                     return ctx.throwTypeError("Generic static accessor property access is not supported");
                 }
-                return new JSString("");
+                String legacyValue;
+                if ("$&".equals(legacyGetterName) || "lastMatch".equals(legacyGetterName)) {
+                    legacyValue = ctx.getRegExpLegacyLastMatch();
+                } else if ("$'".equals(legacyGetterName) || "rightContext".equals(legacyGetterName)) {
+                    legacyValue = ctx.getRegExpLegacyRightContext();
+                } else if ("$+".equals(legacyGetterName) || "lastParen".equals(legacyGetterName)) {
+                    legacyValue = ctx.getRegExpLegacyLastParen();
+                } else if ("$`".equals(legacyGetterName) || "leftContext".equals(legacyGetterName)) {
+                    legacyValue = ctx.getRegExpLegacyLeftContext();
+                } else {
+                    legacyValue = "";
+                }
+                return new JSString(legacyValue);
             }, false);
             regexpConstructor.defineProperty(PropertyKey.fromString(legacyGetterName), legacyGetter, PropertyDescriptor.AccessorState.Configurable);
         }
@@ -1620,12 +1632,18 @@ public final class JSGlobalObject {
                 if (thisArg != regexpConstructor) {
                     return ctx.throwTypeError("Generic static accessor property access is not supported");
                 }
-                return new JSString("");
+                return new JSString(ctx.getRegExpLegacyInput());
             }, false);
             JSNativeFunction legacyGSSetter = new JSNativeFunction(context, "set " + legacyGetterSetterName, 1, (ctx, thisArg, args) -> {
                 if (thisArg != regexpConstructor) {
                     return ctx.throwTypeError("Generic static accessor property access is not supported");
                 }
+                JSValue inputArgumentValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                JSString inputString = JSTypeConversions.toString(ctx, inputArgumentValue);
+                if (ctx.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                ctx.setRegExpLegacyInput(inputString.value());
                 return JSUndefined.INSTANCE;
             }, false);
             regexpConstructor.defineProperty(PropertyKey.fromString(legacyGetterSetterName), legacyGSGetter, legacyGSSetter, PropertyDescriptor.AccessorState.Configurable);
@@ -1633,11 +1651,12 @@ public final class JSGlobalObject {
         // $1..$9
         for (int i = 1; i <= 9; i++) {
             final String dollarName = "$" + i;
+            final int captureIndex = i;
             JSNativeFunction dollarGetter = new JSNativeFunction(context, "get " + dollarName, 0, (ctx, thisArg, args) -> {
                 if (thisArg != regexpConstructor) {
                     return ctx.throwTypeError("Generic static accessor property access is not supported");
                 }
-                return new JSString("");
+                return new JSString(ctx.getRegExpLegacyCapture(captureIndex));
             }, false);
             regexpConstructor.defineProperty(PropertyKey.fromString(dollarName), dollarGetter, PropertyDescriptor.AccessorState.Configurable);
         }
@@ -2160,6 +2179,7 @@ public final class JSGlobalObject {
             }
             Set<String> bodyVarNames = new HashSet<>();
             Set<String> functionVarEnvironmentNames = new HashSet<>();
+            Set<String> constLexicalNames = new HashSet<>();
             if (functionLikeExpression instanceof FunctionExpression functionExpression) {
                 for (Pattern parameter : functionExpression.getParams()) {
                     functionVarEnvironmentNames.addAll(parameter.getBoundNames());
@@ -2168,8 +2188,9 @@ public final class JSGlobalObject {
                     functionVarEnvironmentNames.addAll(functionExpression.getRestParameter().getArgument().getBoundNames());
                 }
                 collectVarEnvironmentNamesFromStatements(functionExpression.getBody().getBody(), bodyVarNames);
+                collectConstLexicalNamesFromStatements(functionExpression.getBody().getBody(), constLexicalNames);
                 functionVarEnvironmentNames.addAll(bodyVarNames);
-                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
+                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames, constLexicalNames);
             }
             if (functionLikeExpression instanceof ArrowFunctionExpression arrowFunctionExpression) {
                 for (Pattern parameter : arrowFunctionExpression.getParams()) {
@@ -2180,9 +2201,10 @@ public final class JSGlobalObject {
                 }
                 if (arrowFunctionExpression.getBody() instanceof BlockStatement blockStatement) {
                     collectVarEnvironmentNamesFromStatements(blockStatement.getBody(), bodyVarNames);
+                    collectConstLexicalNamesFromStatements(blockStatement.getBody(), constLexicalNames);
                 }
                 functionVarEnvironmentNames.addAll(bodyVarNames);
-                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames);
+                return new CallerVarEnvironmentAnalysis(bodyVarNames, functionVarEnvironmentNames, constLexicalNames);
             }
             return null;
         }
@@ -2204,6 +2226,90 @@ public final class JSGlobalObject {
                 return c - 'a' + 10;
             }
             return -1;
+        }
+
+        private static void collectConstLexicalNamesFromStatement(Statement statement, Set<String> names) {
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() == VariableKind.CONST) {
+                for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                    names.addAll(declaration.getId().getBoundNames());
+                }
+                return;
+            }
+            if (statement instanceof BlockStatement blockStatement) {
+                collectConstLexicalNamesFromStatements(blockStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof IfStatement ifStatement) {
+                collectConstLexicalNamesFromStatement(ifStatement.getConsequent(), names);
+                if (ifStatement.getAlternate() != null) {
+                    collectConstLexicalNamesFromStatement(ifStatement.getAlternate(), names);
+                }
+                return;
+            }
+            if (statement instanceof ForStatement forStatement) {
+                if (forStatement.getInit() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.CONST) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        names.addAll(declaration.getId().getBoundNames());
+                    }
+                }
+                collectConstLexicalNamesFromStatement(forStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof ForInStatement forInStatement) {
+                if (forInStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.CONST) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        names.addAll(declaration.getId().getBoundNames());
+                    }
+                }
+                collectConstLexicalNamesFromStatement(forInStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof ForOfStatement forOfStatement) {
+                if (forOfStatement.getLeft() instanceof VariableDeclaration variableDeclaration
+                        && variableDeclaration.getKind() == VariableKind.CONST) {
+                    for (VariableDeclarator declaration : variableDeclaration.getDeclarations()) {
+                        names.addAll(declaration.getId().getBoundNames());
+                    }
+                }
+                collectConstLexicalNamesFromStatement(forOfStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof WhileStatement whileStatement) {
+                collectConstLexicalNamesFromStatement(whileStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof DoWhileStatement doWhileStatement) {
+                collectConstLexicalNamesFromStatement(doWhileStatement.getBody(), names);
+                return;
+            }
+            if (statement instanceof SwitchStatement switchStatement) {
+                for (SwitchStatement.SwitchCase switchCase : switchStatement.getCases()) {
+                    collectConstLexicalNamesFromStatements(switchCase.getConsequent(), names);
+                }
+                return;
+            }
+            if (statement instanceof TryStatement tryStatement) {
+                collectConstLexicalNamesFromStatements(tryStatement.getBlock().getBody(), names);
+                if (tryStatement.getHandler() != null) {
+                    collectConstLexicalNamesFromStatements(tryStatement.getHandler().getBody().getBody(), names);
+                }
+                if (tryStatement.getFinalizer() != null) {
+                    collectConstLexicalNamesFromStatements(tryStatement.getFinalizer().getBody(), names);
+                }
+                return;
+            }
+            if (statement instanceof LabeledStatement labeledStatement) {
+                collectConstLexicalNamesFromStatement(labeledStatement.getBody(), names);
+            }
+        }
+
+        private static void collectConstLexicalNamesFromStatements(List<Statement> statements, Set<String> names) {
+            for (Statement statement : statements) {
+                collectConstLexicalNamesFromStatement(statement, names);
+            }
         }
 
         private static void collectVarEnvironmentNamesFromStatement(Statement statement, Set<String> names) {
@@ -2295,6 +2401,33 @@ public final class JSGlobalObject {
             for (Statement statement : statements) {
                 collectVarEnvironmentNamesFromStatement(statement, names);
             }
+        }
+
+        private static boolean containsIdentifierReference(String sourceCode, String identifierName) {
+            if (sourceCode == null
+                    || sourceCode.isEmpty()
+                    || identifierName == null
+                    || identifierName.isEmpty()) {
+                return false;
+            }
+            int searchIndex = 0;
+            while (searchIndex <= sourceCode.length() - identifierName.length()) {
+                int matchIndex = sourceCode.indexOf(identifierName, searchIndex);
+                if (matchIndex < 0) {
+                    return false;
+                }
+                int beforeIndex = matchIndex - 1;
+                int afterIndex = matchIndex + identifierName.length();
+                boolean hasIdentifierCharBefore = beforeIndex >= 0
+                        && isIdentifierPartAscii(sourceCode.charAt(beforeIndex));
+                boolean hasIdentifierCharAfter = afterIndex < sourceCode.length()
+                        && isIdentifierPartAscii(sourceCode.charAt(afterIndex));
+                if (!hasIdentifierCharBefore && !hasIdentifierCharAfter) {
+                    return true;
+                }
+                searchIndex = matchIndex + identifierName.length();
+            }
+            return false;
         }
 
         /**
@@ -2581,11 +2714,14 @@ public final class JSGlobalObject {
             Map<String, Integer> capturedVarOverlaySlots = null;
             Map<String, JSValue> savedGlobals = null;
             Set<String> absentKeys = null;
+            Set<String> immutableOverlayBindingNames = null;
             Set<String> touchedOverlayKeys = null;
             Set<String> evalVarDeclarations = null;
             Set<String> evalLexDeclarations = null;
             Set<String> evalFunctionDeclarations = null;
             Set<String> functionVarEnvironmentNames = null;
+            Set<String> constLexicalNames = null;
+            CallerVarEnvironmentAnalysis callerVarEnvironmentAnalysis = null;
             boolean parsedEvalDeclarations = false;
             boolean evalCodeStrict = inheritedStrictMode;
             boolean overlayStatePushed = false;
@@ -2611,6 +2747,13 @@ public final class JSGlobalObject {
                     }
                 }
             }
+            if (callerBytecodeFunction != null && shouldOverlayLocals) {
+                callerVarEnvironmentAnalysis = analyzeCallerVarEnvironment(callerBytecodeFunction);
+                if (callerVarEnvironmentAnalysis != null) {
+                    functionVarEnvironmentNames = callerVarEnvironmentAnalysis.functionVarEnvironmentNames();
+                    constLexicalNames = callerVarEnvironmentAnalysis.constLexicalNames();
+                }
+            }
 
             if ((shouldOverlayLocals || shouldOverlayTopLevelLexicals)
                     && callerBytecodeFunction != null
@@ -2621,6 +2764,7 @@ public final class JSGlobalObject {
                 capturedVarOverlaySlots = new LinkedHashMap<>();
                 savedGlobals = new HashMap<>();
                 absentKeys = new HashSet<>();
+                immutableOverlayBindingNames = new HashSet<>();
                 touchedOverlayKeys = new HashSet<>();
                 JSValue[] locals = callerFrame.getLocals();
                 for (int i = 0; i < localVarNames.length && i < locals.length; i++) {
@@ -2650,13 +2794,18 @@ public final class JSGlobalObject {
                     // Function name bindings are immutable: make the overlay property
                     // non-writable so PUT_VAR throws TypeError in strict mode and
                     // silently fails in sloppy mode.
-                    if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
+                    boolean isFunctionNameBinding = functionNameLocalIndex >= 0 && i == functionNameLocalIndex;
+                    boolean isConstLexicalBinding = shouldOverlayLocals
+                            && constLexicalNames != null
+                            && constLexicalNames.contains(name);
+                    if (isFunctionNameBinding || isConstLexicalBinding) {
                         PropertyDescriptor fnDesc = new PropertyDescriptor();
                         fnDesc.setValue(locals[i] != null ? locals[i] : JSUndefined.INSTANCE);
                         fnDesc.setWritable(false);
                         fnDesc.setEnumerable(true);
                         fnDesc.setConfigurable(true);
                         global.defineProperty(PropertyKey.fromString(name), fnDesc);
+                        immutableOverlayBindingNames.add(name);
                     }
                 }
                 if (shouldOverlayLocals) {
@@ -2718,6 +2867,7 @@ public final class JSGlobalObject {
                                 capturedFunctionNameDescriptor.setEnumerable(true);
                                 capturedFunctionNameDescriptor.setConfigurable(true);
                                 global.defineProperty(PropertyKey.fromString(capturedVarName), capturedFunctionNameDescriptor);
+                                immutableOverlayBindingNames.add(capturedVarName);
                             }
                         }
                     }
@@ -2799,7 +2949,6 @@ public final class JSGlobalObject {
                 // eval cannot create a var with the same name as a parameter.
                 // Per spec, the parameter scope is separate from the var scope,
                 // so "var x" in eval conflicts with parameter "x".
-                CallerVarEnvironmentAnalysis callerVarEnvironmentAnalysis = null;
                 if (isEvalInFunction
                         && callerBytecodeFunction != null
                         && callerBytecodeFunction.hasParameterExpressions()
@@ -3090,13 +3239,15 @@ public final class JSGlobalObject {
                 callerContext.setPendingException(e.getErrorValue());
                 return JSUndefined.INSTANCE;
             } finally {
-                // Delete non-writable function name binding before restoring globals,
+                // Delete all temporary immutable overlay bindings before restoring globals,
                 // since global.set() cannot overwrite a non-writable property.
-                if (functionNameLocalIndex >= 0 && savedGlobals != null
-                        && localVarNames != null && functionNameLocalIndex < localVarNames.length
-                        && localVarNames[functionNameLocalIndex] != null
-                        && savedGlobals.containsKey(localVarNames[functionNameLocalIndex])) {
-                    global.delete(PropertyKey.fromString(localVarNames[functionNameLocalIndex]));
+                if (immutableOverlayBindingNames != null && !immutableOverlayBindingNames.isEmpty()) {
+                    for (String immutableOverlayBindingName : immutableOverlayBindingNames) {
+                        if (immutableOverlayBindingName == null || immutableOverlayBindingName.isEmpty()) {
+                            continue;
+                        }
+                        global.delete(PropertyKey.fromString(immutableOverlayBindingName));
+                    }
                 }
                 // Restore global object state for scope overlay
                 if (savedGlobals != null) {
@@ -3232,6 +3383,19 @@ public final class JSGlobalObject {
             return JSBoolean.valueOf(!Double.isNaN(num) && !Double.isInfinite(num));
         }
 
+        private static boolean isIdentifierPartAscii(char character) {
+            if (character >= 'a' && character <= 'z') {
+                return true;
+            }
+            if (character >= 'A' && character <= 'Z') {
+                return true;
+            }
+            if (character >= '0' && character <= '9') {
+                return true;
+            }
+            return character == '_' || character == '$';
+        }
+
         private static boolean isInfinityPrefix(String str, int start) {
             return start + 8 <= str.length() && str.startsWith("Infinity", start);
         }
@@ -3359,46 +3523,6 @@ public final class JSGlobalObject {
                 value = (value << 4) | digit;
             }
             return value;
-        }
-
-        private static boolean containsIdentifierReference(String sourceCode, String identifierName) {
-            if (sourceCode == null
-                    || sourceCode.isEmpty()
-                    || identifierName == null
-                    || identifierName.isEmpty()) {
-                return false;
-            }
-            int searchIndex = 0;
-            while (searchIndex <= sourceCode.length() - identifierName.length()) {
-                int matchIndex = sourceCode.indexOf(identifierName, searchIndex);
-                if (matchIndex < 0) {
-                    return false;
-                }
-                int beforeIndex = matchIndex - 1;
-                int afterIndex = matchIndex + identifierName.length();
-                boolean hasIdentifierCharBefore = beforeIndex >= 0
-                        && isIdentifierPartAscii(sourceCode.charAt(beforeIndex));
-                boolean hasIdentifierCharAfter = afterIndex < sourceCode.length()
-                        && isIdentifierPartAscii(sourceCode.charAt(afterIndex));
-                if (!hasIdentifierCharBefore && !hasIdentifierCharAfter) {
-                    return true;
-                }
-                searchIndex = matchIndex + identifierName.length();
-            }
-            return false;
-        }
-
-        private static boolean isIdentifierPartAscii(char character) {
-            if (character >= 'a' && character <= 'z') {
-                return true;
-            }
-            if (character >= 'A' && character <= 'Z') {
-                return true;
-            }
-            if (character >= '0' && character <= '9') {
-                return true;
-            }
-            return character == '_' || character == '$';
         }
 
         /**
@@ -3613,7 +3737,8 @@ public final class JSGlobalObject {
 
         private record CallerVarEnvironmentAnalysis(
                 Set<String> bodyVarNames,
-                Set<String> functionVarEnvironmentNames) {
+                Set<String> functionVarEnvironmentNames,
+                Set<String> constLexicalNames) {
         }
 
         private record WithObjectCandidate(int depth, JSObject object) {

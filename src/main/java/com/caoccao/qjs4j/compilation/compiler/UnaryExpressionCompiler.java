@@ -78,20 +78,31 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 // Match QuickJS scope_delete_var lowering:
                 // - local/arg/closure/implicit arguments bindings => false
                 // - unresolved/global binding => DELETE_VAR runtime check
-                boolean isLocalBinding = compilerContext.scopeManager.findLocalInScopes(id.getName()) != null
-                        || compilerContext.captureResolver.resolveCapturedBindingIndex(id.getName()) != null
-                        || (JSArguments.NAME.equals(id.getName()) && !compilerContext.inGlobalScope)
-                        || compilerContext.nonDeletableGlobalBindings.contains(id.getName());
-                if (isLocalBinding) {
-                    compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+                String identifierName = id.getName();
+                boolean fallsBackToNonDeletableBinding =
+                        compilerContext.scopeManager.findLocalInScopes(identifierName) != null
+                                || compilerContext.captureResolver.resolveCapturedBindingIndex(identifierName) != null
+                                || (JSArguments.NAME.equals(identifierName) && !compilerContext.inGlobalScope)
+                                || compilerContext.nonDeletableGlobalBindings.contains(identifierName);
+                List<Integer> activeWithObjectLocals = compilerContext.withObjectManager.getActiveLocals();
+                if (!activeWithObjectLocals.isEmpty()) {
+                    compilerContext.identifierCompiler.emitWithAwareDeleteIdentifier(
+                            identifierName,
+                            activeWithObjectLocals,
+                            0,
+                            fallsBackToNonDeletableBinding);
                 } else {
-                    List<Integer> withObjectLocals = compilerContext.withObjectManager.getActiveLocals();
-                    if (!withObjectLocals.isEmpty()) {
-                        compilerContext.identifierCompiler.emitWithAwareDeleteIdentifier(id.getName(), withObjectLocals, 0);
-                    } else if (!compilerContext.withObjectManager.getInheritedBindingNames().isEmpty()) {
-                        compilerContext.identifierCompiler.emitInheritedWithAwareDeleteIdentifier(id.getName(), compilerContext.withObjectManager.getInheritedBindingNames(), 0);
+                    List<String> inheritedWithBindingNames = compilerContext.withObjectManager.getInheritedBindingNames();
+                    if (!inheritedWithBindingNames.isEmpty()) {
+                        compilerContext.identifierCompiler.emitInheritedWithAwareDeleteIdentifier(
+                                identifierName,
+                                inheritedWithBindingNames,
+                                0,
+                                fallsBackToNonDeletableBinding);
+                    } else if (fallsBackToNonDeletableBinding) {
+                        compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
                     } else {
-                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, id.getName());
+                        compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, identifierName);
                     }
                 }
             } else {

@@ -1056,7 +1056,6 @@ public final class JSProxy extends JSObject {
         }
         if (!success) {
             executionContext.throwTypeError("'preventExtensions' on proxy: trap returned falsish");
-            return;
         }
     }
 
@@ -1276,7 +1275,6 @@ public final class JSProxy extends JSObject {
         }
         if (!success) {
             executionContext.throwTypeError("'setPrototypeOf' on proxy: trap returned falsish for property 'undefined'");
-            return;
         }
     }
 

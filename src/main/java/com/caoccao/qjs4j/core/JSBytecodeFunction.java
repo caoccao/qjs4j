@@ -67,8 +67,8 @@ public final class JSBytecodeFunction extends JSFunction {
     private boolean classConstructor;
     private IdentityHashMap<JSSymbol, JSSymbol> classPrivateSymbolRemap;
     private Set<JSSymbol> classPrivateSymbols;
-    private boolean displaysAsArgumentsObjectInToString;
     private boolean derivedConstructor;
+    private boolean displaysAsArgumentsObjectInToString;
     private StackFrame evalDynamicScopeFrame;
     private boolean evalDynamicScopeLookupEnabled;
     private boolean evalSuperCallAllowed;
@@ -1697,6 +1697,10 @@ public final class JSBytecodeFunction extends JSFunction {
         return copiedFunction;
     }
 
+    public boolean displaysAsArgumentsObjectInToString() {
+        return displaysAsArgumentsObjectInToString;
+    }
+
     /**
      * Get the bytecode for this function.
      */
@@ -1818,10 +1822,6 @@ public final class JSBytecodeFunction extends JSFunction {
      */
     public String getSourceCode() {
         return sourceCode;
-    }
-
-    public boolean displaysAsArgumentsObjectInToString() {
-        return displaysAsArgumentsObjectInToString;
     }
 
     /**

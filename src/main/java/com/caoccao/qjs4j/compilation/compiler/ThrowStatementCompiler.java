@@ -27,6 +27,10 @@ final class ThrowStatementCompiler extends AstNodeCompiler<ThrowStatement> {
 
     @Override
     void compile(ThrowStatement throwStmt) {
+        if (compilerContext.evalReturnLocalIndex >= 0) {
+            compilerContext.emitter.emitOpcode(Opcode.UNDEFINED);
+            compilerContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, compilerContext.evalReturnLocalIndex);
+        }
         compilerContext.expressionCompiler.compile(throwStmt.getArgument());
 
         // Check if any scope in the disposal path has a CATCH handler for using declarations.

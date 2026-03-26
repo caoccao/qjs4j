@@ -606,13 +606,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
             parseAsDeclarationHead = shouldParseLetAsLexicalDeclarationInForHead();
         }
         if (parseAsDeclarationHead) {
-            // Annex B: suppress 'in' as binary operator only for 'var' in non-strict mode
-            // (allows for-in initializers: for (var a = expr in obj))
+            // Parse declaration initializers in for-head with [~In] to match QuickJS behavior:
+            // unparenthesized `in` in initializers is not allowed and must be parsed as
+            // for-in/for-of head disambiguation.
             boolean savedInOperatorAllowed = parserContext.inOperatorAllowed;
-            boolean isVar = parserContext.match(TokenType.VAR);
-            if (isVar && !parserContext.strictMode) {
-                parserContext.inOperatorAllowed = false;
-            }
+            parserContext.inOperatorAllowed = false;
             if (parserContext.isAwaitUsingDeclarationStart()) {
                 SourceLocation declLocation = parserContext.getLocation();
                 parserContext.expect(TokenType.AWAIT);
@@ -1584,14 +1582,14 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         if (variableDeclaration == null || variableDeclaration.getDeclarations().isEmpty()) {
             return;
         }
-        VariableDeclarator declarator = variableDeclaration.getDeclarations().get(0);
-        if (declarator.getInit() == null) {
+        VariableDeclarator variableDeclarator = variableDeclaration.getDeclarations().get(0);
+        if (variableDeclarator == null || variableDeclarator.getInit() == null) {
             return;
         }
         if (variableDeclaration.getKind() != VariableKind.VAR) {
             throw new JSSyntaxErrorException("Invalid initializer in for-in declaration");
         }
-        if (parserContext.strictMode || !(declarator.getId() instanceof Identifier)) {
+        if (parserContext.strictMode || !(variableDeclarator.getId() instanceof Identifier)) {
             throw new JSSyntaxErrorException("Invalid initializer in for-in declaration");
         }
     }

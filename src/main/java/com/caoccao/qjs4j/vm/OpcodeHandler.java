@@ -173,13 +173,13 @@ public final class OpcodeHandler {
         if (!context.hasEvalOverlayFrames()) {
             return null;
         }
-        boolean hasOverlayBinding = context.hasEvalOverlayBinding(variableName);
-        boolean allowEvalScopedLookup = hasOverlayBinding;
-        if (!allowEvalScopedLookup) {
-            JSFunction currentFunction = executionContext.frame != null ? executionContext.frame.getFunction() : null;
-            if (currentFunction instanceof JSBytecodeFunction currentBytecodeFunction) {
-                allowEvalScopedLookup = currentBytecodeFunction.isEvalDynamicScopeLookupEnabled();
-            }
+        if (context.hasEvalOverlayBinding(variableName)) {
+            return null;
+        }
+        boolean allowEvalScopedLookup = false;
+        JSFunction currentFunction = executionContext.frame != null ? executionContext.frame.getFunction() : null;
+        if (currentFunction instanceof JSBytecodeFunction currentBytecodeFunction) {
+            allowEvalScopedLookup = currentBytecodeFunction.isEvalDynamicScopeLookupEnabled();
         }
         if (!allowEvalScopedLookup) {
             return null;
@@ -2150,8 +2150,17 @@ public final class OpcodeHandler {
 
     static void handleForInStart(Opcode op, ExecutionContext executionContext) {
         executionContext.virtualMachine.valueStack.stackTop = executionContext.sp;
-        JSValue obj = executionContext.virtualMachine.valueStack.pop();
-        JSForInEnumerator enumerator = new JSForInEnumerator(obj);
+        JSValue sourceValue = executionContext.virtualMachine.valueStack.pop();
+        JSValue enumerableValue = sourceValue;
+        if (!sourceValue.isNullOrUndefined() && !(sourceValue instanceof JSObject)) {
+            JSObject boxedObject = executionContext.virtualMachine.toObject(sourceValue);
+            if (boxedObject != null) {
+                enumerableValue = boxedObject;
+            } else {
+                enumerableValue = JSUndefined.INSTANCE;
+            }
+        }
+        JSForInEnumerator enumerator = new JSForInEnumerator(enumerableValue);
         executionContext.virtualMachine.valueStack.pushStackValue(new JSInternalValue(enumerator));
         executionContext.sp = executionContext.virtualMachine.valueStack.stackTop;
         executionContext.pc += op.getSize();
@@ -4052,36 +4061,43 @@ public final class OpcodeHandler {
         }
 
         if (iteratorValue instanceof JSObject iteratorObject && !iteratorValue.isUndefined()) {
+            boolean iteratorAlreadyExhausted = executionContext.virtualMachine.isForOfIteratorExhausted(iteratorObject);
             executionContext.virtualMachine.clearForOfIteratorExhausted(iteratorObject);
-            JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
-            if (executionContext.virtualMachine.context.hasPendingException()) {
-                if (originalPendingException == null) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
-                }
-                executionContext.virtualMachine.context.clearPendingException();
-                executionContext.sp = sp;
-                executionContext.pc += op.getSize();
-                return;
-            }
-            if (JSTypeChecking.isCallable(returnMethodValue)) {
-                JSValue closeResult = callCallableValue(executionContext.virtualMachine.context, returnMethodValue, iteratorObject, JSValue.NO_ARGS);
+            if (!iteratorAlreadyExhausted) {
+                JSValue returnMethodValue = iteratorObject.get(PropertyKey.RETURN);
                 if (executionContext.virtualMachine.context.hasPendingException()) {
                     if (originalPendingException == null) {
                         executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
                     }
                     executionContext.virtualMachine.context.clearPendingException();
-                } else if (!(closeResult instanceof JSObject)) {
-                    if (originalPendingException == null) {
-                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator result is not an object");
-                    }
+                    executionContext.sp = sp;
+                    executionContext.pc += op.getSize();
+                    return;
                 }
-            } else if (returnMethodValue.isNullOrUndefined()) {
-                // No return method.
-            } else if (returnMethodValue instanceof JSObject returnObject && returnObject.isHTMLDDA()) {
-                // IsHTMLDDA callable edge case; preserve previous no-op behavior.
-            } else {
-                if (originalPendingException == null) {
-                    executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator return is not a function");
+                if (JSTypeChecking.isCallable(returnMethodValue)) {
+                    JSValue closeResult = callCallableValue(
+                            executionContext.virtualMachine.context,
+                            returnMethodValue,
+                            iteratorObject,
+                            JSValue.NO_ARGS);
+                    if (executionContext.virtualMachine.context.hasPendingException()) {
+                        if (originalPendingException == null) {
+                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.getPendingException();
+                        }
+                        executionContext.virtualMachine.context.clearPendingException();
+                    } else if (!(closeResult instanceof JSObject)) {
+                        if (originalPendingException == null) {
+                            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator result is not an object");
+                        }
+                    }
+                } else if (returnMethodValue.isNullOrUndefined()) {
+                    // No return method.
+                } else if (returnMethodValue instanceof JSObject returnObject && returnObject.isHTMLDDA()) {
+                    // IsHTMLDDA callable edge case; preserve previous no-op behavior.
+                } else {
+                    if (originalPendingException == null) {
+                        executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("iterator return is not a function");
+                    }
                 }
             }
         }
@@ -6568,8 +6584,12 @@ public final class OpcodeHandler {
             if (callerFrame != null) {
                 return callerFrame;
             }
+            return executionContext.frame;
         }
         if (currentBytecodeFunction.isEvalDynamicScopeLookupEnabled()) {
+            if (executionContext.frame.getCaller() != null) {
+                return executionContext.frame;
+            }
             return currentBytecodeFunction.getEvalDynamicScopeFrame();
         }
         return null;

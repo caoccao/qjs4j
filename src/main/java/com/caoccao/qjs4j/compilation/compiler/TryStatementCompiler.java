@@ -302,7 +302,6 @@ final class TryStatementCompiler extends AstNodeCompiler<TryStatement> {
                     compilerContext.patternCompiler.declarePatternVariables(catchParam);
                     compilerContext.patternCompiler.compile(catchParam);
                 }
-
                 int catchBodyCatchJump = compilerContext.emitter.emitJump(Opcode.CATCH);
                 compileTryFinallyBlock(handler.getBody());
                 compilerContext.emitter.emitOpcode(Opcode.NIP_CATCH);

@@ -121,8 +121,20 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     // --- With-aware identifier lookup (read) ---
 
     void emitInheritedWithAwareDeleteIdentifier(String name, List<String> withBindingNames, int withDepth) {
+        emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth, false);
+    }
+
+    void emitInheritedWithAwareDeleteIdentifier(
+            String name,
+            List<String> withBindingNames,
+            int withDepth,
+            boolean fallbackToFalse) {
         if (withDepth >= withBindingNames.size()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+            if (fallbackToFalse) {
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+            } else {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+            }
             return;
         }
 
@@ -135,7 +147,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
             if (withCapturedIndex != null) {
                 compilerContext.emitter.emitOpcodeU16(Opcode.GET_VAR_REF, withCapturedIndex);
             } else {
-                emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1);
+                emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1, fallbackToFalse);
                 return;
             }
         }
@@ -171,7 +183,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
         compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP);
-        emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1);
+        emitInheritedWithAwareDeleteIdentifier(name, withBindingNames, withDepth + 1, fallbackToFalse);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
     }
@@ -336,8 +348,20 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
     // --- With-aware identifier lookup for call expressions ---
 
     void emitWithAwareDeleteIdentifier(String name, List<Integer> withObjectLocals, int withDepth) {
+        emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth, false);
+    }
+
+    void emitWithAwareDeleteIdentifier(
+            String name,
+            List<Integer> withObjectLocals,
+            int withDepth,
+            boolean fallbackToFalse) {
         if (withDepth >= withObjectLocals.size()) {
-            compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+            if (fallbackToFalse) {
+                compilerContext.emitter.emitOpcode(Opcode.PUSH_FALSE);
+            } else {
+                compilerContext.emitter.emitOpcodeAtom(Opcode.DELETE_VAR, name);
+            }
             return;
         }
 
@@ -379,7 +403,7 @@ final class IdentifierCompiler extends AstNodeCompiler<Identifier> {
         compilerContext.emitter.patchJump(jumpToFallback, fallbackOffset);
         compilerContext.emitter.patchJump(jumpToFallbackWhenBlocked, fallbackOffset);
         compilerContext.emitter.emitOpcode(Opcode.DROP); // drop with-object
-        emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1);
+        emitWithAwareDeleteIdentifier(name, withObjectLocals, withDepth + 1, fallbackToFalse);
         compilerContext.emitter.patchJump(jumpToEnd, compilerContext.emitter.currentOffset());
         compilerContext.emitter.patchJump(jumpToEndWithoutUnscopables, compilerContext.emitter.currentOffset());
     }

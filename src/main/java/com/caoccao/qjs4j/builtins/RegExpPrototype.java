@@ -365,6 +365,8 @@ public final class RegExpPrototype {
                         createIndicesValue(context, indices, regexp.getBytecode().groupNames()), PropertyDescriptor.DataState.All);
             }
 
+            context.updateRegExpLegacyStatics(str, captures, indices, lastIndex);
+
             if (global || sticky) {
                 if (indices != null && indices.length > 0) {
                     setLastIndexOrThrow(context, regexp, JSNumber.of(indices[0][1]));

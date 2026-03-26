@@ -75,10 +75,6 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
 
         compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(0);
 
-        if (compilerContext.loopManager.hasActiveIteratorLoops()) {
-            compilerContext.emitHelpers.emitAbruptCompletionIteratorClose();
-        }
-
         // Execute active finally blocks via GOSUB before returning.
         // Walk from innermost to outermost finally context.
         Iterator<List<Integer>> gosubPatchIterator = compilerContext.activeFinallyGosubPatches.iterator();
@@ -104,6 +100,10 @@ final class ReturnStatementCompiler extends AstNodeCompiler<ReturnStatement> {
             // and GOSUB return address after nested finally chains are processed.
             compilerContext.emitter.emitOpcode(Opcode.DROP);
             compilerContext.emitter.emitOpcode(Opcode.DROP);
+        }
+
+        if (compilerContext.loopManager.hasActiveIteratorLoops()) {
+            compilerContext.emitHelpers.emitAbruptCompletionIteratorClose();
         }
 
         compilerContext.emitter.emitOpcodeU16(Opcode.GET_LOC, returnValueIndex);

@@ -17,7 +17,9 @@
 package com.caoccao.qjs4j.compilation.parser;
 
 import com.caoccao.qjs4j.compilation.ast.*;
+import com.caoccao.qjs4j.compilation.lexer.Token;
 import com.caoccao.qjs4j.compilation.lexer.TokenType;
+import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 
 import java.util.ArrayList;
@@ -89,6 +91,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                 break;
             }
             boolean computed = parserContext.match(TokenType.LBRACKET);
+            Token propertyNameToken = parserContext.currentToken;
             Expression key = delegates.expressions.parsePropertyName();
             Pattern value;
             boolean shorthand = false;
@@ -102,6 +105,7 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
                     value = new AssignmentPattern(value, defaultValue, assignLoc);
                 }
             } else if (!computed && key instanceof Identifier keyIdentifier) {
+                validateObjectPatternShorthandIdentifier(keyIdentifier, propertyNameToken);
                 value = keyIdentifier;
                 shorthand = true;
                 if (parserContext.match(TokenType.ASSIGN)) {
@@ -127,6 +131,44 @@ record PatternParser(ParserContext parserContext, ParserDelegates delegates) {
             return parseArrayPattern();
         } else {
             return parserContext.parseIdentifier();
+        }
+    }
+
+    private void validateObjectPatternShorthandIdentifier(Identifier identifier, Token propertyNameToken) {
+        if (identifier == null || propertyNameToken == null) {
+            return;
+        }
+
+        String identifierName = identifier.getName();
+        if (parserContext.isAlwaysReservedIdentifier(identifierName)) {
+            if (propertyNameToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            if (JSKeyword.ENUM.equals(identifierName)) {
+                throw new JSSyntaxErrorException("Unexpected reserved word");
+            }
+            throw new JSSyntaxErrorException("Unexpected token '" + identifierName + "'");
+        }
+        if (parserContext.strictMode && parserContext.isStrictReservedIdentifier(identifierName)) {
+            if (propertyNameToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+        }
+        if (JSKeyword.AWAIT.equals(identifierName) && !parserContext.isAwaitIdentifierAllowed()) {
+            if (propertyNameToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            throw new JSSyntaxErrorException("Unexpected 'await' keyword");
+        }
+        if (JSKeyword.YIELD.equals(identifierName) && !parserContext.isYieldIdentifierAllowed()) {
+            if (propertyNameToken.escaped()) {
+                throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+            }
+            if (parserContext.strictMode) {
+                throw new JSSyntaxErrorException("Unexpected strict mode reserved word");
+            }
+            throw new JSSyntaxErrorException("Unexpected token 'yield'");
         }
     }
 }

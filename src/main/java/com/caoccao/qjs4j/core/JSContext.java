@@ -89,6 +89,7 @@ public final class JSContext implements AutoCloseable {
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
+    private final String[] regExpLegacyCaptures;
     private final JSRuntime runtime;
     private final UnicodePropertyResolver unicodePropertyResolver;
     private final VirtualMachine virtualMachine;
@@ -125,6 +126,11 @@ public final class JSContext implements AutoCloseable {
     private JSValue pendingException;
     // Promise rejection callback
     private IJSPromiseRejectCallback promiseRejectCallback;
+    private String regExpLegacyInput;
+    private String regExpLegacyLastMatch;
+    private String regExpLegacyLastParen;
+    private String regExpLegacyLeftContext;
+    private String regExpLegacyRightContext;
     private int stackDepth;
     // Execution state
     private boolean strictMode;
@@ -163,6 +169,15 @@ public final class JSContext implements AutoCloseable {
         this.evalOverlayLookupSuppressionDepth = 0;
         this.inBareVariableAssignment = false;
         this.pendingDirectEvalCalls = 0;
+        this.regExpLegacyCaptures = new String[9];
+        this.regExpLegacyInput = "";
+        this.regExpLegacyLastMatch = "";
+        this.regExpLegacyLastParen = "";
+        this.regExpLegacyLeftContext = "";
+        this.regExpLegacyRightContext = "";
+        for (int captureIndex = 0; captureIndex < regExpLegacyCaptures.length; captureIndex++) {
+            regExpLegacyCaptures[captureIndex] = "";
+        }
         this.stackDepth = 0;
         this.strictMode = false;
         this.virtualMachine = new VirtualMachine(this);
@@ -1995,19 +2010,6 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
-    /**
-     * Convert a null return from the private eval() into a JSException throw.
-     * Used by all public eval methods to maintain the throwing API contract.
-     */
-    private JSValue evalOrThrow(JSValue result) {
-        if (result == null) {
-            JSValue error = getPendingException();
-            clearPendingException();
-            throw new JSException(error);
-        }
-        return result;
-    }
-
     public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
         return evalOrThrow(eval(code, filename, false, true, false, false, inheritedStrictMode, true));
     }
@@ -2022,6 +2024,19 @@ public final class JSContext implements AutoCloseable {
 
     JSValue evalIndirectInternal(String code, String filename) {
         return eval(code, filename, false, true, false, false, false, false);
+    }
+
+    /**
+     * Convert a null return from the private eval() into a JSException throw.
+     * Used by all public eval methods to maintain the throwing API contract.
+     */
+    private JSValue evalOrThrow(JSValue result) {
+        if (result == null) {
+            JSValue error = getPendingException();
+            clearPendingException();
+            throw new JSException(error);
+        }
+        return result;
     }
 
     public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
@@ -3090,6 +3105,38 @@ public final class JSContext implements AutoCloseable {
             return null;
         }
         return getIntrinsicPrototype(functionRealm, intrinsicDefaultPrototypeName);
+    }
+
+    public String getRegExpLegacyCapture(int captureIndex) {
+        if (captureIndex < 1 || captureIndex > regExpLegacyCaptures.length) {
+            return "";
+        }
+        String captureValue = regExpLegacyCaptures[captureIndex - 1];
+        if (captureValue == null) {
+            return "";
+        } else {
+            return captureValue;
+        }
+    }
+
+    public String getRegExpLegacyInput() {
+        return regExpLegacyInput;
+    }
+
+    public String getRegExpLegacyLastMatch() {
+        return regExpLegacyLastMatch;
+    }
+
+    public String getRegExpLegacyLastParen() {
+        return regExpLegacyLastParen;
+    }
+
+    public String getRegExpLegacyLeftContext() {
+        return regExpLegacyLeftContext;
+    }
+
+    public String getRegExpLegacyRightContext() {
+        return regExpLegacyRightContext;
     }
 
     public JSRuntime getRuntime() {
@@ -5214,6 +5261,14 @@ public final class JSContext implements AutoCloseable {
         this.promiseRejectCallback = callback;
     }
 
+    public void setRegExpLegacyInput(String inputValue) {
+        if (inputValue == null) {
+            regExpLegacyInput = "";
+        } else {
+            regExpLegacyInput = inputValue;
+        }
+    }
+
     /**
      * Set the %ThrowTypeError% intrinsic function.
      * Called during global object initialization.
@@ -5300,7 +5355,15 @@ public final class JSContext implements AutoCloseable {
         while (descendingIterator.hasNext()) {
             EvalOverlayFrame evalOverlayFrame = descendingIterator.next();
             for (var entry : evalOverlayFrame.savedGlobals().entrySet()) {
-                globalObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
+                PropertyKey overlayKey = PropertyKey.fromString(entry.getKey());
+                PropertyDescriptor currentDescriptor = globalObject.getOwnPropertyDescriptor(overlayKey);
+                if (currentDescriptor != null
+                        && currentDescriptor.isDataDescriptor()
+                        && !currentDescriptor.isWritable()) {
+                    globalObject.defineProperty(overlayKey, entry.getValue(), PropertyDescriptor.DataState.All);
+                } else {
+                    globalObject.set(overlayKey, entry.getValue());
+                }
             }
             for (String absentKey : evalOverlayFrame.absentKeys()) {
                 globalObject.delete(PropertyKey.fromString(absentKey));
@@ -5496,6 +5559,71 @@ public final class JSContext implements AutoCloseable {
                 triggerPendingDependents(ready);
             }
         }
+    }
+
+    public void updateRegExpLegacyStatics(
+            String inputValue,
+            String[] captureValues,
+            int[][] captureIndices,
+            int fallbackStartIndex) {
+        String normalizedInput = inputValue != null ? inputValue : "";
+        regExpLegacyInput = normalizedInput;
+
+        String matchedText = "";
+        if (captureValues != null && captureValues.length > 0 && captureValues[0] != null) {
+            matchedText = captureValues[0];
+        }
+
+        int inputLength = normalizedInput.length();
+        int matchStart = 0;
+        int matchEnd = 0;
+        if (captureIndices != null
+                && captureIndices.length > 0
+                && captureIndices[0] != null
+                && captureIndices[0].length >= 2) {
+            matchStart = Math.max(0, Math.min(inputLength, captureIndices[0][0]));
+            matchEnd = Math.max(matchStart, Math.min(inputLength, captureIndices[0][1]));
+            if (matchedText.isEmpty() && matchEnd >= matchStart) {
+                matchedText = normalizedInput.substring(matchStart, matchEnd);
+            }
+        } else if (!matchedText.isEmpty()) {
+            int normalizedFallbackStart = Math.max(0, fallbackStartIndex);
+            int foundIndex = normalizedInput.indexOf(matchedText, normalizedFallbackStart);
+            if (foundIndex < 0) {
+                foundIndex = normalizedInput.indexOf(matchedText);
+            }
+            if (foundIndex >= 0) {
+                matchStart = foundIndex;
+                matchEnd = Math.min(inputLength, foundIndex + matchedText.length());
+            }
+        }
+
+        regExpLegacyLastMatch = matchedText;
+        regExpLegacyLeftContext = normalizedInput.substring(0, matchStart);
+        regExpLegacyRightContext = normalizedInput.substring(matchEnd);
+
+        for (int captureIndex = 0; captureIndex < regExpLegacyCaptures.length; captureIndex++) {
+            String captureValue = "";
+            int captureValueIndex = captureIndex + 1;
+            if (captureValues != null
+                    && captureValueIndex < captureValues.length
+                    && captureValues[captureValueIndex] != null) {
+                captureValue = captureValues[captureValueIndex];
+            }
+            regExpLegacyCaptures[captureIndex] = captureValue;
+        }
+
+        String lastParenValue = "";
+        if (captureValues != null && captureValues.length > 1) {
+            for (int captureIndex = captureValues.length - 1; captureIndex >= 1; captureIndex--) {
+                String captureValue = captureValues[captureIndex];
+                if (captureValue != null) {
+                    lastParenValue = captureValue;
+                    break;
+                }
+            }
+        }
+        regExpLegacyLastParen = lastParenValue;
     }
 
     private void validateImportNameAgainstModuleRecord(

@@ -413,6 +413,9 @@ record FunctionClassParser(ParserContext parserContext, ParserDelegates delegate
                     peekNext.type() != TokenType.LPAREN &&
                     peekNext.type() != TokenType.ASSIGN &&
                     peekNext.type() != TokenType.SEMICOLON) {
+                if (parserContext.currentToken.escaped()) {
+                    throw new JSSyntaxErrorException("Keyword must not contain escaped characters");
+                }
                 String kind = name;
                 parserContext.advance(); // consume 'get' or 'set'
 
