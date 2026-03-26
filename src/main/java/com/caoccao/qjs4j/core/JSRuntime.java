@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.memory.GarbageCollector;
 import com.caoccao.qjs4j.utils.AtomTable;
 
 import java.util.*;
@@ -29,13 +28,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * The runtime is the top-level container that manages:
  * - Multiple execution contexts (JSContext)
  * - Shared atom table for string interning
- * - Garbage collector
+ * - JVM garbage collection hints
  * - Job queue for promises and microtasks
  * - Runtime-wide limits and configuration
  * <p>
  * A single runtime can have multiple contexts that share:
  * - Atom table (interned strings)
- * - Garbage collector
+ * - JVM garbage collection hints
  * - Job queue
  * <p>
  * But contexts have separate:
@@ -46,7 +45,6 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class JSRuntime implements AutoCloseable {
     private final AtomTable atoms;
     private final List<JSContext> contexts;
-    private final GarbageCollector gc;
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
@@ -68,7 +66,6 @@ public final class JSRuntime implements AutoCloseable {
      */
     public JSRuntime(JSRuntimeOptions options) {
         this.contexts = new ArrayList<>();
-        this.gc = new GarbageCollector();
         this.atoms = new AtomTable();
         this.jobQueue = new ConcurrentLinkedQueue<>();
         this.globalSymbolRegistry = new HashMap<>();
@@ -113,10 +110,14 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Perform garbage collection.
+     * Trigger JVM garbage collection and then poll finalization registries.
      */
     public void gc() {
-        gc.collectGarbage();
+        System.gc();
+        List<JSContext> contextSnapshot = new ArrayList<>(contexts);
+        for (JSContext context : contextSnapshot) {
+            context.pollFinalizationRegistries();
+        }
     }
 
     /**
@@ -135,13 +136,6 @@ public final class JSRuntime implements AutoCloseable {
 
     public JSContext getCurrentExecutingContext() {
         return currentExecutingContext;
-    }
-
-    /**
-     * Get the garbage collector.
-     */
-    public GarbageCollector getGarbageCollector() {
-        return gc;
     }
 
     /**

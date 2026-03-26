@@ -225,7 +225,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         // Create multiple waiters sharing the same runtime (agent cluster)
         for (int i = 0; i < waiterCount; i++) {
             Thread waiter = new Thread(() -> {
-                JSContext waiterCtx = new JSContext(sharedRuntime);
+                JSContext waiterCtx = sharedRuntime.createContext();
                 allWaitersStarted.countDown();
                 JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                         arr, new JSNumber(0), new JSNumber(200), new JSNumber(5000)
@@ -273,7 +273,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         JSRuntime sharedRuntime = context.getRuntime();
 
         Thread waiter = new Thread(() -> {
-            JSContext waiterCtx = new JSContext(sharedRuntime);
+            JSContext waiterCtx = sharedRuntime.createContext();
             waiterStarted.countDown();
             sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(300), new JSNumber(5000)
@@ -431,7 +431,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
 
         // Thread 1: Wait
         Thread waiter = new Thread(() -> {
-            JSContext waiterCtx = new JSContext(sharedRuntime);
+            JSContext waiterCtx = sharedRuntime.createContext();
             waitStarted.countDown();
             JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(100), new JSNumber(5000) // 5 second timeout

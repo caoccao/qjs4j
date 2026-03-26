@@ -76,6 +76,10 @@ public abstract class BaseTest {
         return promise.getState() != JSPromise.PromiseState.PENDING;
     }
 
+    protected JSRuntime createRuntime() {
+        return new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true));
+    }
+
     protected boolean isWindows() {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
@@ -88,14 +92,14 @@ public abstract class BaseTest {
         IJSPromiseRejectCallback jsPromiseRejectCallback = context.getPromiseRejectCallback();
         context.getRuntime().gc();
         context.close();
-        context = new JSContext(new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true)));
+        context = createRuntime().createContext();
         context.setPromiseRejectCallback(jsPromiseRejectCallback);
         return context;
     }
 
     @BeforeEach
     public void setUp() throws Exception {
-        context = new JSContext(new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true)));
+        context = createRuntime().createContext();
     }
 
     @AfterEach

@@ -76,7 +76,7 @@ public final class JSFinalizationRegistry extends JSObject {
 
     /**
      * Poll the reference queue for collected targets and invoke cleanup callbacks.
-     * Called lazily from processMicrotasks() — no background thread needed.
+     * Called lazily from processMicrotasks() and runtime.gc() — no background thread needed.
      */
     public void pollCleanups() {
         Reference<?> ref;

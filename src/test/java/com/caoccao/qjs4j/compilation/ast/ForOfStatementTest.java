@@ -34,7 +34,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfArrayDestructuring() {
-        try (JSContext context = new JSContext(new JSRuntime())) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             String code = """
                     var result = '';
                     for (var [k, v] of [[1, 'a'], [2, 'b']]) result += k + v;
@@ -47,7 +47,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfInFunction() {
-        try (JSContext context = new JSContext(new JSRuntime())) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             String code = """
                     function test() {
                       var result = '';
@@ -63,7 +63,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfInGlobalScope() {
-        try (JSContext context = new JSContext(new JSRuntime())) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             String code = """
                     var result = '';
                     for (var x of ['a', 'b', 'c']) result += x;
@@ -86,7 +86,7 @@ public class ForOfStatementTest extends BaseJavetTest {
 
     @Test
     void testForOfSimpleArray() {
-        try (JSContext context = new JSContext(new JSRuntime())) {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             String code = """
                     var result = '';
                     for (var x of ['a', 'b', 'c']) result += x;

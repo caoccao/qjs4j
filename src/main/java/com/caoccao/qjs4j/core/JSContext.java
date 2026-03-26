@@ -142,7 +142,7 @@ public final class JSContext implements AutoCloseable {
     /**
      * Create a new execution context.
      */
-    public JSContext(JSRuntime runtime) {
+    JSContext(JSRuntime runtime) {
         this.callStack = new ArrayDeque<>();
         this.activeGlobalFunctionBindingConfigurable = false;
         this.activeGlobalFunctionBindingInitializations = null;
@@ -4598,6 +4598,12 @@ public final class JSContext implements AutoCloseable {
         return decodeIdentifierEscapes(trimmed);
     }
 
+    void pollFinalizationRegistries() {
+        for (int registryIndex = 0; registryIndex < finalizationRegistries.size(); registryIndex++) {
+            finalizationRegistries.get(registryIndex).pollCleanups();
+        }
+    }
+
     public void popEvalOverlay() {
         if (!evalOverlayFrames.isEmpty()) {
             evalOverlayFrames.pop();
@@ -4671,10 +4677,7 @@ public final class JSContext implements AutoCloseable {
      */
     public void processMicrotasks() {
         microtaskQueue.processMicrotasks();
-        // Poll finalization registries for collected targets
-        for (int i = 0; i < finalizationRegistries.size(); i++) {
-            finalizationRegistries.get(i).pollCleanups();
-        }
+        pollFinalizationRegistries();
     }
 
     public void pushEvalOverlay(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
