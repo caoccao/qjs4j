@@ -74,7 +74,7 @@ object Config {
         const val ASSERTJ_CORE = "3.27.6"
         const val COMMONS_IO = "2.18.0"
         const val JAVA_VERSION = "17"
-        const val JAVET = "5.0.2"
+        const val JAVET = "5.0.5"
         const val JMH = "1.37"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"

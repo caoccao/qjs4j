@@ -88,14 +88,14 @@ public abstract class BaseTest {
         IJSPromiseRejectCallback jsPromiseRejectCallback = context.getPromiseRejectCallback();
         context.getRuntime().gc();
         context.close();
-        context = new JSContext(new JSRuntime());
+        context = new JSContext(new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true)));
         context.setPromiseRejectCallback(jsPromiseRejectCallback);
         return context;
     }
 
     @BeforeEach
     public void setUp() throws Exception {
-        context = new JSContext(new JSRuntime());
+        context = new JSContext(new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true)));
     }
 
     @AfterEach
