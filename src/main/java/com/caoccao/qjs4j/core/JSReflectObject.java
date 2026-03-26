@@ -482,7 +482,18 @@ public final class JSReflectObject {
             return context.getPendingException();
         }
         JSValue receiver = args.length > 2 ? args[2] : target;
-        return target.get(key, receiver);
+        JSValue result = target.get(key, receiver);
+        // Cross-realm: if the getter moved the exception to the receiver's context,
+        // transfer it back to the caller's context so it can be properly thrown.
+        if (!context.hasPendingException()
+                && receiver instanceof JSObject receiverObj
+                && receiverObj.getContext() != null
+                && receiverObj.getContext() != context
+                && receiverObj.getContext().hasPendingException()) {
+            context.setPendingException(receiverObj.getContext().getPendingException());
+            receiverObj.getContext().clearPendingException();
+        }
+        return result;
     }
 
     /**
