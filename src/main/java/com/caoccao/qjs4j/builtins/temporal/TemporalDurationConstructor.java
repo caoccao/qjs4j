@@ -521,14 +521,26 @@ public final class TemporalDurationConstructor {
         return false;
     }
 
+    private static boolean isCalendarTemporalObject(JSValue value) {
+        return value instanceof JSTemporalPlainDate
+                || value instanceof JSTemporalPlainDateTime
+                || value instanceof JSTemporalPlainMonthDay
+                || value instanceof JSTemporalPlainYearMonth
+                || value instanceof JSTemporalZonedDateTime;
+    }
+
     private static boolean isDateTimeWithinRelativeToRange(IsoDate isoDate, IsoTime isoTime) {
+        int constrainedSecond = isoTime.second();
+        if (constrainedSecond == 60) {
+            constrainedSecond = 59;
+        }
         LocalDateTime dateTime = LocalDateTime.of(
                 isoDate.year(),
                 isoDate.month(),
                 isoDate.day(),
                 isoTime.hour(),
                 isoTime.minute(),
-                isoTime.second(),
+                constrainedSecond,
                 isoTime.millisecond() * 1_000_000
                         + isoTime.microsecond() * 1_000
                         + isoTime.nanosecond());
@@ -699,7 +711,10 @@ public final class TemporalDurationConstructor {
         if (relativeToValue instanceof JSUndefined || relativeToValue == null) {
             return null;
         }
+        return parseRelativeToValue(context, relativeToValue);
+    }
 
+    static RelativeToReference parseRelativeToValue(JSContext context, JSValue relativeToValue) {
         if (relativeToValue instanceof JSTemporalPlainDate plainDate) {
             return new RelativeToReference(plainDate.getIsoDate(), null, null);
         }
@@ -739,9 +754,39 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Invalid calendar.");
                     return null;
                 }
-            } else if (!(calendarValue instanceof JSObject)) {
+            } else if (isCalendarTemporalObject(calendarValue)) {
+                // Fast path: calendar-carrying Temporal objects provide their internal calendar.
+            } else {
                 context.throwTypeError("Temporal error: Calendar must be string.");
                 return null;
+            }
+        }
+
+        if (!(relativeToObject instanceof JSProxy)) {
+            boolean hasOwnDateField =
+                    relativeToObject.hasOwnProperty(PropertyKey.fromString("year"))
+                            || relativeToObject.hasOwnProperty(PropertyKey.fromString("month"))
+                            || relativeToObject.hasOwnProperty(PropertyKey.fromString("monthCode"))
+                            || relativeToObject.hasOwnProperty(PropertyKey.fromString("day"));
+            if (!hasOwnDateField) {
+                context.throwTypeError("Temporal error: Invalid relativeTo option.");
+                return null;
+            }
+            PropertyKey dayKey = PropertyKey.fromString("day");
+            if (relativeToObject.hasOwnProperty(dayKey)) {
+                PropertyDescriptor dayPropertyDescriptor = relativeToObject.getOwnPropertyDescriptor(dayKey);
+                if (dayPropertyDescriptor != null && dayPropertyDescriptor.isAccessorDescriptor()) {
+                    context.throwTypeError("Temporal error: Invalid relativeTo option.");
+                    return null;
+                }
+            }
+            PropertyKey yearKey = PropertyKey.fromString("year");
+            if (relativeToObject.hasOwnProperty(yearKey)) {
+                PropertyDescriptor yearPropertyDescriptor = relativeToObject.getOwnPropertyDescriptor(yearKey);
+                if (yearPropertyDescriptor != null && yearPropertyDescriptor.isAccessorDescriptor()) {
+                    context.throwTypeError("Temporal error: Invalid relativeTo option.");
+                    return null;
+                }
             }
         }
 
@@ -914,6 +959,9 @@ public final class TemporalDurationConstructor {
         int hourInt = hour.intValue();
         int minuteInt = minute.intValue();
         int secondInt = second.intValue();
+        if (secondInt == 60) {
+            secondInt = 59;
+        }
         int millisecondInt = millisecond.intValue();
         int microsecondInt = microsecond.intValue();
         int nanosecondInt = nanosecond.intValue();
@@ -964,6 +1012,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
+        String constrainedRelativeToText = constrainLeapSecond(relativeToText);
         boolean hasTimeZoneAnnotation = relativeToText.contains("[");
         boolean hasTimeComponent = relativeToText.contains("T") || relativeToText.contains("t");
         boolean hasOffsetDesignator = hasOffsetDesignator(relativeToText);
@@ -979,7 +1028,7 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
                 }
-                TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, relativeToText);
+                TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
                 if (parsedDateTime == null || context.hasPendingException()) {
                     return null;
                 }
@@ -996,7 +1045,7 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             TemporalParser.ParsedZonedDateTime parsedZonedDateTime =
-                    TemporalParser.parseZonedDateTimeString(context, relativeToText);
+                    TemporalParser.parseZonedDateTimeString(context, constrainedRelativeToText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
@@ -1045,7 +1094,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, relativeToText);
+        TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
         if (parsedDateTime == null || context.hasPendingException()) {
             return null;
         }
@@ -1167,11 +1216,34 @@ public final class TemporalDurationConstructor {
         if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
+        if (value instanceof JSFunction) {
+            context.throwTypeError("Temporal error: Invalid relativeTo option.");
+            return null;
+        }
         long numericValue = TemporalUtils.toLongIfIntegral(context, value);
         if (context.hasPendingException()) {
             return null;
         }
         return numericValue;
+    }
+
+    private static String constrainLeapSecond(String text) {
+        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        if (timeSeparatorIndex < 0) {
+            return text;
+        }
+        int firstColonIndex = text.indexOf(':', timeSeparatorIndex + 1);
+        if (firstColonIndex < 0) {
+            return text;
+        }
+        int secondColonIndex = text.indexOf(':', firstColonIndex + 1);
+        if (secondColonIndex < 0 || secondColonIndex + 2 >= text.length()) {
+            return text;
+        }
+        if (text.charAt(secondColonIndex + 1) == '6' && text.charAt(secondColonIndex + 2) == '0') {
+            return text.substring(0, secondColonIndex + 1) + "59" + text.substring(secondColonIndex + 3);
+        }
+        return text;
     }
 
     private static Long toRequiredIntegralLong(JSContext context, JSValue value) {
@@ -1251,6 +1323,6 @@ public final class TemporalDurationConstructor {
     private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
     }
 
-    private record RelativeToReference(IsoDate relativeDate, BigInteger epochNanoseconds, String timeZoneId) {
+    record RelativeToReference(IsoDate relativeDate, BigInteger epochNanoseconds, String timeZoneId) {
     }
 }
