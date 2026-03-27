@@ -35,7 +35,7 @@ public final class TemporalTimeZone {
      */
     public static IsoDateTime epochNsToDateTimeInZone(BigInteger epochNs, String timeZoneId) {
         java.time.Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zdt = javaInstant.atZone(ZoneId.of(timeZoneId));
+        ZonedDateTime zdt = javaInstant.atZone(resolveTimeZone(timeZoneId));
         return fromZonedDateTime(zdt);
     }
 
@@ -79,7 +79,7 @@ public final class TemporalTimeZone {
      * Gets the number of real hours in a day at the given instant and timezone.
      */
     public static int getHoursInDay(BigInteger epochNs, String timeZoneId) {
-        ZoneId zone = ZoneId.of(timeZoneId);
+        ZoneId zone = resolveTimeZone(timeZoneId);
         java.time.Instant javaInstant = toJavaInstant(epochNs);
         ZonedDateTime zdt = javaInstant.atZone(zone);
         ZonedDateTime startOfDay = zdt.toLocalDate().atStartOfDay(zone);
@@ -93,7 +93,7 @@ public final class TemporalTimeZone {
      * Returns null if no further transition.
      */
     public static BigInteger getNextTransition(BigInteger epochNs, String timeZoneId) {
-        ZoneId zone = ZoneId.of(timeZoneId);
+        ZoneId zone = resolveTimeZone(timeZoneId);
         java.time.Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().nextTransition(javaInstant);
         if (transition == null) return null;
@@ -106,7 +106,7 @@ public final class TemporalTimeZone {
      * Gets the offset in seconds for the given instant and timezone.
      */
     public static int getOffsetSecondsFor(BigInteger epochNs, String timeZoneId) {
-        ZoneId zone = ZoneId.of(timeZoneId);
+        ZoneId zone = resolveTimeZone(timeZoneId);
         java.time.Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffset offset = zone.getRules().getOffset(javaInstant);
         return offset.getTotalSeconds();
@@ -117,7 +117,7 @@ public final class TemporalTimeZone {
      * Returns null if no previous transition.
      */
     public static BigInteger getPreviousTransition(BigInteger epochNs, String timeZoneId) {
-        ZoneId zone = ZoneId.of(timeZoneId);
+        ZoneId zone = resolveTimeZone(timeZoneId);
         java.time.Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().previousTransition(javaInstant);
         if (transition == null) return null;
@@ -134,7 +134,7 @@ public final class TemporalTimeZone {
                 dt.date().year(), dt.date().month(), dt.date().day(),
                 dt.time().hour(), dt.time().minute(), dt.time().second(),
                 dt.time().millisecond() * 1_000_000 + dt.time().microsecond() * 1_000 + dt.time().nanosecond());
-        ZonedDateTime zdt = ldt.atZone(ZoneId.of(timeZoneId));
+        ZonedDateTime zdt = ldt.atZone(resolveTimeZone(timeZoneId));
         java.time.Instant instant = zdt.toInstant();
         return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(instant.getNano()));
@@ -144,7 +144,15 @@ public final class TemporalTimeZone {
      * Resolves a ZoneId string, validating it exists.
      */
     public static ZoneId resolveTimeZone(String timeZoneId) {
-        return ZoneId.of(timeZoneId);
+        try {
+            return ZoneId.of(timeZoneId);
+        } catch (DateTimeException ignored) {
+            ZoneOffset zoneOffset = ZoneOffset.of(timeZoneId);
+            if (zoneOffset.getTotalSeconds() % 60 != 0) {
+                throw new DateTimeException("Invalid sub-minute offset zone: " + timeZoneId);
+            }
+            return zoneOffset;
+        }
     }
 
     private static java.time.Instant toJavaInstant(BigInteger epochNs) {

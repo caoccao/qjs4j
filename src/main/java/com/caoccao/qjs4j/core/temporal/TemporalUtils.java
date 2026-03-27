@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.math.BigInteger;
 import java.util.Locale;
 
 /**
@@ -56,21 +57,30 @@ public final class TemporalUtils {
     public static String formatDurationString(long years, long months, long weeks, long days,
                                               long hours, long minutes, long seconds,
                                               long milliseconds, long microseconds, long nanoseconds) {
-        boolean negative = false;
-        if (years < 0 || months < 0 || weeks < 0 || days < 0 ||
-                hours < 0 || minutes < 0 || seconds < 0 ||
-                milliseconds < 0 || microseconds < 0 || nanoseconds < 0) {
-            negative = true;
-            years = Math.abs(years);
-            months = Math.abs(months);
-            weeks = Math.abs(weeks);
-            days = Math.abs(days);
-            hours = Math.abs(hours);
-            minutes = Math.abs(minutes);
-            seconds = Math.abs(seconds);
-            milliseconds = Math.abs(milliseconds);
-            microseconds = Math.abs(microseconds);
-            nanoseconds = Math.abs(nanoseconds);
+        boolean negative = years < 0 || months < 0 || weeks < 0 || days < 0
+                || hours < 0 || minutes < 0 || seconds < 0
+                || milliseconds < 0 || microseconds < 0 || nanoseconds < 0;
+        BigInteger yearsValue = BigInteger.valueOf(years);
+        BigInteger monthsValue = BigInteger.valueOf(months);
+        BigInteger weeksValue = BigInteger.valueOf(weeks);
+        BigInteger daysValue = BigInteger.valueOf(days);
+        BigInteger hoursValue = BigInteger.valueOf(hours);
+        BigInteger minutesValue = BigInteger.valueOf(minutes);
+        BigInteger secondsValue = BigInteger.valueOf(seconds);
+        BigInteger millisecondsValue = BigInteger.valueOf(milliseconds);
+        BigInteger microsecondsValue = BigInteger.valueOf(microseconds);
+        BigInteger nanosecondsValue = BigInteger.valueOf(nanoseconds);
+        if (negative) {
+            yearsValue = yearsValue.abs();
+            monthsValue = monthsValue.abs();
+            weeksValue = weeksValue.abs();
+            daysValue = daysValue.abs();
+            hoursValue = hoursValue.abs();
+            minutesValue = minutesValue.abs();
+            secondsValue = secondsValue.abs();
+            millisecondsValue = millisecondsValue.abs();
+            microsecondsValue = microsecondsValue.abs();
+            nanosecondsValue = nanosecondsValue.abs();
         }
 
         StringBuilder sb = new StringBuilder();
@@ -79,34 +89,40 @@ public final class TemporalUtils {
         }
         sb.append('P');
 
-        if (years != 0) {
-            sb.append(years).append('Y');
+        if (yearsValue.signum() != 0) {
+            sb.append(yearsValue).append('Y');
         }
-        if (months != 0) {
-            sb.append(months).append('M');
+        if (monthsValue.signum() != 0) {
+            sb.append(monthsValue).append('M');
         }
-        if (weeks != 0) {
-            sb.append(weeks).append('W');
+        if (weeksValue.signum() != 0) {
+            sb.append(weeksValue).append('W');
         }
-        if (days != 0) {
-            sb.append(days).append('D');
+        if (daysValue.signum() != 0) {
+            sb.append(daysValue).append('D');
         }
 
-        boolean hasTimePart = hours != 0 || minutes != 0 || seconds != 0 ||
-                milliseconds != 0 || microseconds != 0 || nanoseconds != 0;
+        BigInteger totalSubsecondNanoseconds = millisecondsValue.multiply(BigInteger.valueOf(1_000_000L))
+                .add(microsecondsValue.multiply(BigInteger.valueOf(1_000L)))
+                .add(nanosecondsValue);
+        BigInteger[] secondCarryAndSubsecondNanoseconds = totalSubsecondNanoseconds.divideAndRemainder(BigInteger.valueOf(1_000_000_000L));
+        BigInteger secondsWithCarry = secondsValue.add(secondCarryAndSubsecondNanoseconds[0]);
+        BigInteger subsecondNanosecondsRemainder = secondCarryAndSubsecondNanoseconds[1];
+
+        boolean hasTimePart = hoursValue.signum() != 0 || minutesValue.signum() != 0 || secondsWithCarry.signum() != 0
+                || subsecondNanosecondsRemainder.signum() != 0;
         if (hasTimePart) {
             sb.append('T');
-            if (hours != 0) {
-                sb.append(hours).append('H');
+            if (hoursValue.signum() != 0) {
+                sb.append(hoursValue).append('H');
             }
-            if (minutes != 0) {
-                sb.append(minutes).append('M');
+            if (minutesValue.signum() != 0) {
+                sb.append(minutesValue).append('M');
             }
-            long totalSubSecondNs = milliseconds * 1_000_000 + microseconds * 1_000 + nanoseconds;
-            if (seconds != 0 || totalSubSecondNs != 0) {
-                sb.append(seconds);
-                if (totalSubSecondNs != 0) {
-                    String fractional = String.format(Locale.ROOT, "%09d", totalSubSecondNs);
+            if (secondsWithCarry.signum() != 0 || subsecondNanosecondsRemainder.signum() != 0) {
+                sb.append(secondsWithCarry);
+                if (subsecondNanosecondsRemainder.signum() != 0) {
+                    String fractional = String.format(Locale.ROOT, "%09d", subsecondNanosecondsRemainder.intValue());
                     // Trim trailing zeros
                     int end = fractional.length();
                     while (end > 0 && fractional.charAt(end - 1) == '0') {
