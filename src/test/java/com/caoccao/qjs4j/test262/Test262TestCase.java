@@ -101,10 +101,6 @@ public class Test262TestCase {
         return Objects.hash(path);
     }
 
-    public boolean isTemporalEnabled() {
-        return features.contains("Temporal");
-    }
-
     public void setCode(String code) {
         this.code = code;
     }

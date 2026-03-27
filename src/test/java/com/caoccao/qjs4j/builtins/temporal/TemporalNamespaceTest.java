@@ -16,10 +16,10 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
-import com.caoccao.qjs4j.BaseTemporalJavetTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-public class TemporalNamespaceTest extends BaseTemporalJavetTest {
+public class TemporalNamespaceTest extends BaseJavetTest {
 
     @Test
     public void testTemporalExists() {

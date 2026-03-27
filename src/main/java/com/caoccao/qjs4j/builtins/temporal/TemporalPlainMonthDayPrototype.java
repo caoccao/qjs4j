@@ -81,10 +81,20 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "toLocaleString");
-        if (md == null) return JSUndefined.INSTANCE;
-        IsoDate d = md.getIsoDate();
-        return new JSString(String.format(Locale.ROOT, "%02d-%02d", d.month(), d.day()));
+        JSTemporalPlainMonthDay plainMonthDay = checkReceiver(context, thisArg, "toLocaleString");
+        if (plainMonthDay == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
+                context,
+                null,
+                new JSValue[]{locales, options});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainMonthDay});
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {

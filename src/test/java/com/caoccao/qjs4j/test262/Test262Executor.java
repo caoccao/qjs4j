@@ -59,13 +59,12 @@ public class Test262Executor {
 
     public TestResult execute(Test262TestCase test) {
         long startTime = System.currentTimeMillis();
-        boolean temporalEnabled = test.isTemporalEnabled();
         List<JSRuntime> realmRuntimes = new ArrayList<>();
-        Test262AgentHost agentHost = new Test262AgentHost(this, temporalEnabled);
+        Test262AgentHost agentHost = new Test262AgentHost(this);
         TestResult result;
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
                 .setShadowRealmEnabled(true)
-                .setTemporalEnabled(temporalEnabled))) {
+                .setTemporalEnabled(true))) {
             try (JSContext context = runtime.createContext()) {
                 agentHost.setSharedAtomicsObject(runtime.getOptions().getAtomicsObject());
                 context.setWaitable(!test.hasFlag("CanBlockIsFalse"));

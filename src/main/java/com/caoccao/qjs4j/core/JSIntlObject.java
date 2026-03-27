@@ -19,7 +19,10 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.FormatStyle;
 import java.util.*;
 import java.util.regex.Pattern;
@@ -5856,6 +5859,11 @@ public final class JSIntlObject {
         double epochMillis;
         if (value instanceof JSDate jsDate) {
             epochMillis = jsDate.getTimeValue();
+        } else if (value instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
+            epochMillis = toEpochMillis(temporalPlainMonthDay, context);
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
         } else if (value instanceof JSObject objectValue && JSTemporalObject.isTemporalPlainMonthDayValue(objectValue)) {
             epochMillis = JSTemporalObject.temporalPlainMonthDayToEpochMillis(context, objectValue);
             if (context.hasPendingException()) {
@@ -5873,6 +5881,19 @@ public final class JSIntlObject {
             return Double.NaN;
         }
         return epochMillis;
+    }
+
+    private static double toEpochMillis(JSTemporalPlainMonthDay temporalPlainMonthDay, JSContext context) {
+        try {
+            LocalDate referenceDate = LocalDate.of(
+                    temporalPlainMonthDay.getIsoDate().year(),
+                    temporalPlainMonthDay.getIsoDate().month(),
+                    temporalPlainMonthDay.getIsoDate().day());
+            return referenceDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainMonthDay value");
+            return Double.NaN;
+        }
     }
 
     /**

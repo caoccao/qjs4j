@@ -113,7 +113,6 @@ public final class JSRuntime implements AutoCloseable {
      * Trigger JVM garbage collection and then poll finalization registries.
      */
     public void gc() {
-        System.gc();
         List<JSContext> contextSnapshot = new ArrayList<>(contexts);
         for (JSContext context : contextSnapshot) {
             context.pollFinalizationRegistries();

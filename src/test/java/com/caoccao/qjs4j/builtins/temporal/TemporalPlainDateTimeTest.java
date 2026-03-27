@@ -16,10 +16,10 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
-import com.caoccao.qjs4j.BaseTemporalJavetTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
-public class TemporalPlainDateTimeTest extends BaseTemporalJavetTest {
+public class TemporalPlainDateTimeTest extends BaseJavetTest {
 
     // ========== Constructor tests ==========
 

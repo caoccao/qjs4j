@@ -31,7 +31,6 @@ final class Test262Agent implements AutoCloseable {
     private final BlockingQueue<JSValue> broadcasts;
     private final Test262AgentHost host;
     private final String script;
-    private final boolean temporalEnabled;
     private final Test262Executor test262Executor;
     private final Thread thread;
     private volatile boolean closed;
@@ -41,12 +40,10 @@ final class Test262Agent implements AutoCloseable {
             Test262Executor test262Executor,
             String script,
             List<JSRuntime> realmRuntimes,
-            Test262AgentHost host,
-            boolean temporalEnabled) {
+            Test262AgentHost host) {
         this.test262Executor = test262Executor;
         this.script = script;
         this.host = host;
-        this.temporalEnabled = temporalEnabled;
         broadcasts = new LinkedBlockingQueue<>();
         closed = false;
         runtime = null;
@@ -95,7 +92,7 @@ final class Test262Agent implements AutoCloseable {
         List<JSRuntime> agentRealmRuntimes = new ArrayList<>();
         try (JSRuntime agentRuntime = new JSRuntime(new JSRuntimeOptions()
                 .setAtomicsObject(host.getSharedAtomicsObject())
-                .setTemporalEnabled(temporalEnabled));
+                .setTemporalEnabled(true));
              JSContext agentContext = agentRuntime.createContext()) {
             runtime = agentRuntime;
             test262Executor.install262Object(agentContext, agentRealmRuntimes, host, this);
