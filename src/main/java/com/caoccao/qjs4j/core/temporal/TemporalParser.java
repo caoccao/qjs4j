@@ -18,10 +18,13 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
 
+import java.math.BigInteger;
+
 /**
  * ISO 8601 string parser for Temporal types.
  */
 public final class TemporalParser {
+    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
 
     private final String input;
     private int pos;
@@ -29,6 +32,32 @@ public final class TemporalParser {
     public TemporalParser(String input) {
         this.input = input;
         this.pos = 0;
+    }
+
+    private static long[] decomposeTimeFraction(BigInteger fractionalNanoseconds) {
+        BigInteger[] minuteDivision = fractionalNanoseconds.divideAndRemainder(BigInteger.valueOf(60_000_000_000L));
+        long minutePortion = minuteDivision[0].longValue();
+        BigInteger remainingAfterMinutes = minuteDivision[1];
+
+        BigInteger[] secondDivision = remainingAfterMinutes.divideAndRemainder(BigInteger.valueOf(1_000_000_000L));
+        long secondPortion = secondDivision[0].longValue();
+        BigInteger remainingAfterSeconds = secondDivision[1];
+
+        BigInteger[] millisecondDivision = remainingAfterSeconds.divideAndRemainder(BigInteger.valueOf(1_000_000L));
+        long millisecondPortion = millisecondDivision[0].longValue();
+        BigInteger remainingAfterMilliseconds = millisecondDivision[1];
+
+        BigInteger[] microsecondDivision = remainingAfterMilliseconds.divideAndRemainder(BigInteger.valueOf(1_000L));
+        long microsecondPortion = microsecondDivision[0].longValue();
+        long nanosecondPortion = microsecondDivision[1].longValue();
+
+        return new long[]{
+                minutePortion,
+                secondPortion,
+                millisecondPortion,
+                microsecondPortion,
+                nanosecondPortion
+        };
     }
 
     /**
@@ -389,23 +418,28 @@ public final class TemporalParser {
                     case 'H', 'h' -> {
                         hours = number;
                         if (hasFraction) {
-                            // Convert fractional hours to sub-components
-                            long totalMinuteNs = fractionalNs * 3600;
-                            minutes = totalMinuteNs / 1_000_000_000;
-                            totalMinuteNs %= 1_000_000_000;
-                            seconds = totalMinuteNs / (1_000_000_000 / 60);
+                            BigInteger fractionalHourNanoseconds = BigInteger.valueOf(fractionalNs)
+                                    .multiply(BigInteger.valueOf(3_600_000_000_000L))
+                                    .divide(BILLION);
+                            long[] decomposition = decomposeTimeFraction(fractionalHourNanoseconds);
+                            minutes = decomposition[0];
+                            seconds = decomposition[1];
+                            milliseconds = decomposition[2];
+                            microseconds = decomposition[3];
+                            nanoseconds = decomposition[4];
                         }
                     }
                     case 'M', 'm' -> {
                         minutes = number;
                         if (hasFraction) {
-                            long totalSecNs = fractionalNs * 60;
-                            seconds = totalSecNs / 1_000_000_000;
-                            totalSecNs %= 1_000_000_000;
-                            milliseconds = totalSecNs / 1_000_000;
-                            totalSecNs %= 1_000_000;
-                            microseconds = totalSecNs / 1_000;
-                            nanoseconds = totalSecNs % 1_000;
+                            BigInteger fractionalMinuteNanoseconds = BigInteger.valueOf(fractionalNs)
+                                    .multiply(BigInteger.valueOf(60_000_000_000L))
+                                    .divide(BILLION);
+                            long[] decomposition = decomposeTimeFraction(fractionalMinuteNanoseconds);
+                            seconds = decomposition[1];
+                            milliseconds = decomposition[2];
+                            microseconds = decomposition[3];
+                            nanoseconds = decomposition[4];
                         }
                     }
                     case 'S', 's' -> {

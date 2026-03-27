@@ -507,7 +507,7 @@ public final class JSONObject {
         }
 
         if (jsValue instanceof JSBoolean jsBoolean) {
-            sb.append(Boolean.toString(jsBoolean.value()));
+            sb.append(jsBoolean.value());
             return true;
         }
 
