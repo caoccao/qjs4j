@@ -485,11 +485,137 @@ public final class TemporalParser {
         return Integer.parseInt(yearStr);
     }
 
+    /**
+     * Parse an Instant string like "1970-01-01T00:00:00Z" or "1970-01-01T00:00:00+00:00".
+     * Returns null and sets pending exception on error.
+     */
+    public static ParsedInstant parseInstantString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid character while parsing year value.");
+            return null;
+        }
+        TemporalParser parser = new TemporalParser(input);
+        IsoDate date = parser.parseDate(context);
+        if (date == null) return null;
+        IsoTime time = IsoTime.MIDNIGHT;
+        if (parser.pos < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            parser.pos++;
+            time = parser.parseTime(context);
+            if (time == null) return null;
+        }
+        // Parse offset (required for Instant)
+        int offsetSeconds = parser.parseOffset(context);
+        if (context.hasPendingException()) return null;
+        // Skip annotations
+        parser.parseAnnotations();
+        return new ParsedInstant(date, time, offsetSeconds);
+    }
+
+    /**
+     * Parse a ZonedDateTime string like "2024-01-15T12:00:00+00:00[UTC]".
+     * Returns null and sets pending exception on error.
+     */
+    public static ParsedZonedDateTime parseZonedDateTimeString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid character while parsing year value.");
+            return null;
+        }
+        TemporalParser parser = new TemporalParser(input);
+        IsoDate date = parser.parseDate(context);
+        if (date == null) return null;
+        IsoTime time = IsoTime.MIDNIGHT;
+        if (parser.pos < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            parser.pos++;
+            time = parser.parseTime(context);
+            if (time == null) return null;
+        }
+        // Parse offset
+        int offsetSeconds = 0;
+        if (parser.pos < parser.input.length()) {
+            char c = parser.input.charAt(parser.pos);
+            if (c == 'Z' || c == 'z' || c == '+' || c == '-' || c == '\u2212') {
+                offsetSeconds = parser.parseOffset(context);
+                if (context.hasPendingException()) return null;
+            }
+        }
+        // Parse timezone annotation (required)
+        String timeZoneId = null;
+        String calendarId = "iso8601";
+        while (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '[') {
+            int start = parser.pos + 1;
+            // Skip '!' if present
+            if (start < parser.input.length() && parser.input.charAt(start) == '!') {
+                start++;
+            }
+            int end = parser.input.indexOf(']', parser.pos);
+            if (end < 0) break;
+            String content = parser.input.substring(start, end);
+            if (content.startsWith("u-ca=")) {
+                calendarId = content.substring(5).toLowerCase(java.util.Locale.ROOT);
+            } else if (timeZoneId == null) {
+                timeZoneId = content;
+            }
+            parser.pos = end + 1;
+        }
+        if (timeZoneId == null) {
+            context.throwRangeError("Temporal error: Must specify time zone.");
+            return null;
+        }
+        return new ParsedZonedDateTime(date, time, offsetSeconds, timeZoneId, calendarId);
+    }
+
+    private void parseAnnotations() {
+        while (pos < input.length() && input.charAt(pos) == '[') {
+            int end = input.indexOf(']', pos);
+            if (end < 0) break;
+            pos = end + 1;
+        }
+    }
+
+    private int parseOffset(JSContext context) {
+        if (pos >= input.length()) {
+            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
+            return 0;
+        }
+        char c = input.charAt(pos);
+        if (c == 'Z' || c == 'z') {
+            pos++;
+            return 0;
+        }
+        int sign;
+        if (c == '+') {
+            sign = 1;
+        } else if (c == '-' || c == '\u2212') {
+            sign = -1;
+        } else {
+            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
+            return 0;
+        }
+        pos++;
+        int hours = parseTwoDigits(context, "offset hour");
+        if (context.hasPendingException()) return 0;
+        int minutes = 0;
+        if (pos < input.length() && input.charAt(pos) == ':') {
+            pos++;
+        }
+        if (pos < input.length() && Character.isDigit(input.charAt(pos))) {
+            minutes = parseTwoDigits(context, "offset minute");
+            if (context.hasPendingException()) return 0;
+        }
+        return sign * (hours * 3600 + minutes * 60);
+    }
+
     public record DurationFields(long years, long months, long weeks, long days,
                                  long hours, long minutes, long seconds,
                                  long milliseconds, long microseconds, long nanoseconds) {
     }
 
     public record ParsedDateTime(IsoDate date, IsoTime time, String calendar) {
+    }
+
+    public record ParsedInstant(IsoDate date, IsoTime time, int offsetSeconds) {
+    }
+
+    public record ParsedZonedDateTime(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId, String calendarId) {
     }
 }
