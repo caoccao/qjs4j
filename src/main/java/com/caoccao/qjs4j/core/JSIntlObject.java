@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -47,6 +48,7 @@ public final class JSIntlObject {
      * Maps language (or language-script, language-region) to full locale tag.
      */
     private static final Map<String, String> LIKELY_SUBTAGS = new HashMap<>();
+    private static final BigInteger NANOS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
     // ---- Region Alias Data ----
     // Maps: old region → {language/script → new region}
     // Default replacement is first, specific language/script replacements follow
@@ -2485,7 +2487,7 @@ public final class JSIntlObject {
                 extMap.put("kf", caseFirstOpt);
             }
             if (numericOptSet) {
-                extMap.put("kn", numericOpt ? "true" : "false");
+                extMap.put("kn", Boolean.toString(numericOpt));
             }
             if (numberingSystemOpt != null) {
                 extMap.put("nu", numberingSystemOpt);
@@ -5859,16 +5861,35 @@ public final class JSIntlObject {
         double epochMillis;
         if (value instanceof JSDate jsDate) {
             epochMillis = jsDate.getTimeValue();
+        } else if (value instanceof JSTemporalPlainDate temporalPlainDate) {
+            epochMillis = toEpochMillis(temporalPlainDate, context);
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
+        } else if (value instanceof JSTemporalPlainTime temporalPlainTime) {
+            epochMillis = toEpochMillis(temporalPlainTime, context);
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
+        } else if (value instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
+            epochMillis = toEpochMillis(temporalPlainDateTime, context);
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
+        } else if (value instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
+            epochMillis = toEpochMillis(temporalPlainYearMonth, context);
+            if (context.hasPendingException()) {
+                return Double.NaN;
+            }
         } else if (value instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
             epochMillis = toEpochMillis(temporalPlainMonthDay, context);
             if (context.hasPendingException()) {
                 return Double.NaN;
             }
-        } else if (value instanceof JSObject objectValue && JSTemporalObject.isTemporalPlainMonthDayValue(objectValue)) {
-            epochMillis = JSTemporalObject.temporalPlainMonthDayToEpochMillis(context, objectValue);
-            if (context.hasPendingException()) {
-                return Double.NaN;
-            }
+        } else if (value instanceof JSTemporalInstant temporalInstant) {
+            epochMillis = toEpochMillis(temporalInstant);
+        } else if (value instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
+            epochMillis = toEpochMillis(temporalZonedDateTime);
         } else {
             epochMillis = JSTypeConversions.toNumber(context, value).value();
             if (context.hasPendingException()) {
@@ -5883,6 +5904,43 @@ public final class JSIntlObject {
         return epochMillis;
     }
 
+    private static double toEpochMillis(JSTemporalInstant temporalInstant) {
+        return toEpochMillisFromEpochNanoseconds(temporalInstant.getEpochNanoseconds());
+    }
+
+    private static double toEpochMillis(JSTemporalPlainDate temporalPlainDate, JSContext context) {
+        try {
+            LocalDate localDate = LocalDate.of(
+                    temporalPlainDate.getIsoDate().year(),
+                    temporalPlainDate.getIsoDate().month(),
+                    temporalPlainDate.getIsoDate().day());
+            return localDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainDate value");
+            return Double.NaN;
+        }
+    }
+
+    private static double toEpochMillis(JSTemporalPlainDateTime temporalPlainDateTime, JSContext context) {
+        try {
+            return toEpochMillis(
+                    temporalPlainDateTime.getIsoDateTime().date().year(),
+                    temporalPlainDateTime.getIsoDateTime().date().month(),
+                    temporalPlainDateTime.getIsoDateTime().date().day(),
+                    temporalPlainDateTime.getIsoDateTime().time().hour(),
+                    temporalPlainDateTime.getIsoDateTime().time().minute(),
+                    temporalPlainDateTime.getIsoDateTime().time().second(),
+                    temporalPlainDateTime.getIsoDateTime().time().millisecond(),
+                    temporalPlainDateTime.getIsoDateTime().time().microsecond(),
+                    temporalPlainDateTime.getIsoDateTime().time().nanosecond(),
+                    context,
+                    "Invalid Temporal.PlainDateTime value");
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainDateTime value");
+            return Double.NaN;
+        }
+    }
+
     private static double toEpochMillis(JSTemporalPlainMonthDay temporalPlainMonthDay, JSContext context) {
         try {
             LocalDate referenceDate = LocalDate.of(
@@ -5894,6 +5952,68 @@ public final class JSIntlObject {
             context.throwRangeError("Invalid Temporal.PlainMonthDay value");
             return Double.NaN;
         }
+    }
+
+    private static double toEpochMillis(JSTemporalPlainTime temporalPlainTime, JSContext context) {
+        try {
+            return toEpochMillis(
+                    1970,
+                    1,
+                    1,
+                    temporalPlainTime.getIsoTime().hour(),
+                    temporalPlainTime.getIsoTime().minute(),
+                    temporalPlainTime.getIsoTime().second(),
+                    temporalPlainTime.getIsoTime().millisecond(),
+                    temporalPlainTime.getIsoTime().microsecond(),
+                    temporalPlainTime.getIsoTime().nanosecond(),
+                    context,
+                    "Invalid Temporal.PlainTime value");
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainTime value");
+            return Double.NaN;
+        }
+    }
+
+    private static double toEpochMillis(JSTemporalPlainYearMonth temporalPlainYearMonth, JSContext context) {
+        try {
+            LocalDate localDate = LocalDate.of(
+                    temporalPlainYearMonth.getIsoDate().year(),
+                    temporalPlainYearMonth.getIsoDate().month(),
+                    temporalPlainYearMonth.getIsoDate().day());
+            return localDate.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli();
+        } catch (DateTimeException e) {
+            context.throwRangeError("Invalid Temporal.PlainYearMonth value");
+            return Double.NaN;
+        }
+    }
+
+    private static double toEpochMillis(JSTemporalZonedDateTime temporalZonedDateTime) {
+        return toEpochMillisFromEpochNanoseconds(temporalZonedDateTime.getEpochNanoseconds());
+    }
+
+    private static double toEpochMillis(int year, int month, int day,
+                                        int hour, int minute, int second,
+                                        int millisecond, int microsecond, int nanosecond,
+                                        JSContext context, String errorMessage) {
+        int nanosecondOfSecond = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
+        try {
+            LocalDate localDate = LocalDate.of(year, month, day);
+            return localDate.atTime(hour, minute, second, nanosecondOfSecond)
+                    .toInstant(ZoneOffset.UTC)
+                    .toEpochMilli();
+        } catch (DateTimeException e) {
+            context.throwRangeError(errorMessage);
+            return Double.NaN;
+        }
+    }
+
+    private static double toEpochMillisFromEpochNanoseconds(BigInteger epochNanoseconds) {
+        BigInteger[] quotientAndRemainder = epochNanoseconds.divideAndRemainder(NANOS_PER_MILLISECOND);
+        BigInteger epochMilliseconds = quotientAndRemainder[0];
+        if (epochNanoseconds.signum() < 0 && quotientAndRemainder[1].signum() != 0) {
+            epochMilliseconds = epochMilliseconds.subtract(BigInteger.ONE);
+        }
+        return epochMilliseconds.doubleValue();
     }
 
     /**

@@ -82,12 +82,20 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createPlainDate(context, new IsoDate(isoYear, isoMonth, isoDay), calendarId);
+        JSObject resolvedPrototype = resolveTemporalPrototype(context, "PlainDate");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createPlainDate(context, new IsoDate(isoYear, isoMonth, isoDay), calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, String calendarId) {
-        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
         JSObject prototype = getTemporalPrototype(context, "PlainDate");
+        return createPlainDate(context, isoDate, calendarId, prototype);
+    }
+
+    static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, String calendarId, JSObject prototype) {
+        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
         if (prototype != null) {
             plainDate.setPrototype(prototype);
         }
@@ -212,6 +220,24 @@ public final class TemporalPlainDateConstructor {
             return 0;
         }
         return month;
+    }
+
+    static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
+        JSValue constructorNewTarget = context.getConstructorNewTarget();
+        if (constructorNewTarget instanceof JSObject constructorObject) {
+            JSValue constructorPrototype = constructorObject.get(PropertyKey.PROTOTYPE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (constructorPrototype instanceof JSObject) {
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(constructorObject, JSObject.NAME);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                return resolvedPrototype;
+            }
+        }
+        return getTemporalPrototype(context, typeName);
     }
 
     /**

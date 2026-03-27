@@ -67,12 +67,20 @@ public final class TemporalInstantConstructor {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return createInstant(context, epochNs);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "Instant");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createInstant(context, epochNs, resolvedPrototype);
     }
 
     public static JSTemporalInstant createInstant(JSContext context, BigInteger epochNs) {
-        JSTemporalInstant instant = new JSTemporalInstant(context, epochNs);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Instant");
+        return createInstant(context, epochNs, prototype);
+    }
+
+    static JSTemporalInstant createInstant(JSContext context, BigInteger epochNs, JSObject prototype) {
+        JSTemporalInstant instant = new JSTemporalInstant(context, epochNs);
         if (prototype != null) {
             instant.setPrototype(prototype);
         }

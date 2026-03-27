@@ -59,6 +59,11 @@ public class TemporalInstantTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet("(() => { class CustomInstant extends Temporal.Instant {} const value = new CustomInstant(0n); return value instanceof CustomInstant && value instanceof Temporal.Instant; })()");
+    }
+
+    @Test
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.Instant(0n)");
     }
@@ -111,6 +116,11 @@ public class TemporalInstantTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         assertStringWithJavet("new Temporal.Instant(0n).toJSON()");
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet("(() => { const value = new Temporal.Instant(0n); const locales = 'en-US'; const options = { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
     }
 
     @Test

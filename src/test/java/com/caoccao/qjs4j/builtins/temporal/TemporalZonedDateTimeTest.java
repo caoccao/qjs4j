@@ -59,6 +59,11 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet("(() => { class CustomZonedDateTime extends Temporal.ZonedDateTime {} const value = new CustomZonedDateTime(0n, 'UTC'); return value instanceof CustomZonedDateTime && value instanceof Temporal.ZonedDateTime; })()");
+    }
+
+    @Test
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.ZonedDateTime(0n, 'UTC')");
     }
@@ -226,6 +231,11 @@ public class TemporalZonedDateTimeTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').toJSON()");
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet("(() => { const value = new Temporal.ZonedDateTime(0n, 'UTC'); const result = value.toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test

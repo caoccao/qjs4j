@@ -30,4 +30,14 @@ public class TemporalNamespaceTest extends BaseJavetTest {
     public void testTemporalToStringTag() {
         assertStringWithJavet("Temporal[Symbol.toStringTag]");
     }
+
+    @Test
+    public void testTemporalToStringTagDescriptor() {
+        assertBooleanWithJavet("Object.getOwnPropertyDescriptor(Temporal, Symbol.toStringTag).configurable");
+    }
+
+    @Test
+    public void testTemporalTypeMethodDescriptor() {
+        assertBooleanWithJavet("(() => { const descriptor = Object.getOwnPropertyDescriptor(Temporal.PlainDate.prototype, 'toString'); return descriptor.configurable && descriptor.writable && typeof descriptor.value === 'function'; })()");
+    }
 }

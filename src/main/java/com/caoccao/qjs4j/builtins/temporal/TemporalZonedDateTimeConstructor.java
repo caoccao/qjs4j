@@ -88,13 +88,22 @@ public final class TemporalZonedDateTimeConstructor {
             if (context.hasPendingException()) return JSUndefined.INSTANCE;
         }
 
-        return createZonedDateTime(context, epochNs, timeZoneId, calendarId);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "ZonedDateTime");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createZonedDateTime(context, epochNs, timeZoneId, calendarId, resolvedPrototype);
     }
 
     public static JSTemporalZonedDateTime createZonedDateTime(JSContext context, BigInteger epochNs,
-                                                               String timeZoneId, String calendarId) {
-        JSTemporalZonedDateTime zdt = new JSTemporalZonedDateTime(context, epochNs, timeZoneId, calendarId);
+                                                              String timeZoneId, String calendarId) {
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "ZonedDateTime");
+        return createZonedDateTime(context, epochNs, timeZoneId, calendarId, prototype);
+    }
+
+    static JSTemporalZonedDateTime createZonedDateTime(JSContext context, BigInteger epochNs,
+                                                       String timeZoneId, String calendarId, JSObject prototype) {
+        JSTemporalZonedDateTime zdt = new JSTemporalZonedDateTime(context, epochNs, timeZoneId, calendarId);
         if (prototype != null) {
             zdt.setPrototype(prototype);
         }

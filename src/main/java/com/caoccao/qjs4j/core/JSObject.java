@@ -798,7 +798,7 @@ public non-sealed class JSObject implements JSValue {
                         // Getter threw - convert to pending exception so callers can handle it
                         JSValue exception = e.getJsError() != null ? e.getJsError()
                                 : e.getJsValue() != null ? e.getJsValue()
-                                : propertyAccessContext.throwError(e.getMessage());
+                                  : propertyAccessContext.throwError(e.getMessage());
                         propertyAccessContext.setPendingException(exception);
                         // Cross-realm: propagate exception to receiver's context
                         if (receiver instanceof JSObject receiverObj

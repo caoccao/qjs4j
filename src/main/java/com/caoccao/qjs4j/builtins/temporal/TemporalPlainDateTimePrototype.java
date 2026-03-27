@@ -372,8 +372,19 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "toLocaleString");
-        if (pdt == null) return JSUndefined.INSTANCE;
-        return new JSString(pdt.getIsoDateTime().toString());
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
+                context,
+                null,
+                new JSValue[]{locales, options});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{pdt});
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -304,9 +304,20 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "toLocaleString");
-        if (d == null) return JSUndefined.INSTANCE;
-        return new JSString(d.getRecord().toString());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "toLocaleString");
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue durationFormat = JSIntlObject.createDurationFormat(
+                context,
+                null,
+                new JSValue[]{locales, options});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.durationFormatFormat(context, durationFormat, new JSValue[]{duration});
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

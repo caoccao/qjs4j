@@ -76,6 +76,11 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet("(() => { class CustomPlainDateTime extends Temporal.PlainDateTime {} const value = new CustomPlainDateTime(2024, 1, 15, 12, 30); return value instanceof CustomPlainDateTime && value instanceof Temporal.PlainDateTime; })()");
+    }
+
+    @Test
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.PlainDateTime(2024, 1, 15)");
     }
@@ -212,6 +217,11 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45).toJSON()");
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet("(() => { const value = new Temporal.PlainDateTime(2024, 1, 15, 12, 30, 45); const locales = 'en-US'; const options = { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }; return value.toLocaleString(locales, options) === new Intl.DateTimeFormat(locales, options).format(value); })()");
     }
 
     @Test

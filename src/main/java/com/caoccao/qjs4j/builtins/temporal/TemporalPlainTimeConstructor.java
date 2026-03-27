@@ -100,12 +100,20 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainTime");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond), resolvedPrototype);
     }
 
     public static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime) {
-        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainTime");
+        return createPlainTime(context, isoTime, prototype);
+    }
+
+    static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime, JSObject prototype) {
+        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
         if (prototype != null) {
             plainTime.setPrototype(prototype);
         }

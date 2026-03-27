@@ -59,6 +59,22 @@ public final class TemporalTimeZone {
         return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
     }
 
+    private static IsoDateTime fromLocalDateTime(LocalDateTime ldt) {
+        IsoDate date = new IsoDate(ldt.getYear(), ldt.getMonthValue(), ldt.getDayOfMonth());
+        int nano = ldt.getNano();
+        IsoTime time = new IsoTime(ldt.getHour(), ldt.getMinute(), ldt.getSecond(),
+                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
+        return new IsoDateTime(date, time);
+    }
+
+    private static IsoDateTime fromZonedDateTime(ZonedDateTime zdt) {
+        IsoDate date = new IsoDate(zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth());
+        int nano = zdt.getNano();
+        IsoTime time = new IsoTime(zdt.getHour(), zdt.getMinute(), zdt.getSecond(),
+                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
+        return new IsoDateTime(date, time);
+    }
+
     /**
      * Gets the number of real hours in a day at the given instant and timezone.
      */
@@ -131,33 +147,6 @@ public final class TemporalTimeZone {
         return ZoneId.of(timeZoneId);
     }
 
-    /**
-     * Converts a date-time with an explicit offset to epoch nanoseconds.
-     */
-    public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
-        long epochDay = date.toEpochDay();
-        BigInteger dayNs = BigInteger.valueOf(epochDay).multiply(BigInteger.valueOf(86_400_000_000_000L));
-        BigInteger timeNs = BigInteger.valueOf(time.totalNanoseconds());
-        BigInteger offsetNs = BigInteger.valueOf((long) offsetSeconds * 1_000_000_000L);
-        return dayNs.add(timeNs).subtract(offsetNs);
-    }
-
-    private static IsoDateTime fromLocalDateTime(LocalDateTime ldt) {
-        IsoDate date = new IsoDate(ldt.getYear(), ldt.getMonthValue(), ldt.getDayOfMonth());
-        int nano = ldt.getNano();
-        IsoTime time = new IsoTime(ldt.getHour(), ldt.getMinute(), ldt.getSecond(),
-                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
-        return new IsoDateTime(date, time);
-    }
-
-    private static IsoDateTime fromZonedDateTime(ZonedDateTime zdt) {
-        IsoDate date = new IsoDate(zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth());
-        int nano = zdt.getNano();
-        IsoTime time = new IsoTime(zdt.getHour(), zdt.getMinute(), zdt.getSecond(),
-                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
-        return new IsoDateTime(date, time);
-    }
-
     private static java.time.Instant toJavaInstant(BigInteger epochNs) {
         BigInteger[] secAndNano = epochNs.divideAndRemainder(BILLION);
         long seconds = secAndNano[0].longValueExact();
@@ -167,5 +156,16 @@ public final class TemporalTimeZone {
             nanoAdjust += 1_000_000_000;
         }
         return java.time.Instant.ofEpochSecond(seconds, nanoAdjust);
+    }
+
+    /**
+     * Converts a date-time with an explicit offset to epoch nanoseconds.
+     */
+    public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
+        long epochDay = date.toEpochDay();
+        BigInteger dayNs = BigInteger.valueOf(epochDay).multiply(BigInteger.valueOf(86_400_000_000_000L));
+        BigInteger timeNs = BigInteger.valueOf(time.totalNanoseconds());
+        BigInteger offsetNs = BigInteger.valueOf((long) offsetSeconds * 1_000_000_000L);
+        return dayNs.add(timeNs).subtract(offsetNs);
     }
 }

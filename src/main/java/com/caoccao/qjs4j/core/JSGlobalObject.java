@@ -1967,6 +1967,55 @@ public final class JSGlobalObject {
         temporalObject.defineProperty(PropertyKey.fromString("Duration"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
+    private void initializeTemporalInstant(JSObject temporalObject) {
+        JSObject prototype = context.createJSObject();
+        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Instant"), PropertyDescriptor.DataState.Configurable);
+
+        // Getters
+        defineTemporalGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
+        defineTemporalGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
+
+        // Methods
+        prototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction(context, "add", 1, TemporalInstantPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("subtract"), new JSNativeFunction(context, "subtract", 1, TemporalInstantPrototype::subtract), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("until"), new JSNativeFunction(context, "until", 1, TemporalInstantPrototype::until), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("since"), new JSNativeFunction(context, "since", 1, TemporalInstantPrototype::since), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("round"), new JSNativeFunction(context, "round", 1, TemporalInstantPrototype::round), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("equals"), new JSNativeFunction(context, "equals", 1, TemporalInstantPrototype::equals), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, TemporalInstantPrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toJSON"), new JSNativeFunction(context, "toJSON", 0, TemporalInstantPrototype::toJSON), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction(context, "toLocaleString", 0, TemporalInstantPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, TemporalInstantPrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toZonedDateTimeISO"), new JSNativeFunction(context, "toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
+
+        // Constructor
+        JSNativeFunction constructor = new JSNativeFunction(context, "Instant", 1, TemporalInstantConstructor::construct, true, false);
+        constructor.defineProperty(PropertyKey.fromString("from"), new JSNativeFunction(context, "from", 1, TemporalInstantConstructor::from), PropertyDescriptor.DataState.ConfigurableWritable);
+        constructor.defineProperty(PropertyKey.fromString("fromEpochMilliseconds"), new JSNativeFunction(context, "fromEpochMilliseconds", 1, TemporalInstantConstructor::fromEpochMilliseconds), PropertyDescriptor.DataState.ConfigurableWritable);
+        constructor.defineProperty(PropertyKey.fromString("fromEpochNanoseconds"), new JSNativeFunction(context, "fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds), PropertyDescriptor.DataState.ConfigurableWritable);
+        constructor.defineProperty(PropertyKey.fromString("compare"), new JSNativeFunction(context, "compare", 2, TemporalInstantConstructor::compare), PropertyDescriptor.DataState.ConfigurableWritable);
+
+        // Link constructor <-> prototype
+        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
+        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+        temporalObject.defineProperty(PropertyKey.fromString("Instant"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
+    private void initializeTemporalNow(JSObject temporalObject) {
+        JSObject nowObject = context.createJSObject();
+        nowObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Now"), PropertyDescriptor.DataState.Configurable);
+
+        nowObject.defineProperty(PropertyKey.fromString("instant"), new JSNativeFunction(context, "instant", 0, TemporalNow::instant), PropertyDescriptor.DataState.ConfigurableWritable);
+        nowObject.defineProperty(PropertyKey.fromString("timeZoneId"), new JSNativeFunction(context, "timeZoneId", 0, TemporalNow::timeZoneId), PropertyDescriptor.DataState.ConfigurableWritable);
+        nowObject.defineProperty(PropertyKey.fromString("plainDateTimeISO"), new JSNativeFunction(context, "plainDateTimeISO", 0, TemporalNow::plainDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
+        nowObject.defineProperty(PropertyKey.fromString("plainDateISO"), new JSNativeFunction(context, "plainDateISO", 0, TemporalNow::plainDateISO), PropertyDescriptor.DataState.ConfigurableWritable);
+        nowObject.defineProperty(PropertyKey.fromString("plainTimeISO"), new JSNativeFunction(context, "plainTimeISO", 0, TemporalNow::plainTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
+        nowObject.defineProperty(PropertyKey.fromString("zonedDateTimeISO"), new JSNativeFunction(context, "zonedDateTimeISO", 0, TemporalNow::zonedDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
+
+        temporalObject.defineProperty(PropertyKey.fromString("Now"), nowObject, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
     private void initializeTemporalObject() {
         JSObject temporalObject = context.createJSObject();
         temporalObject.defineProperty(
@@ -2181,6 +2230,47 @@ public final class JSGlobalObject {
         temporalObject.defineProperty(PropertyKey.fromString("PlainTime"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
+    private void initializeTemporalPlainYearMonth(JSObject temporalObject) {
+        JSObject prototype = context.createJSObject();
+        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainYearMonth"), PropertyDescriptor.DataState.Configurable);
+
+        // Getters
+        defineTemporalGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
+        defineTemporalGetter(prototype, "era", TemporalPlainYearMonthPrototype::era);
+        defineTemporalGetter(prototype, "eraYear", TemporalPlainYearMonthPrototype::eraYear);
+        defineTemporalGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
+        defineTemporalGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
+        defineTemporalGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
+        defineTemporalGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
+        defineTemporalGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
+        defineTemporalGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
+        defineTemporalGetter(prototype, "inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
+
+        // Methods
+        prototype.defineProperty(PropertyKey.fromString("with"), new JSNativeFunction(context, "with", 1, TemporalPlainYearMonthPrototype::with), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction(context, "add", 1, TemporalPlainYearMonthPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("subtract"), new JSNativeFunction(context, "subtract", 1, TemporalPlainYearMonthPrototype::subtract), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("until"), new JSNativeFunction(context, "until", 1, TemporalPlainYearMonthPrototype::until), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("since"), new JSNativeFunction(context, "since", 1, TemporalPlainYearMonthPrototype::since), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("equals"), new JSNativeFunction(context, "equals", 1, TemporalPlainYearMonthPrototype::equals), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toPlainDate"), new JSNativeFunction(context, "toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, TemporalPlainYearMonthPrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toJSON"), new JSNativeFunction(context, "toJSON", 0, TemporalPlainYearMonthPrototype::toJSON), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, TemporalPlainYearMonthPrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
+
+        // Constructor
+        JSNativeFunction constructor = new JSNativeFunction(context, "PlainYearMonth", 2, TemporalPlainYearMonthConstructor::construct, true, false);
+        constructor.defineProperty(PropertyKey.fromString("from"), new JSNativeFunction(context, "from", 1, TemporalPlainYearMonthConstructor::from), PropertyDescriptor.DataState.ConfigurableWritable);
+        constructor.defineProperty(PropertyKey.fromString("compare"), new JSNativeFunction(context, "compare", 2, TemporalPlainYearMonthConstructor::compare), PropertyDescriptor.DataState.ConfigurableWritable);
+
+        // Link constructor <-> prototype
+        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
+        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+
+        temporalObject.defineProperty(PropertyKey.fromString("PlainYearMonth"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
+    }
+
     private void initializeTemporalZonedDateTime(JSObject temporalObject) {
         JSObject prototype = context.createJSObject();
         prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.ZonedDateTime"), PropertyDescriptor.DataState.Configurable);
@@ -2247,96 +2337,6 @@ public final class JSGlobalObject {
         prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.ConfigurableWritable);
 
         temporalObject.defineProperty(PropertyKey.fromString("ZonedDateTime"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
-    }
-
-    private void initializeTemporalInstant(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Instant"), PropertyDescriptor.DataState.Configurable);
-
-        // Getters
-        defineTemporalGetter(prototype, "epochMilliseconds", TemporalInstantPrototype::epochMilliseconds);
-        defineTemporalGetter(prototype, "epochNanoseconds", TemporalInstantPrototype::epochNanoseconds);
-
-        // Methods
-        prototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction(context, "add", 1, TemporalInstantPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"), new JSNativeFunction(context, "subtract", 1, TemporalInstantPrototype::subtract), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"), new JSNativeFunction(context, "until", 1, TemporalInstantPrototype::until), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"), new JSNativeFunction(context, "since", 1, TemporalInstantPrototype::since), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("round"), new JSNativeFunction(context, "round", 1, TemporalInstantPrototype::round), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"), new JSNativeFunction(context, "equals", 1, TemporalInstantPrototype::equals), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, TemporalInstantPrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"), new JSNativeFunction(context, "toJSON", 0, TemporalInstantPrototype::toJSON), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction(context, "toLocaleString", 0, TemporalInstantPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, TemporalInstantPrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toZonedDateTimeISO"), new JSNativeFunction(context, "toZonedDateTimeISO", 1, TemporalInstantPrototype::toZonedDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "Instant", 1, TemporalInstantConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"), new JSNativeFunction(context, "from", 1, TemporalInstantConstructor::from), PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("fromEpochMilliseconds"), new JSNativeFunction(context, "fromEpochMilliseconds", 1, TemporalInstantConstructor::fromEpochMilliseconds), PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("fromEpochNanoseconds"), new JSNativeFunction(context, "fromEpochNanoseconds", 1, TemporalInstantConstructor::fromEpochNanoseconds), PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("compare"), new JSNativeFunction(context, "compare", 2, TemporalInstantConstructor::compare), PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Link constructor <-> prototype
-        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
-        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.ConfigurableWritable);
-
-        temporalObject.defineProperty(PropertyKey.fromString("Instant"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
-    }
-
-    private void initializeTemporalNow(JSObject temporalObject) {
-        JSObject nowObject = context.createJSObject();
-        nowObject.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.Now"), PropertyDescriptor.DataState.Configurable);
-
-        nowObject.defineProperty(PropertyKey.fromString("instant"), new JSNativeFunction(context, "instant", 0, TemporalNow::instant), PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("timeZoneId"), new JSNativeFunction(context, "timeZoneId", 0, TemporalNow::timeZoneId), PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainDateTimeISO"), new JSNativeFunction(context, "plainDateTimeISO", 0, TemporalNow::plainDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainDateISO"), new JSNativeFunction(context, "plainDateISO", 0, TemporalNow::plainDateISO), PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("plainTimeISO"), new JSNativeFunction(context, "plainTimeISO", 0, TemporalNow::plainTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
-        nowObject.defineProperty(PropertyKey.fromString("zonedDateTimeISO"), new JSNativeFunction(context, "zonedDateTimeISO", 0, TemporalNow::zonedDateTimeISO), PropertyDescriptor.DataState.ConfigurableWritable);
-
-        temporalObject.defineProperty(PropertyKey.fromString("Now"), nowObject, PropertyDescriptor.DataState.ConfigurableWritable);
-    }
-
-    private void initializeTemporalPlainYearMonth(JSObject temporalObject) {
-        JSObject prototype = context.createJSObject();
-        prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.PlainYearMonth"), PropertyDescriptor.DataState.Configurable);
-
-        // Getters
-        defineTemporalGetter(prototype, "calendarId", TemporalPlainYearMonthPrototype::calendarId);
-        defineTemporalGetter(prototype, "era", TemporalPlainYearMonthPrototype::era);
-        defineTemporalGetter(prototype, "eraYear", TemporalPlainYearMonthPrototype::eraYear);
-        defineTemporalGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
-        defineTemporalGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
-        defineTemporalGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
-        defineTemporalGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
-        defineTemporalGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
-        defineTemporalGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);
-        defineTemporalGetter(prototype, "inLeapYear", TemporalPlainYearMonthPrototype::inLeapYear);
-
-        // Methods
-        prototype.defineProperty(PropertyKey.fromString("with"), new JSNativeFunction(context, "with", 1, TemporalPlainYearMonthPrototype::with), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction(context, "add", 1, TemporalPlainYearMonthPrototype::add), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("subtract"), new JSNativeFunction(context, "subtract", 1, TemporalPlainYearMonthPrototype::subtract), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("until"), new JSNativeFunction(context, "until", 1, TemporalPlainYearMonthPrototype::until), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("since"), new JSNativeFunction(context, "since", 1, TemporalPlainYearMonthPrototype::since), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("equals"), new JSNativeFunction(context, "equals", 1, TemporalPlainYearMonthPrototype::equals), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toPlainDate"), new JSNativeFunction(context, "toPlainDate", 1, TemporalPlainYearMonthPrototype::toPlainDate), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, TemporalPlainYearMonthPrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toJSON"), new JSNativeFunction(context, "toJSON", 0, TemporalPlainYearMonthPrototype::toJSON), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("toLocaleString"), new JSNativeFunction(context, "toLocaleString", 0, TemporalPlainYearMonthPrototype::toLocaleString), PropertyDescriptor.DataState.ConfigurableWritable);
-        prototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, TemporalPlainYearMonthPrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Constructor
-        JSNativeFunction constructor = new JSNativeFunction(context, "PlainYearMonth", 2, TemporalPlainYearMonthConstructor::construct, true, false);
-        constructor.defineProperty(PropertyKey.fromString("from"), new JSNativeFunction(context, "from", 1, TemporalPlainYearMonthConstructor::from), PropertyDescriptor.DataState.ConfigurableWritable);
-        constructor.defineProperty(PropertyKey.fromString("compare"), new JSNativeFunction(context, "compare", 2, TemporalPlainYearMonthConstructor::compare), PropertyDescriptor.DataState.ConfigurableWritable);
-
-        // Link constructor <-> prototype
-        constructor.defineProperty(PropertyKey.PROTOTYPE, prototype, PropertyDescriptor.DataState.None);
-        prototype.defineProperty(PropertyKey.CONSTRUCTOR, constructor, PropertyDescriptor.DataState.ConfigurableWritable);
-
-        temporalObject.defineProperty(PropertyKey.fromString("PlainYearMonth"), constructor, PropertyDescriptor.DataState.ConfigurableWritable);
     }
 
     /**

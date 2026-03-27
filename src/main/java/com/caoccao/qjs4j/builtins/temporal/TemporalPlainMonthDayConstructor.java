@@ -60,12 +60,20 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createPlainMonthDay(context, new IsoDate(referenceYear, isoMonth, isoDay), calendarId);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainMonthDay");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createPlainMonthDay(context, new IsoDate(referenceYear, isoMonth, isoDay), calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainMonthDay createPlainMonthDay(JSContext context, IsoDate isoDate, String calendarId) {
-        JSTemporalPlainMonthDay md = new JSTemporalPlainMonthDay(context, isoDate, calendarId);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainMonthDay");
+        return createPlainMonthDay(context, isoDate, calendarId, prototype);
+    }
+
+    static JSTemporalPlainMonthDay createPlainMonthDay(JSContext context, IsoDate isoDate, String calendarId, JSObject prototype) {
+        JSTemporalPlainMonthDay md = new JSTemporalPlainMonthDay(context, isoDate, calendarId);
         if (prototype != null) {
             md.setPrototype(prototype);
         }

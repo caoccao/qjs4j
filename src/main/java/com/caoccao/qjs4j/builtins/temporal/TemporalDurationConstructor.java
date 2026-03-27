@@ -122,12 +122,20 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createDuration(context, record);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "Duration");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createDuration(context, record, resolvedPrototype);
     }
 
     public static JSTemporalDuration createDuration(JSContext context, TemporalDurationRecord record) {
-        JSTemporalDuration duration = new JSTemporalDuration(context, record);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Duration");
+        return createDuration(context, record, prototype);
+    }
+
+    static JSTemporalDuration createDuration(JSContext context, TemporalDurationRecord record, JSObject prototype) {
+        JSTemporalDuration duration = new JSTemporalDuration(context, record);
         if (prototype != null) {
             duration.setPrototype(prototype);
         }

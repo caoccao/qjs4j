@@ -193,10 +193,20 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "toLocaleString");
-        if (ym == null) return JSUndefined.INSTANCE;
-        IsoDate d = ym.getIsoDate();
-        return new JSString(String.format(Locale.ROOT, "%04d-%02d", d.year(), d.month()));
+        JSTemporalPlainYearMonth plainYearMonth = checkReceiver(context, thisArg, "toLocaleString");
+        if (plainYearMonth == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
+                context,
+                null,
+                new JSValue[]{locales, options});
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainYearMonth});
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -77,12 +77,20 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createPlainYearMonth(context, new IsoDate(isoYear, isoMonth, referenceDay), calendarId);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainYearMonth");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createPlainYearMonth(context, new IsoDate(isoYear, isoMonth, referenceDay), calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainYearMonth createPlainYearMonth(JSContext context, IsoDate isoDate, String calendarId) {
-        JSTemporalPlainYearMonth ym = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainYearMonth");
+        return createPlainYearMonth(context, isoDate, calendarId, prototype);
+    }
+
+    static JSTemporalPlainYearMonth createPlainYearMonth(JSContext context, IsoDate isoDate, String calendarId, JSObject prototype) {
+        JSTemporalPlainYearMonth ym = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
         if (prototype != null) {
             ym.setPrototype(prototype);
         }

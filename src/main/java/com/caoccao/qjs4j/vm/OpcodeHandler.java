@@ -3594,7 +3594,7 @@ public final class OpcodeHandler {
                     // Extract the original JS error value from the VM exception
                     JSValue errorValue = vme.getJsValue() != null ? vme.getJsValue()
                             : vme.getJsError() != null ? vme.getJsError()
-                            : new JSString(vme.getMessage() != null ? vme.getMessage() : "Unknown error");
+                              : new JSString(vme.getMessage() != null ? vme.getMessage() : "Unknown error");
                     if (!resolveState.alreadyResolved) {
                         resolveState.alreadyResolved = true;
                         promise.reject(errorValue);

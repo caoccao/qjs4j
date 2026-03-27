@@ -49,6 +49,11 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet("(() => { class CustomPlainMonthDay extends Temporal.PlainMonthDay {} const value = new CustomPlainMonthDay(3, 15); return value instanceof CustomPlainMonthDay && value instanceof Temporal.PlainMonthDay; })()");
+    }
+
+    @Test
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.PlainMonthDay(3, 15)");
     }
@@ -81,6 +86,11 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).toJSON()");
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet("(() => { const value = new Temporal.PlainMonthDay(3, 15); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', month: '2-digit', day: '2-digit' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test

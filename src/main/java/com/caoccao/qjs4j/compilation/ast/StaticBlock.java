@@ -27,10 +27,10 @@ public final class StaticBlock extends ClassElement {
     public StaticBlock(List<Statement> body) {
         super(body != null
                 ? body.stream()
-                .filter(statement -> statement != null)
-                .map(Statement::getLocation)
-                .findFirst()
-                .orElse(new SourceLocation(0, 0, 0, 0))
+                  .filter(statement -> statement != null)
+                  .map(Statement::getLocation)
+                  .findFirst()
+                  .orElse(new SourceLocation(0, 0, 0, 0))
                 : new SourceLocation(0, 0, 0, 0));
         this.body = body;
     }

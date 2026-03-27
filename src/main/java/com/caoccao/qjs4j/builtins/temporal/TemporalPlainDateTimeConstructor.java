@@ -106,12 +106,20 @@ public final class TemporalPlainDateTimeConstructor {
 
         IsoDateTime dt = new IsoDateTime(new IsoDate(isoYear, isoMonth, isoDay),
                 new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
-        return createPlainDateTime(context, dt, calendarId);
+        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return createPlainDateTime(context, dt, calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, String calendarId) {
-        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainDateTime");
+        return createPlainDateTime(context, isoDateTime, calendarId, prototype);
+    }
+
+    static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, String calendarId, JSObject prototype) {
+        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
         if (prototype != null) {
             plainDateTime.setPrototype(prototype);
         }

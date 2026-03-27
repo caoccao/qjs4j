@@ -54,6 +54,11 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     }
 
     @Test
+    public void testConstructorWithSubclass() {
+        assertBooleanWithJavet("(() => { class CustomPlainYearMonth extends Temporal.PlainYearMonth {} const value = new CustomPlainYearMonth(2024, 3); return value instanceof CustomPlainYearMonth && value instanceof Temporal.PlainYearMonth; })()");
+    }
+
+    @Test
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.PlainYearMonth(2024, 3)");
     }
@@ -126,6 +131,11 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     @Test
     public void testToJSON() {
         assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).toJSON()");
+    }
+
+    @Test
+    public void testToLocaleString() {
+        assertBooleanWithJavet("(() => { const value = new Temporal.PlainYearMonth(2024, 3); const result = value.toLocaleString('en-US', { calendar: 'iso8601', timeZone: 'UTC', year: 'numeric', month: 'long' }); return typeof result === 'string' && result.length > 0; })()");
     }
 
     @Test

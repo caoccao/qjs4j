@@ -16,7 +16,9 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
@@ -29,6 +31,13 @@ public final class TemporalNow {
     private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
 
     private TemporalNow() {
+    }
+
+    private static String getTimeZone(JSValue[] args) {
+        if (args.length > 0 && args[0] instanceof JSString tzStr) {
+            return tzStr.value();
+        }
+        return java.time.ZoneId.systemDefault().getId();
     }
 
     public static JSValue instant(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -57,6 +66,12 @@ public final class TemporalNow {
         return TemporalPlainTimeConstructor.createPlainTime(context, dt.time());
     }
 
+    private static BigInteger systemEpochNs() {
+        java.time.Instant now = java.time.Instant.now();
+        return BigInteger.valueOf(now.getEpochSecond()).multiply(BILLION)
+                .add(BigInteger.valueOf(now.getNano()));
+    }
+
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
         return new JSString(java.time.ZoneId.systemDefault().getId());
     }
@@ -65,18 +80,5 @@ public final class TemporalNow {
         String timeZoneId = getTimeZone(args);
         BigInteger epochNs = systemEpochNs();
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs, timeZoneId, "iso8601");
-    }
-
-    private static String getTimeZone(JSValue[] args) {
-        if (args.length > 0 && args[0] instanceof JSString tzStr) {
-            return tzStr.value();
-        }
-        return java.time.ZoneId.systemDefault().getId();
-    }
-
-    private static BigInteger systemEpochNs() {
-        java.time.Instant now = java.time.Instant.now();
-        return BigInteger.valueOf(now.getEpochSecond()).multiply(BILLION)
-                .add(BigInteger.valueOf(now.getNano()));
     }
 }
