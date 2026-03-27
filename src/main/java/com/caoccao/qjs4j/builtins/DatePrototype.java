@@ -16,8 +16,10 @@
 
 package com.caoccao.qjs4j.builtins;
 
+import com.caoccao.qjs4j.builtins.temporal.TemporalInstantConstructor;
 import com.caoccao.qjs4j.core.*;
 
+import java.math.BigInteger;
 import java.util.Locale;
 
 /**
@@ -39,6 +41,7 @@ public final class DatePrototype {
     private static final int FORMAT_TO_STRING = 1;
     private static final int FORMAT_UTC = 0;
     private static final String MONTH_NAMES = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    private static final BigInteger NANOSECONDS_PER_MILLISECOND = BigInteger.valueOf(1_000_000L);
     private static final int PART_ALL = 3;
     private static final int PART_DATE = 1;
     private static final int PART_TIME = 2;
@@ -626,6 +629,23 @@ public final class DatePrototype {
         String tzName = JSDate.getTimezoneName((long) date.getTimeValue(), useLongName);
         builder.append(" (").append(tzName).append(')');
         return new JSString(builder.toString());
+    }
+
+    public static JSValue toTemporalInstant(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSDate dateObject = requireDate(context, thisArg, "toTemporalInstant");
+        if (dateObject == null) {
+            return context.getPendingException();
+        }
+
+        double timeValue = dateObject.getTimeValue();
+        if (!Double.isFinite(timeValue)) {
+            context.throwRangeError("The number NaN cannot be converted to a BigInt because it is not an integer");
+            return JSUndefined.INSTANCE;
+        }
+
+        long epochMilliseconds = (long) timeValue;
+        BigInteger epochNanoseconds = BigInteger.valueOf(epochMilliseconds).multiply(NANOSECONDS_PER_MILLISECOND);
+        return TemporalInstantConstructor.createInstant(context, epochNanoseconds);
     }
 
     public static JSValue toTimeString(JSContext context, JSValue thisArg, JSValue[] args) {

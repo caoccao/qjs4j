@@ -606,6 +606,12 @@ public final class JSGlobalObject {
         datePrototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, DatePrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
         datePrototype.defineProperty(PropertyKey.fromString("toTimeString"), new JSNativeFunction(context, "toTimeString", 0, DatePrototype::toTimeString), PropertyDescriptor.DataState.ConfigurableWritable);
         datePrototype.defineProperty(PropertyKey.fromString("toUTCString"), toUTCString, PropertyDescriptor.DataState.ConfigurableWritable);
+        if (context.getRuntime().getOptions().isTemporalEnabled()) {
+            datePrototype.defineProperty(
+                    PropertyKey.fromString("toTemporalInstant"),
+                    new JSNativeFunction(context, "toTemporalInstant", 0, DatePrototype::toTemporalInstant),
+                    PropertyDescriptor.DataState.ConfigurableWritable);
+        }
         datePrototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, DatePrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
         datePrototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_PRIMITIVE), toPrimitive, PropertyDescriptor.DataState.Configurable);
 
