@@ -77,7 +77,11 @@ public abstract class BaseTest {
     }
 
     protected JSRuntime createRuntime() {
-        return new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(true));
+        return new JSRuntime(new JSRuntimeOptions().setTemporalEnabled(isTemporalEnabled()));
+    }
+
+    protected boolean isTemporalEnabled() {
+        return false;
     }
 
     protected boolean isWindows() {

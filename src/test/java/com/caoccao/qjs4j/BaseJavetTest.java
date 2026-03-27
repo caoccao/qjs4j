@@ -62,7 +62,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -90,7 +90,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -118,7 +118,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -146,7 +146,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -174,7 +174,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -200,7 +200,7 @@ public class BaseJavetTest extends BaseTest {
     protected void assertErrorWithJavet(String... codeArray) {
         for (String code : getNormalizedCodeStrings(codeArray)) {
             try {
-                v8Runtime.resetContext();
+                resetV8Context();
             } catch (JavetException e) {
             }
             String expectedMessage = assertThatThrownBy(() -> v8Runtime.getExecutor(code).setModule(moduleMode).executeVoid())
@@ -216,7 +216,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -245,7 +245,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -273,7 +273,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -300,7 +300,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -328,7 +328,7 @@ public class BaseJavetTest extends BaseTest {
             printCode(code);
             assertWithJavet(
                     () -> {
-                        v8Runtime.resetContext();
+                        resetV8Context();
                         try (V8Value v8Value = v8Runtime.getExecutor(code).setModule(moduleMode).execute()) {
                             if (v8Value instanceof V8ValuePromise v8ValuePromise) {
                                 v8Runtime.await();
@@ -384,6 +384,13 @@ public class BaseJavetTest extends BaseTest {
         if (debugMode) {
             System.out.println(code);
             System.out.println("----------------");
+        }
+    }
+
+    protected void resetV8Context() throws JavetException {
+        v8Runtime.resetContext();
+        if (!isTemporalEnabled()) {
+            v8Runtime.getExecutor("delete globalThis.Temporal;").executeVoid();
         }
     }
 

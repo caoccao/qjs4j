@@ -339,7 +339,8 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate d = plainDate.getIsoDate();
-        return new JSString(String.format(java.util.Locale.ROOT, "%02d-%02d", d.month(), d.day()));
+        return TemporalPlainMonthDayConstructor.createPlainMonthDay(context,
+                new IsoDate(1972, d.month(), d.day()), plainDate.getCalendarId());
     }
 
     public static JSValue toPlainYearMonth(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -348,7 +349,8 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate d = plainDate.getIsoDate();
-        return new JSString(String.format(java.util.Locale.ROOT, "%04d-%02d", d.year(), d.month()));
+        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context,
+                new IsoDate(d.year(), d.month(), 1), plainDate.getCalendarId());
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

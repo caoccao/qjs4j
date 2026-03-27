@@ -107,6 +107,39 @@ public final class TemporalParser {
     }
 
     /**
+     * Parse a month-day string like "--03-15" or "--0315".
+     * Returns null and sets pending exception on error.
+     */
+    public static IsoDate parseMonthDayString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid character while parsing month value.");
+            return null;
+        }
+        // Try "--MM-DD" format first
+        if (input.startsWith("--")) {
+            TemporalParser parser = new TemporalParser(input);
+            parser.pos = 2; // skip "--"
+            int month = parser.parseTwoDigits(context, "month");
+            if (context.hasPendingException()) return null;
+            if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
+                parser.pos++;
+            }
+            int day = parser.parseTwoDigits(context, "day");
+            if (context.hasPendingException()) return null;
+            // Reference year for MonthDay is 1972 (a leap year, so Feb 29 is valid)
+            if (!IsoDate.isValidIsoDate(1972, month, day)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            return new IsoDate(1972, month, day);
+        }
+        // Try full date format (YYYY-MM-DD)
+        IsoDate date = parseDateString(context, input);
+        if (date == null) return null;
+        return new IsoDate(1972, date.month(), date.day());
+    }
+
+    /**
      * Parse an ISO time string into an IsoTime.
      * Returns null and sets pending exception on error.
      */
@@ -119,6 +152,43 @@ public final class TemporalParser {
         // Try to parse as time directly
         IsoTime time = parser.parseTime(context);
         return time;
+    }
+
+    /**
+     * Parse a year-month string like "2024-03".
+     * Returns null and sets pending exception on error.
+     */
+    public static IsoDate parseYearMonthString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid character while parsing year value.");
+            return null;
+        }
+        TemporalParser parser = new TemporalParser(input);
+        int year = parser.parseYear(context);
+        if (context.hasPendingException()) return null;
+        if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
+            parser.pos++;
+        }
+        int month = parser.parseTwoDigits(context, "month");
+        if (context.hasPendingException()) return null;
+        if (month < 1 || month > 12) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        // If there's a day part, parse it (full date string)
+        int day = 1;
+        if (parser.pos < parser.input.length() && (parser.input.charAt(parser.pos) == '-' || Character.isDigit(parser.input.charAt(parser.pos)))) {
+            if (parser.input.charAt(parser.pos) == '-') {
+                parser.pos++;
+            }
+            day = parser.parseTwoDigits(context, "day");
+            if (context.hasPendingException()) return null;
+        }
+        if (!IsoDate.isValidIsoDate(year, month, day)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return new IsoDate(year, month, day);
     }
 
     private char current() {

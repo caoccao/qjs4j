@@ -14,20 +14,25 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins.temporal;
+package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTemporalJavetTest;
-import org.junit.jupiter.api.Test;
+import com.caoccao.qjs4j.core.temporal.IsoDate;
 
-public class TemporalNamespaceTest extends BaseTemporalJavetTest {
+public final class JSTemporalPlainYearMonth extends JSObject {
+    private final String calendarId;
+    private final IsoDate isoDate;
 
-    @Test
-    public void testTemporalExists() {
-        assertBooleanWithJavet("typeof Temporal === 'object'");
+    public JSTemporalPlainYearMonth(JSContext context, IsoDate isoDate, String calendarId) {
+        super(context);
+        this.isoDate = isoDate;
+        this.calendarId = calendarId;
     }
 
-    @Test
-    public void testTemporalToStringTag() {
-        assertStringWithJavet("Temporal[Symbol.toStringTag]");
+    public String getCalendarId() {
+        return calendarId;
+    }
+
+    public IsoDate getIsoDate() {
+        return isoDate;
     }
 }

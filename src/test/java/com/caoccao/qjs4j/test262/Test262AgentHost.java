@@ -28,12 +28,14 @@ import java.util.concurrent.atomic.AtomicLong;
 final class Test262AgentHost implements AutoCloseable {
     private final CopyOnWriteArrayList<Test262Agent> agents;
     private final BlockingQueue<String> reports;
+    private final boolean temporalEnabled;
     private final Test262Executor test262Executor;
     private final AtomicLong timerIds;
     private AtomicsObject sharedAtomicsObject;
 
-    Test262AgentHost(Test262Executor test262Executor) {
+    Test262AgentHost(Test262Executor test262Executor, boolean temporalEnabled) {
         this.test262Executor = test262Executor;
+        this.temporalEnabled = temporalEnabled;
         agents = new CopyOnWriteArrayList<>();
         reports = new LinkedBlockingQueue<>();
         timerIds = new AtomicLong(1);
@@ -88,7 +90,7 @@ final class Test262AgentHost implements AutoCloseable {
                         String script = args.length > 0
                                 ? JSTypeConversions.toString(ctx, args[0]).value()
                                 : "";
-                        Test262Agent newAgent = new Test262Agent(test262Executor, script, realmRuntimes, this);
+                        Test262Agent newAgent = new Test262Agent(test262Executor, script, realmRuntimes, this, temporalEnabled);
                         agents.add(newAgent);
                         newAgent.start();
                         return JSUndefined.INSTANCE;

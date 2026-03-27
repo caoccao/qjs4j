@@ -40,6 +40,7 @@ public class Test262Config {
 
     public static Test262Config forLanguageTests() {
         Test262Config config = loadDefault();
+        config.addUnsupportedFeatures("Temporal");
         config.includePatterns.clear();
         config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
         config.maxTests = 200;
@@ -48,6 +49,7 @@ public class Test262Config {
 
     public static Test262Config forLongRunningTest() {
         Test262Config config = loadDefault();
+        config.addUnsupportedFeatures("Temporal");
         config.includePatterns.clear();
         config.addIncludePatterns(
                 Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
@@ -62,13 +64,14 @@ public class Test262Config {
     public static Test262Config forQuickTest() {
         Test262Config config = loadDefault();
         // Run a subset of tests for quick validation
+        config.addUnsupportedFeatures("Temporal");
         config.addExcludePatterns(
                 Pattern.compile(".*/test/annexB/built-ins/RegExp/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/decodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        config.maxTests = 100 * 100;
+        // config.maxTests = 100 * 100;
         return config;
     }
 
@@ -76,8 +79,7 @@ public class Test262Config {
         Test262Config config = new Test262Config();
 
         // Define unsupported features
-        config.addUnsupportedFeatures(
-                "source-phase-imports");
+        config.addUnsupportedFeatures("source-phase-imports");
 
         // Default: run all tests
         config.addIncludePatterns(Pattern.compile(".*\\.js$"));

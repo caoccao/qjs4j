@@ -14,20 +14,11 @@
  * limitations under the License.
  */
 
-package com.caoccao.qjs4j.builtins.temporal;
+package com.caoccao.qjs4j;
 
-import com.caoccao.qjs4j.BaseTemporalJavetTest;
-import org.junit.jupiter.api.Test;
-
-public class TemporalNamespaceTest extends BaseTemporalJavetTest {
-
-    @Test
-    public void testTemporalExists() {
-        assertBooleanWithJavet("typeof Temporal === 'object'");
-    }
-
-    @Test
-    public void testTemporalToStringTag() {
-        assertStringWithJavet("Temporal[Symbol.toStringTag]");
+public abstract class BaseTemporalJavetTest extends BaseJavetTest {
+    @Override
+    protected boolean isTemporalEnabled() {
+        return true;
     }
 }
