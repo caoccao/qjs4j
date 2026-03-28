@@ -141,6 +141,25 @@ public final class TemporalDurationConstructor {
         return JSNumber.of(Integer.signum(oneTotalNanoseconds.compareTo(twoTotalNanoseconds)));
     }
 
+    private static String constrainLeapSecond(String text) {
+        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        if (timeSeparatorIndex < 0) {
+            return text;
+        }
+        int firstColonIndex = text.indexOf(':', timeSeparatorIndex + 1);
+        if (firstColonIndex < 0) {
+            return text;
+        }
+        int secondColonIndex = text.indexOf(':', firstColonIndex + 1);
+        if (secondColonIndex < 0 || secondColonIndex + 2 >= text.length()) {
+            return text;
+        }
+        if (text.charAt(secondColonIndex + 1) == '6' && text.charAt(secondColonIndex + 2) == '0') {
+            return text.substring(0, secondColonIndex + 1) + "59" + text.substring(secondColonIndex + 3);
+        }
+        return text;
+    }
+
     /**
      * Temporal.Duration(years?, months?, weeks?, days?, hours?, minutes?, seconds?, milliseconds?, microseconds?, nanoseconds?)
      */
@@ -714,34 +733,6 @@ public final class TemporalDurationConstructor {
         return parseRelativeToValue(context, relativeToValue);
     }
 
-    static RelativeToReference parseRelativeToValue(JSContext context, JSValue relativeToValue) {
-        if (relativeToValue instanceof JSTemporalPlainDate plainDate) {
-            return new RelativeToReference(plainDate.getIsoDate(), null, null);
-        }
-        if (relativeToValue instanceof JSTemporalPlainDateTime plainDateTime) {
-            return new RelativeToReference(plainDateTime.getIsoDateTime().date(), null, null);
-        }
-        if (relativeToValue instanceof JSTemporalZonedDateTime zonedDateTime) {
-            IsoDateTime relativeDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
-                    zonedDateTime.getEpochNanoseconds(),
-                    zonedDateTime.getTimeZoneId());
-            return new RelativeToReference(
-                    relativeDateTime.date(),
-                    zonedDateTime.getEpochNanoseconds(),
-                    zonedDateTime.getTimeZoneId());
-        }
-
-        if (relativeToValue instanceof JSString relativeToString) {
-            return parseRelativeToString(context, relativeToString.value());
-        }
-
-        if (relativeToValue instanceof JSObject relativeToObject) {
-            return parseRelativeToPropertyBag(context, relativeToObject);
-        }
-        context.throwTypeError("Temporal error: Invalid relativeTo option.");
-        return null;
-    }
-
     private static RelativeToReference parseRelativeToPropertyBag(JSContext context, JSObject relativeToObject) {
         JSValue calendarValue = relativeToObject.get(PropertyKey.fromString("calendar"));
         if (context.hasPendingException()) {
@@ -1106,6 +1097,34 @@ public final class TemporalDurationConstructor {
         return new RelativeToReference(isoDate, null, null);
     }
 
+    static RelativeToReference parseRelativeToValue(JSContext context, JSValue relativeToValue) {
+        if (relativeToValue instanceof JSTemporalPlainDate plainDate) {
+            return new RelativeToReference(plainDate.getIsoDate(), null, null);
+        }
+        if (relativeToValue instanceof JSTemporalPlainDateTime plainDateTime) {
+            return new RelativeToReference(plainDateTime.getIsoDateTime().date(), null, null);
+        }
+        if (relativeToValue instanceof JSTemporalZonedDateTime zonedDateTime) {
+            IsoDateTime relativeDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+            return new RelativeToReference(
+                    relativeDateTime.date(),
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+        }
+
+        if (relativeToValue instanceof JSString relativeToString) {
+            return parseRelativeToString(context, relativeToString.value());
+        }
+
+        if (relativeToValue instanceof JSObject relativeToObject) {
+            return parseRelativeToPropertyBag(context, relativeToObject);
+        }
+        context.throwTypeError("Temporal error: Invalid relativeTo option.");
+        return null;
+    }
+
     private static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
         if (timeZoneText.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid time zone.");
@@ -1225,25 +1244,6 @@ public final class TemporalDurationConstructor {
             return null;
         }
         return numericValue;
-    }
-
-    private static String constrainLeapSecond(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
-        if (timeSeparatorIndex < 0) {
-            return text;
-        }
-        int firstColonIndex = text.indexOf(':', timeSeparatorIndex + 1);
-        if (firstColonIndex < 0) {
-            return text;
-        }
-        int secondColonIndex = text.indexOf(':', firstColonIndex + 1);
-        if (secondColonIndex < 0 || secondColonIndex + 2 >= text.length()) {
-            return text;
-        }
-        if (text.charAt(secondColonIndex + 1) == '6' && text.charAt(secondColonIndex + 2) == '0') {
-            return text.substring(0, secondColonIndex + 1) + "59" + text.substring(secondColonIndex + 3);
-        }
-        return text;
     }
 
     private static Long toRequiredIntegralLong(JSContext context, JSValue value) {
