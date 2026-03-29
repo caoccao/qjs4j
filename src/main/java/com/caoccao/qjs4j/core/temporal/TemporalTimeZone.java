@@ -170,10 +170,16 @@ public final class TemporalTimeZone {
      * Converts a date-time with an explicit offset to epoch nanoseconds.
      */
     public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, int offsetSeconds) {
+        return utcDateTimeToEpochNs(date, time, BigInteger.valueOf(offsetSeconds).multiply(BILLION));
+    }
+
+    /**
+     * Converts a date-time with an explicit offset (nanosecond precision) to epoch nanoseconds.
+     */
+    public static BigInteger utcDateTimeToEpochNs(IsoDate date, IsoTime time, BigInteger offsetNanoseconds) {
         long epochDay = date.toEpochDay();
         BigInteger dayNs = BigInteger.valueOf(epochDay).multiply(BigInteger.valueOf(86_400_000_000_000L));
         BigInteger timeNs = BigInteger.valueOf(time.totalNanoseconds());
-        BigInteger offsetNs = BigInteger.valueOf((long) offsetSeconds * 1_000_000_000L);
-        return dayNs.add(timeNs).subtract(offsetNs);
+        return dayNs.add(timeNs).subtract(offsetNanoseconds);
     }
 }

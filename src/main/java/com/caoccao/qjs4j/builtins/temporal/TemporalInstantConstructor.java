@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 
 import java.math.BigInteger;
 
@@ -58,8 +59,13 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (!(arg instanceof JSBigInt bigInt)) {
-            context.throwTypeError("Cannot convert " + JSTypeConversions.toString(context, arg).value() + " to a BigInt");
+        final JSBigInt bigInt;
+        try {
+            bigInt = JSTypeConversions.toBigInt(context, arg);
+        } catch (JSErrorException e) {
+            return context.throwError(e);
+        }
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = bigInt.value();
@@ -119,8 +125,13 @@ public final class TemporalInstantConstructor {
      */
     public static JSValue fromEpochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (!(arg instanceof JSBigInt bigInt)) {
-            context.throwTypeError("Cannot convert " + JSTypeConversions.toString(context, arg).value() + " to a BigInt");
+        final JSBigInt bigInt;
+        try {
+            bigInt = JSTypeConversions.toBigInt(context, arg);
+        } catch (JSErrorException e) {
+            return context.throwError(e);
+        }
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = bigInt.value();
@@ -139,18 +150,40 @@ public final class TemporalInstantConstructor {
         if (item instanceof JSTemporalInstant instant) {
             return createInstant(context, instant.getEpochNanoseconds());
         }
-        if (item instanceof JSString str) {
-            TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, str.value());
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(), parsed.offsetSeconds());
-            if (!isValidEpochNanoseconds(epochNs)) {
-                context.throwRangeError("Temporal error: Nanoseconds out of range.");
+        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            return createInstant(context, zonedDateTime.getEpochNanoseconds());
+        }
+
+        JSValue primitiveItem = item;
+        if (item instanceof JSObject objectItem) {
+            JSObject instantPrototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Instant");
+            if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createInstant(context, epochNs);
+            if (objectItem == instantPrototype) {
+                context.throwTypeError("Method invoked on an incompatible receiver.");
+                return JSUndefined.INSTANCE;
+            }
+            primitiveItem = JSTypeConversions.toPrimitive(context, objectItem, JSTypeConversions.PreferredType.STRING);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
-        context.throwTypeError("Temporal error: Instant argument must be Instant or string.");
-        return JSUndefined.INSTANCE;
+        if (!(primitiveItem instanceof JSString str)) {
+            context.throwTypeError("Temporal error: Instant argument must be Instant or string.");
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, str.value());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(), parsed.offsetNanoseconds());
+        if (!isValidEpochNanoseconds(epochNs)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return createInstant(context, epochNs);
     }
 
     public static JSTemporalInstant toTemporalInstantObject(JSContext context, JSValue item) {
