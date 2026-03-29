@@ -17,7 +17,9 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.*;
+import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
+import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
 import java.math.BigInteger;
 
@@ -26,10 +28,18 @@ import java.math.BigInteger;
  */
 public final class TemporalInstantPrototype {
     private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
     private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
     private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
     private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
     private static final BigInteger NS_PER_SECOND = BILLION;
+    private static final BigInteger NS_PER_US = BigInteger.valueOf(1_000L);
+    private static final long SOLAR_DAY_HOURS = 24L;
+    private static final long SOLAR_DAY_MICROSECONDS = 86_400_000_000L;
+    private static final long SOLAR_DAY_MILLISECONDS = 86_400_000L;
+    private static final long SOLAR_DAY_MINUTES = 1_440L;
+    private static final long SOLAR_DAY_NANOSECONDS = 86_400_000_000_000L;
+    private static final long SOLAR_DAY_SECONDS = 86_400L;
     private static final String TYPE_NAME = "Temporal.Instant";
 
     private TemporalInstantPrototype() {
@@ -49,47 +59,28 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        long hours = 0, minutes = 0, seconds = 0, ms = 0, us = 0, ns = 0;
-        JSValue durationArg = args[0];
-        if (durationArg instanceof JSTemporalDuration dur) {
-            TemporalDurationRecord rec = dur.getRecord();
-            hours = rec.hours();
-            minutes = rec.minutes();
-            seconds = rec.seconds();
-            ms = rec.milliseconds();
-            us = rec.microseconds();
-            ns = rec.nanoseconds();
-        } else if (durationArg instanceof JSString durStr) {
-            TemporalParser.DurationFields df = TemporalParser.parseDurationString(context, durStr.value());
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            hours = df.hours();
-            minutes = df.minutes();
-            seconds = df.seconds();
-            ms = df.milliseconds();
-            us = df.microseconds();
-            ns = df.nanoseconds();
-        } else if (durationArg instanceof JSObject durObj) {
-            hours = TemporalUtils.getIntegerField(context, durObj, "hours", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            minutes = TemporalUtils.getIntegerField(context, durObj, "minutes", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            seconds = TemporalUtils.getIntegerField(context, durObj, "seconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            ms = TemporalUtils.getIntegerField(context, durObj, "milliseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            us = TemporalUtils.getIntegerField(context, durObj, "microseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            ns = TemporalUtils.getIntegerField(context, durObj, "nanoseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (durationRecord.years() != 0
+                || durationRecord.months() != 0
+                || durationRecord.weeks() != 0
+                || durationRecord.days() != 0) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger totalNs = BigInteger.valueOf(hours * 3_600_000_000_000L
-                + minutes * 60_000_000_000L + seconds * 1_000_000_000L
-                + ms * 1_000_000L + us * 1_000L + ns);
-        if (sign < 0) totalNs = totalNs.negate();
+        BigInteger totalNs = BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(NS_PER_US))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        if (sign < 0) {
+            totalNs = totalNs.negate();
+        }
 
         BigInteger result = instant.getEpochNanoseconds().add(totalNs);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(result)) {
@@ -103,7 +94,7 @@ public final class TemporalInstantPrototype {
 
     private static JSTemporalInstant checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalInstant instant)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver.");
             return null;
         }
         return instant;
@@ -139,9 +130,32 @@ public final class TemporalInstantPrototype {
         return divRem[0];
     }
 
+    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
+        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
+        BigInteger quotient = quotientAndRemainder[0];
+        BigInteger remainder = quotientAndRemainder[1];
+        if (remainder.signum() < 0) {
+            quotient = quotient.subtract(BigInteger.ONE);
+            remainder = remainder.add(divisor);
+        }
+        return new BigInteger[]{quotient, remainder};
+    }
+
     private static String formatInstantUtc(BigInteger epochNs) {
         IsoDateTime dt = TemporalTimeZone.epochNsToUtcDateTime(epochNs);
         return dt + "Z";
+    }
+
+    private static long getMaximumRoundingIncrement(String unit) {
+        return switch (unit) {
+            case "hour" -> SOLAR_DAY_HOURS;
+            case "minute" -> SOLAR_DAY_MINUTES;
+            case "second" -> SOLAR_DAY_SECONDS;
+            case "millisecond" -> SOLAR_DAY_MILLISECONDS;
+            case "microsecond" -> SOLAR_DAY_MICROSECONDS;
+            case "nanosecond" -> SOLAR_DAY_NANOSECONDS;
+            default -> -1L;
+        };
     }
 
     private static BigInteger getUnitNs(String unit) {
@@ -150,8 +164,20 @@ public final class TemporalInstantPrototype {
             case "minute" -> NS_PER_MINUTE;
             case "second" -> NS_PER_SECOND;
             case "millisecond" -> NS_PER_MS;
-            case "microsecond" -> BigInteger.valueOf(1_000L);
+            case "microsecond" -> NS_PER_US;
             case "nanosecond" -> BigInteger.ONE;
+            default -> null;
+        };
+    }
+
+    private static String normalizeSmallestUnit(String unit) {
+        return switch (unit) {
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
             default -> null;
         };
     }
@@ -175,33 +201,111 @@ public final class TemporalInstantPrototype {
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "round");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
             return JSUndefined.INSTANCE;
         }
-        String smallestUnit;
+        String smallestUnitText;
+        long roundingIncrement = 1L;
+        String roundingMode = "halfExpand";
         if (args[0] instanceof JSString unitStr) {
-            smallestUnit = unitStr.value();
+            smallestUnitText = unitStr.value();
         } else if (args[0] instanceof JSObject optionsObj) {
-            smallestUnit = TemporalUtils.getStringOption(context, optionsObj, "smallestUnit", null);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: smallestUnit is required.");
+            JSValue roundingIncrementValue = optionsObj.get(PropertyKey.fromString("roundingIncrement"));
+            if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
+            }
+            if (!(roundingIncrementValue instanceof JSUndefined) && roundingIncrementValue != null) {
+                double roundingIncrementAsDouble = JSTypeConversions.toNumber(context, roundingIncrementValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (!Double.isFinite(roundingIncrementAsDouble) || Double.isNaN(roundingIncrementAsDouble)) {
+                    context.throwRangeError("Temporal error: Invalid rounding increment.");
+                    return JSUndefined.INSTANCE;
+                }
+                roundingIncrement = (long) roundingIncrementAsDouble;
+            }
+
+            JSValue roundingModeValue = optionsObj.get(PropertyKey.fromString("roundingMode"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
+                roundingMode = JSTypeConversions.toString(context, roundingModeValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            JSValue smallestUnitValue = optionsObj.get(PropertyKey.fromString("smallestUnit"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
+                smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            } else {
+                smallestUnitText = null;
             }
         } else {
             context.throwTypeError("Temporal error: roundTo must be an object.");
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger unitNs = getUnitNs(smallestUnit);
-        if (unitNs == null) {
-            context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnit);
+        if (smallestUnitText == null) {
+            context.throwRangeError("Temporal error: smallestUnit is required.");
             return JSUndefined.INSTANCE;
         }
 
+        String smallestUnit = normalizeSmallestUnit(smallestUnitText);
+        if (smallestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);
+            return JSUndefined.INSTANCE;
+        }
+
+        boolean validRoundingMode =
+                "ceil".equals(roundingMode)
+                        || "floor".equals(roundingMode)
+                        || "trunc".equals(roundingMode)
+                        || "expand".equals(roundingMode)
+                        || "halfExpand".equals(roundingMode)
+                        || "halfTrunc".equals(roundingMode)
+                        || "halfEven".equals(roundingMode)
+                        || "halfCeil".equals(roundingMode)
+                        || "halfFloor".equals(roundingMode);
+        if (!validRoundingMode) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (roundingIncrement < 1 || roundingIncrement > MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return JSUndefined.INSTANCE;
+        }
+
+        long maximumRoundingIncrement = getMaximumRoundingIncrement(smallestUnit);
+        if (maximumRoundingIncrement <= 0
+                || roundingIncrement > maximumRoundingIncrement
+                || maximumRoundingIncrement % roundingIncrement != 0) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger unitNs = getUnitNs(smallestUnit);
+        if (unitNs == null) {
+            context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);
+            return JSUndefined.INSTANCE;
+        }
+        BigInteger incrementNs = unitNs.multiply(BigInteger.valueOf(roundingIncrement));
+
         BigInteger epochNs = instant.getEpochNanoseconds();
-        BigInteger rounded = roundToIncrement(epochNs, unitNs);
+        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, roundingMode);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(rounded)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -209,17 +313,63 @@ public final class TemporalInstantPrototype {
         return TemporalInstantConstructor.createInstant(context, rounded);
     }
 
-    private static BigInteger roundToIncrement(BigInteger value, BigInteger increment) {
-        BigInteger[] divRem = value.divideAndRemainder(increment);
-        BigInteger remainder = divRem[1];
-        if (remainder.signum() < 0) {
-            remainder = remainder.add(increment);
+    private static BigInteger roundBigIntegerToIncrement(BigInteger value, BigInteger increment, String roundingMode) {
+        if (increment.signum() == 0) {
+            return value;
         }
-        BigInteger half = increment.divide(BigInteger.TWO);
-        if (remainder.compareTo(half) > 0 || (remainder.equals(half) && divRem[0].testBit(0))) {
-            return value.subtract(remainder).add(increment);
+
+        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
+        BigInteger floorQuotient = floorQuotientAndRemainder[0];
+        BigInteger remainder = floorQuotientAndRemainder[1];
+        BigInteger floorValue = floorQuotient.multiply(increment);
+        if (remainder.signum() == 0) {
+            return floorValue;
         }
-        return value.subtract(remainder);
+        BigInteger ceilValue = floorValue.add(increment);
+
+        switch (roundingMode) {
+            case "floor":
+                return floorValue;
+            case "ceil":
+                return ceilValue;
+            case "trunc":
+                return floorValue;
+            case "expand":
+                return ceilValue;
+            case "halfExpand":
+            case "halfTrunc":
+            case "halfEven":
+            case "halfCeil":
+            case "halfFloor":
+                BigInteger twoRemainder = remainder.shiftLeft(1);
+                int halfComparison = twoRemainder.compareTo(increment);
+                if (halfComparison < 0) {
+                    return floorValue;
+                }
+                if (halfComparison > 0) {
+                    return ceilValue;
+                }
+                return switch (roundingMode) {
+                    case "halfExpand" -> {
+                        yield ceilValue;
+                    }
+                    case "halfTrunc" -> {
+                        yield floorValue;
+                    }
+                    case "halfEven" -> {
+                        if (floorQuotient.testBit(0)) {
+                            yield ceilValue;
+                        } else {
+                            yield floorValue;
+                        }
+                    }
+                    case "halfCeil" -> ceilValue;
+                    case "halfFloor" -> floorValue;
+                    default -> ceilValue;
+                };
+            default:
+                return ceilValue;
+        }
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
