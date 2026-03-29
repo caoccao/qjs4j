@@ -65,7 +65,7 @@ public final class JSRuntime implements AutoCloseable {
      * Otherwise a new AtomicsObject is created for this runtime.
      */
     public JSRuntime(JSRuntimeOptions options) {
-        this.contexts = new ArrayList<>();
+        this.contexts = Collections.synchronizedList(new ArrayList<>());
         this.atoms = new AtomTable();
         this.jobQueue = new ConcurrentLinkedQueue<>();
         this.globalSymbolRegistry = new HashMap<>();
@@ -76,8 +76,10 @@ public final class JSRuntime implements AutoCloseable {
     @Override
     public void close() {
         jobQueue.clear();
-        for (JSContext context : new ArrayList<>(contexts)) {
-            context.close();
+        for (JSContext context : getContextSnapshot()) {
+            if (context != null) {
+                context.close();
+            }
         }
         atoms.clear();
         gc();
@@ -113,9 +115,11 @@ public final class JSRuntime implements AutoCloseable {
      * Trigger JVM garbage collection and then poll finalization registries.
      */
     public void gc() {
-        List<JSContext> contextSnapshot = new ArrayList<>(contexts);
+        List<JSContext> contextSnapshot = getContextSnapshot();
         for (JSContext context : contextSnapshot) {
-            context.pollFinalizationRegistries();
+            if (context != null) {
+                context.pollFinalizationRegistries();
+            }
         }
     }
 
@@ -126,11 +130,17 @@ public final class JSRuntime implements AutoCloseable {
         return atoms;
     }
 
+    private List<JSContext> getContextSnapshot() {
+        synchronized (contexts) {
+            return new ArrayList<>(contexts);
+        }
+    }
+
     /**
      * Get all contexts in this runtime.
      */
     public List<JSContext> getContexts() {
-        return new ArrayList<>(contexts);
+        return getContextSnapshot();
     }
 
     public JSContext getCurrentExecutingContext() {
