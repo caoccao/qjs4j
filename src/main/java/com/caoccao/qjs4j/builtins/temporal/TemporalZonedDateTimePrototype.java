@@ -147,6 +147,14 @@ public final class TemporalZonedDateTimePrototype {
         }
     }
 
+    public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "calendar");
+        if (zdt == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(zdt.getCalendarId());
+    }
+
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "calendarId");
         if (zdt == null) return JSUndefined.INSTANCE;
@@ -155,7 +163,7 @@ public final class TemporalZonedDateTimePrototype {
 
     private static JSTemporalZonedDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalZonedDateTime zdt)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return zdt;

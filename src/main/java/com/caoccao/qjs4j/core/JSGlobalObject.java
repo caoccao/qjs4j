@@ -2282,6 +2282,7 @@ public final class JSGlobalObject {
         prototype.defineProperty(PropertyKey.fromSymbol(JSSymbol.TO_STRING_TAG), new JSString("Temporal.ZonedDateTime"), PropertyDescriptor.DataState.Configurable);
 
         // Getters (28)
+        defineTemporalGetter(prototype, "calendar", TemporalZonedDateTimePrototype::calendar);
         defineTemporalGetter(prototype, "calendarId", TemporalZonedDateTimePrototype::calendarId);
         defineTemporalGetter(prototype, "timeZoneId", TemporalZonedDateTimePrototype::timeZoneId);
         defineTemporalGetter(prototype, "era", TemporalZonedDateTimePrototype::era);

@@ -17,9 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 /**
  * Implementation of Temporal.PlainDate constructor and static methods.
@@ -120,13 +118,27 @@ public final class TemporalPlainDateConstructor {
         // Try month or monthCode
         int month;
         JSValue monthValue = fields.get(PropertyKey.fromString("month"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        int parsedMonthCode = Integer.MIN_VALUE;
+        if (!(monthCodeValue instanceof JSUndefined) && monthCodeValue != null) {
+            if (!(monthCodeValue instanceof JSString monthCodeString)) {
+                context.throwTypeError("Temporal error: Date argument must be object or string.");
+                return JSUndefined.INSTANCE;
+            }
+            parsedMonthCode = parseMonthCode(context, monthCodeString.value());
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
         if (monthValue instanceof JSUndefined || monthValue == null) {
-            if (monthCodeValue instanceof JSString monthCodeStr) {
-                month = parseMonthCode(context, monthCodeStr.value());
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
+            if (parsedMonthCode != Integer.MIN_VALUE) {
+                month = parsedMonthCode;
             } else {
                 context.throwTypeError("Temporal error: Date argument must be object or string.");
                 return JSUndefined.INSTANCE;
@@ -134,6 +146,10 @@ public final class TemporalPlainDateConstructor {
         } else {
             month = TemporalUtils.toIntegerThrowOnInfinity(context, monthValue);
             if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (parsedMonthCode != Integer.MIN_VALUE && month != parsedMonthCode) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
         }
@@ -148,9 +164,15 @@ public final class TemporalPlainDateConstructor {
         }
 
         JSValue calendarValue = fields.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String calendarId = "iso8601";
-        if (calendarValue instanceof JSString calStr) {
-            calendarId = calStr.value().toLowerCase(java.util.Locale.ROOT);
+        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
+            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         if ("reject".equals(overflow)) {
@@ -170,16 +192,32 @@ public final class TemporalPlainDateConstructor {
         if (date == null) {
             return JSUndefined.INSTANCE;
         }
-        // Check for calendar annotation
-        String calendar = "iso8601";
-        int calIdx = input.indexOf("[u-ca=");
-        if (calIdx >= 0) {
-            int endIdx = input.indexOf(']', calIdx);
-            if (endIdx > calIdx) {
-                calendar = input.substring(calIdx + 6, endIdx).toLowerCase(java.util.Locale.ROOT);
+        String calendarId = "iso8601";
+        int annotationStart = input.indexOf('[');
+        while (annotationStart >= 0) {
+            int annotationEnd = input.indexOf(']', annotationStart);
+            if (annotationEnd <= annotationStart) {
+                break;
             }
+            String annotationContent = input.substring(annotationStart + 1, annotationEnd);
+            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
+                annotationContent = annotationContent.substring(1);
+            }
+            int equalSignIndex = annotationContent.indexOf('=');
+            if (equalSignIndex > 0) {
+                String annotationKey = annotationContent.substring(0, equalSignIndex);
+                if ("u-ca".equals(annotationKey)) {
+                    String annotationValue = annotationContent.substring(equalSignIndex + 1);
+                    calendarId = TemporalUtils.validateCalendar(context, new JSString(annotationValue));
+                    if (context.hasPendingException()) {
+                        return JSUndefined.INSTANCE;
+                    }
+                    break;
+                }
+            }
+            annotationStart = input.indexOf('[', annotationEnd + 1);
         }
-        return createPlainDate(context, date, calendar);
+        return createPlainDate(context, date, calendarId);
     }
 
     /**
@@ -246,6 +284,15 @@ public final class TemporalPlainDateConstructor {
     public static JSValue toTemporalDate(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainDate plainDate) {
             return createPlainDate(context, plainDate.getIsoDate(), plainDate.getCalendarId());
+        }
+        if (item instanceof JSTemporalPlainDateTime plainDateTime) {
+            return createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
+        }
+        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+            return createPlainDate(context, localDateTime.date(), zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
             return dateFromFields(context, itemObj, options);

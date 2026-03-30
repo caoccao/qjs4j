@@ -29,6 +29,47 @@ public final class TemporalUtils {
     private TemporalUtils() {
     }
 
+    private static boolean canParseCalendarLikeString(JSContext context, String calendarLikeText) {
+        JSValue originalPendingException = context.getPendingException();
+        String calendarLikeBaseText = calendarLikeText;
+        int annotationStart = calendarLikeBaseText.indexOf('[');
+        if (annotationStart >= 0) {
+            calendarLikeBaseText = calendarLikeBaseText.substring(0, annotationStart);
+        }
+
+        if (TemporalParser.parseDateString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
+        if (TemporalParser.parseYearMonthString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
+        if (TemporalParser.parseMonthDayString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
+        if (calendarLikeBaseText.length() == 5
+                && Character.isDigit(calendarLikeBaseText.charAt(0))
+                && Character.isDigit(calendarLikeBaseText.charAt(1))
+                && calendarLikeBaseText.charAt(2) == '-'
+                && Character.isDigit(calendarLikeBaseText.charAt(3))
+                && Character.isDigit(calendarLikeBaseText.charAt(4))
+                && TemporalParser.parseMonthDayString(context, "--" + calendarLikeBaseText) != null
+                && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
+        if (originalPendingException != null) {
+            context.setPendingException(originalPendingException);
+        }
+        return false;
+    }
+
     /**
      * Constrains a date to valid ISO values.
      */
@@ -49,6 +90,29 @@ public final class TemporalUtils {
         microsecond = Math.max(0, Math.min(999, microsecond));
         nanosecond = Math.max(0, Math.min(999, nanosecond));
         return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+    }
+
+    private static String firstCalendarAnnotation(String text) {
+        int annotationStart = text.indexOf('[');
+        while (annotationStart >= 0) {
+            int annotationEnd = text.indexOf(']', annotationStart);
+            if (annotationEnd <= annotationStart) {
+                return null;
+            }
+            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
+            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
+                annotationContent = annotationContent.substring(1);
+            }
+            int equalSignIndex = annotationContent.indexOf('=');
+            if (equalSignIndex > 0) {
+                String annotationKey = annotationContent.substring(0, equalSignIndex);
+                if ("u-ca".equals(annotationKey)) {
+                    return annotationContent.substring(equalSignIndex + 1);
+                }
+            }
+            annotationStart = text.indexOf('[', annotationEnd + 1);
+        }
+        return null;
     }
 
     /**
@@ -205,6 +269,9 @@ public final class TemporalUtils {
      */
     public static int getIntegerField(JSContext context, JSObject obj, String key, int defaultValue) {
         JSValue value = obj.get(PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return Integer.MIN_VALUE;
+        }
         if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
@@ -310,6 +377,52 @@ public final class TemporalUtils {
         return (long) num;
     }
 
+    public static String toTemporalCalendarWithISODefault(JSContext context, JSValue calendarValue) {
+        if (calendarValue instanceof JSUndefined || calendarValue == null) {
+            return "iso8601";
+        }
+        if (calendarValue instanceof JSTemporalPlainDate temporalPlainDate) {
+            return temporalPlainDate.getCalendarId();
+        }
+        if (calendarValue instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
+            return temporalPlainDateTime.getCalendarId();
+        }
+        if (calendarValue instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
+            return temporalPlainMonthDay.getCalendarId();
+        }
+        if (calendarValue instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
+            return temporalPlainYearMonth.getCalendarId();
+        }
+        if (calendarValue instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
+            return temporalZonedDateTime.getCalendarId();
+        }
+        if (!(calendarValue instanceof JSString calendarString)) {
+            context.throwTypeError("Temporal error: Calendar must be string.");
+            return null;
+        }
+
+        String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
+        if ("iso8601".equals(normalizedCalendarId)) {
+            return normalizedCalendarId;
+        }
+
+        String calendarStringValue = calendarString.value();
+        if (!canParseCalendarLikeString(context, calendarStringValue)) {
+            context.throwRangeError("Temporal error: Invalid calendar.");
+            return null;
+        }
+
+        String firstCalendarAnnotation = firstCalendarAnnotation(calendarStringValue);
+        if (firstCalendarAnnotation != null) {
+            String validatedCalendar = validateCalendar(context, new JSString(firstCalendarAnnotation));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return validatedCalendar;
+        }
+        return "iso8601";
+    }
+
     /**
      * Validates that a calendar value is a string, matching V8's error message.
      */
@@ -321,10 +434,11 @@ public final class TemporalUtils {
             context.throwTypeError("Temporal error: Calendar must be string.");
             return null;
         }
-        String calendarId = calendarString.value();
-        // Validate calendar identifier (case-insensitive)
-        String normalized = calendarId.toLowerCase(Locale.ROOT);
-        // For now, accept "iso8601" and other known calendar names
-        return normalized;
+        String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
+        if (!"iso8601".equals(normalizedCalendarId)) {
+            context.throwRangeError("Temporal error: Invalid calendar.");
+            return null;
+        }
+        return normalizedCalendarId;
     }
 }

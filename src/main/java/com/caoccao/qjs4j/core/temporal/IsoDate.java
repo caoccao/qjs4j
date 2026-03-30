@@ -78,7 +78,24 @@ public record IsoDate(int year, int month, int day) {
         if (day < 1 || day > daysInMonth(year, month)) {
             return false;
         }
-        return year >= -271821 && year <= 275760;
+        if (year < -271821 || year > 275760) {
+            return false;
+        }
+        if (year == -271821) {
+            if (month < 4) {
+                return false;
+            }
+            if (month == 4 && day < 19) {
+                return false;
+            }
+        }
+        if (year == 275760) {
+            if (month > 9) {
+                return false;
+            }
+            return month != 9 || day <= 13;
+        }
+        return true;
     }
 
     public IsoDate addDays(int days) {

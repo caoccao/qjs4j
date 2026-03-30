@@ -72,21 +72,49 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
         }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
         TemporalParser parser = new TemporalParser(input);
         IsoDate date = parser.parseDate(context);
         if (date == null) {
             return null;
         }
-        // Consume optional time part
+
+        boolean hasTimePart = false;
         if (parser.pos < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            hasTimePart = true;
             parser.pos++;
-            parser.parseTime(context);
-            if (context.hasPendingException()) {
+            IsoTime parsedTime = parser.parseInstantTime(context);
+            if (parsedTime == null || context.hasPendingException()) {
                 return null;
             }
         }
-        // Consume optional offset and annotations
-        parser.parseOffsetAndAnnotations();
+
+        if (parser.pos < parser.input.length()) {
+            char marker = parser.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            if (marker == '+' || marker == '-') {
+                if (!hasTimePart) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+
+        parser.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
         if (parser.pos != parser.input.length()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -933,7 +961,7 @@ public final class TemporalParser {
         int sign;
         if (c == '+') {
             sign = 1;
-        } else if (c == '-' || c == '\u2212') {
+        } else if (c == '-') {
             sign = -1;
         } else {
             context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
@@ -981,6 +1009,11 @@ public final class TemporalParser {
                 }
                 if (fractionalStart == pos) {
                     context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
+                    return 0;
+                }
+                int fractionalLength = pos - fractionalStart;
+                if (fractionalLength > 9) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
                     return 0;
                 }
             }
