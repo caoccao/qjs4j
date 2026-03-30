@@ -20,9 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
-import java.time.DateTimeException;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
+import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -87,6 +85,33 @@ public final class TemporalDurationConstructor {
         } catch (ArithmeticException | DateTimeException e) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return Long.MIN_VALUE;
+        }
+    }
+
+    private static String canonicalizeTimeZoneIdentifier(String timeZoneText) {
+        if ("utc".equalsIgnoreCase(timeZoneText)
+                || "ut".equalsIgnoreCase(timeZoneText)
+                || "gmt".equalsIgnoreCase(timeZoneText)) {
+            return "UTC";
+        }
+        try {
+            ZoneId zoneId = ZoneId.of(timeZoneText);
+            return zoneId.getId();
+        } catch (DateTimeException ignored) {
+            try {
+                ZoneOffset zoneOffset = ZoneOffset.of(timeZoneText);
+                if (zoneOffset.getTotalSeconds() % 60 != 0) {
+                    return timeZoneText;
+                }
+                return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
+            } catch (DateTimeException ignoredAgain) {
+                for (String availableZoneId : ZoneId.getAvailableZoneIds()) {
+                    if (availableZoneId.equalsIgnoreCase(timeZoneText)) {
+                        return availableZoneId;
+                    }
+                }
+                return timeZoneText;
+            }
         }
     }
 
@@ -1125,7 +1150,7 @@ public final class TemporalDurationConstructor {
         return null;
     }
 
-    private static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
+    static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
         if (timeZoneText.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid time zone.");
             return null;
@@ -1133,7 +1158,7 @@ public final class TemporalDurationConstructor {
         boolean looksLikeIsoDateTime =
                 (timeZoneText.contains("T") || timeZoneText.contains("t")) && timeZoneText.contains("-");
         if (!looksLikeIsoDateTime) {
-            return timeZoneText;
+            return canonicalizeTimeZoneIdentifier(timeZoneText);
         }
 
         if (timeZoneText.contains("[")) {
@@ -1151,7 +1176,7 @@ public final class TemporalDurationConstructor {
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
-            return parsedZonedDateTime.timeZoneId();
+            return canonicalizeTimeZoneIdentifier(parsedZonedDateTime.timeZoneId());
         }
 
         if (!hasOffsetDesignator(timeZoneText)) {
