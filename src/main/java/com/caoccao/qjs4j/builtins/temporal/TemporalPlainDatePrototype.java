@@ -299,7 +299,9 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         long daysDiff = plainDate.getIsoDate().toEpochDay() - other.getIsoDate().toEpochDay();
-        return new JSString(TemporalUtils.formatDurationString(0, 0, 0, daysDiff, 0, 0, 0, 0, 0, 0));
+        return TemporalDurationConstructor.createDuration(
+                context,
+                new TemporalDurationRecord(0, 0, 0, daysDiff, 0, 0, 0, 0, 0, 0));
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -409,7 +411,9 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         long daysDiff = other.getIsoDate().toEpochDay() - plainDate.getIsoDate().toEpochDay();
-        return new JSString(TemporalUtils.formatDurationString(0, 0, 0, daysDiff, 0, 0, 0, 0, 0, 0));
+        return TemporalDurationConstructor.createDuration(
+                context,
+                new TemporalDurationRecord(0, 0, 0, daysDiff, 0, 0, 0, 0, 0, 0));
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
