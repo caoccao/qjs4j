@@ -18,11 +18,14 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
 import java.math.BigInteger;
+import java.time.Instant;
+import java.time.ZoneId;
 
 /**
  * Implementation of Temporal.Now namespace methods.
@@ -33,11 +36,29 @@ public final class TemporalNow {
     private TemporalNow() {
     }
 
-    private static String getTimeZone(JSValue[] args) {
-        if (args.length > 0 && args[0] instanceof JSString tzStr) {
-            return tzStr.value();
+    private static String getTimeZone(JSContext context, JSValue[] args) {
+        if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
+            return ZoneId.systemDefault().getId();
         }
-        return java.time.ZoneId.systemDefault().getId();
+        JSValue timeZoneValue = args[0];
+        if (!(timeZoneValue instanceof JSString timeZoneString)) {
+            context.throwTypeError("Temporal error: Time zone must be string");
+            return null;
+        }
+
+        String normalizedTimeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(
+                context,
+                timeZoneString.value());
+        if (context.hasPendingException() || normalizedTimeZoneId == null) {
+            return null;
+        }
+        try {
+            TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId);
+        } catch (Exception ignored) {
+            context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
+            return null;
+        }
+        return normalizedTimeZoneId;
     }
 
     public static JSValue instant(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -46,28 +67,37 @@ public final class TemporalNow {
     }
 
     public static JSValue plainDateISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(args);
+        String timeZoneId = getTimeZone(context, args);
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime dt = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
-        return TemporalPlainDateConstructor.createPlainDate(context, dt.date(), "iso8601");
+        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        return TemporalPlainDateConstructor.createPlainDate(context, isoDateTime.date(), "iso8601");
     }
 
     public static JSValue plainDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(args);
+        String timeZoneId = getTimeZone(context, args);
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime dt = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, dt, "iso8601");
+        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, isoDateTime, "iso8601");
     }
 
     public static JSValue plainTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(args);
+        String timeZoneId = getTimeZone(context, args);
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime dt = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
-        return TemporalPlainTimeConstructor.createPlainTime(context, dt.time());
+        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        return TemporalPlainTimeConstructor.createPlainTime(context, isoDateTime.time());
     }
 
     private static BigInteger systemEpochNs() {
-        java.time.Instant now = java.time.Instant.now();
+        Instant now = Instant.now();
         return BigInteger.valueOf(now.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(now.getNano()));
     }
@@ -77,7 +107,10 @@ public final class TemporalNow {
     }
 
     public static JSValue zonedDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
-        String timeZoneId = getTimeZone(args);
+        String timeZoneId = getTimeZone(context, args);
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochNs = systemEpochNs();
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs, timeZoneId, "iso8601");
     }
