@@ -291,10 +291,17 @@ public final class TemporalUtils {
      * Returns "constrain" or "reject".
      */
     public static String getOverflowOption(JSContext context, JSValue options) {
-        if (!(options instanceof JSObject optionsObj)) {
+        if (options instanceof JSUndefined || options == null) {
             return "constrain";
         }
+        if (!(options instanceof JSObject optionsObj)) {
+            context.throwTypeError("Temporal error: Option must be object: options.");
+            return null;
+        }
         String overflow = getStringOption(context, optionsObj, "overflow", "constrain");
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (!"constrain".equals(overflow) && !"reject".equals(overflow)) {
             context.throwRangeError("Temporal error: Invalid overflow option: " + overflow);
             return null;
@@ -307,10 +314,17 @@ public final class TemporalUtils {
      */
     public static String getStringOption(JSContext context, JSObject options, String key, String defaultValue) {
         JSValue value = options.get(PropertyKey.fromString(key));
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
-        return JSTypeConversions.toString(context, value).value();
+        JSString stringValue = JSTypeConversions.toString(context, value);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return stringValue.value();
     }
 
     /**

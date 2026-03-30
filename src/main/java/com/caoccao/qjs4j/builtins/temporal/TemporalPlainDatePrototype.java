@@ -17,15 +17,21 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
+
+import java.math.BigInteger;
 
 /**
  * Implementation of Temporal.PlainDate prototype methods.
  */
 public final class TemporalPlainDatePrototype {
+    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
+    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
+    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
+    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
+    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
+    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
+    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
     private static final String TYPE_NAME = "Temporal.PlainDate";
 
     private TemporalPlainDatePrototype() {
@@ -41,94 +47,113 @@ public final class TemporalPlainDatePrototype {
 
     // ========== Getters ==========
 
+    private static IsoDate addDurationToDate(
+            JSContext context,
+            IsoDate date,
+            TemporalDurationRecord durationRecord,
+            String overflow) {
+        BigInteger totalTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        TemporalDurationRecord balancedTimeDuration =
+                TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
+
+        long totalDays;
+        try {
+            long weeksInDays = Math.multiplyExact(durationRecord.weeks(), 7L);
+            totalDays = Math.addExact(durationRecord.days(), weeksInDays);
+            totalDays = Math.addExact(totalDays, balancedTimeDuration.days());
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+
+        long monthIndex = Math.addExact(date.month() - 1L, durationRecord.months());
+        long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long balancedYear = Math.addExact(date.year(), durationRecord.years());
+        balancedYear = Math.addExact(balancedYear, balancedYearDelta);
+
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int balancedYearInt = (int) balancedYear;
+        int maxDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
+        int regulatedDay = date.day();
+        if ("reject".equals(overflow)) {
+            if (regulatedDay > maxDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            regulatedDay = Math.min(regulatedDay, maxDay);
+        }
+
+        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
+        long intermediateEpochDay = intermediateDate.toEpochDay();
+        long resultEpochDay;
+        try {
+            resultEpochDay = Math.addExact(intermediateEpochDay, totalDays);
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        IsoDate result = IsoDate.fromEpochDay(resultEpochDay);
+        if (!IsoDate.isValidIsoDate(result.year(), result.month(), result.day())) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return result;
+    }
+
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDate plainDate, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
-        JSValue durationArg = args[0];
-        long years = 0, months = 0, weeks = 0, days = 0;
 
-        if (durationArg instanceof JSString durationStr) {
-            TemporalParser.DurationFields df = TemporalParser.parseDurationString(context, durationStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            years = df.years();
-            months = df.months();
-            weeks = df.weeks();
-            days = df.days();
-        } else if (durationArg instanceof JSObject durationObj) {
-            years = TemporalUtils.getIntegerField(context, durationObj, "years", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            months = TemporalUtils.getIntegerField(context, durationObj, "months", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            weeks = TemporalUtils.getIntegerField(context, durationObj, "weeks", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            days = TemporalUtils.getIntegerField(context, durationObj, "days", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        years *= sign;
-        months *= sign;
-        weeks *= sign;
-        days *= sign;
-
-        IsoDate result = addToIsoDate(plainDate.getIsoDate(), (int) years, (int) months, (int) weeks, (int) days);
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (sign < 0) {
+            durationRecord = durationRecord.negated();
+        }
 
         String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(result.year(), result.month(), result.day())) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            result = TemporalUtils.constrainIsoDate(result.year(), result.month(), result.day());
+        IsoDate result = addDurationToDate(context, plainDate.getIsoDate(), durationRecord, overflow);
+        if (context.hasPendingException() || result == null) {
+            return JSUndefined.INSTANCE;
         }
-
         return TemporalPlainDateConstructor.createPlainDate(context, result, plainDate.getCalendarId());
     }
 
     static IsoDate addToIsoDate(IsoDate date, int years, int months, int weeks, int days) {
-        // Add years and months first
-        int newYear = date.year() + years;
-        int newMonth = date.month() + months;
-        // Normalize month
-        if (newMonth > 12) {
-            newYear += (newMonth - 1) / 12;
-            newMonth = ((newMonth - 1) % 12) + 1;
-        } else if (newMonth < 1) {
-            newYear += (newMonth - 12) / 12;
-            newMonth = 12 + ((newMonth) % 12);
-            if (newMonth == 12 && months < 0) {
-                // already normalized
-            }
-        }
-        // Constrain day to valid range for the new month
-        int maxDay = IsoDate.daysInMonth(newYear, newMonth);
-        int newDay = Math.min(date.day(), maxDay);
-        // Add weeks and days
-        IsoDate intermediate = new IsoDate(newYear, newMonth, newDay);
-        long totalDays = (long) weeks * 7 + days;
-        if (totalDays != 0) {
-            return intermediate.addDays((int) totalDays);
-        }
-        return intermediate;
+        long monthIndex = (long) date.month() - 1L + months;
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        int normalizedYear = (int) (date.year() + years + yearDelta);
+        int maxDay = IsoDate.daysInMonth(normalizedYear, normalizedMonth);
+        int normalizedDay = Math.min(date.day(), maxDay);
+        IsoDate intermediate = new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+        long totalDays = (long) weeks * 7L + days;
+        return intermediate.addDays((int) totalDays);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -473,8 +473,17 @@ public final class TemporalParser {
         if (context.hasPendingException()) {
             return null;
         }
-        if (hasSep && pos < input.length() && input.charAt(pos) == '-') {
+        if (hasSep) {
+            if (pos >= input.length() || input.charAt(pos) != '-') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
             pos++;
+        } else {
+            if (pos < input.length() && input.charAt(pos) == '-') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
         }
         int day = parseTwoDigits(context, "day");
         if (context.hasPendingException()) {
