@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.internal.os.OperatingSystem
 
 
@@ -86,6 +87,8 @@ plugins {
     java
     id("application")
     `maven-publish`
+    signing
+    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
 }
 
 group = Config.GROUP_ID
@@ -98,6 +101,8 @@ repositories {
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
+    withJavadocJar()
+    withSourcesJar()
 }
 
 application {
@@ -200,6 +205,12 @@ tasks.register<JavaExec>("test262Language") {
     jvmArgs = listOf("-Xmx2g")
 }
 
+tasks.register("sourceJar") {
+    group = "build"
+    description = "Alias task for sourcesJar."
+    dependsOn(tasks.named("sourcesJar"))
+}
+
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
@@ -207,6 +218,8 @@ tasks {
     }
     withType<Javadoc> {
         options.encoding = "UTF-8"
+        isFailOnError = false
+        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
     }
     withType<Test> {
         systemProperty("file.encoding", "UTF-8")
@@ -257,6 +270,36 @@ publishing {
                     )
                 )
             }
+        }
+    }
+}
+
+signing {
+    val signingKey = providers.gradleProperty("signingKey")
+        .orElse(providers.environmentVariable("MAVEN_GPG_PRIVATE_KEY"))
+        .orNull
+    val signingPassword = providers.gradleProperty("signingPassword")
+        .orElse(providers.environmentVariable("MAVEN_GPG_PASSPHRASE"))
+        .orNull
+    if (!signingKey.isNullOrBlank()) {
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign(publishing.publications)
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            username.set(
+                providers.gradleProperty("sonatypeUsername")
+                    .orElse(providers.environmentVariable("SONATYPE_USERNAME"))
+            )
+            password.set(
+                providers.gradleProperty("sonatypePassword")
+                    .orElse(providers.environmentVariable("SONATYPE_PASSWORD"))
+            )
         }
     }
 }

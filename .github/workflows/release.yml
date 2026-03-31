@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run test, javadoc, sourceJar
+        run: ./gradlew --no-daemon test javadoc sourceJar
+
+      - name: Publish to Maven Central
+        env:
+          SONATYPE_USERNAME: ${{ secrets.SONATYPE_USERNAME }}
+          SONATYPE_PASSWORD: ${{ secrets.SONATYPE_PASSWORD }}
+          MAVEN_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: ./gradlew --no-daemon publishToSonatype closeAndReleaseSonatypeStagingRepository
+
+      - name: Bump version by 0.0.1
+        run: deno run --allow-read --allow-write ./scripts/ts/update-version.ts
+
+      - name: Commit and push version bump
+        run: |
+          NEW_VERSION=$(grep -E 'const val QJS4J = "' build.gradle.kts | sed -E 's/.*"([0-9]+\.[0-9]+\.[0-9]+)".*/\1/')
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No version change to commit."
+            exit 0
+          fi
+          git add build.gradle.kts
+          git commit -m "chore(release): bump version to ${NEW_VERSION}"
+          git push
