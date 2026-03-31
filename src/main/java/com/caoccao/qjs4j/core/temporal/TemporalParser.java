@@ -63,6 +63,29 @@ public final class TemporalParser {
         };
     }
 
+    private static String firstCalendarAnnotation(String text) {
+        int annotationStart = text.indexOf('[');
+        while (annotationStart >= 0) {
+            int annotationEnd = text.indexOf(']', annotationStart);
+            if (annotationEnd <= annotationStart) {
+                return null;
+            }
+            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
+            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
+                annotationContent = annotationContent.substring(1);
+            }
+            int equalSignIndex = annotationContent.indexOf('=');
+            if (equalSignIndex > 0) {
+                String annotationKey = annotationContent.substring(0, equalSignIndex);
+                if ("u-ca".equals(annotationKey)) {
+                    return annotationContent.substring(equalSignIndex + 1);
+                }
+            }
+            annotationStart = text.indexOf('[', annotationEnd + 1);
+        }
+        return null;
+    }
+
     private static boolean isAmbiguousFourDigitTime(String value) {
         if (value.length() != 4
                 || !Character.isDigit(value.charAt(0))
@@ -191,32 +214,59 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
         }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
         TemporalParser parser = new TemporalParser(input);
         IsoDate date = parser.parseDate(context);
         if (date == null) {
             return null;
         }
         IsoTime time = IsoTime.MIDNIGHT;
+        boolean hasTimePart = false;
         if (parser.pos < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            hasTimePart = true;
             parser.pos++;
-            time = parser.parseTime(context);
+            time = parser.parseInstantTime(context);
             if (time == null) {
                 return null;
             }
         }
-        // Parse optional calendar annotation
-        String calendar = "iso8601";
-        parser.parseOffsetAndAnnotations();
+
+        if (parser.pos < parser.input.length()) {
+            char marker = parser.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            if (marker == '+' || marker == '-') {
+                if (!hasTimePart) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+
+        parser.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (parser.pos != parser.input.length()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        // Check for calendar annotation — simple extraction
-        int calIdx = input.indexOf("[u-ca=");
-        if (calIdx >= 0) {
-            int endIdx = input.indexOf(']', calIdx);
-            if (endIdx > calIdx) {
-                calendar = input.substring(calIdx + 6, endIdx).toLowerCase(java.util.Locale.ROOT);
+
+        String calendar = "iso8601";
+        String calendarAnnotation = firstCalendarAnnotation(input);
+        if (calendarAnnotation != null) {
+            calendar = TemporalUtils.validateCalendar(context, new com.caoccao.qjs4j.core.JSString(calendarAnnotation));
+            if (context.hasPendingException()) {
+                return null;
             }
         }
         return new ParsedDateTime(date, time, calendar);
