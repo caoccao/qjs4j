@@ -62,8 +62,6 @@ public final class TemporalPlainDatePrototype {
         return addOrSubtract(context, plainDate, args, 1);
     }
 
-    // ========== Getters ==========
-
     private static IsoDate addDurationToDate(
             JSContext context,
             IsoDate date,
@@ -398,8 +396,6 @@ public final class TemporalPlainDatePrototype {
         IsoDate d = plainDate.getIsoDate();
         return JSNumber.of(IsoDate.daysInMonth(d.year(), d.month()));
     }
-
-    // ========== Methods ==========
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "daysInWeek");

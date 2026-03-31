@@ -35,8 +35,6 @@ public final class TemporalZonedDateTimePrototype {
     private TemporalZonedDateTimePrototype() {
     }
 
-    // ========== Getters ==========
-
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "add");
         if (zdt == null) return JSUndefined.INSTANCE;
@@ -368,8 +366,6 @@ public final class TemporalZonedDateTimePrototype {
         return JSNumber.of(dt.date().month());
     }
 
-    // ========== Methods ==========
-
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "monthCode");
         if (zdt == null) return JSUndefined.INSTANCE;
@@ -574,8 +570,6 @@ public final class TemporalZonedDateTimePrototype {
         result = TemporalUtils.maybeAppendCalendar(result, zdt.getCalendarId(), calendarNameOption);
         return new JSString(result);
     }
-
-    // ========== Internal helpers ==========
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "until");

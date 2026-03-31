@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalPlainDateTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.PlainDate(2024, 1, 15).add({days: 10}).toString()");
@@ -57,8 +55,6 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     public void testCompareNoArgs() {
         assertErrorWithJavet("Temporal.PlainDate.compare()");
     }
-
-    // ========== Static method tests ==========
 
     @Test
     public void testConstructorBasic() {
@@ -109,8 +105,6 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     public void testDay() {
         assertIntegerWithJavet("new Temporal.PlainDate(2024, 3, 15).day");
     }
-
-    // ========== Getter tests ==========
 
     @Test
     public void testDayOfWeek() {
@@ -191,8 +185,6 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     public void testMonth() {
         assertIntegerWithJavet("new Temporal.PlainDate(2024, 3, 15).month");
     }
-
-    // ========== Prototype method tests ==========
 
     @Test
     public void testMonthCode() {
@@ -283,8 +275,6 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     public void testWithCalendar() {
         assertStringWithJavet("new Temporal.PlainDate(2024, 1, 15).withCalendar('iso8601').toString()");
     }
-
-    // ========== Error path tests ==========
 
     @Test
     public void testWithNoPartial() {

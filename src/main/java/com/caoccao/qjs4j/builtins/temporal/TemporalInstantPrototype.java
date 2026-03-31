@@ -50,8 +50,6 @@ public final class TemporalInstantPrototype {
         return addOrSubtract(context, instant, args, 1);
     }
 
-    // ========== Getters ==========
-
     private static JSValue addOrSubtract(JSContext context, JSTemporalInstant instant, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
@@ -96,8 +94,6 @@ public final class TemporalInstantPrototype {
         }
         return instant;
     }
-
-    // ========== Methods ==========
 
     private static int differenceUnitRank(String unit) {
         return switch (unit) {
@@ -907,8 +903,6 @@ public final class TemporalInstantPrototype {
         if (instant == null) return JSUndefined.INSTANCE;
         return addOrSubtract(context, instant, args, -1);
     }
-
-    // ========== Internal helpers ==========
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "toJSON");

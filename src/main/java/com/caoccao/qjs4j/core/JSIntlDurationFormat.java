@@ -286,11 +286,6 @@ public final class JSIntlDurationFormat extends JSObject {
         return result;
     }
 
-    // =========================================================================
-    // Unit formatting helpers — produce the same output as our Intl.NumberFormat
-    // with style "unit" so that the test262 harness matches.
-    // =========================================================================
-
     /**
      * Format a plain number (numeric/2-digit style) matching Intl.NumberFormat default output.
      */
@@ -455,10 +450,6 @@ public final class JSIntlDurationFormat extends JSObject {
             return SUBSECOND_UNIT_STYLES;
         }
     }
-
-    // =========================================================================
-    // formatToParts helpers — produce part arrays matching Intl.NumberFormat
-    // =========================================================================
 
     /**
      * IsValidDurationRecord — checks sign consistency and range limits.
@@ -733,10 +724,6 @@ public final class JSIntlDurationFormat extends JSObject {
         return locale;
     }
 
-    // =========================================================================
-    // Duration formatting — implements PartitionDurationFormatPattern
-    // =========================================================================
-
     public String getNumberingSystem() {
         return numberingSystem;
     }
@@ -748,10 +735,6 @@ public final class JSIntlDurationFormat extends JSObject {
     public String getUnitDisplay(int index) {
         return unitDisplays[index];
     }
-
-    // =========================================================================
-    // ListFormat formatToParts helper
-    // =========================================================================
 
     public String getUnitStyle(int index) {
         return unitStyles[index];
@@ -926,10 +909,6 @@ public final class JSIntlDurationFormat extends JSObject {
 
         return flattened;
     }
-
-    // =========================================================================
-    // ToDurationRecord validation
-    // =========================================================================
 
     /**
      * Represents a single part in formatToParts output.

@@ -40,8 +40,6 @@ public final class TemporalPlainDateTimePrototype {
     private TemporalPlainDateTimePrototype() {
     }
 
-    // ========== Getters ==========
-
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "add");
         if (pdt == null) return JSUndefined.INSTANCE;
@@ -807,8 +805,6 @@ public final class TemporalPlainDateTimePrototype {
         return leftUnit;
     }
 
-    // ========== Methods ==========
-
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "microsecond");
         if (pdt == null) return JSUndefined.INSTANCE;
@@ -1246,8 +1242,6 @@ public final class TemporalPlainDateTimePrototype {
         }
         return TemporalDurationConstructor.createDuration(context, resultRecord);
     }
-
-    // ========== Internal helpers ==========
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         context.throwTypeError("Do not use Temporal.PlainDateTime.prototype.valueOf; use Temporal.PlainDateTime.prototype.compare for comparison.");

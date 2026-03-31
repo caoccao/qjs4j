@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalZonedDateTimeTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.ZonedDateTime(0n, 'UTC').add({hours: 1}).toString()");

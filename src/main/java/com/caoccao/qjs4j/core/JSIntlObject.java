@@ -676,10 +676,6 @@ public final class JSIntlObject {
         }
     }
 
-    // =========================================================================
-    // Intl.NumberFormat.prototype.formatToParts
-    // =========================================================================
-
     /**
      * Apply CLDR canonicalization to a tag that has already been through Java's Locale processing.
      */
@@ -865,10 +861,6 @@ public final class JSIntlObject {
         return result.toString();
     }
 
-    // =========================================================================
-    // Intl.ListFormat.prototype.formatToParts
-    // =========================================================================
-
     /**
      * Build resolved locale tag according to ECMA-402 ResolveLocale rules.
      * Unicode extension keys are included only if:
@@ -950,10 +942,6 @@ public final class JSIntlObject {
         }
         return baseLocale;
     }
-
-    // =========================================================================
-    // Intl.DurationFormat
-    // =========================================================================
 
     /**
      * Build resolved locale tag including applied unicode extensions.

@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalPlainDateTimeTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 30).add({hours: 5}).toString()");
@@ -63,8 +61,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
         assertErrorWithJavet("new Temporal.PlainDateTime(2024, 1, 1, 25, 0)");
     }
 
-    // ========== Static method tests ==========
-
     @Test
     public void testConstructorLength() {
         assertIntegerWithJavet("Temporal.PlainDateTime.length");
@@ -84,8 +80,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.PlainDateTime(2024, 1, 15)");
     }
-
-    // ========== Getter tests ==========
 
     @Test
     public void testDay() {
@@ -196,8 +190,6 @@ public class TemporalPlainDateTimeTest extends BaseJavetTest {
     public void testRound() {
         assertStringWithJavet("new Temporal.PlainDateTime(2024, 1, 15, 12, 34, 56).round('minute').toString()");
     }
-
-    // ========== Method tests ==========
 
     @Test
     public void testSecond() {

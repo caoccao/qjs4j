@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalPlainMonthDayTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testCalendarId() {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).calendarId");

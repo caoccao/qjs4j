@@ -38,8 +38,6 @@ public final class TemporalPlainTimePrototype {
         return addOrSubtract(context, plainTime, args, 1);
     }
 
-    // ========== Getters ==========
-
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainTime plainTime, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
@@ -162,8 +160,6 @@ public final class TemporalPlainTimePrototype {
         }
         return JSNumber.of(plainTime.getIsoTime().microsecond());
     }
-
-    // ========== Methods ==========
 
     public static JSValue millisecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainTime plainTime = checkReceiver(context, thisArg, "millisecond");

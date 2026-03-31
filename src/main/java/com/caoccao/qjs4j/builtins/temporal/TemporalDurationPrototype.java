@@ -51,8 +51,6 @@ public final class TemporalDurationPrototype {
     private TemporalDurationPrototype() {
     }
 
-    // ========== Getters ==========
-
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration d = checkReceiver(context, thisArg, "abs");
         if (d == null) return JSUndefined.INSTANCE;
@@ -474,8 +472,6 @@ public final class TemporalDurationPrototype {
         }
         return normalizedUnitText;
     }
-
-    // ========== Methods ==========
 
     private static JSTemporalDuration checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalDuration duration)) {
@@ -1610,8 +1606,6 @@ public final class TemporalDurationPrototype {
                 roundOptions.largestUnit(),
                 roundOptions.smallestUnit());
     }
-
-    // ========== Internal helpers ==========
 
     private static RoundComputationResult roundWithoutRelativeTo(
             JSContext context,

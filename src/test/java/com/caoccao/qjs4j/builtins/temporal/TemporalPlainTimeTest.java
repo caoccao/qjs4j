@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalPlainTimeTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.PlainTime(12, 30).add({hours: 3}).toString()");
@@ -53,8 +51,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.PlainTime(12, 30, 45, 123, 456, 789).toString()");
     }
 
-    // ========== Static method tests ==========
-
     @Test
     public void testConstructorInfinity() {
         assertErrorWithJavet("new Temporal.PlainTime(Infinity)");
@@ -74,8 +70,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     public void testConstructorWithoutNew() {
         assertErrorWithJavet("Temporal.PlainTime(12, 30)");
     }
-
-    // ========== Getter tests ==========
 
     @Test
     public void testEquals() {
@@ -106,8 +100,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     public void testMillisecond() {
         assertIntegerWithJavet("new Temporal.PlainTime(12, 30, 45, 123).millisecond");
     }
-
-    // ========== Prototype method tests ==========
 
     @Test
     public void testMinute() {
@@ -168,8 +160,6 @@ public class TemporalPlainTimeTest extends BaseJavetTest {
     public void testValueOf() {
         assertErrorWithJavet("new Temporal.PlainTime(12, 30).valueOf()");
     }
-
-    // ========== Namespace tests ==========
 
     @Test
     public void testWith() {

@@ -32,8 +32,6 @@ public final class TemporalPlainYearMonthPrototype {
     private TemporalPlainYearMonthPrototype() {
     }
 
-    // ========== Getters ==========
-
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "add");
         if (ym == null) return JSUndefined.INSTANCE;
@@ -145,8 +143,6 @@ public final class TemporalPlainYearMonthPrototype {
         if (ym == null) return JSUndefined.INSTANCE;
         return IsoDate.isLeapYear(ym.getIsoDate().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
-
-    // ========== Methods ==========
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "month");
@@ -272,8 +268,6 @@ public final class TemporalPlainYearMonthPrototype {
         context.throwTypeError("Do not use Temporal.PlainYearMonth.prototype.valueOf; use Temporal.PlainYearMonth.prototype.compare for comparison.");
         return JSUndefined.INSTANCE;
     }
-
-    // ========== Internal helpers ==========
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "with");

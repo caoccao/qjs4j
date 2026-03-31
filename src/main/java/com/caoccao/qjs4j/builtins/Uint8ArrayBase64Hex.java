@@ -404,8 +404,6 @@ public final class Uint8ArrayBase64Hex {
         return -1;
     }
 
-    // ==================== Static Methods ====================
-
     private static boolean isAsciiWhitespace(char ch) {
         return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\f' || ch == '\r';
     }
@@ -462,8 +460,6 @@ public final class Uint8ArrayBase64Hex {
         resultObj.set(PropertyKey.fromString("written"), JSNumber.of(result.bytes.length));
         return resultObj;
     }
-
-    // ==================== Prototype Methods ====================
 
     /**
      * Uint8Array.prototype.setFromHex(string)

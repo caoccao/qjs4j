@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalInstantTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.Instant(0n).add({hours: 1}).toString()");

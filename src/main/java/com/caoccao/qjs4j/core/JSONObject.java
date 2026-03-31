@@ -38,8 +38,6 @@ public final class JSONObject {
         this.context = Objects.requireNonNull(context, "context");
     }
 
-    // ========== Safe Function Call Helpers ==========
-
     /**
      * Build a V8-compatible circular reference error message.
      * Format: "Converting circular structure to JSON\n    --> starting at object with constructor 'X'\n    --- property 'y' closes the circle"
@@ -152,8 +150,6 @@ public final class JSONObject {
         }
         return keys;
     }
-
-    // ========== JSON.parse ==========
 
     /**
      * Safely get a property from an object, catching JSVirtualMachineException.
@@ -576,8 +572,6 @@ public final class JSONObject {
         return false;
     }
 
-    // ========== JSON Parsing Helper Methods ==========
-
     /**
      * JSON.parse(text[, reviver])
      * ES2024 25.5.1
@@ -966,8 +960,6 @@ public final class JSONObject {
         };
     }
 
-    // ========== JSON.stringify ==========
-
     /**
      * JSON.rawJSON(text)
      * ES2024 proposal: json-parse-with-source
@@ -1040,8 +1032,6 @@ public final class JSONObject {
         // Step 8: Return obj
         return obj;
     }
-
-    // ========== JSON.rawJSON and JSON.isRawJSON ==========
 
     private int skipWhitespace(String text, int start) {
         int i = start;
@@ -1363,8 +1353,6 @@ public final class JSONObject {
         return true;
     }
 
-    // ========== Stringify Helper Methods ==========
-
     /**
      * Escape a string for JSON output.
      * Based on QuickJS JS_ToQuotedString.
@@ -1418,8 +1406,6 @@ public final class JSONObject {
     private JSValue throwRawJSONUnexpectedToken(char token, String text) {
         return context.throwSyntaxError("Unexpected token '" + token + "', \"" + text + "\" is not valid JSON");
     }
-
-    // ========== Inner Classes ==========
 
     /**
      * Entry in the circular reference detection stack, tracking the property key

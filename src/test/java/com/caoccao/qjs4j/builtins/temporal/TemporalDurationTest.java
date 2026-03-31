@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalDurationTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAbs() {
         assertStringWithJavet("new Temporal.Duration(-1, -2, -3).abs().toString()");
@@ -63,8 +61,6 @@ public class TemporalDurationTest extends BaseJavetTest {
         assertStringWithJavet("new Temporal.Duration(1, 2, 3, 4, 5, 6, 7).toString()");
     }
 
-    // ========== Static method tests ==========
-
     @Test
     public void testConstructorFractional() {
         assertErrorWithJavet("new Temporal.Duration(1.5)");
@@ -94,8 +90,6 @@ public class TemporalDurationTest extends BaseJavetTest {
     public void testConstructorWithSubclass() {
         assertBooleanWithJavet("(() => { class CustomDuration extends Temporal.Duration {} const value = new CustomDuration(1, 2, 3); return value instanceof CustomDuration && value instanceof Temporal.Duration; })()");
     }
-
-    // ========== Getter tests ==========
 
     @Test
     public void testConstructorWithoutNew() {
@@ -171,8 +165,6 @@ public class TemporalDurationTest extends BaseJavetTest {
     public void testRoundToMissing() {
         assertErrorWithJavet("new Temporal.Duration(0, 0, 0, 0, 1).round()");
     }
-
-    // ========== Method tests ==========
 
     @Test
     public void testSeconds() {

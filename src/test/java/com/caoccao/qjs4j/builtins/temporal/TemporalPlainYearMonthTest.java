@@ -21,8 +21,6 @@ import org.junit.jupiter.api.Test;
 
 public class TemporalPlainYearMonthTest extends BaseJavetTest {
 
-    // ========== Constructor tests ==========
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.PlainYearMonth(2024, 3).add({months: 3}).toString()");

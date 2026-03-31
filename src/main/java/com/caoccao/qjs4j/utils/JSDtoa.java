@@ -170,8 +170,6 @@ public final class JSDtoa {
         return (int) rem;
     }
 
-    // ============== Helper functions ==============
-
     private static int mpFloorLog2(int[] limbs, int len) {
         for (int i = len - 1; i >= 0; i--) {
             if (limbs[i] != 0) {
@@ -232,8 +230,6 @@ public final class JSDtoa {
 
         return len;
     }
-
-    // ============== Multi-precision 32-bit limb operations ==============
 
     private static long mpShiftRightRound(int[] limbs, int len, int shift) {
         if (shift <= 0) {
