@@ -1523,26 +1523,25 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "withPlainTime");
-        if (pdt == null) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
 
         IsoTime time = IsoTime.MIDNIGHT;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
             JSValue timeArg = args[0];
-            if (timeArg instanceof JSTemporalPlainTime pt) {
-                time = pt.getIsoTime();
-            } else if (timeArg instanceof JSString timeStr) {
-                time = TemporalParser.parseTimeString(context, timeStr.value());
-                if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            } else if (timeArg instanceof JSObject timeObj) {
-                int h = TemporalUtils.getIntegerField(context, timeObj, "hour", 0);
-                int m = TemporalUtils.getIntegerField(context, timeObj, "minute", 0);
-                int s = TemporalUtils.getIntegerField(context, timeObj, "second", 0);
-                int ms = TemporalUtils.getIntegerField(context, timeObj, "millisecond", 0);
-                int us = TemporalUtils.getIntegerField(context, timeObj, "microsecond", 0);
-                int ns = TemporalUtils.getIntegerField(context, timeObj, "nanosecond", 0);
-                if (context.hasPendingException()) return JSUndefined.INSTANCE;
-                time = new IsoTime(h, m, s, ms, us, ns);
+            JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(
+                    context,
+                    timeArg,
+                    JSUndefined.INSTANCE);
+            if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
+                return JSUndefined.INSTANCE;
             }
+            time = plainTime.getIsoTime();
+        }
+        if (!isValidPlainDateTimeRange(pdt.getIsoDateTime().date(), time)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
         }
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
                 new IsoDateTime(pdt.getIsoDateTime().date(), time), pdt.getCalendarId());

@@ -341,54 +341,92 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing month value.");
             return null;
         }
-        if (input.length() == 5
+        int day;
+        int month;
+        int prefixLength = -1;
+
+        if (input.startsWith("--")
+                && input.length() >= 6
+                && Character.isDigit(input.charAt(2))
+                && Character.isDigit(input.charAt(3))) {
+            month = parseFixedTwoDigits(input, 2);
+            if (input.length() >= 7 && input.charAt(4) == '-') {
+                if (input.length() >= 7
+                        && Character.isDigit(input.charAt(5))
+                        && Character.isDigit(input.charAt(6))) {
+                    day = parseFixedTwoDigits(input, 5);
+                    prefixLength = 7;
+                } else {
+                    day = -1;
+                }
+            } else if (input.length() >= 6
+                    && Character.isDigit(input.charAt(4))
+                    && Character.isDigit(input.charAt(5))) {
+                day = parseFixedTwoDigits(input, 4);
+                prefixLength = 6;
+            } else {
+                day = -1;
+            }
+            if (prefixLength > 0) {
+                String remainder = input.substring(prefixLength);
+                String syntheticDateString = "1972-"
+                        + (month < 10 ? "0" : "") + month
+                        + "-"
+                        + (day < 10 ? "0" : "") + day
+                        + remainder;
+                IsoDate parsedDate = parseDateString(context, syntheticDateString);
+                if (parsedDate == null) {
+                    return null;
+                }
+                return new IsoDate(1972, parsedDate.month(), parsedDate.day());
+            }
+        } else if (input.length() >= 5
                 && Character.isDigit(input.charAt(0))
                 && Character.isDigit(input.charAt(1))
                 && input.charAt(2) == '-'
                 && Character.isDigit(input.charAt(3))
                 && Character.isDigit(input.charAt(4))) {
-            int month = parseFixedTwoDigits(input, 0);
-            int day = parseFixedTwoDigits(input, 3);
-            if (!IsoDate.isValidIsoDate(1972, month, day)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
+            month = parseFixedTwoDigits(input, 0);
+            day = parseFixedTwoDigits(input, 3);
+            prefixLength = 5;
+            if (prefixLength > 0) {
+                String remainder = input.substring(prefixLength);
+                String syntheticDateString = "1972-"
+                        + (month < 10 ? "0" : "") + month
+                        + "-"
+                        + (day < 10 ? "0" : "") + day
+                        + remainder;
+                IsoDate parsedDate = parseDateString(context, syntheticDateString);
+                if (parsedDate == null) {
+                    return null;
+                }
+                return new IsoDate(1972, parsedDate.month(), parsedDate.day());
             }
-            return new IsoDate(1972, month, day);
-        }
-        if (input.length() == 4
+        } else if (input.length() >= 4
                 && Character.isDigit(input.charAt(0))
                 && Character.isDigit(input.charAt(1))
                 && Character.isDigit(input.charAt(2))
-                && Character.isDigit(input.charAt(3))) {
-            int month = parseFixedTwoDigits(input, 0);
-            int day = parseFixedTwoDigits(input, 2);
-            if (!IsoDate.isValidIsoDate(1972, month, day)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
+                && Character.isDigit(input.charAt(3))
+                && (input.length() == 4 || input.charAt(4) == '[')) {
+            month = parseFixedTwoDigits(input, 0);
+            day = parseFixedTwoDigits(input, 2);
+            String remainder = input.substring(4);
+            String syntheticDateString = "1972-"
+                    + (month < 10 ? "0" : "") + month
+                    + "-"
+                    + (day < 10 ? "0" : "") + day
+                    + remainder;
+            IsoDate parsedDate = parseDateString(context, syntheticDateString);
+            if (parsedDate == null) {
                 return null;
             }
-            return new IsoDate(1972, month, day);
+            return new IsoDate(1972, parsedDate.month(), parsedDate.day());
         }
-        // Try "--MM-DD" format first
-        if (input.startsWith("--")) {
-            TemporalParser parser = new TemporalParser(input);
-            parser.pos = 2; // skip "--"
-            int month = parser.parseTwoDigits(context, "month");
-            if (context.hasPendingException()) return null;
-            if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
-                parser.pos++;
-            }
-            int day = parser.parseTwoDigits(context, "day");
-            if (context.hasPendingException()) return null;
-            // Reference year for MonthDay is 1972 (a leap year, so Feb 29 is valid)
-            if (!IsoDate.isValidIsoDate(1972, month, day)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            return new IsoDate(1972, month, day);
-        }
-        // Try full date format (YYYY-MM-DD)
+
         IsoDate date = parseDateString(context, input);
-        if (date == null) return null;
+        if (date == null) {
+            return null;
+        }
         return new IsoDate(1972, date.month(), date.day());
     }
 
