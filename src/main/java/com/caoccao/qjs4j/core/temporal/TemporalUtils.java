@@ -42,12 +42,22 @@ public final class TemporalUtils {
         }
         context.clearPendingException();
 
+        if (TemporalParser.parseDateTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
         if (TemporalParser.parseYearMonthString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
 
         if (TemporalParser.parseMonthDayString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+            return true;
+        }
+        context.clearPendingException();
+
+        if (TemporalParser.parseTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();

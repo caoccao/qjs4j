@@ -176,8 +176,11 @@ public final class TemporalPlainDateTimeConstructor {
 
         JSValue calendarValue = fields.get(PropertyKey.fromString("calendar"));
         String calendarId = "iso8601";
-        if (calendarValue instanceof JSString calStr) {
-            calendarId = calStr.value().toLowerCase(java.util.Locale.ROOT);
+        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
+            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         if ("reject".equals(overflow)) {
@@ -223,6 +226,18 @@ public final class TemporalPlainDateTimeConstructor {
     public static JSValue toTemporalDateTime(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainDateTime pdt) {
             return createPlainDateTime(context, pdt.getIsoDateTime(), pdt.getCalendarId());
+        }
+        if (item instanceof JSTemporalPlainDate plainDate) {
+            return createPlainDateTime(
+                    context,
+                    new IsoDateTime(plainDate.getIsoDate(), IsoTime.MIDNIGHT),
+                    plainDate.getCalendarId());
+        }
+        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+            return createPlainDateTime(context, localDateTime, zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
             return dateTimeFromFields(context, itemObj, options);
