@@ -425,8 +425,6 @@ public final class TemporalDurationPrototype {
         return canonicalizedUnit;
     }
 
-    // ========== Methods ==========
-
     private static String canonicalizeTemporalDurationUnit(JSContext context, String unitText, String optionName) {
         String normalizedUnitText;
         switch (unitText) {
@@ -477,6 +475,8 @@ public final class TemporalDurationPrototype {
         return normalizedUnitText;
     }
 
+    // ========== Methods ==========
+
     private static JSTemporalDuration checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalDuration duration)) {
             context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
@@ -497,6 +497,58 @@ public final class TemporalDurationPrototype {
         JSTemporalDuration d = checkReceiver(context, thisArg, "days");
         if (d == null) return JSUndefined.INSTANCE;
         return JSNumber.of(d.getRecord().days());
+    }
+
+    static TemporalDurationRecord differencePlainDateTime(
+            JSContext context,
+            IsoDateTime startIsoDateTime,
+            IsoDateTime endIsoDateTime,
+            String largestUnit,
+            String smallestUnit,
+            long roundingIncrement,
+            String roundingMode) {
+        LocalDateTime startDateTime = toLocalDateTime(startIsoDateTime.date(), startIsoDateTime.time());
+        LocalDateTime endDateTime = toLocalDateTime(endIsoDateTime.date(), endIsoDateTime.time());
+
+        TemporalDurationRecord unroundedDuration = buildBalancedDurationFromDateTimes(
+                context,
+                startDateTime,
+                endDateTime,
+                largestUnit,
+                "nanosecond");
+        if (context.hasPendingException() || unroundedDuration == null) {
+            return null;
+        }
+
+        boolean requiresRounding = roundingIncrement != 1L || !"nanosecond".equals(smallestUnit);
+        if (!requiresRounding) {
+            return unroundedDuration;
+        }
+
+        RelativeToOption relativeToOption = new RelativeToOption(startDateTime, false, null, null);
+        RoundOptions roundOptions = new RoundOptions(
+                smallestUnit,
+                largestUnit,
+                roundingIncrement,
+                roundingMode,
+                relativeToOption);
+        LocalDateTime roundedEndDateTime = roundDateTimeDifference(
+                context,
+                startDateTime,
+                endDateTime,
+                roundOptions,
+                relativeToOption,
+                unroundedDuration);
+        if (context.hasPendingException() || roundedEndDateTime == null) {
+            return null;
+        }
+
+        return buildBalancedDurationFromDateTimes(
+                context,
+                startDateTime,
+                roundedEndDateTime,
+                largestUnit,
+                smallestUnit);
     }
 
     private static double divideBigIntegersToDouble(BigInteger numerator, BigInteger divisor) {

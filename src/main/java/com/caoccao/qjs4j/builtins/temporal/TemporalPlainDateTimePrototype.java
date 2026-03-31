@@ -199,6 +199,23 @@ public final class TemporalPlainDateTimePrototype {
         return new JSString(pdt.getCalendarId());
     }
 
+    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
+        return switch (unitText) {
+            case "auto" -> allowAuto ? "auto" : null;
+            case "year", "years" -> "year";
+            case "month", "months" -> "month";
+            case "week", "weeks" -> "week";
+            case "day", "days" -> "day";
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
     private static String canonicalizeSmallestUnit(String unitText) {
         return switch (unitText) {
             case "day", "days" -> "day";
@@ -278,6 +295,125 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "eraYear");
         if (pdt == null) return JSUndefined.INSTANCE;
         return JSUndefined.INSTANCE;
+    }
+
+    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return 1L;
+        }
+        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || numericValue == null) {
+            return Long.MIN_VALUE;
+        }
+        double roundingIncrement = numericValue.value();
+        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return Long.MIN_VALUE;
+        }
+        long integerIncrement = (long) roundingIncrement;
+        if (integerIncrement < 1L || integerIncrement > MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return Long.MIN_VALUE;
+        }
+        return integerIncrement;
+    }
+
+    private static DifferenceSettings getDifferenceSettings(
+            JSContext context,
+            boolean sinceOperation,
+            JSValue optionsArg) {
+        JSObject optionsObject = null;
+        if (!(optionsArg instanceof JSUndefined) && optionsArg != null) {
+            if (optionsArg instanceof JSObject castedOptionsObject) {
+                optionsObject = castedOptionsObject;
+            } else {
+                context.throwTypeError("Temporal error: Options must be an object.");
+                return null;
+            }
+        }
+
+        String largestUnitText = null;
+        long roundingIncrement = 1L;
+        String roundingMode = "trunc";
+        String smallestUnitText = null;
+        if (optionsObject != null) {
+            largestUnitText = getDifferenceStringOption(context, optionsObject, "largestUnit", null);
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            roundingMode = getDifferenceStringOption(context, optionsObject, "roundingMode", "trunc");
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            smallestUnitText = getDifferenceStringOption(context, optionsObject, "smallestUnit", null);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+
+        String largestUnit = largestUnitText == null
+                ? "auto"
+                : canonicalizeDifferenceUnit(largestUnitText, true);
+        if (largestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid largest unit.");
+            return null;
+        }
+        String smallestUnit = smallestUnitText == null
+                ? "nanosecond"
+                : canonicalizeDifferenceUnit(smallestUnitText, false);
+        if (smallestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid smallest unit.");
+            return null;
+        }
+
+        if (!isValidRoundingMode(roundingMode)) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return null;
+        }
+
+        if ("auto".equals(largestUnit)) {
+            largestUnit = largerOfTwoTemporalUnits("day", smallestUnit);
+        }
+        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
+            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
+            return null;
+        }
+
+        if (!isValidDifferenceRoundingIncrement(smallestUnit, roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return null;
+        }
+
+        if (sinceOperation) {
+            roundingMode = negateRoundingMode(roundingMode);
+        }
+        return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+    }
+
+    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return defaultValue;
+        }
+        JSString optionText = JSTypeConversions.toString(context, optionValue);
+        if (context.hasPendingException() || optionText == null) {
+            return null;
+        }
+        return optionText.value();
     }
 
     private static String getRequiredSmallestUnitOption(JSContext context, JSObject optionsObject) {
@@ -384,6 +520,30 @@ public final class TemporalPlainDateTimePrototype {
         return IsoDate.isLeapYear(pdt.getIsoDateTime().date().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
+    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
+        long maximumIncrement;
+        switch (smallestUnit) {
+            case "hour":
+                maximumIncrement = 24L;
+                break;
+            case "minute":
+            case "second":
+                maximumIncrement = 60L;
+                break;
+            case "millisecond":
+            case "microsecond":
+            case "nanosecond":
+                maximumIncrement = 1000L;
+                break;
+            default:
+                return true;
+        }
+        if (roundingIncrement >= maximumIncrement) {
+            return false;
+        }
+        return maximumIncrement % roundingIncrement == 0L;
+    }
+
     private static boolean isValidPlainDateTimeRange(IsoDate date, IsoTime time) {
         long epochDay = date.toEpochDay();
         if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
@@ -420,6 +580,15 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     // ========== Methods ==========
+
+    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
+        int leftRank = temporalUnitRank(leftUnit);
+        int rightRank = temporalUnitRank(rightUnit);
+        if (leftRank > rightRank) {
+            return rightUnit;
+        }
+        return leftUnit;
+    }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "microsecond");
@@ -461,6 +630,16 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "nanosecond");
         if (pdt == null) return JSUndefined.INSTANCE;
         return JSNumber.of(pdt.getIsoDateTime().time().nanosecond());
+    }
+
+    private static String negateRoundingMode(String roundingMode) {
+        return switch (roundingMode) {
+            case "ceil" -> "floor";
+            case "floor" -> "ceil";
+            case "halfCeil" -> "halfFloor";
+            case "halfFloor" -> "halfCeil";
+            default -> roundingMode;
+        };
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -558,26 +737,66 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "since");
-        if (pdt == null) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalPlainDateTime other = TemporalPlainDateTimeConstructor.toTemporalDateTimeObject(context, otherArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!pdt.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
 
-        long daysDiff = pdt.getIsoDateTime().date().toEpochDay() - other.getIsoDateTime().date().toEpochDay();
-        long timeDiffNs = pdt.getIsoDateTime().time().totalNanoseconds() - other.getIsoDateTime().time().totalNanoseconds();
-        long totalNs = daysDiff * 86_400_000_000_000L + timeDiffNs;
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        DifferenceSettings settings = getDifferenceSettings(context, true, optionsArg);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
 
-        TemporalDurationRecord balanced = TemporalDurationPrototype.balanceTimeDuration(totalNs, "day");
-        return TemporalDurationConstructor.createDuration(context,
-                new TemporalDurationRecord(0, 0, 0, balanced.days(),
-                        balanced.hours(), balanced.minutes(), balanced.seconds(),
-                        balanced.milliseconds(), balanced.microseconds(), balanced.nanoseconds()));
+        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+                context,
+                pdt.getIsoDateTime(),
+                other.getIsoDateTime(),
+                settings.largestUnit(),
+                settings.smallestUnit(),
+                settings.roundingIncrement(),
+                settings.roundingMode());
+        if (context.hasPendingException() || durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDurationRecord resultRecord =
+                TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord.negated());
+        if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalDurationConstructor.createDuration(context, resultRecord);
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "subtract");
         if (pdt == null) return JSUndefined.INSTANCE;
         return addOrSubtract(context, pdt, args, -1);
+    }
+
+    private static int temporalUnitRank(String unit) {
+        return switch (unit) {
+            case "year" -> 0;
+            case "month" -> 1;
+            case "week" -> 2;
+            case "day" -> 3;
+            case "hour" -> 4;
+            case "minute" -> 5;
+            case "second" -> 6;
+            case "millisecond" -> 7;
+            case "microsecond" -> 8;
+            case "nanosecond" -> 9;
+            default -> 10;
+        };
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -658,21 +877,47 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "until");
-        if (pdt == null) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalPlainDateTime other = TemporalPlainDateTimeConstructor.toTemporalDateTimeObject(context, otherArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!pdt.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
 
-        long daysDiff = other.getIsoDateTime().date().toEpochDay() - pdt.getIsoDateTime().date().toEpochDay();
-        long timeDiffNs = other.getIsoDateTime().time().totalNanoseconds() - pdt.getIsoDateTime().time().totalNanoseconds();
-        long totalNs = daysDiff * 86_400_000_000_000L + timeDiffNs;
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        DifferenceSettings settings = getDifferenceSettings(context, false, optionsArg);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
 
-        TemporalDurationRecord balanced = TemporalDurationPrototype.balanceTimeDuration(totalNs, "day");
-        return TemporalDurationConstructor.createDuration(context,
-                new TemporalDurationRecord(0, 0, 0, balanced.days(),
-                        balanced.hours(), balanced.minutes(), balanced.seconds(),
-                        balanced.milliseconds(), balanced.microseconds(), balanced.nanoseconds()));
+        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+                context,
+                pdt.getIsoDateTime(),
+                other.getIsoDateTime(),
+                settings.largestUnit(),
+                settings.smallestUnit(),
+                settings.roundingIncrement(),
+                settings.roundingMode());
+        if (context.hasPendingException() || durationRecord == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDurationRecord resultRecord =
+                TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord);
+        if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalDurationConstructor.createDuration(context, resultRecord);
     }
+
+    // ========== Internal helpers ==========
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         context.throwTypeError("Do not use Temporal.PlainDateTime.prototype.valueOf; use Temporal.PlainDateTime.prototype.compare for comparison.");
@@ -720,8 +965,6 @@ public final class TemporalPlainDateTimePrototype {
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
                 new IsoDateTime(constrained, constrainedTime), pdt.getCalendarId());
     }
-
-    // ========== Internal helpers ==========
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "withCalendar");
@@ -772,6 +1015,10 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "yearOfWeek");
         if (pdt == null) return JSUndefined.INSTANCE;
         return JSNumber.of(pdt.getIsoDateTime().date().yearOfWeek());
+    }
+
+    private record DifferenceSettings(String largestUnit, String smallestUnit, long roundingIncrement,
+                                      String roundingMode) {
     }
 
     private record RoundSettings(String smallestUnit, long roundingIncrement, String roundingMode) {
