@@ -1384,6 +1384,7 @@ public final class TemporalDurationPrototype {
 
         if ("year".equals(smallestUnit) || "month".equals(smallestUnit)) {
             return roundDateTimeToCalendarUnit(
+                    context,
                     startDateTime,
                     unroundedEndDateTime,
                     smallestUnit,
@@ -1445,6 +1446,7 @@ public final class TemporalDurationPrototype {
     }
 
     private static LocalDateTime roundDateTimeToCalendarUnit(
+            JSContext context,
             LocalDateTime startDateTime,
             LocalDateTime endDateTime,
             String calendarUnit,
@@ -1472,6 +1474,11 @@ public final class TemporalDurationPrototype {
 
         LocalDateTime lowerBoundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, lowerMultipleCount);
         LocalDateTime upperBoundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, upperMultipleCount);
+        if (!isDateWithinTemporalRange(lowerBoundaryDateTime.toLocalDate())
+                || !isDateWithinTemporalRange(upperBoundaryDateTime.toLocalDate())) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
 
         if (endDateTime.equals(lowerBoundaryDateTime)) {
             return lowerBoundaryDateTime;
