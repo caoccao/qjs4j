@@ -19,10 +19,20 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
+import java.math.BigInteger;
+
 /**
  * Implementation of Temporal.PlainDateTime prototype methods.
  */
 public final class TemporalPlainDateTimePrototype {
+    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
+    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
+    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
+    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
+    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
+    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
+    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
+    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
     private static final String TYPE_NAME = "Temporal.PlainDateTime";
 
     private TemporalPlainDateTimePrototype() {
@@ -36,94 +46,150 @@ public final class TemporalPlainDateTimePrototype {
         return addOrSubtract(context, pdt, args, 1);
     }
 
+    private static IsoDate addDurationToDate(
+            JSContext context,
+            IsoDate date,
+            long years,
+            long months,
+            long weeks,
+            long days,
+            String overflow) {
+        long totalDays;
+        try {
+            totalDays = Math.addExact(days, Math.multiplyExact(weeks, 7L));
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+
+        long monthIndex = Math.addExact(date.month() - 1L, months);
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long balancedYear = Math.addExact(date.year(), years);
+        balancedYear = Math.addExact(balancedYear, yearDelta);
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int balancedYearInt = (int) balancedYear;
+        int maxDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
+        int regulatedDay = date.day();
+        if ("reject".equals(overflow)) {
+            if (regulatedDay > maxDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            regulatedDay = Math.min(regulatedDay, maxDay);
+        }
+
+        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
+        long resultEpochDay;
+        try {
+            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        IsoDate resultDate = IsoDate.fromEpochDay(resultEpochDay);
+        if (!IsoDate.isValidIsoDate(resultDate.year(), resultDate.month(), resultDate.day())) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return resultDate;
+    }
+
+    private static TimeAddResult addDurationToTime(
+            JSContext context,
+            IsoTime time,
+            TemporalDurationRecord durationRecord) {
+        BigInteger durationTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+
+        BigInteger totalNanoseconds = BigInteger.valueOf(time.totalNanoseconds()).add(durationTimeNanoseconds);
+        BigInteger[] dayAndRemainder = totalNanoseconds.divideAndRemainder(DAY_NANOSECONDS);
+        BigInteger dayCarryBigInteger = dayAndRemainder[0];
+        BigInteger remainder = dayAndRemainder[1];
+        if (remainder.signum() < 0) {
+            remainder = remainder.add(DAY_NANOSECONDS);
+            dayCarryBigInteger = dayCarryBigInteger.subtract(BigInteger.ONE);
+        }
+
+        long dayCarry;
+        try {
+            dayCarry = dayCarryBigInteger.longValueExact();
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+        long normalizedTimeNanoseconds = remainder.longValue();
+        IsoTime normalizedTime = IsoTime.fromNanoseconds(normalizedTimeNanoseconds);
+        return new TimeAddResult(normalizedTime, dayCarry);
+    }
+
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDateTime pdt, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
 
-        long years = 0, months = 0, weeks = 0, days = 0;
-        long hours = 0, minutes = 0, seconds = 0, milliseconds = 0, microseconds = 0, nanoseconds = 0;
-
-        JSValue durationArg = args[0];
-        if (durationArg instanceof JSTemporalDuration dur) {
-            TemporalDurationRecord r = dur.getRecord();
-            years = r.years();
-            months = r.months();
-            weeks = r.weeks();
-            days = r.days();
-            hours = r.hours();
-            minutes = r.minutes();
-            seconds = r.seconds();
-            milliseconds = r.milliseconds();
-            microseconds = r.microseconds();
-            nanoseconds = r.nanoseconds();
-        } else if (durationArg instanceof JSString durationStr) {
-            TemporalParser.DurationFields df = TemporalParser.parseDurationString(context, durationStr.value());
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            years = df.years();
-            months = df.months();
-            weeks = df.weeks();
-            days = df.days();
-            hours = df.hours();
-            minutes = df.minutes();
-            seconds = df.seconds();
-            milliseconds = df.milliseconds();
-            microseconds = df.microseconds();
-            nanoseconds = df.nanoseconds();
-        } else if (durationArg instanceof JSObject durationObj) {
-            years = TemporalUtils.getIntegerField(context, durationObj, "years", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            months = TemporalUtils.getIntegerField(context, durationObj, "months", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            weeks = TemporalUtils.getIntegerField(context, durationObj, "weeks", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            days = TemporalUtils.getIntegerField(context, durationObj, "days", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            hours = TemporalUtils.getIntegerField(context, durationObj, "hours", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            minutes = TemporalUtils.getIntegerField(context, durationObj, "minutes", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            seconds = TemporalUtils.getIntegerField(context, durationObj, "seconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            milliseconds = TemporalUtils.getIntegerField(context, durationObj, "milliseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            microseconds = TemporalUtils.getIntegerField(context, durationObj, "microseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            nanoseconds = TemporalUtils.getIntegerField(context, durationObj, "nanoseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        years *= sign;
-        months *= sign;
-        weeks *= sign;
-        days *= sign;
-        hours *= sign;
-        minutes *= sign;
-        seconds *= sign;
-        milliseconds *= sign;
-        microseconds *= sign;
-        nanoseconds *= sign;
+        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
-        // Add time components first, get overflow days
-        long totalTimeNs = hours * 3_600_000_000_000L
-                + minutes * 60_000_000_000L
-                + seconds * 1_000_000_000L
-                + milliseconds * 1_000_000L
-                + microseconds * 1_000L
-                + nanoseconds;
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (sign < 0) {
+            durationRecord = durationRecord.negated();
+        }
 
-        IsoTime.AddResult timeResult = pdt.getIsoDateTime().time().addNanoseconds(totalTimeNs);
+        TimeAddResult timeResult = addDurationToTime(context, pdt.getIsoDateTime().time(), durationRecord);
+        if (context.hasPendingException() || timeResult == null) {
+            return JSUndefined.INSTANCE;
+        }
 
-        // Add date components including overflow days from time
-        IsoDate newDate = TemporalPlainDatePrototype.addToIsoDate(pdt.getIsoDateTime().date(),
-                (int) years, (int) months, (int) weeks, (int) days + timeResult.days());
+        long adjustedDays;
+        try {
+            adjustedDays = Math.addExact(durationRecord.days(), timeResult.dayCarry());
+        } catch (ArithmeticException e) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new IsoDateTime(newDate, timeResult.time()), pdt.getCalendarId());
+        IsoDate newDate = addDurationToDate(
+                context,
+                pdt.getIsoDateTime().date(),
+                durationRecord.years(),
+                durationRecord.months(),
+                durationRecord.weeks(),
+                adjustedDays,
+                overflow);
+        if (context.hasPendingException() || newDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        if (!isValidPlainDateTimeRange(newDate, timeResult.time())) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+                context,
+                new IsoDateTime(newDate, timeResult.time()),
+                pdt.getCalendarId());
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -134,7 +200,7 @@ public final class TemporalPlainDateTimePrototype {
 
     private static JSTemporalPlainDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainDateTime pdt)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return pdt;
@@ -210,6 +276,14 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "inLeapYear");
         if (pdt == null) return JSUndefined.INSTANCE;
         return IsoDate.isLeapYear(pdt.getIsoDateTime().date().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
+    }
+
+    private static boolean isValidPlainDateTimeRange(IsoDate date, IsoTime time) {
+        long epochDay = date.toEpochDay();
+        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            return false;
+        }
+        return epochDay != MIN_SUPPORTED_EPOCH_DAY || time.totalNanoseconds() != 0L;
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -556,5 +630,8 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "yearOfWeek");
         if (pdt == null) return JSUndefined.INSTANCE;
         return JSNumber.of(pdt.getIsoDateTime().date().yearOfWeek());
+    }
+
+    private record TimeAddResult(IsoTime time, long dayCarry) {
     }
 }

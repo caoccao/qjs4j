@@ -106,8 +106,14 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime dt = new IsoDateTime(new IsoDate(isoYear, isoMonth, isoDay),
-                new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
+        IsoDate date = new IsoDate(isoYear, isoMonth, isoDay);
+        IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!isValidPlainDateTimeRange(date, time)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime dt = new IsoDateTime(date, time);
         JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
