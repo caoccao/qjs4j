@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
+import java.time.DateTimeException;
 
 /**
  * Implementation of Temporal.PlainDateTime prototype methods.
@@ -519,6 +520,28 @@ public final class TemporalPlainDateTimePrototype {
         return JSTypeConversions.toString(context, roundingModeValue).value();
     }
 
+    private static String getTemporalDisambiguation(JSContext context, JSValue optionsArg) {
+        if (optionsArg instanceof JSUndefined || optionsArg == null) {
+            return "compatible";
+        }
+        if (!(optionsArg instanceof JSObject optionsObject)) {
+            context.throwTypeError("Temporal error: Option must be object: options.");
+            return null;
+        }
+        String disambiguation = getDifferenceStringOption(context, optionsObject, "disambiguation", "compatible");
+        if (context.hasPendingException() || disambiguation == null) {
+            return null;
+        }
+        if (!"compatible".equals(disambiguation)
+                && !"earlier".equals(disambiguation)
+                && !"later".equals(disambiguation)
+                && !"reject".equals(disambiguation)) {
+            context.throwRangeError("Temporal error: Invalid disambiguation option.");
+            return null;
+        }
+        return disambiguation;
+    }
+
     private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
         String calendarNameOption = getDifferenceStringOption(context, optionsObject, "calendarName", "auto");
         if (context.hasPendingException() || calendarNameOption == null) {
@@ -775,8 +798,6 @@ public final class TemporalPlainDateTimePrototype {
                 || "halfFloor".equals(roundingMode);
     }
 
-    // ========== Methods ==========
-
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
         int leftRank = temporalUnitRank(leftUnit);
         int rightRank = temporalUnitRank(rightUnit);
@@ -785,6 +806,8 @@ public final class TemporalPlainDateTimePrototype {
         }
         return leftUnit;
     }
+
+    // ========== Methods ==========
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "microsecond");
@@ -1090,6 +1113,54 @@ public final class TemporalPlainDateTimePrototype {
         String timeString = getToStringTimeString(roundedTime, toStringSettings);
         String dateTimeString = dateString + "T" + timeString;
         return TemporalUtils.maybeAppendCalendar(dateTimeString, plainDateTime.getCalendarId(), toStringSettings.calendarNameOption());
+    }
+
+    private static String toTemporalTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {
+        if (!(timeZoneLike instanceof JSString timeZoneString)) {
+            context.throwTypeError("Temporal error: Time zone must be string.");
+            return null;
+        }
+        return TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneString.value());
+    }
+
+    public static JSValue toZonedDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "toZonedDateTime");
+        if (plainDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue temporalTimeZoneLike = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String timeZoneId = toTemporalTimeZoneIdentifier(context, temporalTimeZoneLike);
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        String disambiguation = getTemporalDisambiguation(context, optionsArg);
+        if (context.hasPendingException() || disambiguation == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger epochNanoseconds;
+        try {
+            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    plainDateTime.getIsoDateTime(),
+                    timeZoneId,
+                    disambiguation);
+        } catch (DateTimeException e) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+                context,
+                epochNanoseconds,
+                timeZoneId,
+                plainDateTime.getCalendarId());
     }
 
     private static long unitToNanoseconds(String unit) {

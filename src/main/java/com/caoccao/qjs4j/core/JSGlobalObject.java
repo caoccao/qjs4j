@@ -2153,6 +2153,7 @@ public final class JSGlobalObject {
         prototype.defineProperty(PropertyKey.fromString("toPlainDate"), new JSNativeFunction(context, "toPlainDate", 0, TemporalPlainDateTimePrototype::toPlainDate), PropertyDescriptor.DataState.ConfigurableWritable);
         prototype.defineProperty(PropertyKey.fromString("toPlainTime"), new JSNativeFunction(context, "toPlainTime", 0, TemporalPlainDateTimePrototype::toPlainTime), PropertyDescriptor.DataState.ConfigurableWritable);
         prototype.defineProperty(PropertyKey.fromString("toString"), new JSNativeFunction(context, "toString", 0, TemporalPlainDateTimePrototype::toStringMethod), PropertyDescriptor.DataState.ConfigurableWritable);
+        prototype.defineProperty(PropertyKey.fromString("toZonedDateTime"), new JSNativeFunction(context, "toZonedDateTime", 1, TemporalPlainDateTimePrototype::toZonedDateTime), PropertyDescriptor.DataState.ConfigurableWritable);
         prototype.defineProperty(PropertyKey.fromString("until"), new JSNativeFunction(context, "until", 1, TemporalPlainDateTimePrototype::until), PropertyDescriptor.DataState.ConfigurableWritable);
         prototype.defineProperty(PropertyKey.fromString("valueOf"), new JSNativeFunction(context, "valueOf", 0, TemporalPlainDateTimePrototype::valueOf), PropertyDescriptor.DataState.ConfigurableWritable);
         prototype.defineProperty(PropertyKey.fromString("with"), new JSNativeFunction(context, "with", 1, TemporalPlainDateTimePrototype::with), PropertyDescriptor.DataState.ConfigurableWritable);
