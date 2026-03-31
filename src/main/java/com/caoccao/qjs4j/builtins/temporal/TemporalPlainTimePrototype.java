@@ -18,8 +18,10 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
+import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+
+import java.math.BigInteger;
 
 /**
  * Implementation of Temporal.PlainTime prototype methods.
@@ -43,59 +45,27 @@ public final class TemporalPlainTimePrototype {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
-        long hours = 0, minutes = 0, seconds = 0, milliseconds = 0, microseconds = 0, nanoseconds = 0;
 
-        JSValue durationArg = args[0];
-        if (durationArg instanceof JSString durationStr) {
-            TemporalParser.DurationFields df = TemporalParser.parseDurationString(context, durationStr.value());
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            hours = df.hours();
-            minutes = df.minutes();
-            seconds = df.seconds();
-            milliseconds = df.milliseconds();
-            microseconds = df.microseconds();
-            nanoseconds = df.nanoseconds();
-        } else if (durationArg instanceof JSObject durationObj) {
-            hours = TemporalUtils.getIntegerField(context, durationObj, "hours", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            minutes = TemporalUtils.getIntegerField(context, durationObj, "minutes", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            seconds = TemporalUtils.getIntegerField(context, durationObj, "seconds", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            milliseconds = TemporalUtils.getIntegerField(context, durationObj, "milliseconds", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            microseconds = TemporalUtils.getIntegerField(context, durationObj, "microseconds", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-            nanoseconds = TemporalUtils.getIntegerField(context, durationObj, "nanoseconds", 0);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException() || temporalDuration == null) {
             return JSUndefined.INSTANCE;
         }
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        BigInteger durationNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+        if (sign < 0) {
+            durationNanoseconds = durationNanoseconds.negate();
+        }
 
-        long totalAddNs = sign * (hours * 3_600_000_000_000L
-                + minutes * 60_000_000_000L
-                + seconds * 1_000_000_000L
-                + milliseconds * 1_000_000L
-                + microseconds * 1_000L
-                + nanoseconds);
+        BigInteger dayNanoseconds = BigInteger.valueOf(86_400_000_000_000L);
+        BigInteger timeNanoseconds = BigInteger.valueOf(plainTime.getIsoTime().totalNanoseconds());
+        BigInteger resultNanoseconds = timeNanoseconds.add(durationNanoseconds).remainder(dayNanoseconds);
+        if (resultNanoseconds.signum() < 0) {
+            resultNanoseconds = resultNanoseconds.add(dayNanoseconds);
+        }
 
-        IsoTime.AddResult result = plainTime.getIsoTime().addNanoseconds(totalAddNs);
-        return TemporalPlainTimeConstructor.createPlainTime(context, result.time());
+        return TemporalPlainTimeConstructor.createPlainTime(
+                context,
+                IsoTime.fromNanoseconds(resultNanoseconds.longValue()));
     }
 
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {

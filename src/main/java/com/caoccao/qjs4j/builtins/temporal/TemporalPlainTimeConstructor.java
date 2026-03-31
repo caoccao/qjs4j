@@ -135,11 +135,6 @@ public final class TemporalPlainTimeConstructor {
     }
 
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options) {
-        String overflow = TemporalUtils.getOverflowOption(context, options);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
         boolean hasTimeField = false;
 
         JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
@@ -206,6 +201,11 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
+        String overflow = TemporalUtils.getOverflowOption(context, options);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
         if ("reject".equals(overflow)) {
             if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
                 context.throwRangeError("Temporal error: Invalid time");
@@ -238,12 +238,24 @@ public final class TemporalPlainTimeConstructor {
      */
     public static JSValue toTemporalTime(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainTime plainTime) {
+            TemporalUtils.getOverflowOption(context, options);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             return createPlainTime(context, plainTime.getIsoTime());
         }
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
+            TemporalUtils.getOverflowOption(context, options);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             return createPlainTime(context, plainDateTime.getIsoDateTime().time());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            TemporalUtils.getOverflowOption(context, options);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
             return createPlainTime(
                     context,
                     TemporalTimeZone.epochNsToDateTimeInZone(
@@ -254,7 +266,15 @@ public final class TemporalPlainTimeConstructor {
             return timeFromFields(context, itemObj, options);
         }
         if (item instanceof JSString itemStr) {
-            return timeFromString(context, itemStr.value());
+            JSValue result = timeFromString(context, itemStr.value());
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            TemporalUtils.getOverflowOption(context, options);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            return result;
         }
         context.throwTypeError("Temporal error: Time-like argument must be object or string");
         return JSUndefined.INSTANCE;
