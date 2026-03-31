@@ -344,6 +344,181 @@ public final class TemporalPlainTimePrototype {
         return optionText.value();
     }
 
+    private static FractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
+        if (value instanceof JSUndefined) {
+            return new FractionalSecondDigitsOption(true, -1);
+        }
+        if (value instanceof JSNumber numberValue) {
+            double numericValue = numberValue.value();
+            if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
+                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
+                return null;
+            }
+            int flooredValue = (int) Math.floor(numericValue);
+            if (flooredValue < 0 || flooredValue > 9) {
+                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
+                return null;
+            }
+            return new FractionalSecondDigitsOption(false, flooredValue);
+        }
+
+        JSString stringValue = JSTypeConversions.toString(context, value);
+        if (context.hasPendingException() || stringValue == null) {
+            return null;
+        }
+        if ("auto".equals(stringValue.value())) {
+            return new FractionalSecondDigitsOption(true, -1);
+        }
+        context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
+        return null;
+    }
+
+    private static String canonicalizeToStringSmallestUnit(String unitText) {
+        return switch (unitText) {
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
+    private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
+        JSObject optionsObject = null;
+        if (!(optionsValue instanceof JSUndefined) && optionsValue != null) {
+            if (optionsValue instanceof JSObject castedOptionsObject) {
+                optionsObject = castedOptionsObject;
+            } else {
+                context.throwTypeError("Temporal error: Option must be object: options.");
+                return null;
+            }
+        }
+
+        FractionalSecondDigitsOption fractionalSecondDigitsOption = new FractionalSecondDigitsOption(true, -1);
+        String roundingMode = "trunc";
+        String smallestUnitText = null;
+        if (optionsObject != null) {
+            JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            fractionalSecondDigitsOption = getToStringFractionalSecondDigitsOption(context, fractionalSecondDigitsValue);
+            if (context.hasPendingException() || fractionalSecondDigitsOption == null) {
+                return null;
+            }
+
+            roundingMode = getStringOption(context, optionsObject, "roundingMode", "trunc");
+            if (context.hasPendingException() || roundingMode == null) {
+                return null;
+            }
+
+            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
+                JSString smallestUnitString = JSTypeConversions.toString(context, smallestUnitValue);
+                if (context.hasPendingException() || smallestUnitString == null) {
+                    return null;
+                }
+                smallestUnitText = smallestUnitString.value();
+            }
+        }
+
+        if (!isValidRoundingMode(roundingMode)) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return null;
+        }
+
+        String smallestUnit = null;
+        if (smallestUnitText != null) {
+            smallestUnit = canonicalizeToStringSmallestUnit(smallestUnitText);
+            if (smallestUnit == null) {
+                context.throwRangeError("Temporal error: Invalid smallestUnit option.");
+                return null;
+            }
+        }
+
+        boolean autoFractionalSecondDigits = smallestUnit == null && fractionalSecondDigitsOption.auto();
+        int fractionalSecondDigits;
+        long roundingIncrementNanoseconds;
+        if (smallestUnit != null) {
+            fractionalSecondDigits = switch (smallestUnit) {
+                case "second" -> 0;
+                case "millisecond" -> 3;
+                case "microsecond" -> 6;
+                case "nanosecond" -> 9;
+                default -> 0;
+            };
+            roundingIncrementNanoseconds = switch (smallestUnit) {
+                case "minute" -> 60_000_000_000L;
+                case "second" -> 1_000_000_000L;
+                case "millisecond" -> 1_000_000L;
+                case "microsecond" -> 1_000L;
+                case "nanosecond" -> 1L;
+                default -> 1L;
+            };
+        } else if (autoFractionalSecondDigits) {
+            fractionalSecondDigits = -1;
+            roundingIncrementNanoseconds = 1L;
+        } else {
+            fractionalSecondDigits = fractionalSecondDigitsOption.digits();
+            if (fractionalSecondDigits == 0) {
+                roundingIncrementNanoseconds = 1_000_000_000L;
+            } else {
+                roundingIncrementNanoseconds = (long) Math.pow(10, 9 - fractionalSecondDigits);
+            }
+        }
+
+        return new ToStringSettings(
+                smallestUnit,
+                roundingMode,
+                autoFractionalSecondDigits,
+                fractionalSecondDigits,
+                roundingIncrementNanoseconds);
+    }
+
+    private static String getToStringFractionalPart(IsoTime time, int digits) {
+        if (digits <= 0) {
+            return "";
+        }
+        String nineDigits = String.format("%03d%03d%03d",
+                time.millisecond(),
+                time.microsecond(),
+                time.nanosecond());
+        return nineDigits.substring(0, digits);
+    }
+
+    private static String getToStringTimeString(IsoTime time, ToStringSettings toStringSettings) {
+        String hourMinute = String.format("%02d:%02d", time.hour(), time.minute());
+        if ("minute".equals(toStringSettings.smallestUnit())) {
+            return hourMinute;
+        }
+
+        String hourMinuteSecond = String.format("%s:%02d", hourMinute, time.second());
+        if (toStringSettings.autoFractionalSecondDigits()) {
+            String fullFraction = String.format("%03d%03d%03d",
+                    time.millisecond(),
+                    time.microsecond(),
+                    time.nanosecond());
+            int end = fullFraction.length();
+            while (end > 0 && fullFraction.charAt(end - 1) == '0') {
+                end--;
+            }
+            if (end == 0) {
+                return hourMinuteSecond;
+            }
+            return hourMinuteSecond + "." + fullFraction.substring(0, end);
+        }
+
+        int fractionDigits = toStringSettings.fractionalSecondDigits();
+        if (fractionDigits == 0) {
+            return hourMinuteSecond;
+        }
+        return hourMinuteSecond + "." + getToStringFractionalPart(time, fractionDigits);
+    }
+
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainTime plainTime = checkReceiver(context, thisArg, "hour");
         if (plainTime == null) {
@@ -593,7 +768,24 @@ public final class TemporalPlainTimePrototype {
         if (plainTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(plainTime.getIsoTime().toString());
+        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        ToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
+        if (context.hasPendingException() || toStringSettings == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        long roundedNanoseconds = plainTime.getIsoTime().totalNanoseconds();
+        if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
+            roundedNanoseconds = roundToIncrementAsIfPositive(
+                    roundedNanoseconds,
+                    toStringSettings.roundingIncrementNanoseconds(),
+                    toStringSettings.roundingMode());
+        }
+        if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
+            roundedNanoseconds = 0L;
+        }
+        IsoTime roundedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+        return new JSString(getToStringTimeString(roundedTime, toStringSettings));
     }
 
     private static long unitToNanoseconds(String unit) {
@@ -691,5 +883,16 @@ public final class TemporalPlainTimePrototype {
             String smallestUnit,
             long roundingIncrement,
             String roundingMode) {
+    }
+
+    private record FractionalSecondDigitsOption(boolean auto, int digits) {
+    }
+
+    private record ToStringSettings(
+            String smallestUnit,
+            String roundingMode,
+            boolean autoFractionalSecondDigits,
+            int fractionalSecondDigits,
+            long roundingIncrementNanoseconds) {
     }
 }
