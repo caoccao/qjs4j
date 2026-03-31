@@ -166,6 +166,12 @@ public final class TemporalPlainYearMonthPrototype {
         return JSNumber.of(12);
     }
 
+    public static JSValue referenceISODay(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "referenceISODay");
+        if (ym == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(ym.getIsoDate().day());
+    }
+
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "since");
         if (ym == null) return JSUndefined.INSTANCE;
@@ -235,8 +241,16 @@ public final class TemporalPlainYearMonthPrototype {
         JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "toString");
         if (ym == null) return JSUndefined.INSTANCE;
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         IsoDate d = ym.getIsoDate();
-        String result = String.format(Locale.ROOT, "%04d-%02d", d.year(), d.month());
+        boolean includeReferenceDay = !"never".equals(calendarNameOption)
+                && (!"auto".equals(calendarNameOption) || !"iso8601".equals(ym.getCalendarId()));
+        String result = TemporalUtils.formatIsoDate(d.year(), d.month(), includeReferenceDay ? d.day() : 1);
+        if (!includeReferenceDay) {
+            result = result.substring(0, result.lastIndexOf('-'));
+        }
         result = TemporalUtils.maybeAppendCalendar(result, ym.getCalendarId(), calendarNameOption);
         return new JSString(result);
     }

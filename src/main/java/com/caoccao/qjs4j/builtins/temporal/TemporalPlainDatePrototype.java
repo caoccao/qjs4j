@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.*;
+import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.IsoTime;
+import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 import java.math.BigInteger;
 
@@ -37,6 +40,7 @@ public final class TemporalPlainDatePrototype {
     private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
     private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
     private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = 1_000_000_000L;
+    private static final String TYPE_NAME = "Temporal.PlainDate";
     private static final String UNIT_AUTO = "auto";
     private static final String UNIT_DAY = "day";
     private static final String UNIT_HOUR = "hour";
@@ -48,7 +52,6 @@ public final class TemporalPlainDatePrototype {
     private static final String UNIT_SECOND = "second";
     private static final String UNIT_WEEK = "week";
     private static final String UNIT_YEAR = "year";
-    private static final String TYPE_NAME = "Temporal.PlainDate";
 
     private TemporalPlainDatePrototype() {
     }
@@ -172,6 +175,155 @@ public final class TemporalPlainDatePrototype {
         return intermediate.addDays((int) totalDays);
     }
 
+    private static DateDurationFields adjustDateDurationRecord(
+            DateDurationFields dateDuration,
+            long newDays,
+            Long newWeeks,
+            Long newMonths) {
+        long adjustedMonths = newMonths == null ? dateDuration.months() : newMonths;
+        long adjustedWeeks = newWeeks == null ? dateDuration.weeks() : newWeeks;
+        return new DateDurationFields(
+                dateDuration.years(),
+                adjustedMonths,
+                adjustedWeeks,
+                newDays);
+    }
+
+    private static long applyUnsignedRoundingMode(
+            long roundingFloor,
+            long roundingCeiling,
+            int comparison,
+            boolean evenCardinality,
+            String unsignedRoundingMode) {
+        if ("zero".equals(unsignedRoundingMode)) {
+            return roundingFloor;
+        }
+        if ("infinity".equals(unsignedRoundingMode)) {
+            return roundingCeiling;
+        }
+        if (comparison < 0) {
+            return roundingFloor;
+        }
+        if (comparison > 0) {
+            return roundingCeiling;
+        }
+        if ("half-zero".equals(unsignedRoundingMode)) {
+            return roundingFloor;
+        }
+        if ("half-infinity".equals(unsignedRoundingMode)) {
+            return roundingCeiling;
+        }
+        return evenCardinality ? roundingFloor : roundingCeiling;
+    }
+
+    private static YearMonthBalance balanceIsoYearMonth(long year, long month) {
+        long monthIndex = month - 1;
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long normalizedYear = year + yearDelta;
+        return new YearMonthBalance(normalizedYear, normalizedMonth);
+    }
+
+    private static DateDurationFields bubbleRelativeDuration(
+            JSContext context,
+            int sign,
+            DateDurationFields duration,
+            long nudgedEpochDay,
+            IsoDate originDate,
+            String largestUnit,
+            String smallestUnit) {
+        if (smallestUnit.equals(largestUnit)) {
+            return duration;
+        }
+        int largestUnitIndex = temporalUnitRank(largestUnit);
+        int smallestUnitIndex = temporalUnitRank(smallestUnit);
+        for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
+            String unit = temporalUnitByRank(unitIndex);
+            if (UNIT_WEEK.equals(unit) && !UNIT_WEEK.equals(largestUnit)) {
+                continue;
+            }
+
+            DateDurationFields endDuration;
+            if (UNIT_YEAR.equals(unit)) {
+                endDuration = new DateDurationFields(duration.years() + sign, 0, 0, 0);
+            } else if (UNIT_MONTH.equals(unit)) {
+                endDuration = adjustDateDurationRecord(duration, 0, 0L, duration.months() + sign);
+            } else {
+                endDuration = adjustDateDurationRecord(duration, 0, duration.weeks() + sign, null);
+            }
+
+            IsoDate endDate = calendarDateAddConstrain(context, originDate, endDuration);
+            if (context.hasPendingException() || endDate == null) {
+                return null;
+            }
+            boolean didExpandToEnd = Long.compare(nudgedEpochDay, endDate.toEpochDay()) != -sign;
+            if (didExpandToEnd) {
+                duration = endDuration;
+            } else {
+                break;
+            }
+        }
+        return duration;
+    }
+
+    private static IsoDate calendarDateAddConstrain(JSContext context, IsoDate baseDate, DateDurationFields dateDuration) {
+        TemporalDurationRecord durationRecord = new TemporalDurationRecord(
+                dateDuration.years(),
+                dateDuration.months(),
+                dateDuration.weeks(),
+                dateDuration.days(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0);
+        return addDurationToDate(context, baseDate, durationRecord, "constrain");
+    }
+
+    private static DateDurationFields calendarDateUntil(IsoDate one, IsoDate two, String largestUnit) {
+        int sign = -Integer.signum(IsoDate.compareIsoDate(one, two));
+        if (sign == 0) {
+            return DateDurationFields.ZERO;
+        }
+
+        long years = 0;
+        long months = 0;
+        if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
+            long candidateYears = (long) two.year() - one.year();
+            if (candidateYears != 0) {
+                candidateYears -= sign;
+            }
+            while (!isoDateSurpasses(sign, one.year() + candidateYears, one.month(), one.day(), two)) {
+                years = candidateYears;
+                candidateYears += sign;
+            }
+
+            long candidateMonths = sign;
+            YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + candidateMonths);
+            while (!isoDateSurpasses(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), one.day(), two)) {
+                months = candidateMonths;
+                candidateMonths += sign;
+                intermediateYearMonth = balanceIsoYearMonth(intermediateYearMonth.year(), intermediateYearMonth.month() + sign);
+            }
+
+            if (UNIT_MONTH.equals(largestUnit)) {
+                months += years * 12;
+                years = 0;
+            }
+        }
+
+        YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + months);
+        IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), one.day());
+        long dayDifference = two.toEpochDay() - constrainedDate.toEpochDay();
+        long weeks = 0;
+        if (UNIT_WEEK.equals(largestUnit)) {
+            weeks = dayDifference / 7;
+            dayDifference = dayDifference % 7;
+        }
+        return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "calendarId");
         if (plainDate == null) {
@@ -180,12 +332,40 @@ public final class TemporalPlainDatePrototype {
         return new JSString(plainDate.getCalendarId());
     }
 
+    private static String canonicalizeTemporalUnit(String unitText, boolean allowAuto) {
+        if (unitText == null) {
+            return null;
+        }
+        if (allowAuto && UNIT_AUTO.equals(unitText)) {
+            return UNIT_AUTO;
+        }
+        return switch (unitText) {
+            case UNIT_YEAR, "years" -> UNIT_YEAR;
+            case UNIT_MONTH, "months" -> UNIT_MONTH;
+            case UNIT_WEEK, "weeks" -> UNIT_WEEK;
+            case UNIT_DAY, "days" -> UNIT_DAY;
+            case UNIT_HOUR, "hours" -> UNIT_HOUR;
+            case UNIT_MINUTE, "minutes" -> UNIT_MINUTE;
+            case UNIT_SECOND, "seconds" -> UNIT_SECOND;
+            case UNIT_MILLISECOND, "milliseconds" -> UNIT_MILLISECOND;
+            case UNIT_MICROSECOND, "microseconds" -> UNIT_MICROSECOND;
+            case UNIT_NANOSECOND, "nanoseconds" -> UNIT_NANOSECOND;
+            default -> null;
+        };
+    }
+
     private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainDate plainDate)) {
             context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return plainDate;
+    }
+
+    private static IsoDate constrainIsoDate(long year, int month, int day) {
+        int constrainedYear = (int) year;
+        int constrainedDay = Math.min(day, IsoDate.daysInMonth(constrainedYear, month));
+        return new IsoDate(constrainedYear, month, constrainedDay);
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -221,6 +401,8 @@ public final class TemporalPlainDatePrototype {
         return JSNumber.of(IsoDate.daysInMonth(d.year(), d.month()));
     }
 
+    // ========== Methods ==========
+
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "daysInWeek");
         if (plainDate == null) {
@@ -235,6 +417,64 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(IsoDate.daysInYear(plainDate.getIsoDate().year()));
+    }
+
+    private static JSValue differenceTemporalPlainDate(
+            JSContext context,
+            JSTemporalPlainDate plainDate,
+            JSValue[] args,
+            boolean sinceOperation) {
+        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
+        if (context.hasPendingException() || other == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!plainDate.getCalendarId().equals(other.getCalendarId())) {
+            context.throwRangeError("Temporal error: Mismatched calendars.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        DifferenceSettings settings = getDifferenceSettings(context, sinceOperation, optionsArg);
+        if (context.hasPendingException() || settings == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDate thisDate = plainDate.getIsoDate();
+        IsoDate otherDate = other.getIsoDate();
+        if (IsoDate.compareIsoDate(thisDate, otherDate) == 0) {
+            return TemporalDurationConstructor.createDuration(context, TemporalDurationRecord.ZERO);
+        }
+
+        DateDurationFields dateDifference = calendarDateUntil(thisDate, otherDate, settings.largestUnit());
+        boolean roundingNoOp = UNIT_DAY.equals(settings.smallestUnit()) && settings.roundingIncrement() == 1L;
+        if (!roundingNoOp) {
+            dateDifference = roundRelativeDurationDate(
+                    context,
+                    dateDifference,
+                    otherDate.toEpochDay(),
+                    thisDate,
+                    settings);
+            if (context.hasPendingException() || dateDifference == null) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        TemporalDurationRecord resultDuration = new TemporalDurationRecord(
+                dateDifference.years(),
+                dateDifference.months(),
+                dateDifference.weeks(),
+                dateDifference.days(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0);
+        if (sinceOperation) {
+            resultDuration = resultDuration.negated();
+        }
+        return TemporalDurationConstructor.createDuration(context, resultDuration);
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -270,12 +510,194 @@ public final class TemporalPlainDatePrototype {
         return JSUndefined.INSTANCE;
     }
 
+    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(DIFFERENCE_ROUNDING_INCREMENT_OPTION));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return 1L;
+        }
+        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || numericValue == null) {
+            return Long.MIN_VALUE;
+        }
+        double roundingIncrement = numericValue.value();
+        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return Long.MIN_VALUE;
+        }
+        long integerIncrement = (long) roundingIncrement;
+        if (integerIncrement < 1L || integerIncrement > TEMPORAL_MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return Long.MIN_VALUE;
+        }
+        return integerIncrement;
+    }
+
+    private static DifferenceSettings getDifferenceSettings(
+            JSContext context,
+            boolean sinceOperation,
+            JSValue optionsArg) {
+        JSObject optionsObject = null;
+        if (!(optionsArg instanceof JSUndefined) && optionsArg != null) {
+            if (optionsArg instanceof JSObject castedOptionsObject) {
+                optionsObject = castedOptionsObject;
+            } else {
+                context.throwTypeError("Temporal error: Options must be an object.");
+                return null;
+            }
+        }
+
+        String largestUnitText = null;
+        long roundingIncrement = 1L;
+        String roundingMode = "trunc";
+        String smallestUnitText = null;
+        if (optionsObject != null) {
+            largestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_LARGEST_UNIT_OPTION, null);
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            roundingMode = getDifferenceStringOption(context, optionsObject, DIFFERENCE_ROUNDING_MODE_OPTION, "trunc");
+            if (context.hasPendingException()) {
+                return null;
+            }
+
+            smallestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_SMALLEST_UNIT_OPTION, null);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+
+        String largestUnit = largestUnitText == null
+                ? UNIT_AUTO
+                : canonicalizeTemporalUnit(largestUnitText, true);
+        if (largestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid largest unit.");
+            return null;
+        }
+        String smallestUnit = smallestUnitText == null
+                ? UNIT_DAY
+                : canonicalizeTemporalUnit(smallestUnitText, false);
+        if (smallestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid smallest unit.");
+            return null;
+        }
+        if (!isValidDifferenceRoundingMode(roundingMode)) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return null;
+        }
+        if (sinceOperation) {
+            roundingMode = negateRoundingMode(roundingMode);
+        }
+        if (!UNIT_AUTO.equals(largestUnit) && !isDateUnit(largestUnit)) {
+            context.throwRangeError("Temporal error: Invalid largest unit.");
+            return null;
+        }
+        if (!isDateUnit(smallestUnit)) {
+            context.throwRangeError("Temporal error: Invalid smallest unit.");
+            return null;
+        }
+
+        if (UNIT_AUTO.equals(largestUnit)) {
+            largestUnit = largerOfTwoTemporalUnits(UNIT_DAY, smallestUnit);
+        }
+        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
+            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
+            return null;
+        }
+
+        return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+    }
+
+    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return defaultValue;
+        }
+        JSString optionText = JSTypeConversions.toString(context, optionValue);
+        if (context.hasPendingException() || optionText == null) {
+            return null;
+        }
+        return optionText.value();
+    }
+
+    private static String getUnsignedRoundingMode(String roundingMode, String sign) {
+        boolean negativeSign = "negative".equals(sign);
+        return switch (roundingMode) {
+            case "ceil" -> negativeSign ? "zero" : "infinity";
+            case "floor" -> negativeSign ? "infinity" : "zero";
+            case "expand" -> "infinity";
+            case "trunc" -> "zero";
+            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
+            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
+            case "halfExpand" -> "half-infinity";
+            case "halfTrunc" -> "half-zero";
+            case "halfEven" -> "half-even";
+            default -> "half-infinity";
+        };
+    }
+
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "inLeapYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
         return IsoDate.isLeapYear(plainDate.getIsoDate().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
+    }
+
+    private static boolean isCalendarUnit(String unit) {
+        return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit) || UNIT_WEEK.equals(unit);
+    }
+
+    private static boolean isDateUnit(String unit) {
+        return UNIT_YEAR.equals(unit)
+                || UNIT_MONTH.equals(unit)
+                || UNIT_WEEK.equals(unit)
+                || UNIT_DAY.equals(unit);
+    }
+
+    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
+        return "ceil".equals(roundingMode)
+                || "floor".equals(roundingMode)
+                || "trunc".equals(roundingMode)
+                || "expand".equals(roundingMode)
+                || "halfExpand".equals(roundingMode)
+                || "halfTrunc".equals(roundingMode)
+                || "halfEven".equals(roundingMode)
+                || "halfCeil".equals(roundingMode)
+                || "halfFloor".equals(roundingMode);
+    }
+
+    private static boolean isoDateSurpasses(int sign, long year, long month, long day, IsoDate isoDate) {
+        if (year != isoDate.year()) {
+            return sign * (year - isoDate.year()) > 0;
+        }
+        if (month != isoDate.month()) {
+            return sign * (month - isoDate.month()) > 0;
+        }
+        if (day != isoDate.day()) {
+            return sign * (day - isoDate.day()) > 0;
+        }
+        return false;
+    }
+
+    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
+        int leftRank = temporalUnitRank(leftUnit);
+        int rightRank = temporalUnitRank(rightUnit);
+        if (leftRank > rightRank) {
+            return rightUnit;
+        }
+        return leftUnit;
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -294,8 +716,6 @@ public final class TemporalPlainDatePrototype {
         return new JSString(TemporalUtils.monthCode(plainDate.getIsoDate().month()));
     }
 
-    // ========== Methods ==========
-
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "monthsInYear");
         if (plainDate == null) {
@@ -304,18 +724,14 @@ public final class TemporalPlainDatePrototype {
         return JSNumber.of(12);
     }
 
-    private static DateDurationFields adjustDateDurationRecord(
-            DateDurationFields dateDuration,
-            long newDays,
-            Long newWeeks,
-            Long newMonths) {
-        long adjustedMonths = newMonths == null ? dateDuration.months() : newMonths;
-        long adjustedWeeks = newWeeks == null ? dateDuration.weeks() : newWeeks;
-        return new DateDurationFields(
-                dateDuration.years(),
-                adjustedMonths,
-                adjustedWeeks,
-                newDays);
+    private static String negateRoundingMode(String roundingMode) {
+        return switch (roundingMode) {
+            case "ceil" -> "floor";
+            case "floor" -> "ceil";
+            case "halfCeil" -> "halfFloor";
+            case "halfFloor" -> "halfCeil";
+            default -> roundingMode;
+        };
     }
 
     private static NudgeResult nudgeToCalendarUnit(
@@ -424,417 +840,27 @@ public final class TemporalPlainDatePrototype {
         return new NudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
     }
 
-    private static DateDurationFields bubbleRelativeDuration(
-            JSContext context,
-            int sign,
-            DateDurationFields duration,
-            long nudgedEpochDay,
-            IsoDate originDate,
-            String largestUnit,
-            String smallestUnit) {
-        if (smallestUnit.equals(largestUnit)) {
-            return duration;
+    private static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
+        long quotient = quantity / increment;
+        long remainder = quantity % increment;
+        String sign = quantity < 0 ? "negative" : "positive";
+        long roundingFloor = Math.abs(quotient);
+        long roundingCeiling = roundingFloor + 1L;
+        int comparison = Integer.compare(Long.compare(Math.abs(remainder * 2L), increment), 0);
+        boolean evenCardinality = Math.floorMod(roundingFloor, 2L) == 0L;
+        String unsignedRoundingMode = getUnsignedRoundingMode(roundingMode, sign);
+        long rounded;
+        if (remainder == 0L) {
+            rounded = roundingFloor;
+        } else {
+            rounded = applyUnsignedRoundingMode(
+                    roundingFloor,
+                    roundingCeiling,
+                    comparison,
+                    evenCardinality,
+                    unsignedRoundingMode);
         }
-        int largestUnitIndex = temporalUnitRank(largestUnit);
-        int smallestUnitIndex = temporalUnitRank(smallestUnit);
-        for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
-            String unit = temporalUnitByRank(unitIndex);
-            if (UNIT_WEEK.equals(unit) && !UNIT_WEEK.equals(largestUnit)) {
-                continue;
-            }
-
-            DateDurationFields endDuration;
-            if (UNIT_YEAR.equals(unit)) {
-                endDuration = new DateDurationFields(duration.years() + sign, 0, 0, 0);
-            } else if (UNIT_MONTH.equals(unit)) {
-                endDuration = adjustDateDurationRecord(duration, 0, 0L, duration.months() + sign);
-            } else {
-                endDuration = adjustDateDurationRecord(duration, 0, duration.weeks() + sign, null);
-            }
-
-            IsoDate endDate = calendarDateAddConstrain(context, originDate, endDuration);
-            if (context.hasPendingException() || endDate == null) {
-                return null;
-            }
-            boolean didExpandToEnd = Long.compare(nudgedEpochDay, endDate.toEpochDay()) != -sign;
-            if (didExpandToEnd) {
-                duration = endDuration;
-            } else {
-                break;
-            }
-        }
-        return duration;
-    }
-
-    private static IsoDate calendarDateAddConstrain(JSContext context, IsoDate baseDate, DateDurationFields dateDuration) {
-        TemporalDurationRecord durationRecord = new TemporalDurationRecord(
-                dateDuration.years(),
-                dateDuration.months(),
-                dateDuration.weeks(),
-                dateDuration.days(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0);
-        return addDurationToDate(context, baseDate, durationRecord, "constrain");
-    }
-
-    private static DateDurationFields calendarDateUntil(IsoDate one, IsoDate two, String largestUnit) {
-        int sign = -Integer.signum(IsoDate.compareIsoDate(one, two));
-        if (sign == 0) {
-            return DateDurationFields.ZERO;
-        }
-
-        long years = 0;
-        long months = 0;
-        if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
-            long candidateYears = (long) two.year() - one.year();
-            if (candidateYears != 0) {
-                candidateYears -= sign;
-            }
-            while (!isoDateSurpasses(sign, one.year() + candidateYears, one.month(), one.day(), two)) {
-                years = candidateYears;
-                candidateYears += sign;
-            }
-
-            long candidateMonths = sign;
-            YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + candidateMonths);
-            while (!isoDateSurpasses(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), one.day(), two)) {
-                months = candidateMonths;
-                candidateMonths += sign;
-                intermediateYearMonth = balanceIsoYearMonth(intermediateYearMonth.year(), intermediateYearMonth.month() + sign);
-            }
-
-            if (UNIT_MONTH.equals(largestUnit)) {
-                months += years * 12;
-                years = 0;
-            }
-        }
-
-        YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + months);
-        IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), one.day());
-        long dayDifference = two.toEpochDay() - constrainedDate.toEpochDay();
-        long weeks = 0;
-        if (UNIT_WEEK.equals(largestUnit)) {
-            weeks = dayDifference / 7;
-            dayDifference = dayDifference % 7;
-        }
-        return new DateDurationFields(years, months, weeks, dayDifference);
-    }
-
-    private static YearMonthBalance balanceIsoYearMonth(long year, long month) {
-        long monthIndex = month - 1;
-        long yearDelta = Math.floorDiv(monthIndex, 12L);
-        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        long normalizedYear = year + yearDelta;
-        return new YearMonthBalance(normalizedYear, normalizedMonth);
-    }
-
-    private static IsoDate constrainIsoDate(long year, int month, int day) {
-        int constrainedYear = (int) year;
-        int constrainedDay = Math.min(day, IsoDate.daysInMonth(constrainedYear, month));
-        return new IsoDate(constrainedYear, month, constrainedDay);
-    }
-
-    private static String canonicalizeTemporalUnit(String unitText, boolean allowAuto) {
-        if (unitText == null) {
-            return null;
-        }
-        if (allowAuto && UNIT_AUTO.equals(unitText)) {
-            return UNIT_AUTO;
-        }
-        return switch (unitText) {
-            case UNIT_YEAR, "years" -> UNIT_YEAR;
-            case UNIT_MONTH, "months" -> UNIT_MONTH;
-            case UNIT_WEEK, "weeks" -> UNIT_WEEK;
-            case UNIT_DAY, "days" -> UNIT_DAY;
-            case UNIT_HOUR, "hours" -> UNIT_HOUR;
-            case UNIT_MINUTE, "minutes" -> UNIT_MINUTE;
-            case UNIT_SECOND, "seconds" -> UNIT_SECOND;
-            case UNIT_MILLISECOND, "milliseconds" -> UNIT_MILLISECOND;
-            case UNIT_MICROSECOND, "microseconds" -> UNIT_MICROSECOND;
-            case UNIT_NANOSECOND, "nanoseconds" -> UNIT_NANOSECOND;
-            default -> null;
-        };
-    }
-
-    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
-    }
-
-    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(DIFFERENCE_ROUNDING_INCREMENT_OPTION));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TEMPORAL_MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
-    private static String getUnsignedRoundingMode(String roundingMode, String sign) {
-        boolean negativeSign = "negative".equals(sign);
-        return switch (roundingMode) {
-            case "ceil" -> negativeSign ? "zero" : "infinity";
-            case "floor" -> negativeSign ? "infinity" : "zero";
-            case "expand" -> "infinity";
-            case "trunc" -> "zero";
-            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
-            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
-            case "halfExpand" -> "half-infinity";
-            case "halfTrunc" -> "half-zero";
-            case "halfEven" -> "half-even";
-            default -> "half-infinity";
-        };
-    }
-
-    private static DifferenceSettings getDifferenceSettings(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArg) {
-        JSObject optionsObject = null;
-        if (!(optionsArg instanceof JSUndefined) && optionsArg != null) {
-            if (optionsArg instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
-            }
-        }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_LARGEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingMode = getDifferenceStringOption(context, optionsObject, DIFFERENCE_ROUNDING_MODE_OPTION, "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            smallestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_SMALLEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? UNIT_AUTO
-                : canonicalizeTemporalUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? UNIT_DAY
-                : canonicalizeTemporalUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-        if (!isValidDifferenceRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-        if (sinceOperation) {
-            roundingMode = negateRoundingMode(roundingMode);
-        }
-        if (!UNIT_AUTO.equals(largestUnit) && !isDateUnit(largestUnit)) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        if (!isDateUnit(smallestUnit)) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (UNIT_AUTO.equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits(UNIT_DAY, smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
-    }
-
-    private static boolean isCalendarUnit(String unit) {
-        return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit) || UNIT_WEEK.equals(unit);
-    }
-
-    private static boolean isDateUnit(String unit) {
-        return UNIT_YEAR.equals(unit)
-                || UNIT_MONTH.equals(unit)
-                || UNIT_WEEK.equals(unit)
-                || UNIT_DAY.equals(unit);
-    }
-
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
-    }
-
-    private static boolean isoDateSurpasses(int sign, long year, long month, long day, IsoDate isoDate) {
-        if (year != isoDate.year()) {
-            return sign * (year - isoDate.year()) > 0;
-        }
-        if (month != isoDate.month()) {
-            return sign * (month - isoDate.month()) > 0;
-        }
-        if (day != isoDate.day()) {
-            return sign * (day - isoDate.day()) > 0;
-        }
-        return false;
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
-    }
-
-    private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
-    }
-
-    private static long applyUnsignedRoundingMode(
-            long roundingFloor,
-            long roundingCeiling,
-            int comparison,
-            boolean evenCardinality,
-            String unsignedRoundingMode) {
-        if ("zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        if (comparison < 0) {
-            return roundingFloor;
-        }
-        if (comparison > 0) {
-            return roundingCeiling;
-        }
-        if ("half-zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("half-infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        return evenCardinality ? roundingFloor : roundingCeiling;
-    }
-
-    private static JSValue differenceTemporalPlainDate(
-            JSContext context,
-            JSTemporalPlainDate plainDate,
-            JSValue[] args,
-            boolean sinceOperation) {
-        JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        JSTemporalPlainDate other = TemporalPlainDateConstructor.toTemporalDateObject(context, otherArg);
-        if (context.hasPendingException() || other == null) {
-            return JSUndefined.INSTANCE;
-        }
-        if (!plainDate.getCalendarId().equals(other.getCalendarId())) {
-            context.throwRangeError("Temporal error: Mismatched calendars.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        DifferenceSettings settings = getDifferenceSettings(context, sinceOperation, optionsArg);
-        if (context.hasPendingException() || settings == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        IsoDate thisDate = plainDate.getIsoDate();
-        IsoDate otherDate = other.getIsoDate();
-        if (IsoDate.compareIsoDate(thisDate, otherDate) == 0) {
-            return TemporalDurationConstructor.createDuration(context, TemporalDurationRecord.ZERO);
-        }
-
-        DateDurationFields dateDifference = calendarDateUntil(thisDate, otherDate, settings.largestUnit());
-        boolean roundingNoOp = UNIT_DAY.equals(settings.smallestUnit()) && settings.roundingIncrement() == 1L;
-        if (!roundingNoOp) {
-            dateDifference = roundRelativeDurationDate(
-                    context,
-                    dateDifference,
-                    otherDate.toEpochDay(),
-                    thisDate,
-                    settings);
-            if (context.hasPendingException() || dateDifference == null) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
-        TemporalDurationRecord resultDuration = new TemporalDurationRecord(
-                dateDifference.years(),
-                dateDifference.months(),
-                dateDifference.weeks(),
-                dateDifference.days(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0);
-        if (sinceOperation) {
-            resultDuration = resultDuration.negated();
-        }
-        return TemporalDurationConstructor.createDuration(context, resultDuration);
+        return "positive".equals(sign) ? increment * rounded : -increment * rounded;
     }
 
     private static DateDurationFields roundRelativeDurationDate(
@@ -871,43 +897,20 @@ public final class TemporalPlainDatePrototype {
         return roundedDuration;
     }
 
-    private static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
-        long quotient = quantity / increment;
-        long remainder = quantity % increment;
-        String sign = quantity < 0 ? "negative" : "positive";
-        long roundingFloor = Math.abs(quotient);
-        long roundingCeiling = roundingFloor + 1L;
-        int comparison = Integer.compare(Long.compare(Math.abs(remainder * 2L), increment), 0);
-        boolean evenCardinality = Math.floorMod(roundingFloor, 2L) == 0L;
-        String unsignedRoundingMode = getUnsignedRoundingMode(roundingMode, sign);
-        long rounded;
-        if (remainder == 0L) {
-            rounded = roundingFloor;
-        } else {
-            rounded = applyUnsignedRoundingMode(
-                    roundingFloor,
-                    roundingCeiling,
-                    comparison,
-                    evenCardinality,
-                    unsignedRoundingMode);
+    public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "since");
+        if (plainDate == null) {
+            return JSUndefined.INSTANCE;
         }
-        return "positive".equals(sign) ? increment * rounded : -increment * rounded;
+        return differenceTemporalPlainDate(context, plainDate, args, true);
     }
 
-    private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case UNIT_YEAR -> 0;
-            case UNIT_MONTH -> 1;
-            case UNIT_WEEK -> 2;
-            case UNIT_DAY -> 3;
-            case UNIT_HOUR -> 4;
-            case UNIT_MINUTE -> 5;
-            case UNIT_SECOND -> 6;
-            case UNIT_MILLISECOND -> 7;
-            case UNIT_MICROSECOND -> 8;
-            case UNIT_NANOSECOND -> 9;
-            default -> 10;
-        };
+    public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "subtract");
+        if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return addOrSubtract(context, plainDate, args, -1);
     }
 
     private static String temporalUnitByRank(int unitRank) {
@@ -926,20 +929,20 @@ public final class TemporalPlainDatePrototype {
         };
     }
 
-    public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "since");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return differenceTemporalPlainDate(context, plainDate, args, true);
-    }
-
-    public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "subtract");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return addOrSubtract(context, plainDate, args, -1);
+    private static int temporalUnitRank(String unit) {
+        return switch (unit) {
+            case UNIT_YEAR -> 0;
+            case UNIT_MONTH -> 1;
+            case UNIT_WEEK -> 2;
+            case UNIT_DAY -> 3;
+            case UNIT_HOUR -> 4;
+            case UNIT_MINUTE -> 5;
+            case UNIT_SECOND -> 6;
+            case UNIT_MILLISECOND -> 7;
+            case UNIT_MICROSECOND -> 8;
+            case UNIT_NANOSECOND -> 9;
+            default -> 10;
+        };
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -974,29 +977,21 @@ public final class TemporalPlainDatePrototype {
         }
         IsoTime time = IsoTime.MIDNIGHT;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            JSValue timeArg = args[0];
-            if (timeArg instanceof JSTemporalPlainTime pt) {
-                time = pt.getIsoTime();
-            } else if (timeArg instanceof JSString timeStr) {
-                time = TemporalParser.parseTimeString(context, timeStr.value());
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-            } else if (timeArg instanceof JSObject timeObj) {
-                int hour = TemporalUtils.getIntegerField(context, timeObj, "hour", 0);
-                int minute = TemporalUtils.getIntegerField(context, timeObj, "minute", 0);
-                int second = TemporalUtils.getIntegerField(context, timeObj, "second", 0);
-                int millisecond = TemporalUtils.getIntegerField(context, timeObj, "millisecond", 0);
-                int microsecond = TemporalUtils.getIntegerField(context, timeObj, "microsecond", 0);
-                int nanosecond = TemporalUtils.getIntegerField(context, timeObj, "nanosecond", 0);
-                if (context.hasPendingException()) {
-                    return JSUndefined.INSTANCE;
-                }
-                time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(context, args[0], JSUndefined.INSTANCE);
+            if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
+                return JSUndefined.INSTANCE;
             }
+            time = plainTime.getIsoTime();
         }
+
+        IsoDate isoDate = plainDate.getIsoDate();
+        if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY && IsoTime.compareIsoTime(time, IsoTime.MIDNIGHT) == 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new com.caoccao.qjs4j.core.temporal.IsoDateTime(plainDate.getIsoDate(), time), plainDate.getCalendarId());
+                new com.caoccao.qjs4j.core.temporal.IsoDateTime(isoDate, time), plainDate.getCalendarId());
     }
 
     public static JSValue toPlainMonthDay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1025,6 +1020,9 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String result = plainDate.getIsoDate().toString();
         result = TemporalUtils.maybeAppendCalendar(result, plainDate.getCalendarId(), calendarNameOption);
         return new JSString(result);

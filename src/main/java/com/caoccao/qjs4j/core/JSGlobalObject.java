@@ -2178,6 +2178,7 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "calendarId", TemporalPlainMonthDayPrototype::calendarId);
         defineTemporalGetter(prototype, "monthCode", TemporalPlainMonthDayPrototype::monthCode);
         defineTemporalGetter(prototype, "day", TemporalPlainMonthDayPrototype::day);
+        defineTemporalGetter(prototype, "referenceISOYear", TemporalPlainMonthDayPrototype::referenceISOYear);
 
         // Methods
         prototype.defineProperty(PropertyKey.fromString("with"), new JSNativeFunction(context, "with", 1, TemporalPlainMonthDayPrototype::with), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -2247,6 +2248,7 @@ public final class JSGlobalObject {
         defineTemporalGetter(prototype, "year", TemporalPlainYearMonthPrototype::year);
         defineTemporalGetter(prototype, "month", TemporalPlainYearMonthPrototype::month);
         defineTemporalGetter(prototype, "monthCode", TemporalPlainYearMonthPrototype::monthCode);
+        defineTemporalGetter(prototype, "referenceISODay", TemporalPlainYearMonthPrototype::referenceISODay);
         defineTemporalGetter(prototype, "daysInMonth", TemporalPlainYearMonthPrototype::daysInMonth);
         defineTemporalGetter(prototype, "daysInYear", TemporalPlainYearMonthPrototype::daysInYear);
         defineTemporalGetter(prototype, "monthsInYear", TemporalPlainYearMonthPrototype::monthsInYear);

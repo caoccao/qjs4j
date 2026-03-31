@@ -258,10 +258,25 @@ public final class TemporalUtils {
      * Returns "auto", "always", "never", or "critical".
      */
     public static String getCalendarNameOption(JSContext context, JSValue options) {
-        if (!(options instanceof JSObject optionsObj)) {
+        if (options instanceof JSUndefined || options == null) {
             return "auto";
         }
-        return getStringOption(context, optionsObj, "calendarName", "auto");
+        if (!(options instanceof JSObject optionsObj)) {
+            context.throwTypeError("Temporal error: Option must be object: options.");
+            return null;
+        }
+        String calendarNameOption = getStringOption(context, optionsObj, "calendarName", "auto");
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!"auto".equals(calendarNameOption)
+                && !"always".equals(calendarNameOption)
+                && !"never".equals(calendarNameOption)
+                && !"critical".equals(calendarNameOption)) {
+            context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
+            return null;
+        }
+        return calendarNameOption;
     }
 
     /**

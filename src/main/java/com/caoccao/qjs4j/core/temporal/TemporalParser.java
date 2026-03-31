@@ -63,6 +63,66 @@ public final class TemporalParser {
         };
     }
 
+    private static boolean isAmbiguousFourDigitTime(String value) {
+        if (value.length() != 4
+                || !Character.isDigit(value.charAt(0))
+                || !Character.isDigit(value.charAt(1))
+                || !Character.isDigit(value.charAt(2))
+                || !Character.isDigit(value.charAt(3))) {
+            return false;
+        }
+        int month = parseFixedTwoDigits(value, 0);
+        int day = parseFixedTwoDigits(value, 2);
+        return IsoDate.isValidIsoDate(1972, month, day);
+    }
+
+    private static boolean isAmbiguousSixDigitTime(String value) {
+        if (value.length() != 6
+                || !Character.isDigit(value.charAt(0))
+                || !Character.isDigit(value.charAt(1))
+                || !Character.isDigit(value.charAt(2))
+                || !Character.isDigit(value.charAt(3))
+                || !Character.isDigit(value.charAt(4))
+                || !Character.isDigit(value.charAt(5))) {
+            return false;
+        }
+        int month = parseFixedTwoDigits(value, 4);
+        return month >= 1 && month <= 12;
+    }
+
+    private static boolean isAmbiguousTimeStringWithoutDesignator(String input) {
+        String candidate = input;
+        int annotationStart = candidate.indexOf('[');
+        if (annotationStart >= 0) {
+            candidate = candidate.substring(0, annotationStart);
+        }
+        if (isAmbiguousFourDigitTime(candidate) || isAmbiguousSixDigitTime(candidate)) {
+            return true;
+        }
+        if (candidate.length() == 5
+                && Character.isDigit(candidate.charAt(0))
+                && Character.isDigit(candidate.charAt(1))
+                && candidate.charAt(2) == '-'
+                && Character.isDigit(candidate.charAt(3))
+                && Character.isDigit(candidate.charAt(4))) {
+            int month = parseFixedTwoDigits(candidate, 0);
+            int day = parseFixedTwoDigits(candidate, 3);
+            return IsoDate.isValidIsoDate(1972, month, day);
+        }
+        if (candidate.length() == 7
+                && Character.isDigit(candidate.charAt(0))
+                && Character.isDigit(candidate.charAt(1))
+                && Character.isDigit(candidate.charAt(2))
+                && Character.isDigit(candidate.charAt(3))
+                && candidate.charAt(4) == '-'
+                && Character.isDigit(candidate.charAt(5))
+                && Character.isDigit(candidate.charAt(6))) {
+            int month = parseFixedTwoDigits(candidate, 5);
+            return month >= 1 && month <= 12;
+        }
+        return false;
+    }
+
     /**
      * Parse an ISO date string into an IsoDate.
      * Returns null and sets pending exception on error.
@@ -174,6 +234,10 @@ public final class TemporalParser {
         return parser.parseDuration(context);
     }
 
+    private static int parseFixedTwoDigits(String value, int index) {
+        return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
+    }
+
     /**
      * Parse an Instant string like "1970-01-01T00:00:00Z" or "1970-01-01T00:00:00+00:00".
      * Returns null and sets pending exception on error.
@@ -259,9 +323,67 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
         TemporalParser parser = new TemporalParser(input);
-        // Try to parse as time directly
-        IsoTime time = parser.parseTime(context);
+        IsoTime time;
+        if (parser.pos < parser.input.length() && (parser.current() == 'T' || parser.current() == 't')) {
+            parser.pos++;
+            time = parser.parseInstantTime(context);
+        } else {
+            int initialPosition = parser.pos;
+            IsoDate parsedDate = parser.parseDate(context);
+            if (parsedDate != null && !context.hasPendingException()) {
+                if (parser.pos >= parser.input.length()) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                char separator = parser.current();
+                if (separator != 'T' && separator != 't' && separator != ' ') {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                parser.pos++;
+                time = parser.parseInstantTime(context);
+            } else {
+                context.clearPendingException();
+                parser.pos = initialPosition;
+                if (isAmbiguousTimeStringWithoutDesignator(input)) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                time = parser.parseInstantTime(context);
+            }
+        }
+        if (time == null || context.hasPendingException()) {
+            return null;
+        }
+
+        if (parser.pos < parser.input.length()) {
+            char marker = parser.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            if (marker == '+' || marker == '-') {
+                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+
+        parser.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (parser.pos != parser.input.length()) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
         return time;
     }
 

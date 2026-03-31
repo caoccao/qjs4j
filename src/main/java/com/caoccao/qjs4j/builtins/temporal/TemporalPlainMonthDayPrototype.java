@@ -53,8 +53,6 @@ public final class TemporalPlainMonthDayPrototype {
         return JSNumber.of(md.getIsoDate().day());
     }
 
-    // ========== Methods ==========
-
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "equals");
         if (md == null) return JSUndefined.INSTANCE;
@@ -67,10 +65,18 @@ public final class TemporalPlainMonthDayPrototype {
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
+    // ========== Methods ==========
+
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "monthCode");
         if (md == null) return JSUndefined.INSTANCE;
         return new JSString(TemporalUtils.monthCode(md.getIsoDate().month()));
+    }
+
+    public static JSValue referenceISOYear(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "referenceISOYear");
+        if (md == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(md.getIsoDate().year());
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -123,8 +129,18 @@ public final class TemporalPlainMonthDayPrototype {
         JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "toString");
         if (md == null) return JSUndefined.INSTANCE;
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         IsoDate d = md.getIsoDate();
-        String result = String.format(Locale.ROOT, "%02d-%02d", d.month(), d.day());
+        boolean includeReferenceYear = !"never".equals(calendarNameOption)
+                && (!"auto".equals(calendarNameOption) || !"iso8601".equals(md.getCalendarId()));
+        String result;
+        if (includeReferenceYear) {
+            result = TemporalUtils.formatIsoDate(d.year(), d.month(), d.day());
+        } else {
+            result = String.format(Locale.ROOT, "%02d-%02d", d.month(), d.day());
+        }
         result = TemporalUtils.maybeAppendCalendar(result, md.getCalendarId(), calendarNameOption);
         return new JSString(result);
     }

@@ -129,34 +129,79 @@ public final class TemporalPlainTimeConstructor {
         return toTemporalTime(context, item, options);
     }
 
+    private static boolean isUndefinedOrNull(JSValue value) {
+        return value instanceof JSUndefined || value == null;
+    }
+
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options) {
         String overflow = TemporalUtils.getOverflowOption(context, options);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        int hour = TemporalUtils.getIntegerField(context, fields, "hour", 0);
+        boolean hasTimeField = false;
+
+        JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int minute = TemporalUtils.getIntegerField(context, fields, "minute", 0);
+        hasTimeField |= !isUndefinedOrNull(hourValue);
+        int hour = toIntegerFieldOrDefault(context, hourValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int second = TemporalUtils.getIntegerField(context, fields, "second", 0);
+
+        JSValue microsecondValue = fields.get(PropertyKey.fromString("microsecond"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int millisecond = TemporalUtils.getIntegerField(context, fields, "millisecond", 0);
+        hasTimeField |= !isUndefinedOrNull(microsecondValue);
+        int microsecond = toIntegerFieldOrDefault(context, microsecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int microsecond = TemporalUtils.getIntegerField(context, fields, "microsecond", 0);
+
+        JSValue millisecondValue = fields.get(PropertyKey.fromString("millisecond"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int nanosecond = TemporalUtils.getIntegerField(context, fields, "nanosecond", 0);
+        hasTimeField |= !isUndefinedOrNull(millisecondValue);
+        int millisecond = toIntegerFieldOrDefault(context, millisecondValue, 0);
         if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue minuteValue = fields.get(PropertyKey.fromString("minute"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        hasTimeField |= !isUndefinedOrNull(minuteValue);
+        int minute = toIntegerFieldOrDefault(context, minuteValue, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue nanosecondValue = fields.get(PropertyKey.fromString("nanosecond"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        hasTimeField |= !isUndefinedOrNull(nanosecondValue);
+        int nanosecond = toIntegerFieldOrDefault(context, nanosecondValue, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue secondValue = fields.get(PropertyKey.fromString("second"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        hasTimeField |= !isUndefinedOrNull(secondValue);
+        int second = toIntegerFieldOrDefault(context, secondValue, 0);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!hasTimeField) {
+            context.throwTypeError("Temporal error: Time-like argument must be object or string");
             return JSUndefined.INSTANCE;
         }
 
@@ -178,6 +223,13 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         return createPlainTime(context, time);
+    }
+
+    private static int toIntegerFieldOrDefault(JSContext context, JSValue value, int defaultValue) {
+        if (isUndefinedOrNull(value)) {
+            return defaultValue;
+        }
+        return TemporalUtils.toIntegerThrowOnInfinity(context, value);
     }
 
     /**

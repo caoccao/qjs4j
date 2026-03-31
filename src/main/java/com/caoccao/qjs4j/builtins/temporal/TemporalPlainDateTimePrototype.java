@@ -404,14 +404,17 @@ public final class TemporalPlainDateTimePrototype {
         if (pdt == null) return JSUndefined.INSTANCE;
 
         Object fractionalSecondDigits = "auto";
-        String calendarNameOption = "auto";
+        JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String calendarNameOption = TemporalUtils.getCalendarNameOption(context, optionsValue);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
-        if (args.length > 0 && args[0] instanceof JSObject options) {
+        if (optionsValue instanceof JSObject options) {
             JSValue fsdValue = options.get(PropertyKey.fromString("fractionalSecondDigits"));
             if (fsdValue instanceof JSNumber fsdNum) {
                 fractionalSecondDigits = (int) fsdNum.value();
             }
-            calendarNameOption = TemporalUtils.getCalendarNameOption(context, args[0]);
         }
 
         IsoDate d = pdt.getIsoDateTime().date();

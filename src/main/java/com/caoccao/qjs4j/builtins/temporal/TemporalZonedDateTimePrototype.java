@@ -567,6 +567,9 @@ public final class TemporalZonedDateTimePrototype {
         JSTemporalZonedDateTime zdt = checkReceiver(context, thisArg, "toString");
         if (zdt == null) return JSUndefined.INSTANCE;
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String result = formatZonedDateTimeBase(zdt);
         result = TemporalUtils.maybeAppendCalendar(result, zdt.getCalendarId(), calendarNameOption);
         return new JSString(result);

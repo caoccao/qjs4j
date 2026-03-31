@@ -102,7 +102,7 @@ public final class TemporalPlainTimePrototype {
 
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainTime plainTime)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return plainTime;
