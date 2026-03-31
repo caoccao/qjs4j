@@ -228,12 +228,14 @@ public final class TemporalUtils {
     public static String formatIsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
-        if (nanosecond != 0) {
-            sb.append(String.format(Locale.ROOT, ".%03d%03d%03d", millisecond, microsecond, nanosecond));
-        } else if (microsecond != 0) {
-            sb.append(String.format(Locale.ROOT, ".%03d%03d", millisecond, microsecond));
-        } else if (millisecond != 0) {
-            sb.append(String.format(Locale.ROOT, ".%03d", millisecond));
+        int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
+        if (totalFractionalNanoseconds != 0) {
+            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+            int end = fractional.length();
+            while (end > 0 && fractional.charAt(end - 1) == '0') {
+                end--;
+            }
+            sb.append('.').append(fractional, 0, end);
         }
         return sb.toString();
     }
