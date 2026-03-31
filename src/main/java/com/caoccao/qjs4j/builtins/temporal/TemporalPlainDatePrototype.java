@@ -17,12 +17,10 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
+import java.time.DateTimeException;
 
 /**
  * Implementation of Temporal.PlainDate prototype methods.
@@ -1026,6 +1024,77 @@ public final class TemporalPlainDatePrototype {
         String result = plainDate.getIsoDate().toString();
         result = TemporalUtils.maybeAppendCalendar(result, plainDate.getCalendarId(), calendarNameOption);
         return new JSString(result);
+    }
+
+    private static String toTemporalTimeZoneIdentifier(JSContext context, JSValue timeZoneLike) {
+        if (!(timeZoneLike instanceof JSString timeZoneString)) {
+            context.throwTypeError("Temporal error: Time zone must be string.");
+            return null;
+        }
+        return TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneString.value());
+    }
+
+    public static JSValue toZonedDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toZonedDateTime");
+        if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue timeZoneLike = item;
+        JSValue plainTimeLike = JSUndefined.INSTANCE;
+        if (item instanceof JSObject itemObject) {
+            JSValue maybeTimeZone = itemObject.get(PropertyKey.fromString("timeZone"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(maybeTimeZone instanceof JSUndefined) && maybeTimeZone != null) {
+                timeZoneLike = maybeTimeZone;
+                plainTimeLike = itemObject.get(PropertyKey.fromString("plainTime"));
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
+
+        String timeZoneId = toTemporalTimeZoneIdentifier(context, timeZoneLike);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDate isoDate = plainDate.getIsoDate();
+        IsoTime isoTime = IsoTime.MIDNIGHT;
+        if (!(plainTimeLike instanceof JSUndefined) && plainTimeLike != null) {
+            JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(context, plainTimeLike, JSUndefined.INSTANCE);
+            if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
+                return JSUndefined.INSTANCE;
+            }
+            isoTime = plainTime.getIsoTime();
+            if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY
+                    && IsoTime.compareIsoTime(isoTime, IsoTime.MIDNIGHT) == 0) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        BigInteger epochNanoseconds;
+        try {
+            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    new IsoDateTime(isoDate, isoTime),
+                    timeZoneId);
+        } catch (DateTimeException e) {
+            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+            return JSUndefined.INSTANCE;
+        }
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+                context,
+                epochNanoseconds,
+                timeZoneId,
+                plainDate.getCalendarId());
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

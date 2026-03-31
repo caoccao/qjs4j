@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
+import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
@@ -238,6 +239,16 @@ public final class TemporalPlainTimeConstructor {
     public static JSValue toTemporalTime(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainTime plainTime) {
             return createPlainTime(context, plainTime.getIsoTime());
+        }
+        if (item instanceof JSTemporalPlainDateTime plainDateTime) {
+            return createPlainTime(context, plainDateTime.getIsoDateTime().time());
+        }
+        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            return createPlainTime(
+                    context,
+                    TemporalTimeZone.epochNsToDateTimeInZone(
+                            zonedDateTime.getEpochNanoseconds(),
+                            zonedDateTime.getTimeZoneId()).time());
         }
         if (item instanceof JSObject itemObj) {
             return timeFromFields(context, itemObj, options);
