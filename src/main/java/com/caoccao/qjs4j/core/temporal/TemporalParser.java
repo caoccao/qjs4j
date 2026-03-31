@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSString;
 
 import java.math.BigInteger;
 
@@ -264,7 +265,7 @@ public final class TemporalParser {
         String calendar = "iso8601";
         String calendarAnnotation = firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
-            calendar = TemporalUtils.validateCalendar(context, new com.caoccao.qjs4j.core.JSString(calendarAnnotation));
+            calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -339,6 +340,33 @@ public final class TemporalParser {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing month value.");
             return null;
+        }
+        if (input.length() == 5
+                && Character.isDigit(input.charAt(0))
+                && Character.isDigit(input.charAt(1))
+                && input.charAt(2) == '-'
+                && Character.isDigit(input.charAt(3))
+                && Character.isDigit(input.charAt(4))) {
+            int month = parseFixedTwoDigits(input, 0);
+            int day = parseFixedTwoDigits(input, 3);
+            if (!IsoDate.isValidIsoDate(1972, month, day)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            return new IsoDate(1972, month, day);
+        }
+        if (input.length() == 4
+                && Character.isDigit(input.charAt(0))
+                && Character.isDigit(input.charAt(1))
+                && Character.isDigit(input.charAt(2))
+                && Character.isDigit(input.charAt(3))) {
+            int month = parseFixedTwoDigits(input, 0);
+            int day = parseFixedTwoDigits(input, 2);
+            if (!IsoDate.isValidIsoDate(1972, month, day)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            return new IsoDate(1972, month, day);
         }
         // Try "--MM-DD" format first
         if (input.startsWith("--")) {

@@ -861,6 +861,35 @@ public final class TemporalPlainDateTimePrototype {
         };
     }
 
+    private static MonthCodeInfo parseMonthCodeForPlainDateTimeWith(JSContext context, String monthCode) {
+        if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        if (monthCode.charAt(0) != 'M') {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int month = Integer.parseInt(monthCode.substring(1, 3));
+        boolean leapMonth = false;
+        if (monthCode.length() == 4) {
+            if (monthCode.charAt(3) != 'L') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            leapMonth = true;
+        }
+        if (month < 1 || month > 12) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return new MonthCodeInfo(month, leapMonth);
+    }
+
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "round");
         if (pdt == null) {
@@ -1233,8 +1262,38 @@ public final class TemporalPlainDateTimePrototype {
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "with");
-        if (pdt == null) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
+            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (fields instanceof JSTemporalPlainDate
+                || fields instanceof JSTemporalPlainDateTime
+                || fields instanceof JSTemporalPlainMonthDay
+                || fields instanceof JSTemporalPlainTime
+                || fields instanceof JSTemporalPlainYearMonth
+                || fields instanceof JSTemporalZonedDateTime) {
+            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
+            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
         }
@@ -1242,39 +1301,222 @@ public final class TemporalPlainDateTimePrototype {
         IsoDate origDate = pdt.getIsoDateTime().date();
         IsoTime origTime = pdt.getIsoDateTime().time();
 
-        int year = TemporalUtils.getIntegerField(context, fields, "year", origDate.year());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int month = TemporalUtils.getIntegerField(context, fields, "month", origDate.month());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int day = TemporalUtils.getIntegerField(context, fields, "day", origDate.day());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int hour = TemporalUtils.getIntegerField(context, fields, "hour", origTime.hour());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int minute = TemporalUtils.getIntegerField(context, fields, "minute", origTime.minute());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int second = TemporalUtils.getIntegerField(context, fields, "second", origTime.second());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int millisecond = TemporalUtils.getIntegerField(context, fields, "millisecond", origTime.millisecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int microsecond = TemporalUtils.getIntegerField(context, fields, "microsecond", origTime.microsecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int nanosecond = TemporalUtils.getIntegerField(context, fields, "nanosecond", origTime.nanosecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        JSValue dayValue = fields.get(PropertyKey.fromString("day"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasDay = !(dayValue instanceof JSUndefined) && dayValue != null;
+        int day = origDate.day();
+        if (hasDay) {
+            day = TemporalUtils.toIntegerThrowOnInfinity(context, dayValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
-        IsoDate constrained = TemporalUtils.constrainIsoDate(year, month, day);
-        IsoTime constrainedTime = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new IsoDateTime(constrained, constrainedTime), pdt.getCalendarId());
+        JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasHour = !(hourValue instanceof JSUndefined) && hourValue != null;
+        int hour = origTime.hour();
+        if (hasHour) {
+            hour = TemporalUtils.toIntegerThrowOnInfinity(context, hourValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue microsecondValue = fields.get(PropertyKey.fromString("microsecond"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMicrosecond = !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
+        int microsecond = origTime.microsecond();
+        if (hasMicrosecond) {
+            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, microsecondValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue millisecondValue = fields.get(PropertyKey.fromString("millisecond"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMillisecond = !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
+        int millisecond = origTime.millisecond();
+        if (hasMillisecond) {
+            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, millisecondValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue minuteValue = fields.get(PropertyKey.fromString("minute"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMinute = !(minuteValue instanceof JSUndefined) && minuteValue != null;
+        int minute = origTime.minute();
+        if (hasMinute) {
+            minute = TemporalUtils.toIntegerThrowOnInfinity(context, minuteValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue monthValue = fields.get(PropertyKey.fromString("month"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMonth = !(monthValue instanceof JSUndefined) && monthValue != null;
+        int month = origDate.month();
+        if (hasMonth) {
+            month = TemporalUtils.toIntegerThrowOnInfinity(context, monthValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
+        String monthCode = null;
+        if (hasMonthCode) {
+            monthCode = JSTypeConversions.toString(context, monthCodeValue).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue nanosecondValue = fields.get(PropertyKey.fromString("nanosecond"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasNanosecond = !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
+        int nanosecond = origTime.nanosecond();
+        if (hasNanosecond) {
+            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, nanosecondValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue secondValue = fields.get(PropertyKey.fromString("second"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasSecond = !(secondValue instanceof JSUndefined) && secondValue != null;
+        int second = origTime.second();
+        if (hasSecond) {
+            second = TemporalUtils.toIntegerThrowOnInfinity(context, secondValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue yearValue = fields.get(PropertyKey.fromString("year"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
+        int year = origDate.year();
+        if (hasYear) {
+            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        boolean hasAnyField = hasDay
+                || hasHour
+                || hasMicrosecond
+                || hasMillisecond
+                || hasMinute
+                || hasMonth
+                || hasMonthCode
+                || hasNanosecond
+                || hasSecond
+                || hasYear;
+        if (!hasAnyField) {
+            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (day < 1 || month < 1) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        MonthCodeInfo parsedMonthCode = null;
+        if (hasMonthCode) {
+            parsedMonthCode = parseMonthCodeForPlainDateTimeWith(context, monthCode);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        if (parsedMonthCode != null) {
+            if (parsedMonthCode.leapMonth()) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            if (hasMonth && month != parsedMonthCode.month()) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            month = parsedMonthCode.month();
+        }
+
+        IsoDate resultDate;
+        IsoTime resultTime;
+        if ("reject".equals(overflow)) {
+            if (!IsoDate.isValidIsoDate(year, month, day)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            resultDate = new IsoDate(year, month, day);
+            resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        } else {
+            resultDate = TemporalUtils.constrainIsoDate(year, month, day);
+            resultTime = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        }
+
+        if (!isValidPlainDateTimeRange(resultDate, resultTime)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+                context,
+                new IsoDateTime(resultDate, resultTime),
+                pdt.getCalendarId());
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "withCalendar");
-        if (pdt == null) return JSUndefined.INSTANCE;
-
-        String calendarId = "iso8601";
-        if (args.length > 0) {
-            calendarId = TemporalUtils.validateCalendar(context, args[0]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
+            context.throwTypeError("Temporal error: Calendar is required.");
+            return JSUndefined.INSTANCE;
+        }
+        String calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context, pdt.getIsoDateTime(), calendarId);
     }
@@ -1323,6 +1565,9 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private record FractionalSecondDigitsOption(boolean auto, int digits) {
+    }
+
+    private record MonthCodeInfo(int month, boolean leapMonth) {
     }
 
     private record RoundSettings(String smallestUnit, long roundingIncrement, String roundingMode) {
