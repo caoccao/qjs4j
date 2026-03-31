@@ -152,6 +152,10 @@ public final class TemporalParser {
      * Returns null and sets pending exception on error.
      */
     public static IsoDate parseDateString(JSContext context, String input) {
+        return parseDateString(context, input, true);
+    }
+
+    private static IsoDate parseDateString(JSContext context, String input, boolean enforceIsoDateRange) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -161,7 +165,7 @@ public final class TemporalParser {
             return null;
         }
         TemporalParser parser = new TemporalParser(input);
-        IsoDate date = parser.parseDate(context);
+        IsoDate date = parser.parseDate(context, enforceIsoDateRange);
         if (date == null) {
             return null;
         }
@@ -374,7 +378,7 @@ public final class TemporalParser {
                         + "-"
                         + (day < 10 ? "0" : "") + day
                         + remainder;
-                IsoDate parsedDate = parseDateString(context, syntheticDateString);
+                IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
                 if (parsedDate == null) {
                     return null;
                 }
@@ -396,7 +400,7 @@ public final class TemporalParser {
                         + "-"
                         + (day < 10 ? "0" : "") + day
                         + remainder;
-                IsoDate parsedDate = parseDateString(context, syntheticDateString);
+                IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
                 if (parsedDate == null) {
                     return null;
                 }
@@ -416,14 +420,14 @@ public final class TemporalParser {
                     + "-"
                     + (day < 10 ? "0" : "") + day
                     + remainder;
-            IsoDate parsedDate = parseDateString(context, syntheticDateString);
+            IsoDate parsedDate = parseDateString(context, syntheticDateString, false);
             if (parsedDate == null) {
                 return null;
             }
             return new IsoDate(1972, parsedDate.month(), parsedDate.day());
         }
 
-        IsoDate date = parseDateString(context, input);
+        IsoDate date = parseDateString(context, input, false);
         if (date == null) {
             return null;
         }
@@ -687,6 +691,19 @@ public final class TemporalParser {
                 && (annotationValue.charAt(0) == '+' || annotationValue.charAt(0) == '-');
     }
 
+    private boolean isValidIsoDateForParsing(int year, int month, int day, boolean enforceIsoDateRange) {
+        if (month < 1 || month > 12) {
+            return false;
+        }
+        if (day < 1 || day > IsoDate.daysInMonth(year, month)) {
+            return false;
+        }
+        if (!enforceIsoDateRange) {
+            return true;
+        }
+        return IsoDate.isValidIsoDate(year, month, day);
+    }
+
     private void parseAnnotations() {
         while (pos < input.length() && input.charAt(pos) == '[') {
             int end = input.indexOf(']', pos);
@@ -698,6 +715,10 @@ public final class TemporalParser {
     }
 
     private IsoDate parseDate(JSContext context) {
+        return parseDate(context, true);
+    }
+
+    private IsoDate parseDate(JSContext context, boolean enforceIsoDateRange) {
         int year = parseYear(context);
         if (context.hasPendingException()) {
             return null;
@@ -727,7 +748,7 @@ public final class TemporalParser {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!IsoDate.isValidIsoDate(year, month, day)) {
+        if (!isValidIsoDateForParsing(year, month, day, enforceIsoDateRange)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }

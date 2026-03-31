@@ -41,7 +41,7 @@ public final class TemporalPlainMonthDayPrototype {
 
     private static JSTemporalPlainMonthDay checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainMonthDay md)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return md;
@@ -61,6 +61,7 @@ public final class TemporalPlainMonthDayPrototype {
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
         boolean equal = md.getIsoDate().month() == other.getIsoDate().month()
                 && md.getIsoDate().day() == other.getIsoDate().day()
+                && md.getIsoDate().year() == other.getIsoDate().year()
                 && md.getCalendarId().equals(other.getCalendarId());
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
@@ -105,24 +106,33 @@ public final class TemporalPlainMonthDayPrototype {
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainMonthDay md = checkReceiver(context, thisArg, "toPlainDate");
-        if (md == null) return JSUndefined.INSTANCE;
+        if (md == null) {
+            return JSUndefined.INSTANCE;
+        }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
         int year = TemporalUtils.getIntegerField(context, fields, "year", Integer.MIN_VALUE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         if (year == Integer.MIN_VALUE) {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
         IsoDate d = md.getIsoDate();
-        if (!IsoDate.isValidIsoDate(year, d.month(), d.day())) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+        int month = d.month();
+        int day = d.day();
+        if (!IsoDate.isValidIsoDate(year, month, day)) {
+            day = Math.min(day, IsoDate.daysInMonth(year, month));
+            if (!IsoDate.isValidIsoDate(year, month, day)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         }
         return TemporalPlainDateConstructor.createPlainDate(context,
-                new IsoDate(year, d.month(), d.day()), md.getCalendarId());
+                new IsoDate(year, month, day), md.getCalendarId());
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -170,6 +170,15 @@ public final class TemporalPlainMonthDayConstructor {
         }
         boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
         int year = 1972;
+
+        ParsedMonthCode parsedMonthCode = null;
+        if (hasMonthCode) {
+            parsedMonthCode = parseMonthCodeSyntaxForMonthDayFrom(context, monthCode);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
         if (hasYear) {
             year = TemporalUtils.toIntegerThrowOnInfinity(context, yearValue);
             if (context.hasPendingException()) {
@@ -192,14 +201,6 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        ParsedMonthCode parsedMonthCode = null;
-        if (hasMonthCode) {
-            parsedMonthCode = parseMonthCodeForMonthDayFrom(context, monthCode);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
-        }
-
         int resolvedMonth = hasMonth ? month : parsedMonthCode.month();
         if (resolvedMonth < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -207,6 +208,10 @@ public final class TemporalPlainMonthDayConstructor {
         }
 
         if (parsedMonthCode != null) {
+            if (parsedMonthCode.month() < 1 || parsedMonthCode.month() > 12) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
             if (parsedMonthCode.leapMonth()) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
@@ -251,7 +256,7 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, new IsoDate(date.year(), date.month(), date.day()), calendar);
     }
 
-    private static ParsedMonthCode parseMonthCodeForMonthDayFrom(JSContext context, String monthCode) {
+    private static ParsedMonthCode parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -272,10 +277,6 @@ public final class TemporalPlainMonthDayConstructor {
                 return null;
             }
             leapMonth = true;
-        }
-        if (month < 1 || month > 12) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
         }
         return new ParsedMonthCode(month, leapMonth);
     }
