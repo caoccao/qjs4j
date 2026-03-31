@@ -27,6 +27,7 @@ import java.math.BigInteger;
 public final class TemporalPlainDateTimePrototype {
     private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
     private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
+    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
     private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
     private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
     private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
@@ -198,6 +199,19 @@ public final class TemporalPlainDateTimePrototype {
         return new JSString(pdt.getCalendarId());
     }
 
+    private static String canonicalizeSmallestUnit(String unitText) {
+        return switch (unitText) {
+            case "day", "days" -> "day";
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
     private static JSTemporalPlainDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainDateTime pdt)) {
             context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
@@ -266,6 +280,98 @@ public final class TemporalPlainDateTimePrototype {
         return JSUndefined.INSTANCE;
     }
 
+    private static String getRequiredSmallestUnitOption(JSContext context, JSObject optionsObject) {
+        JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (smallestUnitValue instanceof JSUndefined || smallestUnitValue == null) {
+            context.throwRangeError("Temporal error: Must specify a roundTo parameter.");
+            return null;
+        }
+        return JSTypeConversions.toString(context, smallestUnitValue).value();
+    }
+
+    private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
+        long roundingIncrement = 1L;
+        String roundingMode = "halfExpand";
+        String smallestUnitText;
+
+        if (roundTo instanceof JSString unitString) {
+            smallestUnitText = unitString.value();
+        } else if (roundTo instanceof JSObject optionsObject) {
+            // Read and coerce all option properties before algorithmic validation.
+            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            roundingMode = getRoundingModeOption(context, optionsObject);
+            if (context.hasPendingException() || roundingMode == null) {
+                return null;
+            }
+            smallestUnitText = getRequiredSmallestUnitOption(context, optionsObject);
+            if (context.hasPendingException() || smallestUnitText == null) {
+                return null;
+            }
+        } else {
+            context.throwTypeError("Temporal error: roundTo must be an object.");
+            return null;
+        }
+
+        if (!isValidRoundingMode(roundingMode)) {
+            context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingMode);
+            return null;
+        }
+
+        String smallestUnit = canonicalizeSmallestUnit(smallestUnitText);
+        if (smallestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid unit for rounding.");
+            return null;
+        }
+
+        if (!isValidRoundingIncrementForSmallestUnit(smallestUnit, roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return null;
+        }
+
+        return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
+    }
+
+    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
+        JSValue roundingIncrementValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (roundingIncrementValue instanceof JSUndefined || roundingIncrementValue == null) {
+            return 1L;
+        }
+        double numericRoundingIncrement = JSTypeConversions.toNumber(context, roundingIncrementValue).value();
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return Long.MIN_VALUE;
+        }
+        long integerRoundingIncrement = (long) numericRoundingIncrement;
+        if (integerRoundingIncrement < 1L || integerRoundingIncrement > MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return Long.MIN_VALUE;
+        }
+        return integerRoundingIncrement;
+    }
+
+    private static String getRoundingModeOption(JSContext context, JSObject optionsObject) {
+        JSValue roundingModeValue = optionsObject.get(PropertyKey.fromString("roundingMode"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (roundingModeValue instanceof JSUndefined || roundingModeValue == null) {
+            return "halfExpand";
+        }
+        return JSTypeConversions.toString(context, roundingModeValue).value();
+    }
+
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "hour");
         if (pdt == null) return JSUndefined.INSTANCE;
@@ -285,6 +391,35 @@ public final class TemporalPlainDateTimePrototype {
         }
         return epochDay != MIN_SUPPORTED_EPOCH_DAY || time.totalNanoseconds() != 0L;
     }
+
+    private static boolean isValidRoundingIncrementForSmallestUnit(String smallestUnit, long roundingIncrement) {
+        if ("day".equals(smallestUnit)) {
+            return roundingIncrement == 1L;
+        }
+        long dividend = switch (smallestUnit) {
+            case "hour" -> 24L;
+            case "minute", "second" -> 60L;
+            case "millisecond", "microsecond", "nanosecond" -> 1_000L;
+            default -> 0L;
+        };
+        return roundingIncrement >= 1L
+                && roundingIncrement < dividend
+                && dividend % roundingIncrement == 0L;
+    }
+
+    private static boolean isValidRoundingMode(String roundingMode) {
+        return "ceil".equals(roundingMode)
+                || "floor".equals(roundingMode)
+                || "trunc".equals(roundingMode)
+                || "expand".equals(roundingMode)
+                || "halfExpand".equals(roundingMode)
+                || "halfTrunc".equals(roundingMode)
+                || "halfEven".equals(roundingMode)
+                || "halfCeil".equals(roundingMode)
+                || "halfFloor".equals(roundingMode);
+    }
+
+    // ========== Methods ==========
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "microsecond");
@@ -328,83 +463,90 @@ public final class TemporalPlainDateTimePrototype {
         return JSNumber.of(pdt.getIsoDateTime().time().nanosecond());
     }
 
-    // ========== Methods ==========
-
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "round");
-        if (pdt == null) return JSUndefined.INSTANCE;
+        if (pdt == null) {
+            return JSUndefined.INSTANCE;
+        }
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must specify a roundTo parameter.");
             return JSUndefined.INSTANCE;
         }
 
-        String smallestUnit;
-        int increment = 1;
-        String roundingMode = "halfExpand";
-
-        if (args[0] instanceof JSString unitStr) {
-            smallestUnit = unitStr.value();
-        } else if (args[0] instanceof JSObject options) {
-            smallestUnit = TemporalUtils.getStringOption(context, options, "smallestUnit", null);
-            if (smallestUnit == null) {
-                context.throwRangeError("Temporal error: Must specify a roundTo parameter.");
-                return JSUndefined.INSTANCE;
-            }
-            String incStr = TemporalUtils.getStringOption(context, options, "roundingIncrement", "1");
-            try {
-                increment = Integer.parseInt(incStr);
-            } catch (NumberFormatException e) {
-                // Keep default
-            }
-            roundingMode = TemporalUtils.getStringOption(context, options, "roundingMode", "halfExpand");
-        } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
+        RoundSettings roundSettings = getRoundSettings(context, args[0]);
+        if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
 
-        long totalNs = pdt.getIsoDateTime().time().totalNanoseconds();
-        long unitNs = unitToNanoseconds(smallestUnit);
-        if (unitNs == 0) {
-            context.throwRangeError("Temporal error: Invalid unit for rounding.");
-            return JSUndefined.INSTANCE;
-        }
+        long totalNanoseconds = pdt.getIsoDateTime().time().totalNanoseconds();
+        long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
+        long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
+        long roundedNanoseconds = roundToIncrementAsIfPositive(
+                totalNanoseconds,
+                incrementNanoseconds,
+                roundSettings.roundingMode());
 
-        long incrementNs = unitNs * increment;
-        long roundedNs = roundToIncrement(totalNs, incrementNs, roundingMode);
-
-        // Handle day overflow
         int dayAdjust = 0;
-        if (roundedNs >= 86_400_000_000_000L) {
-            dayAdjust = (int) (roundedNs / 86_400_000_000_000L);
-            roundedNs = Math.floorMod(roundedNs, 86_400_000_000_000L);
-        } else if (roundedNs < 0) {
-            dayAdjust = (int) Math.floorDiv(roundedNs, 86_400_000_000_000L);
-            roundedNs = Math.floorMod(roundedNs, 86_400_000_000_000L);
+        if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
+            dayAdjust = 1;
+            roundedNanoseconds = 0L;
         }
 
-        IsoDate adjustedDate = dayAdjust != 0 ? pdt.getIsoDateTime().date().addDays(dayAdjust) : pdt.getIsoDateTime().date();
-        IsoTime adjustedTime = IsoTime.fromNanoseconds(roundedNs);
+        IsoDate adjustedDate = pdt.getIsoDateTime().date();
+        if (dayAdjust != 0) {
+            adjustedDate = adjustedDate.addDays(dayAdjust);
+        }
+        IsoTime adjustedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+        if (!isValidPlainDateTimeRange(adjustedDate, adjustedTime)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new IsoDateTime(adjustedDate, adjustedTime), pdt.getCalendarId());
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+                context,
+                new IsoDateTime(adjustedDate, adjustedTime),
+                pdt.getCalendarId());
     }
 
-    private static long roundToIncrement(long value, long increment, String mode) {
-        if (increment == 0) return value;
-        return switch (mode) {
-            case "ceil" -> {
-                long div = Math.floorDiv(value, increment);
-                yield (value % increment == 0) ? value : (div + 1) * increment;
-            }
-            case "floor", "trunc" -> Math.floorDiv(value, increment) * increment;
-            case "halfExpand" -> {
-                long remainder = Math.floorMod(value, increment);
-                if (remainder * 2 >= increment) {
-                    yield Math.floorDiv(value, increment) * increment + increment;
+    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
+        long quotient = Math.floorDiv(quantity, increment);
+        long lower = quotient * increment;
+        long remainder = quantity - lower;
+        if (remainder == 0L) {
+            return quantity;
+        }
+        long upper = lower + increment;
+
+        return switch (roundingMode) {
+            case "ceil", "expand" -> upper;
+            case "floor", "trunc" -> lower;
+            case "halfExpand", "halfCeil" -> {
+                if (remainder * 2L >= increment) {
+                    yield upper;
+                } else {
+                    yield lower;
                 }
-                yield Math.floorDiv(value, increment) * increment;
             }
-            default -> Math.floorDiv(value, increment) * increment;
+            case "halfTrunc", "halfFloor" -> {
+                if (remainder * 2L > increment) {
+                    yield upper;
+                } else {
+                    yield lower;
+                }
+            }
+            case "halfEven" -> {
+                long doubleRemainder = remainder * 2L;
+                if (doubleRemainder < increment) {
+                    yield lower;
+                } else if (doubleRemainder > increment) {
+                    yield upper;
+                } else if (Math.floorMod(quotient, 2L) == 0L) {
+                    yield lower;
+                } else {
+                    yield upper;
+                }
+            }
+            default -> lower;
         };
     }
 
@@ -630,6 +772,9 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime pdt = checkReceiver(context, thisArg, "yearOfWeek");
         if (pdt == null) return JSUndefined.INSTANCE;
         return JSNumber.of(pdt.getIsoDateTime().date().yearOfWeek());
+    }
+
+    private record RoundSettings(String smallestUnit, long roundingIncrement, String roundingMode) {
     }
 
     private record TimeAddResult(IsoTime time, long dayCarry) {
