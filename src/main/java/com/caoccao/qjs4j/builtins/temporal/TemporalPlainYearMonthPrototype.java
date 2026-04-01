@@ -38,53 +38,95 @@ public final class TemporalPlainYearMonthPrototype {
         return addOrSubtract(context, ym, args, 1);
     }
 
+    private static IsoDate addDateDurationToPlainYearMonth(
+            JSContext context,
+            IsoDate baseDate,
+            long yearsToAdd,
+            long monthsToAdd,
+            String overflow) {
+        long monthIndex = (long) baseDate.month() - 1L + monthsToAdd;
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long normalizedYearAsLong = (long) baseDate.year() + yearsToAdd + yearDelta;
+        if (normalizedYearAsLong < Integer.MIN_VALUE || normalizedYearAsLong > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int normalizedYear = (int) normalizedYearAsLong;
+
+        if (!TemporalPlainYearMonthConstructor.isValidIsoYearMonth(normalizedYear, normalizedMonth)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        int normalizedDay = baseDate.day();
+        int daysInNormalizedMonth = IsoDate.daysInMonth(normalizedYear, normalizedMonth);
+        if (normalizedDay > daysInNormalizedMonth) {
+            if ("reject".equals(overflow)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            normalizedDay = daysInNormalizedMonth;
+        }
+
+        if (!IsoDate.isValidIsoDate(normalizedYear, normalizedMonth, normalizedDay)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        return new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+    }
+
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainYearMonth ym, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
 
-        long years = 0, months = 0;
-        JSValue durationArg = args[0];
-        if (durationArg instanceof JSTemporalDuration dur) {
-            years = dur.getRecord().years();
-            months = dur.getRecord().months();
-        } else if (durationArg instanceof JSString durationStr) {
-            com.caoccao.qjs4j.core.temporal.TemporalParser.DurationFields df =
-                    com.caoccao.qjs4j.core.temporal.TemporalParser.parseDurationString(context, durationStr.value());
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            years = df.years();
-            months = df.months();
-        } else if (durationArg instanceof JSObject durationObj) {
-            years = TemporalUtils.getIntegerField(context, durationObj, "years", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            months = TemporalUtils.getIntegerField(context, durationObj, "months", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException() || temporalDuration == null) {
             return JSUndefined.INSTANCE;
         }
 
-        years *= sign;
-        months *= sign;
-
-        IsoDate d = ym.getIsoDate();
-        int newYear = d.year() + (int) years;
-        int newMonth = d.month() + (int) months;
-        // Normalize month
-        if (newMonth > 12) {
-            newYear += (newMonth - 1) / 12;
-            newMonth = ((newMonth - 1) % 12) + 1;
-        } else if (newMonth < 1) {
-            newYear += (newMonth - 12) / 12;
-            newMonth = 12 + (newMonth % 12);
-            if (newMonth == 12 && months * sign < 0) {
-                // already normalized
-            }
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (sign < 0) {
+            durationRecord = durationRecord.negated();
         }
 
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context,
-                new IsoDate(newYear, newMonth, 1), ym.getCalendarId());
+        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException() || overflow == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDate originalDate = ym.getIsoDate();
+        if (!IsoDate.isValidIsoDate(originalDate.year(), originalDate.month(), originalDate.day())) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (durationRecord.weeks() != 0
+                || durationRecord.days() != 0
+                || durationRecord.hours() != 0
+                || durationRecord.minutes() != 0
+                || durationRecord.seconds() != 0
+                || durationRecord.milliseconds() != 0
+                || durationRecord.microseconds() != 0
+                || durationRecord.nanoseconds() != 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDate resultDate = addDateDurationToPlainYearMonth(
+                context,
+                originalDate,
+                durationRecord.years(),
+                durationRecord.months(),
+                overflow);
+        if (context.hasPendingException() || resultDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context, resultDate, ym.getCalendarId());
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -95,7 +137,7 @@ public final class TemporalPlainYearMonthPrototype {
 
     private static JSTemporalPlainYearMonth checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainYearMonth ym)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver " + JSTypeConversions.toString(context, thisArg).value());
+            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
             return null;
         }
         return ym;
@@ -234,20 +276,22 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainYearMonth ym = checkReceiver(context, thisArg, "toString");
-        if (ym == null) return JSUndefined.INSTANCE;
+        JSTemporalPlainYearMonth jsTemporalPlainYearMonth = checkReceiver(context, thisArg, "toString");
+        if (jsTemporalPlainYearMonth == null) {
+            return JSUndefined.INSTANCE;
+        }
         String calendarNameOption = TemporalUtils.getCalendarNameOption(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate d = ym.getIsoDate();
+        IsoDate isoDate = jsTemporalPlainYearMonth.getIsoDate();
         boolean includeReferenceDay = !"never".equals(calendarNameOption)
-                && (!"auto".equals(calendarNameOption) || !"iso8601".equals(ym.getCalendarId()));
-        String result = TemporalUtils.formatIsoDate(d.year(), d.month(), includeReferenceDay ? d.day() : 1);
+                && (!"auto".equals(calendarNameOption) || !"iso8601".equals(jsTemporalPlainYearMonth.getCalendarId()));
+        String result = TemporalUtils.formatIsoDate(isoDate.year(), isoDate.month(), includeReferenceDay ? isoDate.day() : 1);
         if (!includeReferenceDay) {
             result = result.substring(0, result.lastIndexOf('-'));
         }
-        result = TemporalUtils.maybeAppendCalendar(result, ym.getCalendarId(), calendarNameOption);
+        result = TemporalUtils.maybeAppendCalendar(result, jsTemporalPlainYearMonth.getCalendarId(), calendarNameOption);
         return new JSString(result);
     }
 
