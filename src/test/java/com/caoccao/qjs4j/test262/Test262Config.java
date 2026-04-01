@@ -68,7 +68,7 @@ public class Test262Config {
                 Pattern.compile(".*/test/built-ins/encodeURI.*/.*\\.js$"),
                 Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
-        config.maxTests = 186 * 100;
+        config.maxTests = 187 * 100;
         return config;
     }
 
