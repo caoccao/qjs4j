@@ -27,6 +27,8 @@ import java.util.Locale;
  * Implementation of Temporal.PlainYearMonth prototype methods.
  */
 public final class TemporalPlainYearMonthPrototype {
+    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
+    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
     private static final String TYPE_NAME = "Temporal.PlainYearMonth";
 
     private TemporalPlainYearMonthPrototype() {
@@ -164,6 +166,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
         boolean equal = plainYearMonth.getIsoDate().year() == other.getIsoDate().year()
                 && plainYearMonth.getIsoDate().month() == other.getIsoDate().month()
+                && plainYearMonth.getIsoDate().day() == other.getIsoDate().day()
                 && plainYearMonth.getCalendarId().equals(other.getCalendarId());
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
@@ -184,6 +187,12 @@ public final class TemporalPlainYearMonthPrototype {
         JSTemporalPlainYearMonth plainYearMonth = checkReceiver(context, thisArg, "inLeapYear");
         if (plainYearMonth == null) return JSUndefined.INSTANCE;
         return IsoDate.isLeapYear(plainYearMonth.getIsoDate().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
+    }
+
+    private static boolean isYearMonthDifferenceDateWithinSupportedRange(JSTemporalPlainYearMonth plainYearMonth) {
+        IsoDate isoDate = plainYearMonth.getIsoDate();
+        long firstDayEpochDay = new IsoDate(isoDate.year(), isoDate.month(), 1).toEpochDay();
+        return firstDayEpochDay >= MIN_SUPPORTED_EPOCH_DAY && firstDayEpochDay <= MAX_SUPPORTED_EPOCH_DAY;
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -216,6 +225,11 @@ public final class TemporalPlainYearMonthPrototype {
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalPlainYearMonth other = TemporalPlainYearMonthConstructor.toTemporalYearMonthObject(context, otherArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (!isYearMonthDifferenceDateWithinSupportedRange(plainYearMonth)
+                || !isYearMonthDifferenceDateWithinSupportedRange(other)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
 
         int monthsDiff = (plainYearMonth.getIsoDate().year() - other.getIsoDate().year()) * 12
                 + (plainYearMonth.getIsoDate().month() - other.getIsoDate().month());
@@ -301,6 +315,11 @@ public final class TemporalPlainYearMonthPrototype {
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalPlainYearMonth other = TemporalPlainYearMonthConstructor.toTemporalYearMonthObject(context, otherArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (!isYearMonthDifferenceDateWithinSupportedRange(plainYearMonth)
+                || !isYearMonthDifferenceDateWithinSupportedRange(other)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
 
         int monthsDiff = (other.getIsoDate().year() - plainYearMonth.getIsoDate().year()) * 12
                 + (other.getIsoDate().month() - plainYearMonth.getIsoDate().month());
