@@ -34,16 +34,16 @@ public final class TemporalPlainDateConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalPlainDate one = toTemporalDateObject(context, oneArg);
+        JSTemporalPlainDate firstDate = toTemporalDateObject(context, oneArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainDate two = toTemporalDateObject(context, twoArg);
+        JSTemporalPlainDate secondDate = toTemporalDateObject(context, twoArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoDate.compareIsoDate(one.getIsoDate(), two.getIsoDate()));
+        return JSNumber.of(IsoDate.compareIsoDate(firstDate.getIsoDate(), secondDate.getIsoDate()));
     }
 
     /**
@@ -111,9 +111,9 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasDay = !(dayValue instanceof JSUndefined) && dayValue != null;
-        int day = Integer.MIN_VALUE;
+        int dayOfMonth = Integer.MIN_VALUE;
         if (hasDay) {
-            day = TemporalUtils.toIntegerThrowOnInfinity(context, dayValue);
+            dayOfMonth = TemporalUtils.toIntegerThrowOnInfinity(context, dayValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -212,7 +212,7 @@ public final class TemporalPlainDateConstructor {
             }
         }
 
-        if (resolvedMonth < 1 || day < 1) {
+        if (resolvedMonth < 1 || dayOfMonth < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -226,13 +226,13 @@ public final class TemporalPlainDateConstructor {
         }
 
         if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, resolvedMonth, day)) {
+            if (!IsoDate.isValidIsoDate(year, resolvedMonth, dayOfMonth)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDate(context, new IsoDate(year, resolvedMonth, day), calendarId);
+            return createPlainDate(context, new IsoDate(year, resolvedMonth, dayOfMonth), calendarId);
         } else {
-            IsoDate constrained = TemporalUtils.constrainIsoDate(year, resolvedMonth, day);
+            IsoDate constrained = TemporalUtils.constrainIsoDate(year, resolvedMonth, dayOfMonth);
             if (!IsoDate.isValidIsoDate(constrained.year(), constrained.month(), constrained.day())) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;

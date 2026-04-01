@@ -110,8 +110,8 @@ public final class TemporalInstantPrototype {
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochMilliseconds");
         if (instant == null) return JSUndefined.INSTANCE;
-        BigInteger ms = floorDiv(instant.getEpochNanoseconds(), NS_PER_MS);
-        return JSNumber.of(ms.longValue());
+        BigInteger epochMilliseconds = floorDiv(instant.getEpochNanoseconds(), NS_PER_MS);
+        return JSNumber.of(epochMilliseconds.longValue());
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -129,12 +129,13 @@ public final class TemporalInstantPrototype {
         return instant.getEpochNanoseconds().equals(other.getEpochNanoseconds()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
-    private static BigInteger floorDiv(BigInteger a, BigInteger b) {
-        BigInteger[] divRem = a.divideAndRemainder(b);
-        if (divRem[1].signum() < 0 && b.signum() > 0 || divRem[1].signum() > 0 && b.signum() < 0) {
-            return divRem[0].subtract(BigInteger.ONE);
+    private static BigInteger floorDiv(BigInteger dividend, BigInteger divisor) {
+        BigInteger[] quotientAndRemainder = dividend.divideAndRemainder(divisor);
+        if (quotientAndRemainder[1].signum() < 0 && divisor.signum() > 0
+                || quotientAndRemainder[1].signum() > 0 && divisor.signum() < 0) {
+            return quotientAndRemainder[0].subtract(BigInteger.ONE);
         }
-        return divRem[0];
+        return quotientAndRemainder[0];
     }
 
     private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
@@ -149,8 +150,8 @@ public final class TemporalInstantPrototype {
     }
 
     private static String formatInstantUtc(BigInteger epochNs) {
-        IsoDateTime dt = TemporalTimeZone.epochNsToUtcDateTime(epochNs);
-        return dt + "Z";
+        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToUtcDateTime(epochNs);
+        return isoDateTime + "Z";
     }
 
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
@@ -213,11 +214,11 @@ public final class TemporalInstantPrototype {
         if (fractionalSecondDigits == null) {
             if (totalFractionalNanoseconds != 0) {
                 String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-                int end = fraction.length();
-                while (end > 0 && fraction.charAt(end - 1) == '0') {
-                    end--;
+                int fractionEndIndex = fraction.length();
+                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
+                    fractionEndIndex--;
                 }
-                stringBuilder.append('.').append(fraction, 0, end);
+                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
             }
         } else if (fractionalSecondDigits > 0) {
             String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
@@ -381,14 +382,14 @@ public final class TemporalInstantPrototype {
 
     private static JSValue nsToDuration(JSContext context, BigInteger diffNs) {
         int signum = diffNs.signum();
-        BigInteger abs = diffNs.abs();
+        BigInteger absoluteDiffNanoseconds = diffNs.abs();
         // For Instant, the default largestUnit is "second" per spec
-        long totalSeconds = abs.divide(NS_PER_SECOND).longValue();
-        abs = abs.remainder(NS_PER_SECOND);
-        long totalMs = abs.divide(NS_PER_MS).longValue();
-        abs = abs.remainder(NS_PER_MS);
-        long totalUs = abs.divide(BigInteger.valueOf(1_000)).longValue();
-        long totalNs = abs.remainder(BigInteger.valueOf(1_000)).longValue();
+        long totalSeconds = absoluteDiffNanoseconds.divide(NS_PER_SECOND).longValue();
+        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_SECOND);
+        long totalMs = absoluteDiffNanoseconds.divide(NS_PER_MS).longValue();
+        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_MS);
+        long totalUs = absoluteDiffNanoseconds.divide(BigInteger.valueOf(1_000)).longValue();
+        long totalNs = absoluteDiffNanoseconds.remainder(BigInteger.valueOf(1_000)).longValue();
 
         return TemporalDurationConstructor.createDuration(context,
                 new TemporalDurationRecord(0, 0, 0, 0,
@@ -621,7 +622,7 @@ public final class TemporalInstantPrototype {
         if (timeZoneId != null) {
             try {
                 TemporalTimeZone.resolveTimeZone(timeZoneId);
-            } catch (Exception e) {
+            } catch (Exception invalidTimeZoneException) {
                 context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
                 return null;
             }
@@ -962,7 +963,7 @@ public final class TemporalInstantPrototype {
         }
         try {
             TemporalTimeZone.resolveTimeZone(timeZoneId);
-        } catch (Exception e) {
+        } catch (Exception invalidTimeZoneException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }

@@ -502,14 +502,14 @@ public final class TemporalPlainTimePrototype {
                     time.millisecond(),
                     time.microsecond(),
                     time.nanosecond());
-            int end = fullFraction.length();
-            while (end > 0 && fullFraction.charAt(end - 1) == '0') {
-                end--;
+            int fractionEndIndex = fullFraction.length();
+            while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
+                fractionEndIndex--;
             }
-            if (end == 0) {
+            if (fractionEndIndex == 0) {
                 return hourMinuteSecond;
             }
-            return hourMinuteSecond + "." + fullFraction.substring(0, end);
+            return hourMinuteSecond + "." + fullFraction.substring(0, fractionEndIndex);
         }
 
         int fractionDigits = toStringSettings.fractionalSecondDigits();

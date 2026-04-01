@@ -38,12 +38,12 @@ public final class TemporalZonedDateTimeConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalZonedDateTime one = toTemporalZonedDateTimeObject(context, oneArg);
+        JSTemporalZonedDateTime firstZonedDateTime = toTemporalZonedDateTimeObject(context, oneArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        JSTemporalZonedDateTime two = toTemporalZonedDateTimeObject(context, twoArg);
+        JSTemporalZonedDateTime secondZonedDateTime = toTemporalZonedDateTimeObject(context, twoArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
 
-        return JSNumber.of(one.getEpochNanoseconds().compareTo(two.getEpochNanoseconds()));
+        return JSNumber.of(firstZonedDateTime.getEpochNanoseconds().compareTo(secondZonedDateTime.getEpochNanoseconds()));
     }
 
     /**
@@ -77,7 +77,7 @@ public final class TemporalZonedDateTimeConstructor {
         String timeZoneId = tzStr.value();
         try {
             java.time.ZoneId.of(timeZoneId);
-        } catch (Exception e) {
+        } catch (Exception invalidTimeZoneException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }
@@ -103,11 +103,11 @@ public final class TemporalZonedDateTimeConstructor {
 
     static JSTemporalZonedDateTime createZonedDateTime(JSContext context, BigInteger epochNs,
                                                        String timeZoneId, String calendarId, JSObject prototype) {
-        JSTemporalZonedDateTime zdt = new JSTemporalZonedDateTime(context, epochNs, timeZoneId, calendarId);
+        JSTemporalZonedDateTime zonedDateTime = new JSTemporalZonedDateTime(context, epochNs, timeZoneId, calendarId);
         if (prototype != null) {
-            zdt.setPrototype(prototype);
+            zonedDateTime.setPrototype(prototype);
         }
-        return zdt;
+        return zonedDateTime;
     }
 
     /**
@@ -119,15 +119,15 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     public static JSValue toTemporalZonedDateTime(JSContext context, JSValue item) {
-        if (item instanceof JSTemporalZonedDateTime zdt) {
-            return createZonedDateTime(context, zdt.getEpochNanoseconds(), zdt.getTimeZoneId(), zdt.getCalendarId());
+        if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
+            return createZonedDateTime(context, zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
         }
-        if (item instanceof JSString str) {
-            TemporalParser.ParsedZonedDateTime parsed = TemporalParser.parseZonedDateTimeString(context, str.value());
+        if (item instanceof JSString zonedDateTimeString) {
+            TemporalParser.ParsedZonedDateTime parsed = TemporalParser.parseZonedDateTimeString(context, zonedDateTimeString.value());
             if (context.hasPendingException()) return JSUndefined.INSTANCE;
             try {
                 java.time.ZoneId.of(parsed.timeZoneId());
-            } catch (Exception e) {
+            } catch (Exception invalidTimeZoneException) {
                 context.throwRangeError("Temporal error: Invalid time zone: " + parsed.timeZoneId());
                 return JSUndefined.INSTANCE;
             }

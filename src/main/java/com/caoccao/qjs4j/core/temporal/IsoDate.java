@@ -23,14 +23,14 @@ public record IsoDate(int year, int month, int day) {
 
     private static final int[] DAYS_IN_MONTH = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
-    public static int compareIsoDate(IsoDate one, IsoDate two) {
-        if (one.year != two.year) {
-            return Integer.compare(one.year, two.year);
+    public static int compareIsoDate(IsoDate firstDate, IsoDate secondDate) {
+        if (firstDate.year != secondDate.year) {
+            return Integer.compare(firstDate.year, secondDate.year);
         }
-        if (one.month != two.month) {
-            return Integer.compare(one.month, two.month);
+        if (firstDate.month != secondDate.month) {
+            return Integer.compare(firstDate.month, secondDate.month);
         }
-        return Integer.compare(one.day, two.day);
+        return Integer.compare(firstDate.day, secondDate.day);
     }
 
     public static int daysInMonth(int year, int month) {
@@ -46,19 +46,19 @@ public record IsoDate(int year, int month, int day) {
 
     public static IsoDate fromEpochDay(long epochDay) {
         // Algorithm from https://howardhinnant.github.io/date_algorithms.html
-        long z = epochDay + 719468;
-        long era = (z >= 0 ? z : z - 146096) / 146097;
-        long doe = z - era * 146097;
-        long yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-        long y = yoe + era * 400;
-        long doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-        long mp = (5 * doy + 2) / 153;
-        long d = doy - (153 * mp + 2) / 5 + 1;
-        long m = mp + (mp < 10 ? 3 : -9);
-        if (m <= 2) {
-            y++;
+        long shiftedEpochDay = epochDay + 719468;
+        long eraIndex = (shiftedEpochDay >= 0 ? shiftedEpochDay : shiftedEpochDay - 146096) / 146097;
+        long dayOfEra = shiftedEpochDay - eraIndex * 146097;
+        long yearOfEra = (dayOfEra - dayOfEra / 1460 + dayOfEra / 36524 - dayOfEra / 146096) / 365;
+        long computedYear = yearOfEra + eraIndex * 400;
+        long dayOfYear = dayOfEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+        long monthPrime = (5 * dayOfYear + 2) / 153;
+        long dayOfMonth = dayOfYear - (153 * monthPrime + 2) / 5 + 1;
+        long computedMonth = monthPrime + (monthPrime < 10 ? 3 : -9);
+        if (computedMonth <= 2) {
+            computedYear++;
         }
-        return new IsoDate((int) y, (int) m, (int) d);
+        return new IsoDate((int) computedYear, (int) computedMonth, (int) dayOfMonth);
     }
 
     public static boolean isLeapYear(int year) {
@@ -71,11 +71,11 @@ public record IsoDate(int year, int month, int day) {
         return year % 400 == 0;
     }
 
-    public static boolean isValidIsoDate(int year, int month, int day) {
+    public static boolean isValidIsoDate(int year, int month, int dayOfMonth) {
         if (month < 1 || month > 12) {
             return false;
         }
-        if (day < 1 || day > daysInMonth(year, month)) {
+        if (dayOfMonth < 1 || dayOfMonth > daysInMonth(year, month)) {
             return false;
         }
         if (year < -271821 || year > 275760) {
@@ -85,7 +85,7 @@ public record IsoDate(int year, int month, int day) {
             if (month < 4) {
                 return false;
             }
-            if (month == 4 && day < 19) {
+            if (month == 4 && dayOfMonth < 19) {
                 return false;
             }
         }
@@ -93,7 +93,7 @@ public record IsoDate(int year, int month, int day) {
             if (month > 9) {
                 return false;
             }
-            return month != 9 || day <= 13;
+            return month != 9 || dayOfMonth <= 13;
         }
         return true;
     }
@@ -106,31 +106,31 @@ public record IsoDate(int year, int month, int day) {
     public int dayOfWeek() {
         long epochDay = toEpochDay();
         // 1970-01-01 is Thursday (4), ISO weekday: 1=Monday, 7=Sunday
-        int dow = Math.floorMod(epochDay + 3, 7) + 1;
-        return dow;
+        int dayOfWeek = Math.floorMod(epochDay + 3, 7) + 1;
+        return dayOfWeek;
     }
 
     public int dayOfYear() {
         int result = day;
-        for (int m = 1; m < month; m++) {
-            result += daysInMonth(year, m);
+        for (int monthIndex = 1; monthIndex < month; monthIndex++) {
+            result += daysInMonth(year, monthIndex);
         }
         return result;
     }
 
     public long toEpochDay() {
-        long y = year;
-        long m = month;
-        long d = day;
+        long yearValue = year;
+        long monthValue = month;
+        long dayOfMonth = day;
         // Algorithm from https://howardhinnant.github.io/date_algorithms.html
-        if (m <= 2) {
-            y--;
+        if (monthValue <= 2) {
+            yearValue--;
         }
-        long era = (y >= 0 ? y : y - 399) / 400;
-        long yoe = y - era * 400;
-        long doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
-        long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
-        return era * 146097 + doe - 719468;
+        long eraIndex = (yearValue >= 0 ? yearValue : yearValue - 399) / 400;
+        long yearOfEra = yearValue - eraIndex * 400;
+        long dayOfYear = (153 * (monthValue + (monthValue > 2 ? -3 : 9)) + 2) / 5 + dayOfMonth - 1;
+        long dayOfEra = yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
+        return eraIndex * 146097 + dayOfEra - 719468;
     }
 
     @Override

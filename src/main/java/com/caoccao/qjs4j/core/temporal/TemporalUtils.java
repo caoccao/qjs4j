@@ -83,10 +83,10 @@ public final class TemporalUtils {
     /**
      * Constrains a date to valid ISO values.
      */
-    public static IsoDate constrainIsoDate(int year, int month, int day) {
+    public static IsoDate constrainIsoDate(int year, int month, int dayOfMonth) {
         month = Math.max(1, Math.min(12, month));
-        day = Math.max(1, Math.min(IsoDate.daysInMonth(year, month), day));
-        return new IsoDate(year, month, day);
+        dayOfMonth = Math.max(1, Math.min(IsoDate.daysInMonth(year, month), dayOfMonth));
+        return new IsoDate(year, month, dayOfMonth);
     }
 
     /**
@@ -157,23 +157,23 @@ public final class TemporalUtils {
             nanosecondsValue = nanosecondsValue.abs();
         }
 
-        StringBuilder sb = new StringBuilder();
+        StringBuilder stringBuilder = new StringBuilder();
         if (negative) {
-            sb.append('-');
+            stringBuilder.append('-');
         }
-        sb.append('P');
+        stringBuilder.append('P');
 
         if (yearsValue.signum() != 0) {
-            sb.append(yearsValue).append('Y');
+            stringBuilder.append(yearsValue).append('Y');
         }
         if (monthsValue.signum() != 0) {
-            sb.append(monthsValue).append('M');
+            stringBuilder.append(monthsValue).append('M');
         }
         if (weeksValue.signum() != 0) {
-            sb.append(weeksValue).append('W');
+            stringBuilder.append(weeksValue).append('W');
         }
         if (daysValue.signum() != 0) {
-            sb.append(daysValue).append('D');
+            stringBuilder.append(daysValue).append('D');
         }
 
         BigInteger totalSubsecondNanoseconds = millisecondsValue.multiply(BigInteger.valueOf(1_000_000L))
@@ -186,83 +186,83 @@ public final class TemporalUtils {
         boolean hasTimePart = hoursValue.signum() != 0 || minutesValue.signum() != 0 || secondsWithCarry.signum() != 0
                 || subsecondNanosecondsRemainder.signum() != 0;
         if (hasTimePart) {
-            sb.append('T');
+            stringBuilder.append('T');
             if (hoursValue.signum() != 0) {
-                sb.append(hoursValue).append('H');
+                stringBuilder.append(hoursValue).append('H');
             }
             if (minutesValue.signum() != 0) {
-                sb.append(minutesValue).append('M');
+                stringBuilder.append(minutesValue).append('M');
             }
             if (secondsWithCarry.signum() != 0 || subsecondNanosecondsRemainder.signum() != 0) {
-                sb.append(secondsWithCarry);
+                stringBuilder.append(secondsWithCarry);
                 if (subsecondNanosecondsRemainder.signum() != 0) {
                     String fractional = String.format(Locale.ROOT, "%09d", subsecondNanosecondsRemainder.intValue());
                     // Trim trailing zeros
-                    int end = fractional.length();
-                    while (end > 0 && fractional.charAt(end - 1) == '0') {
-                        end--;
+                    int fractionalEndIndex = fractional.length();
+                    while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
+                        fractionalEndIndex--;
                     }
-                    sb.append('.').append(fractional, 0, end);
+                    stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
                 }
-                sb.append('S');
+                stringBuilder.append('S');
             }
         }
 
         // Empty duration = PT0S
-        if (sb.length() == 1 || (sb.length() == 2 && negative)) {
-            sb.append("T0S");
+        if (stringBuilder.length() == 1 || (stringBuilder.length() == 2 && negative)) {
+            stringBuilder.append("T0S");
         }
 
-        return sb.toString();
+        return stringBuilder.toString();
     }
 
-    public static String formatIsoDate(int year, int month, int day) {
+    public static String formatIsoDate(int year, int month, int dayOfMonth) {
         if (year >= 0 && year <= 9999) {
-            return String.format(Locale.ROOT, "%04d-%02d-%02d", year, month, day);
+            return String.format(Locale.ROOT, "%04d-%02d-%02d", year, month, dayOfMonth);
         } else {
             String sign = year >= 0 ? "+" : "-";
-            return String.format(Locale.ROOT, "%s%06d-%02d-%02d", sign, Math.abs(year), month, day);
+            return String.format(Locale.ROOT, "%s%06d-%02d-%02d", sign, Math.abs(year), month, dayOfMonth);
         }
     }
 
     public static String formatIsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
         int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
         if (totalFractionalNanoseconds != 0) {
             String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            int end = fractional.length();
-            while (end > 0 && fractional.charAt(end - 1) == '0') {
-                end--;
+            int fractionalEndIndex = fractional.length();
+            while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
+                fractionalEndIndex--;
             }
-            sb.append('.').append(fractional, 0, end);
+            stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
         }
-        return sb.toString();
+        return stringBuilder.toString();
     }
 
     public static String formatIsoTimeWithPrecision(int hour, int minute, int second,
                                                     int millisecond, int microsecond, int nanosecond,
                                                     Object fractionalSecondDigits) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
         if (fractionalSecondDigits instanceof Integer digits) {
             if (digits == 0) {
-                return sb.toString();
+                return stringBuilder.toString();
             }
             int totalFractionalNs = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
             String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNs);
-            sb.append('.').append(fractional, 0, digits);
+            stringBuilder.append('.').append(fractional, 0, digits);
         } else {
             // "auto" mode — same as default
             if (nanosecond != 0) {
-                sb.append(String.format(Locale.ROOT, ".%03d%03d%03d", millisecond, microsecond, nanosecond));
+                stringBuilder.append(String.format(Locale.ROOT, ".%03d%03d%03d", millisecond, microsecond, nanosecond));
             } else if (microsecond != 0) {
-                sb.append(String.format(Locale.ROOT, ".%03d%03d", millisecond, microsecond));
+                stringBuilder.append(String.format(Locale.ROOT, ".%03d%03d", millisecond, microsecond));
             } else if (millisecond != 0) {
-                sb.append(String.format(Locale.ROOT, ".%03d", millisecond));
+                stringBuilder.append(String.format(Locale.ROOT, ".%03d", millisecond));
             }
         }
-        return sb.toString();
+        return stringBuilder.toString();
     }
 
     /**
@@ -294,23 +294,23 @@ public final class TemporalUtils {
     /**
      * Gets an integer field from a JSObject, returning the default if undefined.
      */
-    public static int getIntegerField(JSContext context, JSObject obj, String key, int defaultValue) {
-        JSValue value = obj.get(PropertyKey.fromString(key));
+    public static int getIntegerField(JSContext context, JSObject sourceObject, String optionKey, int defaultValue) {
+        JSValue value = sourceObject.get(PropertyKey.fromString(optionKey));
         if (context.hasPendingException()) {
             return Integer.MIN_VALUE;
         }
         if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
-        double num = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
             return Integer.MIN_VALUE;
         }
-        if (!Double.isFinite(num)) {
+        if (!Double.isFinite(numericValue)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Integer.MIN_VALUE;
         }
-        return (int) num;
+        return (int) numericValue;
     }
 
     /**
@@ -339,8 +339,8 @@ public final class TemporalUtils {
     /**
      * Gets a string option from an options object.
      */
-    public static String getStringOption(JSContext context, JSObject options, String key, String defaultValue) {
-        JSValue value = options.get(PropertyKey.fromString(key));
+    public static String getStringOption(JSContext context, JSObject options, String optionKey, String defaultValue) {
+        JSValue value = options.get(PropertyKey.fromString(optionKey));
         if (context.hasPendingException()) {
             return null;
         }
@@ -386,15 +386,15 @@ public final class TemporalUtils {
      * Returns Integer.MIN_VALUE if a pending exception was set.
      */
     public static int toIntegerThrowOnInfinity(JSContext context, JSValue value) {
-        double num = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
             return Integer.MIN_VALUE;
         }
-        if (!Double.isFinite(num)) {
+        if (!Double.isFinite(numericValue)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Integer.MIN_VALUE;
         }
-        return (int) num;
+        return (int) numericValue;
     }
 
     /**
@@ -403,19 +403,19 @@ public final class TemporalUtils {
      * Returns Long.MIN_VALUE if a pending exception was set.
      */
     public static long toLongIfIntegral(JSContext context, JSValue value) {
-        double num = JSTypeConversions.toNumber(context, value).value();
+        double numericValue = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
             return Long.MIN_VALUE;
         }
-        if (!Double.isFinite(num)) {
+        if (!Double.isFinite(numericValue)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Long.MIN_VALUE;
         }
-        if (num != Math.floor(num)) {
+        if (numericValue != Math.floor(numericValue)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Long.MIN_VALUE;
         }
-        return (long) num;
+        return (long) numericValue;
     }
 
     public static String toTemporalCalendarWithISODefault(JSContext context, JSValue calendarValue) {

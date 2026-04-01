@@ -42,12 +42,12 @@ public final class TemporalInstantConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalInstant one = toTemporalInstantObject(context, oneArg);
+        JSTemporalInstant firstInstant = toTemporalInstantObject(context, oneArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        JSTemporalInstant two = toTemporalInstantObject(context, twoArg);
+        JSTemporalInstant secondInstant = toTemporalInstantObject(context, twoArg);
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
 
-        return JSNumber.of(one.getEpochNanoseconds().compareTo(two.getEpochNanoseconds()));
+        return JSNumber.of(firstInstant.getEpochNanoseconds().compareTo(secondInstant.getEpochNanoseconds()));
     }
 
     /**
@@ -58,12 +58,12 @@ public final class TemporalInstantConstructor {
             context.throwTypeError("Method invoked on an object that is not Temporal.Instant.");
             return JSUndefined.INSTANCE;
         }
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochNanosecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         final JSBigInt bigInt;
         try {
-            bigInt = JSTypeConversions.toBigInt(context, arg);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
+            bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);
+        } catch (JSErrorException conversionException) {
+            return context.throwError(conversionException);
         }
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -105,14 +105,14 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.fromEpochMilliseconds(epochMilliseconds)
      */
     public static JSValue fromEpochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        double ms = JSTypeConversions.toNumber(context, arg).value();
+        JSValue epochMillisecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        double epochMilliseconds = JSTypeConversions.toNumber(context, epochMillisecondsArgument).value();
         if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        if (!Double.isFinite(ms) || ms != Math.floor(ms)) {
+        if (!Double.isFinite(epochMilliseconds) || epochMilliseconds != Math.floor(epochMilliseconds)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return JSUndefined.INSTANCE;
         }
-        BigInteger epochNs = BigInteger.valueOf((long) ms).multiply(NS_PER_MS);
+        BigInteger epochNs = BigInteger.valueOf((long) epochMilliseconds).multiply(NS_PER_MS);
         if (!isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -124,12 +124,12 @@ public final class TemporalInstantConstructor {
      * Temporal.Instant.fromEpochNanoseconds(epochNanoseconds)
      */
     public static JSValue fromEpochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSValue arg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        JSValue epochNanosecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         final JSBigInt bigInt;
         try {
-            bigInt = JSTypeConversions.toBigInt(context, arg);
-        } catch (JSErrorException e) {
-            return context.throwError(e);
+            bigInt = JSTypeConversions.toBigInt(context, epochNanosecondsArgument);
+        } catch (JSErrorException conversionException) {
+            return context.throwError(conversionException);
         }
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -169,12 +169,12 @@ public final class TemporalInstantConstructor {
                 return JSUndefined.INSTANCE;
             }
         }
-        if (!(primitiveItem instanceof JSString str)) {
+        if (!(primitiveItem instanceof JSString instantString)) {
             context.throwTypeError("Temporal error: Instant argument must be Instant or string.");
             return JSUndefined.INSTANCE;
         }
 
-        TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, str.value());
+        TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, instantString.value());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

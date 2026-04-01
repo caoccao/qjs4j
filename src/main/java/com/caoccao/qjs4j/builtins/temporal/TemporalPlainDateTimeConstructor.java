@@ -36,16 +36,16 @@ public final class TemporalPlainDateTimeConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalPlainDateTime one = toTemporalDateTimeObject(context, oneArg);
+        JSTemporalPlainDateTime firstDateTime = toTemporalDateTimeObject(context, oneArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainDateTime two = toTemporalDateTimeObject(context, twoArg);
+        JSTemporalPlainDateTime secondDateTime = toTemporalDateTimeObject(context, twoArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoDateTime.compareIsoDateTime(one.getIsoDateTime(), two.getIsoDateTime()));
+        return JSNumber.of(IsoDateTime.compareIsoDateTime(firstDateTime.getIsoDateTime(), secondDateTime.getIsoDateTime()));
     }
 
     /**
@@ -113,12 +113,12 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime dt = new IsoDateTime(date, time);
+        IsoDateTime isoDateTime = new IsoDateTime(date, time);
         JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, dt, calendarId, resolvedPrototype);
+        return createPlainDateTime(context, isoDateTime, calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, String calendarId) {
@@ -145,9 +145,9 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasDay = !(dayValue instanceof JSUndefined) && dayValue != null;
-        int day = Integer.MIN_VALUE;
+        int dayOfMonth = Integer.MIN_VALUE;
         if (hasDay) {
-            day = TemporalUtils.toIntegerThrowOnInfinity(context, dayValue);
+            dayOfMonth = TemporalUtils.toIntegerThrowOnInfinity(context, dayValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -274,7 +274,7 @@ public final class TemporalPlainDateTimeConstructor {
         IsoDate resultDate;
         IsoTime resultTime;
         if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, month, day)) {
+            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
@@ -282,14 +282,14 @@ public final class TemporalPlainDateTimeConstructor {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            resultDate = new IsoDate(year, month, day);
+            resultDate = new IsoDate(year, month, dayOfMonth);
             resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
-            if (month < 1 || day < 1) {
+            if (month < 1 || dayOfMonth < 1) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            resultDate = TemporalUtils.constrainIsoDate(year, month, day);
+            resultDate = TemporalUtils.constrainIsoDate(year, month, dayOfMonth);
             resultTime = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
@@ -371,12 +371,12 @@ public final class TemporalPlainDateTimeConstructor {
      * ToTemporalDateTime abstract operation.
      */
     public static JSValue toTemporalDateTime(JSContext context, JSValue item, JSValue options) {
-        if (item instanceof JSTemporalPlainDateTime pdt) {
+        if (item instanceof JSTemporalPlainDateTime plainDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDateTime(context, pdt.getIsoDateTime(), pdt.getCalendarId());
+            return createPlainDateTime(context, plainDateTime.getIsoDateTime(), plainDateTime.getCalendarId());
         }
         if (item instanceof JSTemporalPlainDate plainDate) {
             TemporalUtils.getOverflowOption(context, options);

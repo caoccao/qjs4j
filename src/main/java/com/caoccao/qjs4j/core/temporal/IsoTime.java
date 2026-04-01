@@ -23,42 +23,42 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
     public static final IsoTime MIDNIGHT = new IsoTime(0, 0, 0, 0, 0, 0);
 
-    public static int compareIsoTime(IsoTime one, IsoTime two) {
-        if (one.hour != two.hour) {
-            return Integer.compare(one.hour, two.hour);
+    public static int compareIsoTime(IsoTime firstTime, IsoTime secondTime) {
+        if (firstTime.hour != secondTime.hour) {
+            return Integer.compare(firstTime.hour, secondTime.hour);
         }
-        if (one.minute != two.minute) {
-            return Integer.compare(one.minute, two.minute);
+        if (firstTime.minute != secondTime.minute) {
+            return Integer.compare(firstTime.minute, secondTime.minute);
         }
-        if (one.second != two.second) {
-            return Integer.compare(one.second, two.second);
+        if (firstTime.second != secondTime.second) {
+            return Integer.compare(firstTime.second, secondTime.second);
         }
-        if (one.millisecond != two.millisecond) {
-            return Integer.compare(one.millisecond, two.millisecond);
+        if (firstTime.millisecond != secondTime.millisecond) {
+            return Integer.compare(firstTime.millisecond, secondTime.millisecond);
         }
-        if (one.microsecond != two.microsecond) {
-            return Integer.compare(one.microsecond, two.microsecond);
+        if (firstTime.microsecond != secondTime.microsecond) {
+            return Integer.compare(firstTime.microsecond, secondTime.microsecond);
         }
-        return Integer.compare(one.nanosecond, two.nanosecond);
+        return Integer.compare(firstTime.nanosecond, secondTime.nanosecond);
     }
 
     /**
      * Creates an IsoTime from total nanoseconds (mod 24 hours).
      */
-    public static IsoTime fromNanoseconds(long totalNs) {
-        long nsPerDay = 86_400_000_000_000L;
-        totalNs = Math.floorMod(totalNs, nsPerDay);
-        int h = (int) (totalNs / 3_600_000_000_000L);
-        totalNs %= 3_600_000_000_000L;
-        int min = (int) (totalNs / 60_000_000_000L);
-        totalNs %= 60_000_000_000L;
-        int s = (int) (totalNs / 1_000_000_000L);
-        totalNs %= 1_000_000_000L;
-        int ms = (int) (totalNs / 1_000_000L);
-        totalNs %= 1_000_000L;
-        int us = (int) (totalNs / 1_000L);
-        int ns = (int) (totalNs % 1_000L);
-        return new IsoTime(h, min, s, ms, us, ns);
+    public static IsoTime fromNanoseconds(long totalNanoseconds) {
+        long nanosecondsPerDay = 86_400_000_000_000L;
+        totalNanoseconds = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
+        int hourValue = (int) (totalNanoseconds / 3_600_000_000_000L);
+        totalNanoseconds %= 3_600_000_000_000L;
+        int minuteValue = (int) (totalNanoseconds / 60_000_000_000L);
+        totalNanoseconds %= 60_000_000_000L;
+        int secondValue = (int) (totalNanoseconds / 1_000_000_000L);
+        totalNanoseconds %= 1_000_000_000L;
+        int millisecondValue = (int) (totalNanoseconds / 1_000_000L);
+        totalNanoseconds %= 1_000_000L;
+        int microsecondValue = (int) (totalNanoseconds / 1_000L);
+        int nanosecondValue = (int) (totalNanoseconds % 1_000L);
+        return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
     public static boolean isValidTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
@@ -83,11 +83,11 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
     /**
      * Add nanoseconds to this time, returning a record with the new time and day overflow.
      */
-    public AddResult addNanoseconds(long addNs) {
-        long totalNs = totalNanoseconds() + addNs;
-        long nsPerDay = 86_400_000_000_000L;
-        int days = (int) Math.floorDiv(totalNs, nsPerDay);
-        long remainder = Math.floorMod(totalNs, nsPerDay);
+    public AddResult addNanoseconds(long nanosecondsToAdd) {
+        long totalNanoseconds = totalNanoseconds() + nanosecondsToAdd;
+        long nanosecondsPerDay = 86_400_000_000_000L;
+        int days = (int) Math.floorDiv(totalNanoseconds, nanosecondsPerDay);
+        long remainder = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
         return new AddResult(fromNanoseconds(remainder), days);
     }
 

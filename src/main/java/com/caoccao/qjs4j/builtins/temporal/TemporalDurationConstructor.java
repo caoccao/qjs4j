@@ -56,17 +56,17 @@ public final class TemporalDurationConstructor {
     private TemporalDurationConstructor() {
     }
 
-    private static boolean areDurationRecordsEqual(TemporalDurationRecord one, TemporalDurationRecord two) {
-        return one.years() == two.years()
-                && one.months() == two.months()
-                && one.weeks() == two.weeks()
-                && one.days() == two.days()
-                && one.hours() == two.hours()
-                && one.minutes() == two.minutes()
-                && one.seconds() == two.seconds()
-                && one.milliseconds() == two.milliseconds()
-                && one.microseconds() == two.microseconds()
-                && one.nanoseconds() == two.nanoseconds();
+    private static boolean areDurationRecordsEqual(TemporalDurationRecord firstRecord, TemporalDurationRecord secondRecord) {
+        return firstRecord.years() == secondRecord.years()
+                && firstRecord.months() == secondRecord.months()
+                && firstRecord.weeks() == secondRecord.weeks()
+                && firstRecord.days() == secondRecord.days()
+                && firstRecord.hours() == secondRecord.hours()
+                && firstRecord.minutes() == secondRecord.minutes()
+                && firstRecord.seconds() == secondRecord.seconds()
+                && firstRecord.milliseconds() == secondRecord.milliseconds()
+                && firstRecord.microseconds() == secondRecord.microseconds()
+                && firstRecord.nanoseconds() == secondRecord.nanoseconds();
     }
 
     private static long calendarDaysFromRelativeTo(
@@ -82,7 +82,7 @@ public final class TemporalDurationConstructor {
                     .plusWeeks(durationRecord.weeks())
                     .plusDays(durationRecord.days());
             return ChronoUnit.DAYS.between(startDate, endDate);
-        } catch (ArithmeticException | DateTimeException e) {
+        } catch (ArithmeticException | DateTimeException rangeException) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return Long.MIN_VALUE;
         }
@@ -123,19 +123,19 @@ public final class TemporalDurationConstructor {
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         JSValue optionsArg = args.length > 2 ? args[2] : JSUndefined.INSTANCE;
 
-        JSTemporalDuration one = toTemporalDurationObject(context, oneArg);
+        JSTemporalDuration firstDuration = toTemporalDurationObject(context, oneArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalDuration two = toTemporalDurationObject(context, twoArg);
+        JSTemporalDuration secondDuration = toTemporalDurationObject(context, twoArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord r1 = one.getRecord();
-        TemporalDurationRecord r2 = two.getRecord();
+        TemporalDurationRecord firstRecord = firstDuration.getRecord();
+        TemporalDurationRecord secondRecord = secondDuration.getRecord();
 
-        if (!isDurationRecordInRange(context, r1) || !isDurationRecordInRange(context, r2)) {
+        if (!isDurationRecordInRange(context, firstRecord) || !isDurationRecordInRange(context, secondRecord)) {
             return JSUndefined.INSTANCE;
         }
 
@@ -144,10 +144,10 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        boolean oneHasCalendarUnits = hasCalendarUnits(r1);
-        boolean twoHasCalendarUnits = hasCalendarUnits(r2);
-        if ((oneHasCalendarUnits || twoHasCalendarUnits) && relativeToReference == null) {
-            if (areDurationRecordsEqual(r1, r2)) {
+        boolean firstHasCalendarUnits = hasCalendarUnits(firstRecord);
+        boolean secondHasCalendarUnits = hasCalendarUnits(secondRecord);
+        if ((firstHasCalendarUnits || secondHasCalendarUnits) && relativeToReference == null) {
+            if (areDurationRecordsEqual(firstRecord, secondRecord)) {
                 return JSNumber.of(0);
             } else {
                 context.throwRangeError("Temporal error: A starting point is required for years, months, or weeks arithmetic.");
@@ -155,15 +155,15 @@ public final class TemporalDurationConstructor {
             }
         }
 
-        BigInteger oneTotalNanoseconds = totalDurationNanoseconds(context, r1, relativeToReference);
+        BigInteger firstTotalNanoseconds = totalDurationNanoseconds(context, firstRecord, relativeToReference);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        BigInteger twoTotalNanoseconds = totalDurationNanoseconds(context, r2, relativeToReference);
+        BigInteger secondTotalNanoseconds = totalDurationNanoseconds(context, secondRecord, relativeToReference);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(Integer.signum(oneTotalNanoseconds.compareTo(twoTotalNanoseconds)));
+        return JSNumber.of(Integer.signum(firstTotalNanoseconds.compareTo(secondTotalNanoseconds)));
     }
 
     private static String constrainLeapSecond(String text) {
@@ -452,14 +452,14 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromString(JSContext context, String input) {
-        TemporalParser.DurationFields df = TemporalParser.parseDurationString(context, input);
-        if (df == null) {
+        TemporalParser.DurationFields durationFields = TemporalParser.parseDurationString(context, input);
+        if (durationFields == null) {
             return JSUndefined.INSTANCE;
         }
         TemporalDurationRecord record = new TemporalDurationRecord(
-                df.years(), df.months(), df.weeks(), df.days(),
-                df.hours(), df.minutes(), df.seconds(),
-                df.milliseconds(), df.microseconds(), df.nanoseconds());
+                durationFields.years(), durationFields.months(), durationFields.weeks(), durationFields.days(),
+                durationFields.hours(), durationFields.minutes(), durationFields.seconds(),
+                durationFields.milliseconds(), durationFields.microseconds(), durationFields.nanoseconds());
 
         if (!record.isValid()) {
             context.throwRangeError("Temporal error: Duration was not valid.");
@@ -506,8 +506,8 @@ public final class TemporalDurationConstructor {
         return toTemporalDuration(context, item);
     }
 
-    private static DurationLikeFieldValue getDurationLikeField(JSContext context, JSObject obj, String key) {
-        JSValue value = obj.get(PropertyKey.fromString(key));
+    private static DurationLikeFieldValue getDurationLikeField(JSContext context, JSObject durationLikeObject, String fieldKey) {
+        JSValue value = durationLikeObject.get(PropertyKey.fromString(fieldKey));
         if (value instanceof JSUndefined || value == null) {
             return new DurationLikeFieldValue(false, BigInteger.ZERO);
         }
@@ -810,7 +810,7 @@ public final class TemporalDurationConstructor {
         if (context.hasPendingException()) {
             return null;
         }
-        Long day = toRequiredIntegralLong(context, dayValue);
+        Long dayOfMonth = toRequiredIntegralLong(context, dayValue);
         if (context.hasPendingException()) {
             return null;
         }
@@ -944,11 +944,11 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        if (!IsoDate.isValidIsoDate(year.intValue(), monthNumber, day.intValue())) {
+        if (!IsoDate.isValidIsoDate(year.intValue(), monthNumber, dayOfMonth.intValue())) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        IsoDate relativeDate = new IsoDate(year.intValue(), monthNumber, day.intValue());
+        IsoDate relativeDate = new IsoDate(year.intValue(), monthNumber, dayOfMonth.intValue());
 
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
             return new RelativeToReference(relativeDate, null, null);
@@ -966,7 +966,7 @@ public final class TemporalDurationConstructor {
         if (!offsetTimeZoneIdentifier) {
             try {
                 TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId);
-            } catch (DateTimeException e) {
+            } catch (DateTimeException invalidTimeZoneException) {
                 context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
                 return null;
             }
@@ -998,7 +998,7 @@ public final class TemporalDurationConstructor {
                 try {
                     BigInteger guessedEpochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(relativeDate, relativeTime, offsetSeconds);
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(guessedEpochNanoseconds, normalizedTimeZoneId);
-                } catch (DateTimeException e) {
+                } catch (DateTimeException invalidTimeZoneException) {
                     context.throwRangeError("Temporal error: Invalid time zone: " + normalizedTimeZoneId);
                     return null;
                 }
@@ -1074,7 +1074,7 @@ public final class TemporalDurationConstructor {
             if (!offsetTimeZoneIdentifier) {
                 try {
                     TemporalTimeZone.resolveTimeZone(timeZoneId);
-                } catch (DateTimeException e) {
+                } catch (DateTimeException invalidTimeZoneException) {
                     context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
                     return null;
                 }
@@ -1093,7 +1093,7 @@ public final class TemporalDurationConstructor {
             } else {
                 try {
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
-                } catch (DateTimeException e) {
+                } catch (DateTimeException invalidTimeZoneException) {
                     context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
                     return null;
                 }

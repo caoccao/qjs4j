@@ -52,15 +52,15 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "abs");
-        if (d == null) return JSUndefined.INSTANCE;
-        return TemporalDurationConstructor.createDuration(context, d.getRecord().abs());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "abs");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return TemporalDurationConstructor.createDuration(context, duration.getRecord().abs());
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "add");
-        if (d == null) return JSUndefined.INSTANCE;
-        return addOrSubtract(context, d, args, 1);
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "add");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return addOrSubtract(context, duration, args, 1);
     }
 
     private static LocalDateTime addCalendarUnits(LocalDateTime dateTime, String calendarUnit, long amount) {
@@ -105,7 +105,7 @@ public final class TemporalDurationPrototype {
         long dayAdjustment;
         try {
             dayAdjustment = dayQuotientAndRemainder[0].longValueExact();
-        } catch (ArithmeticException e) {
+        } catch (ArithmeticException arithmeticException) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
@@ -117,13 +117,13 @@ public final class TemporalDurationPrototype {
         long nanosecondAdjustment = nanosecondRemainder.longValueExact();
         try {
             return startDateTime.plusDays(dayAdjustment).plusNanos(nanosecondAdjustment);
-        } catch (DateTimeException e) {
+        } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
     }
 
-    private static JSValue addOrSubtract(JSContext context, JSTemporalDuration d, JSValue[] args, int sign) {
+    private static JSValue addOrSubtract(JSContext context, JSTemporalDuration duration, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
@@ -134,16 +134,16 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord r1 = d.getRecord();
-        TemporalDurationRecord r2 = other.getRecord();
+        TemporalDurationRecord leftRecord = duration.getRecord();
+        TemporalDurationRecord rightRecord = other.getRecord();
 
-        if (hasCalendarUnits(r1) || hasCalendarUnits(r2)) {
+        if (hasCalendarUnits(leftRecord) || hasCalendarUnits(rightRecord)) {
             context.throwRangeError("Temporal error: A starting point is required for years, months, or weeks arithmetic.");
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger leftNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(r1);
-        BigInteger rightNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(r2);
+        BigInteger leftNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(leftRecord);
+        BigInteger rightNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(rightRecord);
         BigInteger signedRightNanoseconds;
         if (sign < 0) {
             signedRightNanoseconds = rightNanoseconds.negate();
@@ -156,8 +156,8 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String receiverLargestUnit = largestUnitOfDuration(r1);
-        String otherLargestUnit = largestUnitOfDuration(r2);
+        String receiverLargestUnit = largestUnitOfDuration(leftRecord);
+        String otherLargestUnit = largestUnitOfDuration(rightRecord);
         String largestUnit = TemporalDurationConstructor.largerTemporalUnit(receiverLargestUnit, otherLargestUnit);
         TemporalDurationRecord balanced = balanceTimeDuration(totalNanoseconds, largestUnit);
         TemporalDurationRecord normalized = TemporalDurationConstructor.normalizeFloat64RepresentableFields(balanced);
@@ -312,9 +312,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue blank(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "blank");
-        if (d == null) return JSUndefined.INSTANCE;
-        return d.getRecord().isBlank() ? JSBoolean.TRUE : JSBoolean.FALSE;
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "blank");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return duration.getRecord().isBlank() ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
     private static TemporalDurationRecord buildBalancedDurationFromDateTimes(
@@ -490,9 +490,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue days(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "days");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().days());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "days");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().days());
     }
 
     static TemporalDurationRecord differencePlainDateTime(
@@ -669,9 +669,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "hours");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().hours());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "hours");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().hours());
     }
 
     private static boolean isCalendarUnit(String unit) {
@@ -799,27 +799,27 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue microseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "microseconds");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().microseconds());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "microseconds");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().microseconds());
     }
 
     public static JSValue milliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "milliseconds");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().milliseconds());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "milliseconds");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().milliseconds());
     }
 
     public static JSValue minutes(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "minutes");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().minutes());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "minutes");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().minutes());
     }
 
     public static JSValue months(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "months");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().months());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "months");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().months());
     }
 
     private static UnitStepResult moveByWholeCalendarUnits(
@@ -865,9 +865,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue nanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "nanoseconds");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().nanoseconds());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "nanoseconds");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().nanoseconds());
     }
 
     private static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {
@@ -879,9 +879,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue negated(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "negated");
-        if (d == null) return JSUndefined.INSTANCE;
-        return TemporalDurationConstructor.createDuration(context, d.getRecord().negated());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "negated");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return TemporalDurationConstructor.createDuration(context, duration.getRecord().negated());
     }
 
     private static DurationToStringOptions parseDurationToStringOptions(JSContext context, JSValue optionsValue) {
@@ -1215,8 +1215,8 @@ public final class TemporalDurationPrototype {
         return new FractionalSecondDigitsOption(true, -1);
     }
 
-    private static PartialDurationFieldValue readPartialDurationField(JSContext context, JSObject fields, String key) {
-        JSValue value = fields.get(PropertyKey.fromString(key));
+    private static PartialDurationFieldValue readPartialDurationField(JSContext context, JSObject fields, String fieldKey) {
+        JSValue value = fields.get(PropertyKey.fromString(fieldKey));
         if (context.hasPendingException()) {
             return null;
         }
@@ -1695,15 +1695,15 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue seconds(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "seconds");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().seconds());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "seconds");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().seconds());
     }
 
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "sign");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().sign());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "sign");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().sign());
     }
 
     private static String smallestUnitFromFractionalSecondDigits(int fractionalSecondDigits) {
@@ -1719,9 +1719,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "subtract");
-        if (d == null) return JSUndefined.INSTANCE;
-        return addOrSubtract(context, d, args, -1);
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "subtract");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return addOrSubtract(context, duration, args, -1);
     }
 
     private static int temporalDurationUnitRank(String unit) {
@@ -1741,9 +1741,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "toJSON");
-        if (d == null) return JSUndefined.INSTANCE;
-        return new JSString(d.getRecord().toString());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "toJSON");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return new JSString(duration.getRecord().toString());
     }
 
     private static LocalDateTime toLocalDateTime(IsoDate isoDate, IsoTime isoTime) {
@@ -2053,14 +2053,14 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue weeks(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "weeks");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().weeks());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "weeks");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().weeks());
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "with");
-        if (d == null) {
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "with");
+        if (duration == null) {
             return JSUndefined.INSTANCE;
         }
         if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
@@ -2125,17 +2125,17 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord r = d.getRecord();
-        long years = yearsFieldValue.present() ? yearsFieldValue.value() : r.years();
-        long months = monthsFieldValue.present() ? monthsFieldValue.value() : r.months();
-        long weeks = weeksFieldValue.present() ? weeksFieldValue.value() : r.weeks();
-        long days = daysFieldValue.present() ? daysFieldValue.value() : r.days();
-        long hours = hoursFieldValue.present() ? hoursFieldValue.value() : r.hours();
-        long minutes = minutesFieldValue.present() ? minutesFieldValue.value() : r.minutes();
-        long seconds = secondsFieldValue.present() ? secondsFieldValue.value() : r.seconds();
-        long milliseconds = millisecondsFieldValue.present() ? millisecondsFieldValue.value() : r.milliseconds();
-        long microseconds = microsecondsFieldValue.present() ? microsecondsFieldValue.value() : r.microseconds();
-        long nanoseconds = nanosecondsFieldValue.present() ? nanosecondsFieldValue.value() : r.nanoseconds();
+        TemporalDurationRecord durationRecord = duration.getRecord();
+        long years = yearsFieldValue.present() ? yearsFieldValue.value() : durationRecord.years();
+        long months = monthsFieldValue.present() ? monthsFieldValue.value() : durationRecord.months();
+        long weeks = weeksFieldValue.present() ? weeksFieldValue.value() : durationRecord.weeks();
+        long days = daysFieldValue.present() ? daysFieldValue.value() : durationRecord.days();
+        long hours = hoursFieldValue.present() ? hoursFieldValue.value() : durationRecord.hours();
+        long minutes = minutesFieldValue.present() ? minutesFieldValue.value() : durationRecord.minutes();
+        long seconds = secondsFieldValue.present() ? secondsFieldValue.value() : durationRecord.seconds();
+        long milliseconds = millisecondsFieldValue.present() ? millisecondsFieldValue.value() : durationRecord.milliseconds();
+        long microseconds = microsecondsFieldValue.present() ? microsecondsFieldValue.value() : durationRecord.microseconds();
+        long nanoseconds = nanosecondsFieldValue.present() ? nanosecondsFieldValue.value() : durationRecord.nanoseconds();
         TemporalDurationRecord newRecord = new TemporalDurationRecord(years, months, weeks, days,
                 hours, minutes, seconds, milliseconds, microseconds, nanoseconds);
 
@@ -2148,9 +2148,9 @@ public final class TemporalDurationPrototype {
     }
 
     public static JSValue years(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalDuration d = checkReceiver(context, thisArg, "years");
-        if (d == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(d.getRecord().years());
+        JSTemporalDuration duration = checkReceiver(context, thisArg, "years");
+        if (duration == null) return JSUndefined.INSTANCE;
+        return JSNumber.of(duration.getRecord().years());
     }
 
     private record DurationFieldOverrides(

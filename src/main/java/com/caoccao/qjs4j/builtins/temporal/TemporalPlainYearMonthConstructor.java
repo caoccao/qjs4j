@@ -38,26 +38,26 @@ public final class TemporalPlainYearMonthConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalPlainYearMonth one = toTemporalYearMonthObject(context, oneArg);
+        JSTemporalPlainYearMonth firstYearMonth = toTemporalYearMonthObject(context, oneArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainYearMonth two = toTemporalYearMonthObject(context, twoArg);
+        JSTemporalPlainYearMonth secondYearMonth = toTemporalYearMonthObject(context, twoArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        int cmp = Integer.compare(one.getIsoDate().year(), two.getIsoDate().year());
-        if (cmp != 0) {
-            return JSNumber.of(cmp);
+        int comparisonResult = Integer.compare(firstYearMonth.getIsoDate().year(), secondYearMonth.getIsoDate().year());
+        if (comparisonResult != 0) {
+            return JSNumber.of(comparisonResult);
         }
 
-        cmp = Integer.compare(one.getIsoDate().month(), two.getIsoDate().month());
-        if (cmp != 0) {
-            return JSNumber.of(cmp);
+        comparisonResult = Integer.compare(firstYearMonth.getIsoDate().month(), secondYearMonth.getIsoDate().month());
+        if (comparisonResult != 0) {
+            return JSNumber.of(comparisonResult);
         }
 
-        return JSNumber.of(Integer.compare(one.getIsoDate().day(), two.getIsoDate().day()));
+        return JSNumber.of(Integer.compare(firstYearMonth.getIsoDate().day(), secondYearMonth.getIsoDate().day()));
     }
 
     /**
@@ -116,11 +116,11 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     static JSTemporalPlainYearMonth createPlainYearMonth(JSContext context, IsoDate isoDate, String calendarId, JSObject prototype) {
-        JSTemporalPlainYearMonth ym = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
+        JSTemporalPlainYearMonth plainYearMonth = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
         if (prototype != null) {
-            ym.setPrototype(prototype);
+            plainYearMonth.setPrototype(prototype);
         }
-        return ym;
+        return plainYearMonth;
     }
 
     private static String firstCalendarAnnotation(String text) {

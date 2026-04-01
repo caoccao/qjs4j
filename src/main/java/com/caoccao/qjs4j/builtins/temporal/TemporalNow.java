@@ -97,9 +97,9 @@ public final class TemporalNow {
     }
 
     private static BigInteger systemEpochNs() {
-        Instant now = Instant.now();
-        return BigInteger.valueOf(now.getEpochSecond()).multiply(BILLION)
-                .add(BigInteger.valueOf(now.getNano()));
+        Instant currentInstant = Instant.now();
+        return BigInteger.valueOf(currentInstant.getEpochSecond()).multiply(BILLION)
+                .add(BigInteger.valueOf(currentInstant.getNano()));
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {

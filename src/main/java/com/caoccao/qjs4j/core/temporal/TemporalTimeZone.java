@@ -37,8 +37,8 @@ public final class TemporalTimeZone {
      */
     public static IsoDateTime epochNsToDateTimeInZone(BigInteger epochNs, String timeZoneId) {
         Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zdt = javaInstant.atZone(resolveTimeZone(timeZoneId));
-        return fromZonedDateTime(zdt);
+        ZonedDateTime zonedDateTime = javaInstant.atZone(resolveTimeZone(timeZoneId));
+        return fromZonedDateTime(zonedDateTime);
     }
 
     /**
@@ -46,8 +46,8 @@ public final class TemporalTimeZone {
      */
     public static IsoDateTime epochNsToUtcDateTime(BigInteger epochNs) {
         Instant javaInstant = toJavaInstant(epochNs);
-        LocalDateTime ldt = LocalDateTime.ofInstant(javaInstant, ZoneOffset.UTC);
-        return fromLocalDateTime(ldt);
+        LocalDateTime localDateTime = LocalDateTime.ofInstant(javaInstant, ZoneOffset.UTC);
+        return fromLocalDateTime(localDateTime);
     }
 
     /**
@@ -55,24 +55,24 @@ public final class TemporalTimeZone {
      */
     public static String formatOffset(int totalSeconds) {
         String sign = totalSeconds >= 0 ? "+" : "-";
-        int abs = Math.abs(totalSeconds);
-        int hours = abs / 3600;
-        int minutes = (abs % 3600) / 60;
+        int absoluteSeconds = Math.abs(totalSeconds);
+        int hours = absoluteSeconds / 3600;
+        int minutes = (absoluteSeconds % 3600) / 60;
         return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
     }
 
-    private static IsoDateTime fromLocalDateTime(LocalDateTime ldt) {
-        IsoDate date = new IsoDate(ldt.getYear(), ldt.getMonthValue(), ldt.getDayOfMonth());
-        int nano = ldt.getNano();
-        IsoTime time = new IsoTime(ldt.getHour(), ldt.getMinute(), ldt.getSecond(),
+    private static IsoDateTime fromLocalDateTime(LocalDateTime localDateTime) {
+        IsoDate date = new IsoDate(localDateTime.getYear(), localDateTime.getMonthValue(), localDateTime.getDayOfMonth());
+        int nano = localDateTime.getNano();
+        IsoTime time = new IsoTime(localDateTime.getHour(), localDateTime.getMinute(), localDateTime.getSecond(),
                 nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
         return new IsoDateTime(date, time);
     }
 
-    private static IsoDateTime fromZonedDateTime(ZonedDateTime zdt) {
-        IsoDate date = new IsoDate(zdt.getYear(), zdt.getMonthValue(), zdt.getDayOfMonth());
-        int nano = zdt.getNano();
-        IsoTime time = new IsoTime(zdt.getHour(), zdt.getMinute(), zdt.getSecond(),
+    private static IsoDateTime fromZonedDateTime(ZonedDateTime zonedDateTime) {
+        IsoDate date = new IsoDate(zonedDateTime.getYear(), zonedDateTime.getMonthValue(), zonedDateTime.getDayOfMonth());
+        int nano = zonedDateTime.getNano();
+        IsoTime time = new IsoTime(zonedDateTime.getHour(), zonedDateTime.getMinute(), zonedDateTime.getSecond(),
                 nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
         return new IsoDateTime(date, time);
     }
@@ -83,9 +83,9 @@ public final class TemporalTimeZone {
     public static int getHoursInDay(BigInteger epochNs, String timeZoneId) {
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zdt = javaInstant.atZone(zone);
-        ZonedDateTime startOfDay = zdt.toLocalDate().atStartOfDay(zone);
-        ZonedDateTime startOfNextDay = zdt.toLocalDate().plusDays(1).atStartOfDay(zone);
+        ZonedDateTime zonedDateTime = javaInstant.atZone(zone);
+        ZonedDateTime startOfDay = zonedDateTime.toLocalDate().atStartOfDay(zone);
+        ZonedDateTime startOfNextDay = zonedDateTime.toLocalDate().plusDays(1).atStartOfDay(zone);
         long seconds = Duration.between(startOfDay, startOfNextDay).getSeconds();
         return (int) (seconds / 3600);
     }
@@ -131,30 +131,30 @@ public final class TemporalTimeZone {
     /**
      * Converts a local date-time in a timezone to epoch nanoseconds using 'compatible' disambiguation.
      */
-    public static BigInteger localDateTimeToEpochNs(IsoDateTime dt, String timeZoneId) {
-        return localDateTimeToEpochNs(dt, timeZoneId, "compatible");
+    public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId) {
+        return localDateTimeToEpochNs(isoDateTime, timeZoneId, "compatible");
     }
 
     /**
      * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation.
      */
-    public static BigInteger localDateTimeToEpochNs(IsoDateTime dt, String timeZoneId, String disambiguation) {
-        LocalDateTime ldt = LocalDateTime.of(
-                dt.date().year(), dt.date().month(), dt.date().day(),
-                dt.time().hour(), dt.time().minute(), dt.time().second(),
-                dt.time().millisecond() * 1_000_000 + dt.time().microsecond() * 1_000 + dt.time().nanosecond());
+    public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId, String disambiguation) {
+        LocalDateTime localDateTime = LocalDateTime.of(
+                isoDateTime.date().year(), isoDateTime.date().month(), isoDateTime.date().day(),
+                isoDateTime.time().hour(), isoDateTime.time().minute(), isoDateTime.time().second(),
+                isoDateTime.time().millisecond() * 1_000_000 + isoDateTime.time().microsecond() * 1_000 + isoDateTime.time().nanosecond());
         ZoneId zoneId = resolveTimeZone(timeZoneId);
         ZoneRules zoneRules = zoneId.getRules();
-        List<ZoneOffset> validOffsets = zoneRules.getValidOffsets(ldt);
+        List<ZoneOffset> validOffsets = zoneRules.getValidOffsets(localDateTime);
 
         Instant instant;
         if (validOffsets.size() == 1) {
-            instant = ldt.atOffset(validOffsets.get(0)).toInstant();
+            instant = localDateTime.atOffset(validOffsets.get(0)).toInstant();
         } else if (validOffsets.size() == 2) {
             ZoneOffset firstOffset = validOffsets.get(0);
             ZoneOffset secondOffset = validOffsets.get(1);
-            Instant firstInstant = ldt.atOffset(firstOffset).toInstant();
-            Instant secondInstant = ldt.atOffset(secondOffset).toInstant();
+            Instant firstInstant = localDateTime.atOffset(firstOffset).toInstant();
+            Instant secondInstant = localDateTime.atOffset(secondOffset).toInstant();
             Instant earlierInstant = firstInstant.isBefore(secondInstant) ? firstInstant : secondInstant;
             Instant laterInstant = firstInstant.isAfter(secondInstant) ? firstInstant : secondInstant;
 
@@ -166,7 +166,7 @@ public final class TemporalTimeZone {
                 instant = earlierInstant;
             }
         } else {
-            ZoneOffsetTransition transition = zoneRules.getTransition(ldt);
+            ZoneOffsetTransition transition = zoneRules.getTransition(localDateTime);
             if (transition == null) {
                 throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
             }
@@ -176,10 +176,10 @@ public final class TemporalTimeZone {
 
             Duration gapDuration = transition.getDuration().abs();
             if ("earlier".equals(disambiguation)) {
-                LocalDateTime shiftedLocalDateTime = ldt.minusSeconds(gapDuration.getSeconds());
+                LocalDateTime shiftedLocalDateTime = localDateTime.minusSeconds(gapDuration.getSeconds());
                 instant = shiftedLocalDateTime.atOffset(transition.getOffsetBefore()).toInstant();
             } else {
-                LocalDateTime shiftedLocalDateTime = ldt.plusSeconds(gapDuration.getSeconds());
+                LocalDateTime shiftedLocalDateTime = localDateTime.plusSeconds(gapDuration.getSeconds());
                 instant = shiftedLocalDateTime.atOffset(transition.getOffsetAfter()).toInstant();
             }
         }

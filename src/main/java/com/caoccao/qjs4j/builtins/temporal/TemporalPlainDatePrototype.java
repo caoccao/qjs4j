@@ -81,7 +81,7 @@ public final class TemporalPlainDatePrototype {
             long weeksInDays = Math.multiplyExact(durationRecord.weeks(), 7L);
             totalDays = Math.addExact(durationRecord.days(), weeksInDays);
             totalDays = Math.addExact(totalDays, balancedTimeDuration.days());
-        } catch (ArithmeticException e) {
+        } catch (ArithmeticException arithmeticException) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
@@ -113,7 +113,7 @@ public final class TemporalPlainDatePrototype {
         long resultEpochDay;
         try {
             resultEpochDay = Math.addExact(intermediateEpochDay, totalDays);
-        } catch (ArithmeticException e) {
+        } catch (ArithmeticException arithmeticException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
@@ -277,8 +277,8 @@ public final class TemporalPlainDatePrototype {
         return addDurationToDate(context, baseDate, durationRecord, "constrain");
     }
 
-    private static DateDurationFields calendarDateUntil(IsoDate one, IsoDate two, String largestUnit) {
-        int sign = -Integer.signum(IsoDate.compareIsoDate(one, two));
+    private static DateDurationFields calendarDateUntil(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
+        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
         if (sign == 0) {
             return DateDurationFields.ZERO;
         }
@@ -286,18 +286,18 @@ public final class TemporalPlainDatePrototype {
         long years = 0;
         long months = 0;
         if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
-            long candidateYears = (long) two.year() - one.year();
+            long candidateYears = (long) secondDate.year() - firstDate.year();
             if (candidateYears != 0) {
                 candidateYears -= sign;
             }
-            while (!isoDateSurpasses(sign, one.year() + candidateYears, one.month(), one.day(), two)) {
+            while (!isoDateSurpasses(sign, firstDate.year() + candidateYears, firstDate.month(), firstDate.day(), secondDate)) {
                 years = candidateYears;
                 candidateYears += sign;
             }
 
             long candidateMonths = sign;
-            YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + candidateMonths);
-            while (!isoDateSurpasses(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), one.day(), two)) {
+            YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(firstDate.year() + years, firstDate.month() + candidateMonths);
+            while (!isoDateSurpasses(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day(), secondDate)) {
                 months = candidateMonths;
                 candidateMonths += sign;
                 intermediateYearMonth = balanceIsoYearMonth(intermediateYearMonth.year(), intermediateYearMonth.month() + sign);
@@ -309,9 +309,9 @@ public final class TemporalPlainDatePrototype {
             }
         }
 
-        YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(one.year() + years, one.month() + months);
-        IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), one.day());
-        long dayDifference = two.toEpochDay() - constrainedDate.toEpochDay();
+        YearMonthBalance intermediateYearMonth = balanceIsoYearMonth(firstDate.year() + years, firstDate.month() + months);
+        IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day());
+        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
         long weeks = 0;
         if (UNIT_WEEK.equals(largestUnit)) {
             weeks = dayDifference / 7;
@@ -358,9 +358,9 @@ public final class TemporalPlainDatePrototype {
         return plainDate;
     }
 
-    private static IsoDate constrainIsoDate(long year, int month, int day) {
+    private static IsoDate constrainIsoDate(long year, int month, int dayOfMonth) {
         int constrainedYear = (int) year;
-        int constrainedDay = Math.min(day, IsoDate.daysInMonth(constrainedYear, month));
+        int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(constrainedYear, month));
         return new IsoDate(constrainedYear, month, constrainedDay);
     }
 
@@ -393,8 +393,8 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate d = plainDate.getIsoDate();
-        return JSNumber.of(IsoDate.daysInMonth(d.year(), d.month()));
+        IsoDate isoDate = plainDate.getIsoDate();
+        return JSNumber.of(IsoDate.daysInMonth(isoDate.year(), isoDate.month()));
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -672,15 +672,15 @@ public final class TemporalPlainDatePrototype {
                 || "halfFloor".equals(roundingMode);
     }
 
-    private static boolean isoDateSurpasses(int sign, long year, long month, long day, IsoDate isoDate) {
+    private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
         if (year != isoDate.year()) {
             return sign * (year - isoDate.year()) > 0;
         }
         if (month != isoDate.month()) {
             return sign * (month - isoDate.month()) > 0;
         }
-        if (day != isoDate.day()) {
-            return sign * (day - isoDate.day()) > 0;
+        if (dayOfMonth != isoDate.day()) {
+            return sign * (dayOfMonth - isoDate.day()) > 0;
         }
         return false;
     }
@@ -1022,9 +1022,9 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate d = plainDate.getIsoDate();
+        IsoDate isoDate = plainDate.getIsoDate();
         return TemporalPlainMonthDayConstructor.createPlainMonthDay(context,
-                new IsoDate(1972, d.month(), d.day()), plainDate.getCalendarId());
+                new IsoDate(1972, isoDate.month(), isoDate.day()), plainDate.getCalendarId());
     }
 
     public static JSValue toPlainYearMonth(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1032,9 +1032,9 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate d = plainDate.getIsoDate();
+        IsoDate isoDate = plainDate.getIsoDate();
         return TemporalPlainYearMonthConstructor.createPlainYearMonth(context,
-                new IsoDate(d.year(), d.month(), 1), plainDate.getCalendarId());
+                new IsoDate(isoDate.year(), isoDate.month(), 1), plainDate.getCalendarId());
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1107,7 +1107,7 @@ public final class TemporalPlainDatePrototype {
             epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
                     new IsoDateTime(isoDate, isoTime),
                     timeZoneId);
-        } catch (DateTimeException e) {
+        } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }
@@ -1185,14 +1185,14 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         boolean hasDay = !(dayVal instanceof JSUndefined) && dayVal != null;
-        int day = original.day();
+        int dayOfMonth = original.day();
         if (hasDay) {
-            day = TemporalUtils.toIntegerThrowOnInfinity(context, dayVal);
+            dayOfMonth = TemporalUtils.toIntegerThrowOnInfinity(context, dayVal);
         }
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (day < 1) {
+        if (dayOfMonth < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -1269,13 +1269,13 @@ public final class TemporalPlainDatePrototype {
 
         IsoDate resultDate;
         if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, month, day)) {
+            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            resultDate = new IsoDate(year, month, day);
+            resultDate = new IsoDate(year, month, dayOfMonth);
         } else {
-            resultDate = TemporalUtils.constrainIsoDate(year, month, day);
+            resultDate = TemporalUtils.constrainIsoDate(year, month, dayOfMonth);
         }
 
         long resultEpochDay = resultDate.toEpochDay();

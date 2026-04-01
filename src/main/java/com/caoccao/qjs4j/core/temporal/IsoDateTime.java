@@ -21,12 +21,12 @@ package com.caoccao.qjs4j.core.temporal;
  */
 public record IsoDateTime(IsoDate date, IsoTime time) {
 
-    public static int compareIsoDateTime(IsoDateTime one, IsoDateTime two) {
-        int dateCompare = IsoDate.compareIsoDate(one.date, two.date);
+    public static int compareIsoDateTime(IsoDateTime firstDateTime, IsoDateTime secondDateTime) {
+        int dateCompare = IsoDate.compareIsoDate(firstDateTime.date, secondDateTime.date);
         if (dateCompare != 0) {
             return dateCompare;
         }
-        return IsoTime.compareIsoTime(one.time, two.time);
+        return IsoTime.compareIsoTime(firstDateTime.time, secondDateTime.time);
     }
 
     @Override

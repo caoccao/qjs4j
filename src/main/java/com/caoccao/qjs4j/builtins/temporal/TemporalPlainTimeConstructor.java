@@ -37,16 +37,16 @@ public final class TemporalPlainTimeConstructor {
         JSValue oneArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
-        JSTemporalPlainTime one = toTemporalTimeObject(context, oneArg);
+        JSTemporalPlainTime firstTime = toTemporalTimeObject(context, oneArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        JSTemporalPlainTime two = toTemporalTimeObject(context, twoArg);
+        JSTemporalPlainTime secondTime = toTemporalTimeObject(context, twoArg);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoTime.compareIsoTime(one.getIsoTime(), two.getIsoTime()));
+        return JSNumber.of(IsoTime.compareIsoTime(firstTime.getIsoTime(), secondTime.getIsoTime()));
     }
 
     /**
