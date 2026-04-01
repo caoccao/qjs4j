@@ -339,10 +339,7 @@ public final class TemporalPlainDateTimeConstructor {
         if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
             return false;
         }
-        if (epochDay == MIN_SUPPORTED_EPOCH_DAY && time.totalNanoseconds() == 0L) {
-            return false;
-        }
-        return true;
+        return epochDay != MIN_SUPPORTED_EPOCH_DAY || time.totalNanoseconds() != 0L;
     }
 
     private static ParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCode) {

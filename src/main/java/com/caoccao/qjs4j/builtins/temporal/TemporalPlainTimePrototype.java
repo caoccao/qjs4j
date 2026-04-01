@@ -85,6 +85,17 @@ public final class TemporalPlainTimePrototype {
         };
     }
 
+    private static String canonicalizeToStringSmallestUnit(String unitText) {
+        return switch (unitText) {
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         if (!(thisArg instanceof JSTemporalPlainTime plainTime)) {
             context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
@@ -344,6 +355,17 @@ public final class TemporalPlainTimePrototype {
         return optionText.value();
     }
 
+    private static String getToStringFractionalPart(IsoTime time, int digits) {
+        if (digits <= 0) {
+            return "";
+        }
+        String nineDigits = String.format("%03d%03d%03d",
+                time.millisecond(),
+                time.microsecond(),
+                time.nanosecond());
+        return nineDigits.substring(0, digits);
+    }
+
     private static FractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
             return new FractionalSecondDigitsOption(true, -1);
@@ -371,17 +393,6 @@ public final class TemporalPlainTimePrototype {
         }
         context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
         return null;
-    }
-
-    private static String canonicalizeToStringSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
     }
 
     private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
@@ -477,17 +488,6 @@ public final class TemporalPlainTimePrototype {
                 autoFractionalSecondDigits,
                 fractionalSecondDigits,
                 roundingIncrementNanoseconds);
-    }
-
-    private static String getToStringFractionalPart(IsoTime time, int digits) {
-        if (digits <= 0) {
-            return "";
-        }
-        String nineDigits = String.format("%03d%03d%03d",
-                time.millisecond(),
-                time.microsecond(),
-                time.nanosecond());
-        return nineDigits.substring(0, digits);
     }
 
     private static String getToStringTimeString(IsoTime time, ToStringSettings toStringSettings) {
@@ -829,29 +829,122 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
+        if (fields instanceof JSTemporalPlainDate
+                || fields instanceof JSTemporalPlainDateTime
+                || fields instanceof JSTemporalPlainMonthDay
+                || fields instanceof JSTemporalPlainTime
+                || fields instanceof JSTemporalPlainYearMonth
+                || fields instanceof JSTemporalZonedDateTime) {
+            context.throwTypeError("Temporal error: Must specify at least one time field.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue calendarLike = fields.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(calendarLike instanceof JSUndefined) && calendarLike != null) {
+            context.throwTypeError("Temporal error: Must specify at least one time field.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue timeZoneLike = fields.get(PropertyKey.fromString("timeZone"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(timeZoneLike instanceof JSUndefined) && timeZoneLike != null) {
+            context.throwTypeError("Temporal error: Must specify at least one time field.");
+            return JSUndefined.INSTANCE;
+        }
+
         IsoTime original = plainTime.getIsoTime();
-        int hour = TemporalUtils.getIntegerField(context, fields, "hour", original.hour());
+
+        JSValue hourValue = fields.get(PropertyKey.fromString("hour"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int minute = TemporalUtils.getIntegerField(context, fields, "minute", original.minute());
+        boolean hasHour = !(hourValue instanceof JSUndefined) && hourValue != null;
+        int hour = original.hour();
+        if (hasHour) {
+            hour = TemporalUtils.toIntegerThrowOnInfinity(context, hourValue);
+        }
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int second = TemporalUtils.getIntegerField(context, fields, "second", original.second());
+
+        JSValue microsecondValue = fields.get(PropertyKey.fromString("microsecond"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int millisecond = TemporalUtils.getIntegerField(context, fields, "millisecond", original.millisecond());
+        boolean hasMicrosecond = !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
+        int microsecond = original.microsecond();
+        if (hasMicrosecond) {
+            microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, microsecondValue);
+        }
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int microsecond = TemporalUtils.getIntegerField(context, fields, "microsecond", original.microsecond());
+
+        JSValue millisecondValue = fields.get(PropertyKey.fromString("millisecond"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        int nanosecond = TemporalUtils.getIntegerField(context, fields, "nanosecond", original.nanosecond());
+        boolean hasMillisecond = !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
+        int millisecond = original.millisecond();
+        if (hasMillisecond) {
+            millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, millisecondValue);
+        }
         if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue minuteValue = fields.get(PropertyKey.fromString("minute"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMinute = !(minuteValue instanceof JSUndefined) && minuteValue != null;
+        int minute = original.minute();
+        if (hasMinute) {
+            minute = TemporalUtils.toIntegerThrowOnInfinity(context, minuteValue);
+        }
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue nanosecondValue = fields.get(PropertyKey.fromString("nanosecond"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasNanosecond = !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
+        int nanosecond = original.nanosecond();
+        if (hasNanosecond) {
+            nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, nanosecondValue);
+        }
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue secondValue = fields.get(PropertyKey.fromString("second"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasSecond = !(secondValue instanceof JSUndefined) && secondValue != null;
+        int second = original.second();
+        if (hasSecond) {
+            second = TemporalUtils.toIntegerThrowOnInfinity(context, secondValue);
+        }
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        boolean hasAnyField = hasHour
+                || hasMicrosecond
+                || hasMillisecond
+                || hasMinute
+                || hasNanosecond
+                || hasSecond;
+        if (!hasAnyField) {
+            context.throwTypeError("Temporal error: Must specify at least one time field.");
             return JSUndefined.INSTANCE;
         }
 
@@ -879,13 +972,13 @@ public final class TemporalPlainTimePrototype {
             String roundingMode) {
     }
 
+    private record FractionalSecondDigitsOption(boolean auto, int digits) {
+    }
+
     private record RoundSettings(
             String smallestUnit,
             long roundingIncrement,
             String roundingMode) {
-    }
-
-    private record FractionalSecondDigitsOption(boolean auto, int digits) {
     }
 
     private record ToStringSettings(

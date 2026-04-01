@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
 
 import java.math.BigInteger;
+import java.util.Locale;
 
 /**
  * ISO 8601 string parser for Temporal types.
@@ -145,6 +146,22 @@ public final class TemporalParser {
             return month >= 1 && month <= 12;
         }
         return false;
+    }
+
+    private static boolean isValidIsoYearMonthDateForParsing(int year, int month, int day) {
+        if (month < 1 || month > 12) {
+            return false;
+        }
+        if (day < 1 || day > IsoDate.daysInMonth(year, month)) {
+            return false;
+        }
+        if (year < -271821 || year > 275760) {
+            return false;
+        }
+        if (year == -271821 && month < 4) {
+            return false;
+        }
+        return year != 275760 || month <= 9;
     }
 
     /**
@@ -516,31 +533,96 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
         }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
         TemporalParser parser = new TemporalParser(input);
+
         int year = parser.parseYear(context);
-        if (context.hasPendingException()) return null;
-        if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        boolean hasSeparator = parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-';
+        if (hasSeparator) {
             parser.pos++;
         }
+
         int month = parser.parseTwoDigits(context, "month");
-        if (context.hasPendingException()) return null;
+        if (context.hasPendingException()) {
+            return null;
+        }
         if (month < 1 || month > 12) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        // If there's a day part, parse it (full date string)
+
         int day = 1;
-        if (parser.pos < parser.input.length() && (parser.input.charAt(parser.pos) == '-' || Character.isDigit(parser.input.charAt(parser.pos)))) {
-            if (parser.input.charAt(parser.pos) == '-') {
+        if (hasSeparator) {
+            if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
                 parser.pos++;
+                day = parser.parseTwoDigits(context, "day");
+                if (context.hasPendingException()) {
+                    return null;
+                }
             }
-            day = parser.parseTwoDigits(context, "day");
-            if (context.hasPendingException()) return null;
+        } else {
+            if (parser.pos < parser.input.length() && Character.isDigit(parser.input.charAt(parser.pos))) {
+                day = parser.parseTwoDigits(context, "day");
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+            if (parser.pos < parser.input.length() && parser.input.charAt(parser.pos) == '-') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
         }
-        if (!IsoDate.isValidIsoDate(year, month, day)) {
+
+        if (!isValidIsoYearMonthDateForParsing(year, month, day)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
+
+        boolean hasTimePart = false;
+        if (parser.pos < parser.input.length()
+                && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            hasTimePart = true;
+            parser.pos++;
+            IsoTime parsedTime = parser.parseInstantTime(context);
+            if (parsedTime == null || context.hasPendingException()) {
+                return null;
+            }
+        }
+
+        if (parser.pos < parser.input.length()) {
+            char marker = parser.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            if (marker == '+' || marker == '-') {
+                if (!hasTimePart) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+
+        parser.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (parser.pos != parser.input.length()) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
         return new IsoDate(year, month, day);
     }
 
@@ -584,7 +666,7 @@ public final class TemporalParser {
             if (end < 0) break;
             String content = parser.input.substring(start, end);
             if (content.startsWith("u-ca=")) {
-                calendarId = content.substring(5).toLowerCase(java.util.Locale.ROOT);
+                calendarId = content.substring(5).toLowerCase(Locale.ROOT);
             } else if (timeZoneId == null) {
                 timeZoneId = content;
             }

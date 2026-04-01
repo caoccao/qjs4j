@@ -21,6 +21,8 @@ import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
+import java.util.Locale;
+
 /**
  * Implementation of Temporal.PlainYearMonth constructor and static methods.
  */
@@ -37,13 +39,25 @@ public final class TemporalPlainYearMonthConstructor {
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
         JSTemporalPlainYearMonth one = toTemporalYearMonthObject(context, oneArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         JSTemporalPlainYearMonth two = toTemporalYearMonthObject(context, twoArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         int cmp = Integer.compare(one.getIsoDate().year(), two.getIsoDate().year());
-        if (cmp != 0) return JSNumber.of(cmp);
-        return JSNumber.of(Integer.compare(one.getIsoDate().month(), two.getIsoDate().month()));
+        if (cmp != 0) {
+            return JSNumber.of(cmp);
+        }
+
+        cmp = Integer.compare(one.getIsoDate().month(), two.getIsoDate().month());
+        if (cmp != 0) {
+            return JSNumber.of(cmp);
+        }
+
+        return JSNumber.of(Integer.compare(one.getIsoDate().day(), two.getIsoDate().day()));
     }
 
     /**
@@ -56,20 +70,28 @@ public final class TemporalPlainYearMonthConstructor {
         }
 
         int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         String calendarId = "iso8601";
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
             calendarId = TemporalUtils.validateCalendar(context, args[2]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         int referenceDay = 1;
         if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
             referenceDay = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         if (!IsoDate.isValidIsoDate(isoYear, isoMonth, referenceDay)) {
@@ -97,6 +119,29 @@ public final class TemporalPlainYearMonthConstructor {
         return ym;
     }
 
+    private static String firstCalendarAnnotation(String text) {
+        int annotationStart = text.indexOf('[');
+        while (annotationStart >= 0) {
+            int annotationEnd = text.indexOf(']', annotationStart);
+            if (annotationEnd <= annotationStart) {
+                return null;
+            }
+            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
+            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
+                annotationContent = annotationContent.substring(1);
+            }
+            int equalSignIndex = annotationContent.indexOf('=');
+            if (equalSignIndex > 0) {
+                String annotationKey = annotationContent.substring(0, equalSignIndex);
+                if ("u-ca".equals(annotationKey)) {
+                    return annotationContent.substring(equalSignIndex + 1);
+                }
+            }
+            annotationStart = text.indexOf('[', annotationEnd + 1);
+        }
+        return null;
+    }
+
     /**
      * Temporal.PlainYearMonth.from(item, options?)
      */
@@ -122,66 +167,137 @@ public final class TemporalPlainYearMonthConstructor {
 
     public static JSTemporalPlainYearMonth toTemporalYearMonthObject(JSContext context, JSValue item) {
         JSValue result = toTemporalYearMonth(context, item, JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return null;
+        if (context.hasPendingException()) {
+            return null;
+        }
         return (JSTemporalPlainYearMonth) result;
     }
 
     static JSValue yearMonthFromFields(JSContext context, JSObject fields, JSValue options) {
-        String overflow = TemporalUtils.getOverflowOption(context, options);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-
-        int year = TemporalUtils.getIntegerField(context, fields, "year", Integer.MIN_VALUE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        if (year == Integer.MIN_VALUE) {
+        JSObject plainYearMonthPrototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainYearMonth");
+        if (fields == plainYearMonthPrototype) {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
 
-        int month;
-        JSValue monthValue = fields.get(PropertyKey.fromString("month"));
-        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
-        if (monthValue instanceof JSUndefined || monthValue == null) {
-            if (monthCodeValue instanceof JSString monthCodeStr) {
-                month = TemporalPlainDateConstructor.parseMonthCode(context, monthCodeStr.value());
-                if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            } else {
-                context.throwTypeError("Temporal error: year argument must be an object.");
+        JSValue yearValue = fields.get(PropertyKey.fromString("year"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (yearValue instanceof JSFunction) {
+            context.throwTypeError("Temporal error: year argument must be an object.");
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
+        int year = 0;
+        if (hasYear) {
+            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearValue);
+            if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-        } else {
+        }
+
+        JSValue monthValue = fields.get(PropertyKey.fromString("month"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (monthValue instanceof JSFunction) {
+            context.throwTypeError("Temporal error: year argument must be an object.");
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMonth = !(monthValue instanceof JSUndefined) && monthValue != null;
+        int month = 0;
+        if (hasMonth) {
             month = TemporalUtils.toIntegerThrowOnInfinity(context, monthValue);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        JSValue monthCodeValue = fields.get(PropertyKey.fromString("monthCode"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (monthCodeValue instanceof JSFunction) {
+            context.throwTypeError("Temporal error: year argument must be an object.");
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
+
+        if (!hasYear || (!hasMonth && !hasMonthCode)) {
+            context.throwTypeError("Temporal error: year argument must be an object.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (hasMonthCode) {
+            JSString monthCodeString = JSTypeConversions.toString(context, monthCodeValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            int monthFromMonthCode = TemporalPlainDateConstructor.parseMonthCode(context, monthCodeString.value());
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (monthFromMonthCode < 1 || monthFromMonthCode > 12) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            if (hasMonth && month != monthFromMonthCode) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            if (!hasMonth) {
+                month = monthFromMonthCode;
+            }
         }
 
         JSValue calendarValue = fields.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         String calendarId = "iso8601";
-        if (calendarValue instanceof JSString calStr) {
-            calendarId = calStr.value().toLowerCase(java.util.Locale.ROOT);
+        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
+            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        String overflow = TemporalUtils.getOverflowOption(context, options);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
         }
 
         if ("reject".equals(overflow)) {
-            if (month < 1 || month > 12) {
+            if (!IsoDate.isValidIsoDate(year, month, 1)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
             return createPlainYearMonth(context, new IsoDate(year, month, 1), calendarId);
-        } else {
-            month = Math.max(1, Math.min(12, month));
-            return createPlainYearMonth(context, new IsoDate(year, month, 1), calendarId);
         }
+
+        int constrainedMonth = Math.max(1, Math.min(12, month));
+        return createPlainYearMonth(context, new IsoDate(year, constrainedMonth, 1), calendarId);
     }
 
     static JSValue yearMonthFromString(JSContext context, String input) {
         IsoDate date = TemporalParser.parseYearMonthString(context, input);
-        if (date == null) return JSUndefined.INSTANCE;
+        if (date == null) {
+            return JSUndefined.INSTANCE;
+        }
+
         String calendar = "iso8601";
-        int calIdx = input.indexOf("[u-ca=");
-        if (calIdx >= 0) {
-            int endIdx = input.indexOf(']', calIdx);
-            if (endIdx > calIdx) {
-                calendar = input.substring(calIdx + 6, endIdx).toLowerCase(java.util.Locale.ROOT);
+        String calendarAnnotation = firstCalendarAnnotation(input);
+        if (calendarAnnotation != null) {
+            calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
             }
         }
-        return createPlainYearMonth(context, new IsoDate(date.year(), date.month(), 1), calendar);
+
+        return createPlainYearMonth(
+                context,
+                new IsoDate(date.year(), date.month(), 1),
+                calendar.toLowerCase(Locale.ROOT));
     }
 }
