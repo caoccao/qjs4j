@@ -21,8 +21,6 @@ import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
-import java.util.Locale;
-
 /**
  * Implementation of Temporal.PlainYearMonth prototype methods.
  */
@@ -729,7 +727,8 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate isoDate = plainYearMonth.getIsoDate();
-        return new JSString(String.format(Locale.ROOT, "%04d-%02d", isoDate.year(), isoDate.month()));
+        String formattedDate = TemporalUtils.formatIsoDate(isoDate.year(), isoDate.month(), 1);
+        return new JSString(formattedDate.substring(0, formattedDate.lastIndexOf('-')));
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -767,6 +766,13 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate isoDate = plainYearMonth.getIsoDate();
+        if (dayOfMonth < 1) {
+            dayOfMonth = 1;
+        }
+        int daysInMonth = IsoDate.daysInMonth(isoDate.year(), isoDate.month());
+        if (dayOfMonth > daysInMonth) {
+            dayOfMonth = daysInMonth;
+        }
         if (!IsoDate.isValidIsoDate(isoDate.year(), isoDate.month(), dayOfMonth)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
