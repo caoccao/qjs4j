@@ -764,16 +764,8 @@ public final class TemporalDurationConstructor {
             return null;
         }
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            if (calendarValue instanceof JSString calendarString) {
-                String calendarId = calendarString.value().toLowerCase(java.util.Locale.ROOT);
-                if (!"iso8601".equals(calendarId)) {
-                    context.throwRangeError("Temporal error: Invalid calendar.");
-                    return null;
-                }
-            } else if (isCalendarTemporalObject(calendarValue)) {
-                // Fast path: calendar-carrying Temporal objects provide their internal calendar.
-            } else {
-                context.throwTypeError("Temporal error: Calendar must be string.");
+            TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            if (context.hasPendingException()) {
                 return null;
             }
         }

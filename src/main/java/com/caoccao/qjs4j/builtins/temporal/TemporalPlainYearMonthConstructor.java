@@ -172,10 +172,7 @@ public final class TemporalPlainYearMonthConstructor {
         if (year == -271821 && month < 4) {
             return false;
         }
-        if (year == 275760 && month > 9) {
-            return false;
-        }
-        return true;
+        return year != 275760 || month <= 9;
     }
 
     private static ParsedMonthCode parseMonthCodeForYearMonthFrom(JSContext context, JSValue monthCodeValue) {

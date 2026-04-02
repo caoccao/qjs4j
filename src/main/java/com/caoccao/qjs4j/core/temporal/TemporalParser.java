@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.JSString;
 
 import java.math.BigInteger;
-import java.util.Locale;
 
 /**
  * ISO 8601 string parser for Temporal types.
@@ -82,6 +81,26 @@ public final class TemporalParser {
                 if ("u-ca".equals(annotationKey)) {
                     return annotationContent.substring(equalSignIndex + 1);
                 }
+            }
+            annotationStart = text.indexOf('[', annotationEnd + 1);
+        }
+        return null;
+    }
+
+    private static String firstTimeZoneAnnotation(String text) {
+        int annotationStart = text.indexOf('[');
+        while (annotationStart >= 0) {
+            int annotationEnd = text.indexOf(']', annotationStart);
+            if (annotationEnd <= annotationStart) {
+                return null;
+            }
+            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
+            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
+                annotationContent = annotationContent.substring(1);
+            }
+            int equalSignIndex = annotationContent.indexOf('=');
+            if (equalSignIndex < 0) {
+                return annotationContent;
             }
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
@@ -635,51 +654,65 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
         }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
         TemporalParser parser = new TemporalParser(input);
         IsoDate date = parser.parseDate(context);
-        if (date == null) return null;
-        IsoTime time = IsoTime.MIDNIGHT;
-        if (parser.position < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
-            parser.position++;
-            time = parser.parseTime(context);
-            if (time == null) return null;
+        if (date == null) {
+            return null;
         }
-        // Parse offset
+        IsoTime time = IsoTime.MIDNIGHT;
+        boolean hasTimePart = false;
+        if (parser.position < parser.input.length() && (parser.current() == 'T' || parser.current() == 't' || parser.current() == ' ')) {
+            hasTimePart = true;
+            parser.position++;
+            time = parser.parseInstantTime(context);
+            if (time == null) {
+                return null;
+            }
+        }
         int offsetSeconds = 0;
         if (parser.position < parser.input.length()) {
-            char currentChar = parser.input.charAt(parser.position);
-            if (currentChar == 'Z' || currentChar == 'z' || currentChar == '+' || currentChar == '-' || currentChar == '\u2212') {
-                offsetSeconds = parser.parseOffset(context);
-                if (context.hasPendingException()) return null;
+            char marker = parser.input.charAt(parser.position);
+            if (marker == 'Z' || marker == 'z' || marker == '+' || marker == '-') {
+                if (!hasTimePart) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+                offsetSeconds = parsedOffset.totalSeconds();
             }
         }
-        // Parse timezone annotation (required)
-        String timeZoneId = null;
-        String calendarId = "iso8601";
-        while (parser.position < parser.input.length() && parser.input.charAt(parser.position) == '[') {
-            int start = parser.position + 1;
-            // Skip '!' if present
-            if (start < parser.input.length() && parser.input.charAt(start) == '!') {
-                start++;
-            }
-            int annotationEndIndex = parser.input.indexOf(']', parser.position);
-            if (annotationEndIndex < 0) break;
-            String content = parser.input.substring(start, annotationEndIndex);
-            if (content.startsWith("u-ca=")) {
-                calendarId = content.substring(5).toLowerCase(Locale.ROOT);
-            } else if (timeZoneId == null) {
-                timeZoneId = content;
-            }
-            parser.position = annotationEndIndex + 1;
-        }
-        if (timeZoneId == null) {
-            context.throwRangeError("Temporal error: Must specify time zone.");
+
+        parser.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
             return null;
         }
         if (parser.position != parser.input.length()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
+
+        String timeZoneId = firstTimeZoneAnnotation(input);
+        if (timeZoneId == null) {
+            context.throwRangeError("Temporal error: Must specify time zone.");
+            return null;
+        }
+
+        String calendarId = "iso8601";
+        String calendarAnnotation = firstCalendarAnnotation(input);
+        if (calendarAnnotation != null) {
+            calendarId = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
+
         return new ParsedZonedDateTime(date, time, offsetSeconds, timeZoneId, calendarId);
     }
 
