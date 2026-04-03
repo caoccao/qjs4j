@@ -128,7 +128,7 @@ public final class TemporalZonedDateTimeConstructor {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;
         }
-        String timeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneString.value());
+        String timeZoneId = normalizeTimeZoneIdentifier(context, timeZoneString.value());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
         }
@@ -511,7 +511,7 @@ public final class TemporalZonedDateTimeConstructor {
         return offsetParts.hours() <= 23 && offsetParts.minutes() <= 59;
     }
 
-    private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
+    static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
         if (timeZoneId == null || timeZoneId.length() < 3) {
             return false;
         }
@@ -599,7 +599,7 @@ public final class TemporalZonedDateTimeConstructor {
         return !localDateTime.isBefore(minimumDateTime) && !localDateTime.isAfter(maximumDateTime);
     }
 
-    private static String normalizeTimeZoneIdentifier(JSContext context, String timeZoneText) {
+    static String normalizeTimeZoneIdentifier(JSContext context, String timeZoneText) {
         String normalizedTimeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneText);
         if (context.hasPendingException() || normalizedTimeZoneId == null) {
             return null;

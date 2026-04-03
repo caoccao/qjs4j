@@ -20,6 +20,8 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
+import java.time.DateTimeException;
+import java.time.ZoneOffset;
 
 /**
  * Implementation of Temporal.ZonedDateTime prototype methods.
@@ -37,7 +39,9 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "add");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, zonedDateTime, args, 1);
     }
 
@@ -47,102 +51,156 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        long years = 0, months = 0, weeks = 0, days = 0;
-        long hours = 0, minutes = 0, seconds = 0, milliseconds = 0, microseconds = 0, nanoseconds = 0;
-        JSValue durationArg = args[0];
-        if (durationArg instanceof JSTemporalDuration duration) {
-            TemporalDurationRecord durationRecord = duration.getRecord();
-            years = durationRecord.years();
-            months = durationRecord.months();
-            weeks = durationRecord.weeks();
-            days = durationRecord.days();
-            hours = durationRecord.hours();
-            minutes = durationRecord.minutes();
-            seconds = durationRecord.seconds();
-            milliseconds = durationRecord.milliseconds();
-            microseconds = durationRecord.microseconds();
-            nanoseconds = durationRecord.nanoseconds();
-        } else if (durationArg instanceof JSString durStr) {
-            TemporalParser.DurationFields durationFields = TemporalParser.parseDurationString(context, durStr.value());
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            years = durationFields.years();
-            months = durationFields.months();
-            weeks = durationFields.weeks();
-            days = durationFields.days();
-            hours = durationFields.hours();
-            minutes = durationFields.minutes();
-            seconds = durationFields.seconds();
-            milliseconds = durationFields.milliseconds();
-            microseconds = durationFields.microseconds();
-            nanoseconds = durationFields.nanoseconds();
-        } else if (durationArg instanceof JSObject durObj) {
-            years = TemporalUtils.getIntegerField(context, durObj, "years", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            months = TemporalUtils.getIntegerField(context, durObj, "months", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            weeks = TemporalUtils.getIntegerField(context, durObj, "weeks", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            days = TemporalUtils.getIntegerField(context, durObj, "days", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            hours = TemporalUtils.getIntegerField(context, durObj, "hours", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            minutes = TemporalUtils.getIntegerField(context, durObj, "minutes", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            seconds = TemporalUtils.getIntegerField(context, durObj, "seconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            milliseconds = TemporalUtils.getIntegerField(context, durObj, "milliseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            microseconds = TemporalUtils.getIntegerField(context, durObj, "microseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            nanoseconds = TemporalUtils.getIntegerField(context, durObj, "nanoseconds", 0);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        } else {
-            context.throwTypeError("Temporal error: Must provide a duration.");
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException() || temporalDuration == null) {
             return JSUndefined.INSTANCE;
         }
 
-        years *= sign;
-        months *= sign;
-        weeks *= sign;
-        days *= sign;
-        hours *= sign;
-        minutes *= sign;
-        seconds *= sign;
-        milliseconds *= sign;
-        microseconds *= sign;
-        nanoseconds *= sign;
-
-        // For date components, add to local date then resolve
-        if (years != 0 || months != 0 || weeks != 0 || days != 0) {
-            IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-            IsoDate newDate = TemporalPlainDatePrototype.addToIsoDate(localDateTime.date(),
-                    (int) years, (int) months, (int) weeks, (int) days);
-            IsoDateTime newLocalDateTime = new IsoDateTime(newDate, localDateTime.time());
-            BigInteger epochNs = TemporalTimeZone.localDateTimeToEpochNs(newLocalDateTime, zonedDateTime.getTimeZoneId());
-            // Add time components
-            BigInteger timeNs = BigInteger.valueOf(hours * 3_600_000_000_000L
-                    + minutes * 60_000_000_000L + seconds * 1_000_000_000L
-                    + milliseconds * 1_000_000L + microseconds * 1_000L + nanoseconds);
-            epochNs = epochNs.add(timeNs);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNs)) {
-                context.throwRangeError("Temporal error: Nanoseconds out of range.");
-                return JSUndefined.INSTANCE;
-            }
-            return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs,
-                    zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
-        } else {
-            // Time-only: add directly to epochNs
-            BigInteger timeNs = BigInteger.valueOf(hours * 3_600_000_000_000L
-                    + minutes * 60_000_000_000L + seconds * 1_000_000_000L
-                    + milliseconds * 1_000_000L + microseconds * 1_000L + nanoseconds);
-            BigInteger result = zonedDateTime.getEpochNanoseconds().add(timeNs);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(result)) {
-                context.throwRangeError("Temporal error: Nanoseconds out of range.");
-                return JSUndefined.INSTANCE;
-            }
-            return TemporalZonedDateTimeConstructor.createZonedDateTime(context, result,
-                    zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (sign < 0) {
+            durationRecord = durationRecord.negated();
         }
+
+        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger epochNanoseconds = addDurationToZonedDateTime(context, zonedDateTime, durationRecord, overflow);
+        if (context.hasPendingException() || epochNanoseconds == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+                context,
+                epochNanoseconds,
+                zonedDateTime.getTimeZoneId(),
+                zonedDateTime.getCalendarId());
+    }
+
+    private static BigInteger addDurationToZonedDateTime(
+            JSContext context,
+            JSTemporalZonedDateTime zonedDateTime,
+            TemporalDurationRecord durationRecord,
+            String overflow) {
+        BigInteger intermediateEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
+        if (durationRecord.years() != 0
+                || durationRecord.months() != 0
+                || durationRecord.weeks() != 0
+                || durationRecord.days() != 0) {
+            IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+            IsoDate addedDate = addIsoDateWithOverflow(
+                    context,
+                    localDateTime.date(),
+                    durationRecord.years(),
+                    durationRecord.months(),
+                    durationRecord.weeks(),
+                    durationRecord.days(),
+                    overflow);
+            if (context.hasPendingException() || addedDate == null) {
+                return null;
+            }
+
+            IsoDateTime addedDateTime = new IsoDateTime(addedDate, localDateTime.time());
+            try {
+                intermediateEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                        addedDateTime,
+                        zonedDateTime.getTimeZoneId());
+            } catch (DateTimeException dateTimeException) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        }
+
+        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
+        BigInteger resultEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(resultEpochNanoseconds)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return null;
+        }
+        return resultEpochNanoseconds;
+    }
+
+    private static IsoDate addIsoDateWithOverflow(
+            JSContext context,
+            IsoDate date,
+            long years,
+            long months,
+            long weeks,
+            long days,
+            String overflow) {
+        long monthIndex;
+        long balancedYear;
+        try {
+            monthIndex = Math.addExact(date.month() - 1L, months);
+            long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
+            balancedYear = Math.addExact(date.year(), years);
+            balancedYear = Math.addExact(balancedYear, balancedYearDelta);
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        int balancedYearInt = (int) balancedYear;
+        int maximumDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
+        int balancedDay = date.day();
+        if ("reject".equals(overflow)) {
+            if (balancedDay > maximumDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            balancedDay = Math.min(balancedDay, maximumDay);
+        }
+
+        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, balancedDay);
+        long resultEpochDay;
+        try {
+            long daysFromWeeks = Math.multiplyExact(weeks, 7L);
+            long totalDays = Math.addExact(days, daysFromWeeks);
+            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        try {
+            return IsoDate.fromEpochDay(resultEpochDay);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+    }
+
+    private static String canonicalizeTimeZoneIdentifierForEquals(String timeZoneId) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return timeZoneId;
+        }
+        String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
+        if ("Z".equals(normalizedTimeZoneId)) {
+            return "+00:00";
+        }
+        try {
+            ZoneOffset zoneOffset = ZoneOffset.of(normalizedTimeZoneId);
+            return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
+        } catch (DateTimeException ignored) {
+            return normalizedTimeZoneId;
+        }
+    }
+
+    private static BigInteger durationTimeToNanoseconds(TemporalDurationRecord durationRecord) {
+        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
     }
 
     public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -223,17 +281,23 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "equals");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalZonedDateTime other;
         if (otherArg instanceof JSTemporalZonedDateTime otherZdt) {
             other = otherZdt;
         } else {
             other = TemporalZonedDateTimeConstructor.toTemporalZonedDateTimeObject(context, otherArg);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
+        String receiverTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(zonedDateTime.getTimeZoneId());
+        String argumentTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(other.getTimeZoneId());
         boolean equal = zonedDateTime.getEpochNanoseconds().equals(other.getEpochNanoseconds())
-                && zonedDateTime.getTimeZoneId().equals(other.getTimeZoneId())
+                && receiverTimeZoneId.equals(argumentTimeZoneId)
                 && zonedDateTime.getCalendarId().equals(other.getCalendarId());
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
@@ -669,16 +733,21 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue withTimeZone(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "withTimeZone");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue tzArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        if (!(tzArg instanceof JSString tzStr)) {
+        if (!(tzArg instanceof JSString timeZoneString)) {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;
         }
-        String timeZoneId = tzStr.value();
+        String timeZoneId = TemporalZonedDateTimeConstructor.normalizeTimeZoneIdentifier(context, timeZoneString.value());
+        if (context.hasPendingException() || timeZoneId == null) {
+            return JSUndefined.INSTANCE;
+        }
         try {
-            java.time.ZoneId.of(timeZoneId);
-        } catch (Exception invalidTimeZoneException) {
+            TemporalTimeZone.resolveTimeZone(timeZoneId);
+        } catch (DateTimeException invalidTimeZoneException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }
