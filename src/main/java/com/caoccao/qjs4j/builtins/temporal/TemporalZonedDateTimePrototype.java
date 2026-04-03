@@ -344,13 +344,12 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "getTimeZoneTransition");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue directionArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String direction;
-        if (directionArg instanceof JSString dirStr) {
-            direction = dirStr.value();
-        } else {
-            context.throwTypeError("Temporal error: Expected string for direction.");
+        String direction = getDirectionOption(context, directionArg);
+        if (context.hasPendingException() || direction == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -369,6 +368,46 @@ public final class TemporalZonedDateTimePrototype {
         }
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
                 transitionEpochNs, zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
+    }
+
+    private static String getDirectionOption(JSContext context, JSValue directionParam) {
+        if (directionParam instanceof JSString directionString) {
+            String direction = directionString.value();
+            if ("next".equals(direction) || "previous".equals(direction)) {
+                return direction;
+            }
+            context.throwRangeError("Temporal error: Invalid direction: " + direction);
+            return null;
+        }
+
+        if (directionParam instanceof JSObject directionObject) {
+            JSValue directionValue = directionObject.get(PropertyKey.fromString("direction"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (directionValue instanceof JSUndefined || directionValue == null) {
+                context.throwRangeError("Temporal error: Invalid direction: undefined");
+                return null;
+            }
+            JSString directionString = JSTypeConversions.toString(context, directionValue);
+            if (context.hasPendingException() || directionString == null) {
+                return null;
+            }
+            String direction = directionString.value();
+            if ("next".equals(direction) || "previous".equals(direction)) {
+                return direction;
+            }
+            context.throwRangeError("Temporal error: Invalid direction: " + direction);
+            return null;
+        }
+
+        if (directionParam instanceof JSUndefined || directionParam == null) {
+            context.throwTypeError("Temporal error: direction is required.");
+            return null;
+        }
+
+        context.throwTypeError("Temporal error: direction must be a string or an object.");
+        return null;
     }
 
     private static BigInteger getUnitNs(String unit) {
@@ -392,8 +431,43 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue hoursInDay(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hoursInDay");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(TemporalTimeZone.getHoursInDay(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId()));
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDate todayDate = localDateTime.date();
+        IsoDate tomorrowDate;
+        try {
+            tomorrowDate = todayDate.addDays(1);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger todayStartEpochNanoseconds;
+        BigInteger tomorrowStartEpochNanoseconds;
+        try {
+            todayStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    new IsoDateTime(todayDate, IsoTime.MIDNIGHT),
+                    zonedDateTime.getTimeZoneId());
+            tomorrowStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    new IsoDateTime(tomorrowDate, IsoTime.MIDNIGHT),
+                    zonedDateTime.getTimeZoneId());
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(todayStartEpochNanoseconds)
+                || !TemporalInstantConstructor.isValidEpochNanoseconds(tomorrowStartEpochNanoseconds)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger dayNanoseconds = tomorrowStartEpochNanoseconds.subtract(todayStartEpochNanoseconds);
+        BigInteger hoursInDay = dayNanoseconds.divide(NS_PER_HOUR);
+        return JSNumber.of(hoursInDay.longValue());
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
