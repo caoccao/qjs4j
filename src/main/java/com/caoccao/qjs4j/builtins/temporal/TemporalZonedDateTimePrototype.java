@@ -1137,10 +1137,28 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue startOfDay(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "startOfDay");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime;
+        try {
+            localDateTime = getLocalDateTime(zonedDateTime);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
         IsoDateTime startOfDay = new IsoDateTime(localDateTime.date(), IsoTime.MIDNIGHT);
-        BigInteger epochNs = TemporalTimeZone.localDateTimeToEpochNs(startOfDay, zonedDateTime.getTimeZoneId());
+        BigInteger epochNs;
+        try {
+            epochNs = TemporalTimeZone.localDateTimeToEpochNs(startOfDay, zonedDateTime.getTimeZoneId());
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNs)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs,
                 zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
     }
