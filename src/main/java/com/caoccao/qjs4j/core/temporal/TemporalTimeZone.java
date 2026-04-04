@@ -22,12 +22,18 @@ import java.time.zone.ZoneOffsetTransition;
 import java.time.zone.ZoneRules;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * TimeZone operations backed by java.time.
  */
 public final class TemporalTimeZone {
     private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final int SECONDS_PER_HOUR = 3_600;
+    private static final int SECONDS_PER_MINUTE = 60;
+    private static final Pattern SIMPLE_OFFSET_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})$");
 
     private TemporalTimeZone() {
     }
@@ -36,6 +42,11 @@ public final class TemporalTimeZone {
      * Converts epoch nanoseconds to a local IsoDateTime in the given timezone.
      */
     public static IsoDateTime epochNsToDateTimeInZone(BigInteger epochNs, String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            BigInteger localEpochNanoseconds = epochNs.add(BigInteger.valueOf(fixedOffsetSeconds).multiply(BILLION));
+            return epochNsToUtcDateTime(localEpochNanoseconds);
+        }
         Instant javaInstant = toJavaInstant(epochNs);
         ZonedDateTime zonedDateTime = javaInstant.atZone(resolveTimeZone(timeZoneId));
         return fromZonedDateTime(zonedDateTime);
@@ -81,6 +92,10 @@ public final class TemporalTimeZone {
      * Gets the number of real hours in a day at the given instant and timezone.
      */
     public static int getHoursInDay(BigInteger epochNs, String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            return 24;
+        }
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZonedDateTime zonedDateTime = javaInstant.atZone(zone);
@@ -95,6 +110,10 @@ public final class TemporalTimeZone {
      * Returns null if no further transition.
      */
     public static BigInteger getNextTransition(BigInteger epochNs, String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            return null;
+        }
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().nextTransition(javaInstant);
@@ -108,6 +127,10 @@ public final class TemporalTimeZone {
      * Gets the offset in seconds for the given instant and timezone.
      */
     public static int getOffsetSecondsFor(BigInteger epochNs, String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            return fixedOffsetSeconds;
+        }
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffset offset = zone.getRules().getOffset(javaInstant);
@@ -119,6 +142,10 @@ public final class TemporalTimeZone {
      * Returns null if no previous transition.
      */
     public static BigInteger getPreviousTransition(BigInteger epochNs, String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            return null;
+        }
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().previousTransition(javaInstant);
@@ -139,6 +166,11 @@ public final class TemporalTimeZone {
      * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation.
      */
     public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId, String disambiguation) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            return utcDateTimeToEpochNs(isoDateTime.date(), isoDateTime.time(), fixedOffsetSeconds);
+        }
+
         LocalDateTime localDateTime = LocalDateTime.of(
                 isoDateTime.date().year(), isoDateTime.date().month(), isoDateTime.date().day(),
                 isoDateTime.time().hour(), isoDateTime.time().minute(), isoDateTime.time().second(),
@@ -192,6 +224,13 @@ public final class TemporalTimeZone {
      * Resolves a ZoneId string, validating it exists.
      */
     public static ZoneId resolveTimeZone(String timeZoneId) {
+        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
+        if (fixedOffsetSeconds != null) {
+            if (Math.abs(fixedOffsetSeconds) > 18 * SECONDS_PER_HOUR) {
+                throw new DateTimeException("Offset zone is outside java.time range: " + timeZoneId);
+            }
+            return ZoneOffset.ofTotalSeconds(fixedOffsetSeconds);
+        }
         try {
             return ZoneId.of(timeZoneId);
         } catch (DateTimeException ignored) {
@@ -212,6 +251,28 @@ public final class TemporalTimeZone {
             nanoAdjust += 1_000_000_000;
         }
         return Instant.ofEpochSecond(seconds, nanoAdjust);
+    }
+
+    private static Integer parseFixedOffsetSeconds(String timeZoneId) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return null;
+        }
+        if ("Z".equals(timeZoneId)) {
+            return 0;
+        }
+        Matcher offsetMatcher = SIMPLE_OFFSET_PATTERN.matcher(timeZoneId);
+        if (!offsetMatcher.matches()) {
+            return null;
+        }
+
+        int hourValue = Integer.parseInt(offsetMatcher.group(2));
+        int minuteValue = Integer.parseInt(offsetMatcher.group(3));
+        if (hourValue > 23 || minuteValue > 59) {
+            return null;
+        }
+
+        int sign = ("-".equals(offsetMatcher.group(1)) || "\u2212".equals(offsetMatcher.group(1))) ? -1 : 1;
+        return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
     }
 
     /**
