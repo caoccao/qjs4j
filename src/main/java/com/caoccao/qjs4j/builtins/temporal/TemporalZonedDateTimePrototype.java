@@ -48,39 +48,6 @@ public final class TemporalZonedDateTimePrototype {
         return addOrSubtract(context, zonedDateTime, args, 1);
     }
 
-    private static JSValue addOrSubtract(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSValue[] args, int sign) {
-        if (args.length == 0 || args[0] instanceof JSUndefined) {
-            context.throwTypeError("Temporal error: Must provide a duration.");
-            return JSUndefined.INSTANCE;
-        }
-
-        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
-        if (context.hasPendingException() || temporalDuration == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
-        if (sign < 0) {
-            durationRecord = durationRecord.negated();
-        }
-
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        BigInteger epochNanoseconds = addDurationToZonedDateTime(context, zonedDateTime, durationRecord, overflow);
-        if (context.hasPendingException() || epochNanoseconds == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(
-                context,
-                epochNanoseconds,
-                zonedDateTime.getTimeZoneId(),
-                zonedDateTime.getCalendarId());
-    }
-
     private static BigInteger addDurationToZonedDateTime(
             JSContext context,
             JSTemporalZonedDateTime zonedDateTime,
@@ -181,6 +148,83 @@ public final class TemporalZonedDateTimePrototype {
         }
     }
 
+    private static JSValue addOrSubtract(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSValue[] args, int sign) {
+        if (args.length == 0 || args[0] instanceof JSUndefined) {
+            context.throwTypeError("Temporal error: Must provide a duration.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSTemporalDuration temporalDuration = TemporalDurationConstructor.toTemporalDurationObject(context, args[0]);
+        if (context.hasPendingException() || temporalDuration == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        if (sign < 0) {
+            durationRecord = durationRecord.negated();
+        }
+
+        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger epochNanoseconds = addDurationToZonedDateTime(context, zonedDateTime, durationRecord, overflow);
+        if (context.hasPendingException() || epochNanoseconds == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+                context,
+                epochNanoseconds,
+                zonedDateTime.getTimeZoneId(),
+                zonedDateTime.getCalendarId());
+    }
+
+    public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "calendar");
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(zonedDateTime.getCalendarId());
+    }
+
+    public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "calendarId");
+        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        return new JSString(zonedDateTime.getCalendarId());
+    }
+
+    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
+        return switch (unitText) {
+            case "auto" -> allowAuto ? "auto" : null;
+            case "year", "years" -> "year";
+            case "month", "months" -> "month";
+            case "week", "weeks" -> "week";
+            case "day", "days" -> "day";
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
+    private static String canonicalizeRoundSmallestUnit(String unitText) {
+        return switch (unitText) {
+            case "day", "days" -> "day";
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
+    }
+
     private static String canonicalizeTimeZoneIdentifierForEquals(String timeZoneId) {
         if (timeZoneId == null || timeZoneId.isEmpty()) {
             return timeZoneId;
@@ -197,27 +241,20 @@ public final class TemporalZonedDateTimePrototype {
         }
     }
 
-    private static BigInteger durationTimeToNanoseconds(TemporalDurationRecord durationRecord) {
-        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-    }
-
-    public static JSValue calendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "calendar");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(zonedDateTime.getCalendarId());
-    }
-
-    public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "calendarId");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        return new JSString(zonedDateTime.getCalendarId());
+    private static String canonicalizeToStringSmallestUnit(String unitText) {
+        return switch (unitText) {
+            case "year", "years" -> "year";
+            case "month", "months" -> "month";
+            case "week", "weeks" -> "week";
+            case "day", "days" -> "day";
+            case "hour", "hours" -> "hour";
+            case "minute", "minutes" -> "minute";
+            case "second", "seconds" -> "second";
+            case "millisecond", "milliseconds" -> "millisecond";
+            case "microsecond", "microseconds" -> "microsecond";
+            case "nanosecond", "nanoseconds" -> "nanosecond";
+            default -> null;
+        };
     }
 
     private static JSTemporalZonedDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -267,6 +304,15 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) return JSUndefined.INSTANCE;
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
         return JSNumber.of(IsoDate.daysInYear(localDateTime.date().year()));
+    }
+
+    private static BigInteger durationTimeToNanoseconds(TemporalDurationRecord durationRecord) {
+        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -326,6 +372,17 @@ public final class TemporalZonedDateTimePrototype {
         return quotientAndRemainder[0];
     }
 
+    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
+        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
+        BigInteger quotient = quotientAndRemainder[0];
+        BigInteger remainder = quotientAndRemainder[1];
+        if (remainder.signum() < 0) {
+            quotient = quotient.subtract(BigInteger.ONE);
+            remainder = remainder.add(divisor);
+        }
+        return new BigInteger[]{quotient, remainder};
+    }
+
     private static String formatZonedDateTime(JSTemporalZonedDateTime zonedDateTime) {
         String base = formatZonedDateTimeBase(zonedDateTime);
         if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
@@ -339,139 +396,6 @@ public final class TemporalZonedDateTimePrototype {
         int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         String offset = TemporalTimeZone.formatOffset(offsetSeconds);
         return localDateTime + offset + "[" + zonedDateTime.getTimeZoneId() + "]";
-    }
-
-    private static IsoDateTime getLocalDateTime(JSTemporalZonedDateTime zonedDateTime) {
-        return TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
-    }
-
-    public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "getTimeZoneTransition");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-        JSValue directionArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        String direction = getDirectionOption(context, directionArg);
-        if (context.hasPendingException() || direction == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        BigInteger transitionEpochNs;
-        if ("next".equals(direction)) {
-            transitionEpochNs = TemporalTimeZone.getNextTransition(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
-        } else if ("previous".equals(direction)) {
-            transitionEpochNs = TemporalTimeZone.getPreviousTransition(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
-        } else {
-            context.throwRangeError("Temporal error: Invalid direction: " + direction);
-            return JSUndefined.INSTANCE;
-        }
-
-        if (transitionEpochNs == null) {
-            return JSNull.INSTANCE;
-        }
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
-                transitionEpochNs, zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
-    }
-
-    private static String getDirectionOption(JSContext context, JSValue directionParam) {
-        if (directionParam instanceof JSString directionString) {
-            String direction = directionString.value();
-            if ("next".equals(direction) || "previous".equals(direction)) {
-                return direction;
-            }
-            context.throwRangeError("Temporal error: Invalid direction: " + direction);
-            return null;
-        }
-
-        if (directionParam instanceof JSObject directionObject) {
-            JSValue directionValue = directionObject.get(PropertyKey.fromString("direction"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (directionValue instanceof JSUndefined || directionValue == null) {
-                context.throwRangeError("Temporal error: Invalid direction: undefined");
-                return null;
-            }
-            JSString directionString = JSTypeConversions.toString(context, directionValue);
-            if (context.hasPendingException() || directionString == null) {
-                return null;
-            }
-            String direction = directionString.value();
-            if ("next".equals(direction) || "previous".equals(direction)) {
-                return direction;
-            }
-            context.throwRangeError("Temporal error: Invalid direction: " + direction);
-            return null;
-        }
-
-        if (directionParam instanceof JSUndefined || directionParam == null) {
-            context.throwTypeError("Temporal error: direction is required.");
-            return null;
-        }
-
-        context.throwTypeError("Temporal error: direction must be a string or an object.");
-        return null;
-    }
-
-    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        return switch (unitText) {
-            case "auto" -> allowAuto ? "auto" : null;
-            case "year", "years" -> "year";
-            case "month", "months" -> "month";
-            case "week", "weeks" -> "week";
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
-    }
-
-    private static String canonicalizeRoundSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
-    }
-
-    private static String canonicalizeToStringSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "year", "years" -> "year";
-            case "month", "months" -> "month";
-            case "week", "weeks" -> "week";
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
-    }
-
-    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
     }
 
     private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -582,6 +506,113 @@ public final class TemporalZonedDateTimePrototype {
         return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
     }
 
+    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return defaultValue;
+        }
+        JSString optionText = JSTypeConversions.toString(context, optionValue);
+        if (context.hasPendingException() || optionText == null) {
+            return null;
+        }
+        return optionText.value();
+    }
+
+    private static String getDirectionOption(JSContext context, JSValue directionParam) {
+        if (directionParam instanceof JSString directionString) {
+            String direction = directionString.value();
+            if ("next".equals(direction) || "previous".equals(direction)) {
+                return direction;
+            }
+            context.throwRangeError("Temporal error: Invalid direction: " + direction);
+            return null;
+        }
+
+        if (directionParam instanceof JSObject directionObject) {
+            JSValue directionValue = directionObject.get(PropertyKey.fromString("direction"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (directionValue instanceof JSUndefined || directionValue == null) {
+                context.throwRangeError("Temporal error: Invalid direction: undefined");
+                return null;
+            }
+            JSString directionString = JSTypeConversions.toString(context, directionValue);
+            if (context.hasPendingException() || directionString == null) {
+                return null;
+            }
+            String direction = directionString.value();
+            if ("next".equals(direction) || "previous".equals(direction)) {
+                return direction;
+            }
+            context.throwRangeError("Temporal error: Invalid direction: " + direction);
+            return null;
+        }
+
+        if (directionParam instanceof JSUndefined || directionParam == null) {
+            context.throwTypeError("Temporal error: direction is required.");
+            return null;
+        }
+
+        context.throwTypeError("Temporal error: direction must be a string or an object.");
+        return null;
+    }
+
+    private static IsoDateTime getLocalDateTime(JSTemporalZonedDateTime zonedDateTime) {
+        return TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
+    }
+
+    private static Integer getOptionalIntegerWithField(JSContext context, JSObject fieldsObject, String fieldName) {
+        JSValue fieldValue = fieldsObject.get(PropertyKey.fromString(fieldName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (fieldValue instanceof JSUndefined || fieldValue == null) {
+            return null;
+        }
+        double numericValue = JSTypeConversions.toNumber(context, fieldValue).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!Double.isFinite(numericValue)) {
+            context.throwRangeError("Temporal error: Expected finite integer.");
+            return null;
+        }
+        return (int) numericValue;
+    }
+
+    private static String getOptionalOffsetStringWithField(JSContext context, JSObject fieldsObject) {
+        JSValue offsetValue = fieldsObject.get(PropertyKey.fromString("offset"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (offsetValue instanceof JSUndefined || offsetValue == null) {
+            return null;
+        }
+        if (offsetValue instanceof JSString offsetString) {
+            return offsetString.value();
+        }
+        if (offsetValue instanceof JSObject) {
+            return JSTypeConversions.toString(context, offsetValue).value();
+        }
+        context.throwTypeError("Temporal error: Offset must be string.");
+        return null;
+    }
+
+    private static String getOptionalStringWithField(JSContext context, JSObject fieldsObject, String fieldName) {
+        JSValue fieldValue = fieldsObject.get(PropertyKey.fromString(fieldName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (fieldValue instanceof JSUndefined || fieldValue == null) {
+            return null;
+        }
+        return JSTypeConversions.toString(context, fieldValue).value();
+    }
+
     private static String getRequiredSmallestUnitOption(JSContext context, JSObject optionsObject) {
         JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
         if (context.hasPendingException()) {
@@ -596,6 +627,49 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
         return smallestUnitText.value();
+    }
+
+    private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
+        long roundingIncrement = 1L;
+        String roundingMode = "halfExpand";
+        String smallestUnitText;
+
+        if (roundTo instanceof JSString unitString) {
+            smallestUnitText = unitString.value();
+        } else if (roundTo instanceof JSObject optionsObject) {
+            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            roundingMode = getRoundingModeOption(context, optionsObject);
+            if (context.hasPendingException() || roundingMode == null) {
+                return null;
+            }
+            smallestUnitText = getRequiredSmallestUnitOption(context, optionsObject);
+            if (context.hasPendingException() || smallestUnitText == null) {
+                return null;
+            }
+        } else {
+            context.throwTypeError("Temporal error: roundTo must be an object.");
+            return null;
+        }
+
+        if (!isValidRoundingMode(roundingMode)) {
+            context.throwRangeError("Temporal error: Invalid rounding mode.");
+            return null;
+        }
+
+        String smallestUnit = canonicalizeRoundSmallestUnit(smallestUnitText);
+        if (smallestUnit == null) {
+            context.throwRangeError("Temporal error: Invalid unit: " + smallestUnitText);
+            return null;
+        }
+
+        if (!isValidRoundingIncrementForSmallestUnit(smallestUnit, roundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid rounding increment.");
+            return null;
+        }
+        return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 
     private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -637,6 +711,34 @@ public final class TemporalZonedDateTimePrototype {
         return roundingModeText.value();
     }
 
+    public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "getTimeZoneTransition");
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        JSValue directionArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+        String direction = getDirectionOption(context, directionArg);
+        if (context.hasPendingException() || direction == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger transitionEpochNs;
+        if ("next".equals(direction)) {
+            transitionEpochNs = TemporalTimeZone.getNextTransition(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
+        } else if ("previous".equals(direction)) {
+            transitionEpochNs = TemporalTimeZone.getPreviousTransition(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
+        } else {
+            context.throwRangeError("Temporal error: Invalid direction: " + direction);
+            return JSUndefined.INSTANCE;
+        }
+
+        if (transitionEpochNs == null) {
+            return JSNull.INSTANCE;
+        }
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
+                transitionEpochNs, zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
+    }
+
     private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
         String calendarNameOption = getDifferenceStringOption(context, optionsObject, "calendarName", "auto");
         if (context.hasPendingException() || calendarNameOption == null) {
@@ -650,6 +752,17 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
         return calendarNameOption;
+    }
+
+    private static String getToStringFractionalPart(IsoTime time, int digits) {
+        if (digits <= 0) {
+            return "";
+        }
+        String nineDigitFraction = String.format("%03d%03d%03d",
+                time.millisecond(),
+                time.microsecond(),
+                time.nanosecond());
+        return nineDigitFraction.substring(0, digits);
     }
 
     private static FractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
@@ -691,20 +804,6 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
         return offsetOption;
-    }
-
-    private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
-        String timeZoneNameOption = getDifferenceStringOption(context, optionsObject, "timeZoneName", "auto");
-        if (context.hasPendingException() || timeZoneNameOption == null) {
-            return null;
-        }
-        if (!"auto".equals(timeZoneNameOption)
-                && !"never".equals(timeZoneNameOption)
-                && !"critical".equals(timeZoneNameOption)) {
-            context.throwRangeError("Temporal error: Invalid timeZoneName option.");
-            return null;
-        }
-        return timeZoneNameOption;
     }
 
     private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
@@ -832,17 +931,6 @@ public final class TemporalZonedDateTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringFractionalPart(IsoTime time, int digits) {
-        if (digits <= 0) {
-            return "";
-        }
-        String nineDigitFraction = String.format("%03d%03d%03d",
-                time.millisecond(),
-                time.microsecond(),
-                time.nanosecond());
-        return nineDigitFraction.substring(0, digits);
-    }
-
     private static String getToStringTimeString(IsoTime time, ToStringSettings toStringSettings) {
         String hourMinute = String.format("%02d:%02d", time.hour(), time.minute());
         if ("minute".equals(toStringSettings.smallestUnit())) {
@@ -872,47 +960,118 @@ public final class TemporalZonedDateTimePrototype {
         return hourMinuteSecond + "." + getToStringFractionalPart(time, fractionalSecondDigits);
     }
 
-    private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
-        long roundingIncrement = 1L;
-        String roundingMode = "halfExpand";
-        String smallestUnitText;
+    private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
+        String timeZoneNameOption = getDifferenceStringOption(context, optionsObject, "timeZoneName", "auto");
+        if (context.hasPendingException() || timeZoneNameOption == null) {
+            return null;
+        }
+        if (!"auto".equals(timeZoneNameOption)
+                && !"never".equals(timeZoneNameOption)
+                && !"critical".equals(timeZoneNameOption)) {
+            context.throwRangeError("Temporal error: Invalid timeZoneName option.");
+            return null;
+        }
+        return timeZoneNameOption;
+    }
 
-        if (roundTo instanceof JSString unitString) {
-            smallestUnitText = unitString.value();
-        } else if (roundTo instanceof JSObject optionsObject) {
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingMode = getRoundingModeOption(context, optionsObject);
-            if (context.hasPendingException() || roundingMode == null) {
-                return null;
-            }
-            smallestUnitText = getRequiredSmallestUnitOption(context, optionsObject);
-            if (context.hasPendingException() || smallestUnitText == null) {
-                return null;
-            }
-        } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
+    private static WithOptions getWithOptions(JSContext context, JSValue optionsValue) {
+        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+            return new WithOptions("compatible", "prefer", "constrain");
+        }
+        if (!(optionsValue instanceof JSObject optionsObject)) {
+            context.throwTypeError("Temporal error: Option must be object: options.");
             return null;
         }
 
-        if (!isValidRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
+        String disambiguation = getDifferenceStringOption(context, optionsObject, "disambiguation", "compatible");
+        if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
 
-        String smallestUnit = canonicalizeRoundSmallestUnit(smallestUnitText);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid unit: " + smallestUnitText);
+        String offsetOption = getDifferenceStringOption(context, optionsObject, "offset", "prefer");
+        if (context.hasPendingException() || offsetOption == null) {
             return null;
         }
 
-        if (!isValidRoundingIncrementForSmallestUnit(smallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
+        String overflow = getDifferenceStringOption(context, optionsObject, "overflow", "constrain");
+        if (context.hasPendingException() || overflow == null) {
             return null;
         }
-        return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
+
+        if (!"compatible".equals(disambiguation)
+                && !"earlier".equals(disambiguation)
+                && !"later".equals(disambiguation)
+                && !"reject".equals(disambiguation)) {
+            context.throwRangeError("Temporal error: Invalid disambiguation option.");
+            return null;
+        }
+        if (!"prefer".equals(offsetOption)
+                && !"use".equals(offsetOption)
+                && !"ignore".equals(offsetOption)
+                && !"reject".equals(offsetOption)) {
+            context.throwRangeError("Temporal error: Invalid offset option.");
+            return null;
+        }
+        if (!"constrain".equals(overflow) && !"reject".equals(overflow)) {
+            context.throwRangeError("Temporal error: Invalid overflow option.");
+            return null;
+        }
+        return new WithOptions(disambiguation, offsetOption, overflow);
+    }
+
+    public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hour");
+        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        return JSNumber.of(localDateTime.time().hour());
+    }
+
+    public static JSValue hoursInDay(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hoursInDay");
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDate todayDate = localDateTime.date();
+        IsoDate tomorrowDate;
+        try {
+            tomorrowDate = todayDate.addDays(1);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger todayStartEpochNanoseconds;
+        BigInteger tomorrowStartEpochNanoseconds;
+        try {
+            todayStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    new IsoDateTime(todayDate, IsoTime.MIDNIGHT),
+                    zonedDateTime.getTimeZoneId());
+            tomorrowStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    new IsoDateTime(tomorrowDate, IsoTime.MIDNIGHT),
+                    zonedDateTime.getTimeZoneId());
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
+
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(todayStartEpochNanoseconds)
+                || !TemporalInstantConstructor.isValidEpochNanoseconds(tomorrowStartEpochNanoseconds)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
+
+        BigInteger dayNanoseconds = tomorrowStartEpochNanoseconds.subtract(todayStartEpochNanoseconds);
+        BigInteger hoursInDay = dayNanoseconds.divide(NS_PER_HOUR);
+        return JSNumber.of(hoursInDay.longValue());
+    }
+
+    public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "inLeapYear");
+        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        return IsoDate.isLeapYear(localDateTime.date().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
     private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
@@ -975,100 +1134,6 @@ public final class TemporalZonedDateTimePrototype {
         return leftUnit;
     }
 
-    private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
-    }
-
-    private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case "year" -> 0;
-            case "month" -> 1;
-            case "week" -> 2;
-            case "day" -> 3;
-            case "hour" -> 4;
-            case "minute" -> 5;
-            case "second" -> 6;
-            case "millisecond" -> 7;
-            case "microsecond" -> 8;
-            case "nanosecond" -> 9;
-            default -> 10;
-        };
-    }
-
-    private static long unitToNanoseconds(String unit) {
-        return switch (unit) {
-            case "day" -> DAY_NANOSECONDS;
-            case "hour" -> NS_PER_HOUR.longValue();
-            case "minute" -> NS_PER_MINUTE.longValue();
-            case "second" -> NS_PER_SECOND.longValue();
-            case "millisecond" -> NS_PER_MS.longValue();
-            case "microsecond" -> NS_PER_US.longValue();
-            case "nanosecond" -> 1L;
-            default -> 0L;
-        };
-    }
-
-    public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hour");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        return JSNumber.of(localDateTime.time().hour());
-    }
-
-    public static JSValue hoursInDay(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hoursInDay");
-        if (zonedDateTime == null) {
-            return JSUndefined.INSTANCE;
-        }
-
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        IsoDate todayDate = localDateTime.date();
-        IsoDate tomorrowDate;
-        try {
-            tomorrowDate = todayDate.addDays(1);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        BigInteger todayStartEpochNanoseconds;
-        BigInteger tomorrowStartEpochNanoseconds;
-        try {
-            todayStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    new IsoDateTime(todayDate, IsoTime.MIDNIGHT),
-                    zonedDateTime.getTimeZoneId());
-            tomorrowStartEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    new IsoDateTime(tomorrowDate, IsoTime.MIDNIGHT),
-                    zonedDateTime.getTimeZoneId());
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
-        }
-
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(todayStartEpochNanoseconds)
-                || !TemporalInstantConstructor.isValidEpochNanoseconds(tomorrowStartEpochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return JSUndefined.INSTANCE;
-        }
-
-        BigInteger dayNanoseconds = tomorrowStartEpochNanoseconds.subtract(todayStartEpochNanoseconds);
-        BigInteger hoursInDay = dayNanoseconds.divide(NS_PER_HOUR);
-        return JSNumber.of(hoursInDay.longValue());
-    }
-
-    public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "inLeapYear");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        return IsoDate.isLeapYear(localDateTime.date().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
-    }
-
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "microsecond");
         if (zonedDateTime == null) return JSUndefined.INSTANCE;
@@ -1115,6 +1180,16 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) return JSUndefined.INSTANCE;
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
         return JSNumber.of(localDateTime.time().nanosecond());
+    }
+
+    private static String negateRoundingMode(String roundingMode) {
+        return switch (roundingMode) {
+            case "ceil" -> "floor";
+            case "floor" -> "ceil";
+            case "halfCeil" -> "halfFloor";
+            case "halfFloor" -> "halfCeil";
+            default -> roundingMode;
+        };
     }
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1207,6 +1282,83 @@ public final class TemporalZonedDateTimePrototype {
                 zonedDateTime.getCalendarId());
     }
 
+    private static BigInteger roundBigIntegerToIncrementAsIfPositive(BigInteger quantity, BigInteger increment, String roundingMode) {
+        if (increment.signum() == 0) {
+            return quantity;
+        }
+        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(quantity, increment);
+        BigInteger floorQuotient = floorQuotientAndRemainder[0];
+        BigInteger lower = floorQuotient.multiply(increment);
+        BigInteger remainder = floorQuotientAndRemainder[1];
+        if (remainder.signum() == 0) {
+            return lower;
+        }
+        BigInteger upper = lower.add(increment);
+
+        return switch (roundingMode) {
+            case "ceil", "expand" -> upper;
+            case "floor", "trunc" -> lower;
+            case "halfExpand", "halfCeil" -> remainder.shiftLeft(1).compareTo(increment) >= 0 ? upper : lower;
+            case "halfTrunc", "halfFloor" -> remainder.shiftLeft(1).compareTo(increment) > 0 ? upper : lower;
+            case "halfEven" -> {
+                BigInteger doubledRemainder = remainder.shiftLeft(1);
+                int halfComparison = doubledRemainder.compareTo(increment);
+                if (halfComparison < 0) {
+                    yield lower;
+                } else if (halfComparison > 0) {
+                    yield upper;
+                } else if (floorQuotient.testBit(0)) {
+                    yield upper;
+                } else {
+                    yield lower;
+                }
+            }
+            default -> lower;
+        };
+    }
+
+    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
+        long quotient = Math.floorDiv(quantity, increment);
+        long lower = quotient * increment;
+        long remainder = quantity - lower;
+        if (remainder == 0L) {
+            return quantity;
+        }
+        long upper = lower + increment;
+
+        return switch (roundingMode) {
+            case "ceil", "expand" -> upper;
+            case "floor", "trunc" -> lower;
+            case "halfExpand", "halfCeil" -> {
+                if (remainder * 2L >= increment) {
+                    yield upper;
+                } else {
+                    yield lower;
+                }
+            }
+            case "halfTrunc", "halfFloor" -> {
+                if (remainder * 2L > increment) {
+                    yield upper;
+                } else {
+                    yield lower;
+                }
+            }
+            case "halfEven" -> {
+                long doubleRemainder = remainder * 2L;
+                if (doubleRemainder < increment) {
+                    yield lower;
+                } else if (doubleRemainder > increment) {
+                    yield upper;
+                } else if (Math.floorMod(quotient, 2L) == 0L) {
+                    yield lower;
+                } else {
+                    yield upper;
+                }
+            }
+            default -> lower;
+        };
+    }
+
     private static BigInteger roundZonedDateTimeToDay(
             JSContext context,
             JSTemporalZonedDateTime zonedDateTime,
@@ -1254,94 +1406,6 @@ public final class TemporalZonedDateTimePrototype {
                 dayLengthNanoseconds,
                 roundingMode);
         return startNanoseconds.add(roundedElapsedNanoseconds);
-    }
-
-    private static BigInteger roundBigIntegerToIncrementAsIfPositive(BigInteger quantity, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return quantity;
-        }
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(quantity, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger lower = floorQuotient.multiply(increment);
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        if (remainder.signum() == 0) {
-            return lower;
-        }
-        BigInteger upper = lower.add(increment);
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> remainder.shiftLeft(1).compareTo(increment) >= 0 ? upper : lower;
-            case "halfTrunc", "halfFloor" -> remainder.shiftLeft(1).compareTo(increment) > 0 ? upper : lower;
-            case "halfEven" -> {
-                BigInteger doubledRemainder = remainder.shiftLeft(1);
-                int halfComparison = doubledRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    yield lower;
-                } else if (halfComparison > 0) {
-                    yield upper;
-                } else if (floorQuotient.testBit(0)) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            default -> lower;
-        };
-    }
-
-    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
-        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
-        BigInteger quotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            quotient = quotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(divisor);
-        }
-        return new BigInteger[]{quotient, remainder};
-    }
-
-    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        long quotient = Math.floorDiv(quantity, increment);
-        long lower = quotient * increment;
-        long remainder = quantity - lower;
-        if (remainder == 0L) {
-            return quantity;
-        }
-        long upper = lower + increment;
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> {
-                if (remainder * 2L >= increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfTrunc", "halfFloor" -> {
-                if (remainder * 2L > increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfEven" -> {
-                long doubleRemainder = remainder * 2L;
-                if (doubleRemainder < increment) {
-                    yield lower;
-                } else if (doubleRemainder > increment) {
-                    yield upper;
-                } else if (Math.floorMod(quotient, 2L) == 0L) {
-                    yield lower;
-                } else {
-                    yield upper;
-                }
-            }
-            default -> lower;
-        };
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1433,6 +1497,22 @@ public final class TemporalZonedDateTimePrototype {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "subtract");
         if (zonedDateTime == null) return JSUndefined.INSTANCE;
         return addOrSubtract(context, zonedDateTime, args, -1);
+    }
+
+    private static int temporalUnitRank(String unit) {
+        return switch (unit) {
+            case "year" -> 0;
+            case "month" -> 1;
+            case "week" -> 2;
+            case "day" -> 3;
+            case "hour" -> 4;
+            case "minute" -> 5;
+            case "second" -> 6;
+            case "millisecond" -> 7;
+            case "microsecond" -> 8;
+            case "nanosecond" -> 9;
+            default -> 10;
+        };
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1544,6 +1624,19 @@ public final class TemporalZonedDateTimePrototype {
         return new JSString(result);
     }
 
+    private static long unitToNanoseconds(String unit) {
+        return switch (unit) {
+            case "day" -> DAY_NANOSECONDS;
+            case "hour" -> NS_PER_HOUR.longValue();
+            case "minute" -> NS_PER_MINUTE.longValue();
+            case "second" -> NS_PER_SECOND.longValue();
+            case "millisecond" -> NS_PER_MS.longValue();
+            case "microsecond" -> NS_PER_US.longValue();
+            case "nanosecond" -> 1L;
+            default -> 0L;
+        };
+    }
+
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "until");
         if (zonedDateTime == null) {
@@ -1607,71 +1700,194 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "with");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        if (args.length == 0 || !(args[0] instanceof JSObject fields)) {
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (args.length == 0 || !(args[0] instanceof JSObject fieldsObject)) {
+            context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
+            return JSUndefined.INSTANCE;
+        }
+        if (fieldsObject instanceof JSTemporalPlainDate
+                || fieldsObject instanceof JSTemporalPlainDateTime
+                || fieldsObject instanceof JSTemporalPlainMonthDay
+                || fieldsObject instanceof JSTemporalPlainYearMonth
+                || fieldsObject instanceof JSTemporalPlainTime
+                || fieldsObject instanceof JSTemporalZonedDateTime
+                || fieldsObject instanceof JSTemporalInstant
+                || fieldsObject instanceof JSTemporalDuration) {
+            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue calendarValue = fieldsObject.get(PropertyKey.fromString("calendar"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
+            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
+            return JSUndefined.INSTANCE;
+        }
+
+        JSValue timeZoneValue = fieldsObject.get(PropertyKey.fromString("timeZone"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!(timeZoneValue instanceof JSUndefined) && timeZoneValue != null) {
+            context.throwTypeError("Temporal error: Invalid ZonedDateTime-like object.");
+            return JSUndefined.INSTANCE;
+        }
+
+        Integer dayField = getOptionalIntegerWithField(context, fieldsObject, "day");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer hourField = getOptionalIntegerWithField(context, fieldsObject, "hour");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer microsecondField = getOptionalIntegerWithField(context, fieldsObject, "microsecond");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer millisecondField = getOptionalIntegerWithField(context, fieldsObject, "millisecond");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer minuteField = getOptionalIntegerWithField(context, fieldsObject, "minute");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer monthField = getOptionalIntegerWithField(context, fieldsObject, "month");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String monthCodeField = getOptionalStringWithField(context, fieldsObject, "monthCode");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer nanosecondField = getOptionalIntegerWithField(context, fieldsObject, "nanosecond");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        String offsetField = getOptionalOffsetStringWithField(context, fieldsObject);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer secondField = getOptionalIntegerWithField(context, fieldsObject, "second");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        Integer yearField = getOptionalIntegerWithField(context, fieldsObject, "year");
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+
+        boolean hasAnyWithField = dayField != null
+                || hourField != null
+                || microsecondField != null
+                || millisecondField != null
+                || minuteField != null
+                || monthField != null
+                || monthCodeField != null
+                || nanosecondField != null
+                || offsetField != null
+                || secondField != null
+                || yearField != null;
+        if (!hasAnyWithField) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        int year = TemporalUtils.getIntegerField(context, fields, "year", localDateTime.date().year());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int month = TemporalUtils.getIntegerField(context, fields, "month", localDateTime.date().month());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int dayOfMonth = TemporalUtils.getIntegerField(context, fields, "day", localDateTime.date().day());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int hour = TemporalUtils.getIntegerField(context, fields, "hour", localDateTime.time().hour());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int minute = TemporalUtils.getIntegerField(context, fields, "minute", localDateTime.time().minute());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int second = TemporalUtils.getIntegerField(context, fields, "second", localDateTime.time().second());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int millisecond = TemporalUtils.getIntegerField(context, fields, "millisecond", localDateTime.time().millisecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int microsecond = TemporalUtils.getIntegerField(context, fields, "microsecond", localDateTime.time().microsecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
-        int nanosecond = TemporalUtils.getIntegerField(context, fields, "nanosecond", localDateTime.time().nanosecond());
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if ((dayField != null && dayField < 1) || (monthField != null && monthField < 1)) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return JSUndefined.INSTANCE;
+        }
 
-        IsoDateTime newLocalDateTime = new IsoDateTime(new IsoDate(year, month, dayOfMonth),
-                new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
-        BigInteger epochNs = TemporalTimeZone.localDateTimeToEpochNs(newLocalDateTime, zonedDateTime.getTimeZoneId());
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs,
-                zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
+        JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        WithOptions withOptions = getWithOptions(context, optionsValue);
+        if (context.hasPendingException() || withOptions == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        int mergedYear = yearField != null ? yearField : localDateTime.date().year();
+        int mergedDay = dayField != null ? dayField : localDateTime.date().day();
+        int mergedHour = hourField != null ? hourField : localDateTime.time().hour();
+        int mergedMinute = minuteField != null ? minuteField : localDateTime.time().minute();
+        int mergedSecond = secondField != null ? secondField : localDateTime.time().second();
+        int mergedMillisecond = millisecondField != null ? millisecondField : localDateTime.time().millisecond();
+        int mergedMicrosecond = microsecondField != null ? microsecondField : localDateTime.time().microsecond();
+        int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
+
+        JSObject mergedFieldsObject = new JSObject(context);
+        mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(mergedYear));
+        if (monthField != null || monthCodeField == null) {
+            int mergedMonth = monthField != null ? monthField : localDateTime.date().month();
+            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(mergedMonth));
+        }
+        if (monthCodeField != null) {
+            mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCodeField));
+        }
+        mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(mergedDay));
+        mergedFieldsObject.set(PropertyKey.fromString("hour"), JSNumber.of(mergedHour));
+        mergedFieldsObject.set(PropertyKey.fromString("minute"), JSNumber.of(mergedMinute));
+        mergedFieldsObject.set(PropertyKey.fromString("second"), JSNumber.of(mergedSecond));
+        mergedFieldsObject.set(PropertyKey.fromString("millisecond"), JSNumber.of(mergedMillisecond));
+        mergedFieldsObject.set(PropertyKey.fromString("microsecond"), JSNumber.of(mergedMicrosecond));
+        mergedFieldsObject.set(PropertyKey.fromString("nanosecond"), JSNumber.of(mergedNanosecond));
+        mergedFieldsObject.set(PropertyKey.fromString("timeZone"), new JSString(zonedDateTime.getTimeZoneId()));
+        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(zonedDateTime.getCalendarId()));
+        if (offsetField != null) {
+            mergedFieldsObject.set(PropertyKey.fromString("offset"), new JSString(offsetField));
+        }
+
+        JSObject normalizedOptionsObject = new JSObject(context);
+        normalizedOptionsObject.set(PropertyKey.fromString("disambiguation"), new JSString(withOptions.disambiguation()));
+        normalizedOptionsObject.set(PropertyKey.fromString("offset"), new JSString(withOptions.offset()));
+        normalizedOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(withOptions.overflow()));
+
+        return TemporalZonedDateTimeConstructor.from(
+                context,
+                JSUndefined.INSTANCE,
+                new JSValue[]{mergedFieldsObject, normalizedOptionsObject});
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "withCalendar");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        String calendarId = TemporalUtils.validateCalendar(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (args.length == 0 || args[0] instanceof JSUndefined || args[0] == null) {
+            context.throwTypeError("Temporal error: Calendar is required.");
+            return JSUndefined.INSTANCE;
+        }
+        String calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
                 zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId(), calendarId);
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "withPlainTime");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
         IsoTime newTime = IsoTime.MIDNIGHT;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
-            JSValue timeArg = args[0];
-            if (timeArg instanceof JSTemporalPlainTime plainTime) {
-                newTime = plainTime.getIsoTime();
-            } else if (timeArg instanceof JSString timeStr) {
-                newTime = TemporalParser.parseTimeString(context, timeStr.value());
-                if (context.hasPendingException()) return JSUndefined.INSTANCE;
-            } else if (timeArg instanceof JSObject timeObj) {
-                int hourValue = TemporalUtils.getIntegerField(context, timeObj, "hour", 0);
-                int minuteValue = TemporalUtils.getIntegerField(context, timeObj, "minute", 0);
-                int secondValue = TemporalUtils.getIntegerField(context, timeObj, "second", 0);
-                int millisecondValue = TemporalUtils.getIntegerField(context, timeObj, "millisecond", 0);
-                int microsecondValue = TemporalUtils.getIntegerField(context, timeObj, "microsecond", 0);
-                int nanosecondValue = TemporalUtils.getIntegerField(context, timeObj, "nanosecond", 0);
-                if (context.hasPendingException()) return JSUndefined.INSTANCE;
-                newTime = new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
+            JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(
+                    context,
+                    args[0],
+                    JSUndefined.INSTANCE);
+            if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
+                return JSUndefined.INSTANCE;
             }
+            newTime = plainTime.getIsoTime();
         }
+
         IsoDateTime newLocalDateTime = new IsoDateTime(localDateTime.date(), newTime);
         BigInteger epochNs = TemporalTimeZone.localDateTimeToEpochNs(newLocalDateTime, zonedDateTime.getTimeZoneId());
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs,
@@ -1743,5 +1959,11 @@ public final class TemporalZonedDateTimePrototype {
             boolean autoFractionalSecondDigits,
             int fractionalSecondDigits,
             long roundingIncrementNanoseconds) {
+    }
+
+    private record WithOptions(
+            String disambiguation,
+            String offset,
+            String overflow) {
     }
 }
