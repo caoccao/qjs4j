@@ -6533,7 +6533,7 @@ public final class OpcodeHandler {
             // Not a function - set pending TypeError so JS catch handlers can process it
             // Generate a descriptive error message similar to V8/QuickJS
             String message;
-            if (!virtualMachine.propertyAccessChain.isEmpty()) {
+            if (virtualMachine.propertyAccessChain.length() > 0) {
                 // Use the tracked property access for better error messages
                 message = virtualMachine.propertyAccessChain + " is not a function";
             } else if (callee instanceof JSUndefined) {
