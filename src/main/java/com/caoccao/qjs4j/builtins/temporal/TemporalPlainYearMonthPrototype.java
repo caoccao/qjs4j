@@ -18,7 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
+import com.caoccao.qjs4j.core.temporal.TemporalDuration;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
@@ -98,7 +98,7 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -259,7 +259,7 @@ public final class TemporalPlainYearMonthPrototype {
         IsoDate thisIsoDate = plainYearMonth.getIsoDate();
         IsoDate otherIsoDate = otherPlainYearMonth.getIsoDate();
         if (thisIsoDate.year() == otherIsoDate.year() && thisIsoDate.month() == otherIsoDate.month()) {
-            return TemporalDurationConstructor.createDuration(context, TemporalDurationRecord.ZERO);
+            return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
         }
 
         IsoDate thisDifferenceDate = createDifferenceIsoDate(context, plainYearMonth);
@@ -290,7 +290,7 @@ public final class TemporalPlainYearMonthPrototype {
             }
         }
 
-        TemporalDurationRecord resultDuration = new TemporalDurationRecord(
+        TemporalDuration resultDuration = new TemporalDuration(
                 durationFields.years(),
                 durationFields.months(),
                 0,
@@ -752,7 +752,7 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate isoDate = plainYearMonth.getIsoDate();
-        String formattedDate = TemporalUtils.formatIsoDate(isoDate.year(), isoDate.month(), 1);
+        String formattedDate = new IsoDate(isoDate.year(), isoDate.month(), 1).toString();
         return new JSString(formattedDate.substring(0, formattedDate.lastIndexOf('-')));
     }
 
@@ -818,7 +818,7 @@ public final class TemporalPlainYearMonthPrototype {
         IsoDate isoDate = plainYearMonth.getIsoDate();
         boolean includeReferenceDay = !"never".equals(calendarNameOption)
                 && (!"auto".equals(calendarNameOption) || !"iso8601".equals(plainYearMonth.getCalendarId()));
-        String result = TemporalUtils.formatIsoDate(isoDate.year(), isoDate.month(), includeReferenceDay ? isoDate.day() : 1);
+        String result = new IsoDate(isoDate.year(), isoDate.month(), includeReferenceDay ? isoDate.day() : 1).toString();
         if (!includeReferenceDay) {
             result = result.substring(0, result.lastIndexOf('-'));
         }

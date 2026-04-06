@@ -51,7 +51,7 @@ public final class TemporalZonedDateTimePrototype {
     private static BigInteger addDurationToZonedDateTime(
             JSContext context,
             JSTemporalZonedDateTime zonedDateTime,
-            TemporalDurationRecord durationRecord,
+            TemporalDuration durationRecord,
             String overflow) {
         BigInteger intermediateEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
         if (durationRecord.years() != 0
@@ -159,7 +159,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -306,7 +306,7 @@ public final class TemporalZonedDateTimePrototype {
         return JSNumber.of(IsoDate.daysInYear(localDateTime.date().year()));
     }
 
-    private static BigInteger durationTimeToNanoseconds(TemporalDurationRecord durationRecord) {
+    private static BigInteger durationTimeToNanoseconds(TemporalDuration durationRecord) {
         return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
                 .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
                 .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
@@ -1444,7 +1444,7 @@ public final class TemporalZonedDateTimePrototype {
                 other.getEpochNanoseconds(),
                 receiverTimeZoneId);
 
-        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 thisLocalDateTime,
                 otherLocalDateTime,
@@ -1456,7 +1456,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord resultRecord =
+        TemporalDuration resultRecord =
                 TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord.negated());
         if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -1597,10 +1597,7 @@ public final class TemporalZonedDateTimePrototype {
         IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
                 roundedEpochNanoseconds,
                 zonedDateTime.getTimeZoneId());
-        String dateString = TemporalUtils.formatIsoDate(
-                localDateTime.date().year(),
-                localDateTime.date().month(),
-                localDateTime.date().day());
+        String dateString = localDateTime.date().toString();
         String timeString = getToStringTimeString(localDateTime.time(), toStringSettings);
 
         StringBuilder stringBuilder = new StringBuilder();
@@ -1666,7 +1663,7 @@ public final class TemporalZonedDateTimePrototype {
                 other.getEpochNanoseconds(),
                 receiverTimeZoneId);
 
-        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 thisLocalDateTime,
                 otherLocalDateTime,
@@ -1678,7 +1675,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord resultRecord = TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord);
+        TemporalDuration resultRecord = TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord);
         if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
@@ -1876,7 +1873,7 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        IsoTime newTime = IsoTime.MIDNIGHT;
+        BigInteger epochNanoseconds;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
             JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(
                     context,
@@ -1885,12 +1882,21 @@ public final class TemporalZonedDateTimePrototype {
             if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
                 return JSUndefined.INSTANCE;
             }
-            newTime = plainTime.getIsoTime();
+            IsoDateTime resultLocalDateTime = new IsoDateTime(localDateTime.date(), plainTime.getIsoTime());
+            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    resultLocalDateTime,
+                    zonedDateTime.getTimeZoneId());
+        } else {
+            IsoDateTime startOfDayDateTime = new IsoDateTime(localDateTime.date(), IsoTime.MIDNIGHT);
+            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    startOfDayDateTime,
+                    zonedDateTime.getTimeZoneId());
         }
-
-        IsoDateTime newLocalDateTime = new IsoDateTime(localDateTime.date(), newTime);
-        BigInteger epochNs = TemporalTimeZone.localDateTimeToEpochNs(newLocalDateTime, zonedDateTime.getTimeZoneId());
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs,
+        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNanoseconds,
                 zonedDateTime.getTimeZoneId(), zonedDateTime.getCalendarId());
     }
 

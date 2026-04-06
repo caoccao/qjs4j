@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import java.util.Locale;
+
 /**
  * Represents an ISO 8601 date with year, month, and day components.
  */
@@ -135,7 +137,11 @@ public record IsoDate(int year, int month, int day) {
 
     @Override
     public String toString() {
-        return TemporalUtils.formatIsoDate(year, month, day);
+        if (year >= 0 && year <= 9999) {
+            return String.format(Locale.ROOT, "%04d-%02d-%02d", year, month, day);
+        }
+        String sign = year >= 0 ? "+" : "-";
+        return String.format(Locale.ROOT, "%s%06d-%02d-%02d", sign, Math.abs(year), month, day);
     }
 
     public int weekOfYear() {

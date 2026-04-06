@@ -106,7 +106,7 @@ public final class TemporalPlainDateTimePrototype {
     private static TimeAddResult addDurationToTime(
             JSContext context,
             IsoTime time,
-            TemporalDurationRecord durationRecord) {
+            TemporalDuration durationRecord) {
         BigInteger durationTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
                 .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
                 .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
@@ -151,7 +151,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -1000,7 +1000,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 plainDateTime.getIsoDateTime(),
                 other.getIsoDateTime(),
@@ -1012,7 +1012,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord resultRecord =
+        TemporalDuration resultRecord =
                 TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord.negated());
         if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -1134,7 +1134,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
 
-        String dateString = TemporalUtils.formatIsoDate(roundedDate.year(), roundedDate.month(), roundedDate.day());
+        String dateString = roundedDate.toString();
         String timeString = getToStringTimeString(roundedTime, toStringSettings);
         String dateTimeString = dateString + "T" + timeString;
         return TemporalUtils.maybeAppendCalendar(dateTimeString, plainDateTime.getCalendarId(), toStringSettings.calendarNameOption());
@@ -1222,7 +1222,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 plainDateTime.getIsoDateTime(),
                 other.getIsoDateTime(),
@@ -1234,7 +1234,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord resultRecord =
+        TemporalDuration resultRecord =
                 TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord);
         if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");

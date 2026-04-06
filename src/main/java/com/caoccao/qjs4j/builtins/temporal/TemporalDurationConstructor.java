@@ -56,7 +56,7 @@ public final class TemporalDurationConstructor {
     private TemporalDurationConstructor() {
     }
 
-    private static boolean areDurationRecordsEqual(TemporalDurationRecord firstRecord, TemporalDurationRecord secondRecord) {
+    private static boolean areDurationRecordsEqual(TemporalDuration firstRecord, TemporalDuration secondRecord) {
         return firstRecord.years() == secondRecord.years()
                 && firstRecord.months() == secondRecord.months()
                 && firstRecord.weeks() == secondRecord.weeks()
@@ -71,7 +71,7 @@ public final class TemporalDurationConstructor {
 
     private static long calendarDaysFromRelativeTo(
             JSContext context,
-            TemporalDurationRecord durationRecord,
+            TemporalDuration durationRecord,
             RelativeToReference relativeToReference) {
         IsoDate relativeDate = relativeToReference.relativeDate();
         try {
@@ -132,8 +132,8 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord firstRecord = firstDuration.getRecord();
-        TemporalDurationRecord secondRecord = secondDuration.getRecord();
+        TemporalDuration firstRecord = firstDuration.getDuration();
+        TemporalDuration secondRecord = secondDuration.getDuration();
 
         if (!isDurationRecordInRange(context, firstRecord) || !isDurationRecordInRange(context, secondRecord)) {
             return JSUndefined.INSTANCE;
@@ -259,7 +259,7 @@ public final class TemporalDurationConstructor {
             }
         }
 
-        TemporalDurationRecord record = new TemporalDurationRecord(years, months, weeks, days,
+        TemporalDuration record = new TemporalDuration(years, months, weeks, days,
                 hours, minutes, seconds, milliseconds, microseconds, nanoseconds);
 
         if (!record.isValid()) {
@@ -277,12 +277,12 @@ public final class TemporalDurationConstructor {
         return createDuration(context, record, resolvedPrototype);
     }
 
-    public static JSTemporalDuration createDuration(JSContext context, TemporalDurationRecord record) {
+    public static JSTemporalDuration createDuration(JSContext context, TemporalDuration record) {
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Duration");
         return createDuration(context, record, prototype);
     }
 
-    static JSTemporalDuration createDuration(JSContext context, TemporalDurationRecord record, JSObject prototype) {
+    static JSTemporalDuration createDuration(JSContext context, TemporalDuration record, JSObject prototype) {
         JSTemporalDuration duration = new JSTemporalDuration(context, record);
         if (prototype != null) {
             duration.setPrototype(prototype);
@@ -290,7 +290,7 @@ public final class TemporalDurationConstructor {
         return duration;
     }
 
-    static BigInteger dayTimeNanoseconds(TemporalDurationRecord durationRecord) {
+    static BigInteger dayTimeNanoseconds(TemporalDuration durationRecord) {
         return BigInteger.valueOf(durationRecord.days()).multiply(DAY_NANOSECONDS)
                 .add(BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS))
                 .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
@@ -437,7 +437,7 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord record = new TemporalDurationRecord(years, months, weeks, days,
+        TemporalDuration record = new TemporalDuration(years, months, weeks, days,
                 hours, minutes, seconds, milliseconds, microseconds, nanoseconds);
 
         if (!record.isValid()) {
@@ -456,7 +456,7 @@ public final class TemporalDurationConstructor {
         if (durationFields == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalDurationRecord record = new TemporalDurationRecord(
+        TemporalDuration record = new TemporalDuration(
                 durationFields.years(), durationFields.months(), durationFields.weeks(), durationFields.days(),
                 durationFields.hours(), durationFields.minutes(), durationFields.seconds(),
                 durationFields.milliseconds(), durationFields.microseconds(), durationFields.nanoseconds());
@@ -527,7 +527,7 @@ public final class TemporalDurationConstructor {
         return new DurationLikeFieldValue(true, numericValue);
     }
 
-    private static boolean hasCalendarUnits(TemporalDurationRecord durationRecord) {
+    private static boolean hasCalendarUnits(TemporalDuration durationRecord) {
         return durationRecord.years() != 0 || durationRecord.months() != 0 || durationRecord.weeks() != 0;
     }
 
@@ -600,7 +600,7 @@ public final class TemporalDurationConstructor {
         return !date.isBefore(minDate) && !date.isAfter(maxDate);
     }
 
-    private static boolean isDurationRecordInRange(JSContext context, TemporalDurationRecord durationRecord) {
+    private static boolean isDurationRecordInRange(JSContext context, TemporalDuration durationRecord) {
         if (durationRecord.years() > CALENDAR_UNIT_MAX
                 || durationRecord.years() < -CALENDAR_UNIT_MAX
                 || durationRecord.months() > CALENDAR_UNIT_MAX
@@ -618,7 +618,7 @@ public final class TemporalDurationConstructor {
         return true;
     }
 
-    static boolean isDurationRecordTimeRangeValid(TemporalDurationRecord durationRecord) {
+    static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
         BigInteger totalNanoseconds = dayTimeNanoseconds(durationRecord);
         return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
     }
@@ -678,8 +678,8 @@ public final class TemporalDurationConstructor {
         }
     }
 
-    static TemporalDurationRecord normalizeFloat64RepresentableFields(TemporalDurationRecord durationRecord) {
-        return new TemporalDurationRecord(
+    static TemporalDuration normalizeFloat64RepresentableFields(TemporalDuration durationRecord) {
+        return new TemporalDuration(
                 toFloat64RepresentableLong(durationRecord.years()),
                 toFloat64RepresentableLong(durationRecord.months()),
                 toFloat64RepresentableLong(durationRecord.weeks()),
@@ -1276,7 +1276,7 @@ public final class TemporalDurationConstructor {
      */
     public static JSValue toTemporalDuration(JSContext context, JSValue item) {
         if (item instanceof JSTemporalDuration duration) {
-            return createDuration(context, duration.getRecord());
+            return createDuration(context, duration.getDuration());
         }
         if (item instanceof JSString itemStr) {
             return durationFromString(context, itemStr.value());
@@ -1298,7 +1298,7 @@ public final class TemporalDurationConstructor {
 
     private static BigInteger totalDurationNanoseconds(
             JSContext context,
-            TemporalDurationRecord durationRecord,
+            TemporalDuration durationRecord,
             RelativeToReference relativeToReference) {
         if (relativeToReference == null) {
             return dayTimeNanoseconds(durationRecord);

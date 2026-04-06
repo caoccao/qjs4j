@@ -60,7 +60,7 @@ public final class TemporalInstantPrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (durationRecord.years() != 0
                 || durationRecord.months() != 0
                 || durationRecord.weeks() != 0
@@ -228,10 +228,7 @@ public final class TemporalInstantPrototype {
     }
 
     private static String formatWithPrecision(IsoDateTime isoDateTime, String smallestUnit, Integer fractionalSecondDigits) {
-        String datePart = TemporalUtils.formatIsoDate(
-                isoDateTime.date().year(),
-                isoDateTime.date().month(),
-                isoDateTime.date().day());
+        String datePart = isoDateTime.date().toString();
         String timePart;
         if ("minute".equals(smallestUnit)) {
             timePart = String.format(Locale.ROOT, "%02d:%02d", isoDateTime.time().hour(), isoDateTime.time().minute());
@@ -313,10 +310,10 @@ public final class TemporalInstantPrototype {
                 incrementNanoseconds,
                 differenceOptions.roundingMode());
 
-        TemporalDurationRecord balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
+        TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
                 roundedNanoseconds,
                 differenceOptions.largestUnit());
-        TemporalDurationRecord normalizedDuration =
+        TemporalDuration normalizedDuration =
                 TemporalDurationConstructor.normalizeFloat64RepresentableFields(balancedDuration);
         if (!TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -392,7 +389,7 @@ public final class TemporalInstantPrototype {
         long totalNs = absoluteDiffNanoseconds.remainder(BigInteger.valueOf(1_000)).longValue();
 
         return TemporalDurationConstructor.createDuration(context,
-                new TemporalDurationRecord(0, 0, 0, 0,
+                new TemporalDuration(0, 0, 0, 0,
                         0, 0, totalSeconds * signum,
                         totalMs * signum, totalUs * signum, totalNs * signum));
     }

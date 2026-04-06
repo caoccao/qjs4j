@@ -128,6 +128,10 @@ public final class TemporalZonedDateTimeConstructor {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;
         }
+        if (timeZoneString.value().indexOf('[') >= 0) {
+            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneString.value());
+            return JSUndefined.INSTANCE;
+        }
         String timeZoneId = normalizeTimeZoneIdentifier(context, timeZoneString.value());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;

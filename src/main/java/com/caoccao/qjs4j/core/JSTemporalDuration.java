@@ -16,17 +16,17 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
+import com.caoccao.qjs4j.core.temporal.TemporalDuration;
 
 public final class JSTemporalDuration extends JSObject {
-    private final TemporalDurationRecord record;
+    private final TemporalDuration duration;
 
-    public JSTemporalDuration(JSContext context, TemporalDurationRecord record) {
+    public JSTemporalDuration(JSContext context, TemporalDuration duration) {
         super(context);
-        this.record = record;
+        this.duration = duration;
     }
 
-    public TemporalDurationRecord getRecord() {
-        return record;
+    public TemporalDuration getDuration() {
+        return duration;
     }
 }

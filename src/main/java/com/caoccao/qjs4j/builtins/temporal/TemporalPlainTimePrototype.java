@@ -18,7 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalDurationRecord;
+import com.caoccao.qjs4j.core.temporal.TemporalDuration;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 import java.math.BigInteger;
@@ -52,7 +52,7 @@ public final class TemporalPlainTimePrototype {
         if (context.hasPendingException() || temporalDuration == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         BigInteger durationNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
         if (sign < 0) {
             durationNanoseconds = durationNanoseconds.negate();
@@ -132,10 +132,10 @@ public final class TemporalPlainTimePrototype {
                 incrementNanoseconds,
                 differenceSettings.roundingMode());
 
-        TemporalDurationRecord balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
+        TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
                 roundedNanoseconds,
                 differenceSettings.largestUnit());
-        TemporalDurationRecord normalizedDuration =
+        TemporalDuration normalizedDuration =
                 TemporalDurationConstructor.normalizeFloat64RepresentableFields(balancedDuration);
         if (!normalizedDuration.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");

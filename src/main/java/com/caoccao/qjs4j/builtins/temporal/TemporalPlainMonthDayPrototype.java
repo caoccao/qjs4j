@@ -168,7 +168,7 @@ public final class TemporalPlainMonthDayPrototype {
                 && (!"auto".equals(calendarNameOption) || !"iso8601".equals(plainMonthDay.getCalendarId()));
         String result;
         if (includeReferenceYear) {
-            result = TemporalUtils.formatIsoDate(isoDate.year(), isoDate.month(), isoDate.day());
+            result = isoDate.toString();
         } else {
             result = String.format(Locale.ROOT, "%02d-%02d", isoDate.month(), isoDate.day());
         }

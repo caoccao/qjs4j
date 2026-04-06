@@ -1,0 +1,176 @@
+/*
+ * Copyright (c) 2025-2026. caoccao.com Sam Cao
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.caoccao.qjs4j.core.temporal;
+
+import java.math.BigInteger;
+import java.util.Locale;
+
+/**
+ * Internal data type representing a Temporal.Duration's component fields.
+ */
+public record TemporalDuration(
+        long years, long months, long weeks, long days,
+        long hours, long minutes, long seconds,
+        long milliseconds, long microseconds, long nanoseconds) {
+
+    public static final TemporalDuration ZERO = new TemporalDuration(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+    public TemporalDuration abs() {
+        return new TemporalDuration(
+                Math.abs(years), Math.abs(months), Math.abs(weeks), Math.abs(days),
+                Math.abs(hours), Math.abs(minutes), Math.abs(seconds),
+                Math.abs(milliseconds), Math.abs(microseconds), Math.abs(nanoseconds));
+    }
+
+    public boolean isBlank() {
+        return years == 0 && months == 0 && weeks == 0 && days == 0 &&
+                hours == 0 && minutes == 0 && seconds == 0 &&
+                milliseconds == 0 && microseconds == 0 && nanoseconds == 0;
+    }
+
+    public boolean isValid() {
+        // All non-zero fields must have the same sign
+        int positive = 0;
+        int negative = 0;
+        long[] fields = {years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds};
+        for (long f : fields) {
+            if (f > 0) positive++;
+            if (f < 0) negative++;
+        }
+        return positive == 0 || negative == 0;
+    }
+
+    public TemporalDuration negated() {
+        return new TemporalDuration(
+                -years, -months, -weeks, -days,
+                -hours, -minutes, -seconds,
+                -milliseconds, -microseconds, -nanoseconds);
+    }
+
+    public int sign() {
+        if (years > 0 || months > 0 || weeks > 0 || days > 0 ||
+                hours > 0 || minutes > 0 || seconds > 0 ||
+                milliseconds > 0 || microseconds > 0 || nanoseconds > 0) {
+            return 1;
+        }
+        if (years < 0 || months < 0 || weeks < 0 || days < 0 ||
+                hours < 0 || minutes < 0 || seconds < 0 ||
+                milliseconds < 0 || microseconds < 0 || nanoseconds < 0) {
+            return -1;
+        }
+        return 0;
+    }
+
+    @Override
+    public String toString() {
+        boolean negative = years < 0 || months < 0 || weeks < 0 || days < 0
+                || hours < 0 || minutes < 0 || seconds < 0
+                || milliseconds < 0 || microseconds < 0 || nanoseconds < 0;
+        BigInteger yearsValue = BigInteger.valueOf(years);
+        BigInteger monthsValue = BigInteger.valueOf(months);
+        BigInteger weeksValue = BigInteger.valueOf(weeks);
+        BigInteger daysValue = BigInteger.valueOf(days);
+        BigInteger hoursValue = BigInteger.valueOf(hours);
+        BigInteger minutesValue = BigInteger.valueOf(minutes);
+        BigInteger secondsValue = BigInteger.valueOf(seconds);
+        BigInteger millisecondsValue = BigInteger.valueOf(milliseconds);
+        BigInteger microsecondsValue = BigInteger.valueOf(microseconds);
+        BigInteger nanosecondsValue = BigInteger.valueOf(nanoseconds);
+        if (negative) {
+            yearsValue = yearsValue.abs();
+            monthsValue = monthsValue.abs();
+            weeksValue = weeksValue.abs();
+            daysValue = daysValue.abs();
+            hoursValue = hoursValue.abs();
+            minutesValue = minutesValue.abs();
+            secondsValue = secondsValue.abs();
+            millisecondsValue = millisecondsValue.abs();
+            microsecondsValue = microsecondsValue.abs();
+            nanosecondsValue = nanosecondsValue.abs();
+        }
+
+        StringBuilder stringBuilder = new StringBuilder();
+        if (negative) {
+            stringBuilder.append('-');
+        }
+        stringBuilder.append('P');
+
+        if (yearsValue.signum() != 0) {
+            stringBuilder.append(yearsValue).append('Y');
+        }
+        if (monthsValue.signum() != 0) {
+            stringBuilder.append(monthsValue).append('M');
+        }
+        if (weeksValue.signum() != 0) {
+            stringBuilder.append(weeksValue).append('W');
+        }
+        if (daysValue.signum() != 0) {
+            stringBuilder.append(daysValue).append('D');
+        }
+
+        BigInteger totalSubsecondNanoseconds = millisecondsValue.multiply(BigInteger.valueOf(1_000_000L))
+                .add(microsecondsValue.multiply(BigInteger.valueOf(1_000L)))
+                .add(nanosecondsValue);
+        BigInteger[] secondCarryAndSubsecondNanoseconds =
+                totalSubsecondNanoseconds.divideAndRemainder(BigInteger.valueOf(1_000_000_000L));
+        BigInteger secondsWithCarry = secondsValue.add(secondCarryAndSubsecondNanoseconds[0]);
+        BigInteger subsecondNanosecondsRemainder = secondCarryAndSubsecondNanoseconds[1];
+
+        boolean hasTimePart = hoursValue.signum() != 0 || minutesValue.signum() != 0 || secondsWithCarry.signum() != 0
+                || subsecondNanosecondsRemainder.signum() != 0;
+        if (hasTimePart) {
+            stringBuilder.append('T');
+            if (hoursValue.signum() != 0) {
+                stringBuilder.append(hoursValue).append('H');
+            }
+            if (minutesValue.signum() != 0) {
+                stringBuilder.append(minutesValue).append('M');
+            }
+            if (secondsWithCarry.signum() != 0 || subsecondNanosecondsRemainder.signum() != 0) {
+                stringBuilder.append(secondsWithCarry);
+                if (subsecondNanosecondsRemainder.signum() != 0) {
+                    String fractional = String.format(Locale.ROOT, "%09d", subsecondNanosecondsRemainder.intValue());
+                    int fractionalEndIndex = fractional.length();
+                    while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
+                        fractionalEndIndex--;
+                    }
+                    stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
+                }
+                stringBuilder.append('S');
+            }
+        }
+
+        if (stringBuilder.length() == 1 || (stringBuilder.length() == 2 && negative)) {
+            stringBuilder.append("T0S");
+        }
+
+        return stringBuilder.toString();
+    }
+
+    /**
+     * Returns total nanoseconds for the days+time portion only (no years/months/weeks).
+     */
+    public long totalNanoseconds() {
+        return days * 86_400_000_000_000L
+                + hours * 3_600_000_000_000L
+                + minutes * 60_000_000_000L
+                + seconds * 1_000_000_000L
+                + milliseconds * 1_000_000L
+                + microseconds * 1_000L
+                + nanoseconds;
+    }
+}

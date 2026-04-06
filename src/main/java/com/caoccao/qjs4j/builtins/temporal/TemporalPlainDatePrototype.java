@@ -65,7 +65,7 @@ public final class TemporalPlainDatePrototype {
     private static IsoDate addDurationToDate(
             JSContext context,
             IsoDate date,
-            TemporalDurationRecord durationRecord,
+            TemporalDuration durationRecord,
             String overflow) {
         BigInteger totalTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
                 .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
@@ -73,7 +73,7 @@ public final class TemporalPlainDatePrototype {
                 .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
                 .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
                 .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-        TemporalDurationRecord balancedTimeDuration =
+        TemporalDuration balancedTimeDuration =
                 TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
 
         long totalDays;
@@ -142,7 +142,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDurationRecord durationRecord = temporalDuration.getRecord();
+        TemporalDuration durationRecord = temporalDuration.getDuration();
         if (sign < 0) {
             durationRecord = durationRecord.negated();
         }
@@ -263,7 +263,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static IsoDate calendarDateAddConstrain(JSContext context, IsoDate baseDate, DateDurationFields dateDuration) {
-        TemporalDurationRecord durationRecord = new TemporalDurationRecord(
+        TemporalDuration durationRecord = new TemporalDuration(
                 dateDuration.years(),
                 dateDuration.months(),
                 dateDuration.weeks(),
@@ -437,7 +437,7 @@ public final class TemporalPlainDatePrototype {
         IsoDate thisDate = plainDate.getIsoDate();
         IsoDate otherDate = other.getIsoDate();
         if (IsoDate.compareIsoDate(thisDate, otherDate) == 0) {
-            return TemporalDurationConstructor.createDuration(context, TemporalDurationRecord.ZERO);
+            return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
         }
 
         DateDurationFields dateDifference = calendarDateUntil(thisDate, otherDate, settings.largestUnit());
@@ -454,7 +454,7 @@ public final class TemporalPlainDatePrototype {
             }
         }
 
-        TemporalDurationRecord resultDuration = new TemporalDurationRecord(
+        TemporalDuration resultDuration = new TemporalDuration(
                 dateDifference.years(),
                 dateDifference.months(),
                 dateDifference.weeks(),
