@@ -281,13 +281,13 @@ public final class VirtualMachine {
 
     void appendPropertyAccessForArrayIndex(JSValue indexValue) {
         if (indexValue instanceof JSString stringValue) {
-            if (!propertyAccessChain.isEmpty()) {
+            if (propertyAccessChain.length() > 0) {
                 propertyAccessChain.append('.');
             }
             propertyAccessChain.append(stringValue.value());
         } else if (indexValue instanceof JSNumber numberValue) {
             String propertyName = JSTypeConversions.toString(context, numberValue).value();
-            if (!propertyAccessChain.isEmpty()) {
+            if (propertyAccessChain.length() > 0) {
                 propertyAccessChain.append('.');
             }
             propertyAccessChain.append(propertyName);
