@@ -1275,7 +1275,7 @@ public final class TemporalPlainDatePrototype {
             }
             resultDate = new IsoDate(year, month, dayOfMonth);
         } else {
-            resultDate = TemporalUtils.constrainIsoDate(year, month, dayOfMonth);
+            resultDate = IsoDate.constrain(year, month, dayOfMonth);
         }
 
         long resultEpochDay = resultDate.toEpochDay();

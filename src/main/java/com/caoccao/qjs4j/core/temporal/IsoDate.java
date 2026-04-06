@@ -73,6 +73,12 @@ public record IsoDate(int year, int month, int day) {
         return year % 400 == 0;
     }
 
+    public static IsoDate constrain(int year, int month, int dayOfMonth) {
+        month = Math.max(1, Math.min(12, month));
+        dayOfMonth = Math.max(1, Math.min(daysInMonth(year, month), dayOfMonth));
+        return new IsoDate(year, month, dayOfMonth);
+    }
+
     public static boolean isValidIsoDate(int year, int month, int dayOfMonth) {
         if (month < 1 || month > 12) {
             return false;

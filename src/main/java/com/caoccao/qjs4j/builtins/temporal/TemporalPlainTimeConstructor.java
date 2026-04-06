@@ -213,7 +213,7 @@ public final class TemporalPlainTimeConstructor {
             }
             return createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
         } else {
-            IsoTime constrained = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
             return createPlainTime(context, constrained);
         }
     }

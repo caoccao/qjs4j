@@ -252,8 +252,8 @@ public final class TemporalZonedDateTimeConstructor {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            isoDate = TemporalUtils.constrainIsoDate(year, month, dayOfMonth);
-            isoTime = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            isoDate = IsoDate.constrain(year, month, dayOfMonth);
+            isoTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
         String timeZoneId = propertyBagData.timeZoneId();

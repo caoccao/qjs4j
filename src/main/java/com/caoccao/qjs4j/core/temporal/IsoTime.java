@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import java.util.Locale;
+
 /**
  * Represents an ISO 8601 time with hour, minute, second, millisecond, microsecond, and nanosecond components.
  */
@@ -61,6 +63,16 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
+    public static IsoTime constrain(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+        hour = Math.max(0, Math.min(23, hour));
+        minute = Math.max(0, Math.min(59, minute));
+        second = Math.max(0, Math.min(59, second));
+        millisecond = Math.max(0, Math.min(999, millisecond));
+        microsecond = Math.max(0, Math.min(999, microsecond));
+        nanosecond = Math.max(0, Math.min(999, nanosecond));
+        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+    }
+
     public static boolean isValidTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
         if (hour < 0 || hour > 23) {
             return false;
@@ -93,7 +105,18 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
     @Override
     public String toString() {
-        return TemporalUtils.formatIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
+        int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
+        if (totalFractionalNanoseconds != 0) {
+            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+            int fractionalEndIndex = fractional.length();
+            while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
+                fractionalEndIndex--;
+            }
+            stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
+        }
+        return stringBuilder.toString();
     }
 
     /**

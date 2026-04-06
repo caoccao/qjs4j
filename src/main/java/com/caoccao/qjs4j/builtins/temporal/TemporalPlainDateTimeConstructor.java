@@ -289,8 +289,8 @@ public final class TemporalPlainDateTimeConstructor {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            resultDate = TemporalUtils.constrainIsoDate(year, month, dayOfMonth);
-            resultTime = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            resultDate = IsoDate.constrain(year, month, dayOfMonth);
+            resultTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
         if (!isValidPlainDateTimeRange(resultDate, resultTime)) {

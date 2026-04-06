@@ -232,7 +232,7 @@ public final class TemporalPlainDateConstructor {
             }
             return createPlainDate(context, new IsoDate(year, resolvedMonth, dayOfMonth), calendarId);
         } else {
-            IsoDate constrained = TemporalUtils.constrainIsoDate(year, resolvedMonth, dayOfMonth);
+            IsoDate constrained = IsoDate.constrain(year, resolvedMonth, dayOfMonth);
             if (!IsoDate.isValidIsoDate(constrained.year(), constrained.month(), constrained.day())) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;

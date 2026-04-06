@@ -80,28 +80,6 @@ public final class TemporalUtils {
         return false;
     }
 
-    /**
-     * Constrains a date to valid ISO values.
-     */
-    public static IsoDate constrainIsoDate(int year, int month, int dayOfMonth) {
-        month = Math.max(1, Math.min(12, month));
-        dayOfMonth = Math.max(1, Math.min(IsoDate.daysInMonth(year, month), dayOfMonth));
-        return new IsoDate(year, month, dayOfMonth);
-    }
-
-    /**
-     * Constrains a time to valid ISO values.
-     */
-    public static IsoTime constrainIsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
-        hour = Math.max(0, Math.min(23, hour));
-        minute = Math.max(0, Math.min(59, minute));
-        second = Math.max(0, Math.min(59, second));
-        millisecond = Math.max(0, Math.min(999, millisecond));
-        microsecond = Math.max(0, Math.min(999, microsecond));
-        nanosecond = Math.max(0, Math.min(999, nanosecond));
-        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-    }
-
     private static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
@@ -123,46 +101,6 @@ public final class TemporalUtils {
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
         return null;
-    }
-
-    public static String formatIsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
-        int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
-        if (totalFractionalNanoseconds != 0) {
-            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            int fractionalEndIndex = fractional.length();
-            while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
-                fractionalEndIndex--;
-            }
-            stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
-        }
-        return stringBuilder.toString();
-    }
-
-    public static String formatIsoTimeWithPrecision(int hour, int minute, int second,
-                                                    int millisecond, int microsecond, int nanosecond,
-                                                    Object fractionalSecondDigits) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
-        if (fractionalSecondDigits instanceof Integer digits) {
-            if (digits == 0) {
-                return stringBuilder.toString();
-            }
-            int totalFractionalNs = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
-            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNs);
-            stringBuilder.append('.').append(fractional, 0, digits);
-        } else {
-            // "auto" mode — same as default
-            if (nanosecond != 0) {
-                stringBuilder.append(String.format(Locale.ROOT, ".%03d%03d%03d", millisecond, microsecond, nanosecond));
-            } else if (microsecond != 0) {
-                stringBuilder.append(String.format(Locale.ROOT, ".%03d%03d", millisecond, microsecond));
-            } else if (millisecond != 0) {
-                stringBuilder.append(String.format(Locale.ROOT, ".%03d", millisecond));
-            }
-        }
-        return stringBuilder.toString();
     }
 
     /**

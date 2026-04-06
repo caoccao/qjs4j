@@ -960,7 +960,7 @@ public final class TemporalPlainTimePrototype {
             }
             return TemporalPlainTimeConstructor.createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
         } else {
-            IsoTime constrained = TemporalUtils.constrainIsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
             return TemporalPlainTimeConstructor.createPlainTime(context, constrained);
         }
     }

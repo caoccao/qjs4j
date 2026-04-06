@@ -230,9 +230,9 @@ public final class TemporalPlainMonthDayConstructor {
             return createPlainMonthDay(context, new IsoDate(1972, resolvedMonth, dayOfMonth), calendarId);
         }
 
-        IsoDate constrainedDate = TemporalUtils.constrainIsoDate(year, resolvedMonth, dayOfMonth);
+        IsoDate constrainedDate = IsoDate.constrain(year, resolvedMonth, dayOfMonth);
         if (resolvedMonth > 12) {
-            constrainedDate = TemporalUtils.constrainIsoDate(year, 12, dayOfMonth);
+            constrainedDate = IsoDate.constrain(year, 12, dayOfMonth);
         }
         return createPlainMonthDay(
                 context,

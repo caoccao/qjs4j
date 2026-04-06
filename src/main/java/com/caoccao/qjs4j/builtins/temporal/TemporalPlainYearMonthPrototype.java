@@ -957,7 +957,7 @@ public final class TemporalPlainYearMonthPrototype {
             }
             resultDate = new IsoDate(year, month, referenceDay);
         } else {
-            resultDate = TemporalUtils.constrainIsoDate(year, month, referenceDay);
+            resultDate = IsoDate.constrain(year, month, referenceDay);
             if (!TemporalPlainYearMonthConstructor.isValidIsoYearMonth(resultDate.year(), resultDate.month())) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
