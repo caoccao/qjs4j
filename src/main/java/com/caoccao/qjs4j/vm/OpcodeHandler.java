@@ -2644,7 +2644,7 @@ public final class OpcodeHandler {
                 executionContext.push(JSUndefined.INSTANCE);
             } else {
                 if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
-                    if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+                    if (!executionContext.virtualMachine.propertyAccessChain.length() > 0) {
                         executionContext.virtualMachine.propertyAccessChain.append('.');
                     }
                     executionContext.virtualMachine.propertyAccessChain.append(fieldName);
@@ -2677,7 +2677,7 @@ public final class OpcodeHandler {
                 executionContext.push(JSUndefined.INSTANCE);
             } else {
                 if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
-                    if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+                    if (!executionContext.virtualMachine.propertyAccessChain.length() > 0) {
                         executionContext.virtualMachine.propertyAccessChain.append('.');
                     }
                     executionContext.virtualMachine.propertyAccessChain.append(fieldName);
