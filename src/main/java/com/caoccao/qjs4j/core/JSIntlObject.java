@@ -128,6 +128,27 @@ public final class JSIntlObject {
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
 
+    private enum DateTimeFormattableKind {
+        NUMBER,
+        INSTANT,
+        PLAIN_DATE,
+        PLAIN_DATE_TIME,
+        PLAIN_MONTH_DAY,
+        PLAIN_TIME,
+        PLAIN_YEAR_MONTH,
+        ZONED_DATE_TIME
+    }
+
+    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, String calendarId) {
+    }
+
+    private record DateStyleOptionFields(
+            String weekdayOption,
+            String yearOption,
+            String monthOption,
+            String dayOption) {
+    }
+
     static {
         AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales())
                 .map(Locale::toLanguageTag)
@@ -1768,12 +1789,14 @@ public final class JSIntlObject {
             // Apply defaults per ECMA-402 ToDateTimeOptions(options, required, defaults):
             // 'required' determines which component types to check for needDefaults.
             // 'defaults' determines which defaults to add when needDefaults is true.
+            boolean hasDefaultDateComponents = false;
+            boolean hasDefaultTimeComponents = false;
             if (dateStyle == null && timeStyle == null) {
-                boolean hasDateComponent = weekdayOption != null || eraOption != null
+                boolean hasDateComponent = weekdayOption != null
                         || yearOption != null || monthOption != null || dayOption != null;
                 boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
                         || minuteOption != null || secondOption != null
-                        || fractionalSecondDigits != null || timeZoneNameOption != null;
+                        || fractionalSecondDigits != null;
                 boolean needDefaults;
                 if ("date".equals(required)) {
                     needDefaults = !hasDateComponent;
@@ -1788,11 +1811,13 @@ public final class JSIntlObject {
                         yearOption = "numeric";
                         monthOption = "numeric";
                         dayOption = "numeric";
+                        hasDefaultDateComponents = true;
                     }
                     if ("time".equals(defaults) || "all".equals(defaults)) {
                         hourOption = "numeric";
                         minuteOption = "numeric";
                         secondOption = "numeric";
+                        hasDefaultTimeComponents = true;
                     }
                 }
             }
@@ -1886,7 +1911,7 @@ public final class JSIntlObject {
                     resolvedLocale, dateStyle, timeStyle, calendar, numberingSystem, timeZone,
                     hourCycle, weekdayOption, eraOption, yearOption, monthOption, dayOption,
                     dayPeriodOption, hourOption, minuteOption, secondOption, fractionalSecondDigits,
-                    timeZoneNameOption);
+                    timeZoneNameOption, hasDefaultDateComponents, hasDefaultTimeComponents);
             JSObject resolvedDtfPrototype = resolveIntlPrototype(context, prototype, "DateTimeFormat");
             if (context.hasPendingException()) {
                 return context.getPendingException();
@@ -3250,15 +3275,55 @@ public final class JSIntlObject {
         return array;
     }
 
+    private static boolean differsOnlyInTimeParts(
+            List<JSIntlDateTimeFormat.DatePart> startParts,
+            List<JSIntlDateTimeFormat.DatePart> endParts) {
+        if (startParts.size() != endParts.size()) {
+            return false;
+        }
+        boolean hasDifference = false;
+        boolean hasHourDifference = false;
+        for (int index = 0; index < startParts.size(); index++) {
+            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
+            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
+            if (startPart.equals(endPart)) {
+                continue;
+            }
+            hasDifference = true;
+            String type = startPart.type();
+            if (!"hour".equals(type)
+                    && !"minute".equals(type)
+                    && !"second".equals(type)
+                    && !"fractionalSecond".equals(type)
+                    && !"dayPeriod".equals(type)) {
+                return false;
+            }
+            if ("hour".equals(type)) {
+                hasHourDifference = true;
+            }
+        }
+        return hasDifference && hasHourDifference;
+    }
+
     public static JSValue dateTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.format called on incompatible receiver");
         }
-        double epochMillis = toDateTimeEpochMillis(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        DateTimeFormattable formattable = toDateTimeFormattable(
+                context,
+                args.length > 0 ? args[0] : JSUndefined.INSTANCE,
+                true);
+        if (formattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, formattable.kind());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(dateTimeFormat.format(epochMillis));
+        if (!isFormattableEpochMillisValid(context, formattable)) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(effectiveDateTimeFormat.format(formattable.epochMillis()));
     }
 
     /**
@@ -3291,21 +3356,39 @@ public final class JSIntlObject {
         if (startArg instanceof JSUndefined || endArg instanceof JSUndefined) {
             return context.throwTypeError("start date or end date is undefined");
         }
-        double startDate = toDateTimeEpochMillis(context, startArg, false);
+        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
+        if (startFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
+        if (endFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (startFormattable.kind() != endFormattable.kind()) {
+            return context.throwTypeError("Invalid range");
+        }
+        if (startFormattable.calendarId() != null
+                && endFormattable.calendarId() != null
+                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
+            return context.throwRangeError("Invalid date/time value");
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, startFormattable.kind());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        double endDate = toDateTimeEpochMillis(context, endArg, false);
-        if (context.hasPendingException()) {
+        if (!isFormattableEpochMillisValid(context, startFormattable)
+                || !isFormattableEpochMillisValid(context, endFormattable)) {
             return JSUndefined.INSTANCE;
         }
+        double startDate = startFormattable.epochMillis();
+        double endDate = endFormattable.epochMillis();
 
         if (Double.compare(startDate, endDate) == 0) {
-            return new JSString(dateTimeFormat.format(startDate));
+            return new JSString(effectiveDateTimeFormat.format(startDate));
         }
 
-        List<JSIntlDateTimeFormat.DatePart> startParts = dateTimeFormat.formatToPartsList(startDate);
-        List<JSIntlDateTimeFormat.DatePart> endParts = dateTimeFormat.formatToPartsList(endDate);
+        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
+        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
 
         StringBuilder resultBuilder = new StringBuilder();
         if (startParts.equals(endParts)) {
@@ -3325,7 +3408,9 @@ public final class JSIntlObject {
                 break;
             }
         }
-        boolean canCollapse = dateTimeFormat.hasTextMonth() && isYearSame && startParts.size() == endParts.size();
+        boolean canCollapse = startParts.size() == endParts.size()
+                && ((effectiveDateTimeFormat.hasTextMonth() && isYearSame)
+                || differsOnlyInTimeParts(startParts, endParts));
         if (canCollapse) {
             int firstDifferenceIndex = -1;
             int lastDifferenceIndex = -1;
@@ -3380,17 +3465,35 @@ public final class JSIntlObject {
             return context.throwTypeError("start date or end date is undefined");
         }
 
-        double startDate = toDateTimeEpochMillis(context, startArg, false);
+        DateTimeFormattable startFormattable = toDateTimeFormattable(context, startArg, false);
+        if (startFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        DateTimeFormattable endFormattable = toDateTimeFormattable(context, endArg, false);
+        if (endFormattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (startFormattable.kind() != endFormattable.kind()) {
+            return context.throwTypeError("Invalid range");
+        }
+        if (startFormattable.calendarId() != null
+                && endFormattable.calendarId() != null
+                && !startFormattable.calendarId().equals(endFormattable.calendarId())) {
+            return context.throwRangeError("Invalid date/time value");
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, startFormattable.kind());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        double endDate = toDateTimeEpochMillis(context, endArg, false);
-        if (context.hasPendingException()) {
+        if (!isFormattableEpochMillisValid(context, startFormattable)
+                || !isFormattableEpochMillisValid(context, endFormattable)) {
             return JSUndefined.INSTANCE;
         }
+        double startDate = startFormattable.epochMillis();
+        double endDate = endFormattable.epochMillis();
 
-        List<JSIntlDateTimeFormat.DatePart> startParts = dateTimeFormat.formatToPartsList(startDate);
-        List<JSIntlDateTimeFormat.DatePart> endParts = dateTimeFormat.formatToPartsList(endDate);
+        List<JSIntlDateTimeFormat.DatePart> startParts = effectiveDateTimeFormat.formatToPartsList(startDate);
+        List<JSIntlDateTimeFormat.DatePart> endParts = effectiveDateTimeFormat.formatToPartsList(endDate);
 
         JSArray result = context.createJSArray();
         // Check if dates are practically equal (all parts identical)
@@ -3411,7 +3514,8 @@ public final class JSIntlObject {
                 break;
             }
         }
-        boolean canCollapse = dateTimeFormat.hasTextMonth() && yearSame;
+        boolean canCollapse = (effectiveDateTimeFormat.hasTextMonth() && yearSame)
+                || differsOnlyInTimeParts(startParts, endParts);
         if (canCollapse && startParts.size() == endParts.size()) {
             int firstDiff = -1;
             int lastDiff = -1;
@@ -3468,11 +3572,21 @@ public final class JSIntlObject {
         if (!(thisArg instanceof JSIntlDateTimeFormat dateTimeFormat)) {
             return context.throwTypeError("Intl.DateTimeFormat.prototype.formatToParts called on incompatible receiver");
         }
-        double dateValue = toDateTimeEpochMillis(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE, true);
+        DateTimeFormattable formattable = toDateTimeFormattable(
+                context,
+                args.length > 0 ? args[0] : JSUndefined.INSTANCE,
+                true);
+        if (formattable == null || context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, formattable.kind());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        List<JSIntlDateTimeFormat.DatePart> partsList = dateTimeFormat.formatToPartsList(dateValue);
+        if (!isFormattableEpochMillisValid(context, formattable)) {
+            return JSUndefined.INSTANCE;
+        }
+        List<JSIntlDateTimeFormat.DatePart> partsList = effectiveDateTimeFormat.formatToPartsList(formattable.epochMillis());
         return datePartsToJSArray(context, partsList);
     }
 
@@ -5841,55 +5955,395 @@ public final class JSIntlObject {
         return result;
     }
 
-    private static double toDateTimeEpochMillis(JSContext context, JSValue value, boolean useCurrentTimeForUndefined) {
-        if (useCurrentTimeForUndefined && value instanceof JSUndefined) {
-            return System.currentTimeMillis();
+    private static JSIntlDateTimeFormat createTemporalDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat,
+            DateTimeFormattableKind formattableKind) {
+        boolean supportsDateFields = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH, PLAIN_MONTH_DAY -> true;
+            default -> false;
+        };
+        boolean supportsTimeFields = switch (formattableKind) {
+            case PLAIN_DATE_TIME, PLAIN_TIME -> true;
+            default -> false;
+        };
+        boolean supportsWeekday = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME -> true;
+            default -> false;
+        };
+        boolean supportsEra = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsYear = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsMonth = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsDay = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY -> true;
+            default -> false;
+        };
+
+        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
+        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
+        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
+        String eraOption = baseDateTimeFormat.getEraOption();
+        String yearOption = baseDateTimeFormat.getYearOption();
+        String monthOption = baseDateTimeFormat.getMonthOption();
+        String dayOption = baseDateTimeFormat.getDayOption();
+        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
+        String hourOption = baseDateTimeFormat.getHourOption();
+        String minuteOption = baseDateTimeFormat.getMinuteOption();
+        String secondOption = baseDateTimeFormat.getSecondOption();
+        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
+
+        if (baseDateTimeFormat.hasDefaultDateComponents()) {
+            yearOption = null;
+            monthOption = null;
+            dayOption = null;
+        }
+        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
+            hourOption = null;
+            minuteOption = null;
+            secondOption = null;
         }
 
-        double epochMillis;
-        if (value instanceof JSDate jsDate) {
-            epochMillis = jsDate.getTimeValue();
-        } else if (value instanceof JSTemporalPlainDate temporalPlainDate) {
-            epochMillis = toEpochMillis(temporalPlainDate, context);
-            if (context.hasPendingException()) {
-                return Double.NaN;
+        if ((formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH
+                || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY)
+                && dateStyle != null) {
+            DateStyleOptionFields dateStyleOptionFields = toDateStyleOptionFields(dateStyle);
+            if (weekdayOption == null) {
+                weekdayOption = dateStyleOptionFields.weekdayOption();
             }
-        } else if (value instanceof JSTemporalPlainTime temporalPlainTime) {
-            epochMillis = toEpochMillis(temporalPlainTime, context);
-            if (context.hasPendingException()) {
-                return Double.NaN;
+            if (yearOption == null) {
+                yearOption = dateStyleOptionFields.yearOption();
             }
-        } else if (value instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
-            epochMillis = toEpochMillis(temporalPlainDateTime, context);
-            if (context.hasPendingException()) {
-                return Double.NaN;
+            if (monthOption == null) {
+                monthOption = dateStyleOptionFields.monthOption();
             }
-        } else if (value instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
-            epochMillis = toEpochMillis(temporalPlainYearMonth, context);
-            if (context.hasPendingException()) {
-                return Double.NaN;
+            if (dayOption == null) {
+                dayOption = dateStyleOptionFields.dayOption();
             }
-        } else if (value instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
-            epochMillis = toEpochMillis(temporalPlainMonthDay, context);
-            if (context.hasPendingException()) {
-                return Double.NaN;
+            dateStyle = null;
+        }
+
+        boolean droppedOptionForTypeError = false;
+        if (!supportsDateFields && dateStyle != null) {
+            dateStyle = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && timeStyle != null) {
+            timeStyle = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsWeekday && weekdayOption != null) {
+            weekdayOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsEra && eraOption != null) {
+            eraOption = null;
+        }
+        if (!supportsYear && yearOption != null) {
+            yearOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsMonth && monthOption != null) {
+            monthOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsDay && dayOption != null) {
+            dayOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && dayPeriodOption != null) {
+            dayPeriodOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && hourOption != null) {
+            hourOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && minuteOption != null) {
+            minuteOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && secondOption != null) {
+            secondOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && fractionalSecondDigits != null) {
+            fractionalSecondDigits = null;
+            droppedOptionForTypeError = true;
+        }
+
+        boolean hasOverlap = dateStyle != null
+                || timeStyle != null
+                || weekdayOption != null
+                || eraOption != null
+                || yearOption != null
+                || monthOption != null
+                || dayOption != null
+                || dayPeriodOption != null
+                || hourOption != null
+                || minuteOption != null
+                || secondOption != null
+                || fractionalSecondDigits != null;
+        if (!hasOverlap && droppedOptionForTypeError) {
+            context.throwTypeError("Invalid date/time formatting options");
+            return null;
+        }
+
+        switch (formattableKind) {
+            case PLAIN_DATE -> {
+                boolean hasDateComponent = weekdayOption != null || yearOption != null
+                        || monthOption != null || dayOption != null || dateStyle != null;
+                if (!hasDateComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                }
             }
-        } else if (value instanceof JSTemporalInstant temporalInstant) {
-            epochMillis = toEpochMillis(temporalInstant);
-        } else if (value instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
-            epochMillis = toEpochMillis(temporalZonedDateTime);
-        } else {
-            epochMillis = JSTypeConversions.toNumber(context, value).value();
-            if (context.hasPendingException()) {
-                return Double.NaN;
+            case PLAIN_DATE_TIME -> {
+                boolean hasDateComponent = weekdayOption != null || yearOption != null
+                        || monthOption != null || dayOption != null || dateStyle != null;
+                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
+                        || minuteOption != null || secondOption != null
+                        || fractionalSecondDigits != null || timeStyle != null;
+                if (!hasDateComponent && !hasTimeComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                    hourOption = "numeric";
+                    minuteOption = "numeric";
+                    secondOption = "numeric";
+                }
+            }
+            case PLAIN_MONTH_DAY -> {
+                boolean hasMonthDayComponent = monthOption != null || dayOption != null || dateStyle != null;
+                if (!hasMonthDayComponent) {
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                }
+            }
+            case PLAIN_TIME -> {
+                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
+                        || minuteOption != null || secondOption != null
+                        || fractionalSecondDigits != null || timeStyle != null;
+                if (!hasTimeComponent) {
+                    hourOption = "numeric";
+                    minuteOption = "numeric";
+                    secondOption = "numeric";
+                }
+            }
+            case PLAIN_YEAR_MONTH -> {
+                boolean hasYearMonthComponent = yearOption != null || monthOption != null || dateStyle != null;
+                if (!hasYearMonthComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                }
+            }
+            default -> {
             }
         }
 
-        if (!Double.isFinite(epochMillis) || Math.abs(epochMillis) > 8.64e15) {
+        return new JSIntlDateTimeFormat(
+                context,
+                baseDateTimeFormat.getLocale(),
+                dateStyle,
+                timeStyle,
+                baseDateTimeFormat.getCalendar(),
+                baseDateTimeFormat.getNumberingSystem(),
+                "UTC",
+                baseDateTimeFormat.getHourCycle(),
+                weekdayOption,
+                eraOption,
+                yearOption,
+                monthOption,
+                dayOption,
+                dayPeriodOption,
+                hourOption,
+                minuteOption,
+                secondOption,
+                fractionalSecondDigits,
+                null,
+                false,
+                false);
+    }
+
+    private static JSIntlDateTimeFormat getEffectiveDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat,
+            DateTimeFormattableKind formattableKind) {
+        return switch (formattableKind) {
+            case NUMBER -> baseDateTimeFormat;
+            case INSTANT -> createInstantDateTimeFormat(context, baseDateTimeFormat);
+            case ZONED_DATE_TIME -> {
+                context.throwTypeError("Invalid date/time value");
+                yield null;
+            }
+            default -> createTemporalDateTimeFormat(context, baseDateTimeFormat, formattableKind);
+        };
+    }
+
+    private static JSIntlDateTimeFormat createInstantDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat) {
+        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
+        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
+        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
+        String eraOption = baseDateTimeFormat.getEraOption();
+        String yearOption = baseDateTimeFormat.getYearOption();
+        String monthOption = baseDateTimeFormat.getMonthOption();
+        String dayOption = baseDateTimeFormat.getDayOption();
+        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
+        String hourOption = baseDateTimeFormat.getHourOption();
+        String minuteOption = baseDateTimeFormat.getMinuteOption();
+        String secondOption = baseDateTimeFormat.getSecondOption();
+        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
+        String timeZoneNameOption = baseDateTimeFormat.getTimeZoneNameOption();
+
+        if (baseDateTimeFormat.hasDefaultDateComponents()) {
+            yearOption = null;
+            monthOption = null;
+            dayOption = null;
+        }
+        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
+            hourOption = null;
+            minuteOption = null;
+            secondOption = null;
+        }
+
+        boolean hasDateComponent = dateStyle != null
+                || weekdayOption != null
+                || yearOption != null
+                || monthOption != null
+                || dayOption != null;
+        boolean hasTimeComponent = timeStyle != null
+                || dayPeriodOption != null
+                || hourOption != null
+                || minuteOption != null
+                || secondOption != null
+                || fractionalSecondDigits != null;
+        if (!hasDateComponent && !hasTimeComponent) {
+            yearOption = "numeric";
+            monthOption = "numeric";
+            dayOption = "numeric";
+            hourOption = "numeric";
+            minuteOption = "numeric";
+            secondOption = "numeric";
+        }
+
+        return new JSIntlDateTimeFormat(
+                context,
+                baseDateTimeFormat.getLocale(),
+                dateStyle,
+                timeStyle,
+                baseDateTimeFormat.getCalendar(),
+                baseDateTimeFormat.getNumberingSystem(),
+                baseDateTimeFormat.getTimeZone(),
+                baseDateTimeFormat.getHourCycle(),
+                weekdayOption,
+                eraOption,
+                yearOption,
+                monthOption,
+                dayOption,
+                dayPeriodOption,
+                hourOption,
+                minuteOption,
+                secondOption,
+                fractionalSecondDigits,
+                timeZoneNameOption,
+                false,
+                false);
+    }
+
+    private static boolean isFormattableEpochMillisValid(JSContext context, DateTimeFormattable formattable) {
+        if (!Double.isFinite(formattable.epochMillis())) {
             context.throwRangeError("Invalid time value");
-            return Double.NaN;
+            return false;
         }
-        return epochMillis;
+        if (formattable.kind() == DateTimeFormattableKind.NUMBER
+                && Math.abs(formattable.epochMillis()) > 8.64e15) {
+            context.throwRangeError("Invalid time value");
+            return false;
+        }
+        return true;
+    }
+
+    private static DateStyleOptionFields toDateStyleOptionFields(FormatStyle dateStyle) {
+        return switch (dateStyle) {
+            case FULL -> new DateStyleOptionFields("long", "numeric", "long", "numeric");
+            case LONG -> new DateStyleOptionFields(null, "numeric", "long", "numeric");
+            case MEDIUM -> new DateStyleOptionFields(null, "numeric", "short", "numeric");
+            case SHORT -> new DateStyleOptionFields(null, "2-digit", "numeric", "numeric");
+        };
+    }
+
+    private static DateTimeFormattable toDateTimeFormattable(
+            JSContext context,
+            JSValue value,
+            boolean useCurrentTimeForUndefined) {
+        if (useCurrentTimeForUndefined && value instanceof JSUndefined) {
+            return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, System.currentTimeMillis(), null);
+        }
+
+        if (value instanceof JSDate jsDate) {
+            return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, jsDate.getTimeValue(), null);
+        }
+        if (value instanceof JSTemporalInstant temporalInstant) {
+            return new DateTimeFormattable(DateTimeFormattableKind.INSTANT, toEpochMillis(temporalInstant), null);
+        }
+        if (value instanceof JSTemporalPlainDate temporalPlainDate) {
+            double epochMillis = toEpochMillis(temporalPlainDate, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_DATE, epochMillis, temporalPlainDate.getCalendarId());
+        }
+        if (value instanceof JSTemporalPlainDateTime temporalPlainDateTime) {
+            double epochMillis = toEpochMillis(temporalPlainDateTime, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_DATE_TIME, epochMillis, temporalPlainDateTime.getCalendarId());
+        }
+        if (value instanceof JSTemporalPlainMonthDay temporalPlainMonthDay) {
+            double epochMillis = toEpochMillis(temporalPlainMonthDay, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_MONTH_DAY, epochMillis, temporalPlainMonthDay.getCalendarId());
+        }
+        if (value instanceof JSTemporalPlainTime temporalPlainTime) {
+            double epochMillis = toEpochMillis(temporalPlainTime, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_TIME, epochMillis, null);
+        }
+        if (value instanceof JSTemporalPlainYearMonth temporalPlainYearMonth) {
+            double epochMillis = toEpochMillis(temporalPlainYearMonth, context);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            return new DateTimeFormattable(DateTimeFormattableKind.PLAIN_YEAR_MONTH, epochMillis, temporalPlainYearMonth.getCalendarId());
+        }
+        if (value instanceof JSTemporalZonedDateTime temporalZonedDateTime) {
+            return new DateTimeFormattable(
+                    DateTimeFormattableKind.ZONED_DATE_TIME,
+                    toEpochMillis(temporalZonedDateTime),
+                    temporalZonedDateTime.getCalendarId());
+        }
+
+        double epochMillis = JSTypeConversions.toNumber(context, value).value();
+        if (context.hasPendingException()) {
+            return null;
+        }
+        return new DateTimeFormattable(DateTimeFormattableKind.NUMBER, epochMillis, null);
     }
 
     private static double toEpochMillis(JSTemporalInstant temporalInstant) {

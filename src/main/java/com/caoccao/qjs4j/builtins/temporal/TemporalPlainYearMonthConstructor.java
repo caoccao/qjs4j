@@ -370,6 +370,10 @@ public final class TemporalPlainYearMonthConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
+            if (!"iso8601".equals(calendar)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         }
 
         return createPlainYearMonth(

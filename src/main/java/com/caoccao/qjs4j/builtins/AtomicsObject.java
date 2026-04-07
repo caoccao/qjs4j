@@ -93,8 +93,10 @@ public final class AtomicsObject {
         return Math.max(timeoutNumber, 0.0);
     }
 
-    private static String getWaitKey(IJSArrayBuffer buffer, int index) {
-        return System.identityHashCode(buffer) + ":" + index;
+    private static String getWaitKey(JSTypedArray typedArray, int index) {
+        byte[] sharedBytes = requireAtomicArray(typedArray);
+        int absoluteByteOffset = typedArray.getByteOffset() + (index * typedArray.getBytesPerElement());
+        return System.identityHashCode(sharedBytes) + ":" + absoluteByteOffset;
     }
 
     private static byte[] requireAtomicArray(JSTypedArray typedArray) {
@@ -773,7 +775,7 @@ public final class AtomicsObject {
                     ? Integer.MAX_VALUE
                     : (int) Math.min(clampedCount, Integer.MAX_VALUE);
 
-            String waitKey = getWaitKey(buffer, index);
+            String waitKey = getWaitKey(typedArray, index);
             WaitList waitList = waitLists.get(waitKey);
             if (waitList == null) {
                 return JSNumber.of(0);
@@ -1140,8 +1142,7 @@ public final class AtomicsObject {
                 return new JSString("timed-out");
             }
 
-            IJSArrayBuffer buffer = typedArray.getBuffer();
-            String waitKey = getWaitKey(buffer, index);
+            String waitKey = getWaitKey(typedArray, index);
             WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
             long timeout = Double.isInfinite(timeoutDouble)
                     ? -1L
@@ -1215,8 +1216,7 @@ public final class AtomicsObject {
                 return createWaitAsyncSyncResult(context, "timed-out");
             }
 
-            IJSArrayBuffer buffer = typedArray.getBuffer();
-            String waitKey = getWaitKey(buffer, index);
+            String waitKey = getWaitKey(typedArray, index);
             WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
             JSPromise promise = context.createJSPromise();
             JSObject result = context.createJSObject();
@@ -1225,22 +1225,20 @@ public final class AtomicsObject {
             long timeoutMillis = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            CountDownLatch waiterRegisteredLatch = new CountDownLatch(1);
-            waitAsyncExecutor.execute(() -> {
-                try {
-                    String waitResult = waitList.await(timeoutMillis, waiterRegisteredLatch);
-                    promise.fulfill(new JSString(waitResult));
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    waiterRegisteredLatch.countDown();
-                    promise.fulfill(new JSString("timed-out"));
-                }
-            });
+            waitList.registerWaiter();
             try {
-                waiterRegisteredLatch.await();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                promise.reject(new JSString("timed-out"));
+                waitAsyncExecutor.execute(() -> {
+                    try {
+                        String waitResult = waitList.awaitRegisteredWaiter(timeoutMillis);
+                        promise.fulfill(new JSString(waitResult));
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        promise.fulfill(new JSString("timed-out"));
+                    }
+                });
+            } catch (RejectedExecutionException e) {
+                waitList.cancelRegisteredWaiter();
+                promise.fulfill(new JSString("timed-out"));
             }
             return result;
         } catch (JSErrorException e) {
@@ -1362,28 +1360,68 @@ public final class AtomicsObject {
                 if (registrationLatch != null) {
                     registrationLatch.countDown();
                 }
+                return awaitRegisteredWaiterInternal(timeoutMs);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public String awaitRegisteredWaiter(long timeoutMs) throws InterruptedException {
+            lock.lock();
+            try {
+                return awaitRegisteredWaiterInternal(timeoutMs);
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void cancelRegisteredWaiter() {
+            lock.lock();
+            try {
+                if (waitingCount > 0) {
+                    waitingCount--;
+                    if (pendingSignals > waitingCount) {
+                        pendingSignals = waitingCount;
+                    }
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void registerWaiter() {
+            lock.lock();
+            try {
+                waitingCount++;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        private String awaitRegisteredWaiterInternal(long timeoutMs) throws InterruptedException {
+            try {
                 if (timeoutMs < 0) {
                     while (pendingSignals == 0) {
                         condition.await();
                     }
                     pendingSignals--;
-                    waitingCount--;
                     return "ok";
                 }
 
                 long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
                 while (pendingSignals == 0) {
                     if (remainingNanos <= 0) {
-                        waitingCount--;
                         return "timed-out";
                     }
                     remainingNanos = condition.awaitNanos(remainingNanos);
                 }
                 pendingSignals--;
-                waitingCount--;
                 return "ok";
             } finally {
-                lock.unlock();
+                waitingCount--;
+                if (pendingSignals > waitingCount) {
+                    pendingSignals = waitingCount;
+                }
             }
         }
 

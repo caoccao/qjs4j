@@ -252,6 +252,10 @@ public final class TemporalPlainMonthDayConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
+            if (!"iso8601".equals(calendar)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         }
         return createPlainMonthDay(context, new IsoDate(date.year(), date.month(), date.day()), calendar);
     }
