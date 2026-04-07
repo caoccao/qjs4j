@@ -16,6 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.TemporalDuration;
+import com.caoccao.qjs4j.core.temporal.TemporalParser;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
@@ -532,10 +535,32 @@ public final class JSIntlDurationFormat extends JSObject {
      * Returns null if the value is invalid (exception already thrown on context).
      */
     public static Map<String, Double> toDurationRecord(JSContext context, JSValue input) {
-        // Step 1: If Type(input) is String, throw RangeError (temporal duration string)
-        if (input instanceof JSString) {
-            context.throwRangeError("Invalid duration");
-            return null;
+        if (input instanceof JSTemporalDuration temporalDurationObject) {
+            return toDurationRecordMap(temporalDurationObject.getDuration());
+        }
+
+        if (input instanceof JSString durationString) {
+            TemporalParser.DurationFields parsedDurationFields =
+                    TemporalParser.parseDurationString(context, durationString.value());
+            if (parsedDurationFields == null || context.hasPendingException()) {
+                return null;
+            }
+            TemporalDuration temporalDuration = new TemporalDuration(
+                    parsedDurationFields.years(),
+                    parsedDurationFields.months(),
+                    parsedDurationFields.weeks(),
+                    parsedDurationFields.days(),
+                    parsedDurationFields.hours(),
+                    parsedDurationFields.minutes(),
+                    parsedDurationFields.seconds(),
+                    parsedDurationFields.milliseconds(),
+                    parsedDurationFields.microseconds(),
+                    parsedDurationFields.nanoseconds());
+            Map<String, Double> durationRecord = toDurationRecordMap(temporalDuration);
+            if (!isValidDurationRecord(context, durationRecord)) {
+                return null;
+            }
+            return durationRecord;
         }
 
         // Step 2: If Type(input) is not Object, throw TypeError
@@ -590,6 +615,21 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         return result;
+    }
+
+    private static Map<String, Double> toDurationRecordMap(TemporalDuration temporalDuration) {
+        Map<String, Double> durationRecord = new LinkedHashMap<>();
+        durationRecord.put("years", (double) temporalDuration.years());
+        durationRecord.put("months", (double) temporalDuration.months());
+        durationRecord.put("weeks", (double) temporalDuration.weeks());
+        durationRecord.put("days", (double) temporalDuration.days());
+        durationRecord.put("hours", (double) temporalDuration.hours());
+        durationRecord.put("minutes", (double) temporalDuration.minutes());
+        durationRecord.put("seconds", (double) temporalDuration.seconds());
+        durationRecord.put("milliseconds", (double) temporalDuration.milliseconds());
+        durationRecord.put("microseconds", (double) temporalDuration.microseconds());
+        durationRecord.put("nanoseconds", (double) temporalDuration.nanoseconds());
+        return durationRecord;
     }
 
     /**
