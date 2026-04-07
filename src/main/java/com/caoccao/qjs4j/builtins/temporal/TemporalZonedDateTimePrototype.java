@@ -1547,7 +1547,11 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{zonedDateTime});
+        JSValue instant = TemporalInstantConstructor.createInstant(context, zonedDateTime.getEpochNanoseconds());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{instant});
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {

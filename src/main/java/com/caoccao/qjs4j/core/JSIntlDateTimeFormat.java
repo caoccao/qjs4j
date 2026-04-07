@@ -59,6 +59,8 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final String dayOption;
     private final String dayPeriodOption;
     private final String eraOption;
+    private final boolean hasDefaultDateComponents;
+    private final boolean hasDefaultTimeComponents;
     private final String formatPattern;
     private final Integer fractionalSecondDigits;
     private final String hourCycle;
@@ -81,7 +83,9 @@ public final class JSIntlDateTimeFormat extends JSObject {
                                 String yearOption, String monthOption, String dayOption,
                                 String dayPeriodOption, String hourOption, String minuteOption,
                                 String secondOption, Integer fractionalSecondDigits,
-                                String timeZoneNameOption) {
+                                String timeZoneNameOption,
+                                boolean hasDefaultDateComponents,
+                                boolean hasDefaultTimeComponents) {
         super(context);
         this.locale = locale;
         this.dateStyle = dateStyle;
@@ -101,6 +105,8 @@ public final class JSIntlDateTimeFormat extends JSObject {
         this.secondOption = secondOption;
         this.fractionalSecondDigits = fractionalSecondDigits;
         this.timeZoneNameOption = timeZoneNameOption;
+        this.hasDefaultDateComponents = hasDefaultDateComponents;
+        this.hasDefaultTimeComponents = hasDefaultTimeComponents;
         this.formatPattern = buildFormatPattern();
     }
 
@@ -245,7 +251,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
             case 'E', 'e', 'c' -> "weekday";
             case 'G' -> "era";
             case 'a', 'b', 'B' -> "dayPeriod";
-            case 'z', 'Z', 'v', 'V' -> "timeZoneName";
+            case 'z', 'Z', 'v', 'V', 'O', 'X', 'x' -> "timeZoneName";
             default -> "literal";
         };
     }
@@ -257,6 +263,17 @@ public final class JSIntlDateTimeFormat extends JSObject {
      */
     private static boolean isPatternSeparator(char c) {
         return c == ' ' || c == '\u202F' || c == '\u00A0';
+    }
+
+    private static boolean isNumericDatePartType(String datePartType) {
+        return "year".equals(datePartType)
+                || "relatedYear".equals(datePartType)
+                || "month".equals(datePartType)
+                || "day".equals(datePartType)
+                || "hour".equals(datePartType)
+                || "minute".equals(datePartType)
+                || "second".equals(datePartType)
+                || "fractionalSecond".equals(datePartType);
     }
 
     private static String resolveEnglishDayPeriod(int hourOfDay, String dayPeriodStyle) {
@@ -432,11 +449,16 @@ public final class JSIntlDateTimeFormat extends JSObject {
     }
 
     private String applyNumberingSystem(String text) {
-        if (numberingSystem == null) {
-            return text;
+        String effectiveNumberingSystem = numberingSystem;
+        if (effectiveNumberingSystem == null) {
+            if ("ar".equals(locale.getLanguage())) {
+                effectiveNumberingSystem = "arab";
+            } else {
+                return text;
+            }
         }
         String digitMap;
-        switch (numberingSystem) {
+        switch (effectiveNumberingSystem) {
             case "arab" -> digitMap = "٠١٢٣٤٥٦٧٨٩";
             case "deva" -> digitMap = "०१२३४५६७८९";
             case "hanidec" -> digitMap = "〇一二三四五六七八九";
@@ -444,13 +466,12 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 return text;
             }
         }
-
         StringBuilder builder = new StringBuilder(text.length());
         for (int index = 0; index < text.length(); index++) {
             char character = text.charAt(index);
             if (character >= '0' && character <= '9') {
                 builder.append(digitMap.charAt(character - '0'));
-            } else if (character == '.' && "arab".equals(numberingSystem)) {
+            } else if (character == '.' && "arab".equals(effectiveNumberingSystem)) {
                 builder.append('٫');
             } else {
                 builder.append(character);
@@ -466,7 +487,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         boolean hasDate = yearOption != null || monthOption != null || dayOption != null
                 || weekdayOption != null || eraOption != null;
         boolean hasTime = hourOption != null || minuteOption != null || secondOption != null
-                || dayPeriodOption != null || fractionalSecondDigits != null;
+                || dayPeriodOption != null || fractionalSecondDigits != null || timeZoneNameOption != null;
 
         if (hasDate && hasTime) {
             String datePattern = buildDateSubPattern();
@@ -490,6 +511,17 @@ public final class JSIntlDateTimeFormat extends JSObject {
         String basePattern = DateTimeFormatterBuilder.getLocalizedDateTimePattern(
                 baseStyle, null, IsoChronology.INSTANCE, locale);
         String adjustedPattern = adjustPatternFields(basePattern, true);
+        if (weekdayOption != null
+                && adjustedPattern.indexOf('E') < 0
+                && adjustedPattern.indexOf('e') < 0
+                && adjustedPattern.indexOf('c') < 0) {
+            String weekdayPattern = switch (weekdayOption) {
+                case "long" -> "EEEE";
+                case "narrow" -> "EEEEE";
+                default -> "E";
+            };
+            adjustedPattern = weekdayPattern + ", " + adjustedPattern;
+        }
         if (eraOption != null && !"chinese".equals(calendar) && !"dangi".equals(calendar) && adjustedPattern.indexOf('G') < 0) {
             adjustedPattern = adjustedPattern + " G";
         }
@@ -536,6 +568,8 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 case "narrow" -> pattern.append("BBBBB");
                 default -> pattern.append("B");
             }
+        }
+        if (!hasClockField && dayPeriodOption == null && timeZoneNameOption == null) {
             return pattern.toString();
         }
         if (hourOption != null) {
@@ -564,6 +598,18 @@ public final class JSIntlDateTimeFormat extends JSObject {
             if (use12Hour) {
                 pattern.append(" a");
             }
+        }
+        if (timeZoneNameOption != null) {
+            if (pattern.length() > 0) {
+                pattern.append(' ');
+            }
+            pattern.append(switch (timeZoneNameOption) {
+                case "long", "longGeneric" -> "zzzz";
+                case "longOffset" -> "OOOO";
+                case "shortOffset" -> "O";
+                case "shortGeneric", "short" -> "z";
+                default -> "z";
+            });
         }
         return pattern.toString();
     }
@@ -609,12 +655,15 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 }
                 int fieldWidth = i - fieldStart;
                 if (useLunarParts && c == 'y' && lunarDate != null) {
-                    parts.add(new DatePart("relatedYear", Integer.toString(lunarDate.relatedYear())));
+                    parts.add(new DatePart("relatedYear", applyNumberingSystem(Integer.toString(lunarDate.relatedYear()))));
                     parts.add(new DatePart("yearName", chineseYearName(lunarDate.relatedYear())));
                     continue;
                 }
                 String type = fieldCharToType(c, useLunarParts);
                 String value = formatField(dateTime, zoneId, c, fieldWidth, lunarDate);
+                if (isNumericDatePartType(type)) {
+                    value = applyNumberingSystem(value);
+                }
                 if ("second".equals(type) && fractionalSecondDigits != null
                         && i < formatPattern.length() && formatPattern.charAt(i) == '.') {
                     // The second field itself; fractional part comes next via '.' + 'S' tokens
@@ -721,6 +770,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     public String getEraOption() {
         return eraOption;
+    }
+
+    public boolean hasDefaultDateComponents() {
+        return hasDefaultDateComponents;
+    }
+
+    public boolean hasDefaultTimeComponents() {
+        return hasDefaultTimeComponents;
     }
 
     /**

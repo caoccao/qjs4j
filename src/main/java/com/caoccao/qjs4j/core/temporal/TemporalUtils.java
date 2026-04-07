@@ -25,6 +25,11 @@ import java.util.Locale;
  * Shared utilities for Temporal types.
  */
 public final class TemporalUtils {
+    private static final String[] SUPPORTED_CALENDAR_IDENTIFIERS = {
+            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
+            "gregory", "hebrew", "indian", "islamic-civil", "islamic-tbla",
+            "islamic-umalqura", "iso8601", "japanese", "persian", "roc"
+    };
 
     private TemporalUtils() {
     }
@@ -101,6 +106,18 @@ public final class TemporalUtils {
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
         return null;
+    }
+
+    private static boolean isSupportedCalendarIdentifier(String calendarIdentifier) {
+        if (calendarIdentifier == null) {
+            return false;
+        }
+        for (String supportedCalendarIdentifier : SUPPORTED_CALENDAR_IDENTIFIERS) {
+            if (supportedCalendarIdentifier.equals(calendarIdentifier)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -281,7 +298,7 @@ public final class TemporalUtils {
         }
 
         String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
-        if ("iso8601".equals(normalizedCalendarId)) {
+        if (isSupportedCalendarIdentifier(normalizedCalendarId)) {
             return normalizedCalendarId;
         }
 
@@ -314,7 +331,7 @@ public final class TemporalUtils {
             return null;
         }
         String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
-        if (!"iso8601".equals(normalizedCalendarId)) {
+        if (!isSupportedCalendarIdentifier(normalizedCalendarId)) {
             context.throwRangeError("Temporal error: Invalid calendar.");
             return null;
         }
