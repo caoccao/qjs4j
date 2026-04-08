@@ -105,6 +105,13 @@ public final class TemporalPlainDateConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
+        String calendarId = "iso8601";
+        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
+            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
 
         JSValue dayValue = fields.get(PropertyKey.fromString("day"));
         if (context.hasPendingException()) {
@@ -175,6 +182,71 @@ public final class TemporalPlainDateConstructor {
                 return JSUndefined.INSTANCE;
             }
         }
+        boolean yearDerivedFromEra = false;
+
+        boolean calendarSupportsEras = calendarUsesEras(calendarId);
+        if (!calendarSupportsEras) {
+            if (!hasYear) {
+                context.throwTypeError("Temporal error: Date argument must be object or string.");
+                return JSUndefined.INSTANCE;
+            }
+        } else {
+            JSValue eraValue = fields.get(PropertyKey.fromString("era"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            boolean hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
+            String era = null;
+            if (hasEra) {
+                era = JSTypeConversions.toString(context, eraValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            JSValue eraYearValue = fields.get(PropertyKey.fromString("eraYear"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            boolean hasEraYear = !(eraYearValue instanceof JSUndefined) && eraYearValue != null;
+            Integer eraYear = null;
+            if (hasEraYear) {
+                eraYear = TemporalUtils.toIntegerThrowOnInfinity(context, eraYearValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            if (hasEra != hasEraYear) {
+                context.throwTypeError("Temporal error: Date argument must be object or string.");
+                return JSUndefined.INSTANCE;
+            }
+            if (!hasYear && hasEra && hasEraYear) {
+                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                year = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                hasYear = true;
+                yearDerivedFromEra = true;
+            } else if (hasEra && hasEraYear) {
+                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                int expectedYear = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                if (year != expectedYear) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
 
         if (!hasYear) {
             context.throwTypeError("Temporal error: Date argument must be object or string.");
@@ -201,44 +273,138 @@ public final class TemporalPlainDateConstructor {
             resolvedMonth = parsedMonthCode.month();
         }
 
+        String monthCodeText = null;
         if (parsedMonthCode != null) {
-            if (parsedMonthCode.month() < 1 || parsedMonthCode.month() > 12 || parsedMonthCode.leapMonth()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            if (hasMonth && month != parsedMonthCode.month()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+            monthCodeText = TemporalUtils.monthCode(parsedMonthCode.month());
+            if (parsedMonthCode.leapMonth()) {
+                monthCodeText += "L";
             }
         }
-
-        if (resolvedMonth < 1 || dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+        Integer monthFromProperty = hasMonth ? resolvedMonth : null;
+        IsoDate convertedIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+                context,
+                calendarId,
+                year,
+                monthFromProperty,
+                monthCodeText,
+                dayOfMonth,
+                overflow);
+        if (context.hasPendingException() || convertedIsoDate == null) {
             return JSUndefined.INSTANCE;
         }
+        return createPlainDate(context, convertedIsoDate, calendarId);
+    }
 
-        String calendarId = "iso8601";
-        if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
-            if (context.hasPendingException()) {
-                return JSUndefined.INSTANCE;
-            }
+    private static boolean calendarUsesEras(String calendarId) {
+        if ("buddhist".equals(calendarId)
+                || "coptic".equals(calendarId)
+                || "ethioaa".equals(calendarId)
+                || "ethiopic".equals(calendarId)
+                || "gregory".equals(calendarId)
+                || "hebrew".equals(calendarId)
+                || "indian".equals(calendarId)
+                || "islamic-civil".equals(calendarId)
+                || "islamic-tbla".equals(calendarId)
+                || "islamic-umalqura".equals(calendarId)
+                || "japanese".equals(calendarId)
+                || "persian".equals(calendarId)
+                || "roc".equals(calendarId)) {
+            return true;
         }
+        return false;
+    }
 
-        if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, resolvedMonth, dayOfMonth)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            return createPlainDate(context, new IsoDate(year, resolvedMonth, dayOfMonth), calendarId);
-        } else {
-            IsoDate constrained = IsoDate.constrain(year, resolvedMonth, dayOfMonth);
-            if (!IsoDate.isValidIsoDate(constrained.year(), constrained.month(), constrained.day())) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            return createPlainDate(context, constrained, calendarId);
+    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
+        if (era == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
         }
+        String normalizedEra = era.toLowerCase();
+        return switch (calendarId) {
+            case "gregory" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                default -> {
+                    context.throwRangeError("Temporal error: Invalid era.");
+                    yield null;
+                }
+            };
+            case "japanese" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
+                default -> {
+                    context.throwRangeError("Temporal error: Invalid era.");
+                    yield null;
+                }
+            };
+            case "roc" -> switch (normalizedEra) {
+                case "roc", "minguo" -> "roc";
+                case "broc", "before-roc" -> "broc";
+                default -> {
+                    context.throwRangeError("Temporal error: Invalid era.");
+                    yield null;
+                }
+            };
+            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
+            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
+            case "ethiopic" -> ("aa".equals(normalizedEra) || "am".equals(normalizedEra))
+                    ? normalizedEra
+                    : invalidEra(context);
+            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "indian" -> ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra))
+                    ? "shaka"
+                    : invalidEra(context);
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
+                case "ah", "bh" -> normalizedEra;
+                default -> invalidEra(context);
+            };
+            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
+            default -> invalidEra(context);
+        };
+    }
+
+    private static String invalidEra(JSContext context) {
+        context.throwRangeError("Temporal error: Invalid era.");
+        return null;
+    }
+
+    private static int yearFromEraAndEraYear(JSContext context, String calendarId, String era, int eraYear) {
+        return switch (calendarId) {
+            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
+            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
+            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
+            case "buddhist" -> eraYear;
+            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
+            default -> eraYear;
+        };
+    }
+
+    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
+        if ("ce".equals(era)) {
+            return eraYear;
+        }
+        if ("bce".equals(era)) {
+            return 1 - eraYear;
+        }
+        if ("meiji".equals(era)) {
+            return 1867 + eraYear;
+        }
+        if ("taisho".equals(era)) {
+            return 1911 + eraYear;
+        }
+        if ("showa".equals(era)) {
+            return 1925 + eraYear;
+        }
+        if ("heisei".equals(era)) {
+            return 1988 + eraYear;
+        }
+        if ("reiwa".equals(era)) {
+            return 2018 + eraYear;
+        }
+        return eraYear;
     }
 
     static JSValue dateFromString(JSContext context, String input) {

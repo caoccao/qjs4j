@@ -1900,16 +1900,18 @@ public final class JSIntlObject {
             // Finalize hourCycle for the instance:
             // - If no hour component, set to null (step 32 of CreateDateTimeFormat)
             // - If still null (no option/extension/hour12), use locale default
+            String hourCycleForInstant = hourCycle;
             boolean hasHourComponent = hourOption != null || timeStyle != null;
             if (!hasHourComponent) {
                 hourCycle = null;
             } else if (hourCycle == null) {
                 hourCycle = getLocaleDefaultHourCycle(locale);
+                hourCycleForInstant = hourCycle;
             }
 
             JSIntlDateTimeFormat dateTimeFormat = new JSIntlDateTimeFormat(context,
                     resolvedLocale, dateStyle, timeStyle, calendar, numberingSystem, timeZone,
-                    hourCycle, weekdayOption, eraOption, yearOption, monthOption, dayOption,
+                    hourCycle, hourCycleForInstant, weekdayOption, eraOption, yearOption, monthOption, dayOption,
                     dayPeriodOption, hourOption, minuteOption, secondOption, fractionalSecondDigits,
                     timeZoneNameOption, hasDefaultDateComponents, hasDefaultTimeComponents);
             JSObject resolvedDtfPrototype = resolveIntlPrototype(context, prototype, "DateTimeFormat");
@@ -6159,6 +6161,7 @@ public final class JSIntlObject {
                 baseDateTimeFormat.getNumberingSystem(),
                 "UTC",
                 baseDateTimeFormat.getHourCycle(),
+                baseDateTimeFormat.getHourCycleForInstant(),
                 weekdayOption,
                 eraOption,
                 yearOption,
@@ -6192,6 +6195,23 @@ public final class JSIntlObject {
     private static JSIntlDateTimeFormat createInstantDateTimeFormat(
             JSContext context,
             JSIntlDateTimeFormat baseDateTimeFormat) {
+        String effectiveHourCycle = baseDateTimeFormat.getHourCycle();
+        if (effectiveHourCycle == null) {
+            effectiveHourCycle = baseDateTimeFormat.getHourCycleForInstant();
+        }
+        if (effectiveHourCycle == null) {
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(baseDateTimeFormat.getLocale().toLanguageTag());
+            String hourCycleFromUnicodeExtension = unicodeExtensions.get("hc");
+            if ("h11".equals(hourCycleFromUnicodeExtension)
+                    || "h12".equals(hourCycleFromUnicodeExtension)
+                    || "h23".equals(hourCycleFromUnicodeExtension)
+                    || "h24".equals(hourCycleFromUnicodeExtension)) {
+                effectiveHourCycle = hourCycleFromUnicodeExtension;
+            } else {
+                effectiveHourCycle = getLocaleDefaultHourCycle(baseDateTimeFormat.getLocale());
+            }
+        }
+
         FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
         FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
         String weekdayOption = baseDateTimeFormat.getWeekdayOption();
@@ -6245,7 +6265,8 @@ public final class JSIntlObject {
                 baseDateTimeFormat.getCalendar(),
                 baseDateTimeFormat.getNumberingSystem(),
                 baseDateTimeFormat.getTimeZone(),
-                baseDateTimeFormat.getHourCycle(),
+                effectiveHourCycle,
+                effectiveHourCycle,
                 weekdayOption,
                 eraOption,
                 yearOption,

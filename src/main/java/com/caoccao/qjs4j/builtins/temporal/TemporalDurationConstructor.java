@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.core.temporal.*;
 import java.math.BigInteger;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -85,6 +86,41 @@ public final class TemporalDurationConstructor {
         } catch (ArithmeticException | DateTimeException rangeException) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return Long.MIN_VALUE;
+        }
+    }
+
+    private static BigInteger calendarNanosecondsFromRelativeToZoned(
+            JSContext context,
+            TemporalDuration durationRecord,
+            RelativeToReference relativeToReference) {
+        BigInteger startEpochNanoseconds = relativeToReference.epochNanoseconds();
+        Integer preferredOffsetSeconds = relativeToReference.offsetSeconds();
+        String timeZoneId = relativeToReference.timeZoneId();
+        if (startEpochNanoseconds == null || timeZoneId == null) {
+            return BigInteger.ZERO;
+        }
+        try {
+            IsoDate startDate = relativeToReference.relativeDate();
+            IsoTime startTime = relativeToReference.relativeTime();
+            LocalDate endDate = LocalDate.of(
+                            startDate.year(),
+                            startDate.month(),
+                            startDate.day())
+                    .plusYears(durationRecord.years())
+                    .plusMonths(durationRecord.months())
+                    .plusWeeks(durationRecord.weeks())
+                    .plusDays(durationRecord.days());
+            IsoDate endIsoDate = new IsoDate(endDate.getYear(), endDate.getMonthValue(), endDate.getDayOfMonth());
+            IsoDateTime endDateTime = new IsoDateTime(endIsoDate, startTime);
+            BigInteger endEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                    endDateTime,
+                    timeZoneId,
+                    "compatible",
+                    preferredOffsetSeconds);
+            return endEpochNanoseconds.subtract(startEpochNanoseconds);
+        } catch (ArithmeticException | DateTimeException rangeException) {
+            context.throwRangeError("Temporal error: Duration was not valid.");
+            return BigInteger.ZERO;
         }
     }
 
@@ -635,21 +671,13 @@ public final class TemporalDurationConstructor {
         int hours = offsetParts.hours();
         int minutes = offsetParts.minutes();
         String secondsGroup = offsetParts.secondsText();
-        String fractionGroup = offsetParts.fractionText();
         if (hours > 23 || minutes > 59) {
             return false;
         }
         if (secondsGroup != null) {
             int seconds = Integer.parseInt(secondsGroup);
-            if (seconds != 0) {
+            if (seconds > 59) {
                 return false;
-            }
-        }
-        if (fractionGroup != null) {
-            for (int index = 0; index < fractionGroup.length(); index++) {
-                if (fractionGroup.charAt(index) != '0') {
-                    return false;
-                }
             }
         }
         return true;
@@ -733,11 +761,34 @@ public final class TemporalDurationConstructor {
 
     private static int parseOffsetSeconds(String offsetText) {
         OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            throw new DateTimeException("Invalid offset string: " + offsetText);
+        }
         String signGroup = offsetParts.signText();
         int sign = ("-".equals(signGroup) || "\u2212".equals(signGroup)) ? -1 : 1;
         int hours = offsetParts.hours();
         int minutes = offsetParts.minutes();
-        return sign * (hours * 3600 + minutes * 60);
+        int seconds = offsetParts.secondsText() == null ? 0 : Integer.parseInt(offsetParts.secondsText());
+        return sign * (hours * 3600 + minutes * 60 + seconds);
+    }
+
+    private static boolean offsetMatchesTimeZoneOffsetForString(
+            String offsetText,
+            int parsedOffsetSeconds,
+            int zoneOffsetSeconds) {
+        if (offsetTextIncludesSecondsOrFraction(offsetText)) {
+            return parsedOffsetSeconds == zoneOffsetSeconds;
+        }
+        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
+        return parsedOffsetSeconds == roundedZoneOffsetSeconds;
+    }
+
+    private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
     private static RelativeToReference parseRelativeToOption(JSContext context, JSValue optionsValue) {
@@ -918,6 +969,18 @@ public final class TemporalDurationConstructor {
         if (context.hasPendingException()) {
             return null;
         }
+        if (yearValue instanceof JSUndefined || yearValue == null) {
+            JSValue eraYearValue = relativeToObject.get(PropertyKey.fromString("eraYear"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (!(eraYearValue instanceof JSUndefined) && eraYearValue != null) {
+                toOptionalIntegralLong(context, eraYearValue, null);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
         Long year = toRequiredIntegralLong(context, yearValue);
         if (context.hasPendingException()) {
             return null;
@@ -942,8 +1005,23 @@ public final class TemporalDurationConstructor {
         }
         IsoDate relativeDate = new IsoDate(year.intValue(), monthNumber, dayOfMonth.intValue());
 
+        int hourInt = hour.intValue();
+        int minuteInt = minute.intValue();
+        int secondInt = second.intValue();
+        if (secondInt == 60) {
+            secondInt = 59;
+        }
+        int millisecondInt = millisecond.intValue();
+        int microsecondInt = microsecond.intValue();
+        int nanosecondInt = nanosecond.intValue();
+        if (!IsoTime.isValidTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt)) {
+            context.throwRangeError("Temporal error: Invalid time");
+            return null;
+        }
+        IsoTime relativeTime = new IsoTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt);
+        IsoDateTime relativeDateTime = new IsoDateTime(relativeDate, relativeTime);
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
-            return new RelativeToReference(relativeDate, null, null);
+            return new RelativeToReference(relativeDate, relativeTime, null, null, null);
         }
         if (!(timeZoneValue instanceof JSString timeZoneString)) {
             context.throwTypeError("Temporal error: Time zone must be string.");
@@ -964,23 +1042,8 @@ public final class TemporalDurationConstructor {
             }
         }
 
-        int hourInt = hour.intValue();
-        int minuteInt = minute.intValue();
-        int secondInt = second.intValue();
-        if (secondInt == 60) {
-            secondInt = 59;
-        }
-        int millisecondInt = millisecond.intValue();
-        int microsecondInt = microsecond.intValue();
-        int nanosecondInt = nanosecond.intValue();
-        if (!IsoTime.isValidTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt)) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return null;
-        }
-        IsoTime relativeTime = new IsoTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt);
-        IsoDateTime relativeDateTime = new IsoDateTime(relativeDate, relativeTime);
-
         BigInteger epochNanoseconds;
+        Integer referenceOffsetSeconds;
         if (offsetText != null) {
             int offsetSeconds = parseOffsetSeconds(offsetText);
             int zoneOffsetSeconds;
@@ -1000,19 +1063,27 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(relativeDate, relativeTime, offsetSeconds);
+            referenceOffsetSeconds = offsetSeconds;
         } else {
             if (offsetTimeZoneIdentifier) {
                 int offsetSeconds = parseOffsetSeconds(normalizedTimeZoneId);
                 epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(relativeDate, relativeTime, offsetSeconds);
+                referenceOffsetSeconds = offsetSeconds;
             } else {
                 epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(relativeDateTime, normalizedTimeZoneId);
+                referenceOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, normalizedTimeZoneId);
             }
         }
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
-        return new RelativeToReference(relativeDate, epochNanoseconds, normalizedTimeZoneId);
+        return new RelativeToReference(
+                relativeDate,
+                relativeTime,
+                epochNanoseconds,
+                normalizedTimeZoneId,
+                referenceOffsetSeconds);
     }
 
     private static RelativeToReference parseRelativeToString(JSContext context, String relativeToText) {
@@ -1044,7 +1115,7 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Duration field out of range.");
                     return null;
                 }
-                return new RelativeToReference(parsedDateTime.date(), null, null);
+                return new RelativeToReference(parsedDateTime.date(), parsedDateTime.time(), null, null, null);
             }
 
             String offsetText = extractOffsetText(relativeToText);
@@ -1071,30 +1142,108 @@ public final class TemporalDurationConstructor {
                     return null;
                 }
             }
-            BigInteger epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(
-                    parsedZonedDateTime.date(),
-                    parsedZonedDateTime.time(),
-                    parsedZonedDateTime.offsetSeconds());
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return null;
-            }
+            boolean hasSecondOrFractionOffset =
+                    offsetText != null && offsetTextIncludesSecondsOrFraction(offsetText);
+            BigInteger epochNanoseconds;
             int zoneOffsetSeconds;
-            if (offsetTimeZoneIdentifier) {
-                zoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
-            } else {
+            if (offsetText == null && !offsetTimeZoneIdentifier) {
+                IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
+                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
                 try {
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
                 } catch (DateTimeException invalidTimeZoneException) {
                     context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
                     return null;
                 }
+            } else if (offsetText != null && !hasSecondOrFractionOffset && !offsetTimeZoneIdentifier) {
+                IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
+                int parsedOffsetSeconds = parsedZonedDateTime.offsetSeconds();
+                LocalDateTime parsedLocalDateTime = LocalDateTime.of(
+                        parsedIsoDateTime.date().year(),
+                        parsedIsoDateTime.date().month(),
+                        parsedIsoDateTime.date().day(),
+                        parsedIsoDateTime.time().hour(),
+                        parsedIsoDateTime.time().minute(),
+                        parsedIsoDateTime.time().second(),
+                        parsedIsoDateTime.time().millisecond() * 1_000_000
+                                + parsedIsoDateTime.time().microsecond() * 1_000
+                                + parsedIsoDateTime.time().nanosecond());
+                ZoneId zoneId = TemporalTimeZone.resolveTimeZone(timeZoneId);
+                List<ZoneOffset> validOffsets = zoneId.getRules().getValidOffsets(parsedLocalDateTime);
+                BigInteger selectedEpochNanoseconds = null;
+                Integer selectedOffsetSeconds = null;
+                for (ZoneOffset validOffset : validOffsets) {
+                    int candidateOffsetSeconds = validOffset.getTotalSeconds();
+                    if (!offsetMatchesTimeZoneOffsetForString(
+                            offsetText,
+                            parsedOffsetSeconds,
+                            candidateOffsetSeconds)) {
+                        continue;
+                    }
+                    Instant candidateInstant = parsedLocalDateTime.atOffset(validOffset).toInstant();
+                    BigInteger candidateEpochNanoseconds = BigInteger.valueOf(candidateInstant.getEpochSecond())
+                            .multiply(SECOND_NANOSECONDS)
+                            .add(BigInteger.valueOf(candidateInstant.getNano()));
+                    if (selectedEpochNanoseconds == null
+                            || candidateEpochNanoseconds.compareTo(selectedEpochNanoseconds) < 0) {
+                        selectedEpochNanoseconds = candidateEpochNanoseconds;
+                        selectedOffsetSeconds = candidateOffsetSeconds;
+                    }
+                }
+                if (selectedEpochNanoseconds != null && selectedOffsetSeconds != null) {
+                    epochNanoseconds = selectedEpochNanoseconds;
+                    zoneOffsetSeconds = selectedOffsetSeconds;
+                } else {
+                    epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
+                    try {
+                        zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
+                    } catch (DateTimeException invalidTimeZoneException) {
+                        context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+                        return null;
+                    }
+                }
+            } else {
+                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(
+                        parsedZonedDateTime.date(),
+                        parsedZonedDateTime.time(),
+                        parsedZonedDateTime.offsetSeconds());
+                if (offsetTimeZoneIdentifier) {
+                    zoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+                } else {
+                    try {
+                        zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
+                    } catch (DateTimeException invalidTimeZoneException) {
+                        context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+                        return null;
+                    }
+                }
             }
-            if (offsetText != null && zoneOffsetSeconds != parsedZonedDateTime.offsetSeconds()) {
+            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+                context.throwRangeError("Temporal error: Duration field out of range.");
+                return null;
+            }
+            if (offsetText != null
+                    && !offsetMatchesTimeZoneOffsetForString(
+                    offsetText,
+                    parsedZonedDateTime.offsetSeconds(),
+                    zoneOffsetSeconds)) {
                 context.throwRangeError("Temporal error: Invalid offset.");
                 return null;
             }
-            return new RelativeToReference(parsedZonedDateTime.date(), epochNanoseconds, timeZoneId);
+            int referenceOffsetSeconds;
+            if (offsetText == null) {
+                referenceOffsetSeconds = zoneOffsetSeconds;
+            } else if (hasSecondOrFractionOffset) {
+                referenceOffsetSeconds = parsedZonedDateTime.offsetSeconds();
+            } else {
+                referenceOffsetSeconds = zoneOffsetSeconds;
+            }
+            return new RelativeToReference(
+                    parsedZonedDateTime.date(),
+                    parsedZonedDateTime.time(),
+                    epochNanoseconds,
+                    timeZoneId,
+                    referenceOffsetSeconds);
         }
 
         if (hasOffsetDesignator) {
@@ -1111,24 +1260,34 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
-        return new RelativeToReference(isoDate, null, null);
+        return new RelativeToReference(isoDate, parsedDateTime.time(), null, null, null);
     }
 
     static RelativeToReference parseRelativeToValue(JSContext context, JSValue relativeToValue) {
         if (relativeToValue instanceof JSTemporalPlainDate plainDate) {
-            return new RelativeToReference(plainDate.getIsoDate(), null, null);
+            return new RelativeToReference(plainDate.getIsoDate(), IsoTime.MIDNIGHT, null, null, null);
         }
         if (relativeToValue instanceof JSTemporalPlainDateTime plainDateTime) {
-            return new RelativeToReference(plainDateTime.getIsoDateTime().date(), null, null);
+            return new RelativeToReference(
+                    plainDateTime.getIsoDateTime().date(),
+                    plainDateTime.getIsoDateTime().time(),
+                    null,
+                    null,
+                    null);
         }
         if (relativeToValue instanceof JSTemporalZonedDateTime zonedDateTime) {
             IsoDateTime relativeDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
-            return new RelativeToReference(
-                    relativeDateTime.date(),
+            int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
+            return new RelativeToReference(
+                    relativeDateTime.date(),
+                    relativeDateTime.time(),
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId(),
+                    offsetSeconds);
         }
 
         if (relativeToValue instanceof JSString relativeToString) {
@@ -1271,6 +1430,17 @@ public final class TemporalDurationConstructor {
         return toOptionalIntegralLong(context, value, null);
     }
 
+    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
+        int sign = offsetSeconds < 0 ? -1 : 1;
+        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
+        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
+        int remainingSeconds = absoluteOffsetSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteOffsetMinutes++;
+        }
+        return sign * absoluteOffsetMinutes * 60;
+    }
+
     /**
      * ToTemporalDuration abstract operation.
      */
@@ -1303,11 +1473,19 @@ public final class TemporalDurationConstructor {
         if (relativeToReference == null) {
             return dayTimeNanoseconds(durationRecord);
         }
-        long calendarDays = calendarDaysFromRelativeTo(context, durationRecord, relativeToReference);
+        BigInteger calendarNanoseconds;
+        if (relativeToReference.epochNanoseconds() != null && relativeToReference.timeZoneId() != null) {
+            calendarNanoseconds = calendarNanosecondsFromRelativeToZoned(context, durationRecord, relativeToReference);
+        } else {
+            long calendarDays = calendarDaysFromRelativeTo(context, durationRecord, relativeToReference);
+            if (context.hasPendingException()) {
+                return BigInteger.ZERO;
+            }
+            calendarNanoseconds = BigInteger.valueOf(calendarDays).multiply(DAY_NANOSECONDS);
+        }
         if (context.hasPendingException()) {
             return BigInteger.ZERO;
         }
-        BigInteger calendarNanoseconds = BigInteger.valueOf(calendarDays).multiply(DAY_NANOSECONDS);
         BigInteger timeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
                 .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
                 .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
@@ -1340,6 +1518,11 @@ public final class TemporalDurationConstructor {
     private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
     }
 
-    record RelativeToReference(IsoDate relativeDate, BigInteger epochNanoseconds, String timeZoneId) {
+    record RelativeToReference(
+            IsoDate relativeDate,
+            IsoTime relativeTime,
+            BigInteger epochNanoseconds,
+            String timeZoneId,
+            Integer offsetSeconds) {
     }
 }

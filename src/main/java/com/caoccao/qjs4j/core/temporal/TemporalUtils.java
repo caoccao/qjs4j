@@ -108,12 +108,30 @@ public final class TemporalUtils {
         return null;
     }
 
+    private static String canonicalizeCalendarIdentifier(String calendarIdentifier) {
+        if (calendarIdentifier == null) {
+            return null;
+        }
+        String normalizedCalendarIdentifier = calendarIdentifier.toLowerCase(Locale.ROOT);
+        if ("islamicc".equals(normalizedCalendarIdentifier)) {
+            return "islamic-civil";
+        }
+        if ("ethiopic-amete-alem".equals(normalizedCalendarIdentifier)) {
+            return "ethioaa";
+        }
+        if ("gregorian".equals(normalizedCalendarIdentifier)) {
+            return "gregory";
+        }
+        return normalizedCalendarIdentifier;
+    }
+
     private static boolean isSupportedCalendarIdentifier(String calendarIdentifier) {
         if (calendarIdentifier == null) {
             return false;
         }
+        String canonicalCalendarIdentifier = canonicalizeCalendarIdentifier(calendarIdentifier);
         for (String supportedCalendarIdentifier : SUPPORTED_CALENDAR_IDENTIFIERS) {
-            if (supportedCalendarIdentifier.equals(calendarIdentifier)) {
+            if (supportedCalendarIdentifier.equals(canonicalCalendarIdentifier)) {
                 return true;
             }
         }
@@ -297,9 +315,9 @@ public final class TemporalUtils {
             return null;
         }
 
-        String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
-        if (isSupportedCalendarIdentifier(normalizedCalendarId)) {
-            return normalizedCalendarId;
+        String canonicalCalendarId = canonicalizeCalendarIdentifier(calendarString.value());
+        if (isSupportedCalendarIdentifier(canonicalCalendarId)) {
+            return canonicalCalendarId;
         }
 
         String calendarStringValue = calendarString.value();
@@ -330,11 +348,11 @@ public final class TemporalUtils {
             context.throwTypeError("Temporal error: Calendar must be string.");
             return null;
         }
-        String normalizedCalendarId = calendarString.value().toLowerCase(Locale.ROOT);
-        if (!isSupportedCalendarIdentifier(normalizedCalendarId)) {
+        String canonicalCalendarId = canonicalizeCalendarIdentifier(calendarString.value());
+        if (!isSupportedCalendarIdentifier(canonicalCalendarId)) {
             context.throwRangeError("Temporal error: Invalid calendar.");
             return null;
         }
-        return normalizedCalendarId;
+        return canonicalCalendarId;
     }
 }
