@@ -259,6 +259,7 @@ public final class TemporalPlainDatePrototype {
             DateDurationFields duration,
             long nudgedEpochDay,
             IsoDate originDate,
+            String calendarId,
             String largestUnit,
             String smallestUnit) {
         if (smallestUnit.equals(largestUnit)) {
@@ -281,7 +282,7 @@ public final class TemporalPlainDatePrototype {
                 endDuration = adjustDateDurationRecord(duration, 0, duration.weeks() + sign, null);
             }
 
-            IsoDate endDate = calendarDateAddConstrain(context, originDate, endDuration);
+            IsoDate endDate = calendarDateAddConstrain(context, originDate, calendarId, endDuration);
             if (context.hasPendingException() || endDate == null) {
                 return null;
             }
@@ -295,22 +296,147 @@ public final class TemporalPlainDatePrototype {
         return duration;
     }
 
-    private static IsoDate calendarDateAddConstrain(JSContext context, IsoDate baseDate, DateDurationFields dateDuration) {
-        TemporalDuration durationRecord = new TemporalDuration(
+    private static IsoDate calendarDateAddConstrain(
+            JSContext context,
+            IsoDate baseDate,
+            String calendarId,
+            DateDurationFields dateDuration) {
+        if ("iso8601".equals(calendarId)) {
+            TemporalDuration durationRecord = new TemporalDuration(
+                    dateDuration.years(),
+                    dateDuration.months(),
+                    dateDuration.weeks(),
+                    dateDuration.days(),
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0);
+            return addDurationToDate(context, baseDate, durationRecord, "constrain");
+        }
+        return TemporalCalendarMath.addCalendarDate(
+                context,
+                baseDate,
+                calendarId,
                 dateDuration.years(),
                 dateDuration.months(),
                 dateDuration.weeks(),
                 dateDuration.days(),
-                0,
-                0,
-                0,
-                0,
-                0,
-                0);
-        return addDurationToDate(context, baseDate, durationRecord, "constrain");
+                "constrain");
     }
 
-    private static DateDurationFields calendarDateUntil(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
+    private static DateDurationFields calendarDateUntil(
+            JSContext context,
+            IsoDate firstDate,
+            IsoDate secondDate,
+            String calendarId,
+            String largestUnit) {
+        if ("iso8601".equals(calendarId)) {
+            return calendarDateUntilIso(firstDate, secondDate, largestUnit);
+        }
+        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
+        if (sign == 0) {
+            return DateDurationFields.ZERO;
+        }
+
+        long years = 0;
+        long months = 0;
+        if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields =
+                    TemporalCalendarMath.isoDateToCalendarDate(firstDate, calendarId);
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields =
+                    TemporalCalendarMath.isoDateToCalendarDate(secondDate, calendarId);
+            long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
+            if (candidateYears != 0L) {
+                candidateYears -= sign;
+            }
+            while (true) {
+                DateDurationFields candidateYearDuration = new DateDurationFields(candidateYears, 0, 0, 0);
+                IsoDate candidateYearDate = calendarDateAddConstrain(context, firstDate, calendarId, candidateYearDuration);
+                if (context.hasPendingException() || candidateYearDate == null) {
+                    return null;
+                }
+                if (isoDateSurpasses(sign, candidateYearDate, secondDate)) {
+                    break;
+                }
+                years = candidateYears;
+                candidateYears += sign;
+            }
+
+            long candidateMonths = sign;
+            while (true) {
+                DateDurationFields candidateMonthDuration = new DateDurationFields(years, candidateMonths, 0, 0);
+                IsoDate candidateMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, candidateMonthDuration);
+                if (context.hasPendingException() || candidateMonthDate == null) {
+                    return null;
+                }
+                if (isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
+                    break;
+                }
+                months = candidateMonths;
+                candidateMonths += sign;
+            }
+
+            if (UNIT_MONTH.equals(largestUnit)) {
+                long monthsFromYears = monthsForYearDelta(context, firstDate, calendarId, years);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                long totalMonths;
+                try {
+                    totalMonths = Math.addExact(months, monthsFromYears);
+                } catch (ArithmeticException arithmeticException) {
+                    context.throwRangeError("Temporal error: Duration field out of range.");
+                    return null;
+                }
+                while (true) {
+                    DateDurationFields totalMonthDuration = new DateDurationFields(0, totalMonths, 0, 0);
+                    IsoDate totalMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, totalMonthDuration);
+                    if (context.hasPendingException() || totalMonthDate == null) {
+                        return null;
+                    }
+                    if (isoDateSurpasses(sign, totalMonthDate, secondDate)) {
+                        totalMonths -= sign;
+                        continue;
+                    }
+
+                    long nextTotalMonths;
+                    try {
+                        nextTotalMonths = Math.addExact(totalMonths, sign);
+                    } catch (ArithmeticException arithmeticException) {
+                        break;
+                    }
+                    DateDurationFields nextTotalMonthDuration = new DateDurationFields(0, nextTotalMonths, 0, 0);
+                    IsoDate nextTotalMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, nextTotalMonthDuration);
+                    if (context.hasPendingException() || nextTotalMonthDate == null) {
+                        return null;
+                    }
+                    if (isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
+                        break;
+                    }
+                    totalMonths = nextTotalMonths;
+                }
+                months = totalMonths;
+                years = 0;
+            }
+        }
+
+        DateDurationFields intermediateDuration = new DateDurationFields(years, months, 0, 0);
+        IsoDate constrainedDate = calendarDateAddConstrain(context, firstDate, calendarId, intermediateDuration);
+        if (context.hasPendingException() || constrainedDate == null) {
+            return null;
+        }
+        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
+        long weeks = 0;
+        if (UNIT_WEEK.equals(largestUnit)) {
+            weeks = dayDifference / 7;
+            dayDifference = dayDifference % 7;
+        }
+        return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
+    private static DateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
         int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
         if (sign == 0) {
             return DateDurationFields.ZERO;
@@ -473,7 +599,12 @@ public final class TemporalPlainDatePrototype {
             return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
         }
 
-        DateDurationFields dateDifference = calendarDateUntil(thisDate, otherDate, settings.largestUnit());
+        DateDurationFields dateDifference = calendarDateUntil(
+                context,
+                thisDate,
+                otherDate,
+                plainDate.getCalendarId(),
+                settings.largestUnit());
         boolean roundingNoOp = UNIT_DAY.equals(settings.smallestUnit()) && settings.roundingIncrement() == 1L;
         if (!roundingNoOp) {
             dateDifference = roundRelativeDurationDate(
@@ -481,6 +612,7 @@ public final class TemporalPlainDatePrototype {
                     dateDifference,
                     otherDate.toEpochDay(),
                     thisDate,
+                    plainDate.getCalendarId(),
                     settings);
             if (context.hasPendingException() || dateDifference == null) {
                 return JSUndefined.INSTANCE;
@@ -815,6 +947,65 @@ public final class TemporalPlainDatePrototype {
         return false;
     }
 
+    private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
+        return sign * IsoDate.compareIsoDate(firstDate, secondDate) > 0;
+    }
+
+    private static long monthsForYearDelta(
+            JSContext context,
+            IsoDate firstDate,
+            String calendarId,
+            long yearDelta) {
+        if (yearDelta == 0L) {
+            return 0L;
+        }
+        if ("coptic".equals(calendarId) || "ethiopic".equals(calendarId) || "ethioaa".equals(calendarId)) {
+            try {
+                return Math.multiplyExact(yearDelta, 13L);
+            } catch (ArithmeticException arithmeticException) {
+                context.throwRangeError("Temporal error: Duration field out of range.");
+                return 0L;
+            }
+        }
+        if ("iso8601".equals(calendarId)
+                || "gregory".equals(calendarId)
+                || "japanese".equals(calendarId)
+                || "buddhist".equals(calendarId)
+                || "roc".equals(calendarId)
+                || "indian".equals(calendarId)
+                || "persian".equals(calendarId)
+                || "islamic-civil".equals(calendarId)
+                || "islamic-tbla".equals(calendarId)
+                || "islamic-umalqura".equals(calendarId)) {
+            try {
+                return Math.multiplyExact(yearDelta, 12L);
+            } catch (ArithmeticException arithmeticException) {
+                context.throwRangeError("Temporal error: Duration field out of range.");
+                return 0L;
+            }
+        }
+
+        int yearSign = yearDelta > 0L ? 1 : -1;
+        long absoluteYearDelta = Math.abs(yearDelta);
+        long totalMonths = 0L;
+        IsoDate cursorDate = firstDate;
+        for (long yearIndex = 0L; yearIndex < absoluteYearDelta; yearIndex++) {
+            int monthsInYear = TemporalCalendarMath.monthsInYear(cursorDate, calendarId);
+            try {
+                totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
+            } catch (ArithmeticException arithmeticException) {
+                context.throwRangeError("Temporal error: Duration field out of range.");
+                return 0L;
+            }
+            DateDurationFields oneYearDuration = new DateDurationFields(yearSign, 0, 0, 0);
+            cursorDate = calendarDateAddConstrain(context, cursorDate, calendarId, oneYearDuration);
+            if (context.hasPendingException() || cursorDate == null) {
+                return 0L;
+            }
+        }
+        return totalMonths;
+    }
+
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
         int leftRank = temporalUnitRank(leftUnit);
         int rightRank = temporalUnitRank(rightUnit);
@@ -865,6 +1056,7 @@ public final class TemporalPlainDatePrototype {
             DateDurationFields duration,
             long destinationEpochDay,
             IsoDate originDate,
+            String calendarId,
             DifferenceSettings settings) {
         String smallestUnit = settings.smallestUnit();
         long increment = settings.roundingIncrement();
@@ -886,13 +1078,21 @@ public final class TemporalPlainDatePrototype {
             endDuration = adjustDateDurationRecord(duration, 0, 0L, roundingEndValue);
         } else if (UNIT_WEEK.equals(smallestUnit)) {
             DateDurationFields yearsAndMonthsDuration = adjustDateDurationRecord(duration, 0, 0L, null);
-            IsoDate weeksStart = calendarDateAddConstrain(context, originDate, yearsAndMonthsDuration);
+            IsoDate weeksStart = calendarDateAddConstrain(context, originDate, calendarId, yearsAndMonthsDuration);
             if (context.hasPendingException() || weeksStart == null) {
                 return null;
             }
             long weeksEndEpochDay = weeksStart.toEpochDay() + duration.days();
             IsoDate weeksEnd = IsoDate.fromEpochDay(weeksEndEpochDay);
-            DateDurationFields weekDifference = calendarDateUntil(weeksStart, weeksEnd, UNIT_WEEK);
+            DateDurationFields weekDifference = calendarDateUntil(
+                    context,
+                    weeksStart,
+                    weeksEnd,
+                    calendarId,
+                    UNIT_WEEK);
+            if (context.hasPendingException() || weekDifference == null) {
+                return null;
+            }
             long roundedWeeks = roundNumberToIncrement(duration.weeks() + weekDifference.weeks(), increment, "trunc");
             roundingStartValue = roundedWeeks;
             roundingEndValue = roundedWeeks + increment * sign;
@@ -906,11 +1106,11 @@ public final class TemporalPlainDatePrototype {
             endDuration = adjustDateDurationRecord(duration, roundingEndValue, null, null);
         }
 
-        IsoDate startDate = calendarDateAddConstrain(context, originDate, startDuration);
+        IsoDate startDate = calendarDateAddConstrain(context, originDate, calendarId, startDuration);
         if (context.hasPendingException() || startDate == null) {
             return null;
         }
-        IsoDate endDate = calendarDateAddConstrain(context, originDate, endDuration);
+        IsoDate endDate = calendarDateAddConstrain(context, originDate, calendarId, endDuration);
         if (context.hasPendingException() || endDate == null) {
             return null;
         }
@@ -1037,11 +1237,19 @@ public final class TemporalPlainDatePrototype {
             DateDurationFields duration,
             long destinationEpochDay,
             IsoDate originDate,
+            String calendarId,
             DifferenceSettings settings) {
         int sign = duration.sign() < 0 ? -1 : 1;
         NudgeResult nudgeResult;
         if (isCalendarUnit(settings.smallestUnit())) {
-            nudgeResult = nudgeToCalendarUnit(context, sign, duration, destinationEpochDay, originDate, settings);
+            nudgeResult = nudgeToCalendarUnit(
+                    context,
+                    sign,
+                    duration,
+                    destinationEpochDay,
+                    originDate,
+                    calendarId,
+                    settings);
         } else {
             nudgeResult = nudgeToDayUnit(duration, destinationEpochDay, settings);
         }
@@ -1057,6 +1265,7 @@ public final class TemporalPlainDatePrototype {
                     roundedDuration,
                     nudgeResult.nudgedEpochDay(),
                     originDate,
+                    calendarId,
                     settings.largestUnit(),
                     bubbleSmallestUnit);
             if (context.hasPendingException() || roundedDuration == null) {
