@@ -287,6 +287,49 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 || "fractionalSecond".equals(datePartType);
     }
 
+    private List<DatePart> normalizeDayPeriodLiteralSpacing(List<DatePart> parts) {
+        if (!shouldUseNarrowNoBreakSpaceBeforeMeridiem()) {
+            return parts;
+        }
+        if (parts.isEmpty()) {
+            return parts;
+        }
+        List<DatePart> normalizedParts = new ArrayList<>(parts.size());
+        for (int partIndex = 0; partIndex < parts.size(); partIndex++) {
+            DatePart currentPart = parts.get(partIndex);
+            if ("literal".equals(currentPart.type()) && " ".equals(currentPart.value())) {
+                int nextPartIndex = partIndex + 1;
+                if (nextPartIndex < parts.size()) {
+                    DatePart nextPart = parts.get(nextPartIndex);
+                    if ("dayPeriod".equals(nextPart.type()) && isMeridiemMarker(nextPart.value())) {
+                        normalizedParts.add(new DatePart("literal", "\u202F"));
+                        continue;
+                    }
+                }
+            }
+            normalizedParts.add(currentPart);
+        }
+        return normalizedParts;
+    }
+
+    private boolean shouldUseNarrowNoBreakSpaceBeforeMeridiem() {
+        String effectiveNumberingSystem = numberingSystem;
+        if (effectiveNumberingSystem == null) {
+            effectiveNumberingSystem = "latn";
+        }
+        return "en".equals(locale.getLanguage()) && "latn".equals(effectiveNumberingSystem);
+    }
+
+    private static boolean isMeridiemMarker(String dayPeriodText) {
+        if (dayPeriodText == null) {
+            return false;
+        }
+        return "AM".equals(dayPeriodText)
+                || "PM".equals(dayPeriodText)
+                || "am".equals(dayPeriodText)
+                || "pm".equals(dayPeriodText);
+    }
+
     private static String resolveEnglishDayPeriod(int hourOfDay, String dayPeriodStyle) {
         if (hourOfDay == 12) {
             return "narrow".equals(dayPeriodStyle) ? "n" : "noon";
@@ -705,7 +748,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 parts.add(new DatePart("literal", formatPattern.substring(litStart, i)));
             }
         }
-        return parts;
+        return normalizeDayPeriodLiteralSpacing(parts);
     }
 
     public String format(double epochMillis) {
