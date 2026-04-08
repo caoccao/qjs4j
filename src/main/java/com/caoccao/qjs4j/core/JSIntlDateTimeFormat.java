@@ -16,11 +16,20 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.time.DateTimeException;
+import java.time.chrono.Chronology;
+import java.time.chrono.HijrahChronology;
 import java.time.chrono.IsoChronology;
+import java.time.chrono.JapaneseChronology;
+import java.time.chrono.MinguoChronology;
+import java.time.chrono.ThaiBuddhistChronology;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.FormatStyle;
@@ -64,6 +73,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final String formatPattern;
     private final Integer fractionalSecondDigits;
     private final String hourCycle;
+    private final String hourCycleForInstant;
     private final String hourOption;
     private final Locale locale;
     private final String minuteOption;
@@ -79,7 +89,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     public JSIntlDateTimeFormat(JSContext context, Locale locale, FormatStyle dateStyle, FormatStyle timeStyle,
                                 String calendar, String numberingSystem, String timeZone,
-                                String hourCycle, String weekdayOption, String eraOption,
+                                String hourCycle, String hourCycleForInstant, String weekdayOption, String eraOption,
                                 String yearOption, String monthOption, String dayOption,
                                 String dayPeriodOption, String hourOption, String minuteOption,
                                 String secondOption, Integer fractionalSecondDigits,
@@ -94,6 +104,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         this.numberingSystem = numberingSystem;
         this.timeZone = timeZone;
         this.hourCycle = hourCycle;
+        this.hourCycleForInstant = hourCycleForInstant;
         this.weekdayOption = weekdayOption;
         this.eraOption = eraOption;
         this.yearOption = yearOption;
@@ -294,7 +305,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     private static LunarDate toChineseLunarDate(LocalDate gregorianDate) {
         if (LocalDate.of(2100, 1, 1).equals(gregorianDate)) {
-            return new LunarDate(2099, 11, 21);
+            return new LunarDate(2099, 11, 21, false);
         }
 
         LocalDate lunarBaseDate = LocalDate.of(1900, 1, 31);
@@ -302,12 +313,12 @@ public final class JSIntlDateTimeFormat extends JSObject {
             LocalDate firstSupportedDate = LocalDate.of(1900, 1, 1);
             if (!gregorianDate.isBefore(firstSupportedDate)) {
                 int dayInMonth = gregorianDate.getDayOfMonth();
-                return new LunarDate(1899, 12, dayInMonth);
+                return new LunarDate(1899, 12, dayInMonth, false);
             }
             int fallbackYear = gregorianDate.getYear() - 1;
             int fallbackMonth = gregorianDate.getMonthValue();
             int fallbackDay = gregorianDate.getDayOfMonth();
-            return new LunarDate(fallbackYear, fallbackMonth, fallbackDay);
+            return new LunarDate(fallbackYear, fallbackMonth, fallbackDay, false);
         }
 
         int offsetDays = (int) (gregorianDate.toEpochDay() - lunarBaseDate.toEpochDay());
@@ -325,7 +336,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         if (lunarYear > maxYear) {
             int fallbackMonth = gregorianDate.getMonthValue();
             int fallbackDay = gregorianDate.getDayOfMonth();
-            return new LunarDate(gregorianDate.getYear(), fallbackMonth, fallbackDay);
+            return new LunarDate(gregorianDate.getYear(), fallbackMonth, fallbackDay, false);
         }
 
         int leapMonth = chineseLeapMonth(lunarYear);
@@ -351,7 +362,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         }
 
         int lunarDay = offsetDays + 1;
-        return new LunarDate(lunarYear, lunarMonth, lunarDay);
+        return new LunarDate(lunarYear, lunarMonth, lunarDay, inLeapMonth);
     }
 
     /**
@@ -574,8 +585,22 @@ public final class JSIntlDateTimeFormat extends JSObject {
         }
         if (hourOption != null) {
             boolean use12Hour = hourCycle == null || "h12".equals(hourCycle) || "h11".equals(hourCycle);
-            char hourChar = use12Hour ? 'h' : 'H';
-            pattern.append("2-digit".equals(hourOption) ? String.valueOf(hourChar).repeat(2) : String.valueOf(hourChar));
+            char hourChar;
+            if ("h11".equals(hourCycle)) {
+                hourChar = 'K';
+            } else if ("h24".equals(hourCycle)) {
+                hourChar = 'k';
+            } else if (use12Hour) {
+                hourChar = 'h';
+            } else {
+                hourChar = 'H';
+            }
+            boolean useTwoDigitHour = "2-digit".equals(hourOption) || !use12Hour;
+            if (useTwoDigitHour) {
+                pattern.append(String.valueOf(hourChar).repeat(2));
+            } else {
+                pattern.append(hourChar);
+            }
         }
         if (minuteOption != null) {
             if (pattern.length() > 0) {
@@ -622,7 +647,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         LunarDate lunarDate = null;
         boolean useLunarParts = isChineseOrDangiCalendar();
         if (useLunarParts) {
-            lunarDate = toChineseLunarDate(dateTime.toLocalDate());
+            lunarDate = toLunisolarDate(dateTime.toLocalDate(), calendar);
             if (isLunarYearOnlyPattern()) {
                 String yearName = chineseYearName(lunarDate.relatedYear());
                 if ("zh".equals(locale.getLanguage())) {
@@ -705,6 +730,15 @@ public final class JSIntlDateTimeFormat extends JSObject {
         if ((field == 'a' || field == 'b' || field == 'B') && dayPeriodOption != null && "en".equals(locale.getLanguage())) {
             return resolveEnglishDayPeriod(dateTime.getHour(), dayPeriodOption);
         }
+        Chronology chronology = resolveChronology();
+        TemporalCalendarMath.CalendarDateFields calendarDateFields = null;
+        boolean useTemporalIslamicFields = isIslamicCalendar() && hasExplicitNumericDateOptions();
+        boolean useTemporalCalendarFields = (chronology == null && calendar != null && !isChineseOrDangiCalendar())
+                || useTemporalIslamicFields;
+        if (useTemporalCalendarFields) {
+            IsoDate isoDate = new IsoDate(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth());
+            calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendar);
+        }
         if (field == 'G' && eraOption != null) {
             int year = dateTime.getYear();
             return resolveEraValue(year);
@@ -714,10 +748,16 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 return Integer.toString(lunarDate.relatedYear());
             }
             if (field == 'M' || field == 'L') {
+                String monthValue;
                 if (width >= 2) {
-                    return String.format(locale, "%02d", lunarDate.month());
+                    monthValue = String.format(locale, "%02d", lunarDate.month());
+                } else {
+                    monthValue = Integer.toString(lunarDate.month());
                 }
-                return Integer.toString(lunarDate.month());
+                if (lunarDate.leapMonth()) {
+                    return monthValue + "bis";
+                }
+                return monthValue;
             }
             if (field == 'd') {
                 if (width >= 2) {
@@ -726,8 +766,40 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 return Integer.toString(lunarDate.day());
             }
         }
+        if (calendarDateFields != null) {
+            if (field == 'y') {
+                return Integer.toString(calendarDateFields.year());
+            }
+            if (field == 'M' || field == 'L') {
+                if ("hebrew".equals(calendar)) {
+                    return resolveHebrewMonthName(calendarDateFields.monthCode());
+                }
+                if (width >= 2) {
+                    return String.format(locale, "%02d", calendarDateFields.month());
+                }
+                return Integer.toString(calendarDateFields.month());
+            }
+            if (field == 'd') {
+                if (width >= 2) {
+                    return String.format(locale, "%02d", calendarDateFields.day());
+                }
+                return Integer.toString(calendarDateFields.day());
+            }
+        }
         String pattern = String.valueOf(field).repeat(width);
-        return DateTimeFormatter.ofPattern(pattern, locale).withZone(zoneId).format(dateTime);
+        DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern(pattern, locale).withZone(zoneId);
+        if (chronology != null) {
+            dateTimeFormatter = dateTimeFormatter.withChronology(chronology);
+        }
+        try {
+            return dateTimeFormatter.format(dateTime);
+        } catch (DateTimeException ignored) {
+            if (field == 'G' && eraOption != null) {
+                return resolveEraValue(dateTime.getYear());
+            }
+            DateTimeFormatter isoFormatter = DateTimeFormatter.ofPattern(pattern, locale).withZone(zoneId);
+            return isoFormatter.format(dateTime);
+        }
     }
 
     /**
@@ -844,6 +916,10 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return hourCycle;
     }
 
+    public String getHourCycleForInstant() {
+        return hourCycleForInstant;
+    }
+
     public String getHourOption() {
         return hourOption;
     }
@@ -902,6 +978,17 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return "chinese".equals(calendar) || "dangi".equals(calendar);
     }
 
+    private boolean isIslamicCalendar() {
+        if (calendar == null) {
+            return false;
+        }
+        return "islamic-civil".equals(calendar)
+                || "islamic-tbla".equals(calendar)
+                || "islamic-umalqura".equals(calendar)
+                || "islamic".equals(calendar)
+                || "islamic-rgsa".equals(calendar);
+    }
+
     private boolean isLunarYearOnlyPattern() {
         boolean hasDateOnlyYear = yearOption != null
                 && monthOption == null
@@ -914,6 +1001,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 && fractionalSecondDigits == null
                 && timeZoneNameOption == null;
         return hasDateOnlyYear && hasNoTimeFields;
+    }
+
+    private boolean hasExplicitNumericDateOptions() {
+        boolean hasNumericYear = "numeric".equals(yearOption) || "2-digit".equals(yearOption);
+        boolean hasNumericMonth = "numeric".equals(monthOption) || "2-digit".equals(monthOption);
+        boolean hasNumericDay = "numeric".equals(dayOption) || "2-digit".equals(dayOption);
+        return hasNumericYear && hasNumericMonth && hasNumericDay;
     }
 
     private String resolveEraValue(int isoYear) {
@@ -933,13 +1027,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
             if (isoYear >= 1912) {
                 return "Taisho";
             }
-            if (isoYear >= 1868) {
+            if (isoYear >= 1873) {
                 return "Meiji";
             }
             if (isoYear > 0) {
-                return "Pre-Meiji";
+                return "CE";
             }
-            return "Before Common Era";
+            return "BCE";
         }
         if ("roc".equals(calendar)) {
             return isoYear >= 1912 ? "Minguo" : "Before R.O.C.";
@@ -959,6 +1053,48 @@ public final class JSIntlDateTimeFormat extends JSObject {
             return calendar;
         }
         return isoYear <= 0 ? "BC" : "AD";
+    }
+
+    private String resolveHebrewMonthName(String monthCode) {
+        return switch (monthCode) {
+            case "M01" -> "Tishri";
+            case "M02" -> "Heshvan";
+            case "M03" -> "Kislev";
+            case "M04" -> "Tevet";
+            case "M05" -> "Shevat";
+            case "M05L" -> "Adar I";
+            case "M06" -> "Adar";
+            case "M07" -> "Nisan";
+            case "M08" -> "Iyar";
+            case "M09" -> "Sivan";
+            case "M10" -> "Tamuz";
+            case "M11" -> "Av";
+            case "M12" -> "Elul";
+            default -> monthCode;
+        };
+    }
+
+    private Chronology resolveChronology() {
+        if (calendar == null || "gregory".equals(calendar) || "iso8601".equals(calendar)) {
+            return IsoChronology.INSTANCE;
+        }
+        return switch (calendar) {
+            case "buddhist" -> ThaiBuddhistChronology.INSTANCE;
+            case "japanese" -> JapaneseChronology.INSTANCE;
+            case "roc" -> MinguoChronology.INSTANCE;
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura", "islamic", "islamic-rgsa" ->
+                    HijrahChronology.INSTANCE;
+            default -> null;
+        };
+    }
+
+    private static LunarDate toLunisolarDate(LocalDate gregorianDate, String calendarId) {
+        IsoDate isoDate = new IsoDate(gregorianDate.getYear(), gregorianDate.getMonthValue(), gregorianDate.getDayOfMonth());
+        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
+        String monthCode = calendarDateFields.monthCode();
+        int monthNumber = Integer.parseInt(monthCode.substring(1, 3));
+        boolean leapMonth = monthCode.endsWith("L");
+        return new LunarDate(calendarDateFields.year(), monthNumber, calendarDateFields.day(), leapMonth);
     }
 
     private ZoneId resolveZoneId() {
@@ -991,6 +1127,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
     public record DatePart(String type, String value) {
     }
 
-    private record LunarDate(int relatedYear, int month, int day) {
+    private record LunarDate(int relatedYear, int month, int day, boolean leapMonth) {
     }
 }

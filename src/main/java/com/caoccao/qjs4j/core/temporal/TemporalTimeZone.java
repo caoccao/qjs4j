@@ -67,8 +67,13 @@ public final class TemporalTimeZone {
     public static String formatOffset(int totalSeconds) {
         String sign = totalSeconds >= 0 ? "+" : "-";
         int absoluteSeconds = Math.abs(totalSeconds);
-        int hours = absoluteSeconds / 3600;
-        int minutes = (absoluteSeconds % 3600) / 60;
+        int absoluteMinutes = absoluteSeconds / 60;
+        int remainingSeconds = absoluteSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteMinutes++;
+        }
+        int hours = absoluteMinutes / 60;
+        int minutes = absoluteMinutes % 60;
         return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
     }
 
@@ -166,6 +171,18 @@ public final class TemporalTimeZone {
      * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation.
      */
     public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId, String disambiguation) {
+        return localDateTimeToEpochNs(isoDateTime, timeZoneId, disambiguation, null);
+    }
+
+    /**
+     * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation and
+     * optionally preferring a matching offset when the local date-time is ambiguous.
+     */
+    public static BigInteger localDateTimeToEpochNs(
+            IsoDateTime isoDateTime,
+            String timeZoneId,
+            String disambiguation,
+            Integer preferredOffsetSeconds) {
         Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
         if (fixedOffsetSeconds != null) {
             return utcDateTimeToEpochNs(isoDateTime.date(), isoDateTime.time(), fixedOffsetSeconds);
@@ -185,6 +202,18 @@ public final class TemporalTimeZone {
         } else if (validOffsets.size() == 2) {
             ZoneOffset firstOffset = validOffsets.get(0);
             ZoneOffset secondOffset = validOffsets.get(1);
+            if (preferredOffsetSeconds != null) {
+                if (firstOffset.getTotalSeconds() == preferredOffsetSeconds.intValue()) {
+                    instant = localDateTime.atOffset(firstOffset).toInstant();
+                    return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
+                            .add(BigInteger.valueOf(instant.getNano()));
+                }
+                if (secondOffset.getTotalSeconds() == preferredOffsetSeconds.intValue()) {
+                    instant = localDateTime.atOffset(secondOffset).toInstant();
+                    return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
+                            .add(BigInteger.valueOf(instant.getNano()));
+                }
+            }
             Instant firstInstant = localDateTime.atOffset(firstOffset).toInstant();
             Instant secondInstant = localDateTime.atOffset(secondOffset).toInstant();
             Instant earlierInstant = firstInstant.isBefore(secondInstant) ? firstInstant : secondInstant;
