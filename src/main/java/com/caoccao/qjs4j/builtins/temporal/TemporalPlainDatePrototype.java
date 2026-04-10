@@ -1471,6 +1471,16 @@ public final class TemporalPlainDatePrototype {
         }
         JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (options instanceof JSObject optionsObject) {
+            JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(timeStyleValue instanceof JSUndefined) && timeStyleValue != null) {
+                context.throwTypeError("Invalid date/time formatting options");
+                return JSUndefined.INSTANCE;
+            }
+        }
         JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
                 context,
                 null,
@@ -1576,8 +1586,9 @@ public final class TemporalPlainDatePrototype {
         }
 
         IsoDate isoDate = plainDate.getIsoDate();
+        boolean hasPlainTimeArgument = !(plainTimeLike instanceof JSUndefined) && plainTimeLike != null;
         IsoTime isoTime = IsoTime.MIDNIGHT;
-        if (!(plainTimeLike instanceof JSUndefined) && plainTimeLike != null) {
+        if (hasPlainTimeArgument) {
             JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(context, plainTimeLike, JSUndefined.INSTANCE);
             if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
                 return JSUndefined.INSTANCE;
@@ -1592,9 +1603,13 @@ public final class TemporalPlainDatePrototype {
 
         BigInteger epochNanoseconds;
         try {
-            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    new IsoDateTime(isoDate, isoTime),
-                    timeZoneId);
+            if (hasPlainTimeArgument) {
+                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                        new IsoDateTime(isoDate, isoTime),
+                        timeZoneId);
+            } else {
+                epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(isoDate, timeZoneId);
+            }
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
