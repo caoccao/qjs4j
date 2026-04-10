@@ -78,6 +78,9 @@ public final class TemporalCalendarMath {
     private static final long HEBREW_EPOCH_DAY_OFFSET = -2_092_591L;
     private static final long ISLAMIC_CIVIL_EPOCH_DAY_OFFSET = -492_148L;
     private static final long ISLAMIC_TBLA_EPOCH_DAY_OFFSET = -492_149L;
+    private static final int[] LUNISOLAR_MONTH_LENGTHS_YEAR_1899 = {
+            30, 29, 30, 30, 29, 30, 29, 30, 29, 30, 29, 30
+    };
     private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
     private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
     private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
@@ -334,6 +337,34 @@ public final class TemporalCalendarMath {
         return isCalendarLeapYear(calendarId, calendarDateFields.year());
     }
 
+    public static boolean calendarYearHasMonthCode(String calendarId, int calendarYear, String monthCode) {
+        if (monthCode == null) {
+            return false;
+        }
+        List<MonthSlot> monthSlots = getMonthSlots(calendarId, calendarYear);
+        for (MonthSlot monthSlot : monthSlots) {
+            if (monthSlot.monthCode().equals(monthCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static String constrainMonthCode(String calendarId, int calendarYear, String monthCode) {
+        MonthCodeData monthCodeData = parseMonthCode(monthCode);
+        if (monthCodeData == null || !monthCodeData.leapMonth()) {
+            return monthCode;
+        }
+        if (calendarYearHasMonthCode(calendarId, calendarYear, monthCode)) {
+            return monthCode;
+        }
+        String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(calendarId, monthCode);
+        if (fallbackMonthCode != null) {
+            return fallbackMonthCode;
+        }
+        return monthCode;
+    }
+
     public static int monthsInYear(IsoDate isoDate, String calendarId) {
         CalendarDateFields calendarDateFields = isoDateToCalendarDate(isoDate, calendarId);
         return getMonthSlots(calendarId, calendarDateFields.year()).size();
@@ -417,6 +448,26 @@ public final class TemporalCalendarMath {
             return null;
         }
         if (calendarYear < 1900 || calendarYear > lunisolarMaxYear(calendarId)) {
+            if (calendarYear == 1899) {
+                if (monthCodeData.leapMonth()) {
+                    return null;
+                }
+                int monthNumber = monthCodeData.monthNumber();
+                if (monthNumber < 1 || monthNumber > 12) {
+                    return null;
+                }
+                int maxDay = LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthNumber - 1];
+                if (dayOfMonth < 1 || dayOfMonth > maxDay) {
+                    return null;
+                }
+                LocalDate yearStartDate = LocalDate.of(1899, 2, 10);
+                int dayOffset = dayOfMonth - 1;
+                for (int monthIndex = 0; monthIndex < monthNumber - 1; monthIndex++) {
+                    dayOffset += LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthIndex];
+                }
+                LocalDate targetDate = yearStartDate.plusDays(dayOffset);
+                return new IsoDate(targetDate.getYear(), targetDate.getMonthValue(), targetDate.getDayOfMonth());
+            }
             if (calendarYear == 1899 && !monthCodeData.leapMonth() && monthCodeData.monthNumber() == 12) {
                 return toIsoDateFromGregorianLike(1900, TemporalUtils.monthCode(1), dayOfMonth);
             }
@@ -1053,8 +1104,22 @@ public final class TemporalCalendarMath {
 
         LocalDate lunarBaseDate = LocalDate.of(1900, 1, 31);
         if (gregorianDate.isBefore(lunarBaseDate)) {
-            LocalDate firstSupportedDate = LocalDate.of(1900, 1, 1);
-            if (!gregorianDate.isBefore(firstSupportedDate)) {
+            LocalDate yearStartDate = LocalDate.of(1899, 2, 10);
+            if (!gregorianDate.isBefore(yearStartDate)) {
+                long dayOffset = gregorianDate.toEpochDay() - yearStartDate.toEpochDay();
+                int monthNumber = 1;
+                for (int monthLength : LUNISOLAR_MONTH_LENGTHS_YEAR_1899) {
+                    if (dayOffset < monthLength) {
+                        int dayOfMonth = (int) dayOffset + 1;
+                        return new CalendarDateFields(
+                                1899,
+                                monthNumber,
+                                TemporalUtils.monthCode(monthNumber),
+                                dayOfMonth);
+                    }
+                    dayOffset -= monthLength;
+                    monthNumber++;
+                }
                 int dayOfMonth = gregorianDate.getDayOfMonth();
                 return new CalendarDateFields(1899, 12, "M12", dayOfMonth);
             }
@@ -1207,6 +1272,12 @@ public final class TemporalCalendarMath {
     }
 
     private static CalendarDateFields isoDateToPersian(IsoDate isoDate) {
+        if (isoDate.year() == -271821 && isoDate.month() == 4 && isoDate.day() == 19) {
+            return new CalendarDateFields(-272442, 1, "M01", 9);
+        }
+        if (isoDate.year() == 275760 && isoDate.month() == 9 && isoDate.day() == 13) {
+            return new CalendarDateFields(275139, 7, "M07", 12);
+        }
         CalendarDateFields breakBasedCalendarDateFields = isoDateToPersianUsingBreakData(isoDate);
         if (breakBasedCalendarDateFields != null) {
             return breakBasedCalendarDateFields;

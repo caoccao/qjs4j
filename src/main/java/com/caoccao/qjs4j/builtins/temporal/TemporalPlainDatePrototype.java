@@ -360,6 +360,21 @@ public final class TemporalPlainDatePrototype {
                 if (isoDateSurpasses(sign, candidateYearDate, secondDate)) {
                     break;
                 }
+                if (doesConceptualYearDateSurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateYears,
+                        secondCalendarDateFields)) {
+                    break;
+                }
+                if (doesConstrainedCalendarDaySurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateYearDate,
+                        secondCalendarDateFields,
+                        calendarId)) {
+                    break;
+                }
                 years = candidateYears;
                 candidateYears += sign;
             }
@@ -372,6 +387,14 @@ public final class TemporalPlainDatePrototype {
                     return null;
                 }
                 if (isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
+                    break;
+                }
+                if (doesConstrainedCalendarDaySurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateMonthDate,
+                        secondCalendarDateFields,
+                        calendarId)) {
                     break;
                 }
                 months = candidateMonths;
@@ -400,6 +423,15 @@ public final class TemporalPlainDatePrototype {
                         totalMonths -= sign;
                         continue;
                     }
+                    if (doesConstrainedCalendarDaySurpassSecondDate(
+                            sign,
+                            firstCalendarDateFields,
+                            totalMonthDate,
+                            secondCalendarDateFields,
+                            calendarId)) {
+                        totalMonths -= sign;
+                        continue;
+                    }
 
                     long nextTotalMonths;
                     try {
@@ -413,6 +445,14 @@ public final class TemporalPlainDatePrototype {
                         return null;
                     }
                     if (isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
+                        break;
+                    }
+                    if (doesConstrainedCalendarDaySurpassSecondDate(
+                            sign,
+                            firstCalendarDateFields,
+                            nextTotalMonthDate,
+                            secondCalendarDateFields,
+                            calendarId)) {
                         break;
                     }
                     totalMonths = nextTotalMonths;
@@ -434,6 +474,24 @@ public final class TemporalPlainDatePrototype {
             dayDifference = dayDifference % 7;
         }
         return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
+    private static int compareCalendarDateFields(
+            long firstYear,
+            String firstMonthCode,
+            int firstDay,
+            int secondYear,
+            String secondMonthCode,
+            int secondDay) {
+        int yearComparison = Long.compare(firstYear, secondYear);
+        if (yearComparison != 0) {
+            return yearComparison;
+        }
+        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
+        if (monthComparison != 0) {
+            return monthComparison;
+        }
+        return Integer.compare(firstDay, secondDay);
     }
 
     private static DateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
@@ -477,6 +535,81 @@ public final class TemporalPlainDatePrototype {
             dayDifference = dayDifference % 7;
         }
         return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
+    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
+        MonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        MonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
+            return firstMonthCode.compareTo(secondMonthCode);
+        }
+        int monthNumberComparison = Integer.compare(
+                firstMonthCodeParts.monthNumber(),
+                secondMonthCodeParts.monthNumber());
+        if (monthNumberComparison != 0) {
+            return monthNumberComparison;
+        }
+        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
+            return 0;
+        }
+        return firstMonthCodeParts.leapMonth() ? 1 : -1;
+    }
+
+    private static boolean doesConceptualYearDateSurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            long candidateYears,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+        long candidateYear = firstCalendarDateFields.year() + candidateYears;
+        int comparison = compareCalendarDateFields(
+                candidateYear,
+                firstCalendarDateFields.monthCode(),
+                firstCalendarDateFields.day(),
+                secondCalendarDateFields.year(),
+                secondCalendarDateFields.monthCode(),
+                secondCalendarDateFields.day());
+        return sign * comparison > 0;
+    }
+
+    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoDate constrainedCandidateDate,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            String calendarId) {
+        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
+                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
+            return false;
+        }
+        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
+            return false;
+        }
+        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
+            return false;
+        }
+        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
+    }
+
+    private static MonthCodeParts parseMonthCodeParts(String monthCodeText) {
+        if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
+            return null;
+        }
+        if (monthCodeText.charAt(0) != 'M') {
+            return null;
+        }
+        if (!Character.isDigit(monthCodeText.charAt(1)) || !Character.isDigit(monthCodeText.charAt(2))) {
+            return null;
+        }
+        int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
+        boolean leapMonth = false;
+        if (monthCodeText.length() == 4) {
+            if (monthCodeText.charAt(3) != 'L') {
+                return null;
+            }
+            leapMonth = true;
+        }
+        return new MonthCodeParts(monthNumber, leapMonth);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1338,6 +1471,16 @@ public final class TemporalPlainDatePrototype {
         }
         JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (options instanceof JSObject optionsObject) {
+            JSValue timeStyleValue = optionsObject.get(PropertyKey.fromString("timeStyle"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(timeStyleValue instanceof JSUndefined) && timeStyleValue != null) {
+                context.throwTypeError("Invalid date/time formatting options");
+                return JSUndefined.INSTANCE;
+            }
+        }
         JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
                 context,
                 null,
@@ -1443,8 +1586,9 @@ public final class TemporalPlainDatePrototype {
         }
 
         IsoDate isoDate = plainDate.getIsoDate();
+        boolean hasPlainTimeArgument = !(plainTimeLike instanceof JSUndefined) && plainTimeLike != null;
         IsoTime isoTime = IsoTime.MIDNIGHT;
-        if (!(plainTimeLike instanceof JSUndefined) && plainTimeLike != null) {
+        if (hasPlainTimeArgument) {
             JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(context, plainTimeLike, JSUndefined.INSTANCE);
             if (context.hasPendingException() || !(temporalTime instanceof JSTemporalPlainTime plainTime)) {
                 return JSUndefined.INSTANCE;
@@ -1459,9 +1603,13 @@ public final class TemporalPlainDatePrototype {
 
         BigInteger epochNanoseconds;
         try {
-            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    new IsoDateTime(isoDate, isoTime),
-                    timeZoneId);
+            if (hasPlainTimeArgument) {
+                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
+                        new IsoDateTime(isoDate, isoTime),
+                        timeZoneId);
+            } else {
+                epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(isoDate, timeZoneId);
+            }
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
@@ -1493,6 +1641,9 @@ public final class TemporalPlainDatePrototype {
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "weekOfYear");
         if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!"iso8601".equals(plainDate.getCalendarId())) {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(plainDate.getIsoDate().weekOfYear());
@@ -1534,111 +1685,213 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate original = plainDate.getIsoDate();
-        JSValue dayVal = fields.get(PropertyKey.fromString("day"));
+        String calendarId = plainDate.getCalendarId();
+        boolean calendarSupportsEraFields = calendarSupportsEraFields(calendarId);
+
+        JSValue dayFieldValue = fields.get(PropertyKey.fromString("day"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasDay = !(dayVal instanceof JSUndefined) && dayVal != null;
-        int dayOfMonth = original.day();
-        if (hasDay) {
-            dayOfMonth = TemporalUtils.toIntegerThrowOnInfinity(context, dayVal);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+        boolean hasDayField = !(dayFieldValue instanceof JSUndefined) && dayFieldValue != null;
+        Integer dayOfMonth = null;
+        if (hasDayField) {
+            dayOfMonth = TemporalUtils.toIntegerThrowOnInfinity(context, dayFieldValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (dayOfMonth < 1) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         }
 
-        JSValue monthVal = fields.get(PropertyKey.fromString("month"));
+        JSValue monthFieldValue = fields.get(PropertyKey.fromString("month"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonth = !(monthVal instanceof JSUndefined) && monthVal != null;
-        int month = original.month();
-        if (hasMonth) {
-            month = TemporalUtils.toIntegerThrowOnInfinity(context, monthVal);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        if (month < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return JSUndefined.INSTANCE;
+        boolean hasMonthField = !(monthFieldValue instanceof JSUndefined) && monthFieldValue != null;
+        Integer month = null;
+        if (hasMonthField) {
+            month = TemporalUtils.toIntegerThrowOnInfinity(context, monthFieldValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (month < 1) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         }
 
-        JSValue monthCodeVal = fields.get(PropertyKey.fromString("monthCode"));
+        JSValue monthCodeFieldValue = fields.get(PropertyKey.fromString("monthCode"));
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean hasMonthCode = !(monthCodeVal instanceof JSUndefined) && monthCodeVal != null;
+        boolean hasMonthCodeField = !(monthCodeFieldValue instanceof JSUndefined) && monthCodeFieldValue != null;
         String monthCode = null;
-        if (hasMonthCode) {
-            monthCode = JSTypeConversions.toString(context, monthCodeVal).value();
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-
-        JSValue yearVal = fields.get(PropertyKey.fromString("year"));
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
-        }
-        boolean hasYear = !(yearVal instanceof JSUndefined) && yearVal != null;
-        int year = original.year();
-        if (hasYear) {
-            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearVal);
-        }
-        if (context.hasPendingException()) {
-            return JSUndefined.INSTANCE;
+        if (hasMonthCodeField) {
+            monthCode = JSTypeConversions.toString(context, monthCodeFieldValue).value();
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
-        boolean hasAnyField = hasDay || hasMonth || hasMonthCode || hasYear;
+        JSValue yearFieldValue = fields.get(PropertyKey.fromString("year"));
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        boolean hasYearField = !(yearFieldValue instanceof JSUndefined) && yearFieldValue != null;
+        Integer year = null;
+        if (hasYearField) {
+            year = TemporalUtils.toIntegerThrowOnInfinity(context, yearFieldValue);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        boolean hasEraField = false;
+        boolean hasEraYearField = false;
+        String era = null;
+        Integer eraYear = null;
+        if (calendarSupportsEraFields) {
+            JSValue eraFieldValue = fields.get(PropertyKey.fromString("era"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            hasEraField = !(eraFieldValue instanceof JSUndefined) && eraFieldValue != null;
+            if (hasEraField) {
+                era = JSTypeConversions.toString(context, eraFieldValue).value();
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+
+            JSValue eraYearFieldValue = fields.get(PropertyKey.fromString("eraYear"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            hasEraYearField = !(eraYearFieldValue instanceof JSUndefined) && eraYearFieldValue != null;
+            if (hasEraYearField) {
+                eraYear = TemporalUtils.toIntegerThrowOnInfinity(context, eraYearFieldValue);
+                if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+            }
+        }
+
+        boolean hasAnyField = hasDayField
+                || hasMonthField
+                || hasMonthCodeField
+                || hasYearField
+                || hasEraField
+                || hasEraYearField;
         if (!hasAnyField) {
             context.throwTypeError("Temporal error: Must specify at least one calendar field.");
             return JSUndefined.INSTANCE;
         }
 
-        String overflow = TemporalUtils.getOverflowOption(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        if (context.hasPendingException() || calendarDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        String calendarMonthCode = resolveCalendarMonthCode(context, plainDate);
+        if (context.hasPendingException() || calendarMonthCode == null) {
+            return JSUndefined.INSTANCE;
+        }
+        EraFields eraFields = resolveEraFields(plainDate);
+
+        JSObject mergedFieldsObject = new JSObject(context);
+        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId));
+        mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDate.day()));
+        if ("iso8601".equals(calendarId)) {
+            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(calendarDate.month()));
+        }
+        mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(calendarMonthCode));
+        mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(calendarDate.year()));
+        if (eraFields != null) {
+            if (eraFields.era() != null) {
+                mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(eraFields.era()));
+            }
+            if (eraFields.eraYear() != null) {
+                mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraFields.eraYear()));
+            }
+        }
+
+        if (hasYearField) {
+            mergedFieldsObject.delete(PropertyKey.fromString("era"));
+            mergedFieldsObject.delete(PropertyKey.fromString("eraYear"));
+        }
+        if (hasEraField || hasEraYearField) {
+            mergedFieldsObject.delete(PropertyKey.fromString("year"));
+            mergedFieldsObject.delete(PropertyKey.fromString("era"));
+            mergedFieldsObject.delete(PropertyKey.fromString("eraYear"));
+        }
+        if (hasMonthField) {
+            mergedFieldsObject.delete(PropertyKey.fromString("monthCode"));
+        }
+        if (hasMonthCodeField) {
+            mergedFieldsObject.delete(PropertyKey.fromString("month"));
+        }
+
+        if (hasDayField) {
+            mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(dayOfMonth));
+        }
+        if (hasMonthField) {
+            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(month));
+        }
+        if (hasMonthCodeField) {
+            mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCode));
+        }
+        if (hasYearField) {
+            mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(year));
+        }
+        if (hasEraField) {
+            mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(era));
+        }
+        if (hasEraYearField) {
+            mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYear));
+        }
+
+        JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        String overflow = TemporalUtils.getOverflowOption(context, optionsValue);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-
-        if (hasMonthCode) {
-            MonthCodeInfo parsedMonthCode = parseMonthCodeForPlainDateWith(context, monthCode);
-            if (context.hasPendingException() || parsedMonthCode == null) {
+        if (!"reject".equals(overflow)
+                && hasYearField
+                && !hasMonthField
+                && !hasMonthCodeField) {
+            JSValue mergedMonthCodeValue = mergedFieldsObject.get(PropertyKey.fromString("monthCode"));
+            if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            if (parsedMonthCode.leapMonth()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
+            if (mergedMonthCodeValue instanceof JSString mergedMonthCodeString) {
+                String constrainedMonthCode = TemporalCalendarMath.constrainMonthCode(
+                        calendarId,
+                        year,
+                        mergedMonthCodeString.value());
+                if (constrainedMonthCode != null
+                        && !constrainedMonthCode.equals(mergedMonthCodeString.value())) {
+                    mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(constrainedMonthCode));
+                }
             }
-            if (hasMonth && month != parsedMonthCode.month()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            month = parsedMonthCode.month();
         }
-
-        IsoDate resultDate;
-        if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            resultDate = new IsoDate(year, month, dayOfMonth);
-        } else {
-            resultDate = IsoDate.constrain(year, month, dayOfMonth);
-        }
-
-        long resultEpochDay = resultDate.toEpochDay();
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+        JSObject normalizedOptionsObject = new JSObject(context);
+        normalizedOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(overflow));
+        JSValue mergedDateValue = TemporalPlainDateConstructor.dateFromFields(
+                context,
+                mergedFieldsObject,
+                normalizedOptionsObject);
+        if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateConstructor.createPlainDate(context, resultDate, plainDate.getCalendarId());
+        if (!(mergedDateValue instanceof JSTemporalPlainDate mergedDate)) {
+            context.throwTypeError("Temporal error: Date argument must be object or string.");
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalPlainDateConstructor.createPlainDate(
+                context,
+                mergedDate.getIsoDate(),
+                calendarId);
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1669,6 +1922,9 @@ public final class TemporalPlainDatePrototype {
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "yearOfWeek");
         if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!"iso8601".equals(plainDate.getCalendarId())) {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(plainDate.getIsoDate().yearOfWeek());
@@ -1704,6 +1960,17 @@ public final class TemporalPlainDatePrototype {
 
     private record MonthCodeInfo(
             int month,
+            boolean leapMonth) {
+    }
+
+    private static boolean calendarSupportsEraFields(String calendarId) {
+        return !"iso8601".equals(calendarId)
+                && !"chinese".equals(calendarId)
+                && !"dangi".equals(calendarId);
+    }
+
+    private record MonthCodeParts(
+            int monthNumber,
             boolean leapMonth) {
     }
 

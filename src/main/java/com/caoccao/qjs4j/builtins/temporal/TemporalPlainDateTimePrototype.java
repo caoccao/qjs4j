@@ -247,29 +247,35 @@ public final class TemporalPlainDateTimePrototype {
         return plainDateTime;
     }
 
+    private static JSTemporalPlainDate toPlainDate(JSContext context, JSTemporalPlainDateTime plainDateTime) {
+        return TemporalPlainDateConstructor.createPlainDate(
+                context,
+                plainDateTime.getIsoDateTime().date(),
+                plainDateTime.getCalendarId());
+    }
+
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "day");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().day());
+        return TemporalPlainDatePrototype.day(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "dayOfWeek");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().dayOfWeek());
+        return TemporalPlainDatePrototype.dayOfWeek(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "dayOfYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().dayOfYear());
+        return TemporalPlainDatePrototype.dayOfYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "daysInMonth");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        IsoDate isoDate = plainDateTime.getIsoDateTime().date();
-        return JSNumber.of(IsoDate.daysInMonth(isoDate.year(), isoDate.month()));
+        return TemporalPlainDatePrototype.daysInMonth(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -281,7 +287,7 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "daysInYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(IsoDate.daysInYear(plainDateTime.getIsoDateTime().date().year()));
+        return TemporalPlainDatePrototype.daysInYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -298,13 +304,13 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "era");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSUndefined.INSTANCE;
+        return TemporalPlainDatePrototype.era(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "eraYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSUndefined.INSTANCE;
+        return TemporalPlainDatePrototype.eraYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -734,7 +740,7 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "inLeapYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return IsoDate.isLeapYear(plainDateTime.getIsoDateTime().date().year()) ? JSBoolean.TRUE : JSBoolean.FALSE;
+        return TemporalPlainDatePrototype.inLeapYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
@@ -826,19 +832,19 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "month");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().month());
+        return TemporalPlainDatePrototype.month(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "monthCode");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return new JSString(TemporalUtils.monthCode(plainDateTime.getIsoDateTime().date().month()));
+        return TemporalPlainDatePrototype.monthCode(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "monthsInYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(12);
+        return TemporalPlainDatePrototype.monthsInYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1251,7 +1257,7 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "weekOfYear");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().weekOfYear());
+        return TemporalPlainDatePrototype.weekOfYear(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1544,13 +1550,13 @@ public final class TemporalPlainDateTimePrototype {
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "year");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().year());
+        return TemporalPlainDatePrototype.year(context, toPlainDate(context, plainDateTime), args);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "yearOfWeek");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
-        return JSNumber.of(plainDateTime.getIsoDateTime().date().yearOfWeek());
+        return TemporalPlainDatePrototype.yearOfWeek(context, toPlainDate(context, plainDateTime), args);
     }
 
     private record DifferenceSettings(String largestUnit, String smallestUnit, long roundingIncrement,

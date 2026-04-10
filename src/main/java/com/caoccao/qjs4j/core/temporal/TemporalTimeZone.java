@@ -143,6 +143,17 @@ public final class TemporalTimeZone {
     }
 
     /**
+     * Returns epoch nanoseconds for the first instant of the given date in the specified timezone.
+     */
+    public static BigInteger startOfDayToEpochNs(IsoDate isoDate, String timeZoneId) {
+        ZoneId zoneId = resolveTimeZone(timeZoneId);
+        LocalDate localDate = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
+        Instant instant = localDate.atStartOfDay(zoneId).toInstant();
+        return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
+                .add(BigInteger.valueOf(instant.getNano()));
+    }
+
+    /**
      * Gets the previous timezone transition before the given instant.
      * Returns null if no previous transition.
      */

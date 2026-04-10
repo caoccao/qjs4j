@@ -3322,6 +3322,9 @@ public final class JSIntlObject {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
+            return JSUndefined.INSTANCE;
+        }
         if (!isFormattableEpochMillisValid(context, formattable)) {
             return JSUndefined.INSTANCE;
         }
@@ -3376,6 +3379,10 @@ public final class JSIntlObject {
         }
         JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, startFormattable.kind());
         if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
+                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
             return JSUndefined.INSTANCE;
         }
         if (!isFormattableEpochMillisValid(context, startFormattable)
@@ -3487,6 +3494,10 @@ public final class JSIntlObject {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, startFormattable, effectiveDateTimeFormat)
+                || !isTemporalCalendarCompatibleWithDateTimeFormat(context, endFormattable, effectiveDateTimeFormat)) {
+            return JSUndefined.INSTANCE;
+        }
         if (!isFormattableEpochMillisValid(context, startFormattable)
                 || !isFormattableEpochMillisValid(context, endFormattable)) {
             return JSUndefined.INSTANCE;
@@ -3583,6 +3594,9 @@ public final class JSIntlObject {
         }
         JSIntlDateTimeFormat effectiveDateTimeFormat = getEffectiveDateTimeFormat(context, dateTimeFormat, formattable.kind());
         if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!isTemporalCalendarCompatibleWithDateTimeFormat(context, formattable, effectiveDateTimeFormat)) {
             return JSUndefined.INSTANCE;
         }
         if (!isFormattableEpochMillisValid(context, formattable)) {
@@ -6290,6 +6304,30 @@ public final class JSIntlObject {
         if (formattable.kind() == DateTimeFormattableKind.NUMBER
                 && Math.abs(formattable.epochMillis()) > 8.64e15) {
             context.throwRangeError("Invalid time value");
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isTemporalCalendarCompatibleWithDateTimeFormat(
+            JSContext context,
+            DateTimeFormattable formattable,
+            JSIntlDateTimeFormat dateTimeFormat) {
+        String temporalCalendarId = formattable.calendarId();
+        if (temporalCalendarId == null || temporalCalendarId.isEmpty()) {
+            return true;
+        }
+        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId);
+        if ("iso8601".equals(canonicalTemporalCalendarId)) {
+            return true;
+        }
+        String formatterCalendarId = dateTimeFormat.getCalendar();
+        if (formatterCalendarId == null || formatterCalendarId.isEmpty()) {
+            return true;
+        }
+        String canonicalFormatterCalendarId = canonicalizeCalendar(formatterCalendarId);
+        if (!canonicalTemporalCalendarId.equals(canonicalFormatterCalendarId)) {
+            context.throwRangeError("Invalid date/time value");
             return false;
         }
         return true;
