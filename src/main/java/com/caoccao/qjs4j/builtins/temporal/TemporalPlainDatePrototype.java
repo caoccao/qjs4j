@@ -360,6 +360,21 @@ public final class TemporalPlainDatePrototype {
                 if (isoDateSurpasses(sign, candidateYearDate, secondDate)) {
                     break;
                 }
+                if (doesConceptualYearDateSurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateYears,
+                        secondCalendarDateFields)) {
+                    break;
+                }
+                if (doesConstrainedCalendarDaySurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateYearDate,
+                        secondCalendarDateFields,
+                        calendarId)) {
+                    break;
+                }
                 years = candidateYears;
                 candidateYears += sign;
             }
@@ -372,6 +387,14 @@ public final class TemporalPlainDatePrototype {
                     return null;
                 }
                 if (isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
+                    break;
+                }
+                if (doesConstrainedCalendarDaySurpassSecondDate(
+                        sign,
+                        firstCalendarDateFields,
+                        candidateMonthDate,
+                        secondCalendarDateFields,
+                        calendarId)) {
                     break;
                 }
                 months = candidateMonths;
@@ -400,6 +423,15 @@ public final class TemporalPlainDatePrototype {
                         totalMonths -= sign;
                         continue;
                     }
+                    if (doesConstrainedCalendarDaySurpassSecondDate(
+                            sign,
+                            firstCalendarDateFields,
+                            totalMonthDate,
+                            secondCalendarDateFields,
+                            calendarId)) {
+                        totalMonths -= sign;
+                        continue;
+                    }
 
                     long nextTotalMonths;
                     try {
@@ -413,6 +445,14 @@ public final class TemporalPlainDatePrototype {
                         return null;
                     }
                     if (isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
+                        break;
+                    }
+                    if (doesConstrainedCalendarDaySurpassSecondDate(
+                            sign,
+                            firstCalendarDateFields,
+                            nextTotalMonthDate,
+                            secondCalendarDateFields,
+                            calendarId)) {
                         break;
                     }
                     totalMonths = nextTotalMonths;
@@ -434,6 +474,24 @@ public final class TemporalPlainDatePrototype {
             dayDifference = dayDifference % 7;
         }
         return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
+    private static int compareCalendarDateFields(
+            long firstYear,
+            String firstMonthCode,
+            int firstDay,
+            int secondYear,
+            String secondMonthCode,
+            int secondDay) {
+        int yearComparison = Long.compare(firstYear, secondYear);
+        if (yearComparison != 0) {
+            return yearComparison;
+        }
+        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
+        if (monthComparison != 0) {
+            return monthComparison;
+        }
+        return Integer.compare(firstDay, secondDay);
     }
 
     private static DateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
@@ -477,6 +535,81 @@ public final class TemporalPlainDatePrototype {
             dayDifference = dayDifference % 7;
         }
         return new DateDurationFields(years, months, weeks, dayDifference);
+    }
+
+    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
+        MonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        MonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
+            return firstMonthCode.compareTo(secondMonthCode);
+        }
+        int monthNumberComparison = Integer.compare(
+                firstMonthCodeParts.monthNumber(),
+                secondMonthCodeParts.monthNumber());
+        if (monthNumberComparison != 0) {
+            return monthNumberComparison;
+        }
+        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
+            return 0;
+        }
+        return firstMonthCodeParts.leapMonth() ? 1 : -1;
+    }
+
+    private static boolean doesConceptualYearDateSurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            long candidateYears,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+        long candidateYear = firstCalendarDateFields.year() + candidateYears;
+        int comparison = compareCalendarDateFields(
+                candidateYear,
+                firstCalendarDateFields.monthCode(),
+                firstCalendarDateFields.day(),
+                secondCalendarDateFields.year(),
+                secondCalendarDateFields.monthCode(),
+                secondCalendarDateFields.day());
+        return sign * comparison > 0;
+    }
+
+    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoDate constrainedCandidateDate,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            String calendarId) {
+        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
+                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
+            return false;
+        }
+        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
+            return false;
+        }
+        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
+            return false;
+        }
+        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
+    }
+
+    private static MonthCodeParts parseMonthCodeParts(String monthCodeText) {
+        if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
+            return null;
+        }
+        if (monthCodeText.charAt(0) != 'M') {
+            return null;
+        }
+        if (!Character.isDigit(monthCodeText.charAt(1)) || !Character.isDigit(monthCodeText.charAt(2))) {
+            return null;
+        }
+        int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
+        boolean leapMonth = false;
+        if (monthCodeText.length() == 4) {
+            if (monthCodeText.charAt(3) != 'L') {
+                return null;
+            }
+            leapMonth = true;
+        }
+        return new MonthCodeParts(monthNumber, leapMonth);
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1704,6 +1837,11 @@ public final class TemporalPlainDatePrototype {
 
     private record MonthCodeInfo(
             int month,
+            boolean leapMonth) {
+    }
+
+    private record MonthCodeParts(
+            int monthNumber,
             boolean leapMonth) {
     }
 
