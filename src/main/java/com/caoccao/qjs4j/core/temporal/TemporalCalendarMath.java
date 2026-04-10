@@ -80,6 +80,11 @@ public final class TemporalCalendarMath {
     private static final long ISLAMIC_TBLA_EPOCH_DAY_OFFSET = -492_149L;
     private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
     private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
+    private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
+            1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
+            1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
+            1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469
+    };
     private static final int[] PERSIAN_BREAKS = {
             -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181,
             1210, 1635, 2060, 2097, 2192, 2262, 2324, 2394,
@@ -1347,13 +1352,24 @@ public final class TemporalCalendarMath {
             case "indian" -> IsoDate.isLeapYear(calendarYear + 78);
             case "islamic-civil" -> islamicDaysInMonth(calendarYear, 12, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
             case "islamic-tbla" -> islamicDaysInMonth(calendarYear, 12, ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
-            case "islamic-umalqura" -> getUmalquraMonthSlots(calendarYear).get(11).daysInMonth() == 30;
+            case "islamic-umalqura" -> isKnownUmalquraLeapYear(calendarYear)
+                    || (calendarYear < 1390 || calendarYear > 1469)
+                    && getUmalquraMonthSlots(calendarYear).get(11).daysInMonth() == 30;
             case "persian" -> persianLeapYear(calendarYear);
             case "chinese", "dangi" -> calendarYear >= 1900
                     && calendarYear <= lunisolarMaxYear(calendarId)
                     && lunisolarLeapMonth(calendarId, calendarYear) != 0;
             default -> false;
         };
+    }
+
+    private static boolean isKnownUmalquraLeapYear(int islamicYear) {
+        for (int leapYear : UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469) {
+            if (leapYear == islamicYear) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static IsoDate umalquraToIsoDate(int islamicYear, String monthCode, int dayOfMonth) {
