@@ -128,27 +128,6 @@ public final class JSIntlObject {
      */
     private static volatile Map<String, String> TIMEZONE_LOOKUP_MAP;
 
-    private enum DateTimeFormattableKind {
-        NUMBER,
-        INSTANT,
-        PLAIN_DATE,
-        PLAIN_DATE_TIME,
-        PLAIN_MONTH_DAY,
-        PLAIN_TIME,
-        PLAIN_YEAR_MONTH,
-        ZONED_DATE_TIME
-    }
-
-    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, String calendarId) {
-    }
-
-    private record DateStyleOptionFields(
-            String weekdayOption,
-            String yearOption,
-            String monthOption,
-            String dayOption) {
-    }
-
     static {
         AVAILABLE_LOCALE_LANGUAGES = Arrays.stream(Locale.getAvailableLocales())
                 .map(Locale::toLanguageTag)
@@ -2249,6 +2228,96 @@ public final class JSIntlObject {
         return durationFormat;
     }
 
+    private static JSIntlDateTimeFormat createInstantDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat) {
+        String effectiveHourCycle = baseDateTimeFormat.getHourCycle();
+        if (effectiveHourCycle == null) {
+            effectiveHourCycle = baseDateTimeFormat.getHourCycleForInstant();
+        }
+        if (effectiveHourCycle == null) {
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(baseDateTimeFormat.getLocale().toLanguageTag());
+            String hourCycleFromUnicodeExtension = unicodeExtensions.get("hc");
+            if ("h11".equals(hourCycleFromUnicodeExtension)
+                    || "h12".equals(hourCycleFromUnicodeExtension)
+                    || "h23".equals(hourCycleFromUnicodeExtension)
+                    || "h24".equals(hourCycleFromUnicodeExtension)) {
+                effectiveHourCycle = hourCycleFromUnicodeExtension;
+            } else {
+                effectiveHourCycle = getLocaleDefaultHourCycle(baseDateTimeFormat.getLocale());
+            }
+        }
+
+        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
+        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
+        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
+        String eraOption = baseDateTimeFormat.getEraOption();
+        String yearOption = baseDateTimeFormat.getYearOption();
+        String monthOption = baseDateTimeFormat.getMonthOption();
+        String dayOption = baseDateTimeFormat.getDayOption();
+        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
+        String hourOption = baseDateTimeFormat.getHourOption();
+        String minuteOption = baseDateTimeFormat.getMinuteOption();
+        String secondOption = baseDateTimeFormat.getSecondOption();
+        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
+        String timeZoneNameOption = baseDateTimeFormat.getTimeZoneNameOption();
+
+        if (baseDateTimeFormat.hasDefaultDateComponents()) {
+            yearOption = null;
+            monthOption = null;
+            dayOption = null;
+        }
+        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
+            hourOption = null;
+            minuteOption = null;
+            secondOption = null;
+        }
+
+        boolean hasDateComponent = dateStyle != null
+                || weekdayOption != null
+                || yearOption != null
+                || monthOption != null
+                || dayOption != null;
+        boolean hasTimeComponent = timeStyle != null
+                || dayPeriodOption != null
+                || hourOption != null
+                || minuteOption != null
+                || secondOption != null
+                || fractionalSecondDigits != null;
+        if (!hasDateComponent && !hasTimeComponent) {
+            yearOption = "numeric";
+            monthOption = "numeric";
+            dayOption = "numeric";
+            hourOption = "numeric";
+            minuteOption = "numeric";
+            secondOption = "numeric";
+        }
+
+        return new JSIntlDateTimeFormat(
+                context,
+                baseDateTimeFormat.getLocale(),
+                dateStyle,
+                timeStyle,
+                baseDateTimeFormat.getCalendar(),
+                baseDateTimeFormat.getNumberingSystem(),
+                baseDateTimeFormat.getTimeZone(),
+                effectiveHourCycle,
+                effectiveHourCycle,
+                weekdayOption,
+                eraOption,
+                yearOption,
+                monthOption,
+                dayOption,
+                dayPeriodOption,
+                hourOption,
+                minuteOption,
+                secondOption,
+                fractionalSecondDigits,
+                timeZoneNameOption,
+                false,
+                false);
+    }
+
     public static JSValue createListFormat(JSContext context, JSObject prototype, JSValue[] args) {
         try {
             Locale locale = resolveLocale(context, args, 0);
@@ -3266,6 +3335,226 @@ public final class JSIntlObject {
         }
     }
 
+    private static JSIntlDateTimeFormat createTemporalDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat,
+            DateTimeFormattableKind formattableKind) {
+        boolean supportsDateFields = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH, PLAIN_MONTH_DAY -> true;
+            default -> false;
+        };
+        boolean supportsTimeFields = switch (formattableKind) {
+            case PLAIN_DATE_TIME, PLAIN_TIME -> true;
+            default -> false;
+        };
+        boolean supportsWeekday = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME -> true;
+            default -> false;
+        };
+        boolean supportsEra = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsYear = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsMonth = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_YEAR_MONTH -> true;
+            default -> false;
+        };
+        boolean supportsDay = switch (formattableKind) {
+            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY -> true;
+            default -> false;
+        };
+
+        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
+        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
+        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
+        String eraOption = baseDateTimeFormat.getEraOption();
+        String yearOption = baseDateTimeFormat.getYearOption();
+        String monthOption = baseDateTimeFormat.getMonthOption();
+        String dayOption = baseDateTimeFormat.getDayOption();
+        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
+        String hourOption = baseDateTimeFormat.getHourOption();
+        String minuteOption = baseDateTimeFormat.getMinuteOption();
+        String secondOption = baseDateTimeFormat.getSecondOption();
+        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
+
+        if (baseDateTimeFormat.hasDefaultDateComponents()) {
+            yearOption = null;
+            monthOption = null;
+            dayOption = null;
+        }
+        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
+            hourOption = null;
+            minuteOption = null;
+            secondOption = null;
+        }
+
+        if ((formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH
+                || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY)
+                && dateStyle != null) {
+            DateStyleOptionFields dateStyleOptionFields = toDateStyleOptionFields(dateStyle);
+            if (weekdayOption == null) {
+                weekdayOption = dateStyleOptionFields.weekdayOption();
+            }
+            if (yearOption == null) {
+                yearOption = dateStyleOptionFields.yearOption();
+            }
+            if (monthOption == null) {
+                monthOption = dateStyleOptionFields.monthOption();
+            }
+            if (dayOption == null) {
+                dayOption = dateStyleOptionFields.dayOption();
+            }
+            dateStyle = null;
+        }
+
+        boolean droppedOptionForTypeError = false;
+        if (!supportsDateFields && dateStyle != null) {
+            dateStyle = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && timeStyle != null) {
+            timeStyle = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsWeekday && weekdayOption != null) {
+            weekdayOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsEra && eraOption != null) {
+            eraOption = null;
+        }
+        if (!supportsYear && yearOption != null) {
+            yearOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsMonth && monthOption != null) {
+            monthOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsDay && dayOption != null) {
+            dayOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && dayPeriodOption != null) {
+            dayPeriodOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && hourOption != null) {
+            hourOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && minuteOption != null) {
+            minuteOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && secondOption != null) {
+            secondOption = null;
+            droppedOptionForTypeError = true;
+        }
+        if (!supportsTimeFields && fractionalSecondDigits != null) {
+            fractionalSecondDigits = null;
+            droppedOptionForTypeError = true;
+        }
+
+        boolean hasOverlap = dateStyle != null
+                || timeStyle != null
+                || weekdayOption != null
+                || eraOption != null
+                || yearOption != null
+                || monthOption != null
+                || dayOption != null
+                || dayPeriodOption != null
+                || hourOption != null
+                || minuteOption != null
+                || secondOption != null
+                || fractionalSecondDigits != null;
+        if (!hasOverlap && droppedOptionForTypeError) {
+            context.throwTypeError("Invalid date/time formatting options");
+            return null;
+        }
+
+        switch (formattableKind) {
+            case PLAIN_DATE -> {
+                boolean hasDateComponent = weekdayOption != null || yearOption != null
+                        || monthOption != null || dayOption != null || dateStyle != null;
+                if (!hasDateComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                }
+            }
+            case PLAIN_DATE_TIME -> {
+                boolean hasDateComponent = weekdayOption != null || yearOption != null
+                        || monthOption != null || dayOption != null || dateStyle != null;
+                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
+                        || minuteOption != null || secondOption != null
+                        || fractionalSecondDigits != null || timeStyle != null;
+                if (!hasDateComponent && !hasTimeComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                    hourOption = "numeric";
+                    minuteOption = "numeric";
+                    secondOption = "numeric";
+                }
+            }
+            case PLAIN_MONTH_DAY -> {
+                boolean hasMonthDayComponent = monthOption != null || dayOption != null || dateStyle != null;
+                if (!hasMonthDayComponent) {
+                    monthOption = "numeric";
+                    dayOption = "numeric";
+                }
+            }
+            case PLAIN_TIME -> {
+                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
+                        || minuteOption != null || secondOption != null
+                        || fractionalSecondDigits != null || timeStyle != null;
+                if (!hasTimeComponent) {
+                    hourOption = "numeric";
+                    minuteOption = "numeric";
+                    secondOption = "numeric";
+                }
+            }
+            case PLAIN_YEAR_MONTH -> {
+                boolean hasYearMonthComponent = yearOption != null || monthOption != null || dateStyle != null;
+                if (!hasYearMonthComponent) {
+                    yearOption = "numeric";
+                    monthOption = "numeric";
+                }
+            }
+            default -> {
+            }
+        }
+
+        return new JSIntlDateTimeFormat(
+                context,
+                baseDateTimeFormat.getLocale(),
+                dateStyle,
+                timeStyle,
+                baseDateTimeFormat.getCalendar(),
+                baseDateTimeFormat.getNumberingSystem(),
+                "UTC",
+                baseDateTimeFormat.getHourCycle(),
+                baseDateTimeFormat.getHourCycleForInstant(),
+                weekdayOption,
+                eraOption,
+                yearOption,
+                monthOption,
+                dayOption,
+                dayPeriodOption,
+                hourOption,
+                minuteOption,
+                secondOption,
+                fractionalSecondDigits,
+                null,
+                false,
+                false);
+    }
+
     private static JSValue datePartsToJSArray(JSContext context, List<JSIntlDateTimeFormat.DatePart> parts) {
         JSArray array = context.createJSArray();
         for (JSIntlDateTimeFormat.DatePart part : parts) {
@@ -3275,36 +3564,6 @@ public final class JSIntlObject {
             array.push(partObj);
         }
         return array;
-    }
-
-    private static boolean differsOnlyInTimeParts(
-            List<JSIntlDateTimeFormat.DatePart> startParts,
-            List<JSIntlDateTimeFormat.DatePart> endParts) {
-        if (startParts.size() != endParts.size()) {
-            return false;
-        }
-        boolean hasDifference = false;
-        boolean hasHourDifference = false;
-        for (int index = 0; index < startParts.size(); index++) {
-            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
-            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
-            if (startPart.equals(endPart)) {
-                continue;
-            }
-            hasDifference = true;
-            String type = startPart.type();
-            if (!"hour".equals(type)
-                    && !"minute".equals(type)
-                    && !"second".equals(type)
-                    && !"fractionalSecond".equals(type)
-                    && !"dayPeriod".equals(type)) {
-                return false;
-            }
-            if ("hour".equals(type)) {
-                hasHourDifference = true;
-            }
-        }
-        return hasDifference && hasHourDifference;
     }
 
     public static JSValue dateTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -3686,6 +3945,36 @@ public final class JSIntlObject {
         return resolvedOptions;
     }
 
+    private static boolean differsOnlyInTimeParts(
+            List<JSIntlDateTimeFormat.DatePart> startParts,
+            List<JSIntlDateTimeFormat.DatePart> endParts) {
+        if (startParts.size() != endParts.size()) {
+            return false;
+        }
+        boolean hasDifference = false;
+        boolean hasHourDifference = false;
+        for (int index = 0; index < startParts.size(); index++) {
+            JSIntlDateTimeFormat.DatePart startPart = startParts.get(index);
+            JSIntlDateTimeFormat.DatePart endPart = endParts.get(index);
+            if (startPart.equals(endPart)) {
+                continue;
+            }
+            hasDifference = true;
+            String type = startPart.type();
+            if (!"hour".equals(type)
+                    && !"minute".equals(type)
+                    && !"second".equals(type)
+                    && !"fractionalSecond".equals(type)
+                    && !"dayPeriod".equals(type)) {
+                return false;
+            }
+            if ("hour".equals(type)) {
+                hasHourDifference = true;
+            }
+        }
+        return hasDifference && hasHourDifference;
+    }
+
     /**
      * Intl.DisplayNames.prototype.of(code)
      */
@@ -3882,6 +4171,21 @@ public final class JSIntlObject {
         } catch (IllegalArgumentException e) {
             return 2;
         }
+    }
+
+    private static JSIntlDateTimeFormat getEffectiveDateTimeFormat(
+            JSContext context,
+            JSIntlDateTimeFormat baseDateTimeFormat,
+            DateTimeFormattableKind formattableKind) {
+        return switch (formattableKind) {
+            case NUMBER -> baseDateTimeFormat;
+            case INSTANT -> createInstantDateTimeFormat(context, baseDateTimeFormat);
+            case ZONED_DATE_TIME -> {
+                context.throwTypeError("Invalid date/time value");
+                yield null;
+            }
+            default -> createTemporalDateTimeFormat(context, baseDateTimeFormat, formattableKind);
+        };
     }
 
     /**
@@ -4197,6 +4501,19 @@ public final class JSIntlObject {
         return TIMEZONE_LOOKUP_MAP;
     }
 
+    private static boolean isFormattableEpochMillisValid(JSContext context, DateTimeFormattable formattable) {
+        if (!Double.isFinite(formattable.epochMillis())) {
+            context.throwRangeError("Invalid time value");
+            return false;
+        }
+        if (formattable.kind() == DateTimeFormattableKind.NUMBER
+                && Math.abs(formattable.epochMillis()) > 8.64e15) {
+            context.throwRangeError("Invalid time value");
+            return false;
+        }
+        return true;
+    }
+
     private static boolean isNaNRangeNumberValue(JSContext context, JSValue value) {
         if (value instanceof JSBigInt) {
             return false;
@@ -4275,6 +4592,30 @@ public final class JSIntlObject {
             return false;
         }
         return SUPPORTED_NUMBERING_SYSTEMS.contains(numberingSystem);
+    }
+
+    private static boolean isTemporalCalendarCompatibleWithDateTimeFormat(
+            JSContext context,
+            DateTimeFormattable formattable,
+            JSIntlDateTimeFormat dateTimeFormat) {
+        String temporalCalendarId = formattable.calendarId();
+        if (temporalCalendarId == null || temporalCalendarId.isEmpty()) {
+            return true;
+        }
+        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId);
+        if ("iso8601".equals(canonicalTemporalCalendarId)) {
+            return true;
+        }
+        String formatterCalendarId = dateTimeFormat.getCalendar();
+        if (formatterCalendarId == null || formatterCalendarId.isEmpty()) {
+            return true;
+        }
+        String canonicalFormatterCalendarId = canonicalizeCalendar(formatterCalendarId);
+        if (!canonicalTemporalCalendarId.equals(canonicalFormatterCalendarId)) {
+            context.throwRangeError("Invalid date/time value");
+            return false;
+        }
+        return true;
     }
 
     /**
@@ -5315,6 +5656,8 @@ public final class JSIntlObject {
         return null;
     }
 
+    // ---- Locale option validation helpers ----
+
     public static JSValue relativeTimeFormatFormat(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
             return context.throwTypeError("Intl.RelativeTimeFormat.prototype.format called on incompatible receiver");
@@ -5396,8 +5739,6 @@ public final class JSIntlObject {
             return context.throwRangeError(e.getMessage());
         }
     }
-
-    // ---- Locale option validation helpers ----
 
     public static JSValue relativeTimeFormatResolvedOptions(JSContext context, JSValue thisArg, JSValue[] args) {
         if (!(thisArg instanceof JSIntlRelativeTimeFormat relativeTimeFormat)) {
@@ -5554,6 +5895,8 @@ public final class JSIntlObject {
         }
         return segments.createIterator(context);
     }
+
+    // ---- New Locale prototype methods ----
 
     /**
      * StringListFromIterable (ECMA-402 §13.5.1).
@@ -5719,8 +6062,6 @@ public final class JSIntlObject {
         }
         return locale;
     }
-
-    // ---- New Locale prototype methods ----
 
     /**
      * Strip all extensions (-u-..., -x-..., etc.) from a locale tag,
@@ -5969,368 +6310,6 @@ public final class JSIntlObject {
             result.push(new JSString(value));
         }
         return result;
-    }
-
-    private static JSIntlDateTimeFormat createTemporalDateTimeFormat(
-            JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat,
-            DateTimeFormattableKind formattableKind) {
-        boolean supportsDateFields = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH, PLAIN_MONTH_DAY -> true;
-            default -> false;
-        };
-        boolean supportsTimeFields = switch (formattableKind) {
-            case PLAIN_DATE_TIME, PLAIN_TIME -> true;
-            default -> false;
-        };
-        boolean supportsWeekday = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME -> true;
-            default -> false;
-        };
-        boolean supportsEra = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
-            default -> false;
-        };
-        boolean supportsYear = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_YEAR_MONTH -> true;
-            default -> false;
-        };
-        boolean supportsMonth = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY, PLAIN_YEAR_MONTH -> true;
-            default -> false;
-        };
-        boolean supportsDay = switch (formattableKind) {
-            case PLAIN_DATE, PLAIN_DATE_TIME, PLAIN_MONTH_DAY -> true;
-            default -> false;
-        };
-
-        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
-        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
-        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
-        String eraOption = baseDateTimeFormat.getEraOption();
-        String yearOption = baseDateTimeFormat.getYearOption();
-        String monthOption = baseDateTimeFormat.getMonthOption();
-        String dayOption = baseDateTimeFormat.getDayOption();
-        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
-        String hourOption = baseDateTimeFormat.getHourOption();
-        String minuteOption = baseDateTimeFormat.getMinuteOption();
-        String secondOption = baseDateTimeFormat.getSecondOption();
-        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
-
-        if (baseDateTimeFormat.hasDefaultDateComponents()) {
-            yearOption = null;
-            monthOption = null;
-            dayOption = null;
-        }
-        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
-        }
-
-        if ((formattableKind == DateTimeFormattableKind.PLAIN_YEAR_MONTH
-                || formattableKind == DateTimeFormattableKind.PLAIN_MONTH_DAY)
-                && dateStyle != null) {
-            DateStyleOptionFields dateStyleOptionFields = toDateStyleOptionFields(dateStyle);
-            if (weekdayOption == null) {
-                weekdayOption = dateStyleOptionFields.weekdayOption();
-            }
-            if (yearOption == null) {
-                yearOption = dateStyleOptionFields.yearOption();
-            }
-            if (monthOption == null) {
-                monthOption = dateStyleOptionFields.monthOption();
-            }
-            if (dayOption == null) {
-                dayOption = dateStyleOptionFields.dayOption();
-            }
-            dateStyle = null;
-        }
-
-        boolean droppedOptionForTypeError = false;
-        if (!supportsDateFields && dateStyle != null) {
-            dateStyle = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && timeStyle != null) {
-            timeStyle = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsWeekday && weekdayOption != null) {
-            weekdayOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsEra && eraOption != null) {
-            eraOption = null;
-        }
-        if (!supportsYear && yearOption != null) {
-            yearOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsMonth && monthOption != null) {
-            monthOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsDay && dayOption != null) {
-            dayOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && dayPeriodOption != null) {
-            dayPeriodOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && hourOption != null) {
-            hourOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && minuteOption != null) {
-            minuteOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && secondOption != null) {
-            secondOption = null;
-            droppedOptionForTypeError = true;
-        }
-        if (!supportsTimeFields && fractionalSecondDigits != null) {
-            fractionalSecondDigits = null;
-            droppedOptionForTypeError = true;
-        }
-
-        boolean hasOverlap = dateStyle != null
-                || timeStyle != null
-                || weekdayOption != null
-                || eraOption != null
-                || yearOption != null
-                || monthOption != null
-                || dayOption != null
-                || dayPeriodOption != null
-                || hourOption != null
-                || minuteOption != null
-                || secondOption != null
-                || fractionalSecondDigits != null;
-        if (!hasOverlap && droppedOptionForTypeError) {
-            context.throwTypeError("Invalid date/time formatting options");
-            return null;
-        }
-
-        switch (formattableKind) {
-            case PLAIN_DATE -> {
-                boolean hasDateComponent = weekdayOption != null || yearOption != null
-                        || monthOption != null || dayOption != null || dateStyle != null;
-                if (!hasDateComponent) {
-                    yearOption = "numeric";
-                    monthOption = "numeric";
-                    dayOption = "numeric";
-                }
-            }
-            case PLAIN_DATE_TIME -> {
-                boolean hasDateComponent = weekdayOption != null || yearOption != null
-                        || monthOption != null || dayOption != null || dateStyle != null;
-                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
-                        || minuteOption != null || secondOption != null
-                        || fractionalSecondDigits != null || timeStyle != null;
-                if (!hasDateComponent && !hasTimeComponent) {
-                    yearOption = "numeric";
-                    monthOption = "numeric";
-                    dayOption = "numeric";
-                    hourOption = "numeric";
-                    minuteOption = "numeric";
-                    secondOption = "numeric";
-                }
-            }
-            case PLAIN_MONTH_DAY -> {
-                boolean hasMonthDayComponent = monthOption != null || dayOption != null || dateStyle != null;
-                if (!hasMonthDayComponent) {
-                    monthOption = "numeric";
-                    dayOption = "numeric";
-                }
-            }
-            case PLAIN_TIME -> {
-                boolean hasTimeComponent = dayPeriodOption != null || hourOption != null
-                        || minuteOption != null || secondOption != null
-                        || fractionalSecondDigits != null || timeStyle != null;
-                if (!hasTimeComponent) {
-                    hourOption = "numeric";
-                    minuteOption = "numeric";
-                    secondOption = "numeric";
-                }
-            }
-            case PLAIN_YEAR_MONTH -> {
-                boolean hasYearMonthComponent = yearOption != null || monthOption != null || dateStyle != null;
-                if (!hasYearMonthComponent) {
-                    yearOption = "numeric";
-                    monthOption = "numeric";
-                }
-            }
-            default -> {
-            }
-        }
-
-        return new JSIntlDateTimeFormat(
-                context,
-                baseDateTimeFormat.getLocale(),
-                dateStyle,
-                timeStyle,
-                baseDateTimeFormat.getCalendar(),
-                baseDateTimeFormat.getNumberingSystem(),
-                "UTC",
-                baseDateTimeFormat.getHourCycle(),
-                baseDateTimeFormat.getHourCycleForInstant(),
-                weekdayOption,
-                eraOption,
-                yearOption,
-                monthOption,
-                dayOption,
-                dayPeriodOption,
-                hourOption,
-                minuteOption,
-                secondOption,
-                fractionalSecondDigits,
-                null,
-                false,
-                false);
-    }
-
-    private static JSIntlDateTimeFormat getEffectiveDateTimeFormat(
-            JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat,
-            DateTimeFormattableKind formattableKind) {
-        return switch (formattableKind) {
-            case NUMBER -> baseDateTimeFormat;
-            case INSTANT -> createInstantDateTimeFormat(context, baseDateTimeFormat);
-            case ZONED_DATE_TIME -> {
-                context.throwTypeError("Invalid date/time value");
-                yield null;
-            }
-            default -> createTemporalDateTimeFormat(context, baseDateTimeFormat, formattableKind);
-        };
-    }
-
-    private static JSIntlDateTimeFormat createInstantDateTimeFormat(
-            JSContext context,
-            JSIntlDateTimeFormat baseDateTimeFormat) {
-        String effectiveHourCycle = baseDateTimeFormat.getHourCycle();
-        if (effectiveHourCycle == null) {
-            effectiveHourCycle = baseDateTimeFormat.getHourCycleForInstant();
-        }
-        if (effectiveHourCycle == null) {
-            Map<String, String> unicodeExtensions = parseUnicodeExtensions(baseDateTimeFormat.getLocale().toLanguageTag());
-            String hourCycleFromUnicodeExtension = unicodeExtensions.get("hc");
-            if ("h11".equals(hourCycleFromUnicodeExtension)
-                    || "h12".equals(hourCycleFromUnicodeExtension)
-                    || "h23".equals(hourCycleFromUnicodeExtension)
-                    || "h24".equals(hourCycleFromUnicodeExtension)) {
-                effectiveHourCycle = hourCycleFromUnicodeExtension;
-            } else {
-                effectiveHourCycle = getLocaleDefaultHourCycle(baseDateTimeFormat.getLocale());
-            }
-        }
-
-        FormatStyle dateStyle = baseDateTimeFormat.getDateStyle();
-        FormatStyle timeStyle = baseDateTimeFormat.getTimeStyle();
-        String weekdayOption = baseDateTimeFormat.getWeekdayOption();
-        String eraOption = baseDateTimeFormat.getEraOption();
-        String yearOption = baseDateTimeFormat.getYearOption();
-        String monthOption = baseDateTimeFormat.getMonthOption();
-        String dayOption = baseDateTimeFormat.getDayOption();
-        String dayPeriodOption = baseDateTimeFormat.getDayPeriodOption();
-        String hourOption = baseDateTimeFormat.getHourOption();
-        String minuteOption = baseDateTimeFormat.getMinuteOption();
-        String secondOption = baseDateTimeFormat.getSecondOption();
-        Integer fractionalSecondDigits = baseDateTimeFormat.getFractionalSecondDigits();
-        String timeZoneNameOption = baseDateTimeFormat.getTimeZoneNameOption();
-
-        if (baseDateTimeFormat.hasDefaultDateComponents()) {
-            yearOption = null;
-            monthOption = null;
-            dayOption = null;
-        }
-        if (baseDateTimeFormat.hasDefaultTimeComponents()) {
-            hourOption = null;
-            minuteOption = null;
-            secondOption = null;
-        }
-
-        boolean hasDateComponent = dateStyle != null
-                || weekdayOption != null
-                || yearOption != null
-                || monthOption != null
-                || dayOption != null;
-        boolean hasTimeComponent = timeStyle != null
-                || dayPeriodOption != null
-                || hourOption != null
-                || minuteOption != null
-                || secondOption != null
-                || fractionalSecondDigits != null;
-        if (!hasDateComponent && !hasTimeComponent) {
-            yearOption = "numeric";
-            monthOption = "numeric";
-            dayOption = "numeric";
-            hourOption = "numeric";
-            minuteOption = "numeric";
-            secondOption = "numeric";
-        }
-
-        return new JSIntlDateTimeFormat(
-                context,
-                baseDateTimeFormat.getLocale(),
-                dateStyle,
-                timeStyle,
-                baseDateTimeFormat.getCalendar(),
-                baseDateTimeFormat.getNumberingSystem(),
-                baseDateTimeFormat.getTimeZone(),
-                effectiveHourCycle,
-                effectiveHourCycle,
-                weekdayOption,
-                eraOption,
-                yearOption,
-                monthOption,
-                dayOption,
-                dayPeriodOption,
-                hourOption,
-                minuteOption,
-                secondOption,
-                fractionalSecondDigits,
-                timeZoneNameOption,
-                false,
-                false);
-    }
-
-    private static boolean isFormattableEpochMillisValid(JSContext context, DateTimeFormattable formattable) {
-        if (!Double.isFinite(formattable.epochMillis())) {
-            context.throwRangeError("Invalid time value");
-            return false;
-        }
-        if (formattable.kind() == DateTimeFormattableKind.NUMBER
-                && Math.abs(formattable.epochMillis()) > 8.64e15) {
-            context.throwRangeError("Invalid time value");
-            return false;
-        }
-        return true;
-    }
-
-    private static boolean isTemporalCalendarCompatibleWithDateTimeFormat(
-            JSContext context,
-            DateTimeFormattable formattable,
-            JSIntlDateTimeFormat dateTimeFormat) {
-        String temporalCalendarId = formattable.calendarId();
-        if (temporalCalendarId == null || temporalCalendarId.isEmpty()) {
-            return true;
-        }
-        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId);
-        if ("iso8601".equals(canonicalTemporalCalendarId)) {
-            return true;
-        }
-        String formatterCalendarId = dateTimeFormat.getCalendar();
-        if (formatterCalendarId == null || formatterCalendarId.isEmpty()) {
-            return true;
-        }
-        String canonicalFormatterCalendarId = canonicalizeCalendar(formatterCalendarId);
-        if (!canonicalTemporalCalendarId.equals(canonicalFormatterCalendarId)) {
-            context.throwRangeError("Invalid date/time value");
-            return false;
-        }
-        return true;
     }
 
     private static DateStyleOptionFields toDateStyleOptionFields(FormatStyle dateStyle) {
@@ -6825,5 +6804,26 @@ public final class JSIntlObject {
             case "6" -> "sat";
             default -> value;
         };
+    }
+
+    private enum DateTimeFormattableKind {
+        NUMBER,
+        INSTANT,
+        PLAIN_DATE,
+        PLAIN_DATE_TIME,
+        PLAIN_MONTH_DAY,
+        PLAIN_TIME,
+        PLAIN_YEAR_MONTH,
+        ZONED_DATE_TIME
+    }
+
+    private record DateStyleOptionFields(
+            String weekdayOption,
+            String yearOption,
+            String monthOption,
+            String dayOption) {
+    }
+
+    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, String calendarId) {
     }
 }

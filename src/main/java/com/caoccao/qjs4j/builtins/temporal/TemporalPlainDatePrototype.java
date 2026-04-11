@@ -476,24 +476,6 @@ public final class TemporalPlainDatePrototype {
         return new DateDurationFields(years, months, weeks, dayDifference);
     }
 
-    private static int compareCalendarDateFields(
-            long firstYear,
-            String firstMonthCode,
-            int firstDay,
-            int secondYear,
-            String secondMonthCode,
-            int secondDay) {
-        int yearComparison = Long.compare(firstYear, secondYear);
-        if (yearComparison != 0) {
-            return yearComparison;
-        }
-        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
-        if (monthComparison != 0) {
-            return monthComparison;
-        }
-        return Integer.compare(firstDay, secondDay);
-    }
-
     private static DateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
         int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
         if (sign == 0) {
@@ -537,87 +519,18 @@ public final class TemporalPlainDatePrototype {
         return new DateDurationFields(years, months, weeks, dayDifference);
     }
 
-    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        MonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        MonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
-        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
-            return firstMonthCode.compareTo(secondMonthCode);
-        }
-        int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.monthNumber(),
-                secondMonthCodeParts.monthNumber());
-        if (monthNumberComparison != 0) {
-            return monthNumberComparison;
-        }
-        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
-            return 0;
-        }
-        return firstMonthCodeParts.leapMonth() ? 1 : -1;
-    }
-
-    private static boolean doesConceptualYearDateSurpassSecondDate(
-            int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
-            long candidateYears,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
-        long candidateYear = firstCalendarDateFields.year() + candidateYears;
-        int comparison = compareCalendarDateFields(
-                candidateYear,
-                firstCalendarDateFields.monthCode(),
-                firstCalendarDateFields.day(),
-                secondCalendarDateFields.year(),
-                secondCalendarDateFields.monthCode(),
-                secondCalendarDateFields.day());
-        return sign * comparison > 0;
-    }
-
-    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
-            int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
-            IsoDate constrainedCandidateDate,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
-            String calendarId) {
-        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
-        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
-            return false;
-        }
-        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
-            return false;
-        }
-        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
-            return false;
-        }
-        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
-    }
-
-    private static MonthCodeParts parseMonthCodeParts(String monthCodeText) {
-        if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
-            return null;
-        }
-        if (monthCodeText.charAt(0) != 'M') {
-            return null;
-        }
-        if (!Character.isDigit(monthCodeText.charAt(1)) || !Character.isDigit(monthCodeText.charAt(2))) {
-            return null;
-        }
-        int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
-        boolean leapMonth = false;
-        if (monthCodeText.length() == 4) {
-            if (monthCodeText.charAt(3) != 'L') {
-                return null;
-            }
-            leapMonth = true;
-        }
-        return new MonthCodeParts(monthNumber, leapMonth);
-    }
-
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "calendarId");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
         return new JSString(plainDate.getCalendarId());
+    }
+
+    private static boolean calendarSupportsEraFields(String calendarId) {
+        return !"iso8601".equals(calendarId)
+                && !"chinese".equals(calendarId)
+                && !"dangi".equals(calendarId);
     }
 
     private static String canonicalizeTemporalUnit(String unitText, boolean allowAuto) {
@@ -648,6 +561,42 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
         return plainDate;
+    }
+
+    private static int compareCalendarDateFields(
+            long firstYear,
+            String firstMonthCode,
+            int firstDay,
+            int secondYear,
+            String secondMonthCode,
+            int secondDay) {
+        int yearComparison = Long.compare(firstYear, secondYear);
+        if (yearComparison != 0) {
+            return yearComparison;
+        }
+        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
+        if (monthComparison != 0) {
+            return monthComparison;
+        }
+        return Integer.compare(firstDay, secondDay);
+    }
+
+    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
+        MonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        MonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
+            return firstMonthCode.compareTo(secondMonthCode);
+        }
+        int monthNumberComparison = Integer.compare(
+                firstMonthCodeParts.monthNumber(),
+                secondMonthCodeParts.monthNumber());
+        if (monthNumberComparison != 0) {
+            return monthNumberComparison;
+        }
+        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
+            return 0;
+        }
+        return firstMonthCodeParts.leapMonth() ? 1 : -1;
     }
 
     private static IsoDate constrainIsoDate(long year, int month, int dayOfMonth) {
@@ -769,6 +718,42 @@ public final class TemporalPlainDatePrototype {
         return TemporalDurationConstructor.createDuration(context, resultDuration);
     }
 
+    private static boolean doesConceptualYearDateSurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            long candidateYears,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+        long candidateYear = firstCalendarDateFields.year() + candidateYears;
+        int comparison = compareCalendarDateFields(
+                candidateYear,
+                firstCalendarDateFields.monthCode(),
+                firstCalendarDateFields.day(),
+                secondCalendarDateFields.year(),
+                secondCalendarDateFields.monthCode(),
+                secondCalendarDateFields.day());
+        return sign * comparison > 0;
+    }
+
+    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
+            int sign,
+            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoDate constrainedCandidateDate,
+            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            String calendarId) {
+        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
+                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
+            return false;
+        }
+        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
+            return false;
+        }
+        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
+            return false;
+        }
+        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
+    }
+
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "equals");
         if (plainDate == null) {
@@ -806,95 +791,6 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(eraFields.eraYear());
-    }
-
-    private static EraFields resolveEraFields(JSTemporalPlainDate plainDate) {
-        String calendarId = plainDate.getCalendarId();
-        if ("iso8601".equals(calendarId) || "chinese".equals(calendarId) || "dangi".equals(calendarId)) {
-            return null;
-        }
-
-        IsoDate isoDate = plainDate.getIsoDate();
-        IsoDate calendarDate = resolveCalendarDate(plainDate.getContext(), plainDate);
-        int calendarYear = calendarDate.year();
-
-        if ("gregory".equals(calendarId)) {
-            if (calendarYear <= 0) {
-                return new EraFields("bce", 1 - calendarYear);
-            }
-            return new EraFields("ce", calendarYear);
-        }
-
-        if ("japanese".equals(calendarId)) {
-            LocalDate date = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
-            LocalDate reiwaStart = LocalDate.of(2019, 5, 1);
-            LocalDate heiseiStart = LocalDate.of(1989, 1, 8);
-            LocalDate showaStart = LocalDate.of(1926, 12, 25);
-            LocalDate taishoStart = LocalDate.of(1912, 7, 30);
-            LocalDate meijiStart = LocalDate.of(1873, 1, 1);
-
-            if (!date.isBefore(reiwaStart)) {
-                return new EraFields("reiwa", isoDate.year() - 2018);
-            }
-            if (!date.isBefore(heiseiStart)) {
-                return new EraFields("heisei", isoDate.year() - 1988);
-            }
-            if (!date.isBefore(showaStart)) {
-                return new EraFields("showa", isoDate.year() - 1925);
-            }
-            if (!date.isBefore(taishoStart)) {
-                return new EraFields("taisho", isoDate.year() - 1911);
-            }
-            if (!date.isBefore(meijiStart)) {
-                return new EraFields("meiji", isoDate.year() - 1867);
-            }
-            if (isoDate.year() <= 0) {
-                return new EraFields("bce", 1 - isoDate.year());
-            }
-            return new EraFields("ce", isoDate.year());
-        }
-
-        if ("roc".equals(calendarId)) {
-            if (calendarYear >= 1) {
-                return new EraFields("roc", calendarYear);
-            }
-            return new EraFields("broc", 1 - calendarYear);
-        }
-
-        if ("buddhist".equals(calendarId)) {
-            return new EraFields("be", calendarYear);
-        }
-        if ("coptic".equals(calendarId)) {
-            return new EraFields("am", calendarYear);
-        }
-        if ("ethiopic".equals(calendarId)) {
-            if (calendarYear <= 0) {
-                return new EraFields("aa", 5500 + calendarYear);
-            }
-            return new EraFields("am", calendarYear);
-        }
-        if ("ethioaa".equals(calendarId)) {
-            return new EraFields("aa", calendarYear);
-        }
-        if ("hebrew".equals(calendarId)) {
-            return new EraFields("am", calendarYear);
-        }
-        if ("indian".equals(calendarId)) {
-            return new EraFields("shaka", calendarYear);
-        }
-        if ("persian".equals(calendarId)) {
-            return new EraFields("ap", calendarYear);
-        }
-        if ("islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)) {
-            if (calendarYear > 0) {
-                return new EraFields("ah", calendarYear);
-            }
-            return new EraFields("bh", 1 - calendarYear);
-        }
-
-        return null;
     }
 
     private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -1084,6 +980,32 @@ public final class TemporalPlainDatePrototype {
         return sign * IsoDate.compareIsoDate(firstDate, secondDate) > 0;
     }
 
+    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
+        int leftRank = temporalUnitRank(leftUnit);
+        int rightRank = temporalUnitRank(rightUnit);
+        if (leftRank > rightRank) {
+            return rightUnit;
+        }
+        return leftUnit;
+    }
+
+    public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "month");
+        if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        return JSNumber.of(calendarDate.month());
+    }
+
+    public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
+        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "monthCode");
+        if (plainDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return new JSString(resolveCalendarMonthCode(context, plainDate));
+    }
+
     private static long monthsForYearDelta(
             JSContext context,
             IsoDate firstDate,
@@ -1137,32 +1059,6 @@ public final class TemporalPlainDatePrototype {
             }
         }
         return totalMonths;
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
-    }
-
-    public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "month");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
-        return JSNumber.of(calendarDate.month());
-    }
-
-    public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "monthCode");
-        if (plainDate == null) {
-            return JSUndefined.INSTANCE;
-        }
-        return new JSString(resolveCalendarMonthCode(context, plainDate));
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1327,6 +1223,27 @@ public final class TemporalPlainDatePrototype {
         return new MonthCodeInfo(month, leapMonth);
     }
 
+    private static MonthCodeParts parseMonthCodeParts(String monthCodeText) {
+        if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
+            return null;
+        }
+        if (monthCodeText.charAt(0) != 'M') {
+            return null;
+        }
+        if (!Character.isDigit(monthCodeText.charAt(1)) || !Character.isDigit(monthCodeText.charAt(2))) {
+            return null;
+        }
+        int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
+        boolean leapMonth = false;
+        if (monthCodeText.length() == 4) {
+            if (monthCodeText.charAt(3) != 'L') {
+                return null;
+            }
+            leapMonth = true;
+        }
+        return new MonthCodeParts(monthNumber, leapMonth);
+    }
+
     private static IsoDate resolveCalendarDate(JSContext context, JSTemporalPlainDate plainDate) {
         TemporalCalendarMath.CalendarDateFields calendarDateFields =
                 TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
@@ -1340,6 +1257,95 @@ public final class TemporalPlainDatePrototype {
         TemporalCalendarMath.CalendarDateFields calendarDateFields =
                 TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
         return calendarDateFields.monthCode();
+    }
+
+    private static EraFields resolveEraFields(JSTemporalPlainDate plainDate) {
+        String calendarId = plainDate.getCalendarId();
+        if ("iso8601".equals(calendarId) || "chinese".equals(calendarId) || "dangi".equals(calendarId)) {
+            return null;
+        }
+
+        IsoDate isoDate = plainDate.getIsoDate();
+        IsoDate calendarDate = resolveCalendarDate(plainDate.getContext(), plainDate);
+        int calendarYear = calendarDate.year();
+
+        if ("gregory".equals(calendarId)) {
+            if (calendarYear <= 0) {
+                return new EraFields("bce", 1 - calendarYear);
+            }
+            return new EraFields("ce", calendarYear);
+        }
+
+        if ("japanese".equals(calendarId)) {
+            LocalDate date = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
+            LocalDate reiwaStart = LocalDate.of(2019, 5, 1);
+            LocalDate heiseiStart = LocalDate.of(1989, 1, 8);
+            LocalDate showaStart = LocalDate.of(1926, 12, 25);
+            LocalDate taishoStart = LocalDate.of(1912, 7, 30);
+            LocalDate meijiStart = LocalDate.of(1873, 1, 1);
+
+            if (!date.isBefore(reiwaStart)) {
+                return new EraFields("reiwa", isoDate.year() - 2018);
+            }
+            if (!date.isBefore(heiseiStart)) {
+                return new EraFields("heisei", isoDate.year() - 1988);
+            }
+            if (!date.isBefore(showaStart)) {
+                return new EraFields("showa", isoDate.year() - 1925);
+            }
+            if (!date.isBefore(taishoStart)) {
+                return new EraFields("taisho", isoDate.year() - 1911);
+            }
+            if (!date.isBefore(meijiStart)) {
+                return new EraFields("meiji", isoDate.year() - 1867);
+            }
+            if (isoDate.year() <= 0) {
+                return new EraFields("bce", 1 - isoDate.year());
+            }
+            return new EraFields("ce", isoDate.year());
+        }
+
+        if ("roc".equals(calendarId)) {
+            if (calendarYear >= 1) {
+                return new EraFields("roc", calendarYear);
+            }
+            return new EraFields("broc", 1 - calendarYear);
+        }
+
+        if ("buddhist".equals(calendarId)) {
+            return new EraFields("be", calendarYear);
+        }
+        if ("coptic".equals(calendarId)) {
+            return new EraFields("am", calendarYear);
+        }
+        if ("ethiopic".equals(calendarId)) {
+            if (calendarYear <= 0) {
+                return new EraFields("aa", 5500 + calendarYear);
+            }
+            return new EraFields("am", calendarYear);
+        }
+        if ("ethioaa".equals(calendarId)) {
+            return new EraFields("aa", calendarYear);
+        }
+        if ("hebrew".equals(calendarId)) {
+            return new EraFields("am", calendarYear);
+        }
+        if ("indian".equals(calendarId)) {
+            return new EraFields("shaka", calendarYear);
+        }
+        if ("persian".equals(calendarId)) {
+            return new EraFields("ap", calendarYear);
+        }
+        if ("islamic-civil".equals(calendarId)
+                || "islamic-tbla".equals(calendarId)
+                || "islamic-umalqura".equals(calendarId)) {
+            if (calendarYear > 0) {
+                return new EraFields("ah", calendarYear);
+            }
+            return new EraFields("bh", 1 - calendarYear);
+        }
+
+        return null;
     }
 
     private static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
@@ -1948,9 +1954,6 @@ public final class TemporalPlainDatePrototype {
         }
     }
 
-    private record EraFields(String era, Integer eraYear) {
-    }
-
     private record DifferenceSettings(
             String largestUnit,
             String smallestUnit,
@@ -1958,15 +1961,12 @@ public final class TemporalPlainDatePrototype {
             String roundingMode) {
     }
 
+    private record EraFields(String era, Integer eraYear) {
+    }
+
     private record MonthCodeInfo(
             int month,
             boolean leapMonth) {
-    }
-
-    private static boolean calendarSupportsEraFields(String calendarId) {
-        return !"iso8601".equals(calendarId)
-                && !"chinese".equals(calendarId)
-                && !"dangi".equals(calendarId);
     }
 
     private record MonthCodeParts(

@@ -247,13 +247,6 @@ public final class TemporalPlainDateTimePrototype {
         return plainDateTime;
     }
 
-    private static JSTemporalPlainDate toPlainDate(JSContext context, JSTemporalPlainDateTime plainDateTime) {
-        return TemporalPlainDateConstructor.createPlainDate(
-                context,
-                plainDateTime.getIsoDateTime().date(),
-                plainDateTime.getCalendarId());
-    }
-
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "day");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
@@ -1077,6 +1070,13 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         return JSIntlObject.dateTimeFormatFormat(context, dateTimeFormat, new JSValue[]{plainDateTime});
+    }
+
+    private static JSTemporalPlainDate toPlainDate(JSContext context, JSTemporalPlainDateTime plainDateTime) {
+        return TemporalPlainDateConstructor.createPlainDate(
+                context,
+                plainDateTime.getIsoDateTime().date(),
+                plainDateTime.getCalendarId());
     }
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {

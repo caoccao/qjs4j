@@ -17,7 +17,10 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.*;
+import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.IsoTime;
+import com.caoccao.qjs4j.core.temporal.TemporalDuration;
+import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
 import java.math.BigInteger;
 import java.util.Locale;

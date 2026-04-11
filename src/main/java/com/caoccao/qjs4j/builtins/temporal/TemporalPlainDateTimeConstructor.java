@@ -29,6 +29,64 @@ public final class TemporalPlainDateTimeConstructor {
     private TemporalPlainDateTimeConstructor() {
     }
 
+    private static boolean calendarUsesEras(String calendarId) {
+        return "buddhist".equals(calendarId)
+                || "coptic".equals(calendarId)
+                || "ethioaa".equals(calendarId)
+                || "ethiopic".equals(calendarId)
+                || "gregory".equals(calendarId)
+                || "hebrew".equals(calendarId)
+                || "indian".equals(calendarId)
+                || "islamic-civil".equals(calendarId)
+                || "islamic-tbla".equals(calendarId)
+                || "islamic-umalqura".equals(calendarId)
+                || "japanese".equals(calendarId)
+                || "persian".equals(calendarId)
+                || "roc".equals(calendarId);
+    }
+
+    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
+        if (era == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+        String normalizedEra = era.toLowerCase();
+        return switch (calendarId) {
+            case "gregory" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                default -> invalidEra(context);
+            };
+            case "japanese" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
+                default -> invalidEra(context);
+            };
+            case "roc" -> switch (normalizedEra) {
+                case "roc", "minguo" -> "roc";
+                case "broc", "before-roc" -> "broc";
+                default -> invalidEra(context);
+            };
+            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
+            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
+            case "ethiopic" -> ("aa".equals(normalizedEra) || "am".equals(normalizedEra))
+                    ? normalizedEra
+                    : invalidEra(context);
+            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "indian" -> ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra))
+                    ? "shaka"
+                    : invalidEra(context);
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
+                case "ah", "bh" -> normalizedEra;
+                default -> invalidEra(context);
+            };
+            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
+            default -> invalidEra(context);
+        };
+    }
+
     /**
      * Temporal.PlainDateTime.compare(one, two)
      */
@@ -344,106 +402,6 @@ public final class TemporalPlainDateTimeConstructor {
         return createPlainDateTime(context, new IsoDateTime(resultDate, resultTime), calendarId);
     }
 
-    private static boolean calendarUsesEras(String calendarId) {
-        return "buddhist".equals(calendarId)
-                || "coptic".equals(calendarId)
-                || "ethioaa".equals(calendarId)
-                || "ethiopic".equals(calendarId)
-                || "gregory".equals(calendarId)
-                || "hebrew".equals(calendarId)
-                || "indian".equals(calendarId)
-                || "islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)
-                || "japanese".equals(calendarId)
-                || "persian".equals(calendarId)
-                || "roc".equals(calendarId);
-    }
-
-    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
-        if (era == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
-        }
-        String normalizedEra = era.toLowerCase();
-        return switch (calendarId) {
-            case "gregory" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                default -> invalidEra(context);
-            };
-            case "japanese" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
-                default -> invalidEra(context);
-            };
-            case "roc" -> switch (normalizedEra) {
-                case "roc", "minguo" -> "roc";
-                case "broc", "before-roc" -> "broc";
-                default -> invalidEra(context);
-            };
-            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
-            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
-            case "ethiopic" -> ("aa".equals(normalizedEra) || "am".equals(normalizedEra))
-                    ? normalizedEra
-                    : invalidEra(context);
-            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "indian" -> ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra))
-                    ? "shaka"
-                    : invalidEra(context);
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
-                case "ah", "bh" -> normalizedEra;
-                default -> invalidEra(context);
-            };
-            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
-            default -> invalidEra(context);
-        };
-    }
-
-    private static String invalidEra(JSContext context) {
-        context.throwRangeError("Temporal error: Invalid era.");
-        return null;
-    }
-
-    private static int yearFromEraAndEraYear(String calendarId, String era, int eraYear) {
-        return switch (calendarId) {
-            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
-            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
-            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
-            case "buddhist" -> eraYear;
-            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
-            default -> eraYear;
-        };
-    }
-
-    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
-        if ("ce".equals(era)) {
-            return eraYear;
-        }
-        if ("bce".equals(era)) {
-            return 1 - eraYear;
-        }
-        if ("meiji".equals(era)) {
-            return 1867 + eraYear;
-        }
-        if ("taisho".equals(era)) {
-            return 1911 + eraYear;
-        }
-        if ("showa".equals(era)) {
-            return 1925 + eraYear;
-        }
-        if ("heisei".equals(era)) {
-            return 1988 + eraYear;
-        }
-        if ("reiwa".equals(era)) {
-            return 2018 + eraYear;
-        }
-        return eraYear;
-    }
-
     static JSValue dateTimeFromString(JSContext context, String input) {
         TemporalParser.ParsedDateTime parsed = TemporalParser.parseDateTimeString(context, input);
         if (parsed == null) {
@@ -463,6 +421,11 @@ public final class TemporalPlainDateTimeConstructor {
         JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         return toTemporalDateTime(context, item, options);
+    }
+
+    private static String invalidEra(JSContext context) {
+        context.throwRangeError("Temporal error: Invalid era.");
+        return null;
     }
 
     private static boolean isTemporalPlainDateTimePrototype(JSContext context, JSObject candidate) {
@@ -509,6 +472,31 @@ public final class TemporalPlainDateTimeConstructor {
         }
         int month = Integer.parseInt(monthCode.substring(1, 3));
         return new ParsedMonthCode(month, leapMonth);
+    }
+
+    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
+        if ("ce".equals(era)) {
+            return eraYear;
+        }
+        if ("bce".equals(era)) {
+            return 1 - eraYear;
+        }
+        if ("meiji".equals(era)) {
+            return 1867 + eraYear;
+        }
+        if ("taisho".equals(era)) {
+            return 1911 + eraYear;
+        }
+        if ("showa".equals(era)) {
+            return 1925 + eraYear;
+        }
+        if ("heisei".equals(era)) {
+            return 1988 + eraYear;
+        }
+        if ("reiwa".equals(era)) {
+            return 2018 + eraYear;
+        }
+        return eraYear;
     }
 
     /**
@@ -570,6 +558,18 @@ public final class TemporalPlainDateTimeConstructor {
             return null;
         }
         return (JSTemporalPlainDateTime) result;
+    }
+
+    private static int yearFromEraAndEraYear(String calendarId, String era, int eraYear) {
+        return switch (calendarId) {
+            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
+            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
+            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
+            case "buddhist" -> eraYear;
+            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
+            default -> eraYear;
+        };
     }
 
     private record ParsedMonthCode(int month, boolean leapMonth) {

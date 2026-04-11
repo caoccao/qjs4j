@@ -676,9 +676,7 @@ public final class TemporalDurationConstructor {
         }
         if (secondsGroup != null) {
             int seconds = Integer.parseInt(secondsGroup);
-            if (seconds > 59) {
-                return false;
-            }
+            return seconds <= 59;
         }
         return true;
     }
@@ -718,6 +716,25 @@ public final class TemporalDurationConstructor {
                 toFloat64RepresentableLong(durationRecord.milliseconds()),
                 toFloat64RepresentableLong(durationRecord.microseconds()),
                 toFloat64RepresentableLong(durationRecord.nanoseconds()));
+    }
+
+    private static boolean offsetMatchesTimeZoneOffsetForString(
+            String offsetText,
+            int parsedOffsetSeconds,
+            int zoneOffsetSeconds) {
+        if (offsetTextIncludesSecondsOrFraction(offsetText)) {
+            return parsedOffsetSeconds == zoneOffsetSeconds;
+        }
+        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
+        return parsedOffsetSeconds == roundedZoneOffsetSeconds;
+    }
+
+    private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
     private static long parseDurationConstructorArgument(JSContext context, JSValue value) {
@@ -770,25 +787,6 @@ public final class TemporalDurationConstructor {
         int minutes = offsetParts.minutes();
         int seconds = offsetParts.secondsText() == null ? 0 : Integer.parseInt(offsetParts.secondsText());
         return sign * (hours * 3600 + minutes * 60 + seconds);
-    }
-
-    private static boolean offsetMatchesTimeZoneOffsetForString(
-            String offsetText,
-            int parsedOffsetSeconds,
-            int zoneOffsetSeconds) {
-        if (offsetTextIncludesSecondsOrFraction(offsetText)) {
-            return parsedOffsetSeconds == zoneOffsetSeconds;
-        }
-        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
-        return parsedOffsetSeconds == roundedZoneOffsetSeconds;
-    }
-
-    private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
     private static RelativeToReference parseRelativeToOption(JSContext context, JSValue optionsValue) {
@@ -1349,6 +1347,17 @@ public final class TemporalDurationConstructor {
         return TemporalTimeZone.formatOffset(parsedInstant.offsetSeconds());
     }
 
+    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
+        int sign = offsetSeconds < 0 ? -1 : 1;
+        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
+        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
+        int remainingSeconds = absoluteOffsetSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteOffsetMinutes++;
+        }
+        return sign * absoluteOffsetMinutes * 60;
+    }
+
     private static int temporalUnitRank(String temporalUnit) {
         return switch (temporalUnit) {
             case UNIT_DAY -> 0;
@@ -1428,17 +1437,6 @@ public final class TemporalDurationConstructor {
             return null;
         }
         return toOptionalIntegralLong(context, value, null);
-    }
-
-    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
-        int sign = offsetSeconds < 0 ? -1 : 1;
-        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
-        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
-        int remainingSeconds = absoluteOffsetSeconds % 60;
-        if (remainingSeconds >= 30) {
-            absoluteOffsetMinutes++;
-        }
-        return sign * absoluteOffsetMinutes * 60;
     }
 
     /**
