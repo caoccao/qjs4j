@@ -654,6 +654,34 @@ public final class TemporalPlainDatePrototype {
         return JSNumber.of(TemporalCalendarMath.daysInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
     }
 
+    static TemporalDuration differenceCalendarDates(
+            JSContext context,
+            IsoDate firstDate,
+            IsoDate secondDate,
+            String calendarId,
+            String largestUnit) {
+        DateDurationFields dateDifference = calendarDateUntil(
+                context,
+                firstDate,
+                secondDate,
+                calendarId,
+                largestUnit);
+        if (context.hasPendingException() || dateDifference == null) {
+            return null;
+        }
+        return new TemporalDuration(
+                dateDifference.years(),
+                dateDifference.months(),
+                dateDifference.weeks(),
+                dateDifference.days(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0);
+    }
+
     private static JSValue differenceTemporalPlainDate(
             JSContext context,
             JSTemporalPlainDate plainDate,

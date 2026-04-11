@@ -297,6 +297,40 @@ public final class TemporalPlainDateTimePrototype {
         return TemporalPlainDatePrototype.daysInYear(context, toPlainDate(context, plainDateTime), args);
     }
 
+    private static TemporalDuration differenceTemporalPlainDateTime(
+            JSContext context,
+            JSTemporalPlainDateTime firstDateTime,
+            JSTemporalPlainDateTime secondDateTime,
+            DifferenceSettings settings) {
+        String calendarId = firstDateTime.getCalendarId();
+        boolean noRounding = settings.roundingIncrement() == 1L
+                && "nanosecond".equals(settings.smallestUnit());
+        boolean sameTime = IsoTime.compareIsoTime(
+                firstDateTime.getIsoDateTime().time(),
+                secondDateTime.getIsoDateTime().time()) == 0;
+        boolean dateLargestUnit = "year".equals(settings.largestUnit())
+                || "month".equals(settings.largestUnit())
+                || "week".equals(settings.largestUnit())
+                || "day".equals(settings.largestUnit());
+        if (!"iso8601".equals(calendarId) && noRounding && sameTime && dateLargestUnit) {
+            return TemporalPlainDatePrototype.differenceCalendarDates(
+                    context,
+                    firstDateTime.getIsoDateTime().date(),
+                    secondDateTime.getIsoDateTime().date(),
+                    calendarId,
+                    settings.largestUnit());
+        } else {
+            return TemporalDurationPrototype.differencePlainDateTime(
+                    context,
+                    firstDateTime.getIsoDateTime(),
+                    secondDateTime.getIsoDateTime(),
+                    settings.largestUnit(),
+                    settings.smallestUnit(),
+                    settings.roundingIncrement(),
+                    settings.roundingMode());
+        }
+    }
+
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "equals");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
@@ -1013,14 +1047,11 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = differenceTemporalPlainDateTime(
                 context,
-                plainDateTime.getIsoDateTime(),
-                other.getIsoDateTime(),
-                settings.largestUnit(),
-                settings.smallestUnit(),
-                settings.roundingIncrement(),
-                settings.roundingMode());
+                plainDateTime,
+                other,
+                settings);
         if (context.hasPendingException() || durationRecord == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1242,14 +1273,11 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDuration durationRecord = TemporalDurationPrototype.differencePlainDateTime(
+        TemporalDuration durationRecord = differenceTemporalPlainDateTime(
                 context,
-                plainDateTime.getIsoDateTime(),
-                other.getIsoDateTime(),
-                settings.largestUnit(),
-                settings.smallestUnit(),
-                settings.roundingIncrement(),
-                settings.roundingMode());
+                plainDateTime,
+                other,
+                settings);
         if (context.hasPendingException() || durationRecord == null) {
             return JSUndefined.INSTANCE;
         }
