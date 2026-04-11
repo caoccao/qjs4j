@@ -169,14 +169,28 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate newDate = addDurationToDate(
-                context,
-                plainDateTime.getIsoDateTime().date(),
-                durationRecord.years(),
-                durationRecord.months(),
-                durationRecord.weeks(),
-                adjustedDays,
-                overflow);
+        String calendarId = plainDateTime.getCalendarId();
+        IsoDate newDate;
+        if ("iso8601".equals(calendarId)) {
+            newDate = addDurationToDate(
+                    context,
+                    plainDateTime.getIsoDateTime().date(),
+                    durationRecord.years(),
+                    durationRecord.months(),
+                    durationRecord.weeks(),
+                    adjustedDays,
+                    overflow);
+        } else {
+            newDate = TemporalCalendarMath.addCalendarDate(
+                    context,
+                    plainDateTime.getIsoDateTime().date(),
+                    calendarId,
+                    durationRecord.years(),
+                    durationRecord.months(),
+                    durationRecord.weeks(),
+                    adjustedDays,
+                    overflow);
+        }
         if (context.hasPendingException() || newDate == null) {
             return JSUndefined.INSTANCE;
         }
