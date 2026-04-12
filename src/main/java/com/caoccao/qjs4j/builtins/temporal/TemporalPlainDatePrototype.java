@@ -1554,9 +1554,18 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate isoDate = plainDate.getIsoDate();
-        return TemporalPlainMonthDayConstructor.createPlainMonthDay(context,
-                new IsoDate(1972, isoDate.month(), isoDate.day()), plainDate.getCalendarId());
+        TemporalCalendarMath.CalendarDateFields calendarDateFields =
+                TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
+        JSTemporalPlainMonthDay plainMonthDay = TemporalPlainMonthDayConstructor.createPlainMonthDayFromCalendarMonthDay(
+                context,
+                plainDate.getCalendarId(),
+                calendarDateFields.monthCode(),
+                calendarDateFields.day(),
+                "constrain");
+        if (context.hasPendingException() || plainMonthDay == null) {
+            return JSUndefined.INSTANCE;
+        }
+        return plainMonthDay;
     }
 
     public static JSValue toPlainYearMonth(JSContext context, JSValue thisArg, JSValue[] args) {

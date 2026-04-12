@@ -44,7 +44,7 @@ public final class TemporalCalendarMath {
             0x0c960, 0x0d954, 0x0d4a0, 0x0da50, 0x07552, 0x056a0, 0x0abb7, 0x025d0, 0x092d0, 0x0cab5,
             0x0a950, 0x0b4a0, 0x0baa4, 0x0ad50, 0x055d9, 0x04ba0, 0x0a5b0, 0x15176, 0x052b0, 0x0a930,
             0x07954, 0x06aa0, 0x0ad50, 0x05b52, 0x04b60, 0x0a6e6, 0x0a4e0, 0x0d260, 0x0ea65, 0x0d530,
-            0x05aa0, 0x076a3, 0x096d0, 0x04bd7, 0x04ad0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
+            0x05aa0, 0x076a3, 0x096d0, 0x04afb, 0x04ae0, 0x0a4d0, 0x1d0b6, 0x0d250, 0x0d520, 0x0dd45,
             0x0b5a0, 0x056d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0aa50, 0x1b255, 0x06d20, 0x0ada0,
             0x14b63
     };
@@ -281,7 +281,7 @@ public final class TemporalCalendarMath {
             case "persian" -> persianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case "hebrew" -> hebrewToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case "chinese", "dangi" ->
-                    lunisolarToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, calendarId);
+                    lunisolarToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, calendarId, overflow);
             default -> toIsoDateFromGregorianLike(calendarYear, monthSlot.monthCode(), regulatedDay);
         };
         if (resultIsoDate == null || !IsoDate.isValidIsoDate(resultIsoDate.year(), resultIsoDate.month(), resultIsoDate.day())) {
@@ -1106,7 +1106,12 @@ public final class TemporalCalendarMath {
         return (yearInfo & monthMask) != 0 ? 30 : 29;
     }
 
-    private static IsoDate lunisolarToIsoDate(int calendarYear, String monthCode, int dayOfMonth, String calendarId) {
+    private static IsoDate lunisolarToIsoDate(
+            int calendarYear,
+            String monthCode,
+            int dayOfMonth,
+            String calendarId,
+            String overflow) {
         MonthCodeData monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null) {
             return null;
@@ -1135,7 +1140,17 @@ public final class TemporalCalendarMath {
             if (calendarYear == 1899 && !monthCodeData.leapMonth() && monthCodeData.monthNumber() == 12) {
                 return toIsoDateFromGregorianLike(1900, TemporalUtils.monthCode(1), dayOfMonth);
             }
-            return toIsoDateFromGregorianLike(calendarYear + 1, TemporalUtils.monthCode(monthCodeData.monthNumber()), dayOfMonth);
+            int fallbackIsoYear = calendarYear + 1;
+            String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+            IsoDate fallbackIsoDate = toIsoDateFromGregorianLike(fallbackIsoYear, fallbackMonthCode, dayOfMonth);
+            if (fallbackIsoDate != null) {
+                return fallbackIsoDate;
+            }
+            if ("reject".equals(overflow)) {
+                return null;
+            }
+            int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(fallbackIsoYear, monthCodeData.monthNumber()));
+            return toIsoDateFromGregorianLike(fallbackIsoYear, fallbackMonthCode, constrainedDay);
         }
         int leapMonth = lunisolarLeapMonth(calendarId, calendarYear);
         if (monthCodeData.leapMonth() && leapMonth != monthCodeData.monthNumber()) {
@@ -1406,6 +1421,19 @@ public final class TemporalCalendarMath {
                 if (monthSlot.monthCode().equals(monthCodeFromProperty)) {
                     monthSlotFromCode = monthSlot;
                     break;
+                }
+            }
+            if (monthSlotFromCode == null) {
+                if (!"reject".equals(overflow)
+                        && ("chinese".equals(calendarId) || "dangi".equals(calendarId))
+                        && monthCodeData.leapMonth()) {
+                    String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+                    for (MonthSlot monthSlot : monthSlots) {
+                        if (monthSlot.monthCode().equals(fallbackMonthCode)) {
+                            monthSlotFromCode = monthSlot;
+                            break;
+                        }
+                    }
                 }
             }
             if (monthSlotFromCode == null) {
