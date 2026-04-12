@@ -79,7 +79,7 @@ object Config {
         const val JMH = "1.37"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"
-        const val QJS4J = "0.1.0"
+        const val QJS4J = "0.1.1"
     }
 }
 
