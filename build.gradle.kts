@@ -27,7 +27,7 @@ object Config {
 
 
     object Pom {
-        const val ARTIFACT_ID = "javet"
+        const val ARTIFACT_ID = "qjs4j"
         const val DESCRIPTION = "qjs4j is a native Java implementation of QuickJS."
 
         object Developer {
@@ -40,7 +40,7 @@ object Config {
 
         object License {
             const val NAME = "APACHE LICENSE, VERSION 2.0"
-            const val URL = "https://github.com/caoccao/Javet/blob/main/LICENSE"
+            const val URL = "https://github.com/caoccao/qjs4j/blob/main/LICENSE"
         }
 
         object Scm {
