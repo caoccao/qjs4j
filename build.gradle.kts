@@ -288,6 +288,7 @@ signing {
 }
 
 nexusPublishing {
+    repositoryDescription.set("qjs4j v${Config.VERSION}")
     repositories {
         sonatype {
             nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
