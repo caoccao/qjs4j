@@ -19,17 +19,8 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
 
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.DateTimeException;
-import java.time.chrono.Chronology;
-import java.time.chrono.HijrahChronology;
-import java.time.chrono.IsoChronology;
-import java.time.chrono.JapaneseChronology;
-import java.time.chrono.MinguoChronology;
-import java.time.chrono.ThaiBuddhistChronology;
+import java.time.*;
+import java.time.chrono.*;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.FormatStyle;
@@ -68,10 +59,10 @@ public final class JSIntlDateTimeFormat extends JSObject {
     private final String dayOption;
     private final String dayPeriodOption;
     private final String eraOption;
-    private final boolean hasDefaultDateComponents;
-    private final boolean hasDefaultTimeComponents;
     private final String formatPattern;
     private final Integer fractionalSecondDigits;
+    private final boolean hasDefaultDateComponents;
+    private final boolean hasDefaultTimeComponents;
     private final String hourCycle;
     private final String hourCycleForInstant;
     private final String hourOption;
@@ -267,13 +258,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
         };
     }
 
-    /**
-     * Check if a character is a separator in a date/time pattern.
-     * Covers ASCII space and Unicode space characters like U+202F (narrow no-break space)
-     * and U+00A0 (no-break space) used in CLDR patterns.
-     */
-    private static boolean isPatternSeparator(char c) {
-        return c == ' ' || c == '\u202F' || c == '\u00A0';
+    private static boolean isMeridiemMarker(String dayPeriodText) {
+        if (dayPeriodText == null) {
+            return false;
+        }
+        return "AM".equals(dayPeriodText)
+                || "PM".equals(dayPeriodText)
+                || "am".equals(dayPeriodText)
+                || "pm".equals(dayPeriodText);
     }
 
     private static boolean isNumericDatePartType(String datePartType) {
@@ -287,47 +279,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 || "fractionalSecond".equals(datePartType);
     }
 
-    private List<DatePart> normalizeDayPeriodLiteralSpacing(List<DatePart> parts) {
-        if (!shouldUseNarrowNoBreakSpaceBeforeMeridiem()) {
-            return parts;
-        }
-        if (parts.isEmpty()) {
-            return parts;
-        }
-        List<DatePart> normalizedParts = new ArrayList<>(parts.size());
-        for (int partIndex = 0; partIndex < parts.size(); partIndex++) {
-            DatePart currentPart = parts.get(partIndex);
-            if ("literal".equals(currentPart.type()) && " ".equals(currentPart.value())) {
-                int nextPartIndex = partIndex + 1;
-                if (nextPartIndex < parts.size()) {
-                    DatePart nextPart = parts.get(nextPartIndex);
-                    if ("dayPeriod".equals(nextPart.type()) && isMeridiemMarker(nextPart.value())) {
-                        normalizedParts.add(new DatePart("literal", "\u202F"));
-                        continue;
-                    }
-                }
-            }
-            normalizedParts.add(currentPart);
-        }
-        return normalizedParts;
-    }
-
-    private boolean shouldUseNarrowNoBreakSpaceBeforeMeridiem() {
-        String effectiveNumberingSystem = numberingSystem;
-        if (effectiveNumberingSystem == null) {
-            effectiveNumberingSystem = "latn";
-        }
-        return "en".equals(locale.getLanguage()) && "latn".equals(effectiveNumberingSystem);
-    }
-
-    private static boolean isMeridiemMarker(String dayPeriodText) {
-        if (dayPeriodText == null) {
-            return false;
-        }
-        return "AM".equals(dayPeriodText)
-                || "PM".equals(dayPeriodText)
-                || "am".equals(dayPeriodText)
-                || "pm".equals(dayPeriodText);
+    /**
+     * Check if a character is a separator in a date/time pattern.
+     * Covers ASCII space and Unicode space characters like U+202F (narrow no-break space)
+     * and U+00A0 (no-break space) used in CLDR patterns.
+     */
+    private static boolean isPatternSeparator(char c) {
+        return c == ' ' || c == '\u202F' || c == '\u00A0';
     }
 
     private static String resolveEnglishDayPeriod(int hourOfDay, String dayPeriodStyle) {
@@ -406,6 +364,15 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
         int lunarDay = offsetDays + 1;
         return new LunarDate(lunarYear, lunarMonth, lunarDay, inLeapMonth);
+    }
+
+    private static LunarDate toLunisolarDate(LocalDate gregorianDate, String calendarId) {
+        IsoDate isoDate = new IsoDate(gregorianDate.getYear(), gregorianDate.getMonthValue(), gregorianDate.getDayOfMonth());
+        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
+        String monthCode = calendarDateFields.monthCode();
+        int monthNumber = Integer.parseInt(monthCode.substring(1, 3));
+        boolean leapMonth = monthCode.endsWith("L");
+        return new LunarDate(calendarDateFields.year(), monthNumber, calendarDateFields.day(), leapMonth);
     }
 
     /**
@@ -887,14 +854,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return eraOption;
     }
 
-    public boolean hasDefaultDateComponents() {
-        return hasDefaultDateComponents;
-    }
-
-    public boolean hasDefaultTimeComponents() {
-        return hasDefaultTimeComponents;
-    }
-
     /**
      * Get the replacement pattern for a field character, or null if the field is not requested.
      */
@@ -1007,6 +966,21 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return yearOption;
     }
 
+    public boolean hasDefaultDateComponents() {
+        return hasDefaultDateComponents;
+    }
+
+    public boolean hasDefaultTimeComponents() {
+        return hasDefaultTimeComponents;
+    }
+
+    private boolean hasExplicitNumericDateOptions() {
+        boolean hasNumericYear = "numeric".equals(yearOption) || "2-digit".equals(yearOption);
+        boolean hasNumericMonth = "numeric".equals(monthOption) || "2-digit".equals(monthOption);
+        boolean hasNumericDay = "numeric".equals(dayOption) || "2-digit".equals(dayOption);
+        return hasNumericYear && hasNumericMonth && hasNumericDay;
+    }
+
     /**
      * Check if this formatter uses a text-based month (short, long, or narrow).
      */
@@ -1046,11 +1020,43 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return hasDateOnlyYear && hasNoTimeFields;
     }
 
-    private boolean hasExplicitNumericDateOptions() {
-        boolean hasNumericYear = "numeric".equals(yearOption) || "2-digit".equals(yearOption);
-        boolean hasNumericMonth = "numeric".equals(monthOption) || "2-digit".equals(monthOption);
-        boolean hasNumericDay = "numeric".equals(dayOption) || "2-digit".equals(dayOption);
-        return hasNumericYear && hasNumericMonth && hasNumericDay;
+    private List<DatePart> normalizeDayPeriodLiteralSpacing(List<DatePart> parts) {
+        if (!shouldUseNarrowNoBreakSpaceBeforeMeridiem()) {
+            return parts;
+        }
+        if (parts.isEmpty()) {
+            return parts;
+        }
+        List<DatePart> normalizedParts = new ArrayList<>(parts.size());
+        for (int partIndex = 0; partIndex < parts.size(); partIndex++) {
+            DatePart currentPart = parts.get(partIndex);
+            if ("literal".equals(currentPart.type()) && " ".equals(currentPart.value())) {
+                int nextPartIndex = partIndex + 1;
+                if (nextPartIndex < parts.size()) {
+                    DatePart nextPart = parts.get(nextPartIndex);
+                    if ("dayPeriod".equals(nextPart.type()) && isMeridiemMarker(nextPart.value())) {
+                        normalizedParts.add(new DatePart("literal", "\u202F"));
+                        continue;
+                    }
+                }
+            }
+            normalizedParts.add(currentPart);
+        }
+        return normalizedParts;
+    }
+
+    private Chronology resolveChronology() {
+        if (calendar == null || "gregory".equals(calendar) || "iso8601".equals(calendar)) {
+            return IsoChronology.INSTANCE;
+        }
+        return switch (calendar) {
+            case "buddhist" -> ThaiBuddhistChronology.INSTANCE;
+            case "japanese" -> JapaneseChronology.INSTANCE;
+            case "roc" -> MinguoChronology.INSTANCE;
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura", "islamic", "islamic-rgsa" ->
+                    HijrahChronology.INSTANCE;
+            default -> null;
+        };
     }
 
     private String resolveEraValue(int isoYear) {
@@ -1117,29 +1123,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
         };
     }
 
-    private Chronology resolveChronology() {
-        if (calendar == null || "gregory".equals(calendar) || "iso8601".equals(calendar)) {
-            return IsoChronology.INSTANCE;
-        }
-        return switch (calendar) {
-            case "buddhist" -> ThaiBuddhistChronology.INSTANCE;
-            case "japanese" -> JapaneseChronology.INSTANCE;
-            case "roc" -> MinguoChronology.INSTANCE;
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura", "islamic", "islamic-rgsa" ->
-                    HijrahChronology.INSTANCE;
-            default -> null;
-        };
-    }
-
-    private static LunarDate toLunisolarDate(LocalDate gregorianDate, String calendarId) {
-        IsoDate isoDate = new IsoDate(gregorianDate.getYear(), gregorianDate.getMonthValue(), gregorianDate.getDayOfMonth());
-        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
-        String monthCode = calendarDateFields.monthCode();
-        int monthNumber = Integer.parseInt(monthCode.substring(1, 3));
-        boolean leapMonth = monthCode.endsWith("L");
-        return new LunarDate(calendarDateFields.year(), monthNumber, calendarDateFields.day(), leapMonth);
-    }
-
     private ZoneId resolveZoneId() {
         if (timeZone != null) {
             try {
@@ -1162,6 +1145,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     public void setBoundFormatFunction(JSFunction boundFormatFunction) {
         this.boundFormatFunction = boundFormatFunction;
+    }
+
+    private boolean shouldUseNarrowNoBreakSpaceBeforeMeridiem() {
+        String effectiveNumberingSystem = numberingSystem;
+        if (effectiveNumberingSystem == null) {
+            effectiveNumberingSystem = "latn";
+        }
+        return "en".equals(locale.getLanguage()) && "latn".equals(effectiveNumberingSystem);
     }
 
     /**

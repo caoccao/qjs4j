@@ -143,17 +143,6 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Returns epoch nanoseconds for the first instant of the given date in the specified timezone.
-     */
-    public static BigInteger startOfDayToEpochNs(IsoDate isoDate, String timeZoneId) {
-        ZoneId zoneId = resolveTimeZone(timeZoneId);
-        LocalDate localDate = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
-        Instant instant = localDate.atStartOfDay(zoneId).toInstant();
-        return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
-                .add(BigInteger.valueOf(instant.getNano()));
-    }
-
-    /**
      * Gets the previous timezone transition before the given instant.
      * Returns null if no previous transition.
      */
@@ -260,6 +249,28 @@ public final class TemporalTimeZone {
                 .add(BigInteger.valueOf(instant.getNano()));
     }
 
+    private static Integer parseFixedOffsetSeconds(String timeZoneId) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return null;
+        }
+        if ("Z".equals(timeZoneId)) {
+            return 0;
+        }
+        Matcher offsetMatcher = SIMPLE_OFFSET_PATTERN.matcher(timeZoneId);
+        if (!offsetMatcher.matches()) {
+            return null;
+        }
+
+        int hourValue = Integer.parseInt(offsetMatcher.group(2));
+        int minuteValue = Integer.parseInt(offsetMatcher.group(3));
+        if (hourValue > 23 || minuteValue > 59) {
+            return null;
+        }
+
+        int sign = ("-".equals(offsetMatcher.group(1)) || "\u2212".equals(offsetMatcher.group(1))) ? -1 : 1;
+        return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
+    }
+
     /**
      * Resolves a ZoneId string, validating it exists.
      */
@@ -282,6 +293,17 @@ public final class TemporalTimeZone {
         }
     }
 
+    /**
+     * Returns epoch nanoseconds for the first instant of the given date in the specified timezone.
+     */
+    public static BigInteger startOfDayToEpochNs(IsoDate isoDate, String timeZoneId) {
+        ZoneId zoneId = resolveTimeZone(timeZoneId);
+        LocalDate localDate = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
+        Instant instant = localDate.atStartOfDay(zoneId).toInstant();
+        return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
+                .add(BigInteger.valueOf(instant.getNano()));
+    }
+
     private static Instant toJavaInstant(BigInteger epochNs) {
         BigInteger[] secAndNano = epochNs.divideAndRemainder(BILLION);
         long seconds = secAndNano[0].longValueExact();
@@ -291,28 +313,6 @@ public final class TemporalTimeZone {
             nanoAdjust += 1_000_000_000;
         }
         return Instant.ofEpochSecond(seconds, nanoAdjust);
-    }
-
-    private static Integer parseFixedOffsetSeconds(String timeZoneId) {
-        if (timeZoneId == null || timeZoneId.isEmpty()) {
-            return null;
-        }
-        if ("Z".equals(timeZoneId)) {
-            return 0;
-        }
-        Matcher offsetMatcher = SIMPLE_OFFSET_PATTERN.matcher(timeZoneId);
-        if (!offsetMatcher.matches()) {
-            return null;
-        }
-
-        int hourValue = Integer.parseInt(offsetMatcher.group(2));
-        int minuteValue = Integer.parseInt(offsetMatcher.group(3));
-        if (hourValue > 23 || minuteValue > 59) {
-            return null;
-        }
-
-        int sign = ("-".equals(offsetMatcher.group(1)) || "\u2212".equals(offsetMatcher.group(1))) ? -1 : 1;
-        return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
     }
 
     /**

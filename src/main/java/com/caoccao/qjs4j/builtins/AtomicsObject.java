@@ -1375,29 +1375,6 @@ public final class AtomicsObject {
             }
         }
 
-        public void cancelRegisteredWaiter() {
-            lock.lock();
-            try {
-                if (waitingCount > 0) {
-                    waitingCount--;
-                    if (pendingSignals > waitingCount) {
-                        pendingSignals = waitingCount;
-                    }
-                }
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        public void registerWaiter() {
-            lock.lock();
-            try {
-                waitingCount++;
-            } finally {
-                lock.unlock();
-            }
-        }
-
         private String awaitRegisteredWaiterInternal(long timeoutMs) throws InterruptedException {
             try {
                 if (timeoutMs < 0) {
@@ -1425,6 +1402,20 @@ public final class AtomicsObject {
             }
         }
 
+        public void cancelRegisteredWaiter() {
+            lock.lock();
+            try {
+                if (waitingCount > 0) {
+                    waitingCount--;
+                    if (pendingSignals > waitingCount) {
+                        pendingSignals = waitingCount;
+                    }
+                }
+            } finally {
+                lock.unlock();
+            }
+        }
+
         public int notifyWaiters(int count) {
             lock.lock();
             try {
@@ -1435,6 +1426,15 @@ public final class AtomicsObject {
                     condition.signal();
                 }
                 return toNotify;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        public void registerWaiter() {
+            lock.lock();
+            try {
+                waitingCount++;
             } finally {
                 lock.unlock();
             }

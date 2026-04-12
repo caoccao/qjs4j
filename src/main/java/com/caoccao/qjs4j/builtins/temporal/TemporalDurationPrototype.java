@@ -75,6 +75,24 @@ public final class TemporalDurationPrototype {
         }
     }
 
+    private static LocalDateTime addDurationToDateTime(
+            JSContext context,
+            LocalDateTime startDateTime,
+            TemporalDuration durationRecord) {
+        LocalDateTime dateBalancedDateTime = startDateTime
+                .plusYears(durationRecord.years())
+                .plusMonths(durationRecord.months())
+                .plusWeeks(durationRecord.weeks())
+                .plusDays(durationRecord.days());
+        BigInteger timeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        return addNanosecondsToDateTime(context, dateBalancedDateTime, timeNanoseconds);
+    }
+
     private static ZonedDateTimeComputation addDurationToZonedDateTime(
             JSContext context,
             RelativeToOption relativeToOption,
@@ -115,24 +133,6 @@ public final class TemporalDurationPrototype {
                 endEpochNanoseconds,
                 relativeToOption.timeZoneId());
         return new ZonedDateTimeComputation(endDateTime, endEpochNanoseconds, endOffsetSeconds);
-    }
-
-    private static LocalDateTime addDurationToDateTime(
-            JSContext context,
-            LocalDateTime startDateTime,
-            TemporalDuration durationRecord) {
-        LocalDateTime dateBalancedDateTime = startDateTime
-                .plusYears(durationRecord.years())
-                .plusMonths(durationRecord.months())
-                .plusWeeks(durationRecord.weeks())
-                .plusDays(durationRecord.days());
-        BigInteger timeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-        return addNanosecondsToDateTime(context, dateBalancedDateTime, timeNanoseconds);
     }
 
     private static LocalDateTime addFixedUnits(LocalDateTime dateTime, String unit, long amount) {
@@ -384,6 +384,76 @@ public final class TemporalDurationPrototype {
 
         return new TemporalDuration(0, 0, 0, days, hours, minutes, seconds,
                 milliseconds, microseconds, nanoseconds);
+    }
+
+    private static TemporalDuration balanceZonedDurationWithoutRounding(
+            JSContext context,
+            TemporalDuration durationRecord,
+            RelativeToOption relativeToOption) {
+        LocalDateTime dayBalanceAnchorDateTime = relativeToOption.startDateTime()
+                .plusYears(durationRecord.years())
+                .plusMonths(durationRecord.months())
+                .plusWeeks(durationRecord.weeks())
+                .plusDays(durationRecord.days());
+        BigInteger remainingTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        long additionalDayCount = 0L;
+        while (remainingTimeNanoseconds.signum() != 0) {
+            int direction = remainingTimeNanoseconds.signum() < 0 ? -1 : 1;
+            LocalDateTime adjacentDayDateTime = dayBalanceAnchorDateTime.plusDays(direction);
+            BigInteger oneDayNanoseconds = nanosecondsBetween(
+                    context,
+                    dayBalanceAnchorDateTime,
+                    adjacentDayDateTime,
+                    relativeToOption).abs();
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (oneDayNanoseconds.signum() == 0) {
+                if (direction < 0) {
+                    additionalDayCount--;
+                } else {
+                    additionalDayCount++;
+                }
+                dayBalanceAnchorDateTime = adjacentDayDateTime;
+                continue;
+            }
+            if (remainingTimeNanoseconds.abs().compareTo(oneDayNanoseconds) < 0) {
+                break;
+            }
+            if (direction < 0) {
+                remainingTimeNanoseconds = remainingTimeNanoseconds.add(oneDayNanoseconds);
+                additionalDayCount--;
+            } else {
+                remainingTimeNanoseconds = remainingTimeNanoseconds.subtract(oneDayNanoseconds);
+                additionalDayCount++;
+            }
+            dayBalanceAnchorDateTime = adjacentDayDateTime;
+        }
+        TemporalDuration balancedTimeDuration = balanceTimeDuration(remainingTimeNanoseconds, "hour");
+        long balancedDayCount;
+        try {
+            balancedDayCount = Math.addExact(durationRecord.days(), additionalDayCount);
+            balancedDayCount = Math.addExact(balancedDayCount, balancedTimeDuration.days());
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+        return new TemporalDuration(
+                durationRecord.years(),
+                durationRecord.months(),
+                durationRecord.weeks(),
+                balancedDayCount,
+                balancedTimeDuration.hours(),
+                balancedTimeDuration.minutes(),
+                balancedTimeDuration.seconds(),
+                balancedTimeDuration.milliseconds(),
+                balancedTimeDuration.microseconds(),
+                balancedTimeDuration.nanoseconds());
     }
 
     public static JSValue blank(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1135,41 +1205,6 @@ public final class TemporalDurationPrototype {
             throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
         }
         return sign * (hours * 3600 + minutes * 60);
-    }
-
-    private static IsoDateTime toIsoDateTime(LocalDateTime localDateTime) {
-        int nanosecondOfSecond = localDateTime.getNano();
-        int millisecond = nanosecondOfSecond / 1_000_000;
-        int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
-        int nanosecond = nanosecondOfSecond % 1_000;
-        IsoDate isoDate = new IsoDate(
-                localDateTime.getYear(),
-                localDateTime.getMonthValue(),
-                localDateTime.getDayOfMonth());
-        IsoTime isoTime = new IsoTime(
-                localDateTime.getHour(),
-                localDateTime.getMinute(),
-                localDateTime.getSecond(),
-                millisecond,
-                microsecond,
-                nanosecond);
-        return new IsoDateTime(isoDate, isoTime);
-    }
-
-    private static BigInteger zonedLocalDateTimeToEpochNanoseconds(
-            JSContext context,
-            RelativeToOption relativeToOption,
-            LocalDateTime localDateTime) {
-        IsoDateTime isoDateTime = toIsoDateTime(localDateTime);
-        try {
-            return TemporalTimeZone.localDateTimeToEpochNs(
-                    isoDateTime,
-                    relativeToOption.timeZoneId(),
-                    "compatible");
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
     }
 
     private static RoundOptions parseRoundOptions(JSContext context, JSValue roundToArg, TemporalDuration durationRecord) {
@@ -1944,76 +1979,6 @@ public final class TemporalDurationPrototype {
                 relativeToOption);
     }
 
-    private static TemporalDuration balanceZonedDurationWithoutRounding(
-            JSContext context,
-            TemporalDuration durationRecord,
-            RelativeToOption relativeToOption) {
-        LocalDateTime dayBalanceAnchorDateTime = relativeToOption.startDateTime()
-                .plusYears(durationRecord.years())
-                .plusMonths(durationRecord.months())
-                .plusWeeks(durationRecord.weeks())
-                .plusDays(durationRecord.days());
-        BigInteger remainingTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-        long additionalDayCount = 0L;
-        while (remainingTimeNanoseconds.signum() != 0) {
-            int direction = remainingTimeNanoseconds.signum() < 0 ? -1 : 1;
-            LocalDateTime adjacentDayDateTime = dayBalanceAnchorDateTime.plusDays(direction);
-            BigInteger oneDayNanoseconds = nanosecondsBetween(
-                    context,
-                    dayBalanceAnchorDateTime,
-                    adjacentDayDateTime,
-                    relativeToOption).abs();
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (oneDayNanoseconds.signum() == 0) {
-                if (direction < 0) {
-                    additionalDayCount--;
-                } else {
-                    additionalDayCount++;
-                }
-                dayBalanceAnchorDateTime = adjacentDayDateTime;
-                continue;
-            }
-            if (remainingTimeNanoseconds.abs().compareTo(oneDayNanoseconds) < 0) {
-                break;
-            }
-            if (direction < 0) {
-                remainingTimeNanoseconds = remainingTimeNanoseconds.add(oneDayNanoseconds);
-                additionalDayCount--;
-            } else {
-                remainingTimeNanoseconds = remainingTimeNanoseconds.subtract(oneDayNanoseconds);
-                additionalDayCount++;
-            }
-            dayBalanceAnchorDateTime = adjacentDayDateTime;
-        }
-        TemporalDuration balancedTimeDuration = balanceTimeDuration(remainingTimeNanoseconds, "hour");
-        long balancedDayCount;
-        try {
-            balancedDayCount = Math.addExact(durationRecord.days(), additionalDayCount);
-            balancedDayCount = Math.addExact(balancedDayCount, balancedTimeDuration.days());
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-        return new TemporalDuration(
-                durationRecord.years(),
-                durationRecord.months(),
-                durationRecord.weeks(),
-                balancedDayCount,
-                balancedTimeDuration.hours(),
-                balancedTimeDuration.minutes(),
-                balancedTimeDuration.seconds(),
-                balancedTimeDuration.milliseconds(),
-                balancedTimeDuration.microseconds(),
-                balancedTimeDuration.nanoseconds());
-    }
-
     private static RoundComputationResult roundWithoutRelativeTo(
             JSContext context,
             TemporalDuration durationRecord,
@@ -2145,6 +2110,25 @@ public final class TemporalDurationPrototype {
             case "nanosecond" -> 9;
             default -> 10;
         };
+    }
+
+    private static IsoDateTime toIsoDateTime(LocalDateTime localDateTime) {
+        int nanosecondOfSecond = localDateTime.getNano();
+        int millisecond = nanosecondOfSecond / 1_000_000;
+        int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
+        int nanosecond = nanosecondOfSecond % 1_000;
+        IsoDate isoDate = new IsoDate(
+                localDateTime.getYear(),
+                localDateTime.getMonthValue(),
+                localDateTime.getDayOfMonth());
+        IsoTime isoTime = new IsoTime(
+                localDateTime.getHour(),
+                localDateTime.getMinute(),
+                localDateTime.getSecond(),
+                millisecond,
+                microsecond,
+                nanosecond);
+        return new IsoDateTime(isoDate, isoTime);
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -2616,6 +2600,22 @@ public final class TemporalDurationPrototype {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "years");
         if (duration == null) return JSUndefined.INSTANCE;
         return JSNumber.of(duration.getDuration().years());
+    }
+
+    private static BigInteger zonedLocalDateTimeToEpochNanoseconds(
+            JSContext context,
+            RelativeToOption relativeToOption,
+            LocalDateTime localDateTime) {
+        IsoDateTime isoDateTime = toIsoDateTime(localDateTime);
+        try {
+            return TemporalTimeZone.localDateTimeToEpochNs(
+                    isoDateTime,
+                    relativeToOption.timeZoneId(),
+                    "compatible");
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
     }
 
     private record DurationFieldOverrides(

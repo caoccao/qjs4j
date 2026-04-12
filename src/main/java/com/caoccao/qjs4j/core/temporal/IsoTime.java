@@ -44,6 +44,16 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return Integer.compare(firstTime.nanosecond, secondTime.nanosecond);
     }
 
+    public static IsoTime constrain(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+        hour = Math.max(0, Math.min(23, hour));
+        minute = Math.max(0, Math.min(59, minute));
+        second = Math.max(0, Math.min(59, second));
+        millisecond = Math.max(0, Math.min(999, millisecond));
+        microsecond = Math.max(0, Math.min(999, microsecond));
+        nanosecond = Math.max(0, Math.min(999, nanosecond));
+        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+    }
+
     /**
      * Creates an IsoTime from total nanoseconds (mod 24 hours).
      */
@@ -61,16 +71,6 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         int microsecondValue = (int) (totalNanoseconds / 1_000L);
         int nanosecondValue = (int) (totalNanoseconds % 1_000L);
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
-    }
-
-    public static IsoTime constrain(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
-        hour = Math.max(0, Math.min(23, hour));
-        minute = Math.max(0, Math.min(59, minute));
-        second = Math.max(0, Math.min(59, second));
-        millisecond = Math.max(0, Math.min(999, millisecond));
-        microsecond = Math.max(0, Math.min(999, microsecond));
-        nanosecond = Math.max(0, Math.min(999, nanosecond));
-        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
     }
 
     public static boolean isValidTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {

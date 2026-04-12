@@ -18,7 +18,6 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
 
-import java.math.BigInteger;
 import java.util.Locale;
 
 /**
@@ -85,6 +84,23 @@ public final class TemporalUtils {
         return false;
     }
 
+    private static String canonicalizeCalendarIdentifier(String calendarIdentifier) {
+        if (calendarIdentifier == null) {
+            return null;
+        }
+        String normalizedCalendarIdentifier = calendarIdentifier.toLowerCase(Locale.ROOT);
+        if ("islamicc".equals(normalizedCalendarIdentifier)) {
+            return "islamic-civil";
+        }
+        if ("ethiopic-amete-alem".equals(normalizedCalendarIdentifier)) {
+            return "ethioaa";
+        }
+        if ("gregorian".equals(normalizedCalendarIdentifier)) {
+            return "gregory";
+        }
+        return normalizedCalendarIdentifier;
+    }
+
     private static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
@@ -106,36 +122,6 @@ public final class TemporalUtils {
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
         return null;
-    }
-
-    private static String canonicalizeCalendarIdentifier(String calendarIdentifier) {
-        if (calendarIdentifier == null) {
-            return null;
-        }
-        String normalizedCalendarIdentifier = calendarIdentifier.toLowerCase(Locale.ROOT);
-        if ("islamicc".equals(normalizedCalendarIdentifier)) {
-            return "islamic-civil";
-        }
-        if ("ethiopic-amete-alem".equals(normalizedCalendarIdentifier)) {
-            return "ethioaa";
-        }
-        if ("gregorian".equals(normalizedCalendarIdentifier)) {
-            return "gregory";
-        }
-        return normalizedCalendarIdentifier;
-    }
-
-    private static boolean isSupportedCalendarIdentifier(String calendarIdentifier) {
-        if (calendarIdentifier == null) {
-            return false;
-        }
-        String canonicalCalendarIdentifier = canonicalizeCalendarIdentifier(calendarIdentifier);
-        for (String supportedCalendarIdentifier : SUPPORTED_CALENDAR_IDENTIFIERS) {
-            if (supportedCalendarIdentifier.equals(canonicalCalendarIdentifier)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
@@ -225,6 +211,19 @@ public final class TemporalUtils {
             return null;
         }
         return stringValue.value();
+    }
+
+    private static boolean isSupportedCalendarIdentifier(String calendarIdentifier) {
+        if (calendarIdentifier == null) {
+            return false;
+        }
+        String canonicalCalendarIdentifier = canonicalizeCalendarIdentifier(calendarIdentifier);
+        for (String supportedCalendarIdentifier : SUPPORTED_CALENDAR_IDENTIFIERS) {
+            if (supportedCalendarIdentifier.equals(canonicalCalendarIdentifier)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

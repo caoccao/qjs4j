@@ -753,6 +753,16 @@ public final class TemporalPlainTimePrototype {
         }
         JSValue locales = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
+        if (options instanceof JSObject optionsObject) {
+            JSValue dateStyleValue = optionsObject.get(PropertyKey.fromString("dateStyle"));
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(dateStyleValue instanceof JSUndefined) && dateStyleValue != null) {
+                context.throwTypeError("Invalid date/time formatting options");
+                return JSUndefined.INSTANCE;
+            }
+        }
         JSValue dateTimeFormat = JSIntlObject.createDateTimeFormat(
                 context,
                 null,
