@@ -3530,6 +3530,29 @@ public final class JSIntlObject {
             }
         }
 
+        boolean hasTimeComponent = timeStyle != null
+                || dayPeriodOption != null
+                || hourOption != null
+                || minuteOption != null
+                || secondOption != null
+                || fractionalSecondDigits != null;
+        String effectiveHourCycle = baseDateTimeFormat.getHourCycle();
+        if (hasTimeComponent && effectiveHourCycle == null) {
+            effectiveHourCycle = baseDateTimeFormat.getHourCycleForInstant();
+        }
+        if (hasTimeComponent && effectiveHourCycle == null) {
+            Map<String, String> unicodeExtensions = parseUnicodeExtensions(baseDateTimeFormat.getLocale().toLanguageTag());
+            String hourCycleFromUnicodeExtension = unicodeExtensions.get("hc");
+            if ("h11".equals(hourCycleFromUnicodeExtension)
+                    || "h12".equals(hourCycleFromUnicodeExtension)
+                    || "h23".equals(hourCycleFromUnicodeExtension)
+                    || "h24".equals(hourCycleFromUnicodeExtension)) {
+                effectiveHourCycle = hourCycleFromUnicodeExtension;
+            } else {
+                effectiveHourCycle = getLocaleDefaultHourCycle(baseDateTimeFormat.getLocale());
+            }
+        }
+
         return new JSIntlDateTimeFormat(
                 context,
                 baseDateTimeFormat.getLocale(),
@@ -3538,7 +3561,7 @@ public final class JSIntlObject {
                 baseDateTimeFormat.getCalendar(),
                 baseDateTimeFormat.getNumberingSystem(),
                 "UTC",
-                baseDateTimeFormat.getHourCycle(),
+                effectiveHourCycle,
                 baseDateTimeFormat.getHourCycleForInstant(),
                 weekdayOption,
                 eraOption,
