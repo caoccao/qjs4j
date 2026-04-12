@@ -1,6 +1,6 @@
 # qjs4j
 
-[![Build and Test](https://github.com/caoccao/qjs4j/workflows/Build/badge.svg)](https://github.com/caoccao/qjs4j/actions) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Build and Test](https://github.com/caoccao/qjs4j/workflows/Build/badge.svg)](https://github.com/caoccao/qjs4j/actions) [![Maven Central](https://img.shields.io/maven-central/v/com.caoccao.qjs4j/qjs4j)](https://central.sonatype.com/artifact/com.caoccao.qjs4j/qjs4j) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 qjs4j is a native Java implementation of QuickJS - a complete reimplementation of the QuickJS JavaScript engine in pure Java (JDK 17+, zero external dependencies).
 
