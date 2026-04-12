@@ -27,7 +27,7 @@ object Config {
 
 
     object Pom {
-        const val ARTIFACT_ID = "javet"
+        const val ARTIFACT_ID = "qjs4j"
         const val DESCRIPTION = "qjs4j is a native Java implementation of QuickJS."
 
         object Developer {
@@ -40,7 +40,7 @@ object Config {
 
         object License {
             const val NAME = "APACHE LICENSE, VERSION 2.0"
-            const val URL = "https://github.com/caoccao/Javet/blob/main/LICENSE"
+            const val URL = "https://github.com/caoccao/qjs4j/blob/main/LICENSE"
         }
 
         object Scm {
@@ -79,7 +79,7 @@ object Config {
         const val JMH = "1.37"
         const val JSON_UNIT_ASSERTJ = "5.1.0"
         const val JUNIT = "6.0.1"
-        const val QJS4J = "0.1.0"
+        const val QJS4J = "0.1.2"
     }
 }
 
@@ -288,10 +288,11 @@ signing {
 }
 
 nexusPublishing {
+    repositoryDescription.set("qjs4j v${Config.VERSION}")
     repositories {
         sonatype {
-            nexusUrl.set(uri("https://s01.oss.sonatype.org/service/local/"))
-            snapshotRepositoryUrl.set(uri("https://s01.oss.sonatype.org/content/repositories/snapshots/"))
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
             username.set(
                 providers.gradleProperty("sonatypeUsername")
                     .orElse(providers.environmentVariable("SONATYPE_USERNAME"))
