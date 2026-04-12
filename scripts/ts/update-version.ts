@@ -1,4 +1,5 @@
 const buildFilePath = "build.gradle.kts";
+const readmePath = "README.md";
 const versionPattern = /const val QJS4J = "(\d+)\.(\d+)\.(\d+)"/;
 
 const fileContent = await Deno.readTextFile(buildFilePath);
@@ -26,5 +27,15 @@ const updatedContent = fileContent.replace(
 );
 
 await Deno.writeTextFile(buildFilePath, updatedContent);
+
+const readmeContent = await Deno.readTextFile(readmePath);
+const updatedReadme = readmeContent.replaceAll(
+    /com\.caoccao\.qjs4j:qjs4j:\d+\.\d+\.\d+/g,
+    `com.caoccao.qjs4j:qjs4j:${oldVersion}`,
+).replaceAll(
+    /<version>\d+\.\d+\.\d+<\/version>/g,
+    `<version>${oldVersion}</version>`,
+);
+await Deno.writeTextFile(readmePath, updatedReadme);
 
 console.log(`${oldVersion} -> ${nextVersion}`);

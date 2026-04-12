@@ -33,6 +33,34 @@ See [ASYNC_AWAIT_ENHANCEMENTS.md](docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md) fo
 - **[Migration Status](docs/migration/MIGRATION_STATUS.md)**: Migration progress from QuickJS C to Java
 - **[Async/Await](docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md)**: Async/await and iteration implementation
 
+## Installation
+
+### Gradle (Kotlin DSL)
+
+```kotlin
+dependencies {
+    implementation("com.caoccao.qjs4j:qjs4j:0.1.1")
+}
+```
+
+### Gradle (Groovy DSL)
+
+```groovy
+dependencies {
+    implementation 'com.caoccao.qjs4j:qjs4j:0.1.1'
+}
+```
+
+### Maven
+
+```xml
+<dependency>
+    <groupId>com.caoccao.qjs4j</groupId>
+    <artifactId>qjs4j</artifactId>
+    <version>0.1.1</version>
+</dependency>
+```
+
 ## Quick Start
 
 ```java
