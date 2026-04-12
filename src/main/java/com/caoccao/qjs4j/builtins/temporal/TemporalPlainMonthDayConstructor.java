@@ -554,7 +554,18 @@ public final class TemporalPlainMonthDayConstructor {
                         new IsoDate(DEFAULT_REFERENCE_ISO_YEAR, parsedDate.month(), parsedDate.day()),
                         calendar);
             }
-            return createPlainMonthDay(context, parsedDate, calendar);
+            TemporalCalendarMath.CalendarDateFields calendarDateFields =
+                    TemporalCalendarMath.isoDateToCalendarDate(parsedDate, calendar);
+            JSTemporalPlainMonthDay plainMonthDay = createPlainMonthDayFromCalendarMonthDay(
+                    context,
+                    calendar,
+                    calendarDateFields.monthCode(),
+                    calendarDateFields.day(),
+                    "constrain");
+            if (context.hasPendingException() || plainMonthDay == null) {
+                return JSUndefined.INSTANCE;
+            }
+            return plainMonthDay;
         }
         context.clearPendingException();
 
