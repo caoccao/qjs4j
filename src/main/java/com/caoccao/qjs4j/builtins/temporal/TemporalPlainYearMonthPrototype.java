@@ -129,17 +129,31 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate resultDate = addDateDurationToPlainYearMonth(
-                context,
-                originalDate,
-                durationRecord.years(),
-                durationRecord.months(),
-                overflow);
+        String calendarId = plainYearMonth.getCalendarId();
+        IsoDate resultDate;
+        if ("iso8601".equals(calendarId)) {
+            resultDate = addDateDurationToPlainYearMonth(
+                    context,
+                    originalDate,
+                    durationRecord.years(),
+                    durationRecord.months(),
+                    overflow);
+        } else {
+            resultDate = TemporalCalendarMath.addCalendarDate(
+                    context,
+                    originalDate,
+                    calendarId,
+                    durationRecord.years(),
+                    durationRecord.months(),
+                    0L,
+                    0L,
+                    overflow);
+        }
         if (context.hasPendingException() || resultDate == null) {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context, resultDate, plainYearMonth.getCalendarId());
+        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context, resultDate, calendarId);
     }
 
     private static long applyUnsignedRoundingMode(
@@ -226,8 +240,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate isoDate = plainYearMonth.getIsoDate();
-        return JSNumber.of(IsoDate.daysInMonth(isoDate.year(), isoDate.month()));
+        return JSNumber.of(TemporalCalendarMath.daysInMonth(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -235,7 +248,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(IsoDate.daysInYear(plainYearMonth.getIsoDate().year()));
+        return JSNumber.of(TemporalCalendarMath.daysInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
     }
 
     private static JSValue differenceTemporalPlainYearMonth(
@@ -518,7 +531,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        if (IsoDate.isLeapYear(plainYearMonth.getIsoDate().year())) {
+        if (TemporalCalendarMath.inLeapYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId())) {
             return JSBoolean.TRUE;
         }
         return JSBoolean.FALSE;

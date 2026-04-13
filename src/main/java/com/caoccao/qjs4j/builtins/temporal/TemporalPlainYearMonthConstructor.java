@@ -644,8 +644,8 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     static JSValue yearMonthFromString(JSContext context, String input) {
-        IsoDate date = TemporalParser.parseYearMonthString(context, input);
-        if (date == null) {
+        IsoDate parsedYearMonthDate = TemporalParser.parseYearMonthString(context, input);
+        if (parsedYearMonthDate == null) {
             return JSUndefined.INSTANCE;
         }
 
@@ -657,16 +657,18 @@ public final class TemporalPlainYearMonthConstructor {
                 return JSUndefined.INSTANCE;
             }
         }
+        int referenceDay = 1;
         if (!"iso8601".equals(calendar)) {
             IsoDate parsedDate = TemporalParser.parseDateString(context, input);
             if (parsedDate == null) {
                 return JSUndefined.INSTANCE;
             }
+            referenceDay = parsedDate.day();
         }
 
         return createPlainYearMonth(
                 context,
-                new IsoDate(date.year(), date.month(), 1),
+                new IsoDate(parsedYearMonthDate.year(), parsedYearMonthDate.month(), referenceDay),
                 calendar.toLowerCase(Locale.ROOT));
     }
 

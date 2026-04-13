@@ -1381,7 +1381,10 @@ public final class TemporalCalendarMath {
         if ("hebrew".equals(calendarId) && "M05L".equals(leapMonthCode)) {
             return "M06";
         }
-        return TemporalUtils.monthCode(monthCodeData.monthNumber());
+        if ("chinese".equals(calendarId) || "dangi".equals(calendarId)) {
+            return TemporalUtils.monthCode(monthCodeData.monthNumber());
+        }
+        return null;
     }
 
     private static MonthSlot resolveMonthSlotForInput(
@@ -1424,12 +1427,12 @@ public final class TemporalCalendarMath {
                 }
             }
             if (monthSlotFromCode == null) {
-                if (!"reject".equals(overflow)
-                        && ("chinese".equals(calendarId) || "dangi".equals(calendarId))
-                        && monthCodeData.leapMonth()) {
-                    String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+                if (!"reject".equals(overflow) && monthCodeData.leapMonth()) {
+                    String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(
+                            calendarId,
+                            monthCodeFromProperty);
                     for (MonthSlot monthSlot : monthSlots) {
-                        if (monthSlot.monthCode().equals(fallbackMonthCode)) {
+                        if (fallbackMonthCode != null && monthSlot.monthCode().equals(fallbackMonthCode)) {
                             monthSlotFromCode = monthSlot;
                             break;
                         }
