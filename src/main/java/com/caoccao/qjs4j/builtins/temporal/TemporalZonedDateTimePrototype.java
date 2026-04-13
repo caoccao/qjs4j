@@ -353,14 +353,36 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "era");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
+                context,
+                localDateTime.date(),
+                zonedDateTime.getCalendarId());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalPlainDatePrototype.era(context, plainDate, args);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "eraYear");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+
+        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
+                context,
+                localDateTime.date(),
+                zonedDateTime.getCalendarId());
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
+        return TemporalPlainDatePrototype.eraYear(context, plainDate, args);
     }
 
     private static BigInteger floorDiv(BigInteger dividend, BigInteger divisor) {
@@ -1694,7 +1716,12 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "weekOfYear");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+            return JSUndefined.INSTANCE;
+        }
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
         return JSNumber.of(localDateTime.date().weekOfYear());
     }
@@ -1937,7 +1964,12 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "yearOfWeek");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+            return JSUndefined.INSTANCE;
+        }
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
         return JSNumber.of(localDateTime.date().yearOfWeek());
     }

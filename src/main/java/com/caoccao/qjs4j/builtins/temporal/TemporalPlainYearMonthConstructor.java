@@ -186,7 +186,12 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     private static IsoDate findBoundaryIsoDateForYearMonth(String calendarId, int year, String monthCode) {
-        return findClosestBoundaryIsoDate(calendarId, year, monthCode, MAX_SUPPORTED_EPOCH_DAY);
+        IsoDate minimumBoundaryIsoDate = findClosestBoundaryIsoDate(calendarId, year, monthCode, MIN_SUPPORTED_EPOCH_DAY);
+        if (minimumBoundaryIsoDate != null) {
+            return minimumBoundaryIsoDate;
+        } else {
+            return findClosestBoundaryIsoDate(calendarId, year, monthCode, MAX_SUPPORTED_EPOCH_DAY);
+        }
     }
 
     private static IsoDate findClosestBoundaryIsoDate(
@@ -206,8 +211,7 @@ public final class TemporalPlainYearMonthConstructor {
                 TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
                         TemporalCalendarMath.isoDateToCalendarDate(candidateIsoDate, calendarId);
                 if (candidateCalendarDateFields.year() == targetYear
-                        && targetMonthCode.equals(candidateCalendarDateFields.monthCode())
-                        && candidateCalendarDateFields.day() == 1) {
+                        && targetMonthCode.equals(candidateCalendarDateFields.monthCode())) {
                     return candidateIsoDate;
                 }
             }
@@ -260,12 +264,12 @@ public final class TemporalPlainYearMonthConstructor {
             case "coptic" -> new SupportedYearMonthBoundary(-272099, 4, 275471, 6);
             case "ethioaa" -> new SupportedYearMonthBoundary(-266323, 4, 281247, 6);
             case "ethiopic" -> new SupportedYearMonthBoundary(-271823, 4, 275747, 6);
-            case "gregory" -> new SupportedYearMonthBoundary(-271821, 5, 275760, 9);
+            case "gregory" -> new SupportedYearMonthBoundary(-271821, 4, 275760, 9);
             case "hebrew" -> new SupportedYearMonthBoundary(-268058, 12, 279517, 10);
             case "indian" -> new SupportedYearMonthBoundary(-271899, 2, 275682, 7);
             case "islamic-civil", "islamic-tbla", "islamic-umalqura" ->
                     new SupportedYearMonthBoundary(-280804, 4, 283583, 6);
-            case "japanese" -> new SupportedYearMonthBoundary(-271821, 5, 275760, 9);
+            case "japanese" -> new SupportedYearMonthBoundary(-271821, 4, 275760, 9);
             case "persian" -> new SupportedYearMonthBoundary(-272442, 2, 275139, 7);
             case "roc" -> new SupportedYearMonthBoundary(-273732, 5, 273849, 9);
             default -> null;
@@ -628,6 +632,17 @@ public final class TemporalPlainYearMonthConstructor {
 
         JSValue pendingException = context.getPendingException();
         if ("constrain".equals(overflow) && monthCodeFromProperty != null) {
+            if (("gregory".equals(calendarId) || "japanese".equals(calendarId))
+                    && monthFromProperty == null
+                    && monthCodeFromProperty.length() == 3) {
+                int constrainedIsoMonth = monthNumberFromMonthCode(monthCodeFromProperty);
+                if (constrainedIsoMonth >= 1
+                        && constrainedIsoMonth <= 12
+                        && isValidIsoYearMonth(year, constrainedIsoMonth)) {
+                    context.clearPendingException();
+                    return createPlainYearMonth(context, new IsoDate(year, constrainedIsoMonth, 1), calendarId);
+                }
+            }
             context.clearPendingException();
             IsoDate boundaryIsoDate = findBoundaryIsoDateForYearMonth(calendarId, year, monthCodeFromProperty);
             if (boundaryIsoDate != null) {

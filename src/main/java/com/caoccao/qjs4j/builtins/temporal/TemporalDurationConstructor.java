@@ -1304,8 +1304,16 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Invalid time zone.");
             return null;
         }
+        char firstCharacter = timeZoneText.charAt(0);
+        boolean startsWithDateCharacter =
+                Character.isDigit(firstCharacter)
+                        || firstCharacter == '+'
+                        || firstCharacter == '-'
+                        || firstCharacter == '\u2212';
         boolean looksLikeIsoDateTime =
-                (timeZoneText.contains("T") || timeZoneText.contains("t")) && timeZoneText.contains("-");
+                startsWithDateCharacter
+                        && (timeZoneText.contains("T") || timeZoneText.contains("t"))
+                        && timeZoneText.contains("-");
         if (!looksLikeIsoDateTime) {
             return canonicalizeTimeZoneIdentifier(timeZoneText);
         }
