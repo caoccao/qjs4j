@@ -39,6 +39,15 @@ final class Test262AgentHost implements AutoCloseable {
         timerIds = new AtomicLong(1);
     }
 
+    private boolean areAllAgentsClosed() {
+        for (Test262Agent agent : agents) {
+            if (!agent.isClosed()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     @Override
     public void close() {
         for (Test262Agent agent : agents) {
@@ -229,6 +238,41 @@ final class Test262AgentHost implements AutoCloseable {
                         reportThread.start();
                         return promise;
                     }
+                }));
+        agentObject.set(
+                PropertyKey.fromString("tryYield"),
+                createAgentFunction(context, "tryYield", 0, (ctx, thisArg, args) -> {
+                    try {
+                        Thread.sleep(10L);
+                    } catch (InterruptedException interruptedException) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return JSUndefined.INSTANCE;
+                }));
+        agentObject.set(
+                PropertyKey.fromString("trySleep"),
+                createAgentFunction(context, "trySleep", 1, (ctx, thisArg, args) -> {
+                    long sleepMilliseconds = 0L;
+                    if (args.length > 0) {
+                        sleepMilliseconds = Math.max(0L, (long) JSTypeConversions.toInteger(ctx, args[0]));
+                        if (ctx.hasPendingException()) {
+                            return JSUndefined.INSTANCE;
+                        }
+                    }
+                    long deadlineTimestamp = System.currentTimeMillis() + sleepMilliseconds;
+                    while (System.currentTimeMillis() < deadlineTimestamp) {
+                        if (areAllAgentsClosed()) {
+                            break;
+                        } else {
+                            try {
+                                Thread.sleep(1L);
+                            } catch (InterruptedException interruptedException) {
+                                Thread.currentThread().interrupt();
+                                break;
+                            }
+                        }
+                    }
+                    return JSUndefined.INSTANCE;
                 }));
     }
 
