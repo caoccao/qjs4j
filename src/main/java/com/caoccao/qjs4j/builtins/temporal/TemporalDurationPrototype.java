@@ -825,6 +825,25 @@ public final class TemporalDurationPrototype {
         return quotient.doubleValue();
     }
 
+    private static long estimateCalendarUnitCount(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            String calendarUnit) {
+        long dayDifference = endDateTime.toLocalDate().toEpochDay() - startDateTime.toLocalDate().toEpochDay();
+        if ("day".equals(calendarUnit)) {
+            return dayDifference;
+        }
+        if ("week".equals(calendarUnit)) {
+            return dayDifference / 7L;
+        }
+        long yearDifference = (long) endDateTime.getYear() - startDateTime.getYear();
+        if ("year".equals(calendarUnit)) {
+            return yearDifference;
+        }
+        long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
+        return yearDifference * 12L + monthDifference;
+    }
+
     private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
         BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
         BigInteger quotient = quotientAndRemainder[0];
@@ -1211,25 +1230,6 @@ public final class TemporalDurationPrototype {
             }
         }
         return new UnitStepResult(unitCount, boundaryDateTime);
-    }
-
-    private static long estimateCalendarUnitCount(
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            String calendarUnit) {
-        long dayDifference = endDateTime.toLocalDate().toEpochDay() - startDateTime.toLocalDate().toEpochDay();
-        if ("day".equals(calendarUnit)) {
-            return dayDifference;
-        }
-        if ("week".equals(calendarUnit)) {
-            return dayDifference / 7L;
-        }
-        long yearDifference = (long) endDateTime.getYear() - startDateTime.getYear();
-        if ("year".equals(calendarUnit)) {
-            return yearDifference;
-        }
-        long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
-        return yearDifference * 12L + monthDifference;
     }
 
     private static UnitStepResult moveByWholeFixedUnits(

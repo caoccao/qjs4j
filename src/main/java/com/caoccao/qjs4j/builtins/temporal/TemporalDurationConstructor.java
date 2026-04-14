@@ -22,9 +22,7 @@ import com.caoccao.qjs4j.core.temporal.*;
 import java.math.BigInteger;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -39,6 +37,8 @@ public final class TemporalDurationConstructor {
     static final String UNIT_MINUTE = "minute";
     static final String UNIT_NANOSECOND = "nanosecond";
     static final String UNIT_SECOND = "second";
+    private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
+            createAvailableTimeZoneIdentifierLookup();
     private static final long CALENDAR_UNIT_MAX = 4_294_967_295L;
     private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
     private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
@@ -137,15 +137,14 @@ public final class TemporalDurationConstructor {
     }
 
     private static String canonicalizeTimeZoneIdentifier(String timeZoneText) {
-        String canonicalSupplementaryTimeZoneId =
-                SUPPLEMENTARY_TIME_ZONE_IDS.get(timeZoneText.toLowerCase(Locale.ROOT));
+        String normalizedTimeZoneText = timeZoneText.toLowerCase(Locale.ROOT);
+        String canonicalSupplementaryTimeZoneId = SUPPLEMENTARY_TIME_ZONE_IDS.get(normalizedTimeZoneText);
         if (canonicalSupplementaryTimeZoneId != null) {
             return canonicalSupplementaryTimeZoneId;
         }
-        for (String availableZoneId : ZoneId.getAvailableZoneIds()) {
-            if (availableZoneId.equalsIgnoreCase(timeZoneText)) {
-                return availableZoneId;
-            }
+        String canonicalAvailableTimeZoneId = AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE.get(normalizedTimeZoneText);
+        if (canonicalAvailableTimeZoneId != null) {
+            return canonicalAvailableTimeZoneId;
         }
         if ("ut".equalsIgnoreCase(timeZoneText)) {
             return "UT";
@@ -322,6 +321,21 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
         return createDuration(context, record, resolvedPrototype);
+    }
+
+    private static Map<String, String> createAvailableTimeZoneIdentifierLookup() {
+        List<String> availableTimeZoneIdentifiers = new ArrayList<>(ZoneId.getAvailableZoneIds());
+        Collections.sort(availableTimeZoneIdentifiers);
+        Map<String, String> availableTimeZoneIdentifiersByLowercase = new HashMap<>(availableTimeZoneIdentifiers.size());
+        for (String availableTimeZoneIdentifier : availableTimeZoneIdentifiers) {
+            String normalizedTimeZoneIdentifier = availableTimeZoneIdentifier.toLowerCase(Locale.ROOT);
+            if (!availableTimeZoneIdentifiersByLowercase.containsKey(normalizedTimeZoneIdentifier)) {
+                availableTimeZoneIdentifiersByLowercase.put(
+                        normalizedTimeZoneIdentifier,
+                        availableTimeZoneIdentifier);
+            }
+        }
+        return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
     }
 
     public static JSTemporalDuration createDuration(JSContext context, TemporalDuration record) {
