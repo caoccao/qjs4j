@@ -6280,7 +6280,7 @@ public final class JSIntlObject {
                 Set<String> zoneIds = ZoneId.getAvailableZoneIds();
                 // IANA canonical timezone names: include Etc/GMT+N, Etc/GMT-N, UTC
                 // Exclude SystemV/, EST/MST/HST (deprecated short names), and non-canonical aliases
-                Set<String> nonCanonical = Set.of(
+                Set<String> nonCanonical = new HashSet<>(Set.of(
                         "EST", "MST", "HST", "GMT0", "Etc/GMT0", "Etc/Greenwich",
                         "Etc/UCT", "Etc/Universal", "Etc/Zulu", "UCT", "GMT-0",
                         "GMT+0", "Universal", "Zulu", "Greenwich", "Etc/GMT-0", "Etc/GMT+0",
@@ -6301,8 +6301,51 @@ public final class JSIntlObject {
                         "NZ", "NZ-CHAT", "Navajo", "PRC", "ROC", "ROK", "W-SU",
                         "Cuba", "Egypt", "Eire", "Hongkong", "Iceland", "Iran", "Israel",
                         "Jamaica", "Japan", "Kwajalein", "Libya", "Poland", "Portugal",
-                        "Singapore", "Turkey"
-                );
+                        "Singapore", "Turkey",
+                        "America/Atka", "America/Knox_IN",
+                        "Asia/Ashkhabad", "Asia/Calcutta", "Asia/Dacca", "Asia/Istanbul",
+                        "Asia/Macao", "Asia/Thimbu", "Asia/Ujung_Pandang", "Asia/Ulan_Bator",
+                        "Atlantic/Jan_Mayen", "Pacific/Truk"
+                ));
+                Collections.addAll(nonCanonical,
+                        "Europe/Nicosia",
+                        "Asia/Ashkhabad", "Asia/Calcutta", "Asia/Choibalsan", "Asia/Chongqing",
+                        "Asia/Chungking", "Asia/Dacca", "Asia/Harbin", "Asia/Istanbul", "Asia/Kashgar",
+                        "Asia/Katmandu", "Asia/Macao", "Asia/Rangoon", "Asia/Saigon", "Asia/Tel_Aviv",
+                        "Asia/Thimbu", "Asia/Ujung_Pandang", "Asia/Ulan_Bator",
+                        "Africa/Asmera", "Africa/Timbuktu",
+                        "Antarctica/South_Pole",
+                        "Australia/ACT", "Australia/Canberra", "Australia/Currie", "Australia/LHI",
+                        "Australia/NSW", "Australia/North", "Australia/Queensland", "Australia/South",
+                        "Australia/Tasmania", "Australia/Victoria", "Australia/West", "Australia/Yancowinna",
+                        "Pacific/Enderbury", "Pacific/Johnston", "Pacific/Ponape", "Pacific/Samoa",
+                        "Pacific/Truk", "Pacific/Yap",
+                        "Europe/Belfast", "Europe/Kiev", "Europe/Tiraspol", "Europe/Uzhgorod", "Europe/Zaporozhye",
+                        "America/Argentina/ComodRivadavia", "America/Atka", "America/Buenos_Aires",
+                        "America/Catamarca", "America/Coral_Harbour", "America/Cordoba", "America/Ensenada",
+                        "America/Fort_Wayne", "America/Godthab", "America/Indianapolis", "America/Jujuy",
+                        "America/Knox_IN", "America/Louisville", "America/Mendoza", "America/Montreal",
+                        "America/Nipigon", "America/Pangnirtung", "America/Porto_Acre", "America/Rainy_River",
+                        "America/Rosario", "America/Santa_Isabel", "America/Shiprock", "America/Thunder_Bay",
+                        "America/Virgin", "America/Yellowknife",
+                        "US/Alaska", "US/Aleutian", "US/Arizona", "US/Central", "US/East-Indiana", "US/Eastern",
+                        "US/Hawaii", "US/Indiana-Starke", "US/Michigan", "US/Mountain", "US/Pacific", "US/Samoa",
+                        "Atlantic/Faeroe", "Atlantic/Jan_Mayen",
+                        "Brazil/Acre", "Brazil/DeNoronha", "Brazil/East", "Brazil/West",
+                        "CET", "CST6CDT",
+                        "Canada/Atlantic", "Canada/Central", "Canada/Eastern", "Canada/Mountain",
+                        "Canada/Newfoundland", "Canada/Pacific", "Canada/Saskatchewan", "Canada/Yukon",
+                        "Chile/Continental", "Chile/EasterIsland",
+                        "Cuba", "EET", "EST", "EST5EDT", "Egypt", "Eire",
+                        "Etc/GMT", "Etc/GMT+0", "Etc/GMT-0", "Etc/GMT0", "Etc/Greenwich",
+                        "Etc/UCT", "Etc/UTC", "Etc/Universal", "Etc/Zulu",
+                        "GB", "GB-Eire", "GMT", "GMT+0", "GMT-0", "GMT0", "Greenwich",
+                        "HST", "Hongkong", "Iceland", "Iran", "Israel", "Jamaica", "Japan",
+                        "Kwajalein", "Libya", "MET", "MST", "MST7MDT",
+                        "Mexico/BajaNorte", "Mexico/BajaSur", "Mexico/General",
+                        "NZ", "NZ-CHAT", "Navajo", "PRC", "PST8PDT",
+                        "Poland", "Portugal", "ROC", "ROK", "Singapore", "Turkey",
+                        "UCT", "Universal", "W-SU", "WET", "Zulu");
                 values = zoneIds.stream()
                         .filter(id -> !id.startsWith("SystemV/")
                                 && !nonCanonical.contains(id)
