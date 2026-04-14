@@ -455,6 +455,33 @@ public final class JSArray extends JSObject {
     }
 
     private List<PropertyKey> getOwnPropertyKeysInternal(boolean enumerableOnly) {
+        if (sparseProperties == null
+                && shape.getDeletedPropCount() == 0
+                && shape.getPropertyCount() == 1
+                && PropertyKey.LENGTH.equals(shape.getPropertyKeyAt(0))) {
+            long denseLimit = Math.min(length, denseArray.length);
+            boolean packedDenseRange = denseLimit == length;
+            if (packedDenseRange) {
+                for (int index = 0; index < denseLimit; index++) {
+                    if (denseArray[index] == null) {
+                        packedDenseRange = false;
+                        break;
+                    }
+                }
+            }
+            if (packedDenseRange && denseLimit <= Integer.MAX_VALUE) {
+                int ownKeyCount = (int) denseLimit + (enumerableOnly ? 0 : 1);
+                List<PropertyKey> ownKeys = new ArrayList<>(ownKeyCount);
+                for (int index = 0; index < denseLimit; index++) {
+                    ownKeys.add(PropertyKey.fromIndex(index));
+                }
+                if (!enumerableOnly) {
+                    ownKeys.add(PropertyKey.LENGTH);
+                }
+                return ownKeys;
+            }
+        }
+
         List<Map.Entry<Long, PropertyKey>> numericKeys = new ArrayList<>();
         Set<Long> seenNumericIndices = new HashSet<>();
         List<PropertyKey> stringKeys = new ArrayList<>();
@@ -467,16 +494,17 @@ public final class JSArray extends JSObject {
             if (value != null) {
                 long numericIndex = Integer.toUnsignedLong(i);
                 if (seenNumericIndices.add(numericIndex)) {
-                    numericKeys.add(Map.entry(numericIndex, PropertyKey.fromString(Long.toString(numericIndex))));
+                    numericKeys.add(Map.entry(numericIndex, PropertyKey.fromIndex(i)));
                 }
             }
         }
         if (sparseProperties != null) {
             for (Map.Entry<Integer, JSValue> entry : sparseProperties.entrySet()) {
-                long index = entry.getKey();
+                int sparseIndex = entry.getKey();
+                long index = Integer.toUnsignedLong(sparseIndex);
                 if (index >= 0 && index < length) {
                     if (seenNumericIndices.add(index)) {
-                        numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                        numericKeys.add(Map.entry(index, PropertyKey.fromIndex(sparseIndex)));
                     }
                 }
             }
@@ -489,7 +517,11 @@ public final class JSArray extends JSObject {
                     PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
                     if (descriptor != null && (!enumerableOnly || descriptor.isEnumerable())) {
                         if (seenNumericIndices.add(index)) {
-                            numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                            if (index <= Integer.MAX_VALUE) {
+                                numericKeys.add(Map.entry(index, PropertyKey.fromIndex((int) index)));
+                            } else {
+                                numericKeys.add(Map.entry(index, PropertyKey.fromString(Long.toString(index))));
+                            }
                         }
                     }
                 }
