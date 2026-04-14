@@ -710,6 +710,77 @@ public final class TemporalDurationPrototype {
                 null);
     }
 
+    static TemporalDuration differenceZonedDateTime(
+            JSContext context,
+            BigInteger startEpochNanoseconds,
+            BigInteger endEpochNanoseconds,
+            String timeZoneId,
+            String largestUnit,
+            String smallestUnit,
+            long roundingIncrement,
+            String roundingMode) {
+        IsoDateTime startIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+                startEpochNanoseconds,
+                timeZoneId);
+        IsoDateTime endIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+                endEpochNanoseconds,
+                timeZoneId);
+        LocalDateTime startDateTime = toLocalDateTime(
+                startIsoDateTime.date(),
+                startIsoDateTime.time());
+        LocalDateTime endDateTime = toLocalDateTime(
+                endIsoDateTime.date(),
+                endIsoDateTime.time());
+        RelativeToOption relativeToOption = new RelativeToOption(
+                startDateTime,
+                true,
+                startEpochNanoseconds,
+                timeZoneId,
+                null);
+
+        TemporalDuration unroundedDuration = buildBalancedDurationFromDateTimes(
+                context,
+                startDateTime,
+                endDateTime,
+                largestUnit,
+                "nanosecond",
+                relativeToOption);
+        if (context.hasPendingException() || unroundedDuration == null) {
+            return null;
+        }
+
+        boolean requiresRounding = roundingIncrement != 1L || !"nanosecond".equals(smallestUnit);
+        if (!requiresRounding) {
+            return unroundedDuration;
+        }
+
+        RoundOptions roundOptions = new RoundOptions(
+                smallestUnit,
+                largestUnit,
+                roundingIncrement,
+                roundingMode,
+                relativeToOption);
+        LocalDateTime roundedEndDateTime = roundDateTimeDifference(
+                context,
+                startDateTime,
+                endDateTime,
+                endEpochNanoseconds,
+                roundOptions,
+                relativeToOption,
+                unroundedDuration);
+        if (context.hasPendingException() || roundedEndDateTime == null) {
+            return null;
+        }
+
+        return buildBalancedDurationFromDateTimes(
+                context,
+                startDateTime,
+                roundedEndDateTime,
+                largestUnit,
+                smallestUnit,
+                relativeToOption);
+    }
+
     private static double divideBigIntegersToDouble(BigInteger numerator, BigInteger divisor) {
         if (numerator.signum() == 0) {
             return 0D;
