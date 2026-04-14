@@ -22,6 +22,8 @@ import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -32,10 +34,31 @@ public final class TemporalPlainMonthDayConstructor {
     private static final int DEFAULT_REFERENCE_ISO_YEAR = 1972;
     private static final int MAX_REFERENCE_ISO_YEAR = 2050;
     private static final int MIN_REFERENCE_ISO_YEAR = 1900;
+    private static final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Map<MonthDayLookupKey, IsoDate>>>
+            REFERENCE_LOOKUP_BY_CALENDAR_AND_ISO_YEAR = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<ReferenceLookupKey, IsoDate> REFERENCE_LOOKUP_HIT_CACHE = new ConcurrentHashMap<>();
     private static final Set<ReferenceLookupKey> REFERENCE_LOOKUP_MISS_CACHE = ConcurrentHashMap.newKeySet();
 
     private TemporalPlainMonthDayConstructor() {
+    }
+
+    private static Map<MonthDayLookupKey, IsoDate> buildReferenceLookupForIsoYear(
+            String calendarId,
+            int isoYear) {
+        Map<MonthDayLookupKey, IsoDate> latestIsoDateByMonthDay = new HashMap<>();
+        for (int isoMonth = 1; isoMonth <= 12; isoMonth++) {
+            int daysInMonth = IsoDate.daysInMonth(isoYear, isoMonth);
+            for (int isoDay = 1; isoDay <= daysInMonth; isoDay++) {
+                IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
+                TemporalCalendarMath.CalendarDateFields calendarDateFields =
+                        TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
+                MonthDayLookupKey monthDayLookupKey = new MonthDayLookupKey(
+                        calendarDateFields.monthCode(),
+                        calendarDateFields.day());
+                latestIsoDateByMonthDay.put(monthDayLookupKey, isoDate);
+            }
+        }
+        return Map.copyOf(latestIsoDateByMonthDay);
     }
 
     private static boolean calendarUsesEras(String calendarId) {
@@ -177,26 +200,6 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, referenceIsoDate, calendarId);
     }
 
-    private static IsoDate findLatestIsoDateWithCalendarMonthDayInIsoYear(
-            int isoYear,
-            String calendarId,
-            String monthCode,
-            int dayOfMonth) {
-        IsoDate latestMatch = null;
-        for (int month = 1; month <= 12; month++) {
-            int daysInMonth = IsoDate.daysInMonth(isoYear, month);
-            for (int day = 1; day <= daysInMonth; day++) {
-                IsoDate isoDate = new IsoDate(isoYear, month, day);
-                TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                        TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
-                if (dayOfMonth == calendarDateFields.day() && monthCode.equals(calendarDateFields.monthCode())) {
-                    latestMatch = isoDate;
-                }
-            }
-        }
-        return latestMatch;
-    }
-
     private static IsoDate findReferenceIsoDateExact(String calendarId, String monthCode, int dayOfMonth) {
         ReferenceLookupKey referenceLookupKey = new ReferenceLookupKey(calendarId, monthCode, dayOfMonth);
         IsoDate cachedReferenceIsoDate = REFERENCE_LOOKUP_HIT_CACHE.get(referenceLookupKey);
@@ -222,9 +225,9 @@ public final class TemporalPlainMonthDayConstructor {
         }
 
         for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR; isoYear >= MIN_REFERENCE_ISO_YEAR; isoYear--) {
-            IsoDate candidateIsoDate = findLatestIsoDateWithCalendarMonthDayInIsoYear(
-                    isoYear,
-                    calendarId,
+            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear = findReferenceLookupForIsoYear(calendarId, isoYear);
+            IsoDate candidateIsoDate = findReferenceIsoDateFromReferenceLookup(
+                    referenceLookupForIsoYear,
                     monthCode,
                     dayOfMonth);
             if (candidateIsoDate != null) {
@@ -233,9 +236,9 @@ public final class TemporalPlainMonthDayConstructor {
         }
 
         for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR + 1; isoYear <= MAX_REFERENCE_ISO_YEAR; isoYear++) {
-            IsoDate candidateIsoDate = findLatestIsoDateWithCalendarMonthDayInIsoYear(
-                    isoYear,
-                    calendarId,
+            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear = findReferenceLookupForIsoYear(calendarId, isoYear);
+            IsoDate candidateIsoDate = findReferenceIsoDateFromReferenceLookup(
+                    referenceLookupForIsoYear,
                     monthCode,
                     dayOfMonth);
             if (candidateIsoDate != null) {
@@ -243,6 +246,26 @@ public final class TemporalPlainMonthDayConstructor {
             }
         }
         return null;
+    }
+
+    private static IsoDate findReferenceIsoDateFromReferenceLookup(
+            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear,
+            String monthCode,
+            int dayOfMonth) {
+        MonthDayLookupKey monthDayLookupKey = new MonthDayLookupKey(monthCode, dayOfMonth);
+        return referenceLookupForIsoYear.get(monthDayLookupKey);
+    }
+
+    private static Map<MonthDayLookupKey, IsoDate> findReferenceLookupForIsoYear(
+            String calendarId,
+            int isoYear) {
+        ConcurrentHashMap<Integer, Map<MonthDayLookupKey, IsoDate>> referenceLookupByIsoYear =
+                REFERENCE_LOOKUP_BY_CALENDAR_AND_ISO_YEAR.computeIfAbsent(
+                        calendarId,
+                        key -> new ConcurrentHashMap<>());
+        return referenceLookupByIsoYear.computeIfAbsent(
+                isoYear,
+                key -> buildReferenceLookupForIsoYear(calendarId, isoYear));
     }
 
     private static String firstCalendarAnnotation(String text) {
@@ -801,6 +824,9 @@ public final class TemporalPlainMonthDayConstructor {
             case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
             default -> eraYear;
         };
+    }
+
+    private record MonthDayLookupKey(String monthCode, int dayOfMonth) {
     }
 
     private record ParsedMonthCode(int month, boolean leapMonth) {
