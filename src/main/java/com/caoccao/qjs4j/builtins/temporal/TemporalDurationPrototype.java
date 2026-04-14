@@ -1086,8 +1086,13 @@ public final class TemporalDurationPrototype {
             LocalDateTime startDateTime,
             LocalDateTime endDateTime,
             String calendarUnit) {
-        long unitCount = 0;
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
         if (!endDateTime.isBefore(startDateTime)) {
+            while (boundaryDateTime.isAfter(endDateTime)) {
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+            }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
@@ -1095,8 +1100,13 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
             }
         } else {
+            while (boundaryDateTime.isBefore(endDateTime)) {
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+            }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
@@ -1104,9 +1114,9 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
             }
         }
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
         return new UnitStepResult(unitCount, boundaryDateTime);
     }
 
@@ -1129,8 +1139,24 @@ public final class TemporalDurationPrototype {
         }
 
         int direction = startToEndNanoseconds.signum();
-        long unitCount = 0L;
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
         if (direction >= 0) {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
+                        context,
+                        boundaryDateTime,
+                        endDateTime,
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return new UnitStepResult(unitCount, boundaryDateTime);
+                }
+                if (boundaryToEndNanoseconds.signum() >= 0) {
+                    break;
+                }
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+            }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
@@ -1140,14 +1166,31 @@ public final class TemporalDurationPrototype {
                         endDateTime,
                         relativeToOption);
                 if (context.hasPendingException()) {
-                    return new UnitStepResult(unitCount, addCalendarUnits(startDateTime, calendarUnit, unitCount));
+                    return new UnitStepResult(unitCount, boundaryDateTime);
                 }
                 if (nextToEndNanoseconds.signum() < 0) {
                     break;
                 }
                 unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
             }
         } else {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
+                        context,
+                        boundaryDateTime,
+                        endDateTime,
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return new UnitStepResult(unitCount, boundaryDateTime);
+                }
+                if (boundaryToEndNanoseconds.signum() < 0
+                        || (boundaryToEndNanoseconds.signum() == 0 && boundaryDateTime.equals(endDateTime))) {
+                    break;
+                }
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+            }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
@@ -1157,17 +1200,36 @@ public final class TemporalDurationPrototype {
                         endDateTime,
                         relativeToOption);
                 if (context.hasPendingException()) {
-                    return new UnitStepResult(unitCount, addCalendarUnits(startDateTime, calendarUnit, unitCount));
+                    return new UnitStepResult(unitCount, boundaryDateTime);
                 }
                 if (nextToEndNanoseconds.signum() > 0
                         || (nextToEndNanoseconds.signum() == 0 && !nextDateTime.equals(endDateTime))) {
                     break;
                 }
                 unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
             }
         }
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
         return new UnitStepResult(unitCount, boundaryDateTime);
+    }
+
+    private static long estimateCalendarUnitCount(
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            String calendarUnit) {
+        long dayDifference = endDateTime.toLocalDate().toEpochDay() - startDateTime.toLocalDate().toEpochDay();
+        if ("day".equals(calendarUnit)) {
+            return dayDifference;
+        }
+        if ("week".equals(calendarUnit)) {
+            return dayDifference / 7L;
+        }
+        long yearDifference = (long) endDateTime.getYear() - startDateTime.getYear();
+        if ("year".equals(calendarUnit)) {
+            return yearDifference;
+        }
+        long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
+        return yearDifference * 12L + monthDifference;
     }
 
     private static UnitStepResult moveByWholeFixedUnits(
