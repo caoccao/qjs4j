@@ -2517,6 +2517,12 @@ public final class TemporalZonedDateTimePrototype {
         mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(zonedDateTime.getCalendarId()));
         if (offsetField != null) {
             mergedFieldsObject.set(PropertyKey.fromString("offset"), new JSString(offsetField));
+        } else {
+            int receiverOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+            String receiverOffset = TemporalTimeZone.formatOffsetRoundedToMinute(receiverOffsetSeconds);
+            mergedFieldsObject.set(PropertyKey.fromString("offset"), new JSString(receiverOffset));
         }
 
         JSObject normalizedOptionsObject = new JSObject(context);
@@ -2568,9 +2574,8 @@ public final class TemporalZonedDateTimePrototype {
                     resultLocalDateTime,
                     zonedDateTime.getTimeZoneId());
         } else {
-            IsoDateTime startOfDayDateTime = new IsoDateTime(localDateTime.date(), IsoTime.MIDNIGHT);
-            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    startOfDayDateTime,
+            epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(
+                    localDateTime.date(),
                     zonedDateTime.getTimeZoneId());
         }
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
