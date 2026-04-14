@@ -28,10 +28,12 @@ import java.util.ArrayDeque;
  * returning to the event loop. This ensures promise handlers run at the
  * right time.
  * <p>
- * No synchronization needed: each JSContext is single-threaded following QuickJS design.
+ * The queue is synchronized because some host integrations (for example, Atomics.waitAsync)
+ * can enqueue microtasks from helper threads.
  */
 public final class JSMicrotaskQueue {
     private final JSContext context;
+    private final Object queueLock;
     private final ArrayDeque<Microtask> queue;
     private boolean executing;
 
@@ -42,6 +44,7 @@ public final class JSMicrotaskQueue {
      */
     public JSMicrotaskQueue(JSContext context) {
         this.context = context;
+        this.queueLock = new Object();
         this.queue = new ArrayDeque<>();
         this.executing = false;
     }
@@ -51,7 +54,9 @@ public final class JSMicrotaskQueue {
      * This is used for cleanup or testing.
      */
     public void clear() {
-        queue.clear();
+        synchronized (queueLock) {
+            queue.clear();
+        }
     }
 
     /**
@@ -60,7 +65,9 @@ public final class JSMicrotaskQueue {
      * @param microtask The microtask to enqueue
      */
     public void enqueue(Microtask microtask) {
-        queue.offer(microtask);
+        synchronized (queueLock) {
+            queue.offer(microtask);
+        }
     }
 
     /**
@@ -69,7 +76,9 @@ public final class JSMicrotaskQueue {
      * @return true if the queue is not empty
      */
     public boolean hasPendingMicrotasks() {
-        return !queue.isEmpty();
+        synchronized (queueLock) {
+            return !queue.isEmpty();
+        }
     }
 
     /**
@@ -79,15 +88,21 @@ public final class JSMicrotaskQueue {
      * Microtasks can enqueue more microtasks, so this runs until the queue is empty.
      */
     public void processMicrotasks() {
-        // Prevent re-entrancy
-        if (executing) {
-            return;
+        synchronized (queueLock) {
+            if (executing) {
+                return;
+            }
+            executing = true;
         }
-        executing = true;
-
         try {
             Microtask microtask;
-            while ((microtask = queue.poll()) != null) {
+            while (true) {
+                synchronized (queueLock) {
+                    microtask = queue.poll();
+                    if (microtask == null) {
+                        break;
+                    }
+                }
                 try {
                     microtask.execute();
                 } catch (Exception e) {
@@ -100,7 +115,9 @@ public final class JSMicrotaskQueue {
                 }
             }
         } finally {
-            executing = false;
+            synchronized (queueLock) {
+                executing = false;
+            }
         }
     }
 
@@ -110,7 +127,9 @@ public final class JSMicrotaskQueue {
      * @return The queue size
      */
     public int size() {
-        return queue.size();
+        synchronized (queueLock) {
+            return queue.size();
+        }
     }
 
     /**
