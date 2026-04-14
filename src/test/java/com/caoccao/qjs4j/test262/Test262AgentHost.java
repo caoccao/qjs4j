@@ -198,8 +198,38 @@ final class Test262AgentHost implements AutoCloseable {
     }
 
     public void installAtomicsHelperOverrides(JSContext context) {
-        // Keep helper-provided getReportAsync()/tryYield()/trySleep(). The runtime now supports
-        // named function expressions used in atomicsHelper.js, so no post-load override is needed.
+        JSObject globalObject = context.getGlobalObject();
+        JSValue test262Value = globalObject.get(PropertyKey.fromString("$262"));
+        if (!(test262Value instanceof JSObject test262Object)) {
+            return;
+        }
+        JSValue agentValue = test262Object.get(PropertyKey.fromString("agent"));
+        if (!(agentValue instanceof JSObject agentObject)) {
+            return;
+        }
+        agentObject.set(
+                PropertyKey.fromString("getReportAsync"),
+                createAgentFunction(context, "getReportAsync", 0, (ctx, thisArg, args) -> {
+                    JSPromise promise = ctx.createJSPromise();
+                    String immediateReport = reports.poll();
+                    if (immediateReport != null) {
+                        promise.fulfill(new JSString(immediateReport));
+                        return promise;
+                    } else {
+                        Thread reportThread = new Thread(() -> {
+                            try {
+                                String awaitedReport = reports.take();
+                                promise.fulfill(new JSString(awaitedReport));
+                            } catch (InterruptedException interruptedException) {
+                                Thread.currentThread().interrupt();
+                                promise.fulfill(JSNull.INSTANCE);
+                            }
+                        }, "qjs4j-test262-getReportAsync");
+                        reportThread.setDaemon(true);
+                        reportThread.start();
+                        return promise;
+                    }
+                }));
     }
 
     public void setSharedAtomicsObject(AtomicsObject sharedAtomicsObject) {
