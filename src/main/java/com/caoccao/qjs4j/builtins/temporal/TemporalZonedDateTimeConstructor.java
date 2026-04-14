@@ -21,8 +21,8 @@ import com.caoccao.qjs4j.core.temporal.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 
 import java.math.BigInteger;
-import java.time.DateTimeException;
-import java.time.LocalDateTime;
+import java.time.*;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -34,8 +34,67 @@ public final class TemporalZonedDateTimeConstructor {
             Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
     private static final Pattern OFFSET_EXTENDED_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
 
     private TemporalZonedDateTimeConstructor() {
+    }
+
+    private static boolean calendarUsesEras(String calendarId) {
+        return "buddhist".equals(calendarId)
+                || "coptic".equals(calendarId)
+                || "ethioaa".equals(calendarId)
+                || "ethiopic".equals(calendarId)
+                || "gregory".equals(calendarId)
+                || "hebrew".equals(calendarId)
+                || "indian".equals(calendarId)
+                || "islamic-civil".equals(calendarId)
+                || "islamic-tbla".equals(calendarId)
+                || "islamic-umalqura".equals(calendarId)
+                || "japanese".equals(calendarId)
+                || "persian".equals(calendarId)
+                || "roc".equals(calendarId);
+    }
+
+    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
+        if (era == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+
+        String normalizedEra = era.toLowerCase();
+        return switch (calendarId) {
+            case "gregory" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                default -> invalidEra(context);
+            };
+            case "japanese" -> switch (normalizedEra) {
+                case "ce", "ad" -> "ce";
+                case "bce", "bc" -> "bce";
+                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
+                default -> invalidEra(context);
+            };
+            case "roc" -> switch (normalizedEra) {
+                case "roc", "minguo" -> "roc";
+                case "broc", "before-roc" -> "broc";
+                default -> invalidEra(context);
+            };
+            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
+            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
+            case "ethiopic" ->
+                    ("aa".equals(normalizedEra) || "am".equals(normalizedEra)) ? normalizedEra : invalidEra(context);
+            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
+            case "indian" ->
+                    ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra)) ? "shaka" : invalidEra(context);
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
+                case "ah", "bh" -> normalizedEra;
+                default -> invalidEra(context);
+            };
+            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
+            default -> invalidEra(context);
+        };
     }
 
     /**
@@ -200,30 +259,23 @@ public final class TemporalZonedDateTimeConstructor {
             JSContext context,
             ZonedDateTimePropertyBagData propertyBagData,
             ZonedDateTimeOptions options) {
-        Integer monthNumber = propertyBagData.month();
+        Integer monthFromProperty = propertyBagData.month();
         ParsedMonthCode parsedMonthCode = propertyBagData.parsedMonthCode();
-        if (parsedMonthCode != null) {
-            if (parsedMonthCode.month() < 1 || parsedMonthCode.month() > 12 || parsedMonthCode.leapMonth()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            if (monthNumber != null && monthNumber != parsedMonthCode.month()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            if (monthNumber == null) {
-                monthNumber = parsedMonthCode.month();
-            }
-        }
-
-        if (monthNumber == null) {
+        if (monthFromProperty == null && parsedMonthCode == null) {
             context.throwTypeError("Temporal error: DateTime argument must be object or string.");
             return JSUndefined.INSTANCE;
         }
 
-        int year = propertyBagData.year();
+        String monthCodeFromProperty = null;
+        if (parsedMonthCode != null) {
+            monthCodeFromProperty = TemporalUtils.monthCode(parsedMonthCode.month());
+            if (parsedMonthCode.leapMonth()) {
+                monthCodeFromProperty += "L";
+            }
+        }
+
+        int calendarYear = propertyBagData.year();
         int dayOfMonth = propertyBagData.day();
-        int month = monthNumber;
         int hour = propertyBagData.hour();
         int minute = propertyBagData.minute();
         int second = propertyBagData.second();
@@ -234,25 +286,26 @@ public final class TemporalZonedDateTimeConstructor {
         int microsecond = propertyBagData.microsecond();
         int nanosecond = propertyBagData.nanosecond();
 
-        IsoDate isoDate;
+        IsoDate isoDate = TemporalCalendarMath.calendarDateToIsoDate(
+                context,
+                propertyBagData.calendarId(),
+                calendarYear,
+                monthFromProperty,
+                monthCodeFromProperty,
+                dayOfMonth,
+                options.overflow());
+        if (context.hasPendingException() || isoDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+
         IsoTime isoTime;
         if ("reject".equals(options.overflow())) {
-            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
             if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            isoDate = new IsoDate(year, month, dayOfMonth);
             isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
-            if (month < 1 || dayOfMonth < 1) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            isoDate = IsoDate.constrain(year, month, dayOfMonth);
             isoTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
@@ -264,6 +317,8 @@ public final class TemporalZonedDateTimeConstructor {
                 timeZoneId,
                 propertyBagData.offsetSeconds(),
                 propertyBagData.offsetSeconds() != null,
+                false,
+                false,
                 false,
                 options);
         if (context.hasPendingException() || epochNanoseconds == null) {
@@ -294,6 +349,28 @@ public final class TemporalZonedDateTimeConstructor {
 
         boolean hasExplicitOffset = hasOffsetDesignator(input);
         boolean hasZuluOffset = hasZuluDesignator(input);
+        boolean hasTimeComponent = findDateTimeSeparatorIndex(input) >= 0;
+        if (!hasTimeComponent && !hasExplicitOffset) {
+            BigInteger epochNanoseconds;
+            try {
+                epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(parsed.date(), timeZoneId);
+            } catch (DateTimeException dateTimeException) {
+                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+                return JSUndefined.INSTANCE;
+            }
+            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+                context.throwRangeError("Temporal error: Nanoseconds out of range.");
+                return JSUndefined.INSTANCE;
+            }
+            return createZonedDateTime(context, epochNanoseconds, timeZoneId, parsed.calendarId());
+        }
+        boolean offsetIncludesSecondsOrFraction = false;
+        if (hasExplicitOffset && !hasZuluOffset) {
+            String offsetText = extractOffsetText(input);
+            if (offsetText != null) {
+                offsetIncludesSecondsOrFraction = offsetTextIncludesSecondsOrFraction(offsetText);
+            }
+        }
 
         BigInteger epochNanoseconds = interpretOffset(
                 context,
@@ -303,12 +380,85 @@ public final class TemporalZonedDateTimeConstructor {
                 parsed.offsetSeconds(),
                 hasExplicitOffset,
                 hasZuluOffset,
+                true,
+                offsetIncludesSecondsOrFraction,
                 options);
         if (context.hasPendingException() || epochNanoseconds == null) {
             return JSUndefined.INSTANCE;
         }
 
         return createZonedDateTime(context, epochNanoseconds, timeZoneId, parsed.calendarId());
+    }
+
+    private static String extractOffsetText(String text) {
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
+        if (timeSeparatorIndex < 0) {
+            return null;
+        }
+        int offsetStart = -1;
+        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '[' || character == 'Z' || character == 'z') {
+                break;
+            }
+            if (character == '+' || character == '-' || character == '\u2212') {
+                offsetStart = index;
+                break;
+            }
+        }
+        if (offsetStart < 0) {
+            return null;
+        }
+        int offsetEnd = text.indexOf('[', offsetStart);
+        if (offsetEnd < 0) {
+            offsetEnd = text.length();
+        }
+        return text.substring(offsetStart, offsetEnd);
+    }
+
+    private static int findDateTimeSeparatorIndex(String text) {
+        int annotationStart = text.indexOf('[');
+        int searchEnd = annotationStart >= 0 ? annotationStart : text.length();
+        for (int index = 0; index < searchEnd; index++) {
+            char character = text.charAt(index);
+            if (character == 'T' || character == 't') {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static BigInteger findMatchingEpochNanosecondsForExplicitOffset(
+            JSContext context,
+            IsoDate isoDate,
+            IsoTime isoTime,
+            String timeZoneId,
+            int explicitOffsetSeconds,
+            boolean offsetTimeZoneIdentifier,
+            boolean allowMinuteRounding) {
+        if (offsetTimeZoneIdentifier) {
+            int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+            boolean offsetMatches = allowMinuteRounding
+                    ? roundOffsetSecondsToMinute(timeZoneOffsetSeconds) == explicitOffsetSeconds
+                    : timeZoneOffsetSeconds == explicitOffsetSeconds;
+            if (offsetMatches) {
+                return TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
+            } else {
+                return null;
+            }
+        }
+
+        try {
+            return selectMatchingEpochNanosecondsForExplicitOffset(
+                    isoDate,
+                    isoTime,
+                    timeZoneId,
+                    explicitOffsetSeconds,
+                    allowMinuteRounding);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+            return null;
+        }
     }
 
     /**
@@ -385,7 +535,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean hasOffsetDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
             return false;
         }
@@ -402,7 +552,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean hasZuluDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
             return false;
         }
@@ -426,6 +576,8 @@ public final class TemporalZonedDateTimeConstructor {
             Integer explicitOffsetSeconds,
             boolean hasExplicitOffset,
             boolean hasZuluOffset,
+            boolean stringInput,
+            boolean stringOffsetIncludesSecondsOrFraction,
             ZonedDateTimeOptions options) {
         boolean offsetTimeZoneIdentifier = isOffsetTimeZoneIdentifier(timeZoneId);
 
@@ -448,51 +600,57 @@ public final class TemporalZonedDateTimeConstructor {
         } else if (hasZuluOffset) {
             epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, 0);
         } else {
-            int offsetSeconds = explicitOffsetSeconds != null ? explicitOffsetSeconds : 0;
+            int explicitOffsetSecondsValue = explicitOffsetSeconds != null ? explicitOffsetSeconds : 0;
             String offsetOption = options.offset();
-            if ("ignore".equals(offsetOption)) {
-                if (offsetTimeZoneIdentifier) {
-                    int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
-                    epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
-                } else {
-                    epochNanoseconds = computeWallEpochNanoseconds(
+            if ("use".equals(offsetOption)) {
+                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, explicitOffsetSecondsValue);
+            } else {
+                if ("ignore".equals(offsetOption)) {
+                    epochNanoseconds = resolveEpochNanosecondsIgnoringOffset(
                             context,
                             isoDate,
                             isoTime,
                             timeZoneId,
+                            offsetTimeZoneIdentifier,
                             options.disambiguation());
                     if (context.hasPendingException() || epochNanoseconds == null) {
                         return null;
                     }
+                } else {
+                    if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
+                        context.throwRangeError("Temporal error: Invalid ISO date.");
+                        return null;
+                    }
+                    boolean allowMinuteRounding = stringInput && !stringOffsetIncludesSecondsOrFraction;
+                    BigInteger matchingEpochNanoseconds = findMatchingEpochNanosecondsForExplicitOffset(
+                            context,
+                            isoDate,
+                            isoTime,
+                            timeZoneId,
+                            explicitOffsetSecondsValue,
+                            offsetTimeZoneIdentifier,
+                            allowMinuteRounding);
+                    if (context.hasPendingException()) {
+                        return null;
+                    }
+                    if (matchingEpochNanoseconds != null) {
+                        epochNanoseconds = matchingEpochNanoseconds;
+                    } else if ("reject".equals(offsetOption)) {
+                        context.throwRangeError("Temporal error: Invalid offset.");
+                        return null;
+                    } else {
+                        epochNanoseconds = resolveEpochNanosecondsIgnoringOffset(
+                                context,
+                                isoDate,
+                                isoTime,
+                                timeZoneId,
+                                offsetTimeZoneIdentifier,
+                                options.disambiguation());
+                        if (context.hasPendingException() || epochNanoseconds == null) {
+                            return null;
+                        }
+                    }
                 }
-            } else if ("use".equals(offsetOption)) {
-                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
-            } else if ("prefer".equals(offsetOption)) {
-                if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
-            } else {
-                if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                int zoneOffsetSeconds = computeZoneOffsetSeconds(
-                        context,
-                        isoDate,
-                        isoTime,
-                        timeZoneId,
-                        offsetSeconds,
-                        offsetTimeZoneIdentifier);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (zoneOffsetSeconds != offsetSeconds) {
-                    context.throwRangeError("Temporal error: Invalid offset.");
-                    return null;
-                }
-                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
             }
         }
 
@@ -502,6 +660,11 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         return epochNanoseconds;
+    }
+
+    private static String invalidEra(JSContext context) {
+        context.throwRangeError("Temporal error: Invalid era.");
+        return null;
     }
 
     private static boolean isMinutePrecisionOffsetIdentifier(String text) {
@@ -618,6 +781,14 @@ public final class TemporalZonedDateTimeConstructor {
         return normalizedTimeZoneId;
     }
 
+    private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
+    }
+
     private static ZonedDateTimeOptions parseFromOptions(JSContext context, JSValue optionsValue) {
         if (optionsValue instanceof JSUndefined || optionsValue == null) {
             return new ZonedDateTimeOptions("compatible", "reject", "constrain");
@@ -710,6 +881,15 @@ public final class TemporalZonedDateTimeConstructor {
                     Integer.parseInt(basicMatcher.group(3)),
                     basicMatcher.group(4),
                     basicMatcher.group(5));
+        }
+        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
+        if (hourOnlyMatcher.matches()) {
+            return new OffsetParts(
+                    hourOnlyMatcher.group(1),
+                    Integer.parseInt(hourOnlyMatcher.group(2)),
+                    0,
+                    null,
+                    null);
         }
 
         return null;
@@ -844,19 +1024,77 @@ public final class TemporalZonedDateTimeConstructor {
         if (context.hasPendingException()) {
             return null;
         }
-        Long year = toRequiredIntegralLong(context, yearValue);
-        if (context.hasPendingException() || year == null) {
-            return null;
+        boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
+        Integer year = null;
+        if (hasYear) {
+            long yearLong = TemporalUtils.toLongIfIntegral(context, yearValue);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            year = (int) yearLong;
         }
 
-        if (month == null && parsedMonthCode == null) {
+        if (calendarUsesEras(calendarId)) {
+            JSValue eraValue = itemObject.get(PropertyKey.fromString("era"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            boolean hasEra = !(eraValue instanceof JSUndefined) && eraValue != null;
+            String era = null;
+            if (hasEra) {
+                era = JSTypeConversions.toString(context, eraValue).value();
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            }
+
+            JSValue eraYearValue = itemObject.get(PropertyKey.fromString("eraYear"));
+            if (context.hasPendingException()) {
+                return null;
+            }
+            boolean hasEraYear = !(eraYearValue instanceof JSUndefined) && eraYearValue != null;
+            Integer eraYear = null;
+            if (hasEraYear) {
+                long eraYearLong = TemporalUtils.toLongIfIntegral(context, eraYearValue);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                eraYear = (int) eraYearLong;
+            }
+
+            if (hasEra != hasEraYear) {
+                context.throwTypeError("Temporal error: DateTime argument must be object or string.");
+                return null;
+            }
+
+            if (!hasYear && hasEra && hasEraYear) {
+                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                year = yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                hasYear = true;
+            } else if (hasYear && hasEra && hasEraYear) {
+                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                int expectedYear = yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                if (year != expectedYear) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+            }
+        }
+
+        if (!hasYear || (month == null && parsedMonthCode == null)) {
             context.throwTypeError("Temporal error: DateTime argument must be object or string.");
             return null;
         }
 
         return new ZonedDateTimePropertyBagData(
                 calendarId,
-                year.intValue(),
+                year,
                 month,
                 parsedMonthCode,
                 dayOfMonth.intValue(),
@@ -868,6 +1106,103 @@ public final class TemporalZonedDateTimeConstructor {
                 nanosecond,
                 timeZoneId,
                 offsetSeconds);
+    }
+
+    private static BigInteger resolveEpochNanosecondsIgnoringOffset(
+            JSContext context,
+            IsoDate isoDate,
+            IsoTime isoTime,
+            String timeZoneId,
+            boolean offsetTimeZoneIdentifier,
+            String disambiguation) {
+        if (offsetTimeZoneIdentifier) {
+            int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+            return TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
+        } else {
+            return computeWallEpochNanoseconds(context, isoDate, isoTime, timeZoneId, disambiguation);
+        }
+    }
+
+    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
+        if ("ce".equals(era)) {
+            return eraYear;
+        } else if ("bce".equals(era)) {
+            return 1 - eraYear;
+        } else if ("meiji".equals(era)) {
+            return 1867 + eraYear;
+        } else if ("taisho".equals(era)) {
+            return 1911 + eraYear;
+        } else if ("showa".equals(era)) {
+            return 1925 + eraYear;
+        } else if ("heisei".equals(era)) {
+            return 1988 + eraYear;
+        } else if ("reiwa".equals(era)) {
+            return 2018 + eraYear;
+        } else {
+            return eraYear;
+        }
+    }
+
+    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
+        int sign = offsetSeconds < 0 ? -1 : 1;
+        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
+        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
+        int remainingSeconds = absoluteOffsetSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteOffsetMinutes++;
+        }
+        return sign * absoluteOffsetMinutes * 60;
+    }
+
+    private static BigInteger selectMatchingEpochNanosecondsForExplicitOffset(
+            IsoDate isoDate,
+            IsoTime isoTime,
+            String timeZoneId,
+            int parsedOffsetSeconds,
+            boolean allowMinuteRounding) {
+        int second = isoTime.second();
+        BigInteger leapSecondNanoseconds = BigInteger.ZERO;
+        if (second == 60) {
+            second = 59;
+            leapSecondNanoseconds = BigInteger.valueOf(1_000_000_000L);
+        }
+
+        LocalDateTime localDateTime = LocalDateTime.of(
+                isoDate.year(),
+                isoDate.month(),
+                isoDate.day(),
+                isoTime.hour(),
+                isoTime.minute(),
+                second,
+                isoTime.millisecond() * 1_000_000
+                        + isoTime.microsecond() * 1_000
+                        + isoTime.nanosecond());
+        ZoneId zoneId = TemporalTimeZone.resolveTimeZone(timeZoneId);
+        List<ZoneOffset> validOffsets = zoneId.getRules().getValidOffsets(localDateTime);
+        BigInteger selectedEpochNanoseconds = null;
+        for (ZoneOffset validOffset : validOffsets) {
+            int candidateOffsetSeconds = validOffset.getTotalSeconds();
+            boolean offsetMatches;
+            if (allowMinuteRounding) {
+                int roundedCandidateOffsetSeconds = roundOffsetSecondsToMinute(candidateOffsetSeconds);
+                offsetMatches = roundedCandidateOffsetSeconds == parsedOffsetSeconds;
+            } else {
+                offsetMatches = candidateOffsetSeconds == parsedOffsetSeconds;
+            }
+            if (!offsetMatches) {
+                continue;
+            }
+            Instant candidateInstant = localDateTime.atOffset(validOffset).toInstant();
+            BigInteger candidateEpochNanoseconds = BigInteger.valueOf(candidateInstant.getEpochSecond())
+                    .multiply(BigInteger.valueOf(1_000_000_000L))
+                    .add(BigInteger.valueOf(candidateInstant.getNano()))
+                    .add(leapSecondNanoseconds);
+            if (selectedEpochNanoseconds == null
+                    || candidateEpochNanoseconds.compareTo(selectedEpochNanoseconds) < 0) {
+                selectedEpochNanoseconds = candidateEpochNanoseconds;
+            }
+        }
+        return selectedEpochNanoseconds;
     }
 
     private static int toOptionalIntegralInt(JSContext context, JSObject sourceObject, String key, int defaultValue) {
@@ -967,6 +1302,18 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
         return (JSTemporalZonedDateTime) result;
+    }
+
+    private static int yearFromEraAndEraYear(String calendarId, String era, int eraYear) {
+        return switch (calendarId) {
+            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
+            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
+            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
+            case "buddhist" -> eraYear;
+            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
+            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
+            default -> eraYear;
+        };
     }
 
     private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {

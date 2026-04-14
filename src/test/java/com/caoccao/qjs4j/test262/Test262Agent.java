@@ -84,6 +84,10 @@ final class Test262Agent implements AutoCloseable {
         return runtime;
     }
 
+    public boolean isClosed() {
+        return closed;
+    }
+
     public void markLeaving() {
         closed = true;
     }

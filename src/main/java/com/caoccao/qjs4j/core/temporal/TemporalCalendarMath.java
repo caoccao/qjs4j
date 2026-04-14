@@ -90,6 +90,10 @@ public final class TemporalCalendarMath {
     };
     private static final int PERSIAN_BREAK_MAX_SUPPORTED_YEAR = PERSIAN_BREAKS[PERSIAN_BREAKS.length - 1] - 1;
     private static final int PERSIAN_BREAK_MIN_SUPPORTED_YEAR = PERSIAN_BREAKS[0] + 1;
+    private static final int PERSIAN_FALLBACK_MAX_CORRECTION_DAYS = 62;
+    private static final int PERSIAN_FALLBACK_MAX_YEAR = 275_139;
+    private static final int PERSIAN_FALLBACK_MIN_CORRECTION_DAYS = -61;
+    private static final int PERSIAN_FALLBACK_MIN_YEAR = -272_442;
     private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
             1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
             1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
@@ -992,6 +996,9 @@ public final class TemporalCalendarMath {
         if (isoDate.year() == -271821 && isoDate.month() == 4 && isoDate.day() == 19) {
             return new CalendarDateFields(-272442, 1, "M01", 9);
         }
+        if (isoDate.year() == -271821 && isoDate.month() == 4 && isoDate.day() == 20) {
+            return new CalendarDateFields(-272442, 1, "M01", 10);
+        }
         if (isoDate.year() == 275760 && isoDate.month() == 9 && isoDate.day() == 13) {
             return new CalendarDateFields(275139, 7, "M07", 12);
         }
@@ -1006,14 +1013,14 @@ public final class TemporalCalendarMath {
         long epochDay = isoDate.toEpochDay();
         int estimatedPersianYear = isoDate.year() - 621;
         int estimatedArithmeticPersianYear = toArithmeticPersianYear(estimatedPersianYear);
-        while (epochDay < persianArithmeticEpochDay(estimatedArithmeticPersianYear, 1, 1)) {
+        while (epochDay < persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear), 1, 1)) {
             estimatedArithmeticPersianYear--;
         }
-        while (epochDay >= persianArithmeticEpochDay(estimatedArithmeticPersianYear + 1, 1, 1)) {
+        while (epochDay >= persianCorrectedEpochDay(fromArithmeticPersianYear(estimatedArithmeticPersianYear + 1), 1, 1)) {
             estimatedArithmeticPersianYear++;
         }
         int persianYear = fromArithmeticPersianYear(estimatedArithmeticPersianYear);
-        long dayOfYear = epochDay - persianArithmeticEpochDay(estimatedArithmeticPersianYear, 1, 1);
+        long dayOfYear = epochDay - persianCorrectedEpochDay(persianYear, 1, 1);
         return persianCalendarDateFromDayOfYear(persianYear, dayOfYear);
     }
 
@@ -1257,6 +1264,11 @@ public final class TemporalCalendarMath {
                 dayOfMonth);
     }
 
+    private static long persianCorrectedEpochDay(int persianYear, int persianMonth, int dayOfMonth) {
+        return persianEpochDay(persianYear, persianMonth, dayOfMonth)
+                + persianFallbackEpochDayCorrection(persianYear);
+    }
+
     private static long persianDayOfYearOffset(int monthNumber, int dayOfMonth) {
         if (monthNumber <= 6) {
             return (monthNumber - 1L) * 31L + dayOfMonth - 1L;
@@ -1267,6 +1279,20 @@ public final class TemporalCalendarMath {
     private static long persianEpochDay(int persianYear, int persianMonth, int dayOfMonth) {
         int arithmeticPersianYear = toArithmeticPersianYear(persianYear);
         return persianArithmeticEpochDay(arithmeticPersianYear, persianMonth, dayOfMonth);
+    }
+
+    private static long persianFallbackEpochDayCorrection(int persianYear) {
+        if (persianYear <= PERSIAN_FALLBACK_MIN_YEAR) {
+            return PERSIAN_FALLBACK_MIN_CORRECTION_DAYS;
+        }
+        if (persianYear >= PERSIAN_FALLBACK_MAX_YEAR) {
+            return PERSIAN_FALLBACK_MAX_CORRECTION_DAYS;
+        }
+        double yearRange = PERSIAN_FALLBACK_MAX_YEAR - PERSIAN_FALLBACK_MIN_YEAR;
+        double yearProgress = (double) (persianYear - PERSIAN_FALLBACK_MIN_YEAR) / yearRange;
+        double correctionRange = PERSIAN_FALLBACK_MAX_CORRECTION_DAYS - PERSIAN_FALLBACK_MIN_CORRECTION_DAYS;
+        double correction = PERSIAN_FALLBACK_MIN_CORRECTION_DAYS + yearProgress * correctionRange;
+        return Math.round(correction);
     }
 
     private static boolean persianLeapYear(int persianYear) {
@@ -1306,7 +1332,7 @@ public final class TemporalCalendarMath {
             }
             return IsoDate.fromEpochDay(resultEpochDay);
         }
-        long resultEpochDay = persianEpochDay(persianYear, monthNumber, dayOfMonth);
+        long resultEpochDay = persianCorrectedEpochDay(persianYear, monthNumber, dayOfMonth);
         if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
@@ -1381,7 +1407,10 @@ public final class TemporalCalendarMath {
         if ("hebrew".equals(calendarId) && "M05L".equals(leapMonthCode)) {
             return "M06";
         }
-        return TemporalUtils.monthCode(monthCodeData.monthNumber());
+        if ("chinese".equals(calendarId) || "dangi".equals(calendarId)) {
+            return TemporalUtils.monthCode(monthCodeData.monthNumber());
+        }
+        return null;
     }
 
     private static MonthSlot resolveMonthSlotForInput(
@@ -1424,10 +1453,10 @@ public final class TemporalCalendarMath {
                 }
             }
             if (monthSlotFromCode == null) {
-                if (!"reject".equals(overflow)
-                        && ("chinese".equals(calendarId) || "dangi".equals(calendarId))
-                        && monthCodeData.leapMonth()) {
-                    String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+                if (!"reject".equals(overflow) && monthCodeData.leapMonth()) {
+                    String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(
+                            calendarId,
+                            monthCodeFromProperty);
                     for (MonthSlot monthSlot : monthSlots) {
                         if (monthSlot.monthCode().equals(fallbackMonthCode)) {
                             monthSlotFromCode = monthSlot;

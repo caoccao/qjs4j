@@ -1574,8 +1574,16 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         IsoDate isoDate = plainDate.getIsoDate();
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context,
-                new IsoDate(isoDate.year(), isoDate.month(), 1), plainDate.getCalendarId());
+        IsoDate plainYearMonthIsoDate;
+        if ("iso8601".equals(plainDate.getCalendarId())) {
+            plainYearMonthIsoDate = new IsoDate(isoDate.year(), isoDate.month(), 1);
+        } else {
+            plainYearMonthIsoDate = isoDate;
+        }
+        return TemporalPlainYearMonthConstructor.createPlainYearMonth(
+                context,
+                plainYearMonthIsoDate,
+                plainDate.getCalendarId());
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {

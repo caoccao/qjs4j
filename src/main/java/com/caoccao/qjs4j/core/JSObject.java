@@ -670,7 +670,10 @@ public non-sealed class JSObject implements JSValue {
             // while the descriptor may hold a stale value from initialization.
             if (desc != null && desc.isDataDescriptor()) {
                 if (offset < propertyValues.length && propertyValues[offset] != null) {
-                    desc.setValue(propertyValues[offset]);
+                    JSValue currentValue = propertyValues[offset];
+                    if (desc.getValue() != currentValue) {
+                        desc.setValue(currentValue);
+                    }
                 }
             }
             return desc;
