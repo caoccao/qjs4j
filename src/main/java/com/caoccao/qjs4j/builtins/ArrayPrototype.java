@@ -970,6 +970,26 @@ public final class ArrayPrototype {
             fromIndex = (long) fromIndexD;
         }
 
+        if (obj instanceof JSArray jsArray && fromIndex <= Integer.MAX_VALUE && length <= Integer.MAX_VALUE) {
+            int startIndex = (int) fromIndex;
+            int endIndex = (int) length;
+            for (int index = startIndex; index < endIndex; index++) {
+                JSValue element = jsArray.get(index);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+                if (JSTypeConversions.strictEquals(element, searchElement)) {
+                    return JSBoolean.TRUE;
+                }
+                if (element instanceof JSNumber elementNumber && searchElement instanceof JSNumber searchNumber) {
+                    if (Double.isNaN(elementNumber.value()) && Double.isNaN(searchNumber.value())) {
+                        return JSBoolean.TRUE;
+                    }
+                }
+            }
+            return JSBoolean.FALSE;
+        }
+
         for (long i = fromIndex; i < length; i++) {
             PropertyKey key = PropertyKey.fromString(Long.toString(i));
             JSValue element = obj.get(key);
