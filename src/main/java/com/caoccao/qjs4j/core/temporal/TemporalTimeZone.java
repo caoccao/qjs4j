@@ -67,14 +67,26 @@ public final class TemporalTimeZone {
     public static String formatOffset(int totalSeconds) {
         String sign = totalSeconds >= 0 ? "+" : "-";
         int absoluteSeconds = Math.abs(totalSeconds);
+        int hours = absoluteSeconds / 3_600;
+        int minutes = (absoluteSeconds % 3_600) / 60;
+        int seconds = absoluteSeconds % 60;
+        if (seconds == 0) {
+            return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
+        } else {
+            return String.format(Locale.ROOT, "%s%02d:%02d:%02d", sign, hours, minutes, seconds);
+        }
+    }
+
+    public static String formatOffsetRoundedToMinute(int totalSeconds) {
+        int sign = totalSeconds < 0 ? -1 : 1;
+        int absoluteSeconds = Math.abs(totalSeconds);
         int absoluteMinutes = absoluteSeconds / 60;
         int remainingSeconds = absoluteSeconds % 60;
         if (remainingSeconds >= 30) {
             absoluteMinutes++;
         }
-        int hours = absoluteMinutes / 60;
-        int minutes = absoluteMinutes % 60;
-        return String.format(Locale.ROOT, "%s%02d:%02d", sign, hours, minutes);
+        int roundedTotalSeconds = sign * absoluteMinutes * 60;
+        return formatOffset(roundedTotalSeconds);
     }
 
     private static IsoDateTime fromLocalDateTime(LocalDateTime localDateTime) {
@@ -281,6 +293,16 @@ public final class TemporalTimeZone {
                 throw new DateTimeException("Offset zone is outside java.time range: " + timeZoneId);
             }
             return ZoneOffset.ofTotalSeconds(fixedOffsetSeconds);
+        }
+        String normalizedTimeZoneId = timeZoneId.toLowerCase(Locale.ROOT);
+        if ("roc".equals(normalizedTimeZoneId)) {
+            return ZoneId.of("Asia/Taipei");
+        } else if ("est".equals(normalizedTimeZoneId)) {
+            return ZoneId.of("America/Panama");
+        } else if ("mst".equals(normalizedTimeZoneId)) {
+            return ZoneId.of("America/Phoenix");
+        } else if ("hst".equals(normalizedTimeZoneId)) {
+            return ZoneId.of("Pacific/Honolulu");
         }
         try {
             return ZoneId.of(timeZoneId);

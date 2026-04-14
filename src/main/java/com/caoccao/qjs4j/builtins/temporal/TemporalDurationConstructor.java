@@ -23,6 +23,8 @@ import java.math.BigInteger;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,9 +49,19 @@ public final class TemporalDurationConstructor {
             Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
     private static final Pattern OFFSET_EXTENDED_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
     private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS =
             BigInteger.valueOf(9_007_199_254_740_992L).multiply(SECOND_NANOSECONDS).subtract(BigInteger.ONE);
+    private static final Map<String, String> SUPPLEMENTARY_TIME_ZONE_IDS = Map.of(
+            "est", "EST",
+            "mst", "MST",
+            "hst", "HST",
+            "gmt+0", "GMT+0",
+            "gmt-0", "GMT-0",
+            "gmt0", "GMT0",
+            "roc", "ROC");
     private static final String UNIT_MONTH = "month";
     private static final String UNIT_WEEK = "week";
     private static final String UNIT_YEAR = "year";
@@ -125,29 +137,28 @@ public final class TemporalDurationConstructor {
     }
 
     private static String canonicalizeTimeZoneIdentifier(String timeZoneText) {
-        if ("utc".equalsIgnoreCase(timeZoneText)
-                || "ut".equalsIgnoreCase(timeZoneText)
-                || "gmt".equalsIgnoreCase(timeZoneText)) {
-            return "UTC";
+        String canonicalSupplementaryTimeZoneId =
+                SUPPLEMENTARY_TIME_ZONE_IDS.get(timeZoneText.toLowerCase(Locale.ROOT));
+        if (canonicalSupplementaryTimeZoneId != null) {
+            return canonicalSupplementaryTimeZoneId;
+        }
+        for (String availableZoneId : ZoneId.getAvailableZoneIds()) {
+            if (availableZoneId.equalsIgnoreCase(timeZoneText)) {
+                return availableZoneId;
+            }
+        }
+        if ("ut".equalsIgnoreCase(timeZoneText)) {
+            return "UT";
         }
         try {
-            ZoneId zoneId = ZoneId.of(timeZoneText);
-            return zoneId.getId();
-        } catch (DateTimeException ignored) {
-            try {
-                ZoneOffset zoneOffset = ZoneOffset.of(timeZoneText);
-                if (zoneOffset.getTotalSeconds() % 60 != 0) {
-                    return timeZoneText;
-                }
-                return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
-            } catch (DateTimeException ignoredAgain) {
-                for (String availableZoneId : ZoneId.getAvailableZoneIds()) {
-                    if (availableZoneId.equalsIgnoreCase(timeZoneText)) {
-                        return availableZoneId;
-                    }
-                }
+            ZoneOffset zoneOffset = ZoneOffset.of(timeZoneText);
+            if (zoneOffset.getTotalSeconds() % 60 != 0) {
                 return timeZoneText;
+            } else {
+                return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
             }
+        } catch (DateTimeException ignored) {
+            return timeZoneText;
         }
     }
 
@@ -772,6 +783,15 @@ public final class TemporalDurationConstructor {
                     Integer.parseInt(basicMatcher.group(3)),
                     basicMatcher.group(4),
                     basicMatcher.group(5));
+        }
+        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
+        if (hourOnlyMatcher.matches()) {
+            return new OffsetParts(
+                    hourOnlyMatcher.group(1),
+                    Integer.parseInt(hourOnlyMatcher.group(2)),
+                    0,
+                    null,
+                    null);
         }
         return null;
     }

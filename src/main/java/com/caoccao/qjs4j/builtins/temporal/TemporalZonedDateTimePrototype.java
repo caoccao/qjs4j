@@ -59,14 +59,28 @@ public final class TemporalZonedDateTimePrototype {
                 || durationRecord.weeks() != 0
                 || durationRecord.days() != 0) {
             IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-            IsoDate addedDate = addIsoDateWithOverflow(
-                    context,
-                    localDateTime.date(),
-                    durationRecord.years(),
-                    durationRecord.months(),
-                    durationRecord.weeks(),
-                    durationRecord.days(),
-                    overflow);
+            String calendarId = zonedDateTime.getCalendarId();
+            IsoDate addedDate;
+            if ("iso8601".equals(calendarId)) {
+                addedDate = addIsoDateWithOverflow(
+                        context,
+                        localDateTime.date(),
+                        durationRecord.years(),
+                        durationRecord.months(),
+                        durationRecord.weeks(),
+                        durationRecord.days(),
+                        overflow);
+            } else {
+                addedDate = TemporalCalendarMath.addCalendarDate(
+                        context,
+                        localDateTime.date(),
+                        calendarId,
+                        durationRecord.years(),
+                        durationRecord.months(),
+                        durationRecord.weeks(),
+                        durationRecord.days(),
+                        overflow);
+            }
             if (context.hasPendingException() || addedDate == null) {
                 return null;
             }
@@ -231,13 +245,17 @@ public final class TemporalZonedDateTimePrototype {
         }
         String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
         if ("Z".equals(normalizedTimeZoneId)) {
-            return "+00:00";
+            return "offset:+00:00";
         }
         try {
             ZoneOffset zoneOffset = ZoneOffset.of(normalizedTimeZoneId);
-            return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
-        } catch (DateTimeException ignored) {
-            return normalizedTimeZoneId;
+            return "offset:" + TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
+        } catch (DateTimeException ignoredOffsetException) {
+            try {
+                return "named:" + TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId).getRules();
+            } catch (DateTimeException ignoredTimeZoneException) {
+                return normalizedTimeZoneId;
+            }
         }
     }
 

@@ -34,6 +34,8 @@ public final class TemporalZonedDateTimeConstructor {
             Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
     private static final Pattern OFFSET_EXTENDED_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
 
     private TemporalZonedDateTimeConstructor() {
     }
@@ -257,30 +259,23 @@ public final class TemporalZonedDateTimeConstructor {
             JSContext context,
             ZonedDateTimePropertyBagData propertyBagData,
             ZonedDateTimeOptions options) {
-        Integer monthNumber = propertyBagData.month();
+        Integer monthFromProperty = propertyBagData.month();
         ParsedMonthCode parsedMonthCode = propertyBagData.parsedMonthCode();
-        if (parsedMonthCode != null) {
-            if (parsedMonthCode.month() < 1 || parsedMonthCode.month() > 12 || parsedMonthCode.leapMonth()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            if (monthNumber != null && monthNumber != parsedMonthCode.month()) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            if (monthNumber == null) {
-                monthNumber = parsedMonthCode.month();
-            }
-        }
-
-        if (monthNumber == null) {
+        if (monthFromProperty == null && parsedMonthCode == null) {
             context.throwTypeError("Temporal error: DateTime argument must be object or string.");
             return JSUndefined.INSTANCE;
         }
 
-        int year = propertyBagData.year();
+        String monthCodeFromProperty = null;
+        if (parsedMonthCode != null) {
+            monthCodeFromProperty = TemporalUtils.monthCode(parsedMonthCode.month());
+            if (parsedMonthCode.leapMonth()) {
+                monthCodeFromProperty += "L";
+            }
+        }
+
+        int calendarYear = propertyBagData.year();
         int dayOfMonth = propertyBagData.day();
-        int month = monthNumber;
         int hour = propertyBagData.hour();
         int minute = propertyBagData.minute();
         int second = propertyBagData.second();
@@ -291,25 +286,26 @@ public final class TemporalZonedDateTimeConstructor {
         int microsecond = propertyBagData.microsecond();
         int nanosecond = propertyBagData.nanosecond();
 
-        IsoDate isoDate;
+        IsoDate isoDate = TemporalCalendarMath.calendarDateToIsoDate(
+                context,
+                propertyBagData.calendarId(),
+                calendarYear,
+                monthFromProperty,
+                monthCodeFromProperty,
+                dayOfMonth,
+                options.overflow());
+        if (context.hasPendingException() || isoDate == null) {
+            return JSUndefined.INSTANCE;
+        }
+
         IsoTime isoTime;
         if ("reject".equals(options.overflow())) {
-            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
             if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            isoDate = new IsoDate(year, month, dayOfMonth);
             isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
-            if (month < 1 || dayOfMonth < 1) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
-            isoDate = IsoDate.constrain(year, month, dayOfMonth);
             isoTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
@@ -353,6 +349,21 @@ public final class TemporalZonedDateTimeConstructor {
 
         boolean hasExplicitOffset = hasOffsetDesignator(input);
         boolean hasZuluOffset = hasZuluDesignator(input);
+        boolean hasTimeComponent = findDateTimeSeparatorIndex(input) >= 0;
+        if (!hasTimeComponent && !hasExplicitOffset) {
+            BigInteger epochNanoseconds;
+            try {
+                epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(parsed.date(), timeZoneId);
+            } catch (DateTimeException dateTimeException) {
+                context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+                return JSUndefined.INSTANCE;
+            }
+            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+                context.throwRangeError("Temporal error: Nanoseconds out of range.");
+                return JSUndefined.INSTANCE;
+            }
+            return createZonedDateTime(context, epochNanoseconds, timeZoneId, parsed.calendarId());
+        }
         boolean offsetIncludesSecondsOrFraction = false;
         if (hasExplicitOffset && !hasZuluOffset) {
             String offsetText = extractOffsetText(input);
@@ -380,7 +391,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static String extractOffsetText(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
             return null;
         }
@@ -403,6 +414,51 @@ public final class TemporalZonedDateTimeConstructor {
             offsetEnd = text.length();
         }
         return text.substring(offsetStart, offsetEnd);
+    }
+
+    private static int findDateTimeSeparatorIndex(String text) {
+        int annotationStart = text.indexOf('[');
+        int searchEnd = annotationStart >= 0 ? annotationStart : text.length();
+        for (int index = 0; index < searchEnd; index++) {
+            char character = text.charAt(index);
+            if (character == 'T' || character == 't') {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static BigInteger findMatchingEpochNanosecondsForExplicitOffset(
+            JSContext context,
+            IsoDate isoDate,
+            IsoTime isoTime,
+            String timeZoneId,
+            int explicitOffsetSeconds,
+            boolean offsetTimeZoneIdentifier,
+            boolean allowMinuteRounding) {
+        if (offsetTimeZoneIdentifier) {
+            int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+            boolean offsetMatches = allowMinuteRounding
+                    ? roundOffsetSecondsToMinute(timeZoneOffsetSeconds) == explicitOffsetSeconds
+                    : timeZoneOffsetSeconds == explicitOffsetSeconds;
+            if (offsetMatches) {
+                return TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
+            } else {
+                return null;
+            }
+        }
+
+        try {
+            return selectMatchingEpochNanosecondsForExplicitOffset(
+                    isoDate,
+                    isoTime,
+                    timeZoneId,
+                    explicitOffsetSeconds,
+                    allowMinuteRounding);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
+            return null;
+        }
     }
 
     /**
@@ -479,7 +535,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean hasOffsetDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
             return false;
         }
@@ -496,7 +552,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean hasZuluDesignator(String text) {
-        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
             return false;
         }
@@ -544,78 +600,56 @@ public final class TemporalZonedDateTimeConstructor {
         } else if (hasZuluOffset) {
             epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, 0);
         } else {
-            int offsetSeconds = explicitOffsetSeconds != null ? explicitOffsetSeconds : 0;
+            int explicitOffsetSecondsValue = explicitOffsetSeconds != null ? explicitOffsetSeconds : 0;
             String offsetOption = options.offset();
-            if ("ignore".equals(offsetOption)) {
-                if (offsetTimeZoneIdentifier) {
-                    int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
-                    epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
-                } else {
-                    epochNanoseconds = computeWallEpochNanoseconds(
+            if ("use".equals(offsetOption)) {
+                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, explicitOffsetSecondsValue);
+            } else {
+                if ("ignore".equals(offsetOption)) {
+                    epochNanoseconds = resolveEpochNanosecondsIgnoringOffset(
                             context,
                             isoDate,
                             isoTime,
                             timeZoneId,
+                            offsetTimeZoneIdentifier,
                             options.disambiguation());
                     if (context.hasPendingException() || epochNanoseconds == null) {
                         return null;
                     }
-                }
-            } else if ("use".equals(offsetOption)) {
-                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
-            } else if ("prefer".equals(offsetOption)) {
-                if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
-            } else {
-                if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                if (stringInput && !offsetTimeZoneIdentifier && !stringOffsetIncludesSecondsOrFraction) {
-                    BigInteger matchingEpochNanoseconds = selectMatchingEpochNanosecondsForMinuteOffset(
-                            isoDate,
-                            isoTime,
-                            timeZoneId,
-                            offsetSeconds);
-                    if (matchingEpochNanoseconds != null) {
-                        epochNanoseconds = matchingEpochNanoseconds;
-                    } else {
-                        int zoneOffsetSeconds = computeZoneOffsetSeconds(
-                                context,
-                                isoDate,
-                                isoTime,
-                                timeZoneId,
-                                offsetSeconds,
-                                false);
-                        if (context.hasPendingException()) {
-                            return null;
-                        }
-                        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
-                        if (roundedZoneOffsetSeconds != offsetSeconds) {
-                            context.throwRangeError("Temporal error: Invalid offset.");
-                            return null;
-                        }
-                        epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, zoneOffsetSeconds);
-                    }
                 } else {
-                    int zoneOffsetSeconds = computeZoneOffsetSeconds(
+                    if (!isZonedDateTimeWithinRange(isoDate, isoTime)) {
+                        context.throwRangeError("Temporal error: Invalid ISO date.");
+                        return null;
+                    }
+                    boolean allowMinuteRounding = stringInput && !stringOffsetIncludesSecondsOrFraction;
+                    BigInteger matchingEpochNanoseconds = findMatchingEpochNanosecondsForExplicitOffset(
                             context,
                             isoDate,
                             isoTime,
                             timeZoneId,
-                            offsetSeconds,
-                            offsetTimeZoneIdentifier);
+                            explicitOffsetSecondsValue,
+                            offsetTimeZoneIdentifier,
+                            allowMinuteRounding);
                     if (context.hasPendingException()) {
                         return null;
                     }
-                    if (zoneOffsetSeconds != offsetSeconds) {
+                    if (matchingEpochNanoseconds != null) {
+                        epochNanoseconds = matchingEpochNanoseconds;
+                    } else if ("reject".equals(offsetOption)) {
                         context.throwRangeError("Temporal error: Invalid offset.");
                         return null;
+                    } else {
+                        epochNanoseconds = resolveEpochNanosecondsIgnoringOffset(
+                                context,
+                                isoDate,
+                                isoTime,
+                                timeZoneId,
+                                offsetTimeZoneIdentifier,
+                                options.disambiguation());
+                        if (context.hasPendingException() || epochNanoseconds == null) {
+                            return null;
+                        }
                     }
-                    epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, offsetSeconds);
                 }
             }
         }
@@ -848,6 +882,15 @@ public final class TemporalZonedDateTimeConstructor {
                     basicMatcher.group(4),
                     basicMatcher.group(5));
         }
+        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
+        if (hourOnlyMatcher.matches()) {
+            return new OffsetParts(
+                    hourOnlyMatcher.group(1),
+                    Integer.parseInt(hourOnlyMatcher.group(2)),
+                    0,
+                    null,
+                    null);
+        }
 
         return null;
     }
@@ -1065,6 +1108,21 @@ public final class TemporalZonedDateTimeConstructor {
                 offsetSeconds);
     }
 
+    private static BigInteger resolveEpochNanosecondsIgnoringOffset(
+            JSContext context,
+            IsoDate isoDate,
+            IsoTime isoTime,
+            String timeZoneId,
+            boolean offsetTimeZoneIdentifier,
+            String disambiguation) {
+        if (offsetTimeZoneIdentifier) {
+            int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+            return TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
+        } else {
+            return computeWallEpochNanoseconds(context, isoDate, isoTime, timeZoneId, disambiguation);
+        }
+    }
+
     private static int resolveJapaneseYearFromEra(String era, int eraYear) {
         if ("ce".equals(era)) {
             return eraYear;
@@ -1096,11 +1154,12 @@ public final class TemporalZonedDateTimeConstructor {
         return sign * absoluteOffsetMinutes * 60;
     }
 
-    private static BigInteger selectMatchingEpochNanosecondsForMinuteOffset(
+    private static BigInteger selectMatchingEpochNanosecondsForExplicitOffset(
             IsoDate isoDate,
             IsoTime isoTime,
             String timeZoneId,
-            int parsedOffsetSeconds) {
+            int parsedOffsetSeconds,
+            boolean allowMinuteRounding) {
         int second = isoTime.second();
         BigInteger leapSecondNanoseconds = BigInteger.ZERO;
         if (second == 60) {
@@ -1123,8 +1182,14 @@ public final class TemporalZonedDateTimeConstructor {
         BigInteger selectedEpochNanoseconds = null;
         for (ZoneOffset validOffset : validOffsets) {
             int candidateOffsetSeconds = validOffset.getTotalSeconds();
-            int roundedCandidateOffsetSeconds = roundOffsetSecondsToMinute(candidateOffsetSeconds);
-            if (roundedCandidateOffsetSeconds != parsedOffsetSeconds) {
+            boolean offsetMatches;
+            if (allowMinuteRounding) {
+                int roundedCandidateOffsetSeconds = roundOffsetSecondsToMinute(candidateOffsetSeconds);
+                offsetMatches = roundedCandidateOffsetSeconds == parsedOffsetSeconds;
+            } else {
+                offsetMatches = candidateOffsetSeconds == parsedOffsetSeconds;
+            }
+            if (!offsetMatches) {
                 continue;
             }
             Instant candidateInstant = localDateTime.atOffset(validOffset).toInstant();

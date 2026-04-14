@@ -201,7 +201,7 @@ public final class TemporalInstantPrototype {
         } else {
             isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(roundedEpochNanoseconds, timeZoneId);
             int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(roundedEpochNanoseconds, timeZoneId);
-            zoneSuffix = TemporalTimeZone.formatOffset(offsetSeconds);
+            zoneSuffix = TemporalTimeZone.formatOffsetRoundedToMinute(offsetSeconds);
         }
 
         String dateTimeText = formatWithPrecision(isoDateTime, smallestUnit, fractionalSecondDigits);
