@@ -524,7 +524,20 @@ public final class TemporalDurationPrototype {
 
         boolean shouldBalanceWeeks = "week".equals(largestUnit) || "week".equals(smallestUnit);
         if (shouldBalanceWeeks) {
-            UnitStepResult weekStepResult = moveByWholeFixedUnits(cursorDateTime, endDateTime, "week");
+            UnitStepResult weekStepResult;
+            if (relativeToOption != null && relativeToOption.zoned()) {
+                weekStepResult = moveByWholeCalendarUnits(
+                        context,
+                        cursorDateTime,
+                        endDateTime,
+                        "week",
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            } else {
+                weekStepResult = moveByWholeFixedUnits(cursorDateTime, endDateTime, "week");
+            }
             weeks = weekStepResult.count();
             cursorDateTime = weekStepResult.boundaryDateTime();
             if (smallestUnitRank == temporalDurationUnitRank("week")) {
@@ -533,7 +546,20 @@ public final class TemporalDurationPrototype {
         }
 
         if (smallestUnitRank >= temporalDurationUnitRank("day")) {
-            UnitStepResult dayStepResult = moveByWholeFixedUnits(cursorDateTime, endDateTime, "day");
+            UnitStepResult dayStepResult;
+            if (relativeToOption != null && relativeToOption.zoned()) {
+                dayStepResult = moveByWholeCalendarUnits(
+                        context,
+                        cursorDateTime,
+                        endDateTime,
+                        "day",
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+            } else {
+                dayStepResult = moveByWholeFixedUnits(cursorDateTime, endDateTime, "day");
+            }
             days = dayStepResult.count();
             cursorDateTime = dayStepResult.boundaryDateTime();
             if (smallestUnitRank == temporalDurationUnitRank("day")) {
@@ -1075,6 +1101,66 @@ public final class TemporalDurationPrototype {
                 long nextUnitCount = unitCount - 1L;
                 LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
                 if (nextDateTime.isBefore(endDateTime)) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+            }
+        }
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+        return new UnitStepResult(unitCount, boundaryDateTime);
+    }
+
+    private static UnitStepResult moveByWholeCalendarUnits(
+            JSContext context,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            String calendarUnit,
+            RelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return moveByWholeCalendarUnits(startDateTime, endDateTime, calendarUnit);
+        }
+        BigInteger startToEndNanoseconds = nanosecondsBetween(
+                context,
+                startDateTime,
+                endDateTime,
+                relativeToOption);
+        if (context.hasPendingException()) {
+            return new UnitStepResult(0L, startDateTime);
+        }
+
+        int direction = startToEndNanoseconds.signum();
+        long unitCount = 0L;
+        if (direction >= 0) {
+            while (true) {
+                long nextUnitCount = unitCount + 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(
+                        context,
+                        nextDateTime,
+                        endDateTime,
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return new UnitStepResult(unitCount, addCalendarUnits(startDateTime, calendarUnit, unitCount));
+                }
+                if (nextToEndNanoseconds.signum() < 0) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+            }
+        } else {
+            while (true) {
+                long nextUnitCount = unitCount - 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(
+                        context,
+                        nextDateTime,
+                        endDateTime,
+                        relativeToOption);
+                if (context.hasPendingException()) {
+                    return new UnitStepResult(unitCount, addCalendarUnits(startDateTime, calendarUnit, unitCount));
+                }
+                if (nextToEndNanoseconds.signum() > 0
+                        || (nextToEndNanoseconds.signum() == 0 && !nextDateTime.equals(endDateTime))) {
                     break;
                 }
                 unitCount = nextUnitCount;
@@ -1672,6 +1758,7 @@ public final class TemporalDurationPrototype {
                     context,
                     startDateTime,
                     unroundedEndDateTime,
+                    unroundedEndEpochNanoseconds,
                     smallestUnit,
                     roundingIncrement,
                     roundingMode,
@@ -1773,10 +1860,17 @@ public final class TemporalDurationPrototype {
                 && isTimeUnit(smallestUnit)
                 && hasAnyDateUnits(durationRecord)
                 && !isTimeUnit(roundOptions.largestUnit())) {
-            long wholeDayCount = java.time.temporal.ChronoUnit.DAYS.between(
-                    startDateTime.toLocalDate(),
-                    unroundedEndDateTime.toLocalDate());
-            LocalDateTime dayAdjustedDateTime = startDateTime.plusDays(wholeDayCount);
+            LocalDateTime dayAdjustedDateTime;
+            try {
+                dayAdjustedDateTime = startDateTime
+                        .plusYears(durationRecord.years())
+                        .plusMonths(durationRecord.months())
+                        .plusWeeks(durationRecord.weeks())
+                        .plusDays(durationRecord.days());
+            } catch (DateTimeException dateTimeException) {
+                context.throwRangeError("Temporal error: Duration field out of range.");
+                return null;
+            }
             BigInteger timeRemainderNanoseconds = nanosecondsBetween(
                     context,
                     dayAdjustedDateTime,
@@ -1804,18 +1898,15 @@ public final class TemporalDurationPrototype {
                 relativeToOption);
         BigInteger incrementNanoseconds;
         if (relativeToOption.zoned() && "day".equals(smallestUnit)) {
-            LocalDateTime incrementBoundaryDateTime;
-            if (totalNanoseconds.signum() < 0) {
-                incrementBoundaryDateTime = addCalendarUnits(startDateTime, "day", -1L);
-            } else {
-                incrementBoundaryDateTime = addCalendarUnits(startDateTime, "day", 1L);
-            }
-            BigInteger oneDayIncrementNanoseconds = nanosecondsBetween(
+            return roundDateTimeToCalendarUnit(
                     context,
                     startDateTime,
-                    incrementBoundaryDateTime,
-                    relativeToOption).abs();
-            incrementNanoseconds = oneDayIncrementNanoseconds.multiply(BigInteger.valueOf(roundingIncrement));
+                    unroundedEndDateTime,
+                    unroundedEndEpochNanoseconds,
+                    "day",
+                    roundingIncrement,
+                    roundingMode,
+                    relativeToOption);
         } else if ("week".equals(smallestUnit)) {
             incrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
         } else {
@@ -1829,20 +1920,53 @@ public final class TemporalDurationPrototype {
             JSContext context,
             LocalDateTime startDateTime,
             LocalDateTime endDateTime,
+            BigInteger knownEndEpochNanoseconds,
             String calendarUnit,
             long roundingIncrement,
             String roundingMode,
             RelativeToOption relativeToOption) {
         UnitStepResult truncatedStepResult = moveByWholeCalendarUnits(startDateTime, endDateTime, calendarUnit);
+        if (relativeToOption != null && relativeToOption.zoned()) {
+            truncatedStepResult = moveByWholeCalendarUnits(
+                    context,
+                    startDateTime,
+                    endDateTime,
+                    calendarUnit,
+                    relativeToOption);
+            if (context.hasPendingException()) {
+                return null;
+            }
+        }
         long truncatedCount = truncatedStepResult.count();
         LocalDateTime truncatedBoundaryDateTime = truncatedStepResult.boundaryDateTime();
 
+        int boundaryToEndDirection;
+        if (relativeToOption != null && relativeToOption.zoned()) {
+            BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
+                    context,
+                    truncatedBoundaryDateTime,
+                    null,
+                    endDateTime,
+                    knownEndEpochNanoseconds,
+                    relativeToOption);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            boundaryToEndDirection = boundaryToEndNanoseconds.signum();
+        } else if (truncatedBoundaryDateTime.isBefore(endDateTime)) {
+            boundaryToEndDirection = 1;
+        } else if (truncatedBoundaryDateTime.isAfter(endDateTime)) {
+            boundaryToEndDirection = -1;
+        } else {
+            boundaryToEndDirection = 0;
+        }
+
         long lowerUnitCount;
         long upperUnitCount;
-        if (truncatedBoundaryDateTime.isAfter(endDateTime)) {
+        if (boundaryToEndDirection < 0) {
             lowerUnitCount = truncatedCount - 1;
             upperUnitCount = truncatedCount;
-        } else if (truncatedBoundaryDateTime.isBefore(endDateTime)) {
+        } else if (boundaryToEndDirection > 0) {
             lowerUnitCount = truncatedCount;
             upperUnitCount = truncatedCount + 1;
         } else {
@@ -1868,7 +1992,27 @@ public final class TemporalDurationPrototype {
             return upperBoundaryDateTime;
         }
 
-        int direction = endDateTime.isBefore(startDateTime) ? -1 : 1;
+        int direction;
+        if (relativeToOption != null && relativeToOption.zoned()) {
+            BigInteger startToEndNanoseconds = nanosecondsBetween(
+                    context,
+                    startDateTime,
+                    null,
+                    endDateTime,
+                    knownEndEpochNanoseconds,
+                    relativeToOption);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            direction = startToEndNanoseconds.signum();
+            if (direction == 0) {
+                direction = 1;
+            }
+        } else if (endDateTime.isBefore(startDateTime)) {
+            direction = -1;
+        } else {
+            direction = 1;
+        }
         switch (roundingMode) {
             case "ceil":
                 return upperBoundaryDateTime;

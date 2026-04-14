@@ -2366,6 +2366,23 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
+        String calendarId = zonedDateTime.getCalendarId();
+        boolean calendarSupportsEraFields = !"iso8601".equals(calendarId)
+                && !"chinese".equals(calendarId)
+                && !"dangi".equals(calendarId);
+        String eraField = null;
+        Integer eraYearField = null;
+        if (calendarSupportsEraFields) {
+            eraField = getOptionalStringWithField(context, fieldsObject, "era");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            eraYearField = getOptionalIntegerWithField(context, fieldsObject, "eraYear");
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+        }
+
         boolean hasAnyWithField = dayField != null
                 || hourField != null
                 || microsecondField != null
@@ -2376,7 +2393,9 @@ public final class TemporalZonedDateTimePrototype {
                 || nanosecondField != null
                 || offsetField != null
                 || secondField != null
-                || yearField != null;
+                || yearField != null
+                || eraField != null
+                || eraYearField != null;
         if (!hasAnyWithField) {
             context.throwTypeError("Temporal error: Argument to with() must contain some date/time fields.");
             return JSUndefined.INSTANCE;
@@ -2394,31 +2413,106 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-        int mergedYear = yearField != null ? yearField : localDateTime.date().year();
-        int mergedDay = dayField != null ? dayField : localDateTime.date().day();
+        boolean hasDateField = dayField != null
+                || monthField != null
+                || monthCodeField != null
+                || yearField != null
+                || eraField != null
+                || eraYearField != null;
+        IsoDate mergedDate = localDateTime.date();
+        if (hasDateField) {
+            JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
+                    context,
+                    localDateTime.date(),
+                    calendarId);
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            JSObject dateFieldsObject = new JSObject(context);
+            if (dayField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(dayField));
+            }
+            if (monthField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(monthField));
+            }
+            if (monthCodeField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCodeField));
+            }
+            if (yearField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(yearField));
+            }
+            if (eraField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("era"), new JSString(eraField));
+            }
+            if (eraYearField != null) {
+                dateFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraYearField));
+            }
+            JSObject normalizedDateOptionsObject = new JSObject(context);
+            normalizedDateOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(withOptions.overflow()));
+            JSValue mergedDateValue = TemporalPlainDatePrototype.with(
+                    context,
+                    plainDate,
+                    new JSValue[]{dateFieldsObject, normalizedDateOptionsObject});
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
+            if (!(mergedDateValue instanceof JSTemporalPlainDate mergedPlainDate)) {
+                context.throwTypeError("Temporal error: Date argument must be object or string.");
+                return JSUndefined.INSTANCE;
+            }
+            mergedDate = mergedPlainDate.getIsoDate();
+        }
+
         int mergedHour = hourField != null ? hourField : localDateTime.time().hour();
         int mergedMinute = minuteField != null ? minuteField : localDateTime.time().minute();
         int mergedSecond = secondField != null ? secondField : localDateTime.time().second();
         int mergedMillisecond = millisecondField != null ? millisecondField : localDateTime.time().millisecond();
         int mergedMicrosecond = microsecondField != null ? microsecondField : localDateTime.time().microsecond();
         int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
+        IsoTime mergedIsoTime;
+        if ("reject".equals(withOptions.overflow())) {
+            if (!IsoTime.isValidTime(
+                    mergedHour,
+                    mergedMinute,
+                    mergedSecond,
+                    mergedMillisecond,
+                    mergedMicrosecond,
+                    mergedNanosecond)) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+            mergedIsoTime = new IsoTime(
+                    mergedHour,
+                    mergedMinute,
+                    mergedSecond,
+                    mergedMillisecond,
+                    mergedMicrosecond,
+                    mergedNanosecond);
+        } else {
+            mergedIsoTime = IsoTime.constrain(
+                    mergedHour,
+                    mergedMinute,
+                    mergedSecond,
+                    mergedMillisecond,
+                    mergedMicrosecond,
+                    mergedNanosecond);
+        }
+
+        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(
+                mergedDate,
+                calendarId);
 
         JSObject mergedFieldsObject = new JSObject(context);
-        mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(mergedYear));
-        if (monthField != null || monthCodeField == null) {
-            int mergedMonth = monthField != null ? monthField : localDateTime.date().month();
-            mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(mergedMonth));
-        }
-        if (monthCodeField != null) {
-            mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(monthCodeField));
-        }
-        mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(mergedDay));
-        mergedFieldsObject.set(PropertyKey.fromString("hour"), JSNumber.of(mergedHour));
-        mergedFieldsObject.set(PropertyKey.fromString("minute"), JSNumber.of(mergedMinute));
-        mergedFieldsObject.set(PropertyKey.fromString("second"), JSNumber.of(mergedSecond));
-        mergedFieldsObject.set(PropertyKey.fromString("millisecond"), JSNumber.of(mergedMillisecond));
-        mergedFieldsObject.set(PropertyKey.fromString("microsecond"), JSNumber.of(mergedMicrosecond));
-        mergedFieldsObject.set(PropertyKey.fromString("nanosecond"), JSNumber.of(mergedNanosecond));
+        mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(calendarDateFields.year()));
+        mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(calendarDateFields.month()));
+        mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(calendarDateFields.monthCode()));
+        mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDateFields.day()));
+        mergedFieldsObject.set(PropertyKey.fromString("hour"), JSNumber.of(mergedIsoTime.hour()));
+        mergedFieldsObject.set(PropertyKey.fromString("minute"), JSNumber.of(mergedIsoTime.minute()));
+        mergedFieldsObject.set(PropertyKey.fromString("second"), JSNumber.of(mergedIsoTime.second()));
+        mergedFieldsObject.set(PropertyKey.fromString("millisecond"), JSNumber.of(mergedIsoTime.millisecond()));
+        mergedFieldsObject.set(PropertyKey.fromString("microsecond"), JSNumber.of(mergedIsoTime.microsecond()));
+        mergedFieldsObject.set(PropertyKey.fromString("nanosecond"), JSNumber.of(mergedIsoTime.nanosecond()));
         mergedFieldsObject.set(PropertyKey.fromString("timeZone"), new JSString(zonedDateTime.getTimeZoneId()));
         mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(zonedDateTime.getCalendarId()));
         if (offsetField != null) {
