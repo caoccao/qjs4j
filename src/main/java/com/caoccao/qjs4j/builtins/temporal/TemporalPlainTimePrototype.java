@@ -156,29 +156,6 @@ public final class TemporalPlainTimePrototype {
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
-    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
-        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
-        BigInteger quotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            quotient = quotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(divisor);
-        }
-        return new BigInteger[]{quotient, remainder};
-    }
-
-    private static long getDifferenceRoundingIncrementMaximum(String smallestUnit) {
-        return switch (smallestUnit) {
-            case "hour" -> 24L;
-            case "minute" -> 60L;
-            case "second" -> 60L;
-            case "millisecond" -> 1_000L;
-            case "microsecond" -> 1_000L;
-            case "nanosecond" -> 1_000L;
-            default -> -1L;
-        };
-    }
-
     private static TemporalDifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
@@ -455,14 +432,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximumIncrement = getDifferenceRoundingIncrementMaximum(smallestUnit);
-        if (maximumIncrement <= 0) {
-            return false;
-        }
-        if (roundingIncrement < 1L || roundingIncrement >= maximumIncrement) {
-            return false;
-        }
-        return maximumIncrement % roundingIncrement == 0L;
+        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -528,87 +498,11 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return value;
-        }
-
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        BigInteger floorValue = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return floorValue;
-        }
-        BigInteger ceilValue = floorValue.add(increment);
-        int sign = value.signum();
-
-        return switch (roundingMode) {
-            case "floor" -> floorValue;
-            case "ceil" -> ceilValue;
-            case "trunc" -> sign < 0 ? ceilValue : floorValue;
-            case "expand" -> sign < 0 ? floorValue : ceilValue;
-            case "halfExpand", "halfTrunc", "halfEven", "halfCeil", "halfFloor" -> {
-                BigInteger twoRemainder = remainder.shiftLeft(1);
-                int halfComparison = twoRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    yield floorValue;
-                }
-                if (halfComparison > 0) {
-                    yield ceilValue;
-                }
-                yield switch (roundingMode) {
-                    case "halfExpand" -> sign < 0 ? floorValue : ceilValue;
-                    case "halfTrunc" -> sign < 0 ? ceilValue : floorValue;
-                    case "halfEven" -> floorQuotient.testBit(0) ? ceilValue : floorValue;
-                    case "halfCeil" -> ceilValue;
-                    case "halfFloor" -> floorValue;
-                    default -> ceilValue;
-                };
-            }
-            default -> ceilValue;
-        };
+        return TemporalMathKernel.roundBigIntegerToIncrementSigned(value, increment, roundingMode);
     }
 
     private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        long quotient = Math.floorDiv(quantity, increment);
-        long lower = quotient * increment;
-        long remainder = quantity - lower;
-        if (remainder == 0L) {
-            return quantity;
-        }
-        long upper = lower + increment;
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> {
-                if (remainder * 2L >= increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfTrunc", "halfFloor" -> {
-                if (remainder * 2L > increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfEven" -> {
-                long doubleRemainder = remainder * 2L;
-                if (doubleRemainder < increment) {
-                    yield lower;
-                } else if (doubleRemainder > increment) {
-                    yield upper;
-                } else if (Math.floorMod(quotient, 2L) == 0L) {
-                    yield lower;
-                } else {
-                    yield upper;
-                }
-            }
-            default -> lower;
-        };
+        return TemporalMathKernel.roundLongToIncrementAsIfPositive(quantity, increment, roundingMode);
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {

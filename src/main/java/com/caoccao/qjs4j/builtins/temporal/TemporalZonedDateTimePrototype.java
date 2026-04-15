@@ -207,113 +207,11 @@ public final class TemporalZonedDateTimePrototype {
             JSTemporalZonedDateTime zonedDateTime,
             TemporalDuration durationRecord,
             String overflow) {
-        BigInteger intermediateEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
-        if (durationRecord.years() != 0
-                || durationRecord.months() != 0
-                || durationRecord.weeks() != 0
-                || durationRecord.days() != 0) {
-            IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
-            String calendarId = zonedDateTime.getCalendarId();
-            IsoDate addedDate;
-            if ("iso8601".equals(calendarId)) {
-                addedDate = addIsoDateWithOverflow(
-                        context,
-                        localDateTime.date(),
-                        durationRecord.years(),
-                        durationRecord.months(),
-                        durationRecord.weeks(),
-                        durationRecord.days(),
-                        overflow);
-            } else {
-                addedDate = TemporalCalendarMath.addCalendarDate(
-                        context,
-                        localDateTime.date(),
-                        calendarId,
-                        durationRecord.years(),
-                        durationRecord.months(),
-                        durationRecord.weeks(),
-                        durationRecord.days(),
-                        overflow);
-            }
-            if (context.hasPendingException() || addedDate == null) {
-                return null;
-            }
-
-            IsoDateTime addedDateTime = new IsoDateTime(addedDate, localDateTime.time());
-            try {
-                intermediateEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                        addedDateTime,
-                        zonedDateTime.getTimeZoneId());
-            } catch (DateTimeException dateTimeException) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        }
-
-        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
-        BigInteger resultEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(resultEpochNanoseconds)) {
-            context.throwRangeError("Temporal error: Nanoseconds out of range.");
-            return null;
-        }
-        return resultEpochNanoseconds;
-    }
-
-    private static IsoDate addIsoDateWithOverflow(
-            JSContext context,
-            IsoDate date,
-            long years,
-            long months,
-            long weeks,
-            long days,
-            String overflow) {
-        long monthIndex;
-        long balancedYear;
-        try {
-            monthIndex = Math.addExact(date.month() - 1L, months);
-            long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
-            balancedYear = Math.addExact(date.year(), years);
-            balancedYear = Math.addExact(balancedYear, balancedYearDelta);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        int balancedYearInt = (int) balancedYear;
-        int maximumDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
-        int balancedDay = date.day();
-        if ("reject".equals(overflow)) {
-            if (balancedDay > maximumDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            balancedDay = Math.min(balancedDay, maximumDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, balancedDay);
-        long resultEpochDay;
-        try {
-            long daysFromWeeks = Math.multiplyExact(weeks, 7L);
-            long totalDays = Math.addExact(days, daysFromWeeks);
-            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        try {
-            return IsoDate.fromEpochDay(resultEpochDay);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
+        return TemporalZonedDateTimeArithmeticKernel.addDurationToZonedDateTime(
+                context,
+                zonedDateTime,
+                durationRecord,
+                overflow);
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSValue[] args, int sign) {
@@ -544,14 +442,13 @@ public final class TemporalZonedDateTimePrototype {
             String smallestUnit,
             long roundingIncrement,
             String roundingMode) {
-        BigInteger differenceNanoseconds = endEpochNanoseconds.subtract(startEpochNanoseconds);
-        BigInteger smallestUnitNanoseconds = BigInteger.valueOf(unitToNanoseconds(smallestUnit));
-        BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(roundingIncrement));
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrementSigned(
-                differenceNanoseconds,
-                incrementNanoseconds,
+        return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
+                startEpochNanoseconds,
+                endEpochNanoseconds,
+                largestUnit,
+                unitToNanoseconds(smallestUnit),
+                roundingIncrement,
                 roundingMode);
-        return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
     }
 
     private static TemporalDuration differenceTemporalZonedDateTime(
@@ -648,15 +545,6 @@ public final class TemporalZonedDateTimePrototype {
                 settings.roundingMode());
     }
 
-    private static BigInteger durationTimeToNanoseconds(TemporalDuration durationRecord) {
-        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-    }
-
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "epochMilliseconds");
         if (zonedDateTime == null) return JSUndefined.INSTANCE;
@@ -746,17 +634,6 @@ public final class TemporalZonedDateTimePrototype {
             return quotientAndRemainder[0].subtract(BigInteger.ONE);
         }
         return quotientAndRemainder[0];
-    }
-
-    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
-        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
-        BigInteger quotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            quotient = quotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(divisor);
-        }
-        return new BigInteger[]{quotient, remainder};
     }
 
     private static String formatZonedDateTime(JSTemporalZonedDateTime zonedDateTime) {
@@ -1384,42 +1261,17 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximumIncrement;
-        switch (smallestUnit) {
-            case "hour":
-                maximumIncrement = 24L;
-                break;
-            case "minute":
-            case "second":
-                maximumIncrement = 60L;
-                break;
-            case "millisecond":
-            case "microsecond":
-            case "nanosecond":
-                maximumIncrement = 1_000L;
-                break;
-            default:
-                return true;
+        if (isDateUnit(smallestUnit)) {
+            return true;
         }
-        if (roundingIncrement >= maximumIncrement) {
-            return false;
-        }
-        return maximumIncrement % roundingIncrement == 0L;
+        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
     }
 
     private static boolean isValidRoundingIncrementForSmallestUnit(String smallestUnit, long roundingIncrement) {
         if ("day".equals(smallestUnit)) {
             return roundingIncrement == 1L;
         }
-        long dividend = switch (smallestUnit) {
-            case "hour" -> 24L;
-            case "minute", "second" -> 60L;
-            case "millisecond", "microsecond", "nanosecond" -> 1_000L;
-            default -> 0L;
-        };
-        return roundingIncrement >= 1L
-                && roundingIncrement < dividend
-                && dividend % roundingIncrement == 0L;
+        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -1596,152 +1448,15 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static BigInteger roundBigIntegerToIncrementAsIfPositive(BigInteger quantity, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return quantity;
-        }
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(quantity, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger lower = floorQuotient.multiply(increment);
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        if (remainder.signum() == 0) {
-            return lower;
-        }
-        BigInteger upper = lower.add(increment);
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> remainder.shiftLeft(1).compareTo(increment) >= 0 ? upper : lower;
-            case "halfTrunc", "halfFloor" -> remainder.shiftLeft(1).compareTo(increment) > 0 ? upper : lower;
-            case "halfEven" -> {
-                BigInteger doubledRemainder = remainder.shiftLeft(1);
-                int halfComparison = doubledRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    yield lower;
-                } else if (halfComparison > 0) {
-                    yield upper;
-                } else if (floorQuotient.testBit(0)) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            default -> lower;
-        };
+        return TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(quantity, increment, roundingMode);
     }
 
     private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return value;
-        }
-
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        BigInteger floorValue = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return floorValue;
-        }
-        BigInteger ceilValue = floorValue.add(increment);
-        int sign = value.signum();
-
-        if ("floor".equals(roundingMode)) {
-            return floorValue;
-        } else if ("ceil".equals(roundingMode)) {
-            return ceilValue;
-        } else if ("trunc".equals(roundingMode)) {
-            if (sign < 0) {
-                return ceilValue;
-            } else {
-                return floorValue;
-            }
-        } else if ("expand".equals(roundingMode)) {
-            if (sign < 0) {
-                return floorValue;
-            } else {
-                return ceilValue;
-            }
-        } else if ("halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode)) {
-            BigInteger doubledRemainder = remainder.shiftLeft(1);
-            int halfComparison = doubledRemainder.compareTo(increment);
-            if (halfComparison < 0) {
-                return floorValue;
-            }
-            if (halfComparison > 0) {
-                return ceilValue;
-            }
-            if ("halfExpand".equals(roundingMode)) {
-                if (sign < 0) {
-                    return floorValue;
-                } else {
-                    return ceilValue;
-                }
-            } else if ("halfTrunc".equals(roundingMode)) {
-                if (sign < 0) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            } else if ("halfEven".equals(roundingMode)) {
-                if (floorQuotient.testBit(0)) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            } else if ("halfCeil".equals(roundingMode)) {
-                return ceilValue;
-            } else {
-                return floorValue;
-            }
-        } else {
-            return ceilValue;
-        }
+        return TemporalMathKernel.roundBigIntegerToIncrementSigned(value, increment, roundingMode);
     }
 
     private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        long quotient = Math.floorDiv(quantity, increment);
-        long lower = quotient * increment;
-        long remainder = quantity - lower;
-        if (remainder == 0L) {
-            return quantity;
-        }
-        long upper = lower + increment;
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> {
-                if (remainder * 2L >= increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfTrunc", "halfFloor" -> {
-                if (remainder * 2L > increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfEven" -> {
-                long doubleRemainder = remainder * 2L;
-                if (doubleRemainder < increment) {
-                    yield lower;
-                } else if (doubleRemainder > increment) {
-                    yield upper;
-                } else if (Math.floorMod(quotient, 2L) == 0L) {
-                    yield lower;
-                } else {
-                    yield upper;
-                }
-            }
-            default -> lower;
-        };
+        return TemporalMathKernel.roundLongToIncrementAsIfPositive(quantity, increment, roundingMode);
     }
 
     private static BigInteger roundZonedDateTimeToDay(
