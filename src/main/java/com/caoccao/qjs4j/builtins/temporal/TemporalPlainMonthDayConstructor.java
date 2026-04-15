@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 /**
  * Implementation of Temporal.PlainMonthDay constructor and static methods.
@@ -103,7 +100,7 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, referenceIsoDate, calendarId);
     }
 
-    private static String formatMonthCode(ParsedMonthCode parsedMonthCode) {
+    private static String formatMonthCode(TemporalParsedMonthCode parsedMonthCode) {
         String formattedMonthCode = TemporalUtils.monthCode(parsedMonthCode.month());
         if (parsedMonthCode.leapMonth()) {
             formattedMonthCode = formattedMonthCode + "L";
@@ -273,7 +270,7 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        ParsedMonthCode parsedMonthCode = null;
+        TemporalParsedMonthCode parsedMonthCode = null;
         if (hasMonthCode) {
             parsedMonthCode = parseMonthCodeSyntaxForMonthDayFrom(context, monthCode);
             if (context.hasPendingException()) {
@@ -297,7 +294,7 @@ public final class TemporalPlainMonthDayConstructor {
         int resolvedDay;
         if (hasYear || hasMonth) {
             if ("iso8601".equals(calendarId)) {
-                ResolvedMonthDay resolvedIsoMonthDay = resolveIsoMonthDay(
+                TemporalResolvedMonthDay resolvedIsoMonthDay = resolveIsoMonthDay(
                         context,
                         hasYear ? year : DEFAULT_REFERENCE_ISO_YEAR,
                         hasMonth ? month : null,
@@ -408,22 +405,22 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, parsedMonthDay, calendar);
     }
 
-    private static ParsedMonthCode parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
-        TemporalFieldResolver.ParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
+    private static TemporalParsedMonthCode parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
+        TemporalParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
                 context,
                 monthCode,
                 "Temporal error: Invalid ISO date.");
         if (parsedMonthCode == null) {
             return null;
         }
-        return new ParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
+        return new TemporalParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
     }
 
-    private static ResolvedMonthDay resolveIsoMonthDay(
+    private static TemporalResolvedMonthDay resolveIsoMonthDay(
             JSContext context,
             int year,
             Integer monthFromProperty,
-            ParsedMonthCode monthCodeFromProperty,
+            TemporalParsedMonthCode monthCodeFromProperty,
             int dayOfMonth,
             String overflow) {
         if (dayOfMonth < 1) {
@@ -476,7 +473,7 @@ public final class TemporalPlainMonthDayConstructor {
         } else if (constrainedDay > maximumDay) {
             constrainedDay = maximumDay;
         }
-        return new ResolvedMonthDay(TemporalUtils.monthCode(constrainedMonth), constrainedDay);
+        return new TemporalResolvedMonthDay(TemporalUtils.monthCode(constrainedMonth), constrainedDay);
     }
 
     static IsoDate resolveReferenceIsoDate(
@@ -532,9 +529,4 @@ public final class TemporalPlainMonthDayConstructor {
         return (JSTemporalPlainMonthDay) result;
     }
 
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
-
-    private record ResolvedMonthDay(String monthCode, int dayOfMonth) {
-    }
 }

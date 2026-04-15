@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalParsedMonthCode;
 
 import java.util.Locale;
 
@@ -156,7 +157,7 @@ final class TemporalFieldResolver {
         return monthNumber;
     }
 
-    static ParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCodeText, String rangeErrorMessage) {
+    static TemporalParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCodeText, String rangeErrorMessage) {
         if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
             context.throwRangeError(rangeErrorMessage);
             return null;
@@ -180,10 +181,10 @@ final class TemporalFieldResolver {
         }
 
         int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
-        return new ParsedMonthCode(monthNumber, leapMonth);
+        return new TemporalParsedMonthCode(monthNumber, leapMonth);
     }
 
-    static ParsedMonthCode parseMonthCodeValue(
+    static TemporalParsedMonthCode parseMonthCodeValue(
             JSContext context,
             JSValue monthCodeValue,
             String typeErrorMessage,
@@ -265,6 +266,4 @@ final class TemporalFieldResolver {
         }
     }
 
-    record ParsedMonthCode(int month, boolean leapMonth) {
-    }
 }

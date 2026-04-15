@@ -186,7 +186,7 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        TemporalFieldResolver.ParsedMonthCode parsedMonthCode = null;
+        TemporalParsedMonthCode parsedMonthCode = null;
         if (hasMonthCode) {
             String monthCodeText;
             if (monthCodeValue instanceof JSString monthCodeString) {

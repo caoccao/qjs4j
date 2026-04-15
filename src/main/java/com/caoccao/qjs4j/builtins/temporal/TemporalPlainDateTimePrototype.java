@@ -103,7 +103,7 @@ public final class TemporalPlainDateTimePrototype {
         return resultDate;
     }
 
-    private static TimeAddResult addDurationToTime(
+    private static TemporalTimeAddResult addDurationToTime(
             JSContext context,
             IsoTime time,
             TemporalDuration durationRecord) {
@@ -132,7 +132,7 @@ public final class TemporalPlainDateTimePrototype {
         }
         long normalizedTimeNanoseconds = remainder.longValue();
         IsoTime normalizedTime = IsoTime.fromNanoseconds(normalizedTimeNanoseconds);
-        return new TimeAddResult(normalizedTime, dayCarry);
+        return new TemporalTimeAddResult(normalizedTime, dayCarry);
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDateTime plainDateTime, JSValue[] args, int sign) {
@@ -156,7 +156,7 @@ public final class TemporalPlainDateTimePrototype {
             durationRecord = durationRecord.negated();
         }
 
-        TimeAddResult timeResult = addDurationToTime(context, plainDateTime.getIsoDateTime().time(), durationRecord);
+        TemporalTimeAddResult timeResult = addDurationToTime(context, plainDateTime.getIsoDateTime().time(), durationRecord);
         if (context.hasPendingException() || timeResult == null) {
             return JSUndefined.INSTANCE;
         }
@@ -301,7 +301,7 @@ public final class TemporalPlainDateTimePrototype {
             JSContext context,
             JSTemporalPlainDateTime firstDateTime,
             JSTemporalPlainDateTime secondDateTime,
-            DifferenceSettings settings) {
+            TemporalDifferenceSettings settings) {
         String calendarId = firstDateTime.getCalendarId();
         boolean noRounding = settings.roundingIncrement() == 1L
                 && "nanosecond".equals(settings.smallestUnit());
@@ -379,7 +379,7 @@ public final class TemporalPlainDateTimePrototype {
         return integerIncrement;
     }
 
-    private static DifferenceSettings getDifferenceSettings(
+    private static TemporalDifferenceSettings getDifferenceSettings(
             JSContext context,
             boolean sinceOperation,
             JSValue optionsArg) {
@@ -455,7 +455,7 @@ public final class TemporalPlainDateTimePrototype {
         if (sinceOperation) {
             roundingMode = negateRoundingMode(roundingMode);
         }
-        return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
     }
 
     private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
@@ -485,7 +485,7 @@ public final class TemporalPlainDateTimePrototype {
         return JSTypeConversions.toString(context, smallestUnitValue).value();
     }
 
-    private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
+    private static TemporalRoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
         long roundingIncrement = 1L;
         String roundingMode = "halfExpand";
         String smallestUnitText;
@@ -527,7 +527,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
 
-        return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 
     private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -613,9 +613,9 @@ public final class TemporalPlainDateTimePrototype {
         return nineDigits.substring(0, digits);
     }
 
-    private static FractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
+    private static TemporalFractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
-            return new FractionalSecondDigitsOption(true, -1);
+            return new TemporalFractionalSecondDigitsOption(true, -1);
         }
         if (value instanceof JSNumber numberValue) {
             double numericValue = numberValue.value();
@@ -628,7 +628,7 @@ public final class TemporalPlainDateTimePrototype {
                 context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
                 return null;
             }
-            return new FractionalSecondDigitsOption(false, flooredValue);
+            return new TemporalFractionalSecondDigitsOption(false, flooredValue);
         }
 
         String stringValue = JSTypeConversions.toString(context, value).value();
@@ -636,13 +636,13 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
         if ("auto".equals(stringValue)) {
-            return new FractionalSecondDigitsOption(true, -1);
+            return new TemporalFractionalSecondDigitsOption(true, -1);
         }
         context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
         return null;
     }
 
-    private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
+    private static TemporalPlainDateTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = null;
         if (!(optionsValue instanceof JSUndefined) && optionsValue != null) {
             if (optionsValue instanceof JSObject castedOptionsObject) {
@@ -654,7 +654,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         String calendarNameOption = "auto";
-        FractionalSecondDigitsOption fractionalSecondDigitsOption = new FractionalSecondDigitsOption(true, -1);
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(true, -1);
         String roundingMode = "trunc";
         String smallestUnitText = null;
         if (optionsObject != null) {
@@ -734,7 +734,7 @@ public final class TemporalPlainDateTimePrototype {
             }
         }
 
-        return new ToStringSettings(
+        return new TemporalPlainDateTimeToStringSettings(
                 calendarNameOption,
                 smallestUnit,
                 roundingMode,
@@ -743,7 +743,7 @@ public final class TemporalPlainDateTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringTimeString(IsoTime time, ToStringSettings toStringSettings) {
+    private static String getToStringTimeString(IsoTime time, TemporalPlainDateTimeToStringSettings toStringSettings) {
         String hourMinute = String.format("%02d:%02d", time.hour(), time.minute());
         if ("minute".equals(toStringSettings.smallestUnit())) {
             return hourMinute;
@@ -914,7 +914,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        RoundSettings roundSettings = getRoundSettings(context, args[0]);
+        TemporalRoundSettings roundSettings = getRoundSettings(context, args[0]);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1013,7 +1013,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        DifferenceSettings settings = getDifferenceSettings(context, true, optionsArg);
+        TemporalDifferenceSettings settings = getDifferenceSettings(context, true, optionsArg);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1063,7 +1063,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        ToStringSettings toStringSettings = new ToStringSettings("auto", null, "trunc", true, -1, 1L);
+        TemporalPlainDateTimeToStringSettings toStringSettings = new TemporalPlainDateTimeToStringSettings("auto", null, "trunc", true, -1, 1L);
         String formattedString = toTemporalPlainDateTimeString(context, plainDateTime, toStringSettings);
         if (context.hasPendingException() || formattedString == null) {
             return JSUndefined.INSTANCE;
@@ -1115,7 +1115,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        ToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
+        TemporalPlainDateTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1130,7 +1130,7 @@ public final class TemporalPlainDateTimePrototype {
     private static String toTemporalPlainDateTimeString(
             JSContext context,
             JSTemporalPlainDateTime plainDateTime,
-            ToStringSettings toStringSettings) {
+            TemporalPlainDateTimeToStringSettings toStringSettings) {
         IsoDate isoDate = plainDateTime.getIsoDateTime().date();
         IsoTime isoTime = plainDateTime.getIsoDateTime().time();
 
@@ -1241,7 +1241,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        DifferenceSettings settings = getDifferenceSettings(context, false, optionsArg);
+        TemporalDifferenceSettings settings = getDifferenceSettings(context, false, optionsArg);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1622,27 +1622,5 @@ public final class TemporalPlainDateTimePrototype {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "yearOfWeek");
         if (plainDateTime == null) return JSUndefined.INSTANCE;
         return TemporalPlainDatePrototype.yearOfWeek(context, toPlainDate(context, plainDateTime), args);
-    }
-
-    private record DifferenceSettings(String largestUnit, String smallestUnit, long roundingIncrement,
-                                      String roundingMode) {
-    }
-
-    private record FractionalSecondDigitsOption(boolean auto, int digits) {
-    }
-
-    private record RoundSettings(String smallestUnit, long roundingIncrement, String roundingMode) {
-    }
-
-    private record TimeAddResult(IsoTime time, long dayCarry) {
-    }
-
-    private record ToStringSettings(
-            String calendarNameOption,
-            String smallestUnit,
-            String roundingMode,
-            boolean autoFractionalSecondDigits,
-            int fractionalSecondDigits,
-            long roundingIncrementNanoseconds) {
     }
 }

@@ -200,10 +200,10 @@ public final class TemporalZonedDateTimeConstructor {
 
     private static JSValue createZonedDateTimeFromPropertyBag(
             JSContext context,
-            ZonedDateTimePropertyBagData propertyBagData,
-            ZonedDateTimeOptions options) {
+            TemporalZonedDateTimePropertyBagData propertyBagData,
+            TemporalZonedDateTimeOptions options) {
         Integer monthFromProperty = propertyBagData.month();
-        ParsedMonthCode parsedMonthCode = propertyBagData.parsedMonthCode();
+        TemporalParsedMonthCode parsedMonthCode = propertyBagData.parsedMonthCode();
         if (monthFromProperty == null && parsedMonthCode == null) {
             context.throwTypeError("Temporal error: DateTime argument must be object or string.");
             return JSUndefined.INSTANCE;
@@ -275,7 +275,7 @@ public final class TemporalZonedDateTimeConstructor {
             JSContext context,
             String input,
             TemporalParser.ParsedZonedDateTime parsed,
-            ZonedDateTimeOptions options) {
+            TemporalZonedDateTimeOptions options) {
         String timeZoneId = normalizeTimeZoneIdentifier(context, parsed.timeZoneId());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
@@ -412,7 +412,7 @@ public final class TemporalZonedDateTimeConstructor {
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
-            ZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
+            TemporalZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
             if (context.hasPendingException() || options == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -424,12 +424,12 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         if (item instanceof JSObject itemObject) {
-            ZonedDateTimePropertyBagData propertyBagData = parseZonedDateTimePropertyBag(context, itemObject);
+            TemporalZonedDateTimePropertyBagData propertyBagData = parseZonedDateTimePropertyBag(context, itemObject);
             if (context.hasPendingException() || propertyBagData == null) {
                 return JSUndefined.INSTANCE;
             }
 
-            ZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
+            TemporalZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
             if (context.hasPendingException() || options == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -444,7 +444,7 @@ public final class TemporalZonedDateTimeConstructor {
                 return JSUndefined.INSTANCE;
             }
 
-            ZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
+            TemporalZonedDateTimeOptions options = parseFromOptions(context, optionsArg);
             if (context.hasPendingException() || options == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -521,7 +521,7 @@ public final class TemporalZonedDateTimeConstructor {
             boolean hasZuluOffset,
             boolean stringInput,
             boolean stringOffsetIncludesSecondsOrFraction,
-            ZonedDateTimeOptions options) {
+            TemporalZonedDateTimeOptions options) {
         boolean offsetTimeZoneIdentifier = isOffsetTimeZoneIdentifier(timeZoneId);
 
         BigInteger epochNanoseconds;
@@ -606,7 +606,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean isMinutePrecisionOffsetIdentifier(String text) {
-        OffsetParts offsetParts = parseOffsetParts(text);
+        TemporalOffsetParts offsetParts = parseOffsetParts(text);
         if (offsetParts == null) {
             return false;
         }
@@ -653,7 +653,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean isValidOffsetString(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
@@ -720,16 +720,16 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
         return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
-    private static ZonedDateTimeOptions parseFromOptions(JSContext context, JSValue optionsValue) {
+    private static TemporalZonedDateTimeOptions parseFromOptions(JSContext context, JSValue optionsValue) {
         if (optionsValue instanceof JSUndefined || optionsValue == null) {
-            return new ZonedDateTimeOptions("compatible", "reject", "constrain");
+            return new TemporalZonedDateTimeOptions("compatible", "reject", "constrain");
         }
 
         if (!(optionsValue instanceof JSObject optionsObject)) {
@@ -770,24 +770,24 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        return new ZonedDateTimeOptions(disambiguation, offset, overflow);
+        return new TemporalZonedDateTimeOptions(disambiguation, offset, overflow);
     }
 
-    private static ParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCode) {
-        TemporalFieldResolver.ParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
+    private static TemporalParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCode) {
+        TemporalParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
                 context,
                 monthCode,
                 "Temporal error: Month code out of range.");
         if (parsedMonthCode == null) {
             return null;
         }
-        return new ParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
+        return new TemporalParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
     }
 
-    private static OffsetParts parseOffsetParts(String offsetText) {
+    private static TemporalOffsetParts parseOffsetParts(String offsetText) {
         Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
         if (extendedMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     extendedMatcher.group(1),
                     Integer.parseInt(extendedMatcher.group(2)),
                     Integer.parseInt(extendedMatcher.group(3)),
@@ -797,7 +797,7 @@ public final class TemporalZonedDateTimeConstructor {
 
         Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
         if (basicMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     basicMatcher.group(1),
                     Integer.parseInt(basicMatcher.group(2)),
                     Integer.parseInt(basicMatcher.group(3)),
@@ -806,7 +806,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
         Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
         if (hourOnlyMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     hourOnlyMatcher.group(1),
                     Integer.parseInt(hourOnlyMatcher.group(2)),
                     0,
@@ -818,7 +818,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static int parseOffsetSeconds(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return 0;
         }
@@ -830,7 +830,7 @@ public final class TemporalZonedDateTimeConstructor {
         return sign * (hours * 3600 + minutes * 60);
     }
 
-    private static ZonedDateTimePropertyBagData parseZonedDateTimePropertyBag(JSContext context, JSObject itemObject) {
+    private static TemporalZonedDateTimePropertyBagData parseZonedDateTimePropertyBag(JSContext context, JSObject itemObject) {
         String calendarId = "iso8601";
         JSValue calendarValue = itemObject.get(PropertyKey.fromString("calendar"));
         if (context.hasPendingException()) {
@@ -886,7 +886,7 @@ public final class TemporalZonedDateTimeConstructor {
         if (context.hasPendingException()) {
             return null;
         }
-        ParsedMonthCode parsedMonthCode = null;
+        TemporalParsedMonthCode parsedMonthCode = null;
         if (!(monthCodeValue instanceof JSUndefined) && monthCodeValue != null) {
             String monthCodeText = convertMonthCodeToString(context, monthCodeValue);
             if (context.hasPendingException() || monthCodeText == null) {
@@ -1014,7 +1014,7 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        return new ZonedDateTimePropertyBagData(
+        return new TemporalZonedDateTimePropertyBagData(
                 calendarId,
                 year,
                 month,
@@ -1167,7 +1167,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     public static JSValue toTemporalZonedDateTime(JSContext context, JSValue item) {
-        ZonedDateTimeOptions defaultOptions = new ZonedDateTimeOptions("compatible", "reject", "constrain");
+        TemporalZonedDateTimeOptions defaultOptions = new TemporalZonedDateTimeOptions("compatible", "reject", "constrain");
 
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             return createZonedDateTime(
@@ -1178,7 +1178,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         if (item instanceof JSObject itemObject) {
-            ZonedDateTimePropertyBagData propertyBagData = parseZonedDateTimePropertyBag(context, itemObject);
+            TemporalZonedDateTimePropertyBagData propertyBagData = parseZonedDateTimePropertyBag(context, itemObject);
             if (context.hasPendingException() || propertyBagData == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -1206,28 +1206,4 @@ public final class TemporalZonedDateTimeConstructor {
         return (JSTemporalZonedDateTime) result;
     }
 
-    private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
-    }
-
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
-
-    private record ZonedDateTimeOptions(String disambiguation, String offset, String overflow) {
-    }
-
-    private record ZonedDateTimePropertyBagData(
-            String calendarId,
-            int year,
-            Integer month,
-            ParsedMonthCode parsedMonthCode,
-            int day,
-            int hour,
-            int minute,
-            int second,
-            int millisecond,
-            int microsecond,
-            int nanosecond,
-            String timeZoneId,
-            Integer offsetSeconds) {
-    }
 }

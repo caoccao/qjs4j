@@ -227,7 +227,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -286,7 +286,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -357,7 +357,7 @@ public final class TemporalParser {
         if (time == null) {
             return null;
         }
-        ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+        TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
         if (parsedOffset == null || context.hasPendingException()) {
             return null;
         }
@@ -525,7 +525,7 @@ public final class TemporalParser {
                 return null;
             }
             if (marker == '+' || marker == '-') {
-                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -626,7 +626,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -681,7 +681,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                ParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -1147,7 +1147,7 @@ public final class TemporalParser {
         }
     }
 
-    private ParsedOffset parseInstantOffsetNanoseconds(JSContext context) {
+    private TemporalParsedOffset parseInstantOffsetNanoseconds(JSContext context) {
         if (position >= input.length()) {
             context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
             return null;
@@ -1155,7 +1155,7 @@ public final class TemporalParser {
         char signCharacter = input.charAt(position);
         if (signCharacter == 'Z' || signCharacter == 'z') {
             position++;
-            return new ParsedOffset(0, BigInteger.ZERO);
+            return new TemporalParsedOffset(0, BigInteger.ZERO);
         }
         int sign;
         if (signCharacter == '+') {
@@ -1257,7 +1257,7 @@ public final class TemporalParser {
         if (sign < 0) {
             offsetNanoseconds = offsetNanoseconds.negate();
         }
-        return new ParsedOffset(offsetSeconds, offsetNanoseconds);
+        return new TemporalParsedOffset(offsetSeconds, offsetNanoseconds);
     }
 
     private IsoTime parseInstantTime(JSContext context) {
@@ -1571,9 +1571,6 @@ public final class TemporalParser {
     }
 
     public record ParsedInstant(IsoDate date, IsoTime time, int offsetSeconds, BigInteger offsetNanoseconds) {
-    }
-
-    private record ParsedOffset(int totalSeconds, BigInteger totalNanoseconds) {
     }
 
     public record ParsedZonedDateTime(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId,

@@ -301,7 +301,7 @@ public final class TemporalTimeZone {
     }
 
     public static boolean isValidOffsetString(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
@@ -313,18 +313,14 @@ public final class TemporalTimeZone {
         }
         if (secondsText != null) {
             int seconds = Integer.parseInt(secondsText);
-            if (seconds > 59) {
-                return false;
-            } else {
-                return true;
-            }
+            return seconds <= 59;
         } else {
             return true;
         }
     }
 
     public static boolean isValidTimeZoneOffsetWithoutSeconds(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
@@ -335,11 +331,7 @@ public final class TemporalTimeZone {
         if (hours > 23 || minutes > 59) {
             return false;
         }
-        if (secondsText == null && fractionText == null) {
-            return true;
-        } else {
-            return false;
-        }
+        return secondsText == null && fractionText == null;
     }
 
     /**
@@ -432,15 +424,11 @@ public final class TemporalTimeZone {
     }
 
     public static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
-        if (offsetParts.secondsText() != null || offsetParts.fractionText() != null) {
-            return true;
-        } else {
-            return false;
-        }
+        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
     private static Integer parseFixedOffsetSeconds(String timeZoneId) {
@@ -465,10 +453,10 @@ public final class TemporalTimeZone {
         return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
     }
 
-    private static OffsetParts parseOffsetParts(String offsetText) {
+    private static TemporalOffsetParts parseOffsetParts(String offsetText) {
         Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
         if (extendedMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     extendedMatcher.group(1),
                     Integer.parseInt(extendedMatcher.group(2)),
                     Integer.parseInt(extendedMatcher.group(3)),
@@ -477,7 +465,7 @@ public final class TemporalTimeZone {
         }
         Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
         if (basicMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     basicMatcher.group(1),
                     Integer.parseInt(basicMatcher.group(2)),
                     Integer.parseInt(basicMatcher.group(3)),
@@ -486,7 +474,7 @@ public final class TemporalTimeZone {
         }
         Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
         if (hourOnlyMatcher.matches()) {
-            return new OffsetParts(
+            return new TemporalOffsetParts(
                     hourOnlyMatcher.group(1),
                     Integer.parseInt(hourOnlyMatcher.group(2)),
                     0,
@@ -497,7 +485,7 @@ public final class TemporalTimeZone {
     }
 
     public static int parseOffsetSeconds(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
             throw new DateTimeException("Invalid offset string: " + offsetText);
         }
@@ -647,6 +635,4 @@ public final class TemporalTimeZone {
         return dayNs.add(timeNs).subtract(offsetNanoseconds);
     }
 
-    private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
-    }
 }

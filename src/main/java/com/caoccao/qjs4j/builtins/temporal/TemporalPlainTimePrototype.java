@@ -17,9 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalDuration;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
 
@@ -110,7 +108,7 @@ public final class TemporalPlainTimePrototype {
             JSTemporalPlainTime other,
             JSValue optionsArg,
             boolean sinceOperation) {
-        DifferenceSettings differenceSettings = getDifferenceSettings(context, optionsArg);
+        TemporalDifferenceSettings differenceSettings = getDifferenceSettings(context, optionsArg);
         if (context.hasPendingException() || differenceSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -181,7 +179,7 @@ public final class TemporalPlainTimePrototype {
         };
     }
 
-    private static DifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
+    private static TemporalDifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
                 optionsArg,
@@ -256,10 +254,10 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
     }
 
-    private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
+    private static TemporalRoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
         long roundingIncrement = 1L;
         String roundingMode = "halfExpand";
         String smallestUnitText;
@@ -312,7 +310,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 
     private static String getToStringFractionalPart(IsoTime time, int digits) {
@@ -326,7 +324,7 @@ public final class TemporalPlainTimePrototype {
         return nineDigits.substring(0, digits);
     }
 
-    private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
+    private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
                 optionsValue,
@@ -335,7 +333,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        FractionalSecondDigitsOption fractionalSecondDigitsOption = new FractionalSecondDigitsOption(true, -1);
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(true, -1);
         String roundingMode = "trunc";
         String smallestUnitText = null;
         if (optionsObject != null) {
@@ -343,7 +341,7 @@ public final class TemporalPlainTimePrototype {
             if (context.hasPendingException()) {
                 return null;
             }
-            TemporalOptionResolver.FractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+            TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
                     TemporalOptionResolver.parseFractionalSecondDigitsOption(
                             context,
                             fractionalSecondDigitsValue,
@@ -351,7 +349,7 @@ public final class TemporalPlainTimePrototype {
             if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
                 return null;
             }
-            fractionalSecondDigitsOption = new FractionalSecondDigitsOption(
+            fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(
                     resolvedFractionalSecondDigitsOption.auto(),
                     resolvedFractionalSecondDigitsOption.digits());
 
@@ -411,7 +409,7 @@ public final class TemporalPlainTimePrototype {
             }
         }
 
-        return new ToStringSettings(
+        return new TemporalPlainTimeToStringSettings(
                 smallestUnit,
                 roundingMode,
                 autoFractionalSecondDigits,
@@ -419,7 +417,7 @@ public final class TemporalPlainTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringTimeString(IsoTime time, ToStringSettings toStringSettings) {
+    private static String getToStringTimeString(IsoTime time, TemporalPlainTimeToStringSettings toStringSettings) {
         String hourMinute = String.format("%02d:%02d", time.hour(), time.minute());
         if ("minute".equals(toStringSettings.smallestUnit())) {
             return hourMinute;
@@ -513,7 +511,7 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        RoundSettings roundSettings = getRoundSettings(context, args[0]);
+        TemporalRoundSettings roundSettings = getRoundSettings(context, args[0]);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -696,7 +694,7 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
         JSValue optionsValue = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-        ToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
+        TemporalPlainTimeToStringSettings toStringSettings = getToStringSettings(context, optionsValue);
         if (context.hasPendingException() || toStringSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -890,29 +888,5 @@ public final class TemporalPlainTimePrototype {
             IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
             return TemporalPlainTimeConstructor.createPlainTime(context, constrained);
         }
-    }
-
-    private record DifferenceSettings(
-            String largestUnit,
-            String smallestUnit,
-            long roundingIncrement,
-            String roundingMode) {
-    }
-
-    private record FractionalSecondDigitsOption(boolean auto, int digits) {
-    }
-
-    private record RoundSettings(
-            String smallestUnit,
-            long roundingIncrement,
-            String roundingMode) {
-    }
-
-    private record ToStringSettings(
-            String smallestUnit,
-            String roundingMode,
-            boolean autoFractionalSecondDigits,
-            int fractionalSecondDigits,
-            long roundingIncrementNanoseconds) {
     }
 }

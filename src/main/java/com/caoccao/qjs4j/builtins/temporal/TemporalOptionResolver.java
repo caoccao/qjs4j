@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.TemporalFractionalSecondDigitsOption;
 
 final class TemporalOptionResolver {
     private TemporalOptionResolver() {
@@ -104,12 +105,12 @@ final class TemporalOptionResolver {
                 || "halfFloor".equals(roundingMode);
     }
 
-    static FractionalSecondDigitsOption parseFractionalSecondDigitsOption(
+    static TemporalFractionalSecondDigitsOption parseFractionalSecondDigitsOption(
             JSContext context,
             JSValue fractionalSecondDigitsValue,
             String invalidOptionMessage) {
         if (fractionalSecondDigitsValue instanceof JSUndefined || fractionalSecondDigitsValue == null) {
-            return new FractionalSecondDigitsOption(true, -1);
+            return new TemporalFractionalSecondDigitsOption(true, -1);
         }
         if (fractionalSecondDigitsValue instanceof JSNumber fractionalSecondDigitsNumberValue) {
             double numericValue = fractionalSecondDigitsNumberValue.value();
@@ -122,7 +123,7 @@ final class TemporalOptionResolver {
                 context.throwRangeError(invalidOptionMessage);
                 return null;
             }
-            return new FractionalSecondDigitsOption(false, flooredValue);
+            return new TemporalFractionalSecondDigitsOption(false, flooredValue);
         }
 
         JSString stringValue = JSTypeConversions.toString(context, fractionalSecondDigitsValue);
@@ -130,7 +131,7 @@ final class TemporalOptionResolver {
             return null;
         }
         if ("auto".equals(stringValue.value())) {
-            return new FractionalSecondDigitsOption(true, -1);
+            return new TemporalFractionalSecondDigitsOption(true, -1);
         }
 
         context.throwRangeError(invalidOptionMessage);
@@ -148,6 +149,4 @@ final class TemporalOptionResolver {
         return null;
     }
 
-    record FractionalSecondDigitsOption(boolean auto, int digits) {
-    }
 }

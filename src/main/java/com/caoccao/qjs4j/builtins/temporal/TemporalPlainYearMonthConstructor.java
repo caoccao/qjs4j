@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 import java.util.Locale;
 
@@ -139,26 +136,26 @@ public final class TemporalPlainYearMonthConstructor {
         return toTemporalYearMonth(context, item, options);
     }
 
-    private static SupportedYearMonthBoundary getSupportedYearMonthBoundary(String calendarId) {
+    private static TemporalSupportedYearMonthBoundary getSupportedYearMonthBoundary(String calendarId) {
         return switch (calendarId) {
-            case "buddhist" -> new SupportedYearMonthBoundary(-271278, 5, 276303, 9);
-            case "coptic" -> new SupportedYearMonthBoundary(-272099, 4, 275471, 6);
-            case "ethioaa" -> new SupportedYearMonthBoundary(-266323, 4, 281247, 6);
-            case "ethiopic" -> new SupportedYearMonthBoundary(-271823, 4, 275747, 6);
-            case "gregory" -> new SupportedYearMonthBoundary(-271821, 4, 275760, 9);
-            case "hebrew" -> new SupportedYearMonthBoundary(-268058, 12, 279517, 10);
-            case "indian" -> new SupportedYearMonthBoundary(-271899, 2, 275682, 7);
+            case "buddhist" -> new TemporalSupportedYearMonthBoundary(-271278, 5, 276303, 9);
+            case "coptic" -> new TemporalSupportedYearMonthBoundary(-272099, 4, 275471, 6);
+            case "ethioaa" -> new TemporalSupportedYearMonthBoundary(-266323, 4, 281247, 6);
+            case "ethiopic" -> new TemporalSupportedYearMonthBoundary(-271823, 4, 275747, 6);
+            case "gregory" -> new TemporalSupportedYearMonthBoundary(-271821, 4, 275760, 9);
+            case "hebrew" -> new TemporalSupportedYearMonthBoundary(-268058, 12, 279517, 10);
+            case "indian" -> new TemporalSupportedYearMonthBoundary(-271899, 2, 275682, 7);
             case "islamic-civil", "islamic-tbla", "islamic-umalqura" ->
-                    new SupportedYearMonthBoundary(-280804, 4, 283583, 6);
-            case "japanese" -> new SupportedYearMonthBoundary(-271821, 4, 275760, 9);
-            case "persian" -> new SupportedYearMonthBoundary(-272442, 2, 275139, 7);
-            case "roc" -> new SupportedYearMonthBoundary(-273732, 5, 273849, 9);
+                    new TemporalSupportedYearMonthBoundary(-280804, 4, 283583, 6);
+            case "japanese" -> new TemporalSupportedYearMonthBoundary(-271821, 4, 275760, 9);
+            case "persian" -> new TemporalSupportedYearMonthBoundary(-272442, 2, 275139, 7);
+            case "roc" -> new TemporalSupportedYearMonthBoundary(-273732, 5, 273849, 9);
             default -> null;
         };
     }
 
     private static boolean isOutsideSupportedYearMonth(
-            SupportedYearMonthBoundary supportedYearMonthBoundary,
+            TemporalSupportedYearMonthBoundary supportedYearMonthBoundary,
             int year,
             int month) {
         if (year < supportedYearMonthBoundary.minimumYear()) {
@@ -193,8 +190,8 @@ public final class TemporalPlainYearMonthConstructor {
         return Integer.parseInt(monthCode.substring(1, 3));
     }
 
-    private static ParsedMonthCode parseMonthCodeForYearMonthFrom(JSContext context, JSValue monthCodeValue) {
-        TemporalFieldResolver.ParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeValue(
+    private static TemporalParsedMonthCode parseMonthCodeForYearMonthFrom(JSContext context, JSValue monthCodeValue) {
+        TemporalParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeValue(
                 context,
                 monthCodeValue,
                 "Temporal error: Month code must be string.",
@@ -202,7 +199,7 @@ public final class TemporalPlainYearMonthConstructor {
         if (parsedMonthCode == null) {
             return null;
         }
-        return new ParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
+        return new TemporalParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
     }
 
     public static JSValue toTemporalYearMonth(JSContext context, JSValue item, JSValue options) {
@@ -275,7 +272,7 @@ public final class TemporalPlainYearMonthConstructor {
         boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
         String monthCodeFromProperty = null;
         if (hasMonthCode) {
-            ParsedMonthCode parsedMonthCode = parseMonthCodeForYearMonthFrom(context, monthCodeValue);
+            TemporalParsedMonthCode parsedMonthCode = parseMonthCodeForYearMonthFrom(context, monthCodeValue);
             if (context.hasPendingException() || parsedMonthCode == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -416,7 +413,7 @@ public final class TemporalPlainYearMonthConstructor {
         int requestedMonthNumber = monthFromProperty != null
                 ? monthFromProperty
                 : monthNumberFromMonthCode(monthCodeFromProperty);
-        SupportedYearMonthBoundary supportedYearMonthBoundary = getSupportedYearMonthBoundary(calendarId);
+        TemporalSupportedYearMonthBoundary supportedYearMonthBoundary = getSupportedYearMonthBoundary(calendarId);
         if (supportedYearMonthBoundary != null
                 && requestedMonthNumber != Integer.MIN_VALUE
                 && isOutsideSupportedYearMonth(supportedYearMonthBoundary, year, requestedMonthNumber)) {
@@ -496,9 +493,4 @@ public final class TemporalPlainYearMonthConstructor {
                 calendar.toLowerCase(Locale.ROOT));
     }
 
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
-
-    private record SupportedYearMonthBoundary(int minimumYear, int minimumMonth, int maximumYear, int maximumMonth) {
-    }
 }

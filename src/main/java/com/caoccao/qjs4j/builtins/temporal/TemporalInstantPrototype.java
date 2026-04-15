@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDateTime;
-import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalDuration;
-import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
+import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
 import java.util.Locale;
@@ -158,7 +155,7 @@ public final class TemporalInstantPrototype {
     }
 
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
-        InstantToStringOptions instantToStringOptions = parseInstantToStringOptions(context, optionsArg);
+        TemporalInstantToStringOptions instantToStringOptions = parseInstantToStringOptions(context, optionsArg);
         if (context.hasPendingException() || instantToStringOptions == null) {
             return null;
         }
@@ -300,7 +297,7 @@ public final class TemporalInstantPrototype {
             JSTemporalInstant leftInstant,
             JSTemporalInstant rightInstant,
             JSValue optionsArg) {
-        DifferenceOptions differenceOptions = parseDifferenceOptions(context, optionsArg);
+        TemporalDifferenceSettings differenceOptions = parseDifferenceOptions(context, optionsArg);
         if (context.hasPendingException() || differenceOptions == null) {
             return JSUndefined.INSTANCE;
         }
@@ -397,7 +394,7 @@ public final class TemporalInstantPrototype {
                         totalMs * signum, totalUs * signum, totalNs * signum));
     }
 
-    private static DifferenceOptions parseDifferenceOptions(JSContext context, JSValue optionsArg) {
+    private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
         String largestUnitText = null;
         String smallestUnitText = null;
         long roundingIncrement = 1L;
@@ -505,7 +502,7 @@ public final class TemporalInstantPrototype {
             return null;
         }
 
-        return new DifferenceOptions(
+        return new TemporalDifferenceSettings(
                 canonicalLargestUnit,
                 canonicalSmallestUnit,
                 roundingIncrement,
@@ -540,7 +537,7 @@ public final class TemporalInstantPrototype {
         return null;
     }
 
-    private static InstantToStringOptions parseInstantToStringOptions(JSContext context, JSValue optionsArg) {
+    private static TemporalInstantToStringOptions parseInstantToStringOptions(JSContext context, JSValue optionsArg) {
         JSObject optionsObject;
         if (optionsArg instanceof JSUndefined || optionsArg == null) {
             optionsObject = null;
@@ -628,7 +625,7 @@ public final class TemporalInstantPrototype {
             }
         }
 
-        return new InstantToStringOptions(
+        return new TemporalInstantToStringOptions(
                 fractionalSecondDigits,
                 roundingMode,
                 smallestUnit,
@@ -989,19 +986,5 @@ public final class TemporalInstantPrototype {
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
         context.throwTypeError("Do not use Temporal.Instant.prototype.valueOf; use Temporal.Instant.prototype.compare for comparison.");
         return JSUndefined.INSTANCE;
-    }
-
-    private record DifferenceOptions(
-            String largestUnit,
-            String smallestUnit,
-            long roundingIncrement,
-            String roundingMode) {
-    }
-
-    private record InstantToStringOptions(
-            Integer fractionalSecondDigits,
-            String roundingMode,
-            String smallestUnit,
-            String timeZoneId) {
     }
 }
