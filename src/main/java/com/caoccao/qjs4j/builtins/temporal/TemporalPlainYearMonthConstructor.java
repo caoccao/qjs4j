@@ -28,10 +28,6 @@ import java.util.Locale;
  * Implementation of Temporal.PlainYearMonth constructor and static methods.
  */
 public final class TemporalPlainYearMonthConstructor {
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
-    private static final int YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS = 400;
-
     private TemporalPlainYearMonthConstructor() {
     }
 
@@ -125,40 +121,6 @@ public final class TemporalPlainYearMonthConstructor {
             plainYearMonth.setPrototype(prototype);
         }
         return plainYearMonth;
-    }
-
-    private static IsoDate findBoundaryIsoDateForYearMonth(String calendarId, int year, String monthCode) {
-        IsoDate minimumBoundaryIsoDate = findClosestBoundaryIsoDate(calendarId, year, monthCode, MIN_SUPPORTED_EPOCH_DAY);
-        if (minimumBoundaryIsoDate != null) {
-            return minimumBoundaryIsoDate;
-        } else {
-            return findClosestBoundaryIsoDate(calendarId, year, monthCode, MAX_SUPPORTED_EPOCH_DAY);
-        }
-    }
-
-    private static IsoDate findClosestBoundaryIsoDate(
-            String calendarId,
-            int targetYear,
-            String targetMonthCode,
-            long boundaryEpochDay) {
-        for (int offset = 0; offset <= YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS; offset++) {
-            long[] candidateEpochDays;
-            if (offset == 0) {
-                candidateEpochDays = new long[]{boundaryEpochDay};
-            } else {
-                candidateEpochDays = new long[]{boundaryEpochDay - offset, boundaryEpochDay + offset};
-            }
-            for (long candidateEpochDay : candidateEpochDays) {
-                IsoDate candidateIsoDate = IsoDate.fromEpochDay(candidateEpochDay);
-                TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
-                        TemporalCalendarMath.isoDateToCalendarDate(candidateIsoDate, calendarId);
-                if (candidateCalendarDateFields.year() == targetYear
-                        && targetMonthCode.equals(candidateCalendarDateFields.monthCode())) {
-                    return candidateIsoDate;
-                }
-            }
-        }
-        return null;
     }
 
     /**
@@ -488,7 +450,10 @@ public final class TemporalPlainYearMonthConstructor {
                 }
             }
             context.clearPendingException();
-            IsoDate boundaryIsoDate = findBoundaryIsoDateForYearMonth(calendarId, year, monthCodeFromProperty);
+            IsoDate boundaryIsoDate = TemporalCalendarMath.findBoundaryIsoDateForYearMonth(
+                    calendarId,
+                    year,
+                    monthCodeFromProperty);
             if (boundaryIsoDate != null) {
                 return createPlainYearMonth(context, boundaryIsoDate, calendarId);
             }

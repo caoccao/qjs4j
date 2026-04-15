@@ -24,7 +24,10 @@ import java.time.chrono.HijrahChronology;
 import java.time.chrono.HijrahDate;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Temporal calendar math for non-ISO calendars used by Temporal.PlainDate.
@@ -74,6 +77,7 @@ public final class TemporalCalendarMath {
             0x0b6a0, 0x096d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0b250, 0x1b255, 0x06d40, 0x0ada0,
             0x18b63
     };
+    private static final int DEFAULT_REFERENCE_ISO_YEAR = 1972;
     private static final long ETHIOPIC_EPOCH_DAY_OFFSET = -716_367L;
     private static final long HEBREW_EPOCH_DAY_OFFSET = -2_092_591L;
     private static final long ISLAMIC_CIVIL_EPOCH_DAY_OFFSET = -492_148L;
@@ -81,7 +85,10 @@ public final class TemporalCalendarMath {
     private static final int[] LUNISOLAR_MONTH_LENGTHS_YEAR_1899 = {
             30, 29, 30, 30, 29, 30, 29, 30, 29, 30, 29, 30
     };
+    private static final int MAX_REFERENCE_ISO_DATE_CACHE_SIZE = 4_096;
+    private static final int MAX_REFERENCE_ISO_YEAR = 2050;
     private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
+    private static final int MIN_REFERENCE_ISO_YEAR = 1900;
     private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
     private static final int[] PERSIAN_BREAKS = {
             -61, 9, 38, 199, 426, 686, 756, 818, 1111, 1181,
@@ -94,11 +101,16 @@ public final class TemporalCalendarMath {
     private static final int PERSIAN_FALLBACK_MAX_YEAR = 275_139;
     private static final int PERSIAN_FALLBACK_MIN_CORRECTION_DAYS = -61;
     private static final int PERSIAN_FALLBACK_MIN_YEAR = -272_442;
+    private static final ConcurrentHashMap<ReferenceIsoDateLookupKey, IsoDate> REFERENCE_ISO_DATE_HIT_CACHE =
+            new ConcurrentHashMap<>();
+    private static final Set<ReferenceIsoDateLookupKey> REFERENCE_ISO_DATE_MISS_CACHE =
+            ConcurrentHashMap.newKeySet();
     private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
             1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
             1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
             1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469
     };
+    private static final int YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS = 400;
 
     private TemporalCalendarMath() {
     }
@@ -356,6 +368,48 @@ public final class TemporalCalendarMath {
         return dayCount;
     }
 
+    public static IsoDate findBoundaryIsoDateForYearMonth(String calendarId, int targetYear, String targetMonthCode) {
+        IsoDate minimumBoundaryIsoDate = findClosestBoundaryIsoDate(
+                calendarId,
+                targetYear,
+                targetMonthCode,
+                MIN_SUPPORTED_EPOCH_DAY);
+        if (minimumBoundaryIsoDate != null) {
+            return minimumBoundaryIsoDate;
+        } else {
+            return findClosestBoundaryIsoDate(
+                    calendarId,
+                    targetYear,
+                    targetMonthCode,
+                    MAX_SUPPORTED_EPOCH_DAY);
+        }
+    }
+
+    private static IsoDate findClosestBoundaryIsoDate(
+            String calendarId,
+            int targetYear,
+            String targetMonthCode,
+            long boundaryEpochDay) {
+        for (int offset = 0; offset <= YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS; offset++) {
+            long[] candidateEpochDays;
+            if (offset == 0) {
+                candidateEpochDays = new long[]{boundaryEpochDay};
+            } else {
+                candidateEpochDays = new long[]{boundaryEpochDay - offset, boundaryEpochDay + offset};
+            }
+            for (long candidateEpochDay : candidateEpochDays) {
+                IsoDate candidateIsoDate = IsoDate.fromEpochDay(candidateEpochDay);
+                CalendarDateFields candidateCalendarDateFields =
+                        isoDateToCalendarDate(candidateIsoDate, calendarId);
+                if (candidateCalendarDateFields.year() == targetYear
+                        && targetMonthCode.equals(candidateCalendarDateFields.monthCode())) {
+                    return candidateIsoDate;
+                }
+            }
+        }
+        return null;
+    }
+
     private static MonthSlot findMonthSlotByCode(String calendarId, int calendarYear, String monthCode) {
         List<MonthSlot> monthSlots = getMonthSlots(calendarId, calendarYear);
         for (MonthSlot monthSlot : monthSlots) {
@@ -374,6 +428,86 @@ public final class TemporalCalendarMath {
             }
         }
         return null;
+    }
+
+    private static IsoDate findReferenceIsoDateExact(
+            String calendarId,
+            String monthCode,
+            int dayOfMonth) {
+        if (dayOfMonth < 1 || dayOfMonth > 31) {
+            return null;
+        }
+        ReferenceIsoDateLookupKey referenceIsoDateLookupKey = new ReferenceIsoDateLookupKey(
+                calendarId,
+                monthCode,
+                dayOfMonth);
+        IsoDate cachedReferenceIsoDate = REFERENCE_ISO_DATE_HIT_CACHE.get(referenceIsoDateLookupKey);
+        if (cachedReferenceIsoDate != null) {
+            return cachedReferenceIsoDate;
+        }
+        if (REFERENCE_ISO_DATE_MISS_CACHE.contains(referenceIsoDateLookupKey)) {
+            return null;
+        }
+
+        IsoDate resolvedReferenceIsoDate = findReferenceIsoDateExactUncached(calendarId, monthCode, dayOfMonth);
+        if (resolvedReferenceIsoDate == null) {
+            putBoundedSetEntry(REFERENCE_ISO_DATE_MISS_CACHE, referenceIsoDateLookupKey, MAX_REFERENCE_ISO_DATE_CACHE_SIZE);
+            return null;
+        } else {
+            putBoundedMapEntry(
+                    REFERENCE_ISO_DATE_HIT_CACHE,
+                    referenceIsoDateLookupKey,
+                    resolvedReferenceIsoDate,
+                    MAX_REFERENCE_ISO_DATE_CACHE_SIZE);
+            return resolvedReferenceIsoDate;
+        }
+    }
+
+    private static IsoDate findReferenceIsoDateExactUncached(
+            String calendarId,
+            String monthCode,
+            int dayOfMonth) {
+        for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR; isoYear >= MIN_REFERENCE_ISO_YEAR; isoYear--) {
+            IsoDate candidateReferenceIsoDate = findReferenceIsoDateForIsoYear(
+                    calendarId,
+                    isoYear,
+                    monthCode,
+                    dayOfMonth);
+            if (candidateReferenceIsoDate != null) {
+                return candidateReferenceIsoDate;
+            }
+        }
+        for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR + 1; isoYear <= MAX_REFERENCE_ISO_YEAR; isoYear++) {
+            IsoDate candidateReferenceIsoDate = findReferenceIsoDateForIsoYear(
+                    calendarId,
+                    isoYear,
+                    monthCode,
+                    dayOfMonth);
+            if (candidateReferenceIsoDate != null) {
+                return candidateReferenceIsoDate;
+            }
+        }
+        return null;
+    }
+
+    private static IsoDate findReferenceIsoDateForIsoYear(
+            String calendarId,
+            int isoYear,
+            String monthCode,
+            int dayOfMonth) {
+        IsoDate latestMatchedReferenceIsoDate = null;
+        for (int isoMonth = 1; isoMonth <= 12; isoMonth++) {
+            int daysInIsoMonth = IsoDate.daysInMonth(isoYear, isoMonth);
+            for (int isoDay = 1; isoDay <= daysInIsoMonth; isoDay++) {
+                IsoDate candidateIsoDate = new IsoDate(isoYear, isoMonth, isoDay);
+                CalendarDateFields calendarDateFields = isoDateToCalendarDate(candidateIsoDate, calendarId);
+                if (dayOfMonth == calendarDateFields.day()
+                        && monthCode.equals(calendarDateFields.monthCode())) {
+                    latestMatchedReferenceIsoDate = candidateIsoDate;
+                }
+            }
+        }
+        return latestMatchedReferenceIsoDate;
     }
 
     private static int floorMod(int value, int modulus) {
@@ -687,6 +821,10 @@ public final class TemporalCalendarMath {
                     && lunisolarLeapMonth(calendarId, calendarYear) != 0;
             default -> false;
         };
+    }
+
+    private static boolean isChineseOrDangiCalendar(String calendarId) {
+        return "chinese".equals(calendarId) || "dangi".equals(calendarId);
     }
 
     private static boolean isKnownUmalquraLeapYear(int islamicYear) {
@@ -1387,6 +1525,33 @@ public final class TemporalCalendarMath {
         return new YearMonthIndex(previousYear, previousYearSlots.size());
     }
 
+    private static <Key, Value> void putBoundedMapEntry(
+            ConcurrentHashMap<Key, Value> cache,
+            Key key,
+            Value value,
+            int maximumSize) {
+        if (cache.size() >= maximumSize) {
+            Iterator<Key> cacheIterator = cache.keySet().iterator();
+            if (cacheIterator.hasNext()) {
+                cache.remove(cacheIterator.next());
+            }
+        }
+        cache.put(key, value);
+    }
+
+    private static <Value> void putBoundedSetEntry(
+            Set<Value> cache,
+            Value value,
+            int maximumSize) {
+        if (cache.size() >= maximumSize) {
+            Iterator<Value> cacheIterator = cache.iterator();
+            if (cacheIterator.hasNext()) {
+                cache.remove(cacheIterator.next());
+            }
+        }
+        cache.add(value);
+    }
+
     private static int regulateDay(JSContext context, int dayOfMonth, int daysInMonth, String overflow) {
         if (dayOfMonth < 1) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -1488,6 +1653,82 @@ public final class TemporalCalendarMath {
         return null;
     }
 
+    public static IsoDate resolveReferenceIsoDateForMonthDay(
+            JSContext context,
+            String calendarId,
+            String monthCode,
+            int dayOfMonth,
+            String overflow) {
+        if (dayOfMonth < 1) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        MonthCodeData monthCodeData = parseMonthCode(monthCode);
+        if (monthCodeData == null) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        String normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+        if (monthCodeData.leapMonth()) {
+            normalizedMonthCode = normalizedMonthCode + "L";
+        }
+        int searchDay = dayOfMonth;
+
+        if (isChineseOrDangiCalendar(calendarId) && monthCodeData.leapMonth()) {
+            if ("reject".equals(overflow)) {
+                IsoDate exactLeapReferenceIsoDate = findReferenceIsoDateExact(
+                        calendarId,
+                        normalizedMonthCode,
+                        searchDay);
+                if (exactLeapReferenceIsoDate == null) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                } else {
+                    return exactLeapReferenceIsoDate;
+                }
+            }
+
+            int constrainedLeapDay = Math.min(searchDay, 30);
+            IsoDate exactLeapReferenceIsoDate = findReferenceIsoDateExact(
+                    calendarId,
+                    normalizedMonthCode,
+                    constrainedLeapDay);
+            if (exactLeapReferenceIsoDate != null) {
+                return exactLeapReferenceIsoDate;
+            }
+
+            normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+            searchDay = constrainedLeapDay;
+        }
+
+        if ("reject".equals(overflow)) {
+            IsoDate exactReferenceIsoDate = findReferenceIsoDateExact(
+                    calendarId,
+                    normalizedMonthCode,
+                    searchDay);
+            if (exactReferenceIsoDate == null) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            } else {
+                return exactReferenceIsoDate;
+            }
+        }
+
+        int constrainedSearchDay = Math.min(searchDay, 31);
+        for (int candidateDay = constrainedSearchDay; candidateDay >= 1; candidateDay--) {
+            IsoDate candidateReferenceIsoDate = findReferenceIsoDateExact(
+                    calendarId,
+                    normalizedMonthCode,
+                    candidateDay);
+            if (candidateReferenceIsoDate != null) {
+                return candidateReferenceIsoDate;
+            }
+        }
+        context.throwRangeError("Temporal error: Invalid ISO date.");
+        return null;
+    }
+
     private static int toArithmeticPersianYear(int persianYear) {
         if (persianYear <= 0) {
             return persianYear - 1;
@@ -1551,6 +1792,12 @@ public final class TemporalCalendarMath {
             int gregorianYear,
             int marchDay,
             boolean leapYear) {
+    }
+
+    private record ReferenceIsoDateLookupKey(
+            String calendarId,
+            String monthCode,
+            int dayOfMonth) {
     }
 
     private record YearMonthIndex(

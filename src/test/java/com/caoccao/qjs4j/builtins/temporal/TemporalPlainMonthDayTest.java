@@ -77,6 +77,21 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromWithChineseLeapMonthCode() {
+        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'chinese', monthCode: 'M03L', day: 1 }).toString()");
+    }
+
+    @Test
+    public void testFromWithDangiLeapMonthCodeConstrainOverflow() {
+        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }).toString()");
+    }
+
+    @Test
+    public void testFromWithDangiLeapMonthCodeRejectOverflow() {
+        assertBooleanWithJavet("(() => { try { Temporal.PlainMonthDay.from({ calendar: 'dangi', monthCode: 'M03L', day: 31 }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
     public void testMonthCode() {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).monthCode");
     }
