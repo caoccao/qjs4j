@@ -182,14 +182,12 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static DifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
-        JSObject optionsObject = null;
-        if (!(optionsArg instanceof JSUndefined) && optionsArg != null) {
-            if (optionsArg instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
-            }
+        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
+                context,
+                optionsArg,
+                "Temporal error: Options must be an object.");
+        if (context.hasPendingException()) {
+            return null;
         }
 
         String largestUnitText = null;
@@ -197,22 +195,29 @@ public final class TemporalPlainTimePrototype {
         String roundingMode = "trunc";
         String smallestUnitText = null;
         if (optionsObject != null) {
-            largestUnitText = getStringOption(context, optionsObject, "largestUnit", null);
+            largestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "largestUnit", null);
             if (context.hasPendingException()) {
                 return null;
             }
 
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
+                    context,
+                    optionsObject,
+                    "roundingIncrement",
+                    1L,
+                    1L,
+                    MAX_ROUNDING_INCREMENT,
+                    "Temporal error: Invalid roundingIncrement option.");
             if (context.hasPendingException()) {
                 return null;
             }
 
-            roundingMode = getStringOption(context, optionsObject, "roundingMode", "trunc");
+            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
             if (context.hasPendingException()) {
                 return null;
             }
 
-            smallestUnitText = getStringOption(context, optionsObject, "smallestUnit", null);
+            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -233,7 +238,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!isValidRoundingMode(roundingMode)) {
+        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -254,22 +259,6 @@ public final class TemporalPlainTimePrototype {
         return new DifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
     }
 
-    private static String getRequiredSmallestUnitOption(JSContext context, JSObject optionsObject) {
-        JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (smallestUnitValue instanceof JSUndefined || smallestUnitValue == null) {
-            context.throwRangeError("Temporal error: Must specify a roundTo parameter.");
-            return null;
-        }
-        JSString smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue);
-        if (context.hasPendingException() || smallestUnitText == null) {
-            return null;
-        }
-        return smallestUnitText.value();
-    }
-
     private static RoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
         long roundingIncrement = 1L;
         String roundingMode = "halfExpand";
@@ -279,15 +268,26 @@ public final class TemporalPlainTimePrototype {
             smallestUnitText = unitString.value();
         } else if (roundTo instanceof JSObject optionsObject) {
             // Read and coerce all option properties before algorithmic validation.
-            roundingIncrement = getRoundingIncrementOption(context, optionsObject);
+            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
+                    context,
+                    optionsObject,
+                    "roundingIncrement",
+                    1L,
+                    1L,
+                    MAX_ROUNDING_INCREMENT,
+                    "Temporal error: Invalid roundingIncrement option.");
             if (context.hasPendingException()) {
                 return null;
             }
-            roundingMode = getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
             if (context.hasPendingException() || roundingMode == null) {
                 return null;
             }
-            smallestUnitText = getRequiredSmallestUnitOption(context, optionsObject);
+            smallestUnitText = TemporalOptionResolver.getRequiredStringOption(
+                    context,
+                    optionsObject,
+                    "smallestUnit",
+                    "Temporal error: Must specify a roundTo parameter.");
             if (context.hasPendingException() || smallestUnitText == null) {
                 return null;
             }
@@ -296,7 +296,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!isValidRoundingMode(roundingMode)) {
+        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingMode);
             return null;
         }
@@ -315,46 +315,6 @@ public final class TemporalPlainTimePrototype {
         return new RoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 
-    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
-    private static String getStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
-    }
-
     private static String getToStringFractionalPart(IsoTime time, int digits) {
         if (digits <= 0) {
             return "";
@@ -366,44 +326,13 @@ public final class TemporalPlainTimePrototype {
         return nineDigits.substring(0, digits);
     }
 
-    private static FractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
-        if (value instanceof JSUndefined) {
-            return new FractionalSecondDigitsOption(true, -1);
-        }
-        if (value instanceof JSNumber numberValue) {
-            double numericValue = numberValue.value();
-            if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            int flooredValue = (int) Math.floor(numericValue);
-            if (flooredValue < 0 || flooredValue > 9) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            return new FractionalSecondDigitsOption(false, flooredValue);
-        }
-
-        JSString stringValue = JSTypeConversions.toString(context, value);
-        if (context.hasPendingException() || stringValue == null) {
-            return null;
-        }
-        if ("auto".equals(stringValue.value())) {
-            return new FractionalSecondDigitsOption(true, -1);
-        }
-        context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-        return null;
-    }
-
     private static ToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = null;
-        if (!(optionsValue instanceof JSUndefined) && optionsValue != null) {
-            if (optionsValue instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Option must be object: options.");
-                return null;
-            }
+        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
+                context,
+                optionsValue,
+                "Temporal error: Option must be object: options.");
+        if (context.hasPendingException()) {
+            return null;
         }
 
         FractionalSecondDigitsOption fractionalSecondDigitsOption = new FractionalSecondDigitsOption(true, -1);
@@ -414,30 +343,30 @@ public final class TemporalPlainTimePrototype {
             if (context.hasPendingException()) {
                 return null;
             }
-            fractionalSecondDigitsOption = getToStringFractionalSecondDigitsOption(context, fractionalSecondDigitsValue);
-            if (context.hasPendingException() || fractionalSecondDigitsOption == null) {
+            TemporalOptionResolver.FractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+                    TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                            context,
+                            fractionalSecondDigitsValue,
+                            "Temporal error: Invalid fractionalSecondDigits.");
+            if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
                 return null;
             }
+            fractionalSecondDigitsOption = new FractionalSecondDigitsOption(
+                    resolvedFractionalSecondDigitsOption.auto(),
+                    resolvedFractionalSecondDigitsOption.digits());
 
-            roundingMode = getStringOption(context, optionsObject, "roundingMode", "trunc");
+            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
             if (context.hasPendingException() || roundingMode == null) {
                 return null;
             }
 
-            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
             if (context.hasPendingException()) {
                 return null;
             }
-            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-                JSString smallestUnitString = JSTypeConversions.toString(context, smallestUnitValue);
-                if (context.hasPendingException() || smallestUnitString == null) {
-                    return null;
-                }
-                smallestUnitText = smallestUnitString.value();
-            }
         }
 
-        if (!isValidRoundingMode(roundingMode)) {
+        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -536,18 +465,6 @@ public final class TemporalPlainTimePrototype {
             return false;
         }
         return maximumIncrement % roundingIncrement == 0L;
-    }
-
-    private static boolean isValidRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
