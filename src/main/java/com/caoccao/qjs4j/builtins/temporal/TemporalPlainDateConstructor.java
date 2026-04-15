@@ -27,73 +27,6 @@ public final class TemporalPlainDateConstructor {
     private TemporalPlainDateConstructor() {
     }
 
-    private static boolean calendarUsesEras(String calendarId) {
-        return "buddhist".equals(calendarId)
-                || "coptic".equals(calendarId)
-                || "ethioaa".equals(calendarId)
-                || "ethiopic".equals(calendarId)
-                || "gregory".equals(calendarId)
-                || "hebrew".equals(calendarId)
-                || "indian".equals(calendarId)
-                || "islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)
-                || "japanese".equals(calendarId)
-                || "persian".equals(calendarId)
-                || "roc".equals(calendarId);
-    }
-
-    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
-        if (era == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
-        }
-        String normalizedEra = era.toLowerCase();
-        return switch (calendarId) {
-            case "gregory" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "japanese" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "roc" -> switch (normalizedEra) {
-                case "roc", "minguo" -> "roc";
-                case "broc", "before-roc" -> "broc";
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
-            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
-            case "ethiopic" -> ("aa".equals(normalizedEra) || "am".equals(normalizedEra))
-                    ? normalizedEra
-                    : invalidEra(context);
-            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "indian" -> ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra))
-                    ? "shaka"
-                    : invalidEra(context);
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
-                case "ah", "bh" -> normalizedEra;
-                default -> invalidEra(context);
-            };
-            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
-            default -> invalidEra(context);
-        };
-    }
-
     /**
      * Temporal.PlainDate.compare(one, two)
      */
@@ -211,7 +144,7 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        ParsedMonthCode parsedMonthCode = null;
+        TemporalFieldResolver.ParsedMonthCode parsedMonthCode = null;
         if (hasMonthCode) {
             String monthCodeText;
             if (monthCodeValue instanceof JSString monthCodeString) {
@@ -231,7 +164,10 @@ public final class TemporalPlainDateConstructor {
                 context.throwTypeError("Temporal error: Month code must be string.");
                 return JSUndefined.INSTANCE;
             }
-            parsedMonthCode = parseMonthCodeSyntax(context, monthCodeText);
+            parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
+                    context,
+                    monthCodeText,
+                    "Temporal error: Month code out of range.");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -251,7 +187,7 @@ public final class TemporalPlainDateConstructor {
         }
         boolean yearDerivedFromEra = false;
 
-        boolean calendarSupportsEras = calendarUsesEras(calendarId);
+        boolean calendarSupportsEras = TemporalFieldResolver.calendarUsesEras(calendarId);
         if (!calendarSupportsEras) {
             if (!hasYear) {
                 context.throwTypeError("Temporal error: Date argument must be object or string.");
@@ -289,22 +225,22 @@ public final class TemporalPlainDateConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!hasYear && hasEra && hasEraYear) {
-                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                year = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                year = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
                 hasYear = true;
                 yearDerivedFromEra = true;
             } else if (hasEra && hasEraYear) {
-                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                int expectedYear = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                int expectedYear = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -418,76 +354,8 @@ public final class TemporalPlainDateConstructor {
         return null;
     }
 
-    private static String invalidEra(JSContext context) {
-        context.throwRangeError("Temporal error: Invalid era.");
-        return null;
-    }
-
     static int parseMonthCode(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return 0;
-        }
-        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return 0;
-        }
-        int month = Integer.parseInt(monthCode.substring(1));
-        if (month < 1 || month > 12) {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return 0;
-        }
-        return month;
-    }
-
-    private static ParsedMonthCode parseMonthCodeSyntax(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return null;
-        }
-        if (monthCode.charAt(0) != 'M') {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return null;
-        }
-        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-            context.throwRangeError("Temporal error: Month code out of range.");
-            return null;
-        }
-        boolean leapMonth = false;
-        if (monthCode.length() == 4) {
-            if (monthCode.charAt(3) != 'L') {
-                context.throwRangeError("Temporal error: Month code out of range.");
-                return null;
-            }
-            leapMonth = true;
-        }
-        int month = Integer.parseInt(monthCode.substring(1, 3));
-        return new ParsedMonthCode(month, leapMonth);
-    }
-
-    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
-        if ("ce".equals(era)) {
-            return eraYear;
-        }
-        if ("bce".equals(era)) {
-            return 1 - eraYear;
-        }
-        if ("meiji".equals(era)) {
-            return 1867 + eraYear;
-        }
-        if ("taisho".equals(era)) {
-            return 1911 + eraYear;
-        }
-        if ("showa".equals(era)) {
-            return 1925 + eraYear;
-        }
-        if ("heisei".equals(era)) {
-            return 1988 + eraYear;
-        }
-        if ("reiwa".equals(era)) {
-            return 2018 + eraYear;
-        }
-        return eraYear;
+        return TemporalFieldResolver.parseMonthCode(context, monthCode, "Temporal error: Month code out of range.");
     }
 
     static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
@@ -562,18 +430,4 @@ public final class TemporalPlainDateConstructor {
         return (JSTemporalPlainDate) result;
     }
 
-    private static int yearFromEraAndEraYear(JSContext context, String calendarId, String era, int eraYear) {
-        return switch (calendarId) {
-            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
-            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
-            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
-            case "buddhist" -> eraYear;
-            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
-            default -> eraYear;
-        };
-    }
-
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
 }
