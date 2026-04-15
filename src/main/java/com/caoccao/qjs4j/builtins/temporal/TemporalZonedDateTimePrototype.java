@@ -21,8 +21,6 @@ import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
 import java.time.DateTimeException;
-import java.time.ZoneOffset;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -395,32 +393,6 @@ public final class TemporalZonedDateTimePrototype {
         };
     }
 
-    private static String canonicalizeTimeZoneIdentifierForEquals(JSContext context, String timeZoneId) {
-        if (timeZoneId == null || timeZoneId.isEmpty()) {
-            return timeZoneId;
-        }
-        String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
-        if ("Z".equals(normalizedTimeZoneId)) {
-            return "offset:+00:00";
-        }
-        try {
-            ZoneOffset zoneOffset = ZoneOffset.of(normalizedTimeZoneId);
-            return "offset:" + TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
-        } catch (DateTimeException ignoredOffsetException) {
-            String canonicalTimeZoneId =
-                    TemporalDurationConstructor.parseTimeZoneIdentifierString(context, normalizedTimeZoneId);
-            if (context.hasPendingException() || canonicalTimeZoneId == null) {
-                return "named:" + normalizedTimeZoneId;
-            }
-            String lowerCaseTimeZoneId = canonicalTimeZoneId.toLowerCase(Locale.ROOT);
-            String primaryTimeZoneId = TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS.get(lowerCaseTimeZoneId);
-            if (primaryTimeZoneId == null) {
-                primaryTimeZoneId = canonicalTimeZoneId;
-            }
-            return "named:" + primaryTimeZoneId;
-        }
-    }
-
     private static String canonicalizeToStringSmallestUnit(String unitText) {
         return switch (unitText) {
             case "year", "years" -> "year";
@@ -598,15 +570,17 @@ public final class TemporalZonedDateTimePrototype {
                     settings.roundingMode());
         }
 
-        String startCanonicalTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(
+        String startCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
                 context,
-                startZonedDateTime.getTimeZoneId());
+                startZonedDateTime.getTimeZoneId(),
+                TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
         if (context.hasPendingException()) {
             return null;
         }
-        String endCanonicalTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(
+        String endCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
                 context,
-                endZonedDateTime.getTimeZoneId());
+                endZonedDateTime.getTimeZoneId(),
+                TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
         if (context.hasPendingException()) {
             return null;
         }
@@ -711,11 +685,17 @@ public final class TemporalZonedDateTimePrototype {
                 return JSUndefined.INSTANCE;
             }
         }
-        String receiverTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(context, zonedDateTime.getTimeZoneId());
+        String receiverTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
+                context,
+                zonedDateTime.getTimeZoneId(),
+                TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String argumentTimeZoneId = canonicalizeTimeZoneIdentifierForEquals(context, other.getTimeZoneId());
+        String argumentTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
+                context,
+                other.getTimeZoneId(),
+                TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

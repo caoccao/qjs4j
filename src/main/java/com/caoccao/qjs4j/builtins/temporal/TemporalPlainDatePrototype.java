@@ -1605,7 +1605,7 @@ public final class TemporalPlainDatePrototype {
             context.throwTypeError("Temporal error: Time zone must be string.");
             return null;
         }
-        return TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneString.value());
+        return TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneString.value());
     }
 
     public static JSValue toZonedDateTime(JSContext context, JSValue thisArg, JSValue[] args) {

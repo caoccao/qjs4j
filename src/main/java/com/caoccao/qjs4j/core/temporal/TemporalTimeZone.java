@@ -16,12 +16,13 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 import java.math.BigInteger;
 import java.time.*;
 import java.time.zone.ZoneOffsetTransition;
 import java.time.zone.ZoneRules;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,13 +30,97 @@ import java.util.regex.Pattern;
  * TimeZone operations backed by java.time.
  */
 public final class TemporalTimeZone {
+    private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
+            createAvailableTimeZoneIdentifierLookup();
     private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final Pattern OFFSET_BASIC_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_EXTENDED_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
+    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
+            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
     private static final int SECONDS_PER_HOUR = 3_600;
     private static final int SECONDS_PER_MINUTE = 60;
     private static final Pattern SIMPLE_OFFSET_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})$");
+    private static final Map<String, String> SUPPLEMENTARY_TIME_ZONE_IDS = Map.of(
+            "est", "EST",
+            "mst", "MST",
+            "hst", "HST",
+            "gmt+0", "GMT+0",
+            "gmt-0", "GMT-0",
+            "gmt0", "GMT0",
+            "roc", "ROC");
 
     private TemporalTimeZone() {
+    }
+
+    public static String canonicalizeTimeZoneIdentifier(String timeZoneText) {
+        String normalizedTimeZoneText = timeZoneText.toLowerCase(Locale.ROOT);
+        String canonicalSupplementaryTimeZoneId = SUPPLEMENTARY_TIME_ZONE_IDS.get(normalizedTimeZoneText);
+        if (canonicalSupplementaryTimeZoneId != null) {
+            return canonicalSupplementaryTimeZoneId;
+        }
+        String canonicalAvailableTimeZoneId = AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE.get(normalizedTimeZoneText);
+        if (canonicalAvailableTimeZoneId != null) {
+            return canonicalAvailableTimeZoneId;
+        }
+        if ("ut".equalsIgnoreCase(timeZoneText)) {
+            return "UT";
+        }
+        try {
+            ZoneOffset zoneOffset = ZoneOffset.of(timeZoneText);
+            if (zoneOffset.getTotalSeconds() % 60 != 0) {
+                return timeZoneText;
+            } else {
+                return formatOffset(zoneOffset.getTotalSeconds());
+            }
+        } catch (DateTimeException ignoredException) {
+            return timeZoneText;
+        }
+    }
+
+    public static String canonicalizeTimeZoneIdentifierForEquals(
+            JSContext context,
+            String timeZoneId,
+            Map<String, String> primaryTimeZoneIdentifiersByLowercase) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return timeZoneId;
+        }
+        String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
+        if ("Z".equals(normalizedTimeZoneId)) {
+            return "offset:+00:00";
+        }
+        try {
+            ZoneOffset zoneOffset = ZoneOffset.of(normalizedTimeZoneId);
+            return "offset:" + formatOffset(zoneOffset.getTotalSeconds());
+        } catch (DateTimeException ignoredException) {
+            String canonicalTimeZoneId = parseTimeZoneIdentifierString(context, normalizedTimeZoneId);
+            if (context.hasPendingException() || canonicalTimeZoneId == null) {
+                return "named:" + normalizedTimeZoneId;
+            }
+            String lowerCaseTimeZoneId = canonicalTimeZoneId.toLowerCase(Locale.ROOT);
+            String primaryTimeZoneId = primaryTimeZoneIdentifiersByLowercase.get(lowerCaseTimeZoneId);
+            if (primaryTimeZoneId == null) {
+                primaryTimeZoneId = canonicalTimeZoneId;
+            }
+            return "named:" + primaryTimeZoneId;
+        }
+    }
+
+    private static Map<String, String> createAvailableTimeZoneIdentifierLookup() {
+        List<String> availableTimeZoneIdentifiers = new ArrayList<>(ZoneId.getAvailableZoneIds());
+        Collections.sort(availableTimeZoneIdentifiers);
+        Map<String, String> availableTimeZoneIdentifiersByLowercase = new HashMap<>(availableTimeZoneIdentifiers.size());
+        for (String availableTimeZoneIdentifier : availableTimeZoneIdentifiers) {
+            String normalizedTimeZoneIdentifier = availableTimeZoneIdentifier.toLowerCase(Locale.ROOT);
+            if (!availableTimeZoneIdentifiersByLowercase.containsKey(normalizedTimeZoneIdentifier)) {
+                availableTimeZoneIdentifiersByLowercase.put(
+                        normalizedTimeZoneIdentifier,
+                        availableTimeZoneIdentifier);
+            }
+        }
+        return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
     }
 
     /**
@@ -59,6 +144,32 @@ public final class TemporalTimeZone {
         Instant javaInstant = toJavaInstant(epochNs);
         LocalDateTime localDateTime = LocalDateTime.ofInstant(javaInstant, ZoneOffset.UTC);
         return fromLocalDateTime(localDateTime);
+    }
+
+    private static String extractOffsetText(String text) {
+        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        if (timeSeparatorIndex < 0) {
+            return null;
+        }
+        int offsetStart = -1;
+        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '[' || character == 'Z' || character == 'z') {
+                break;
+            }
+            if (character == '+' || character == '-' || character == '\u2212') {
+                offsetStart = index;
+                break;
+            }
+        }
+        if (offsetStart < 0) {
+            return null;
+        }
+        int offsetEnd = text.indexOf('[', offsetStart);
+        if (offsetEnd < 0) {
+            offsetEnd = text.length();
+        }
+        return text.substring(offsetStart, offsetEnd);
     }
 
     /**
@@ -172,6 +283,65 @@ public final class TemporalTimeZone {
                 .add(BigInteger.valueOf(transInstant.getNano()));
     }
 
+    private static boolean hasOffsetDesignator(String text) {
+        int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
+        if (timeSeparatorIndex < 0) {
+            return false;
+        }
+        for (int index = timeSeparatorIndex + 1; index < text.length(); index++) {
+            char character = text.charAt(index);
+            if (character == '[') {
+                break;
+            }
+            if (character == 'Z' || character == 'z' || character == '+' || character == '-' || character == '\u2212') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean isValidOffsetString(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        int hours = offsetParts.hours();
+        int minutes = offsetParts.minutes();
+        String secondsText = offsetParts.secondsText();
+        if (hours > 23 || minutes > 59) {
+            return false;
+        }
+        if (secondsText != null) {
+            int seconds = Integer.parseInt(secondsText);
+            if (seconds > 59) {
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            return true;
+        }
+    }
+
+    public static boolean isValidTimeZoneOffsetWithoutSeconds(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        int hours = offsetParts.hours();
+        int minutes = offsetParts.minutes();
+        String secondsText = offsetParts.secondsText();
+        String fractionText = offsetParts.fractionText();
+        if (hours > 23 || minutes > 59) {
+            return false;
+        }
+        if (secondsText == null && fractionText == null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     /**
      * Converts a local date-time in a timezone to epoch nanoseconds using 'compatible' disambiguation.
      */
@@ -261,6 +431,18 @@ public final class TemporalTimeZone {
                 .add(BigInteger.valueOf(instant.getNano()));
     }
 
+    public static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            return false;
+        }
+        if (offsetParts.secondsText() != null || offsetParts.fractionText() != null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     private static Integer parseFixedOffsetSeconds(String timeZoneId) {
         if (timeZoneId == null || timeZoneId.isEmpty()) {
             return null;
@@ -281,6 +463,117 @@ public final class TemporalTimeZone {
 
         int sign = ("-".equals(offsetMatcher.group(1)) || "\u2212".equals(offsetMatcher.group(1))) ? -1 : 1;
         return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
+    }
+
+    private static OffsetParts parseOffsetParts(String offsetText) {
+        Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
+        if (extendedMatcher.matches()) {
+            return new OffsetParts(
+                    extendedMatcher.group(1),
+                    Integer.parseInt(extendedMatcher.group(2)),
+                    Integer.parseInt(extendedMatcher.group(3)),
+                    extendedMatcher.group(4),
+                    extendedMatcher.group(5));
+        }
+        Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
+        if (basicMatcher.matches()) {
+            return new OffsetParts(
+                    basicMatcher.group(1),
+                    Integer.parseInt(basicMatcher.group(2)),
+                    Integer.parseInt(basicMatcher.group(3)),
+                    basicMatcher.group(4),
+                    basicMatcher.group(5));
+        }
+        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
+        if (hourOnlyMatcher.matches()) {
+            return new OffsetParts(
+                    hourOnlyMatcher.group(1),
+                    Integer.parseInt(hourOnlyMatcher.group(2)),
+                    0,
+                    null,
+                    null);
+        }
+        return null;
+    }
+
+    public static int parseOffsetSeconds(String offsetText) {
+        OffsetParts offsetParts = parseOffsetParts(offsetText);
+        if (offsetParts == null) {
+            throw new DateTimeException("Invalid offset string: " + offsetText);
+        }
+        String signText = offsetParts.signText();
+        int sign;
+        if ("-".equals(signText) || "\u2212".equals(signText)) {
+            sign = -1;
+        } else {
+            sign = 1;
+        }
+        int hours = offsetParts.hours();
+        int minutes = offsetParts.minutes();
+        int seconds;
+        if (offsetParts.secondsText() == null) {
+            seconds = 0;
+        } else {
+            seconds = Integer.parseInt(offsetParts.secondsText());
+        }
+        return sign * (hours * 3600 + minutes * 60 + seconds);
+    }
+
+    public static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
+        if (timeZoneText.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid time zone.");
+            return null;
+        }
+        char firstCharacter = timeZoneText.charAt(0);
+        boolean startsWithDateCharacter =
+                Character.isDigit(firstCharacter)
+                        || firstCharacter == '+'
+                        || firstCharacter == '-'
+                        || firstCharacter == '\u2212';
+        boolean looksLikeIsoDateTime =
+                startsWithDateCharacter
+                        && (timeZoneText.contains("T") || timeZoneText.contains("t"))
+                        && timeZoneText.contains("-");
+        if (!looksLikeIsoDateTime) {
+            return canonicalizeTimeZoneIdentifier(timeZoneText);
+        }
+
+        if (timeZoneText.contains("[")) {
+            String adjustedTimeZoneText = timeZoneText;
+            if (adjustedTimeZoneText.contains(":60")) {
+                adjustedTimeZoneText = adjustedTimeZoneText.replace(":60", ":59");
+            }
+            String offsetText = extractOffsetText(adjustedTimeZoneText);
+            if (offsetText != null && !isValidOffsetString(offsetText)) {
+                context.throwRangeError("Temporal error: Invalid offset string.");
+                return null;
+            }
+            TemporalParser.ParsedZonedDateTime parsedZonedDateTime =
+                    TemporalParser.parseZonedDateTimeString(context, adjustedTimeZoneText);
+            if (parsedZonedDateTime == null || context.hasPendingException()) {
+                return null;
+            }
+            return canonicalizeTimeZoneIdentifier(parsedZonedDateTime.timeZoneId());
+        }
+
+        if (!hasOffsetDesignator(timeZoneText)) {
+            context.throwRangeError("Temporal error: Invalid time zone.");
+            return null;
+        }
+        String offsetText = extractOffsetText(timeZoneText);
+        if (offsetText != null && !isValidTimeZoneOffsetWithoutSeconds(offsetText)) {
+            context.throwRangeError("Temporal error: Invalid offset string.");
+            return null;
+        }
+        TemporalParser.ParsedInstant parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
+        if (parsedInstant == null || context.hasPendingException()) {
+            return null;
+        }
+        if (parsedInstant.offsetSeconds() == 0) {
+            return "UTC";
+        } else {
+            return formatOffset(parsedInstant.offsetSeconds());
+        }
     }
 
     /**
@@ -352,5 +645,8 @@ public final class TemporalTimeZone {
         BigInteger dayNs = BigInteger.valueOf(epochDay).multiply(BigInteger.valueOf(86_400_000_000_000L));
         BigInteger timeNs = BigInteger.valueOf(time.totalNanoseconds());
         return dayNs.add(timeNs).subtract(offsetNanoseconds);
+    }
+
+    private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
     }
 }

@@ -599,7 +599,7 @@ public final class TemporalInstantPrototype {
                 context.throwTypeError("Temporal error: Time zone must be string");
                 return null;
             }
-            timeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneString.value());
+            timeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneString.value());
             if (context.hasPendingException()) {
                 return null;
             }
@@ -957,7 +957,7 @@ public final class TemporalInstantPrototype {
             context.throwTypeError("Temporal error: Time zone must be string");
             return JSUndefined.INSTANCE;
         }
-        String timeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(context, tzStr.value());
+        String timeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, tzStr.value());
         if (context.hasPendingException() || timeZoneId == null) {
             return JSUndefined.INSTANCE;
         }

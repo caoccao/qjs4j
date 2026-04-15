@@ -705,7 +705,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     static String normalizeTimeZoneIdentifier(JSContext context, String timeZoneText) {
-        String normalizedTimeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(context, timeZoneText);
+        String normalizedTimeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneText);
         if (context.hasPendingException() || normalizedTimeZoneId == null) {
             return null;
         }
