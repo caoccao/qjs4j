@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.util.Optional;
+
 /**
  * Parsed and validated settings for Temporal since()/until() operations.
  * <p>
@@ -80,12 +82,10 @@ public record TemporalDifferenceSettings(
     }
 
     private static String largerOfTwoUnits(String leftUnit, String rightUnit) {
-        TemporalUnit left = TemporalUnit.fromString(leftUnit);
-        TemporalUnit right = TemporalUnit.fromString(rightUnit);
-        if (left == null || right == null) {
-            return leftUnit;
-        }
-        return left.ordinal() <= right.ordinal() ? left.jsName() : right.jsName();
+        return TemporalUnit.fromString(leftUnit)
+                .flatMap(left -> TemporalUnit.fromString(rightUnit)
+                        .map(right -> left.ordinal() <= right.ordinal() ? left.jsName() : right.jsName()))
+                .orElse(leftUnit);
     }
 
     /**
@@ -159,12 +159,13 @@ public record TemporalDifferenceSettings(
         } else if ("auto".equals(largestUnitText)) {
             largestUnit = "auto";
         } else {
-            TemporalUnit parsed = TemporalUnit.fromString(largestUnitText);
-            if (parsed == null || parsed.ordinal() < allowedMin.ordinal() || parsed.ordinal() > allowedMax.ordinal()) {
+            Optional<TemporalUnit> parsed = TemporalUnit.fromString(largestUnitText)
+                    .filter(u -> u.ordinal() >= allowedMin.ordinal() && u.ordinal() <= allowedMax.ordinal());
+            if (parsed.isEmpty()) {
                 context.throwRangeError("Temporal error: Invalid largest unit.");
                 return null;
             }
-            largestUnit = parsed.jsName();
+            largestUnit = parsed.get().jsName();
         }
 
         // 4. Canonicalize and validate smallestUnit
@@ -172,12 +173,13 @@ public record TemporalDifferenceSettings(
         if (smallestUnitText == null) {
             smallestUnit = defaultSmallestUnit.jsName();
         } else {
-            TemporalUnit parsed = TemporalUnit.fromString(smallestUnitText);
-            if (parsed == null || parsed.ordinal() < allowedMin.ordinal() || parsed.ordinal() > allowedMax.ordinal()) {
+            Optional<TemporalUnit> parsed = TemporalUnit.fromString(smallestUnitText)
+                    .filter(u -> u.ordinal() >= allowedMin.ordinal() && u.ordinal() <= allowedMax.ordinal());
+            if (parsed.isEmpty()) {
                 context.throwRangeError("Temporal error: Invalid smallest unit.");
                 return null;
             }
-            smallestUnit = parsed.jsName();
+            smallestUnit = parsed.get().jsName();
         }
 
         // 5. Validate rounding mode
@@ -205,9 +207,10 @@ public record TemporalDifferenceSettings(
 
         // 9. Validate rounding increment
         if (validateSubDayIncrement) {
-            TemporalUnit smallestParsed = TemporalUnit.fromString(smallestUnit);
-            if (smallestParsed != null && smallestParsed.isTimeUnit()) {
-                long maximumIncrement = getMaximumSubDayIncrement(smallestParsed);
+            Optional<TemporalUnit> smallestParsed = TemporalUnit.fromString(smallestUnit)
+                    .filter(TemporalUnit::isTimeUnit);
+            if (smallestParsed.isPresent()) {
+                long maximumIncrement = getMaximumSubDayIncrement(smallestParsed.get());
                 if (maximumIncrement > 0 && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
                     context.throwRangeError("Temporal error: Invalid rounding increment.");
                     return null;

@@ -208,27 +208,17 @@ public final class TemporalInstantPrototype {
     }
 
     private static long getMaximumRoundingIncrement(String unit) {
-        return switch (unit) {
-            case "hour" -> SOLAR_DAY_HOURS;
-            case "minute" -> SOLAR_DAY_MINUTES;
-            case "second" -> SOLAR_DAY_SECONDS;
-            case "millisecond" -> SOLAR_DAY_MILLISECONDS;
-            case "microsecond" -> SOLAR_DAY_MICROSECONDS;
-            case "nanosecond" -> SOLAR_DAY_NANOSECONDS;
-            default -> -1L;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::solarDayDivisor)
+                .orElse(-1L);
     }
 
     private static BigInteger getUnitNs(String unit) {
-        return switch (unit) {
-            case "hour" -> NS_PER_HOUR;
-            case "minute" -> NS_PER_MINUTE;
-            case "second" -> NS_PER_SECOND;
-            case "millisecond" -> NS_PER_MS;
-            case "microsecond" -> NS_PER_US;
-            case "nanosecond" -> BigInteger.ONE;
-            default -> null;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::nanosecondFactorLong)
+                .filter(factor -> factor > 0)
+                .map(BigInteger::valueOf)
+                .orElse(null);
     }
 
     private static JSValue instantDifference(
@@ -262,16 +252,10 @@ public final class TemporalInstantPrototype {
     }
 
     private static String normalizeToStringSmallestUnit(String unit) {
-        TemporalUnit temporalUnit = TemporalUnit.fromString(unit);
-        String normalizedUnit = temporalUnit != null && temporalUnit.isTimeUnit() ? temporalUnit.jsName() : null;
-        if ("minute".equals(normalizedUnit)
-                || "second".equals(normalizedUnit)
-                || "millisecond".equals(normalizedUnit)
-                || "microsecond".equals(normalizedUnit)
-                || "nanosecond".equals(normalizedUnit)) {
-            return normalizedUnit;
-        }
-        return null;
+        return TemporalUnit.fromString(unit)
+                .filter(u -> u.isTimeUnit() && u != TemporalUnit.HOUR)
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
@@ -469,8 +453,10 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnitText);
-        String smallestUnit = parsedUnit != null && parsedUnit.isTimeUnit() ? parsedUnit.jsName() : null;
+        String smallestUnit = TemporalUnit.fromString(smallestUnitText)
+                .filter(TemporalUnit::isTimeUnit)
+                .map(TemporalUnit::jsName)
+                .orElse(null);
         if (smallestUnit == null) {
             context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);
             return JSUndefined.INSTANCE;

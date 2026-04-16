@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
+import java.util.Optional;
 
 /**
  * Implementation of Temporal.PlainTime prototype methods.
@@ -72,13 +73,17 @@ public final class TemporalPlainTimePrototype {
         if ("auto".equals(unitText) && largestUnit) {
             return "auto";
         }
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isTimeUnit() ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .filter(TemporalUnit::isTimeUnit)
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isSmallerOrEqual(TemporalUnit.MINUTE) ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE))
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -195,9 +200,10 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
-        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
-            long maximumIncrement = switch (parsedUnit) {
+        Optional<TemporalUnit> parsedUnit = TemporalUnit.fromString(smallestUnit)
+                .filter(TemporalUnit::isTimeUnit);
+        if (parsedUnit.isPresent()) {
+            long maximumIncrement = switch (parsedUnit.get()) {
                 case HOUR -> 24L;
                 case MINUTE, SECOND -> 60L;
                 case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
@@ -468,15 +474,9 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static long unitToNanoseconds(String unit) {
-        return switch (unit) {
-            case "hour" -> 3_600_000_000_000L;
-            case "minute" -> 60_000_000_000L;
-            case "second" -> 1_000_000_000L;
-            case "millisecond" -> 1_000_000L;
-            case "microsecond" -> 1_000L;
-            case "nanosecond" -> 1L;
-            default -> 0L;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::nanosecondFactorLong)
+                .orElse(0L);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

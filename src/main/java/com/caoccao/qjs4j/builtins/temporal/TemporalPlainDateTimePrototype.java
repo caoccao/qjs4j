@@ -138,13 +138,17 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String canonicalizeSmallestUnit(String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .filter(u -> u.isSmallerOrEqual(TemporalUnit.DAY))
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isSmallerOrEqual(TemporalUnit.MINUTE) ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE))
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static JSTemporalPlainDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -929,16 +933,9 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static long unitToNanoseconds(String unit) {
-        return switch (unit) {
-            case "day" -> 86_400_000_000_000L;
-            case "hour" -> 3_600_000_000_000L;
-            case "minute" -> 60_000_000_000L;
-            case "second" -> 1_000_000_000L;
-            case "millisecond" -> 1_000_000L;
-            case "microsecond" -> 1_000L;
-            case "nanosecond" -> 1L;
-            default -> 0;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::nanosecondFactorLong)
+                .orElse(0L);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
