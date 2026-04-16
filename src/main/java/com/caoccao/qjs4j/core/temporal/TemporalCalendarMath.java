@@ -241,11 +241,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate alexandrianToIsoDate(int calendarYear, String monthCode, int dayOfMonth, long offsetEpochDay) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        long calendarOrdinalDay = alexandrianOrdinalDay(calendarYear, monthCodeData.monthNumber(), dayOfMonth);
+        long calendarOrdinalDay = alexandrianOrdinalDay(calendarYear, monthCodeData.month(), dayOfMonth);
         long epochDay = calendarOrdinalDay + offsetEpochDay;
         if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
             return null;
@@ -321,7 +321,7 @@ public final class TemporalCalendarMath {
     }
 
     public static String constrainMonthCode(String calendarId, int calendarYear, String monthCode) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || !monthCodeData.leapMonth()) {
             return monthCode;
         }
@@ -769,11 +769,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate indianToIsoDate(int indianYear, String monthCode, int dayOfMonth) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        int monthNumber = monthCodeData.monthNumber();
+        int monthNumber = monthCodeData.month();
         if (monthNumber < 1 || monthNumber > 12) {
             return null;
         }
@@ -865,11 +865,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate islamicToIsoDate(int islamicYear, String monthCode, int dayOfMonth, long epochDayOffset) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        int monthNumber = monthCodeData.monthNumber();
+        int monthNumber = monthCodeData.month();
         if (monthNumber < 1 || monthNumber > 12) {
             return null;
         }
@@ -1257,7 +1257,7 @@ public final class TemporalCalendarMath {
             int dayOfMonth,
             String calendarId,
             String overflow) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null) {
             return null;
         }
@@ -1266,7 +1266,7 @@ public final class TemporalCalendarMath {
                 if (monthCodeData.leapMonth()) {
                     return null;
                 }
-                int monthNumber = monthCodeData.monthNumber();
+                int monthNumber = monthCodeData.month();
                 if (monthNumber < 1 || monthNumber > 12) {
                     return null;
                 }
@@ -1282,11 +1282,11 @@ public final class TemporalCalendarMath {
                 LocalDate targetDate = yearStartDate.plusDays(dayOffset);
                 return new IsoDate(targetDate.getYear(), targetDate.getMonthValue(), targetDate.getDayOfMonth());
             }
-            if (calendarYear == 1899 && !monthCodeData.leapMonth() && monthCodeData.monthNumber() == 12) {
+            if (calendarYear == 1899 && !monthCodeData.leapMonth() && monthCodeData.month() == 12) {
                 return toIsoDateFromGregorianLike(1900, TemporalUtils.monthCode(1), dayOfMonth);
             }
             int fallbackIsoYear = calendarYear + 1;
-            String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+            String fallbackMonthCode = TemporalUtils.monthCode(monthCodeData.month());
             IsoDate fallbackIsoDate = toIsoDateFromGregorianLike(fallbackIsoYear, fallbackMonthCode, dayOfMonth);
             if (fallbackIsoDate != null) {
                 return fallbackIsoDate;
@@ -1294,25 +1294,25 @@ public final class TemporalCalendarMath {
             if ("reject".equals(overflow)) {
                 return null;
             }
-            int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(fallbackIsoYear, monthCodeData.monthNumber()));
+            int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(fallbackIsoYear, monthCodeData.month()));
             return toIsoDateFromGregorianLike(fallbackIsoYear, fallbackMonthCode, constrainedDay);
         }
         int leapMonth = lunisolarLeapMonth(calendarId, calendarYear);
-        if (monthCodeData.leapMonth() && leapMonth != monthCodeData.monthNumber()) {
+        if (monthCodeData.leapMonth() && leapMonth != monthCodeData.month()) {
             return null;
         }
         long dayOffset = 0L;
         for (int yearValue = 1900; yearValue < calendarYear; yearValue++) {
             dayOffset += lunisolarYearDays(calendarId, yearValue);
         }
-        for (int monthNumber = 1; monthNumber < monthCodeData.monthNumber(); monthNumber++) {
+        for (int monthNumber = 1; monthNumber < monthCodeData.month(); monthNumber++) {
             dayOffset += lunisolarMonthDays(calendarId, calendarYear, monthNumber);
             if (leapMonth == monthNumber) {
                 dayOffset += lunisolarLeapMonthDays(calendarId, calendarYear);
             }
         }
         if (monthCodeData.leapMonth()) {
-            dayOffset += lunisolarMonthDays(calendarId, calendarYear, monthCodeData.monthNumber());
+            dayOffset += lunisolarMonthDays(calendarId, calendarYear, monthCodeData.month());
         }
         dayOffset += dayOfMonth - 1L;
         LocalDate lunarBaseDate = LocalDate.of(1900, 1, 31);
@@ -1349,7 +1349,7 @@ public final class TemporalCalendarMath {
         return new TemporalYearMonthIndex(currentIndex.year() + 1, 1);
     }
 
-    private static TemporalCalendarMonthCodeData parseMonthCode(String monthCode) {
+    private static TemporalParsedMonthCode parseMonthCode(String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             return null;
         }
@@ -1367,7 +1367,7 @@ public final class TemporalCalendarMath {
             }
             leapMonth = true;
         }
-        return new TemporalCalendarMonthCodeData(monthNumber, leapMonth);
+        return new TemporalParsedMonthCode(monthNumber, leapMonth);
     }
 
     private static long persianArithmeticEpochDay(int arithmeticPersianYear, int persianMonth, int dayOfMonth) {
@@ -1452,11 +1452,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate persianToIsoDate(int persianYear, String monthCode, int dayOfMonth) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        int monthNumber = monthCodeData.monthNumber();
+        int monthNumber = monthCodeData.month();
         if (monthNumber < 1 || monthNumber > 12) {
             return null;
         }
@@ -1565,7 +1565,7 @@ public final class TemporalCalendarMath {
     }
 
     private static String resolveFallbackMonthCodeForMissingLeapMonth(String calendarId, String leapMonthCode) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(leapMonthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(leapMonthCode);
         if (monthCodeData == null || !monthCodeData.leapMonth()) {
             return null;
         }
@@ -1573,7 +1573,7 @@ public final class TemporalCalendarMath {
             return "M06";
         }
         if ("chinese".equals(calendarId) || "dangi".equals(calendarId)) {
-            return TemporalUtils.monthCode(monthCodeData.monthNumber());
+            return TemporalUtils.monthCode(monthCodeData.month());
         }
         return null;
     }
@@ -1606,7 +1606,7 @@ public final class TemporalCalendarMath {
 
         TemporalCalendarMonthSlot monthSlotFromCode = null;
         if (monthCodeFromProperty != null) {
-            TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCodeFromProperty);
+            TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCodeFromProperty);
             if (monthCodeData == null) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;
@@ -1663,13 +1663,13 @@ public final class TemporalCalendarMath {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        String normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+        String normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.month());
         if (monthCodeData.leapMonth()) {
             normalizedMonthCode = normalizedMonthCode + "L";
         }
@@ -1698,7 +1698,7 @@ public final class TemporalCalendarMath {
                 return exactLeapReferenceIsoDate;
             }
 
-            normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.monthNumber());
+            normalizedMonthCode = TemporalUtils.monthCode(monthCodeData.month());
             searchDay = constrainedLeapDay;
         }
 
@@ -1737,11 +1737,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate toIsoDateFromGregorianLike(int isoYear, String monthCode, int dayOfMonth) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        int monthNumber = monthCodeData.monthNumber();
+        int monthNumber = monthCodeData.month();
         if (!IsoDate.isValidIsoDate(isoYear, monthNumber, dayOfMonth)) {
             return null;
         }
@@ -1749,11 +1749,11 @@ public final class TemporalCalendarMath {
     }
 
     private static IsoDate umalquraToIsoDate(int islamicYear, String monthCode, int dayOfMonth) {
-        TemporalCalendarMonthCodeData monthCodeData = parseMonthCode(monthCode);
+        TemporalParsedMonthCode monthCodeData = parseMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
             return null;
         }
-        int monthNumber = monthCodeData.monthNumber();
+        int monthNumber = monthCodeData.month();
         if (monthNumber < 1 || monthNumber > 12) {
             return null;
         }

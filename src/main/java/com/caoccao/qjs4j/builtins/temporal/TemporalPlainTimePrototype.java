@@ -125,7 +125,7 @@ public final class TemporalPlainTimePrototype {
         long smallestUnitNanoseconds = unitToNanoseconds(differenceSettings.smallestUnit());
         BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
                 .multiply(BigInteger.valueOf(differenceSettings.roundingIncrement()));
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds,
                 differenceSettings.roundingMode());
@@ -226,7 +226,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!isValidDifferenceRoundingIncrement(smallestUnit, roundingIncrement)) {
+        if (!TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement)) {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return null;
         }
@@ -282,7 +282,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!isValidDifferenceRoundingIncrement(smallestUnit, roundingIncrement)) {
+        if (!TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement)) {
             context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
             return null;
         }
@@ -431,10 +431,6 @@ public final class TemporalPlainTimePrototype {
         return JSNumber.of(plainTime.getIsoTime().hour());
     }
 
-    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
-    }
-
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
         return temporalUnitRank(leftUnit) <= temporalUnitRank(rightUnit) ? leftUnit : rightUnit;
     }
@@ -489,20 +485,15 @@ public final class TemporalPlainTimePrototype {
         long totalNs = plainTime.getIsoTime().totalNanoseconds();
         long unitNs = unitToNanoseconds(roundSettings.smallestUnit());
         long incrementNs = unitNs * roundSettings.roundingIncrement();
-        long roundedNs = roundToIncrementAsIfPositive(totalNs, incrementNs, roundSettings.roundingMode());
+        long roundedNs = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+                totalNs,
+                incrementNs,
+                roundSettings.roundingMode());
         if (roundedNs == DAY_NANOSECONDS.longValue()) {
             roundedNs = 0L;
         }
 
         return TemporalPlainTimeConstructor.createPlainTime(context, IsoTime.fromNanoseconds(roundedNs));
-    }
-
-    private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        return TemporalMathKernel.roundBigIntegerToIncrementSigned(value, increment, roundingMode);
-    }
-
-    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        return TemporalMathKernel.roundLongToIncrementAsIfPositive(quantity, increment, roundingMode);
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -595,7 +586,7 @@ public final class TemporalPlainTimePrototype {
 
         long roundedNanoseconds = plainTime.getIsoTime().totalNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = roundToIncrementAsIfPositive(
+            roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
                     roundedNanoseconds,
                     toStringSettings.roundingIncrementNanoseconds(),
                     toStringSettings.roundingMode());
@@ -773,11 +764,12 @@ public final class TemporalPlainTimePrototype {
         }
 
         if ("reject".equals(overflow)) {
-            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+            IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            if (!isoTime.isValidTime()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            return TemporalPlainTimeConstructor.createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
+            return TemporalPlainTimeConstructor.createPlainTime(context, isoTime);
         } else {
             IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
             return TemporalPlainTimeConstructor.createPlainTime(context, constrained);

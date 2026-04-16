@@ -73,7 +73,33 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
-    public static boolean isValidTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+    public String formatSecondsAndFraction(Integer fractionalSecondDigits) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(String.format(
+                Locale.ROOT,
+                "%02d:%02d:%02d",
+                hour(),
+                minute(),
+                second()));
+        int totalFractionalNanoseconds =
+                millisecond() * 1_000_000 + microsecond() * 1_000 + nanosecond();
+        if (fractionalSecondDigits == null) {
+            if (totalFractionalNanoseconds != 0) {
+                String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+                int fractionEndIndex = fraction.length();
+                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
+                    fractionEndIndex--;
+                }
+                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
+            }
+        } else if (fractionalSecondDigits > 0) {
+            String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+            stringBuilder.append('.').append(fraction, 0, fractionalSecondDigits);
+        }
+        return stringBuilder.toString();
+    }
+
+    public boolean isValidTime() {
         if (hour < 0 || hour > 23) {
             return false;
         }
@@ -92,31 +118,9 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return nanosecond >= 0 && nanosecond <= 999;
     }
 
-    /**
-     * Add nanoseconds to this time, returning a record with the new time and day overflow.
-     */
-    public AddResult addNanoseconds(long nanosecondsToAdd) {
-        long totalNanoseconds = totalNanoseconds() + nanosecondsToAdd;
-        long nanosecondsPerDay = 86_400_000_000_000L;
-        int days = (int) Math.floorDiv(totalNanoseconds, nanosecondsPerDay);
-        long remainder = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
-        return new AddResult(fromNanoseconds(remainder), days);
-    }
-
     @Override
     public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
-        int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
-        if (totalFractionalNanoseconds != 0) {
-            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            int fractionalEndIndex = fractional.length();
-            while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
-                fractionalEndIndex--;
-            }
-            stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
-        }
-        return stringBuilder.toString();
+        return formatSecondsAndFraction(null);
     }
 
     /**
@@ -129,8 +133,5 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
                 + ((long) millisecond * 1_000_000L)
                 + ((long) microsecond * 1_000L)
                 + nanosecond;
-    }
-
-    public record AddResult(IsoTime time, int days) {
     }
 }

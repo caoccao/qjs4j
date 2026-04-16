@@ -582,14 +582,14 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        TemporalMonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        TemporalMonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        TemporalParsedMonthCode firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        TemporalParsedMonthCode secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
         int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.monthNumber(),
-                secondMonthCodeParts.monthNumber());
+                firstMonthCodeParts.month(),
+                secondMonthCodeParts.month());
         if (monthNumberComparison != 0) {
             return monthNumberComparison;
         }
@@ -1222,36 +1222,7 @@ public final class TemporalPlainDatePrototype {
         return new TemporalNudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
     }
 
-    private static TemporalMonthCodeInfo parseMonthCodeForPlainDateWith(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (monthCode.charAt(0) != 'M') {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        int month = Integer.parseInt(monthCode.substring(1, 3));
-        boolean leapMonth = false;
-        if (monthCode.length() == 4) {
-            if (monthCode.charAt(3) != 'L') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            leapMonth = true;
-        }
-        if (month < 1 || month > 12) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return new TemporalMonthCodeInfo(month, leapMonth);
-    }
-
-    private static TemporalMonthCodeParts parseMonthCodeParts(String monthCodeText) {
+    private static TemporalParsedMonthCode parseMonthCodeParts(String monthCodeText) {
         if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
             return null;
         }
@@ -1269,7 +1240,7 @@ public final class TemporalPlainDatePrototype {
             }
             leapMonth = true;
         }
-        return new TemporalMonthCodeParts(monthNumber, leapMonth);
+        return new TemporalParsedMonthCode(monthNumber, leapMonth);
     }
 
     private static IsoDate resolveCalendarDate(JSContext context, JSTemporalPlainDate plainDate) {

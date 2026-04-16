@@ -33,8 +33,8 @@ import java.util.ArrayDeque;
  */
 public final class JSMicrotaskQueue {
     private final JSContext context;
-    private final Object queueLock;
     private final ArrayDeque<Microtask> queue;
+    private final Object queueLock;
     private boolean executing;
 
     /**

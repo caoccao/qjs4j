@@ -48,8 +48,12 @@ public record TemporalDuration(
         int negative = 0;
         long[] fields = {years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds};
         for (long f : fields) {
-            if (f > 0) positive++;
-            if (f < 0) negative++;
+            if (f > 0) {
+                positive++;
+            }
+            if (f < 0) {
+                negative++;
+            }
         }
         return positive == 0 || negative == 0;
     }

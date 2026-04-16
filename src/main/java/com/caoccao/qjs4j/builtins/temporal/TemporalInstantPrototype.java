@@ -46,7 +46,9 @@ public final class TemporalInstantPrototype {
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "add");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, instant, args, 1);
     }
 
@@ -109,23 +111,31 @@ public final class TemporalInstantPrototype {
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochMilliseconds");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochMilliseconds = floorDiv(instant.getEpochNanoseconds(), NS_PER_MS);
         return JSNumber.of(epochMilliseconds.longValue());
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochNanoseconds");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSBigInt(instant.getEpochNanoseconds());
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "equals");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         return instant.getEpochNanoseconds().equals(other.getEpochNanoseconds()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
@@ -147,11 +157,6 @@ public final class TemporalInstantPrototype {
             remainder = remainder.add(divisor);
         }
         return new BigInteger[]{quotient, remainder};
-    }
-
-    private static String formatInstantUtc(BigInteger epochNs) {
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToUtcDateTime(epochNs);
-        return isoDateTime + "Z";
     }
 
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
@@ -205,43 +210,21 @@ public final class TemporalInstantPrototype {
         return new JSString(dateTimeText + zoneSuffix);
     }
 
-    private static String formatSecondsAndFraction(IsoTime isoTime, Integer fractionalSecondDigits) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d",
-                isoTime.hour(), isoTime.minute(), isoTime.second()));
-        int totalFractionalNanoseconds =
-                isoTime.millisecond() * 1_000_000 + isoTime.microsecond() * 1_000 + isoTime.nanosecond();
-        if (fractionalSecondDigits == null) {
-            if (totalFractionalNanoseconds != 0) {
-                String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-                int fractionEndIndex = fraction.length();
-                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
-                    fractionEndIndex--;
-                }
-                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
-            }
-        } else if (fractionalSecondDigits > 0) {
-            String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            stringBuilder.append('.').append(fraction, 0, fractionalSecondDigits);
-        }
-        return stringBuilder.toString();
-    }
-
     private static String formatWithPrecision(IsoDateTime isoDateTime, String smallestUnit, Integer fractionalSecondDigits) {
         String datePart = isoDateTime.date().toString();
         String timePart;
         if ("minute".equals(smallestUnit)) {
             timePart = String.format(Locale.ROOT, "%02d:%02d", isoDateTime.time().hour(), isoDateTime.time().minute());
         } else if ("second".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 0);
+            timePart = isoDateTime.time().formatSecondsAndFraction(0);
         } else if ("millisecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 3);
+            timePart = isoDateTime.time().formatSecondsAndFraction(3);
         } else if ("microsecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 6);
+            timePart = isoDateTime.time().formatSecondsAndFraction(6);
         } else if ("nanosecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 9);
+            timePart = isoDateTime.time().formatSecondsAndFraction(9);
         } else {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), fractionalSecondDigits);
+            timePart = isoDateTime.time().formatSecondsAndFraction(fractionalSecondDigits);
         }
         return datePart + "T" + timePart;
     }
@@ -375,23 +358,6 @@ public final class TemporalInstantPrototype {
             return normalizedUnit;
         }
         return null;
-    }
-
-    private static JSValue nsToDuration(JSContext context, BigInteger diffNs) {
-        int signum = diffNs.signum();
-        BigInteger absoluteDiffNanoseconds = diffNs.abs();
-        // For Instant, the default largestUnit is "second" per spec
-        long totalSeconds = absoluteDiffNanoseconds.divide(NS_PER_SECOND).longValue();
-        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_SECOND);
-        long totalMs = absoluteDiffNanoseconds.divide(NS_PER_MS).longValue();
-        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_MS);
-        long totalUs = absoluteDiffNanoseconds.divide(BigInteger.valueOf(1_000)).longValue();
-        long totalNs = absoluteDiffNanoseconds.remainder(BigInteger.valueOf(1_000)).longValue();
-
-        return TemporalDurationConstructor.createDuration(context,
-                new TemporalDuration(0, 0, 0, 0,
-                        0, 0, totalSeconds * signum,
-                        totalMs * signum, totalUs * signum, totalNs * signum));
     }
 
     private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
@@ -898,7 +864,9 @@ public final class TemporalInstantPrototype {
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "subtract");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, instant, args, -1);
     }
 

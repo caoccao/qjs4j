@@ -53,55 +53,18 @@ public final class TemporalDurationPrototype {
 
     public static JSValue abs(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "abs");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return TemporalDurationConstructor.createDuration(context, duration.getDuration().abs());
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "add");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, duration, args, 1);
-    }
-
-    private static LocalDateTime addCalendarUnits(LocalDateTime dateTime, String calendarUnit, long amount) {
-        return TemporalDurationArithmeticKernel.addCalendarUnits(dateTime, calendarUnit, amount);
-    }
-
-    private static LocalDateTime addDurationToDateTime(
-            JSContext context,
-            LocalDateTime startDateTime,
-            TemporalDuration durationRecord) {
-        return TemporalDurationArithmeticKernel.addDurationToDateTime(context, startDateTime, durationRecord);
-    }
-
-    private static TemporalZonedDateTimeComputation addDurationToZonedDateTime(
-            JSContext context,
-            TemporalRelativeToOption relativeToOption,
-            TemporalDuration durationRecord) {
-        return TemporalDurationArithmeticKernel.addDurationToZonedDateTime(context, relativeToOption, durationRecord);
-    }
-
-    private static LocalDateTime addFixedUnits(LocalDateTime dateTime, String unit, long amount) {
-        return TemporalDurationArithmeticKernel.addFixedUnits(dateTime, unit, amount);
-    }
-
-    private static LocalDateTime addNanosecondsToDateTime(
-            JSContext context,
-            LocalDateTime startDateTime,
-            BigInteger nanoseconds) {
-        return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, startDateTime, nanoseconds);
-    }
-
-    private static LocalDateTime addNanosecondsToDateTime(
-            JSContext context,
-            LocalDateTime startDateTime,
-            BigInteger nanoseconds,
-            TemporalRelativeToOption relativeToOption) {
-        return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(
-                context,
-                startDateTime,
-                nanoseconds,
-                relativeToOption);
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalDuration duration, JSValue[] args, int sign) {
@@ -364,7 +327,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue blank(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "blank");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return duration.getDuration().isBlank() ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
@@ -583,7 +548,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue days(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "days");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().days());
     }
 
@@ -844,7 +811,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "hours");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().hours());
     }
 
@@ -951,25 +920,33 @@ public final class TemporalDurationPrototype {
 
     public static JSValue microseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "microseconds");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().microseconds());
     }
 
     public static JSValue milliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "milliseconds");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().milliseconds());
     }
 
     public static JSValue minutes(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "minutes");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().minutes());
     }
 
     public static JSValue months(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "months");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().months());
     }
 
@@ -978,15 +955,15 @@ public final class TemporalDurationPrototype {
             LocalDateTime endDateTime,
             String calendarUnit) {
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
         if (!endDateTime.isBefore(startDateTime)) {
             while (boundaryDateTime.isAfter(endDateTime)) {
                 unitCount--;
-                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
                 if (nextDateTime.isAfter(endDateTime)) {
                     break;
                 }
@@ -996,11 +973,11 @@ public final class TemporalDurationPrototype {
         } else {
             while (boundaryDateTime.isBefore(endDateTime)) {
                 unitCount++;
-                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
                 if (nextDateTime.isBefore(endDateTime)) {
                     break;
                 }
@@ -1031,7 +1008,7 @@ public final class TemporalDurationPrototype {
 
         int direction = startToEndNanoseconds.signum();
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
-        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
         if (direction >= 0) {
             while (true) {
                 BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
@@ -1046,11 +1023,11 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount--;
-                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
@@ -1080,11 +1057,11 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount++;
-                boundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
@@ -1114,13 +1091,15 @@ public final class TemporalDurationPrototype {
         }
         BigInteger deltaNanoseconds = nanosecondsBetween(startDateTime, endDateTime);
         long unitCount = deltaNanoseconds.divide(unitNanoseconds).longValue();
-        LocalDateTime boundaryDateTime = addFixedUnits(startDateTime, unit, unitCount);
+        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addFixedUnits(startDateTime, unit, unitCount);
         return new TemporalUnitStepResult(unitCount, boundaryDateTime);
     }
 
     public static JSValue nanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "nanoseconds");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().nanoseconds());
     }
 
@@ -1185,7 +1164,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue negated(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "negated");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return TemporalDurationConstructor.createDuration(context, duration.getDuration().negated());
     }
 
@@ -1528,10 +1509,6 @@ public final class TemporalDurationPrototype {
         return roundedDuration;
     }
 
-    private static BigInteger roundBigIntegerToIncrement(BigInteger value, BigInteger increment, String roundingMode) {
-        return TemporalMathKernel.roundBigIntegerToIncrementSigned(value, increment, roundingMode);
-    }
-
     private static LocalDateTime roundDateTimeDifference(
             JSContext context,
             LocalDateTime startDateTime,
@@ -1579,8 +1556,8 @@ public final class TemporalDurationPrototype {
                     relativeToOption);
             BigInteger weekIncrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedWeekRemainderNanoseconds =
-                    roundBigIntegerToIncrement(weekRemainderNanoseconds, weekIncrementNanoseconds, roundingMode);
-            return addNanosecondsToDateTime(
+                    TemporalMathKernel.roundBigIntegerToIncrementSigned(weekRemainderNanoseconds, weekIncrementNanoseconds, roundingMode);
+            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(
                     context,
                     weekAnchorDateTime,
                     roundedWeekRemainderNanoseconds,
@@ -1626,7 +1603,7 @@ public final class TemporalDurationPrototype {
             if (context.hasPendingException()) {
                 return null;
             }
-            BigInteger roundedTimeNanoseconds = roundBigIntegerToIncrement(
+            BigInteger roundedTimeNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                     BigInteger.valueOf(balancedDurationWithoutRounding.hours()).multiply(HOUR_NANOSECONDS)
                             .add(BigInteger.valueOf(balancedDurationWithoutRounding.minutes()).multiply(MINUTE_NANOSECONDS))
                             .add(BigInteger.valueOf(balancedDurationWithoutRounding.seconds()).multiply(SECOND_NANOSECONDS))
@@ -1638,13 +1615,13 @@ public final class TemporalDurationPrototype {
             BigInteger beyondDaySpanNanoseconds = roundedTimeNanoseconds.subtract(daySpanNanoseconds);
             boolean roundedBeyondOneDay = beyondDaySpanNanoseconds.signum() != -durationSign;
             if (roundedBeyondOneDay) {
-                roundedTimeNanoseconds = roundBigIntegerToIncrement(
+                roundedTimeNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                         beyondDaySpanNanoseconds,
                         unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)),
                         roundingMode);
-                return addNanosecondsToDateTime(context, endAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
+                return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, endAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
             }
-            return addNanosecondsToDateTime(context, startAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
+            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, startAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
         }
 
         if (relativeToOption.zoned()
@@ -1672,8 +1649,8 @@ public final class TemporalDurationPrototype {
             BigInteger incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit)
                     .multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedTimeRemainderNanoseconds =
-                    roundBigIntegerToIncrement(timeRemainderNanoseconds, incrementNanoseconds, roundingMode);
-            return addNanosecondsToDateTime(
+                    TemporalMathKernel.roundBigIntegerToIncrementSigned(timeRemainderNanoseconds, incrementNanoseconds, roundingMode);
+            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(
                     context,
                     dayAdjustedDateTime,
                     roundedTimeRemainderNanoseconds,
@@ -1703,8 +1680,8 @@ public final class TemporalDurationPrototype {
         } else {
             incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement));
         }
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrement(totalNanoseconds, incrementNanoseconds, roundingMode);
-        return addNanosecondsToDateTime(context, startDateTime, roundedNanoseconds, relativeToOption);
+        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundingMode);
+        return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, startDateTime, roundedNanoseconds, relativeToOption);
     }
 
     private static LocalDateTime roundDateTimeToCalendarUnit(
@@ -1768,8 +1745,8 @@ public final class TemporalDurationPrototype {
         long lowerMultipleCount = Math.floorDiv(lowerUnitCount, roundingIncrement) * roundingIncrement;
         long upperMultipleCount = lowerMultipleCount + roundingIncrement;
 
-        LocalDateTime lowerBoundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, lowerMultipleCount);
-        LocalDateTime upperBoundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, upperMultipleCount);
+        LocalDateTime lowerBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, lowerMultipleCount);
+        LocalDateTime upperBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, upperMultipleCount);
         if (!isDateWithinTemporalRange(lowerBoundaryDateTime.toLocalDate())
                 || !isDateWithinTemporalRange(upperBoundaryDateTime.toLocalDate())) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -1904,14 +1881,14 @@ public final class TemporalDurationPrototype {
         BigInteger unroundedEndEpochNanoseconds = null;
         if (relativeToOption.zoned()) {
             TemporalZonedDateTimeComputation zonedDateTimeComputation =
-                    addDurationToZonedDateTime(context, relativeToOption, durationRecord);
+                    TemporalDurationArithmeticKernel.addDurationToZonedDateTime(context, relativeToOption, durationRecord);
             if (context.hasPendingException() || zonedDateTimeComputation == null) {
                 return null;
             }
             unroundedEndDateTime = zonedDateTimeComputation.localDateTime();
             unroundedEndEpochNanoseconds = zonedDateTimeComputation.epochNanoseconds();
         } else {
-            unroundedEndDateTime = addDurationToDateTime(context, startDateTime, durationRecord);
+            unroundedEndDateTime = TemporalDurationArithmeticKernel.addDurationToDateTime(context, startDateTime, durationRecord);
         }
         if (context.hasPendingException()) {
             return null;
@@ -2000,7 +1977,7 @@ public final class TemporalDurationPrototype {
         BigInteger totalNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
         BigInteger roundingUnitNanoseconds = unitToNanosecondsBigInteger(roundOptions.smallestUnit());
         BigInteger incrementNanoseconds = roundingUnitNanoseconds.multiply(BigInteger.valueOf(roundOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrement(totalNanoseconds, incrementNanoseconds, roundOptions.roundingMode());
+        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundOptions.roundingMode());
         TemporalDurationFieldOverrides durationFieldOverrides = null;
         String balancingLargestUnit = roundOptions.largestUnit();
         if ("millisecond".equals(roundOptions.largestUnit())) {
@@ -2074,13 +2051,17 @@ public final class TemporalDurationPrototype {
 
     public static JSValue seconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "seconds");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().seconds());
     }
 
     public static JSValue sign(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "sign");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().sign());
     }
 
@@ -2098,7 +2079,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "subtract");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, duration, args, -1);
     }
 
@@ -2139,7 +2122,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "toJSON");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSString(duration.getDuration().toString());
     }
 
@@ -2189,7 +2174,7 @@ public final class TemporalDurationPrototype {
         BigInteger dayTimeNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
         BigInteger incrementNanoseconds = BigInteger.valueOf(options.roundingIncrementNanoseconds());
         BigInteger roundedDayTimeNanoseconds =
-                roundBigIntegerToIncrement(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
+                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
         if (roundedDayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
@@ -2319,7 +2304,7 @@ public final class TemporalDurationPrototype {
         } else {
             direction = endDateTime.isBefore(startDateTime) ? -1L : 1L;
         }
-        LocalDateTime nextBoundaryDateTime = addCalendarUnits(startDateTime, calendarUnit, wholeUnits + direction);
+        LocalDateTime nextBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, wholeUnits + direction);
         if (zoned) {
             if (!isDateTimeWithinTemporalRange(nextBoundaryDateTime)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
@@ -2393,14 +2378,14 @@ public final class TemporalDurationPrototype {
         BigInteger endEpochNanoseconds = null;
         if (relativeToOption.zoned()) {
             TemporalZonedDateTimeComputation zonedDateTimeComputation =
-                    addDurationToZonedDateTime(context, relativeToOption, durationRecord);
+                    TemporalDurationArithmeticKernel.addDurationToZonedDateTime(context, relativeToOption, durationRecord);
             if (context.hasPendingException() || zonedDateTimeComputation == null) {
                 return Double.NaN;
             }
             endDateTime = zonedDateTimeComputation.localDateTime();
             endEpochNanoseconds = zonedDateTimeComputation.epochNanoseconds();
         } else {
-            endDateTime = addDurationToDateTime(context, startDateTime, durationRecord);
+            endDateTime = TemporalDurationArithmeticKernel.addDurationToDateTime(context, startDateTime, durationRecord);
         }
         if (context.hasPendingException()) {
             return Double.NaN;
@@ -2475,19 +2460,6 @@ public final class TemporalDurationPrototype {
         };
     }
 
-    private static long unitToNanoseconds(String unit) {
-        return switch (unit) {
-            case "day", "days" -> 86_400_000_000_000L;
-            case "hour", "hours" -> 3_600_000_000_000L;
-            case "minute", "minutes" -> 60_000_000_000L;
-            case "second", "seconds" -> 1_000_000_000L;
-            case "millisecond", "milliseconds" -> 1_000_000L;
-            case "microsecond", "microseconds" -> 1_000L;
-            case "nanosecond", "nanoseconds" -> 1L;
-            default -> 0;
-        };
-    }
-
     private static BigInteger unitToNanosecondsBigInteger(String unit) {
         return switch (unit) {
             case "day" -> DAY_NANOSECONDS;
@@ -2509,7 +2481,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue weeks(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "weeks");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().weeks());
     }
 
@@ -2604,7 +2578,9 @@ public final class TemporalDurationPrototype {
 
     public static JSValue years(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "years");
-        if (duration == null) return JSUndefined.INSTANCE;
+        if (duration == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(duration.getDuration().years());
     }
 

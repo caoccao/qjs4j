@@ -58,42 +58,62 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         int isoYear = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         int isoMonth = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         int isoDay = TemporalUtils.toIntegerThrowOnInfinity(context, args.length > 2 ? args[2] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         int hour = 0, minute = 0, second = 0, millisecond = 0, microsecond = 0, nanosecond = 0;
         if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
             hour = TemporalUtils.toIntegerThrowOnInfinity(context, args[3]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
         if (args.length > 4 && !(args[4] instanceof JSUndefined)) {
             minute = TemporalUtils.toIntegerThrowOnInfinity(context, args[4]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
         if (args.length > 5 && !(args[5] instanceof JSUndefined)) {
             second = TemporalUtils.toIntegerThrowOnInfinity(context, args[5]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
         if (args.length > 6 && !(args[6] instanceof JSUndefined)) {
             millisecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[6]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
         if (args.length > 7 && !(args[7] instanceof JSUndefined)) {
             microsecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[7]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
         if (args.length > 8 && !(args[8] instanceof JSUndefined)) {
             nanosecond = TemporalUtils.toIntegerThrowOnInfinity(context, args[8]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         String calendarId = "iso8601";
         if (args.length > 9 && !(args[9] instanceof JSUndefined)) {
             calendarId = TemporalUtils.validateCalendar(context, args[9]);
-            if (context.hasPendingException()) return JSUndefined.INSTANCE;
+            if (context.hasPendingException()) {
+                return JSUndefined.INSTANCE;
+            }
         }
 
         if (!IsoDate.isValidIsoDate(isoYear, isoMonth, isoDay)) {
@@ -101,13 +121,13 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+        IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!time.isValidTime()) {
             context.throwRangeError("Temporal error: Invalid time");
             return JSUndefined.INSTANCE;
         }
 
         IsoDate date = new IsoDate(isoYear, isoMonth, isoDay);
-        IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         if (!isValidPlainDateTimeRange(date, time)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -331,11 +351,11 @@ public final class TemporalPlainDateTimeConstructor {
 
         IsoTime resultTime;
         if ("reject".equals(overflow)) {
-            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+            resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            if (!resultTime.isValidTime()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
             resultTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }
@@ -348,7 +368,7 @@ public final class TemporalPlainDateTimeConstructor {
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {
-        TemporalParser.ParsedDateTime parsed = TemporalParser.parseDateTimeString(context, input);
+        IsoDateTimeCalendar parsed = TemporalParser.parseDateTimeString(context, input);
         if (parsed == null) {
             return JSUndefined.INSTANCE;
         }

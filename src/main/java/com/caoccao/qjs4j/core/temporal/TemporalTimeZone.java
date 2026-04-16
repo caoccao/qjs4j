@@ -217,23 +217,6 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Gets the number of real hours in a day at the given instant and timezone.
-     */
-    public static int getHoursInDay(BigInteger epochNs, String timeZoneId) {
-        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
-        if (fixedOffsetSeconds != null) {
-            return 24;
-        }
-        ZoneId zone = resolveTimeZone(timeZoneId);
-        Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zonedDateTime = javaInstant.atZone(zone);
-        ZonedDateTime startOfDay = zonedDateTime.toLocalDate().atStartOfDay(zone);
-        ZonedDateTime startOfNextDay = zonedDateTime.toLocalDate().plusDays(1).atStartOfDay(zone);
-        long seconds = Duration.between(startOfDay, startOfNextDay).getSeconds();
-        return (int) (seconds / 3600);
-    }
-
-    /**
      * Gets the next timezone transition after the given instant.
      * Returns null if no further transition.
      */
@@ -245,7 +228,9 @@ public final class TemporalTimeZone {
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().nextTransition(javaInstant);
-        if (transition == null) return null;
+        if (transition == null) {
+            return null;
+        }
         Instant transInstant = transition.getInstant();
         return BigInteger.valueOf(transInstant.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(transInstant.getNano()));
@@ -277,7 +262,9 @@ public final class TemporalTimeZone {
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().previousTransition(javaInstant);
-        if (transition == null) return null;
+        if (transition == null) {
+            return null;
+        }
         Instant transInstant = transition.getInstant();
         return BigInteger.valueOf(transInstant.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(transInstant.getNano()));

@@ -252,14 +252,14 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        TemporalMonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        TemporalMonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        TemporalParsedMonthCode firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        TemporalParsedMonthCode secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
         int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.monthNumber(),
-                secondMonthCodeParts.monthNumber());
+                firstMonthCodeParts.month(),
+                secondMonthCodeParts.month());
         if (monthNumberComparison != 0) {
             return monthNumberComparison;
         }
@@ -914,7 +914,7 @@ public final class TemporalPlainYearMonthPrototype {
         };
     }
 
-    private static TemporalMonthCodeInfo parseMonthCodeForWith(JSContext context, String monthCode) {
+    private static TemporalParsedMonthCode parseMonthCodeForWith(JSContext context, String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             context.throwRangeError("Temporal error: Month code out of range.");
             return null;
@@ -936,10 +936,10 @@ public final class TemporalPlainYearMonthPrototype {
             leapMonth = true;
         }
         int month = Integer.parseInt(monthCode.substring(1, 3));
-        return new TemporalMonthCodeInfo(month, leapMonth);
+        return new TemporalParsedMonthCode(month, leapMonth);
     }
 
-    private static TemporalMonthCodeParts parseMonthCodeParts(String monthCodeText) {
+    private static TemporalParsedMonthCode parseMonthCodeParts(String monthCodeText) {
         if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
             return null;
         }
@@ -957,7 +957,7 @@ public final class TemporalPlainYearMonthPrototype {
             }
             leapMonth = true;
         }
-        return new TemporalMonthCodeParts(monthNumber, leapMonth);
+        return new TemporalParsedMonthCode(monthNumber, leapMonth);
     }
 
     public static JSValue referenceISODay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1498,7 +1498,7 @@ public final class TemporalPlainYearMonthPrototype {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        TemporalMonthCodeInfo monthCodeInfo = null;
+        TemporalParsedMonthCode monthCodeInfo = null;
         if (hasMonthCode) {
             monthCodeInfo = parseMonthCodeForWith(context, monthCode);
             if (context.hasPendingException() || monthCodeInfo == null) {

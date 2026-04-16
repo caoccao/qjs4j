@@ -202,18 +202,6 @@ public final class TemporalZonedDateTimePrototype {
         return addOrSubtract(context, zonedDateTime, args, 1);
     }
 
-    private static BigInteger addDurationToZonedDateTime(
-            JSContext context,
-            JSTemporalZonedDateTime zonedDateTime,
-            TemporalDuration durationRecord,
-            String overflow) {
-        return TemporalZonedDateTimeArithmeticKernel.addDurationToZonedDateTime(
-                context,
-                zonedDateTime,
-                durationRecord,
-                overflow);
-    }
-
     private static JSValue addOrSubtract(JSContext context, JSTemporalZonedDateTime zonedDateTime, JSValue[] args, int sign) {
         if (args.length == 0 || args[0] instanceof JSUndefined) {
             context.throwTypeError("Temporal error: Must provide a duration.");
@@ -235,7 +223,11 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger epochNanoseconds = addDurationToZonedDateTime(context, zonedDateTime, durationRecord, overflow);
+        BigInteger epochNanoseconds = TemporalZonedDateTimeArithmeticKernel.addDurationToZonedDateTime(
+                context,
+                zonedDateTime,
+                durationRecord,
+                overflow);
         if (context.hasPendingException() || epochNanoseconds == null) {
             return JSUndefined.INSTANCE;
         }
@@ -257,7 +249,9 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "calendarId");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSString(zonedDateTime.getCalendarId());
     }
 
@@ -388,8 +382,10 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "dayOfWeek");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.date().dayOfWeek());
     }
 
@@ -419,7 +415,9 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "daysInWeek");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return JSNumber.of(7);
     }
 
@@ -435,22 +433,6 @@ public final class TemporalZonedDateTimePrototype {
         return TemporalPlainDatePrototype.daysInYear(context, plainDate, args);
     }
 
-    private static TemporalDuration differenceEpochNanoseconds(
-            BigInteger startEpochNanoseconds,
-            BigInteger endEpochNanoseconds,
-            String largestUnit,
-            String smallestUnit,
-            long roundingIncrement,
-            String roundingMode) {
-        return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
-                startEpochNanoseconds,
-                endEpochNanoseconds,
-                largestUnit,
-                unitToNanoseconds(smallestUnit),
-                roundingIncrement,
-                roundingMode);
-    }
-
     private static TemporalDuration differenceTemporalZonedDateTime(
             JSContext context,
             JSTemporalZonedDateTime startZonedDateTime,
@@ -458,11 +440,11 @@ public final class TemporalZonedDateTimePrototype {
             TemporalDifferenceSettings settings) {
         boolean requiresDateUnits = isDateUnit(settings.largestUnit()) || isDateUnit(settings.smallestUnit());
         if (!requiresDateUnits) {
-            return differenceEpochNanoseconds(
+            return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     settings.largestUnit(),
-                    settings.smallestUnit(),
+                    unitToNanoseconds(settings.smallestUnit()),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -500,11 +482,11 @@ public final class TemporalZonedDateTimePrototype {
                     startZonedDateTime.getEpochNanoseconds()));
             if (sameDate && wallClockSign != 0 && epochSign != 0 && wallClockSign != epochSign) {
                 String timeLargestUnit = largerOfTwoTemporalUnits("hour", settings.smallestUnit());
-                return differenceEpochNanoseconds(
+                return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
                         startZonedDateTime.getEpochNanoseconds(),
                         endZonedDateTime.getEpochNanoseconds(),
                         timeLargestUnit,
-                        settings.smallestUnit(),
+                        unitToNanoseconds(settings.smallestUnit()),
                         settings.roundingIncrement(),
                         settings.roundingMode());
             }
@@ -547,14 +529,18 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "epochMilliseconds");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochMilliseconds = floorDiv(zonedDateTime.getEpochNanoseconds(), NS_PER_MS);
         return JSNumber.of(epochMilliseconds.longValue());
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "epochNanoseconds");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSBigInt(zonedDateTime.getEpochNanoseconds());
     }
 
@@ -599,7 +585,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
                 context,
                 localDateTime.date(),
@@ -616,7 +602,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
                 context,
                 localDateTime.date(),
@@ -645,7 +631,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String formatZonedDateTimeBase(JSTemporalZonedDateTime zonedDateTime) {
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         String offset = TemporalTimeZone.formatOffsetRoundedToMinute(offsetSeconds);
         return localDateTime + offset + "[" + zonedDateTime.getTimeZoneId() + "]";
@@ -777,10 +763,6 @@ public final class TemporalZonedDateTimePrototype {
 
         context.throwTypeError("Temporal error: direction must be a string or an object.");
         return null;
-    }
-
-    private static IsoDateTime getLocalDateTime(JSTemporalZonedDateTime zonedDateTime) {
-        return TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
     }
 
     private static Integer getOptionalIntegerWithField(JSContext context, JSObject fieldsObject, String fieldName) {
@@ -1185,8 +1167,10 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "hour");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().hour());
     }
 
@@ -1196,7 +1180,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         IsoDate todayDate = localDateTime.date();
         IsoDate tomorrowDate;
         try {
@@ -1250,7 +1234,9 @@ public final class TemporalZonedDateTimePrototype {
             return true;
         } else if ("week".equals(unit)) {
             return true;
-        } else return "day".equals(unit);
+        } else {
+            return "day".equals(unit);
+        }
     }
 
     private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
@@ -1285,22 +1271,28 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "microsecond");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().microsecond());
     }
 
     public static JSValue millisecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "millisecond");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().millisecond());
     }
 
     public static JSValue minute(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "minute");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().minute());
     }
 
@@ -1342,8 +1334,10 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "nanosecond");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().nanosecond());
     }
 
@@ -1359,14 +1353,18 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "offset");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return new JSString(TemporalTimeZone.formatOffset(offsetSeconds));
     }
 
     public static JSValue offsetNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "offsetNanoseconds");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of((long) offsetSeconds * 1_000_000_000L);
     }
@@ -1395,7 +1393,7 @@ public final class TemporalZonedDateTimePrototype {
         } else {
             IsoDateTime localDateTime;
             try {
-                localDateTime = getLocalDateTime(zonedDateTime);
+                localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
@@ -1403,7 +1401,7 @@ public final class TemporalZonedDateTimePrototype {
             long totalNanoseconds = localDateTime.time().totalNanoseconds();
             long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
             long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
-            long roundedNanoseconds = roundToIncrementAsIfPositive(
+            long roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
                     totalNanoseconds,
                     incrementNanoseconds,
                     roundSettings.roundingMode());
@@ -1447,25 +1445,13 @@ public final class TemporalZonedDateTimePrototype {
                 zonedDateTime.getCalendarId());
     }
 
-    private static BigInteger roundBigIntegerToIncrementAsIfPositive(BigInteger quantity, BigInteger increment, String roundingMode) {
-        return TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(quantity, increment, roundingMode);
-    }
-
-    private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        return TemporalMathKernel.roundBigIntegerToIncrementSigned(value, increment, roundingMode);
-    }
-
-    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        return TemporalMathKernel.roundLongToIncrementAsIfPositive(quantity, increment, roundingMode);
-    }
-
     private static BigInteger roundZonedDateTimeToDay(
             JSContext context,
             JSTemporalZonedDateTime zonedDateTime,
             String roundingMode) {
         IsoDateTime localDateTime;
         try {
-            localDateTime = getLocalDateTime(zonedDateTime);
+            localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -1501,7 +1487,7 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger dayLengthNanoseconds = endNanoseconds.subtract(startNanoseconds);
         BigInteger elapsedNanoseconds = zonedDateTime.getEpochNanoseconds().subtract(startNanoseconds);
-        BigInteger roundedElapsedNanoseconds = roundBigIntegerToIncrementAsIfPositive(
+        BigInteger roundedElapsedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                 elapsedNanoseconds,
                 dayLengthNanoseconds,
                 roundingMode);
@@ -1510,8 +1496,10 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "second");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().second());
     }
 
@@ -1592,7 +1580,7 @@ public final class TemporalZonedDateTimePrototype {
         }
         IsoDateTime localDateTime;
         try {
-            localDateTime = getLocalDateTime(zonedDateTime);
+            localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -1614,7 +1602,9 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "subtract");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, zonedDateTime, args, -1);
     }
 
@@ -1636,19 +1626,25 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "timeZoneId");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSString(zonedDateTime.getTimeZoneId());
     }
 
     public static JSValue toInstant(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "toInstant");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return TemporalInstantConstructor.createInstant(context, zonedDateTime.getEpochNanoseconds());
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "toJSON");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSString(formatZonedDateTime(zonedDateTime));
     }
 
@@ -1706,7 +1702,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static JSTemporalPlainDate toPlainDate(JSContext context, JSTemporalZonedDateTime zonedDateTime) {
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         JSTemporalPlainDate plainDate = TemporalPlainDateConstructor.createPlainDate(
                 context,
                 localDateTime.date(),
@@ -1719,22 +1715,28 @@ public final class TemporalZonedDateTimePrototype {
 
     public static JSValue toPlainDate(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "toPlainDate");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return TemporalPlainDateConstructor.createPlainDate(context, localDateTime.date(), zonedDateTime.getCalendarId());
     }
 
     public static JSValue toPlainDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "toPlainDateTime");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context, localDateTime, zonedDateTime.getCalendarId());
     }
 
     public static JSValue toPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "toPlainTime");
-        if (zonedDateTime == null) return JSUndefined.INSTANCE;
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        if (zonedDateTime == null) {
+            return JSUndefined.INSTANCE;
+        }
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return TemporalPlainTimeConstructor.createPlainTime(context, localDateTime.time());
     }
 
@@ -1751,7 +1753,7 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger roundedEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedEpochNanoseconds = roundBigIntegerToIncrementAsIfPositive(
+            roundedEpochNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                     roundedEpochNanoseconds,
                     BigInteger.valueOf(toStringSettings.roundingIncrementNanoseconds()),
                     toStringSettings.roundingMode());
@@ -1852,7 +1854,7 @@ public final class TemporalZonedDateTimePrototype {
         if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
             return JSUndefined.INSTANCE;
         }
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.date().weekOfYear());
     }
 
@@ -1986,7 +1988,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         boolean hasDateField = dayField != null
                 || monthField != null
                 || monthCodeField != null
@@ -2045,16 +2047,6 @@ public final class TemporalZonedDateTimePrototype {
         int mergedNanosecond = nanosecondField != null ? nanosecondField : localDateTime.time().nanosecond();
         IsoTime mergedIsoTime;
         if ("reject".equals(withOptions.overflow())) {
-            if (!IsoTime.isValidTime(
-                    mergedHour,
-                    mergedMinute,
-                    mergedSecond,
-                    mergedMillisecond,
-                    mergedMicrosecond,
-                    mergedNanosecond)) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return JSUndefined.INSTANCE;
-            }
             mergedIsoTime = new IsoTime(
                     mergedHour,
                     mergedMinute,
@@ -2062,6 +2054,10 @@ public final class TemporalZonedDateTimePrototype {
                     mergedMillisecond,
                     mergedMicrosecond,
                     mergedNanosecond);
+            if (!mergedIsoTime.isValidTime()) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
         } else {
             mergedIsoTime = IsoTime.constrain(
                     mergedHour,
@@ -2133,7 +2129,7 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         BigInteger epochNanoseconds;
         if (args.length > 0 && !(args[0] instanceof JSUndefined)) {
             JSValue temporalTime = TemporalPlainTimeConstructor.toTemporalTime(
@@ -2204,7 +2200,7 @@ public final class TemporalZonedDateTimePrototype {
         if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
             return JSUndefined.INSTANCE;
         }
-        IsoDateTime localDateTime = getLocalDateTime(zonedDateTime);
+        IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.date().yearOfWeek());
     }
 }

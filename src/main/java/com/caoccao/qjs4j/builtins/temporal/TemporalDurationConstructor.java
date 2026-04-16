@@ -456,14 +456,10 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromString(JSContext context, String input) {
-        TemporalParser.DurationFields durationFields = TemporalParser.parseDurationString(context, input);
-        if (durationFields == null) {
+        TemporalDuration record = TemporalParser.parseDurationString(context, input);
+        if (record == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalDuration record = new TemporalDuration(
-                durationFields.years(), durationFields.months(), durationFields.weeks(), durationFields.days(),
-                durationFields.hours(), durationFields.minutes(), durationFields.seconds(),
-                durationFields.milliseconds(), durationFields.microseconds(), durationFields.nanoseconds());
 
         if (!record.isValid()) {
             context.throwRangeError("Temporal error: Duration was not valid.");
@@ -645,15 +641,11 @@ public final class TemporalDurationConstructor {
             String offsetText,
             int parsedOffsetSeconds,
             int zoneOffsetSeconds) {
-        if (offsetTextIncludesSecondsOrFraction(offsetText)) {
+        if (TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText)) {
             return parsedOffsetSeconds == zoneOffsetSeconds;
         }
         int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
         return parsedOffsetSeconds == roundedZoneOffsetSeconds;
-    }
-
-    private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        return TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText);
     }
 
     private static long parseDurationConstructorArgument(JSContext context, JSValue value) {
@@ -671,10 +663,6 @@ public final class TemporalDurationConstructor {
         }
         BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return toLongDurationField(context, numericValue);
-    }
-
-    private static int parseOffsetSeconds(String offsetText) {
-        return TemporalTimeZone.parseOffsetSeconds(offsetText);
     }
 
     private static RelativeToReference parseRelativeToOption(JSContext context, JSValue optionsValue) {
@@ -900,11 +888,17 @@ public final class TemporalDurationConstructor {
         int millisecondInt = millisecond.intValue();
         int microsecondInt = microsecond.intValue();
         int nanosecondInt = nanosecond.intValue();
-        if (!IsoTime.isValidTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt)) {
+        IsoTime relativeTime = new IsoTime(
+                hourInt,
+                minuteInt,
+                secondInt,
+                millisecondInt,
+                microsecondInt,
+                nanosecondInt);
+        if (!relativeTime.isValidTime()) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
-        IsoTime relativeTime = new IsoTime(hourInt, minuteInt, secondInt, millisecondInt, microsecondInt, nanosecondInt);
         IsoDateTime relativeDateTime = new IsoDateTime(relativeDate, relativeTime);
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
             return new RelativeToReference(relativeDate, relativeTime, null, null, null);
@@ -931,10 +925,10 @@ public final class TemporalDurationConstructor {
         BigInteger epochNanoseconds;
         Integer referenceOffsetSeconds;
         if (offsetText != null) {
-            int offsetSeconds = parseOffsetSeconds(offsetText);
+            int offsetSeconds = TemporalTimeZone.parseOffsetSeconds(offsetText);
             int zoneOffsetSeconds;
             if (offsetTimeZoneIdentifier) {
-                zoneOffsetSeconds = parseOffsetSeconds(normalizedTimeZoneId);
+                zoneOffsetSeconds = TemporalTimeZone.parseOffsetSeconds(normalizedTimeZoneId);
             } else {
                 try {
                     BigInteger guessedEpochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(relativeDate, relativeTime, offsetSeconds);
@@ -952,7 +946,7 @@ public final class TemporalDurationConstructor {
             referenceOffsetSeconds = offsetSeconds;
         } else {
             if (offsetTimeZoneIdentifier) {
-                int offsetSeconds = parseOffsetSeconds(normalizedTimeZoneId);
+                int offsetSeconds = TemporalTimeZone.parseOffsetSeconds(normalizedTimeZoneId);
                 epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(relativeDate, relativeTime, offsetSeconds);
                 referenceOffsetSeconds = offsetSeconds;
             } else {
@@ -993,7 +987,7 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
                 }
-                TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+                IsoDateTimeCalendar parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
                 if (parsedDateTime == null || context.hasPendingException()) {
                     return null;
                 }
@@ -1029,7 +1023,7 @@ public final class TemporalDurationConstructor {
                 }
             }
             boolean hasSecondOrFractionOffset =
-                    offsetText != null && offsetTextIncludesSecondsOrFraction(offsetText);
+                    offsetText != null && TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText);
             BigInteger epochNanoseconds;
             int zoneOffsetSeconds;
             if (offsetText == null && !offsetTimeZoneIdentifier) {
@@ -1094,7 +1088,7 @@ public final class TemporalDurationConstructor {
                         parsedZonedDateTime.time(),
                         parsedZonedDateTime.offsetSeconds());
                 if (offsetTimeZoneIdentifier) {
-                    zoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
+                    zoneOffsetSeconds = TemporalTimeZone.parseOffsetSeconds(timeZoneId);
                 } else {
                     try {
                         zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
@@ -1137,7 +1131,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        TemporalParser.ParsedDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+        IsoDateTimeCalendar parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
         if (parsedDateTime == null || context.hasPendingException()) {
             return null;
         }

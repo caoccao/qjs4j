@@ -167,8 +167,9 @@ public final class JSIntlDateTimeFormat extends JSObject {
             boolean inQ = false;
             for (int i = 0; i < result.length(); i++) {
                 char c = result.charAt(i);
-                if (c == '\'') inQ = !inQ;
-                else if (!inQ && (c == 'a' || c == 'b' || c == 'B')) {
+                if (c == '\'') {
+                    inQ = !inQ;
+                } else if (!inQ && (c == 'a' || c == 'b' || c == 'B')) {
                     hasAmPm = true;
                     break;
                 }
@@ -179,8 +180,9 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 inQ = false;
                 for (int i = 0; i < result.length(); i++) {
                     char c = result.charAt(i);
-                    if (c == '\'') inQ = !inQ;
-                    else if (!inQ && (c == 'h' || c == 'H' || c == 'K' || c == 'k'
+                    if (c == '\'') {
+                        inQ = !inQ;
+                    } else if (!inQ && (c == 'h' || c == 'H' || c == 'K' || c == 'k'
                             || c == 'm' || c == 's' || c == 'S')) {
                         lastTimeField = i;
                     }

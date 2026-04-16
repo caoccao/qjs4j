@@ -77,26 +77,6 @@ public final class TemporalZonedDateTimeConstructor {
         }
     }
 
-    private static int computeZoneOffsetSeconds(
-            JSContext context,
-            IsoDate isoDate,
-            IsoTime isoTime,
-            String timeZoneId,
-            int explicitOffsetSeconds,
-            boolean offsetTimeZoneIdentifier) {
-        if (offsetTimeZoneIdentifier) {
-            return parseOffsetSeconds(timeZoneId);
-        }
-
-        try {
-            BigInteger guessedEpochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, explicitOffsetSeconds);
-            return TemporalTimeZone.getOffsetSecondsFor(guessedEpochNanoseconds, timeZoneId);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-            return Integer.MIN_VALUE;
-        }
-    }
-
     /**
      * Temporal.ZonedDateTime(epochNanoseconds, timeZone, calendar?)
      */
@@ -243,11 +223,11 @@ public final class TemporalZonedDateTimeConstructor {
 
         IsoTime isoTime;
         if ("reject".equals(options.overflow())) {
-            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+            isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            if (!isoTime.isValidTime()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
             isoTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
         }

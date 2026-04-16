@@ -540,23 +540,12 @@ public final class JSIntlDurationFormat extends JSObject {
         }
 
         if (input instanceof JSString durationString) {
-            TemporalParser.DurationFields parsedDurationFields =
+            TemporalDuration parsedDuration =
                     TemporalParser.parseDurationString(context, durationString.value());
-            if (parsedDurationFields == null || context.hasPendingException()) {
+            if (parsedDuration == null || context.hasPendingException()) {
                 return null;
             }
-            TemporalDuration temporalDuration = new TemporalDuration(
-                    parsedDurationFields.years(),
-                    parsedDurationFields.months(),
-                    parsedDurationFields.weeks(),
-                    parsedDurationFields.days(),
-                    parsedDurationFields.hours(),
-                    parsedDurationFields.minutes(),
-                    parsedDurationFields.seconds(),
-                    parsedDurationFields.milliseconds(),
-                    parsedDurationFields.microseconds(),
-                    parsedDurationFields.nanoseconds());
-            Map<String, Double> durationRecord = toDurationRecordMap(temporalDuration);
+            Map<String, Double> durationRecord = toDurationRecordMap(parsedDuration);
             if (!isValidDurationRecord(context, durationRecord)) {
                 return null;
             }
