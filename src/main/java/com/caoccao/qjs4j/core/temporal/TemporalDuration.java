@@ -27,13 +27,47 @@ public record TemporalDuration(
         long hours, long minutes, long seconds,
         long milliseconds, long microseconds, long nanoseconds) {
 
-    public static final TemporalDuration ZERO = new TemporalDuration(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static final TemporalDuration ZERO = new TemporalDuration(
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public TemporalDuration abs() {
         return new TemporalDuration(
                 Math.abs(years), Math.abs(months), Math.abs(weeks), Math.abs(days),
                 Math.abs(hours), Math.abs(minutes), Math.abs(seconds),
                 Math.abs(milliseconds), Math.abs(microseconds), Math.abs(nanoseconds));
+    }
+
+    /**
+     * Adds this duration's time components to the given IsoTime, returning
+     * the new time and day carry. Mirrors Rust's TimeDuration.addToTime().
+     *
+     * @return result with normalized time and day overflow, or null on overflow
+     */
+    public TemporalTimeAddResult addToTime(IsoTime time) {
+        BigInteger durationTimeNs = timeNanoseconds();
+        BigInteger totalNs = BigInteger.valueOf(time.totalNanoseconds()).add(durationTimeNs);
+        BigInteger[] dayAndRemainder = totalNs.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
+        BigInteger dayCarryBig = dayAndRemainder[0];
+        BigInteger remainder = dayAndRemainder[1];
+        if (remainder.signum() < 0) {
+            remainder = remainder.add(TemporalConstants.BI_DAY_NANOSECONDS);
+            dayCarryBig = dayCarryBig.subtract(BigInteger.ONE);
+        }
+        try {
+            long dayCarry = dayCarryBig.longValueExact();
+            IsoTime normalizedTime = IsoTime.createFromNanoseconds(remainder.longValue());
+            return new TemporalTimeAddResult(normalizedTime, dayCarry);
+        } catch (ArithmeticException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Returns total nanoseconds for days through nanoseconds.
+     */
+    public BigInteger dayTimeNanoseconds() {
+        return BigInteger.valueOf(days).multiply(TemporalConstants.BI_DAY_NANOSECONDS)
+                .add(timeNanoseconds());
     }
 
     public boolean isBlank() {
@@ -44,14 +78,13 @@ public record TemporalDuration(
 
     public boolean isValid() {
         // All non-zero fields must have the same sign
-        int positive = 0;
-        int negative = 0;
-        long[] fields = {years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds};
-        for (long f : fields) {
-            if (f > 0) positive++;
-            if (f < 0) negative++;
-        }
-        return positive == 0 || negative == 0;
+        boolean hasPositive = years > 0 || months > 0 || weeks > 0 || days > 0
+                || hours > 0 || minutes > 0 || seconds > 0
+                || milliseconds > 0 || microseconds > 0 || nanoseconds > 0;
+        boolean hasNegative = years < 0 || months < 0 || weeks < 0 || days < 0
+                || hours < 0 || minutes < 0 || seconds < 0
+                || milliseconds < 0 || microseconds < 0 || nanoseconds < 0;
+        return !hasPositive || !hasNegative;
     }
 
     public TemporalDuration negated() {
@@ -73,6 +106,18 @@ public record TemporalDuration(
             return -1;
         }
         return 0;
+    }
+
+    /**
+     * Returns total nanoseconds for hours through nanoseconds (excluding days).
+     */
+    public BigInteger timeNanoseconds() {
+        return BigInteger.valueOf(hours).multiply(TemporalConstants.BI_HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(minutes).multiply(TemporalConstants.BI_MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(seconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(milliseconds).multiply(TemporalConstants.BI_MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(microseconds).multiply(TemporalConstants.BI_MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(nanoseconds));
     }
 
     @Override
@@ -159,18 +204,5 @@ public record TemporalDuration(
         }
 
         return stringBuilder.toString();
-    }
-
-    /**
-     * Returns total nanoseconds for the days+time portion only (no years/months/weeks).
-     */
-    public long totalNanoseconds() {
-        return days * 86_400_000_000_000L
-                + hours * 3_600_000_000_000L
-                + minutes * 60_000_000_000L
-                + seconds * 1_000_000_000L
-                + milliseconds * 1_000_000L
-                + microseconds * 1_000L
-                + nanoseconds;
     }
 }

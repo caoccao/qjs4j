@@ -77,26 +77,6 @@ public final class TemporalZonedDateTimeConstructor {
         }
     }
 
-    private static int computeZoneOffsetSeconds(
-            JSContext context,
-            IsoDate isoDate,
-            IsoTime isoTime,
-            String timeZoneId,
-            int explicitOffsetSeconds,
-            boolean offsetTimeZoneIdentifier) {
-        if (offsetTimeZoneIdentifier) {
-            return parseOffsetSeconds(timeZoneId);
-        }
-
-        try {
-            BigInteger guessedEpochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, explicitOffsetSeconds);
-            return TemporalTimeZone.getOffsetSecondsFor(guessedEpochNanoseconds, timeZoneId);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
-            return Integer.MIN_VALUE;
-        }
-    }
-
     /**
      * Temporal.ZonedDateTime(epochNanoseconds, timeZone, calendar?)
      */
@@ -243,13 +223,13 @@ public final class TemporalZonedDateTimeConstructor {
 
         IsoTime isoTime;
         if ("reject".equals(options.overflow())) {
-            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+            isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            if (!isoTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
         } else {
-            isoTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
+            isoTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
         String timeZoneId = propertyBagData.timeZoneId();
@@ -274,7 +254,7 @@ public final class TemporalZonedDateTimeConstructor {
     private static JSValue createZonedDateTimeFromString(
             JSContext context,
             String input,
-            TemporalParser.ParsedZonedDateTime parsed,
+            IsoZonedDateTimeOffset parsed,
             TemporalZonedDateTimeOptions options) {
         String timeZoneId = normalizeTimeZoneIdentifier(context, parsed.timeZoneId());
         if (context.hasPendingException() || timeZoneId == null) {
@@ -438,7 +418,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         if (item instanceof JSString zonedDateTimeString) {
-            TemporalParser.ParsedZonedDateTime parsed =
+            IsoZonedDateTimeOffset parsed =
                     TemporalParser.parseZonedDateTimeString(context, zonedDateTimeString.value());
             if (context.hasPendingException() || parsed == null) {
                 return JSUndefined.INSTANCE;
@@ -1186,7 +1166,7 @@ public final class TemporalZonedDateTimeConstructor {
         }
 
         if (item instanceof JSString zonedDateTimeString) {
-            TemporalParser.ParsedZonedDateTime parsed =
+            IsoZonedDateTimeOffset parsed =
                     TemporalParser.parseZonedDateTimeString(context, zonedDateTimeString.value());
             if (context.hasPendingException() || parsed == null) {
                 return JSUndefined.INSTANCE;

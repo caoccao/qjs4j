@@ -25,13 +25,9 @@ import java.time.LocalDate;
  * Implementation of Temporal.PlainYearMonth prototype methods.
  */
 public final class TemporalPlainYearMonthPrototype {
-    private static final String DIFFERENCE_LARGEST_UNIT_OPTION = "largestUnit";
-    private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
-    private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
-    private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
-    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = 1_000_000_000L;
+    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
+    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
+    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainYearMonth";
     private static final String UNIT_AUTO = "auto";
     private static final String UNIT_MONTH = "month";
@@ -99,12 +95,13 @@ public final class TemporalPlainYearMonthPrototype {
             normalizedDay = daysInNormalizedMonth;
         }
 
-        if (!IsoDate.isValidIsoDate(normalizedYear, normalizedMonth, normalizedDay)) {
+        IsoDate isoDate = new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        return new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+        return isoDate;
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainYearMonth plainYearMonth, JSValue[] args, int sign) {
@@ -128,8 +125,8 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate originalDate = plainYearMonth.getIsoDate();
-        if (!IsoDate.isValidIsoDate(originalDate.year(), originalDate.month(), originalDate.day())) {
+        IsoDate isoDate = plainYearMonth.getIsoDate();
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -151,14 +148,14 @@ public final class TemporalPlainYearMonthPrototype {
         if ("iso8601".equals(calendarId)) {
             resultDate = addDateDurationToPlainYearMonth(
                     context,
-                    originalDate,
+                    isoDate,
                     durationRecord.years(),
                     durationRecord.months(),
                     overflow);
         } else {
             resultDate = TemporalCalendarMath.addCalendarDate(
                     context,
-                    originalDate,
+                    isoDate,
                     calendarId,
                     durationRecord.years(),
                     durationRecord.months(),
@@ -211,26 +208,8 @@ public final class TemporalPlainYearMonthPrototype {
         return new JSString(plainYearMonth.getCalendarId());
     }
 
-    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        if (unitText == null) {
-            return null;
-        }
-        if (allowAuto && UNIT_AUTO.equals(unitText)) {
-            return UNIT_AUTO;
-        }
-        return switch (unitText) {
-            case UNIT_YEAR, "years" -> UNIT_YEAR;
-            case UNIT_MONTH, "months" -> UNIT_MONTH;
-            default -> null;
-        };
-    }
-
     private static JSTemporalPlainYearMonth checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainYearMonth plainYearMonth)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainYearMonth;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainYearMonth.class, TYPE_NAME, methodName);
     }
 
     private static int compareCalendarDateFields(
@@ -252,14 +231,14 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        TemporalMonthCodeParts firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        TemporalMonthCodeParts secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        TemporalParsedMonthCode firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        TemporalParsedMonthCode secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
         int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.monthNumber(),
-                secondMonthCodeParts.monthNumber());
+                firstMonthCodeParts.month(),
+                secondMonthCodeParts.month());
         if (monthNumberComparison != 0) {
             return monthNumberComparison;
         }
@@ -313,17 +292,15 @@ public final class TemporalPlainYearMonthPrototype {
             IsoDate secondDate,
             String calendarId,
             String largestUnit) {
-        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
+        int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDurationYearMonthFields.ZERO;
         }
 
         long years = 0L;
         long months = 0L;
-        TemporalCalendarMath.CalendarDateFields firstCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(firstDate, calendarId);
-        TemporalCalendarMath.CalendarDateFields secondCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(secondDate, calendarId);
+        IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
+        IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
 
         long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
         if (candidateYears != 0L) {
@@ -538,9 +515,9 @@ public final class TemporalPlainYearMonthPrototype {
 
     private static boolean doesConceptualYearDateSurpassTarget(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             long candidateYears,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+            IsoCalendarDate secondCalendarDateFields) {
         long candidateYear = firstCalendarDateFields.year() + candidateYears;
         int comparison = compareCalendarDateFields(
                 candidateYear,
@@ -554,12 +531,11 @@ public final class TemporalPlainYearMonthPrototype {
 
     private static boolean doesConstrainedCalendarDaySurpassTarget(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             IsoDate constrainedCandidateDate,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            IsoCalendarDate secondCalendarDateFields,
             String calendarId) {
-        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
         if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
             return false;
         }
@@ -616,126 +592,15 @@ public final class TemporalPlainYearMonthPrototype {
         return JSNumber.of(eraFields.eraYear());
     }
 
-    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(DIFFERENCE_ROUNDING_INCREMENT_OPTION));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TEMPORAL_MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
     private static TemporalDifferenceSettings getDifferenceSettings(
             JSContext context,
             boolean sinceOperation,
             JSValue optionsArgument) {
-        JSObject optionsObject = null;
-        if (!(optionsArgument instanceof JSUndefined) && optionsArgument != null) {
-            if (optionsArgument instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
-            }
-        }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_LARGEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingMode = getDifferenceStringOption(context, optionsObject, DIFFERENCE_ROUNDING_MODE_OPTION, "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-            smallestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_SMALLEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? UNIT_AUTO
-                : canonicalizeDifferenceUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? UNIT_MONTH
-                : canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-        if (!isValidDifferenceRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-        if (sinceOperation) {
-            roundingMode = negateRoundingMode(roundingMode);
-        }
-        if (!UNIT_AUTO.equals(largestUnit) && !isYearMonthUnit(largestUnit)) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        if (!isYearMonthUnit(smallestUnit)) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (UNIT_AUTO.equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits(UNIT_YEAR, smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
-    }
-
-    private static String getDifferenceStringOption(
-            JSContext context,
-            JSObject optionsObject,
-            String optionName,
-            String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
+        return TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArgument,
+                TemporalUnit.YEAR, TemporalUnit.MONTH,
+                TemporalUnit.MONTH, TemporalUnit.YEAR,
+                true, false);
     }
 
     private static String getUnsignedRoundingMode(String roundingMode, String sign) {
@@ -791,33 +656,8 @@ public final class TemporalPlainYearMonthPrototype {
         return differenceEpochDay >= MIN_SUPPORTED_EPOCH_DAY && differenceEpochDay <= MAX_SUPPORTED_EPOCH_DAY;
     }
 
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
-    }
-
-    private static boolean isYearMonthUnit(String unit) {
-        return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit);
-    }
-
     private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * IsoDate.compareIsoDate(firstDate, secondDate) > 0;
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
+        return sign * firstDate.compareTo(secondDate) > 0;
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -904,17 +744,7 @@ public final class TemporalPlainYearMonthPrototype {
         return JSNumber.of(TemporalCalendarMath.monthsInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
     }
 
-    private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
-    }
-
-    private static TemporalMonthCodeInfo parseMonthCodeForWith(JSContext context, String monthCode) {
+    private static TemporalParsedMonthCode parseMonthCodeForWith(JSContext context, String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             context.throwRangeError("Temporal error: Month code out of range.");
             return null;
@@ -936,10 +766,10 @@ public final class TemporalPlainYearMonthPrototype {
             leapMonth = true;
         }
         int month = Integer.parseInt(monthCode.substring(1, 3));
-        return new TemporalMonthCodeInfo(month, leapMonth);
+        return new TemporalParsedMonthCode(month, leapMonth);
     }
 
-    private static TemporalMonthCodeParts parseMonthCodeParts(String monthCodeText) {
+    private static TemporalParsedMonthCode parseMonthCodeParts(String monthCodeText) {
         if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
             return null;
         }
@@ -957,7 +787,7 @@ public final class TemporalPlainYearMonthPrototype {
             }
             leapMonth = true;
         }
-        return new TemporalMonthCodeParts(monthNumber, leapMonth);
+        return new TemporalParsedMonthCode(monthNumber, leapMonth);
     }
 
     public static JSValue referenceISODay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -969,8 +799,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static IsoDate resolveCalendarDate(JSTemporalPlainYearMonth plainYearMonth) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         return new IsoDate(
                 calendarDateFields.year(),
                 calendarDateFields.month(),
@@ -978,8 +808,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static String resolveCalendarMonthCode(JSTemporalPlainYearMonth plainYearMonth) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         return calendarDateFields.monthCode();
     }
 
@@ -1149,7 +979,7 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         String signText = sign < 0L ? "negative" : "positive";
-        String unsignedRoundingMode = getUnsignedRoundingMode(differenceSettings.roundingMode(), signText);
+        String unsignedRoundingMode = getUnsignedRoundingMode(differenceSettings.roundingMode().jsName(), signText);
         int comparison = Long.compare(Math.abs(numerator) * 2L, Math.abs(denominator));
         boolean evenCardinality = Math.floorMod(Math.abs(roundingStartValue) / increment, 2L) == 0L;
 
@@ -1194,14 +1024,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         return addOrSubtract(context, plainYearMonth, args, -1);
-    }
-
-    private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case UNIT_YEAR -> 0;
-            case UNIT_MONTH -> 1;
-            default -> 2;
-        };
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1259,8 +1081,8 @@ public final class TemporalPlainYearMonthPrototype {
 
         JSTemporalPlainYearMonth plainYearMonthForFormatting = plainYearMonth;
         if (!"iso8601".equals(plainYearMonth.getCalendarId())) {
-            TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+            IsoCalendarDate calendarDateFields =
+                    plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
             IsoDate midMonthIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
                     context,
                     plainYearMonth.getCalendarId(),
@@ -1299,8 +1121,8 @@ public final class TemporalPlainYearMonthPrototype {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         JSObject mergedFields = context.createJSObject();
         mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainYearMonth.getCalendarId()));
         mergedFields.set(PropertyKey.fromString("year"), JSNumber.of(calendarDateFields.year()));
@@ -1498,7 +1320,7 @@ public final class TemporalPlainYearMonthPrototype {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        TemporalMonthCodeInfo monthCodeInfo = null;
+        TemporalParsedMonthCode monthCodeInfo = null;
         if (hasMonthCode) {
             monthCodeInfo = parseMonthCodeForWith(context, monthCode);
             if (context.hasPendingException() || monthCodeInfo == null) {

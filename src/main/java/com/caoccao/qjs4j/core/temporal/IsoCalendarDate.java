@@ -16,7 +16,9 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-import java.math.BigInteger;
-
-public record TemporalParsedOffset(int totalSeconds, BigInteger totalNanoseconds) {
+public record IsoCalendarDate(
+        int year,
+        int month,
+        String monthCode,
+        int day) {
 }

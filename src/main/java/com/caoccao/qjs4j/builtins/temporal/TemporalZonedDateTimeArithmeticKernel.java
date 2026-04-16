@@ -24,10 +24,6 @@ import java.math.BigInteger;
 import java.time.DateTimeException;
 
 final class TemporalZonedDateTimeArithmeticKernel {
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger NS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
 
     private TemporalZonedDateTimeArithmeticKernel() {
     }
@@ -82,7 +78,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
             }
         }
 
-        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
+        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         BigInteger resultEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(resultEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
@@ -141,7 +137,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
         }
 
         try {
-            return IsoDate.fromEpochDay(resultEpochDay);
+            return IsoDate.createFromEpochDay(resultEpochDay);
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -161,16 +157,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
         BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds,
-                roundingMode);
+                TemporalRoundingMode.fromString(roundingMode));
         return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
-    }
-
-    private static BigInteger durationTimeToNanoseconds(TemporalDuration durationRecord) {
-        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
     }
 }

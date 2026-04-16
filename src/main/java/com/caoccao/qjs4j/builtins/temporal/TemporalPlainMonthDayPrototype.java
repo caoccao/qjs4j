@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
 import com.caoccao.qjs4j.core.temporal.TemporalParsedMonthCode;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
@@ -42,11 +42,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     private static JSTemporalPlainMonthDay checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainMonthDay plainMonthDay)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainMonthDay;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainMonthDay.class, TYPE_NAME, methodName);
     }
 
     private static void copyFieldIfPresent(
@@ -68,8 +64,8 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainMonthDay.getIsoDate().toIsoCalendarDate(plainMonthDay.getCalendarId());
         return JSNumber.of(calendarDateFields.day());
     }
 
@@ -95,8 +91,8 @@ public final class TemporalPlainMonthDayPrototype {
         if (plainMonthDay == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainMonthDay.getIsoDate().toIsoCalendarDate(plainMonthDay.getCalendarId());
         return new JSString(calendarDateFields.monthCode());
     }
 
@@ -195,8 +191,8 @@ public final class TemporalPlainMonthDayPrototype {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainMonthDay.getIsoDate().toIsoCalendarDate(plainMonthDay.getCalendarId());
         JSObject mergedFields = context.createJSObject();
         mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainMonthDay.getCalendarId()));
         mergedFields.set(PropertyKey.fromString("monthCode"), new JSString(calendarDateFields.monthCode()));
@@ -386,7 +382,7 @@ public final class TemporalPlainMonthDayPrototype {
         }
 
         if ("reject".equals(overflow)) {
-            if (!IsoDate.isValidIsoDate(year, month, dayOfMonth)) {
+            if (!new IsoDate(year, month, dayOfMonth).isValid()) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
@@ -453,8 +449,8 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainMonthDay.getIsoDate().toIsoCalendarDate(plainMonthDay.getCalendarId());
         JSObject mergedFields = context.createJSObject();
         mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainMonthDay.getCalendarId()));
         mergedFields.set(PropertyKey.fromString("monthCode"), new JSString(calendarDateFields.monthCode()));

@@ -16,17 +16,52 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import java.time.LocalDateTime;
+
 /**
  * Represents an ISO 8601 date-time combining IsoDate and IsoTime.
  */
-public record IsoDateTime(IsoDate date, IsoTime time) {
+public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoDateTime> {
 
-    public static int compareIsoDateTime(IsoDateTime firstDateTime, IsoDateTime secondDateTime) {
-        int dateCompare = IsoDate.compareIsoDate(firstDateTime.date, secondDateTime.date);
+    public static IsoDateTime createFromLocalDateTime(LocalDateTime localDateTime) {
+        int nanosecondOfSecond = localDateTime.getNano();
+        int millisecond = nanosecondOfSecond / 1_000_000;
+        int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
+        int nanosecond = nanosecondOfSecond % 1_000;
+        IsoDate isoDate = new IsoDate(
+                localDateTime.getYear(),
+                localDateTime.getMonthValue(),
+                localDateTime.getDayOfMonth());
+        IsoTime isoTime = new IsoTime(
+                localDateTime.getHour(),
+                localDateTime.getMinute(),
+                localDateTime.getSecond(),
+                millisecond,
+                microsecond,
+                nanosecond);
+        return new IsoDateTime(isoDate, isoTime);
+    }
+
+    @Override
+    public int compareTo(IsoDateTime otherIsoDateTime) {
+        int dateCompare = date.compareTo(otherIsoDateTime.date);
         if (dateCompare != 0) {
             return dateCompare;
         }
-        return IsoTime.compareIsoTime(firstDateTime.time, secondDateTime.time);
+        return time.compareTo(otherIsoDateTime.time);
+    }
+
+    public LocalDateTime toLocalDateTime() {
+        return LocalDateTime.of(
+                date.year(),
+                date.month(),
+                date.day(),
+                time.hour(),
+                time.minute(),
+                time.second(),
+                time.millisecond() * 1_000_000
+                        + time.microsecond() * 1_000
+                        + time.nanosecond());
     }
 
     @Override

@@ -25,10 +25,10 @@ import java.math.BigInteger;
  * ISO 8601 string parser for Temporal types.
  */
 public final class TemporalParser {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
 
     private final String input;
     private int position;
@@ -117,7 +117,7 @@ public final class TemporalParser {
         }
         int month = parseFixedTwoDigits(value, 0);
         int dayOfMonth = parseFixedTwoDigits(value, 2);
-        return IsoDate.isValidIsoDate(1972, month, dayOfMonth);
+        return new IsoDate(1972, month, dayOfMonth).isValid();
     }
 
     private static boolean isAmbiguousSixDigitTime(String value) {
@@ -151,7 +151,7 @@ public final class TemporalParser {
                 && Character.isDigit(candidate.charAt(4))) {
             int month = parseFixedTwoDigits(candidate, 0);
             int dayOfMonth = parseFixedTwoDigits(candidate, 3);
-            return IsoDate.isValidIsoDate(1972, month, dayOfMonth);
+            return new IsoDate(1972, month, dayOfMonth).isValid();
         }
         if (candidate.length() == 7
                 && Character.isDigit(candidate.charAt(0))
@@ -227,7 +227,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -250,7 +250,7 @@ public final class TemporalParser {
      * Parse an ISO date-time string.
      * Returns null and sets pending exception on error.
      */
-    public static ParsedDateTime parseDateTimeString(JSContext context, String input) {
+    public static IsoCalendarDateTime parseDateTimeString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -286,7 +286,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -310,13 +310,13 @@ public final class TemporalParser {
                 return null;
             }
         }
-        return new ParsedDateTime(date, time, calendar);
+        return new IsoCalendarDateTime(date, time, calendar);
     }
 
     /**
      * Parse a duration string like "P1Y2M3DT4H5M6S".
      */
-    public static DurationFields parseDurationString(JSContext context, String input) {
+    public static TemporalDuration parseDurationString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid duration string.");
             return null;
@@ -333,7 +333,7 @@ public final class TemporalParser {
      * Parse an Instant string like "1970-01-01T00:00:00Z" or "1970-01-01T00:00:00+00:00".
      * Returns null and sets pending exception on error.
      */
-    public static ParsedInstant parseInstantString(JSContext context, String input) {
+    public static IsoDateTimeOffset parseInstantString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -357,7 +357,7 @@ public final class TemporalParser {
         if (time == null) {
             return null;
         }
-        TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+        IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
         if (parsedOffset == null || context.hasPendingException()) {
             return null;
         }
@@ -369,7 +369,7 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        return new ParsedInstant(date, time, parsedOffset.totalSeconds(), parsedOffset.totalNanoseconds());
+        return new IsoDateTimeOffset(date, time, parsedOffset);
     }
 
     /**
@@ -525,7 +525,7 @@ public final class TemporalParser {
                 return null;
             }
             if (marker == '+' || marker == '-') {
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -626,7 +626,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -649,7 +649,7 @@ public final class TemporalParser {
      * Parse a ZonedDateTime string like "2024-01-15T12:00:00+00:00[UTC]".
      * Returns null and sets pending exception on error.
      */
-    public static ParsedZonedDateTime parseZonedDateTimeString(JSContext context, String input) {
+    public static IsoZonedDateTimeOffset parseZonedDateTimeString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -681,7 +681,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -713,7 +713,7 @@ public final class TemporalParser {
             }
         }
 
-        return new ParsedZonedDateTime(date, time, offsetSeconds, timeZoneId, calendarId);
+        return new IsoZonedDateTimeOffset(date, time, offsetSeconds, timeZoneId, calendarId);
     }
 
     private char current() {
@@ -816,17 +816,7 @@ public final class TemporalParser {
         if (!enforceIsoDateRange) {
             return true;
         }
-        return IsoDate.isValidIsoDate(year, month, dayOfMonth);
-    }
-
-    private void parseAnnotations() {
-        while (position < input.length() && input.charAt(position) == '[') {
-            int annotationEndIndex = input.indexOf(']', position);
-            if (annotationEndIndex < 0) {
-                break;
-            }
-            position = annotationEndIndex + 1;
-        }
+        return new IsoDate(year, month, dayOfMonth).isValid();
     }
 
     private IsoDate parseDate(JSContext context) {
@@ -870,7 +860,7 @@ public final class TemporalParser {
         return new IsoDate(year, month, dayOfMonth);
     }
 
-    private DurationFields parseDuration(JSContext context) {
+    private TemporalDuration parseDuration(JSContext context) {
         boolean negative = false;
         if (position < input.length() && (input.charAt(position) == '-' || input.charAt(position) == '\u2212')) {
             negative = true;
@@ -1059,7 +1049,7 @@ public final class TemporalParser {
         }
 
         int sign = negative ? -1 : 1;
-        return new DurationFields(
+        return new TemporalDuration(
                 years * sign, months * sign, weeks * sign, days * sign,
                 hours * sign, minutes * sign, seconds * sign,
                 milliseconds * sign, microseconds * sign, nanoseconds * sign
@@ -1147,7 +1137,7 @@ public final class TemporalParser {
         }
     }
 
-    private TemporalParsedOffset parseInstantOffsetNanoseconds(JSContext context) {
+    private IsoOffset parseInstantOffsetNanoseconds(JSContext context) {
         if (position >= input.length()) {
             context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
             return null;
@@ -1155,7 +1145,7 @@ public final class TemporalParser {
         char signCharacter = input.charAt(position);
         if (signCharacter == 'Z' || signCharacter == 'z') {
             position++;
-            return new TemporalParsedOffset(0, BigInteger.ZERO);
+            return new IsoOffset(0, BigInteger.ZERO);
         }
         int sign;
         if (signCharacter == '+') {
@@ -1257,7 +1247,7 @@ public final class TemporalParser {
         if (sign < 0) {
             offsetNanoseconds = offsetNanoseconds.negate();
         }
-        return new TemporalParsedOffset(offsetSeconds, offsetNanoseconds);
+        return new IsoOffset(offsetSeconds, offsetNanoseconds);
     }
 
     private IsoTime parseInstantTime(JSContext context) {
@@ -1324,108 +1314,12 @@ public final class TemporalParser {
         }
 
         int constrainedSecond = second == 60 ? 59 : second;
-        if (!IsoTime.isValidTime(hour, minute, constrainedSecond, millisecond, microsecond, nanosecond)) {
+        IsoTime parsedIsoTime = new IsoTime(hour, minute, constrainedSecond, millisecond, microsecond, nanosecond);
+        if (!parsedIsoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
-        return new IsoTime(hour, minute, constrainedSecond, millisecond, microsecond, nanosecond);
-    }
-
-    private int parseOffset(JSContext context) {
-        if (position >= input.length()) {
-            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-            return 0;
-        }
-        char currentChar = input.charAt(position);
-        if (currentChar == 'Z' || currentChar == 'z') {
-            position++;
-            return 0;
-        }
-        int sign;
-        if (currentChar == '+') {
-            sign = 1;
-        } else if (currentChar == '-') {
-            sign = -1;
-        } else {
-            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-            return 0;
-        }
-        position++;
-        int hours = parseTwoDigits(context, "offset hour");
-        if (context.hasPendingException()) return 0;
-        if (hours > 23) {
-            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-            return 0;
-        }
-        int minutes = 0;
-        if (position < input.length() && input.charAt(position) == ':') {
-            position++;
-        }
-        if (position < input.length() && Character.isDigit(input.charAt(position))) {
-            minutes = parseTwoDigits(context, "offset minute");
-            if (context.hasPendingException()) return 0;
-            if (minutes > 59) {
-                context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-                return 0;
-            }
-        }
-        int seconds = 0;
-        if (position < input.length() && input.charAt(position) == ':') {
-            position++;
-            if (position + 2 > input.length() || !Character.isDigit(input.charAt(position)) || !Character.isDigit(input.charAt(position + 1))) {
-                context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-                return 0;
-            }
-            seconds = parseTwoDigits(context, "offset second");
-            if (context.hasPendingException()) {
-                return 0;
-            }
-            if (seconds > 59) {
-                context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-                return 0;
-            }
-            if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
-                position++;
-                int fractionalStart = position;
-                while (position < input.length() && Character.isDigit(input.charAt(position))) {
-                    position++;
-                }
-                if (fractionalStart == position) {
-                    context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-                    return 0;
-                }
-                int fractionalLength = position - fractionalStart;
-                if (fractionalLength > 9) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return 0;
-                }
-            }
-        }
-        return sign * (hours * 3600 + minutes * 60 + seconds);
-    }
-
-    private void parseOffsetAndAnnotations() {
-        // Skip offset (+HH:MM, -HH:MM, Z)
-        if (position < input.length()) {
-            char currentChar = input.charAt(position);
-            if (currentChar == 'Z' || currentChar == 'z') {
-                position++;
-            } else if (currentChar == '+' || currentChar == '-' || currentChar == '\u2212') {
-                position++;
-                // Skip offset digits
-                while (position < input.length() && (Character.isDigit(input.charAt(position)) || input.charAt(position) == ':')) {
-                    position++;
-                }
-            }
-        }
-        // Skip annotations [...]
-        while (position < input.length() && input.charAt(position) == '[') {
-            int annotationEndIndex = input.indexOf(']', position);
-            if (annotationEndIndex < 0) {
-                break;
-            }
-            position = annotationEndIndex + 1;
-        }
+        return parsedIsoTime;
     }
 
     IsoTime parseTime(JSContext context) {
@@ -1478,11 +1372,12 @@ public final class TemporalParser {
             }
         }
 
-        if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+        IsoTime parsedIsoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!parsedIsoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
-        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        return parsedIsoTime;
     }
 
     private int parseTwoDigitNumber(String value, int index) {
@@ -1560,20 +1455,5 @@ public final class TemporalParser {
             return Long.MIN_VALUE;
         }
         return value.longValue();
-    }
-
-    public record DurationFields(long years, long months, long weeks, long days,
-                                 long hours, long minutes, long seconds,
-                                 long milliseconds, long microseconds, long nanoseconds) {
-    }
-
-    public record ParsedDateTime(IsoDate date, IsoTime time, String calendar) {
-    }
-
-    public record ParsedInstant(IsoDate date, IsoTime time, int offsetSeconds, BigInteger offsetNanoseconds) {
-    }
-
-    public record ParsedZonedDateTime(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId,
-                                      String calendarId) {
     }
 }

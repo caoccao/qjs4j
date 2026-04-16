@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public final class TemporalTimeZone {
     private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
             createAvailableTimeZoneIdentifierLookup();
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
     private static final Pattern OFFSET_BASIC_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
     private static final Pattern OFFSET_EXTENDED_PATTERN =
@@ -217,23 +217,6 @@ public final class TemporalTimeZone {
     }
 
     /**
-     * Gets the number of real hours in a day at the given instant and timezone.
-     */
-    public static int getHoursInDay(BigInteger epochNs, String timeZoneId) {
-        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
-        if (fixedOffsetSeconds != null) {
-            return 24;
-        }
-        ZoneId zone = resolveTimeZone(timeZoneId);
-        Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zonedDateTime = javaInstant.atZone(zone);
-        ZonedDateTime startOfDay = zonedDateTime.toLocalDate().atStartOfDay(zone);
-        ZonedDateTime startOfNextDay = zonedDateTime.toLocalDate().plusDays(1).atStartOfDay(zone);
-        long seconds = Duration.between(startOfDay, startOfNextDay).getSeconds();
-        return (int) (seconds / 3600);
-    }
-
-    /**
      * Gets the next timezone transition after the given instant.
      * Returns null if no further transition.
      */
@@ -245,7 +228,9 @@ public final class TemporalTimeZone {
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().nextTransition(javaInstant);
-        if (transition == null) return null;
+        if (transition == null) {
+            return null;
+        }
         Instant transInstant = transition.getInstant();
         return BigInteger.valueOf(transInstant.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(transInstant.getNano()));
@@ -277,7 +262,9 @@ public final class TemporalTimeZone {
         ZoneId zone = resolveTimeZone(timeZoneId);
         Instant javaInstant = toJavaInstant(epochNs);
         ZoneOffsetTransition transition = zone.getRules().previousTransition(javaInstant);
-        if (transition == null) return null;
+        if (transition == null) {
+            return null;
+        }
         Instant transInstant = transition.getInstant();
         return BigInteger.valueOf(transInstant.getEpochSecond()).multiply(BILLION)
                 .add(BigInteger.valueOf(transInstant.getNano()));
@@ -536,7 +523,7 @@ public final class TemporalTimeZone {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;
             }
-            TemporalParser.ParsedZonedDateTime parsedZonedDateTime =
+            IsoZonedDateTimeOffset parsedZonedDateTime =
                     TemporalParser.parseZonedDateTimeString(context, adjustedTimeZoneText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
@@ -553,14 +540,14 @@ public final class TemporalTimeZone {
             context.throwRangeError("Temporal error: Invalid offset string.");
             return null;
         }
-        TemporalParser.ParsedInstant parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
+        IsoDateTimeOffset parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
         if (parsedInstant == null || context.hasPendingException()) {
             return null;
         }
-        if (parsedInstant.offsetSeconds() == 0) {
+        if (parsedInstant.offset().totalSeconds() == 0) {
             return "UTC";
         } else {
-            return formatOffset(parsedInstant.offsetSeconds());
+            return formatOffset(parsedInstant.offset().totalSeconds());
         }
     }
 

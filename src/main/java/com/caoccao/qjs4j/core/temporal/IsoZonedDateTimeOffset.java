@@ -16,5 +16,10 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalMonthCodeParts(int monthNumber, boolean leapMonth) {
+public record IsoZonedDateTimeOffset(
+        IsoDate date,
+        IsoTime time,
+        int offsetSeconds,
+        String timeZoneId,
+        String calendarId) {
 }

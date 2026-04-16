@@ -26,19 +26,18 @@ import java.util.Locale;
  * Implementation of Temporal.Instant prototype methods.
  */
 public final class TemporalInstantPrototype {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger NS_PER_SECOND = BILLION;
-    private static final BigInteger NS_PER_US = BigInteger.valueOf(1_000L);
-    private static final long SOLAR_DAY_HOURS = 24L;
-    private static final long SOLAR_DAY_MICROSECONDS = 86_400_000_000L;
-    private static final long SOLAR_DAY_MILLISECONDS = 86_400_000L;
-    private static final long SOLAR_DAY_MINUTES = 1_440L;
-    private static final long SOLAR_DAY_NANOSECONDS = 86_400_000_000_000L;
-    private static final long SOLAR_DAY_SECONDS = 86_400L;
+    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_US = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final long SOLAR_DAY_HOURS = TemporalConstants.SOLAR_DAY_HOURS;
+    private static final long SOLAR_DAY_MICROSECONDS = TemporalConstants.SOLAR_DAY_MICROSECONDS;
+    private static final long SOLAR_DAY_MILLISECONDS = TemporalConstants.SOLAR_DAY_MILLISECONDS;
+    private static final long SOLAR_DAY_MINUTES = TemporalConstants.SOLAR_DAY_MINUTES;
+    private static final long SOLAR_DAY_NANOSECONDS = TemporalConstants.SOLAR_DAY_NANOSECONDS;
+    private static final long SOLAR_DAY_SECONDS = TemporalConstants.SOLAR_DAY_SECONDS;
     private static final String TYPE_NAME = "Temporal.Instant";
 
     private TemporalInstantPrototype() {
@@ -46,7 +45,9 @@ public final class TemporalInstantPrototype {
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "add");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, instant, args, 1);
     }
 
@@ -69,12 +70,7 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger totalNs = BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(NS_PER_US))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        BigInteger totalNs = durationRecord.timeNanoseconds();
         if (sign < 0) {
             totalNs = totalNs.negate();
         }
@@ -88,44 +84,36 @@ public final class TemporalInstantPrototype {
     }
 
     private static JSTemporalInstant checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalInstant instant)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver.");
-            return null;
-        }
-        return instant;
-    }
-
-    private static int differenceUnitRank(String unit) {
-        return switch (unit) {
-            case "hour" -> 0;
-            case "minute" -> 1;
-            case "second" -> 2;
-            case "millisecond" -> 3;
-            case "microsecond" -> 4;
-            case "nanosecond" -> 5;
-            default -> Integer.MAX_VALUE;
-        };
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME, methodName);
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochMilliseconds");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         BigInteger epochMilliseconds = floorDiv(instant.getEpochNanoseconds(), NS_PER_MS);
         return JSNumber.of(epochMilliseconds.longValue());
     }
 
     public static JSValue epochNanoseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochNanoseconds");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return new JSBigInt(instant.getEpochNanoseconds());
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "equals");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         JSValue otherArg = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSTemporalInstant other = TemporalInstantConstructor.toTemporalInstantObject(context, otherArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         return instant.getEpochNanoseconds().equals(other.getEpochNanoseconds()) ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
@@ -147,11 +135,6 @@ public final class TemporalInstantPrototype {
             remainder = remainder.add(divisor);
         }
         return new BigInteger[]{quotient, remainder};
-    }
-
-    private static String formatInstantUtc(BigInteger epochNs) {
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToUtcDateTime(epochNs);
-        return isoDateTime + "Z";
     }
 
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
@@ -205,67 +188,23 @@ public final class TemporalInstantPrototype {
         return new JSString(dateTimeText + zoneSuffix);
     }
 
-    private static String formatSecondsAndFraction(IsoTime isoTime, Integer fractionalSecondDigits) {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d",
-                isoTime.hour(), isoTime.minute(), isoTime.second()));
-        int totalFractionalNanoseconds =
-                isoTime.millisecond() * 1_000_000 + isoTime.microsecond() * 1_000 + isoTime.nanosecond();
-        if (fractionalSecondDigits == null) {
-            if (totalFractionalNanoseconds != 0) {
-                String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-                int fractionEndIndex = fraction.length();
-                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
-                    fractionEndIndex--;
-                }
-                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
-            }
-        } else if (fractionalSecondDigits > 0) {
-            String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            stringBuilder.append('.').append(fraction, 0, fractionalSecondDigits);
-        }
-        return stringBuilder.toString();
-    }
-
     private static String formatWithPrecision(IsoDateTime isoDateTime, String smallestUnit, Integer fractionalSecondDigits) {
         String datePart = isoDateTime.date().toString();
         String timePart;
         if ("minute".equals(smallestUnit)) {
             timePart = String.format(Locale.ROOT, "%02d:%02d", isoDateTime.time().hour(), isoDateTime.time().minute());
         } else if ("second".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 0);
+            timePart = isoDateTime.time().toString(0);
         } else if ("millisecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 3);
+            timePart = isoDateTime.time().toString(3);
         } else if ("microsecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 6);
+            timePart = isoDateTime.time().toString(6);
         } else if ("nanosecond".equals(smallestUnit)) {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), 9);
+            timePart = isoDateTime.time().toString(9);
         } else {
-            timePart = formatSecondsAndFraction(isoDateTime.time(), fractionalSecondDigits);
+            timePart = isoDateTime.time().toString(fractionalSecondDigits);
         }
         return datePart + "T" + timePart;
-    }
-
-    private static String getDefaultDifferenceLargestUnit(String smallestUnit) {
-        int smallestUnitRank = differenceUnitRank(smallestUnit);
-        int secondRank = differenceUnitRank("second");
-        if (smallestUnitRank < secondRank) {
-            return smallestUnit;
-        } else {
-            return "second";
-        }
-    }
-
-    private static long getDifferenceMaximumRoundingIncrement(String smallestUnit) {
-        return switch (smallestUnit) {
-            case "hour" -> 24L;
-            case "minute" -> 60L;
-            case "second" -> 60L;
-            case "millisecond" -> 1_000L;
-            case "microsecond" -> 1_000L;
-            case "nanosecond" -> 1_000L;
-            default -> -1L;
-        };
     }
 
     private static long getMaximumRoundingIncrement(String unit) {
@@ -305,7 +244,7 @@ public final class TemporalInstantPrototype {
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds().subtract(rightInstant.getEpochNanoseconds());
         BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
         BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds,
                 differenceOptions.roundingMode());
@@ -322,51 +261,9 @@ public final class TemporalInstantPrototype {
         return TemporalDurationConstructor.createDuration(context, normalizedDuration);
     }
 
-    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximum = getDifferenceMaximumRoundingIncrement(smallestUnit);
-        return maximum > 0
-                && roundingIncrement < maximum
-                && maximum % roundingIncrement == 0;
-    }
-
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
-    }
-
-    private static boolean isValidInstantToStringRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
-    }
-
-    private static String normalizeSmallestUnit(String unit) {
-        return switch (unit) {
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
-    }
-
     private static String normalizeToStringSmallestUnit(String unit) {
-        String normalizedUnit = normalizeSmallestUnit(unit);
+        TemporalUnit temporalUnit = TemporalUnit.fromString(unit);
+        String normalizedUnit = temporalUnit != null && temporalUnit.isTimeUnit() ? temporalUnit.jsName() : null;
         if ("minute".equals(normalizedUnit)
                 || "second".equals(normalizedUnit)
                 || "millisecond".equals(normalizedUnit)
@@ -377,136 +274,12 @@ public final class TemporalInstantPrototype {
         return null;
     }
 
-    private static JSValue nsToDuration(JSContext context, BigInteger diffNs) {
-        int signum = diffNs.signum();
-        BigInteger absoluteDiffNanoseconds = diffNs.abs();
-        // For Instant, the default largestUnit is "second" per spec
-        long totalSeconds = absoluteDiffNanoseconds.divide(NS_PER_SECOND).longValue();
-        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_SECOND);
-        long totalMs = absoluteDiffNanoseconds.divide(NS_PER_MS).longValue();
-        absoluteDiffNanoseconds = absoluteDiffNanoseconds.remainder(NS_PER_MS);
-        long totalUs = absoluteDiffNanoseconds.divide(BigInteger.valueOf(1_000)).longValue();
-        long totalNs = absoluteDiffNanoseconds.remainder(BigInteger.valueOf(1_000)).longValue();
-
-        return TemporalDurationConstructor.createDuration(context,
-                new TemporalDuration(0, 0, 0, 0,
-                        0, 0, totalSeconds * signum,
-                        totalMs * signum, totalUs * signum, totalNs * signum));
-    }
-
     private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
-        String largestUnitText = null;
-        String smallestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-
-        JSObject optionsObject;
-        if (optionsArg instanceof JSUndefined || optionsArg == null) {
-            optionsObject = null;
-        } else if (optionsArg instanceof JSObject typedOptionsObject) {
-            optionsObject = typedOptionsObject;
-        } else {
-            context.throwTypeError("Temporal error: Options must be an object.");
-            return null;
-        }
-
-        if (optionsObject != null) {
-            JSValue largestUnitValue = optionsObject.get(PropertyKey.fromString("largestUnit"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(largestUnitValue instanceof JSUndefined) && largestUnitValue != null) {
-                largestUnitText = JSTypeConversions.toString(context, largestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-
-            JSValue roundingIncrementValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(roundingIncrementValue instanceof JSUndefined) && roundingIncrementValue != null) {
-                double numericRoundingIncrement = JSTypeConversions.toNumber(context, roundingIncrementValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
-                    context.throwRangeError("Temporal error: Invalid rounding increment.");
-                    return null;
-                }
-                roundingIncrement = (long) numericRoundingIncrement;
-                if (roundingIncrement < 1L || roundingIncrement > MAX_ROUNDING_INCREMENT) {
-                    context.throwRangeError("Temporal error: Invalid rounding increment.");
-                    return null;
-                }
-            }
-
-            JSValue roundingModeValue = optionsObject.get(PropertyKey.fromString("roundingMode"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
-                roundingMode = JSTypeConversions.toString(context, roundingModeValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-
-            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-                smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-        }
-
-        String canonicalSmallestUnit;
-        if (smallestUnitText == null) {
-            canonicalSmallestUnit = "nanosecond";
-        } else {
-            canonicalSmallestUnit = normalizeSmallestUnit(smallestUnitText);
-            if (canonicalSmallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallest unit.");
-                return null;
-            }
-        }
-
-        String canonicalLargestUnit;
-        if (largestUnitText == null || "auto".equals(largestUnitText)) {
-            canonicalLargestUnit = getDefaultDifferenceLargestUnit(canonicalSmallestUnit);
-        } else {
-            canonicalLargestUnit = normalizeSmallestUnit(largestUnitText);
-            if (canonicalLargestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid largest unit.");
-                return null;
-            }
-        }
-
-        if (differenceUnitRank(canonicalSmallestUnit) < differenceUnitRank(canonicalLargestUnit)) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingIncrement(canonicalSmallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
-        }
-
-        return new TemporalDifferenceSettings(
-                canonicalLargestUnit,
-                canonicalSmallestUnit,
-                roundingIncrement,
-                roundingMode);
+        return TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.SECOND,
+                false, true);
     }
 
     private static Integer parseFractionalSecondDigits(JSContext context, JSValue value) {
@@ -602,7 +375,7 @@ public final class TemporalInstantPrototype {
             }
         }
 
-        if (!isValidInstantToStringRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -696,7 +469,8 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String smallestUnit = normalizeSmallestUnit(smallestUnitText);
+        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnitText);
+        String smallestUnit = parsedUnit != null && parsedUnit.isTimeUnit() ? parsedUnit.jsName() : null;
         if (smallestUnit == null) {
             context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);
             return JSUndefined.INSTANCE;
@@ -805,82 +579,6 @@ public final class TemporalInstantPrototype {
         }
     }
 
-    private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return value;
-        }
-
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        BigInteger floorValue = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return floorValue;
-        }
-        BigInteger ceilValue = floorValue.add(increment);
-        int sign = value.signum();
-
-        switch (roundingMode) {
-            case "floor":
-                return floorValue;
-            case "ceil":
-                return ceilValue;
-            case "trunc":
-                if (sign < 0) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            case "expand":
-                if (sign < 0) {
-                    return floorValue;
-                } else {
-                    return ceilValue;
-                }
-            case "halfExpand":
-            case "halfTrunc":
-            case "halfEven":
-            case "halfCeil":
-            case "halfFloor":
-                BigInteger twoRemainder = remainder.shiftLeft(1);
-                int halfComparison = twoRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    return floorValue;
-                }
-                if (halfComparison > 0) {
-                    return ceilValue;
-                }
-                return switch (roundingMode) {
-                    case "halfExpand" -> {
-                        if (sign < 0) {
-                            yield floorValue;
-                        } else {
-                            yield ceilValue;
-                        }
-                    }
-                    case "halfTrunc" -> {
-                        if (sign < 0) {
-                            yield ceilValue;
-                        } else {
-                            yield floorValue;
-                        }
-                    }
-                    case "halfEven" -> {
-                        if (floorQuotient.testBit(0)) {
-                            yield ceilValue;
-                        } else {
-                            yield floorValue;
-                        }
-                    }
-                    case "halfCeil" -> ceilValue;
-                    case "halfFloor" -> floorValue;
-                    default -> ceilValue;
-                };
-            default:
-                return ceilValue;
-        }
-    }
-
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "since");
         if (instant == null) {
@@ -898,7 +596,9 @@ public final class TemporalInstantPrototype {
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "subtract");
-        if (instant == null) return JSUndefined.INSTANCE;
+        if (instant == null) {
+            return JSUndefined.INSTANCE;
+        }
         return addOrSubtract(context, instant, args, -1);
     }
 

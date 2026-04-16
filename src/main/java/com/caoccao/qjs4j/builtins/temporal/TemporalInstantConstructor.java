@@ -17,6 +17,8 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.IsoDateTimeOffset;
+import com.caoccao.qjs4j.core.temporal.TemporalConstants;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
@@ -30,7 +32,7 @@ public final class TemporalInstantConstructor {
 
     static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
 
     private TemporalInstantConstructor() {
     }
@@ -43,9 +45,13 @@ public final class TemporalInstantConstructor {
         JSValue twoArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
 
         JSTemporalInstant firstInstant = toTemporalInstantObject(context, oneArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         JSTemporalInstant secondInstant = toTemporalInstantObject(context, twoArg);
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
 
         return JSNumber.of(firstInstant.getEpochNanoseconds().compareTo(secondInstant.getEpochNanoseconds()));
     }
@@ -107,7 +113,9 @@ public final class TemporalInstantConstructor {
     public static JSValue fromEpochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSValue epochMillisecondsArgument = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         double epochMilliseconds = JSTypeConversions.toNumber(context, epochMillisecondsArgument).value();
-        if (context.hasPendingException()) return JSUndefined.INSTANCE;
+        if (context.hasPendingException()) {
+            return JSUndefined.INSTANCE;
+        }
         if (!Double.isFinite(epochMilliseconds) || epochMilliseconds != Math.floor(epochMilliseconds)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return JSUndefined.INSTANCE;
@@ -174,11 +182,14 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, instantString.value());
+        IsoDateTimeOffset parsed = TemporalParser.parseInstantString(context, instantString.value());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(), parsed.offsetNanoseconds());
+        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(
+                parsed.date(),
+                parsed.time(),
+                parsed.offset().totalNanoseconds());
         if (!isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -188,7 +199,9 @@ public final class TemporalInstantConstructor {
 
     public static JSTemporalInstant toTemporalInstantObject(JSContext context, JSValue item) {
         JSValue result = toTemporalInstant(context, item);
-        if (context.hasPendingException()) return null;
+        if (context.hasPendingException()) {
+            return null;
+        }
         return (JSTemporalInstant) result;
     }
 }

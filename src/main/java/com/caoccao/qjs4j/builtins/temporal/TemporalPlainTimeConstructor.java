@@ -46,7 +46,7 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoTime.compareIsoTime(firstTime.getIsoTime(), secondTime.getIsoTime()));
+        return JSNumber.of(firstTime.getIsoTime().compareTo(secondTime.getIsoTime()));
     }
 
     /**
@@ -96,7 +96,8 @@ public final class TemporalPlainTimeConstructor {
             }
         }
 
-        if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+        IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!isoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return JSUndefined.INSTANCE;
         }
@@ -105,7 +106,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond), resolvedPrototype);
+        return createPlainTime(context, isoTime, resolvedPrototype);
     }
 
     public static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime) {
@@ -207,13 +208,14 @@ public final class TemporalPlainTimeConstructor {
         }
 
         if ("reject".equals(overflow)) {
-            if (!IsoTime.isValidTime(hour, minute, second, millisecond, microsecond, nanosecond)) {
+            IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+            if (!isoTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond));
+            return createPlainTime(context, isoTime);
         } else {
-            IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
+            IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
             return createPlainTime(context, constrained);
         }
     }

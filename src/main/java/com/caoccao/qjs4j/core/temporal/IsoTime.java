@@ -21,30 +21,30 @@ import java.util.Locale;
 /**
  * Represents an ISO 8601 time with hour, minute, second, millisecond, microsecond, and nanosecond components.
  */
-public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond)
+        implements Comparable<IsoTime> {
 
     public static final IsoTime MIDNIGHT = new IsoTime(0, 0, 0, 0, 0, 0);
 
-    public static int compareIsoTime(IsoTime firstTime, IsoTime secondTime) {
-        if (firstTime.hour != secondTime.hour) {
-            return Integer.compare(firstTime.hour, secondTime.hour);
-        }
-        if (firstTime.minute != secondTime.minute) {
-            return Integer.compare(firstTime.minute, secondTime.minute);
-        }
-        if (firstTime.second != secondTime.second) {
-            return Integer.compare(firstTime.second, secondTime.second);
-        }
-        if (firstTime.millisecond != secondTime.millisecond) {
-            return Integer.compare(firstTime.millisecond, secondTime.millisecond);
-        }
-        if (firstTime.microsecond != secondTime.microsecond) {
-            return Integer.compare(firstTime.microsecond, secondTime.microsecond);
-        }
-        return Integer.compare(firstTime.nanosecond, secondTime.nanosecond);
+    /**
+     * Creates an IsoTime from total nanoseconds (mod 24 hours).
+     */
+    public static IsoTime createFromNanoseconds(long totalNanoseconds) {
+        totalNanoseconds = Math.floorMod(totalNanoseconds, TemporalConstants.DAY_NANOSECONDS);
+        int hourValue = (int) (totalNanoseconds / TemporalConstants.HOUR_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.HOUR_NANOSECONDS;
+        int minuteValue = (int) (totalNanoseconds / TemporalConstants.MINUTE_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.MINUTE_NANOSECONDS;
+        int secondValue = (int) (totalNanoseconds / TemporalConstants.SECOND_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.SECOND_NANOSECONDS;
+        int millisecondValue = (int) (totalNanoseconds / TemporalConstants.MILLISECOND_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.MILLISECOND_NANOSECONDS;
+        int microsecondValue = (int) (totalNanoseconds / TemporalConstants.MICROSECOND_NANOSECONDS);
+        int nanosecondValue = (int) (totalNanoseconds % TemporalConstants.MICROSECOND_NANOSECONDS);
+        return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
-    public static IsoTime constrain(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+    public static IsoTime createNormalized(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
         hour = Math.max(0, Math.min(23, hour));
         minute = Math.max(0, Math.min(59, minute));
         second = Math.max(0, Math.min(59, second));
@@ -54,26 +54,74 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
     }
 
-    /**
-     * Creates an IsoTime from total nanoseconds (mod 24 hours).
-     */
-    public static IsoTime fromNanoseconds(long totalNanoseconds) {
-        long nanosecondsPerDay = 86_400_000_000_000L;
-        totalNanoseconds = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
-        int hourValue = (int) (totalNanoseconds / 3_600_000_000_000L);
-        totalNanoseconds %= 3_600_000_000_000L;
-        int minuteValue = (int) (totalNanoseconds / 60_000_000_000L);
-        totalNanoseconds %= 60_000_000_000L;
-        int secondValue = (int) (totalNanoseconds / 1_000_000_000L);
-        totalNanoseconds %= 1_000_000_000L;
-        int millisecondValue = (int) (totalNanoseconds / 1_000_000L);
-        totalNanoseconds %= 1_000_000L;
-        int microsecondValue = (int) (totalNanoseconds / 1_000L);
-        int nanosecondValue = (int) (totalNanoseconds % 1_000L);
-        return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
+    @Override
+    public int compareTo(IsoTime otherIsoTime) {
+        if (hour != otherIsoTime.hour) {
+            return Integer.compare(hour, otherIsoTime.hour);
+        }
+        if (minute != otherIsoTime.minute) {
+            return Integer.compare(minute, otherIsoTime.minute);
+        }
+        if (second != otherIsoTime.second) {
+            return Integer.compare(second, otherIsoTime.second);
+        }
+        if (millisecond != otherIsoTime.millisecond) {
+            return Integer.compare(millisecond, otherIsoTime.millisecond);
+        }
+        if (microsecond != otherIsoTime.microsecond) {
+            return Integer.compare(microsecond, otherIsoTime.microsecond);
+        }
+        return Integer.compare(nanosecond, otherIsoTime.nanosecond);
     }
 
-    public static boolean isValidTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+    /**
+     * Formats the fractional seconds part (ms, us, ns) to the given number of digits.
+     * Returns empty string if digits <= 0.
+     */
+    public String formatFractionalPart(int digits) {
+        if (digits <= 0) {
+            return "";
+        }
+        String nineDigits = String.format(Locale.ROOT, "%03d%03d%03d",
+                millisecond, microsecond, nanosecond);
+        return nineDigits.substring(0, digits);
+    }
+
+    /**
+     * Formats this time as a string with configurable precision.
+     * Shared by PlainTime, PlainDateTime, and ZonedDateTime toString operations.
+     *
+     * @param smallestUnit               the smallest unit to include (e.g. "minute" truncates seconds)
+     * @param autoFractionalSecondDigits if true, auto-trim trailing zeros from fractional part
+     * @param fractionalSecondDigits     number of fractional digits (0-9), ignored if auto
+     */
+    public String formatTimeString(String smallestUnit, boolean autoFractionalSecondDigits, int fractionalSecondDigits) {
+        String hourMinute = String.format(Locale.ROOT, "%02d:%02d", hour, minute);
+        if ("minute".equals(smallestUnit)) {
+            return hourMinute;
+        }
+
+        String hourMinuteSecond = String.format(Locale.ROOT, "%s:%02d", hourMinute, second);
+        if (autoFractionalSecondDigits) {
+            String fullFraction = String.format(Locale.ROOT, "%03d%03d%03d",
+                    millisecond, microsecond, nanosecond);
+            int fractionEndIndex = fullFraction.length();
+            while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
+                fractionEndIndex--;
+            }
+            if (fractionEndIndex == 0) {
+                return hourMinuteSecond;
+            }
+            return hourMinuteSecond + "." + fullFraction.substring(0, fractionEndIndex);
+        }
+
+        if (fractionalSecondDigits == 0) {
+            return hourMinuteSecond;
+        }
+        return hourMinuteSecond + "." + formatFractionalPart(fractionalSecondDigits);
+    }
+
+    public boolean isValid() {
         if (hour < 0 || hour > 23) {
             return false;
         }
@@ -92,45 +140,46 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return nanosecond >= 0 && nanosecond <= 999;
     }
 
-    /**
-     * Add nanoseconds to this time, returning a record with the new time and day overflow.
-     */
-    public AddResult addNanoseconds(long nanosecondsToAdd) {
-        long totalNanoseconds = totalNanoseconds() + nanosecondsToAdd;
-        long nanosecondsPerDay = 86_400_000_000_000L;
-        int days = (int) Math.floorDiv(totalNanoseconds, nanosecondsPerDay);
-        long remainder = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
-        return new AddResult(fromNanoseconds(remainder), days);
+    public String toString(Integer fractionalSecondDigits) {
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(String.format(
+                Locale.ROOT,
+                "%02d:%02d:%02d",
+                hour(),
+                minute(),
+                second()));
+        int totalFractionalNanoseconds =
+                millisecond() * 1_000_000 + microsecond() * 1_000 + nanosecond();
+        if (fractionalSecondDigits == null) {
+            if (totalFractionalNanoseconds != 0) {
+                String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+                int fractionEndIndex = fraction.length();
+                while (fractionEndIndex > 0 && fraction.charAt(fractionEndIndex - 1) == '0') {
+                    fractionEndIndex--;
+                }
+                stringBuilder.append('.').append(fraction, 0, fractionEndIndex);
+            }
+        } else if (fractionalSecondDigits > 0) {
+            String fraction = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
+            stringBuilder.append('.').append(fraction, 0, fractionalSecondDigits);
+        }
+        return stringBuilder.toString();
     }
 
     @Override
     public String toString() {
-        StringBuilder stringBuilder = new StringBuilder();
-        stringBuilder.append(String.format(Locale.ROOT, "%02d:%02d:%02d", hour, minute, second));
-        int totalFractionalNanoseconds = millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
-        if (totalFractionalNanoseconds != 0) {
-            String fractional = String.format(Locale.ROOT, "%09d", totalFractionalNanoseconds);
-            int fractionalEndIndex = fractional.length();
-            while (fractionalEndIndex > 0 && fractional.charAt(fractionalEndIndex - 1) == '0') {
-                fractionalEndIndex--;
-            }
-            stringBuilder.append('.').append(fractional, 0, fractionalEndIndex);
-        }
-        return stringBuilder.toString();
+        return toString(null);
     }
 
     /**
      * Returns total nanoseconds from midnight.
      */
     public long totalNanoseconds() {
-        return ((long) hour * 3_600_000_000_000L)
-                + ((long) minute * 60_000_000_000L)
-                + ((long) second * 1_000_000_000L)
-                + ((long) millisecond * 1_000_000L)
-                + ((long) microsecond * 1_000L)
+        return ((long) hour * TemporalConstants.HOUR_NANOSECONDS)
+                + ((long) minute * TemporalConstants.MINUTE_NANOSECONDS)
+                + ((long) second * TemporalConstants.SECOND_NANOSECONDS)
+                + ((long) millisecond * TemporalConstants.MILLISECOND_NANOSECONDS)
+                + ((long) microsecond * TemporalConstants.MICROSECOND_NANOSECONDS)
                 + nanosecond;
-    }
-
-    public record AddResult(IsoTime time, int days) {
     }
 }

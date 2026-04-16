@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalFractionalSecondDigitsOption;
+import com.caoccao.qjs4j.core.temporal.TemporalRoundingMode;
 
 final class TemporalOptionResolver {
     private TemporalOptionResolver() {
@@ -94,15 +95,7 @@ final class TemporalOptionResolver {
     }
 
     static boolean isValidRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     static TemporalFractionalSecondDigitsOption parseFractionalSecondDigitsOption(

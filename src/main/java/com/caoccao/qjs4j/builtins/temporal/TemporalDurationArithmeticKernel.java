@@ -24,12 +24,7 @@ import java.time.DateTimeException;
 import java.time.LocalDateTime;
 
 final class TemporalDurationArithmeticKernel {
-    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
-    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
-    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
 
     private TemporalDurationArithmeticKernel() {
     }
@@ -55,8 +50,69 @@ final class TemporalDurationArithmeticKernel {
                 .plusMonths(durationRecord.months())
                 .plusWeeks(durationRecord.weeks())
                 .plusDays(durationRecord.days());
-        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
+        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         return addNanosecondsToDateTime(context, dateBalancedDateTime, timeNanoseconds);
+    }
+
+    /**
+     * Adds date-component duration (years, months, weeks, days) to an ISO date.
+     * Shared by PlainDate and PlainDateTime add/subtract operations.
+     */
+    static IsoDate addDurationToIsoDate(
+            JSContext context,
+            IsoDate date,
+            long years,
+            long months,
+            long weeks,
+            long days,
+            String overflow) {
+        long totalDays;
+        try {
+            totalDays = Math.addExact(days, Math.multiplyExact(weeks, 7L));
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+
+        long monthIndex = Math.addExact(date.month() - 1L, months);
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long balancedYear = Math.addExact(date.year(), years);
+        balancedYear = Math.addExact(balancedYear, yearDelta);
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        int balancedYearInt = (int) balancedYear;
+        int maxDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
+        int regulatedDay = date.day();
+        if ("reject".equals(overflow)) {
+            if (regulatedDay > maxDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            regulatedDay = Math.min(regulatedDay, maxDay);
+        }
+
+        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
+        long resultEpochDay;
+        try {
+            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        IsoDate isoDate = IsoDate.createFromEpochDay(resultEpochDay);
+        if (!isoDate.isValid()) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return isoDate;
     }
 
     static TemporalZonedDateTimeComputation addDurationToZonedDateTime(
@@ -79,7 +135,7 @@ final class TemporalDurationArithmeticKernel {
             return null;
         }
 
-        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
+        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         BigInteger endEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(endEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -89,7 +145,7 @@ final class TemporalDurationArithmeticKernel {
         IsoDateTime endIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
                 endEpochNanoseconds,
                 relativeToOption.timeZoneId());
-        LocalDateTime endDateTime = toLocalDateTime(endIsoDateTime.date(), endIsoDateTime.time());
+        LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
         int endOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(
                 endEpochNanoseconds,
                 relativeToOption.timeZoneId());
@@ -153,58 +209,17 @@ final class TemporalDurationArithmeticKernel {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
-        IsoDateTime resultIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
                 resultEpochNanoseconds,
                 relativeToOption.timeZoneId());
-        return toLocalDateTime(resultIsoDateTime.date(), resultIsoDateTime.time());
-    }
-
-    private static BigInteger durationTimeToNanoseconds(TemporalDuration durationRecord) {
-        return BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-    }
-
-    private static IsoDateTime toIsoDateTime(LocalDateTime localDateTime) {
-        int nanosecondOfSecond = localDateTime.getNano();
-        int millisecond = nanosecondOfSecond / 1_000_000;
-        int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
-        int nanosecond = nanosecondOfSecond % 1_000;
-        IsoDate isoDate = new IsoDate(
-                localDateTime.getYear(),
-                localDateTime.getMonthValue(),
-                localDateTime.getDayOfMonth());
-        IsoTime isoTime = new IsoTime(
-                localDateTime.getHour(),
-                localDateTime.getMinute(),
-                localDateTime.getSecond(),
-                millisecond,
-                microsecond,
-                nanosecond);
-        return new IsoDateTime(isoDate, isoTime);
-    }
-
-    private static LocalDateTime toLocalDateTime(IsoDate isoDate, IsoTime isoTime) {
-        return LocalDateTime.of(
-                isoDate.year(),
-                isoDate.month(),
-                isoDate.day(),
-                isoTime.hour(),
-                isoTime.minute(),
-                isoTime.second(),
-                isoTime.millisecond() * 1_000_000
-                        + isoTime.microsecond() * 1_000
-                        + isoTime.nanosecond());
+        return isoDateTime.toLocalDateTime();
     }
 
     private static BigInteger zonedLocalDateTimeToEpochNanoseconds(
             JSContext context,
             TemporalRelativeToOption relativeToOption,
             LocalDateTime localDateTime) {
-        IsoDateTime isoDateTime = toIsoDateTime(localDateTime);
+        IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
         try {
             return TemporalTimeZone.localDateTimeToEpochNs(
                     isoDateTime,

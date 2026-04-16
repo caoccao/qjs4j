@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.TemporalConstants;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
 import java.math.BigInteger;
@@ -31,7 +32,7 @@ import java.time.ZoneId;
  * Implementation of Temporal.Now namespace methods.
  */
 public final class TemporalNow {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
 
     private TemporalNow() {
     }
