@@ -979,7 +979,7 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         String signText = sign < 0L ? "negative" : "positive";
-        String unsignedRoundingMode = getUnsignedRoundingMode(differenceSettings.roundingMode(), signText);
+        String unsignedRoundingMode = getUnsignedRoundingMode(differenceSettings.roundingMode().jsName(), signText);
         int comparison = Long.compare(Math.abs(numerator) * 2L, Math.abs(denominator));
         boolean evenCardinality = Math.floorMod(Math.abs(roundingStartValue) / increment, 2L) == 0L;
 

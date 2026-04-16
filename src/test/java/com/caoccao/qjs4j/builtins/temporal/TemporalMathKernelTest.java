@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.core.temporal.TemporalRoundingMode;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
@@ -24,15 +25,6 @@ import java.math.BigInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class TemporalMathKernelTest extends BaseTest {
-    @Test
-    public void testIsValidSubDayRoundingIncrement() {
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("hour", 1L)).isTrue();
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("hour", 3L)).isTrue();
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("hour", 5L)).isFalse();
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("minute", 30L)).isTrue();
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("minute", 61L)).isFalse();
-        assertThat(TemporalMathKernel.isValidSubDayRoundingIncrement("day", 1L)).isFalse();
-    }
 
     @Test
     public void testRoundBigIntegerToIncrementAsIfPositive() {
@@ -41,11 +33,11 @@ public class TemporalMathKernelTest extends BaseTest {
         assertThat(TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                 value,
                 increment,
-                "halfExpand")).isEqualTo(BigInteger.valueOf(20L));
+                TemporalRoundingMode.HALF_EXPAND)).isEqualTo(BigInteger.valueOf(20L));
         assertThat(TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                 value,
                 increment,
-                "halfTrunc")).isEqualTo(BigInteger.valueOf(10L));
+                TemporalRoundingMode.HALF_TRUNC)).isEqualTo(BigInteger.valueOf(10L));
     }
 
     @Test
@@ -55,11 +47,11 @@ public class TemporalMathKernelTest extends BaseTest {
         assertThat(TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 value,
                 increment,
-                "trunc")).isEqualTo(BigInteger.valueOf(-10L));
+                TemporalRoundingMode.TRUNC)).isEqualTo(BigInteger.valueOf(-10L));
         assertThat(TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 value,
                 increment,
-                "floor")).isEqualTo(BigInteger.valueOf(-20L));
+                TemporalRoundingMode.FLOOR)).isEqualTo(BigInteger.valueOf(-20L));
     }
 
     @Test
@@ -67,10 +59,10 @@ public class TemporalMathKernelTest extends BaseTest {
         assertThat(TemporalMathKernel.roundLongToIncrementAsIfPositive(
                 155L,
                 10L,
-                "halfFloor")).isEqualTo(150L);
+                TemporalRoundingMode.HALF_FLOOR)).isEqualTo(150L);
         assertThat(TemporalMathKernel.roundLongToIncrementAsIfPositive(
                 155L,
                 10L,
-                "halfExpand")).isEqualTo(160L);
+                TemporalRoundingMode.HALF_EXPAND)).isEqualTo(160L);
     }
 }

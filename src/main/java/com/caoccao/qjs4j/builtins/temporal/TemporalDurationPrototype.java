@@ -529,7 +529,7 @@ public final class TemporalDurationPrototype {
                 smallestUnit,
                 largestUnit,
                 roundingIncrement,
-                roundingMode,
+                TemporalRoundingMode.fromString(roundingMode),
                 relativeToOption);
         LocalDateTime roundedEndDateTime = roundDateTimeDifference(
                 context,
@@ -600,7 +600,7 @@ public final class TemporalDurationPrototype {
                 smallestUnit,
                 largestUnit,
                 roundingIncrement,
-                roundingMode,
+                TemporalRoundingMode.fromString(roundingMode),
                 relativeToOption);
         LocalDateTime roundedEndDateTime = roundDateTimeDifference(
                 context,
@@ -798,16 +798,17 @@ public final class TemporalDurationPrototype {
     }
 
     private static boolean isValidIncrementForUnit(String smallestUnit, long roundingIncrement) {
-        if ("hour".equals(smallestUnit)
-                || "minute".equals(smallestUnit)
-                || "second".equals(smallestUnit)
-                || "millisecond".equals(smallestUnit)
-                || "microsecond".equals(smallestUnit)
-                || "nanosecond".equals(smallestUnit)) {
-            return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
-        } else {
-            return true;
+        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
+        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
+            long maximumIncrement = switch (parsedUnit) {
+                case HOUR -> 24L;
+                case MINUTE, SECOND -> 60L;
+                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+                default -> -1L;
+            };
+            return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
         }
+        return true;
     }
 
     private static String largestDayTimeUnit(TemporalDuration durationRecord) {
@@ -1325,7 +1326,7 @@ public final class TemporalDurationPrototype {
                 canonicalSmallestUnit,
                 canonicalLargestUnit,
                 roundingIncrement,
-                roundingMode,
+                TemporalRoundingMode.fromString(roundingMode),
                 relativeToOption);
     }
 
@@ -1462,7 +1463,7 @@ public final class TemporalDurationPrototype {
             TemporalDuration durationRecord) {
         String smallestUnit = roundOptions.smallestUnit();
         long roundingIncrement = roundOptions.roundingIncrement();
-        String roundingMode = roundOptions.roundingMode();
+        TemporalRoundingMode roundingMode = roundOptions.roundingMode();
 
         if ("year".equals(smallestUnit) || "month".equals(smallestUnit)) {
             return roundDateTimeToCalendarUnit(
@@ -1472,7 +1473,7 @@ public final class TemporalDurationPrototype {
                     unroundedEndEpochNanoseconds,
                     smallestUnit,
                     roundingIncrement,
-                    roundingMode,
+                    roundingMode.jsName(),
                     relativeToOption);
         }
 
@@ -1611,7 +1612,7 @@ public final class TemporalDurationPrototype {
                     unroundedEndEpochNanoseconds,
                     "day",
                     roundingIncrement,
-                    roundingMode,
+                    roundingMode.jsName(),
                     relativeToOption);
         } else if ("week".equals(smallestUnit)) {
             incrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
@@ -2112,7 +2113,7 @@ public final class TemporalDurationPrototype {
         BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger incrementNanoseconds = BigInteger.valueOf(options.roundingIncrementNanoseconds());
         BigInteger roundedDayTimeNanoseconds =
-                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
+                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, TemporalRoundingMode.fromString(options.roundingMode()));
         if (roundedDayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;

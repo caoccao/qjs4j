@@ -244,7 +244,7 @@ public final class TemporalInstantPrototype {
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds().subtract(rightInstant.getEpochNanoseconds());
         BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
         BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds,
                 differenceOptions.roundingMode());
@@ -562,82 +562,6 @@ public final class TemporalInstantPrototype {
                     }
                     case "halfTrunc" -> {
                         yield floorValue;
-                    }
-                    case "halfEven" -> {
-                        if (floorQuotient.testBit(0)) {
-                            yield ceilValue;
-                        } else {
-                            yield floorValue;
-                        }
-                    }
-                    case "halfCeil" -> ceilValue;
-                    case "halfFloor" -> floorValue;
-                    default -> ceilValue;
-                };
-            default:
-                return ceilValue;
-        }
-    }
-
-    private static BigInteger roundBigIntegerToIncrementSigned(BigInteger value, BigInteger increment, String roundingMode) {
-        if (increment.signum() == 0) {
-            return value;
-        }
-
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger remainder = floorQuotientAndRemainder[1];
-        BigInteger floorValue = floorQuotient.multiply(increment);
-        if (remainder.signum() == 0) {
-            return floorValue;
-        }
-        BigInteger ceilValue = floorValue.add(increment);
-        int sign = value.signum();
-
-        switch (roundingMode) {
-            case "floor":
-                return floorValue;
-            case "ceil":
-                return ceilValue;
-            case "trunc":
-                if (sign < 0) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            case "expand":
-                if (sign < 0) {
-                    return floorValue;
-                } else {
-                    return ceilValue;
-                }
-            case "halfExpand":
-            case "halfTrunc":
-            case "halfEven":
-            case "halfCeil":
-            case "halfFloor":
-                BigInteger twoRemainder = remainder.shiftLeft(1);
-                int halfComparison = twoRemainder.compareTo(increment);
-                if (halfComparison < 0) {
-                    return floorValue;
-                }
-                if (halfComparison > 0) {
-                    return ceilValue;
-                }
-                return switch (roundingMode) {
-                    case "halfExpand" -> {
-                        if (sign < 0) {
-                            yield floorValue;
-                        } else {
-                            yield ceilValue;
-                        }
-                    }
-                    case "halfTrunc" -> {
-                        if (sign < 0) {
-                            yield ceilValue;
-                        } else {
-                            yield floorValue;
-                        }
                     }
                     case "halfEven" -> {
                         if (floorQuotient.testBit(0)) {

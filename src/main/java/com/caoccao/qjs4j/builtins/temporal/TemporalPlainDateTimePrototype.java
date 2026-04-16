@@ -228,7 +228,7 @@ public final class TemporalPlainDateTimePrototype {
                     settings.largestUnit(),
                     settings.smallestUnit(),
                     settings.roundingIncrement(),
-                    settings.roundingMode());
+                    settings.roundingMode().jsName());
         }
     }
 
@@ -328,7 +328,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
 
-        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, TemporalRoundingMode.fromString(roundingMode));
     }
 
     private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
@@ -653,7 +653,7 @@ public final class TemporalPlainDateTimePrototype {
         long roundedNanoseconds = roundToIncrementAsIfPositive(
                 totalNanoseconds,
                 incrementNanoseconds,
-                roundSettings.roundingMode());
+                roundSettings.roundingMode().jsName());
 
         int dayAdjust = 0;
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {

@@ -948,7 +948,7 @@ public final class TemporalPlainDatePrototype {
         }
 
         String unsignedRoundingMode = getUnsignedRoundingMode(
-                settings.roundingMode(),
+                settings.roundingMode().jsName(),
                 sign < 0 ? "negative" : "positive");
         int comparison = BigInteger.valueOf(Math.abs(numerator)).shiftLeft(1)
                 .compareTo(BigInteger.valueOf(Math.abs(denominator)));
@@ -979,7 +979,7 @@ public final class TemporalPlainDatePrototype {
             long destinationEpochDay,
             TemporalDifferenceSettings settings) {
         long originalDays = duration.days();
-        long roundedDays = roundNumberToIncrement(originalDays, settings.roundingIncrement(), settings.roundingMode());
+        long roundedDays = roundNumberToIncrement(originalDays, settings.roundingIncrement(), settings.roundingMode().jsName());
         long dayDelta = roundedDays - originalDays;
         int durationSign = Long.compare(originalDays, 0);
         int deltaSign = Long.compare(dayDelta, 0);

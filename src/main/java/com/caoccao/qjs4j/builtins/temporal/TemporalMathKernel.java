@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
+import com.caoccao.qjs4j.core.temporal.TemporalRoundingMode;
+
 import java.math.BigInteger;
 
 final class TemporalMathKernel {
@@ -33,35 +35,10 @@ final class TemporalMathKernel {
         return new BigInteger[]{quotient, remainder};
     }
 
-    static long getMaximumSubDayRoundingIncrement(String smallestUnit) {
-        if ("hour".equals(smallestUnit)) {
-            return 24L;
-        } else if ("minute".equals(smallestUnit) || "second".equals(smallestUnit)) {
-            return 60L;
-        } else if ("millisecond".equals(smallestUnit)
-                || "microsecond".equals(smallestUnit)
-                || "nanosecond".equals(smallestUnit)) {
-            return 1_000L;
-        } else {
-            return -1L;
-        }
-    }
-
-    static boolean isValidSubDayRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximumIncrement = getMaximumSubDayRoundingIncrement(smallestUnit);
-        if (maximumIncrement < 0L) {
-            return false;
-        }
-        if (roundingIncrement < 1L || roundingIncrement >= maximumIncrement) {
-            return false;
-        }
-        return maximumIncrement % roundingIncrement == 0L;
-    }
-
     static BigInteger roundBigIntegerToIncrementAsIfPositive(
             BigInteger quantity,
             BigInteger increment,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         if (increment.signum() == 0) {
             return quantity;
         }
@@ -74,43 +51,31 @@ final class TemporalMathKernel {
         }
         BigInteger upper = lower.add(increment);
 
-        if ("ceil".equals(roundingMode) || "expand".equals(roundingMode)) {
-            return upper;
-        } else if ("floor".equals(roundingMode) || "trunc".equals(roundingMode)) {
-            return lower;
-        } else if ("halfExpand".equals(roundingMode) || "halfCeil".equals(roundingMode)) {
-            if (remainder.shiftLeft(1).compareTo(increment) >= 0) {
-                return upper;
-            } else {
-                return lower;
+        return switch (roundingMode) {
+            case CEIL, EXPAND -> upper;
+            case FLOOR, TRUNC -> lower;
+            case HALF_EXPAND, HALF_CEIL -> remainder.shiftLeft(1).compareTo(increment) >= 0 ? upper : lower;
+            case HALF_TRUNC, HALF_FLOOR -> remainder.shiftLeft(1).compareTo(increment) > 0 ? upper : lower;
+            case HALF_EVEN -> {
+                BigInteger doubledRemainder = remainder.shiftLeft(1);
+                int halfComparison = doubledRemainder.compareTo(increment);
+                if (halfComparison < 0) {
+                    yield lower;
+                } else if (halfComparison > 0) {
+                    yield upper;
+                } else if (floorQuotient.testBit(0)) {
+                    yield upper;
+                } else {
+                    yield lower;
+                }
             }
-        } else if ("halfTrunc".equals(roundingMode) || "halfFloor".equals(roundingMode)) {
-            if (remainder.shiftLeft(1).compareTo(increment) > 0) {
-                return upper;
-            } else {
-                return lower;
-            }
-        } else if ("halfEven".equals(roundingMode)) {
-            BigInteger doubledRemainder = remainder.shiftLeft(1);
-            int halfComparison = doubledRemainder.compareTo(increment);
-            if (halfComparison < 0) {
-                return lower;
-            } else if (halfComparison > 0) {
-                return upper;
-            } else if (floorQuotient.testBit(0)) {
-                return upper;
-            } else {
-                return lower;
-            }
-        } else {
-            return lower;
-        }
+        };
     }
 
     static BigInteger roundBigIntegerToIncrementSigned(
             BigInteger value,
             BigInteger increment,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         if (increment.signum() == 0) {
             return value;
         }
@@ -124,62 +89,33 @@ final class TemporalMathKernel {
         BigInteger ceilValue = floorValue.add(increment);
         int sign = value.signum();
 
-        if ("floor".equals(roundingMode)) {
-            return floorValue;
-        } else if ("ceil".equals(roundingMode)) {
-            return ceilValue;
-        } else if ("trunc".equals(roundingMode)) {
-            if (sign < 0) {
-                return ceilValue;
-            } else {
-                return floorValue;
-            }
-        } else if ("expand".equals(roundingMode)) {
-            if (sign < 0) {
-                return floorValue;
-            } else {
-                return ceilValue;
-            }
-        } else if ("halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode)) {
-            BigInteger doubledRemainder = remainder.shiftLeft(1);
-            int halfComparison = doubledRemainder.compareTo(increment);
-            if (halfComparison < 0) {
-                return floorValue;
-            } else if (halfComparison > 0) {
-                return ceilValue;
-            } else if ("halfExpand".equals(roundingMode)) {
-                if (sign < 0) {
-                    return floorValue;
+        return switch (roundingMode) {
+            case FLOOR -> floorValue;
+            case CEIL -> ceilValue;
+            case TRUNC -> sign < 0 ? ceilValue : floorValue;
+            case EXPAND -> sign < 0 ? floorValue : ceilValue;
+            case HALF_EXPAND, HALF_TRUNC, HALF_EVEN, HALF_CEIL, HALF_FLOOR -> {
+                BigInteger doubledRemainder = remainder.shiftLeft(1);
+                int halfComparison = doubledRemainder.compareTo(increment);
+                if (halfComparison < 0) {
+                    yield floorValue;
+                } else if (halfComparison > 0) {
+                    yield ceilValue;
                 } else {
-                    return ceilValue;
+                    yield switch (roundingMode) {
+                        case HALF_EXPAND -> sign < 0 ? floorValue : ceilValue;
+                        case HALF_TRUNC -> sign < 0 ? ceilValue : floorValue;
+                        case HALF_EVEN -> floorQuotient.testBit(0) ? ceilValue : floorValue;
+                        case HALF_CEIL -> ceilValue;
+                        case HALF_FLOOR -> floorValue;
+                        default -> ceilValue;
+                    };
                 }
-            } else if ("halfTrunc".equals(roundingMode)) {
-                if (sign < 0) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            } else if ("halfEven".equals(roundingMode)) {
-                if (floorQuotient.testBit(0)) {
-                    return ceilValue;
-                } else {
-                    return floorValue;
-                }
-            } else if ("halfCeil".equals(roundingMode)) {
-                return ceilValue;
-            } else {
-                return floorValue;
             }
-        } else {
-            return ceilValue;
-        }
+        };
     }
 
-    static long roundLongToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
+    static long roundLongToIncrementAsIfPositive(long quantity, long increment, TemporalRoundingMode roundingMode) {
         long quotient = Math.floorDiv(quantity, increment);
         long lower = quotient * increment;
         long remainder = quantity - lower;
@@ -188,35 +124,23 @@ final class TemporalMathKernel {
         }
         long upper = lower + increment;
 
-        if ("ceil".equals(roundingMode) || "expand".equals(roundingMode)) {
-            return upper;
-        } else if ("floor".equals(roundingMode) || "trunc".equals(roundingMode)) {
-            return lower;
-        } else if ("halfExpand".equals(roundingMode) || "halfCeil".equals(roundingMode)) {
-            if (remainder * 2L >= increment) {
-                return upper;
-            } else {
-                return lower;
+        return switch (roundingMode) {
+            case CEIL, EXPAND -> upper;
+            case FLOOR, TRUNC -> lower;
+            case HALF_EXPAND, HALF_CEIL -> remainder * 2L >= increment ? upper : lower;
+            case HALF_TRUNC, HALF_FLOOR -> remainder * 2L > increment ? upper : lower;
+            case HALF_EVEN -> {
+                long doubleRemainder = remainder * 2L;
+                if (doubleRemainder < increment) {
+                    yield lower;
+                } else if (doubleRemainder > increment) {
+                    yield upper;
+                } else if (Math.floorMod(quotient, 2L) == 0L) {
+                    yield lower;
+                } else {
+                    yield upper;
+                }
             }
-        } else if ("halfTrunc".equals(roundingMode) || "halfFloor".equals(roundingMode)) {
-            if (remainder * 2L > increment) {
-                return upper;
-            } else {
-                return lower;
-            }
-        } else if ("halfEven".equals(roundingMode)) {
-            long doubleRemainder = remainder * 2L;
-            if (doubleRemainder < increment) {
-                return lower;
-            } else if (doubleRemainder > increment) {
-                return upper;
-            } else if (Math.floorMod(quotient, 2L) == 0L) {
-                return lower;
-            } else {
-                return upper;
-            }
-        } else {
-            return lower;
-        }
+        };
     }
 }

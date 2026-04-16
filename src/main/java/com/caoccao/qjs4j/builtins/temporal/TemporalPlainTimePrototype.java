@@ -195,12 +195,21 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return null;
+        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
+        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
+            long maximumIncrement = switch (parsedUnit) {
+                case HOUR -> 24L;
+                case MINUTE, SECOND -> 60L;
+                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+                default -> -1L;
+            };
+            if (maximumIncrement > 0 && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
+                context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+                return null;
+            }
         }
 
-        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, TemporalRoundingMode.fromString(roundingMode));
     }
 
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
@@ -446,7 +455,7 @@ public final class TemporalPlainTimePrototype {
             roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
                     roundedNanoseconds,
                     toStringSettings.roundingIncrementNanoseconds(),
-                    toStringSettings.roundingMode());
+                    TemporalRoundingMode.fromString(toStringSettings.roundingMode()));
         }
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
             roundedNanoseconds = 0L;

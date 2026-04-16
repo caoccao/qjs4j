@@ -20,6 +20,6 @@ public record TemporalRoundOptions(
         String smallestUnit,
         String largestUnit,
         long roundingIncrement,
-        String roundingMode,
+        TemporalRoundingMode roundingMode,
         TemporalRelativeToOption relativeToOption) {
 }

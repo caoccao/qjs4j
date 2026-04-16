@@ -406,7 +406,7 @@ public final class TemporalZonedDateTimePrototype {
                     settings.largestUnit(),
                     unitToNanoseconds(settings.smallestUnit()),
                     settings.roundingIncrement(),
-                    settings.roundingMode());
+                    settings.roundingMode().jsName());
         }
 
         String startCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
@@ -448,7 +448,7 @@ public final class TemporalZonedDateTimePrototype {
                         timeLargestUnit,
                         unitToNanoseconds(settings.smallestUnit()),
                         settings.roundingIncrement(),
-                        settings.roundingMode());
+                        settings.roundingMode().jsName());
             }
         }
 
@@ -462,7 +462,7 @@ public final class TemporalZonedDateTimePrototype {
                     settings.largestUnit(),
                     settings.smallestUnit(),
                     settings.roundingIncrement(),
-                    settings.roundingMode());
+                    settings.roundingMode().jsName());
         }
 
         boolean noRounding = settings.roundingIncrement() == 1L
@@ -484,7 +484,7 @@ public final class TemporalZonedDateTimePrototype {
                 settings.largestUnit(),
                 settings.smallestUnit(),
                 settings.roundingIncrement(),
-                settings.roundingMode());
+                settings.roundingMode().jsName());
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -755,7 +755,7 @@ public final class TemporalZonedDateTimePrototype {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return null;
         }
-        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, TemporalRoundingMode.fromString(roundingMode));
     }
 
     public static JSValue getTimeZoneTransition(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1101,7 +1101,17 @@ public final class TemporalZonedDateTimePrototype {
         if ("day".equals(smallestUnit)) {
             return roundingIncrement == 1L;
         }
-        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
+        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
+        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
+            long maximumIncrement = switch (parsedUnit) {
+                case HOUR -> 24L;
+                case MINUTE, SECOND -> 60L;
+                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+                default -> -1L;
+            };
+            return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
+        }
+        return true;
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -1220,7 +1230,7 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger roundedEpochNanoseconds;
         if ("day".equals(roundSettings.smallestUnit())) {
-            roundedEpochNanoseconds = roundZonedDateTimeToDay(context, zonedDateTime, roundSettings.roundingMode());
+            roundedEpochNanoseconds = roundZonedDateTimeToDay(context, zonedDateTime, roundSettings.roundingMode().jsName());
             if (context.hasPendingException() || roundedEpochNanoseconds == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -1324,7 +1334,7 @@ public final class TemporalZonedDateTimePrototype {
         BigInteger roundedElapsedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                 elapsedNanoseconds,
                 dayLengthNanoseconds,
-                roundingMode);
+                TemporalRoundingMode.fromString(roundingMode));
         return startNanoseconds.add(roundedElapsedNanoseconds);
     }
 
@@ -1574,7 +1584,7 @@ public final class TemporalZonedDateTimePrototype {
             roundedEpochNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
                     roundedEpochNanoseconds,
                     BigInteger.valueOf(toStringSettings.roundingIncrementNanoseconds()),
-                    toStringSettings.roundingMode());
+                    TemporalRoundingMode.fromString(toStringSettings.roundingMode()));
             if (!TemporalInstantConstructor.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Nanoseconds out of range.");
                 return JSUndefined.INSTANCE;

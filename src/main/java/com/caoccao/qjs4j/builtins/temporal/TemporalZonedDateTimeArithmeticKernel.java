@@ -157,7 +157,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
         BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds,
-                roundingMode);
+                TemporalRoundingMode.fromString(roundingMode));
         return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
     }
 }

@@ -28,7 +28,7 @@ public record TemporalDifferenceSettings(
         String largestUnit,
         String smallestUnit,
         long roundingIncrement,
-        String roundingMode) {
+        TemporalRoundingMode roundingMode) {
 
     private static long getMaximumSubDayIncrement(TemporalUnit unit) {
         return switch (unit) {
@@ -181,17 +181,15 @@ public record TemporalDifferenceSettings(
         }
 
         // 5. Validate rounding mode
-        if (!TemporalRoundingMode.isValid(roundingModeText)) {
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
 
         // 6. Negate rounding mode for since operations
         if (sinceOperation && negateModeForSince) {
-            TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingModeText);
-            if (mode != null) {
-                roundingModeText = mode.negate().jsName();
-            }
+            roundingMode = roundingMode.negate();
         }
 
         // 7. Resolve "auto" for largestUnit
@@ -217,6 +215,6 @@ public record TemporalDifferenceSettings(
             }
         }
 
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingModeText);
+        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
     }
 }
