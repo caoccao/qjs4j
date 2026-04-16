@@ -125,6 +125,53 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
     }
 
     /**
+     * Formats the fractional seconds part (ms, us, ns) to the given number of digits.
+     * Returns empty string if digits <= 0.
+     */
+    public String formatFractionalPart(int digits) {
+        if (digits <= 0) {
+            return "";
+        }
+        String nineDigits = String.format(Locale.ROOT, "%03d%03d%03d",
+                millisecond, microsecond, nanosecond);
+        return nineDigits.substring(0, digits);
+    }
+
+    /**
+     * Formats this time as a string with configurable precision.
+     * Shared by PlainTime, PlainDateTime, and ZonedDateTime toString operations.
+     *
+     * @param smallestUnit              the smallest unit to include (e.g. "minute" truncates seconds)
+     * @param autoFractionalSecondDigits if true, auto-trim trailing zeros from fractional part
+     * @param fractionalSecondDigits    number of fractional digits (0-9), ignored if auto
+     */
+    public String formatTimeString(String smallestUnit, boolean autoFractionalSecondDigits, int fractionalSecondDigits) {
+        String hourMinute = String.format(Locale.ROOT, "%02d:%02d", hour, minute);
+        if ("minute".equals(smallestUnit)) {
+            return hourMinute;
+        }
+
+        String hourMinuteSecond = String.format(Locale.ROOT, "%s:%02d", hourMinute, second);
+        if (autoFractionalSecondDigits) {
+            String fullFraction = String.format(Locale.ROOT, "%03d%03d%03d",
+                    millisecond, microsecond, nanosecond);
+            int fractionEndIndex = fullFraction.length();
+            while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
+                fractionEndIndex--;
+            }
+            if (fractionEndIndex == 0) {
+                return hourMinuteSecond;
+            }
+            return hourMinuteSecond + "." + fullFraction.substring(0, fractionEndIndex);
+        }
+
+        if (fractionalSecondDigits == 0) {
+            return hourMinuteSecond;
+        }
+        return hourMinuteSecond + "." + formatFractionalPart(fractionalSecondDigits);
+    }
+
+    /**
      * Returns total nanoseconds from midnight.
      */
     public long totalNanoseconds() {

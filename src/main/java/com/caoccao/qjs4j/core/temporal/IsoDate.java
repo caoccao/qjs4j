@@ -141,33 +141,15 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     }
 
     private static long hebrewElapsedDays(long hebrewYear) {
-        long monthsElapsed = Math.floorDiv(235L * hebrewYear - 234L, 19L);
-        long partsElapsed = 204L + 793L * Math.floorMod(monthsElapsed, 1080L);
-        long hoursElapsed = 5L
-                + 12L * monthsElapsed
-                + 793L * Math.floorDiv(monthsElapsed, 1080L)
-                + Math.floorDiv(partsElapsed, 1080L);
-        long conjunctionParts = 1080L * Math.floorMod(hoursElapsed, 24L) + Math.floorMod(partsElapsed, 1080L);
-        long dayNumber = 1L + 29L * monthsElapsed + Math.floorDiv(hoursElapsed, 24L);
-        boolean shouldPostpone = conjunctionParts >= 19_440L
-                || (!isHebrewLeapYear(hebrewYear) && Math.floorMod(dayNumber, 7L) == 2L && conjunctionParts >= 9_924L)
-                || (isHebrewLeapYear(hebrewYear - 1L) && Math.floorMod(dayNumber, 7L) == 1L && conjunctionParts >= 16_789L);
-        if (shouldPostpone) {
-            dayNumber++;
-        }
-        long weekDay = Math.floorMod(dayNumber, 7L);
-        if (weekDay == 0L || weekDay == 3L || weekDay == 5L) {
-            dayNumber++;
-        }
-        return dayNumber;
+        return TemporalCalendarMath.hebrewElapsedDays(hebrewYear);
     }
 
     private static long hebrewYearLength(long hebrewYear) {
-        return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
+        return TemporalCalendarMath.hebrewYearLength(hebrewYear);
     }
 
     private static boolean isHebrewLeapYear(long hebrewYear) {
-        return Math.floorMod(7L * hebrewYear + 1L, 19L) < 7L;
+        return TemporalCalendarMath.hebrewLeapYear(hebrewYear);
     }
 
     public static boolean isLeapYear(int year) {

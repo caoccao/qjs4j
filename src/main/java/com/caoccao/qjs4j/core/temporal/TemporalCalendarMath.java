@@ -626,7 +626,7 @@ public final class TemporalCalendarMath {
         return hebrewElapsedDays(hebrewYear) + daysBeforeMonth + dayOfMonth - 1L;
     }
 
-    private static long hebrewElapsedDays(long hebrewYear) {
+    public static long hebrewElapsedDays(long hebrewYear) {
         long monthsElapsed = Math.floorDiv(235L * hebrewYear - 234L, 19L);
         long partsElapsed = 204L + 793L * floorMod(monthsElapsed, 1080L);
         long hoursElapsed = 5L
@@ -650,7 +650,7 @@ public final class TemporalCalendarMath {
         return dayNumber;
     }
 
-    private static boolean hebrewLeapYear(long hebrewYear) {
+    public static boolean hebrewLeapYear(long hebrewYear) {
         return floorMod(7L * hebrewYear + 1L, 19L) < 7L;
     }
 
@@ -666,7 +666,7 @@ public final class TemporalCalendarMath {
         return IsoDate.createFromEpochDay(epochDay);
     }
 
-    private static long hebrewYearLength(long hebrewYear) {
+    public static long hebrewYearLength(long hebrewYear) {
         return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
     }
 

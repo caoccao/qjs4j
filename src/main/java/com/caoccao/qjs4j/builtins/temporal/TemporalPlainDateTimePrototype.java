@@ -423,14 +423,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String getToStringFractionalPart(IsoTime time, int digits) {
-        if (digits <= 0) {
-            return "";
-        }
-        String nineDigits = String.format("%03d%03d%03d",
-                time.millisecond(),
-                time.microsecond(),
-                time.nanosecond());
-        return nineDigits.substring(0, digits);
+        return time.formatFractionalPart(digits);
     }
 
     private static TemporalFractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
@@ -564,32 +557,10 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String getToStringTimeString(IsoTime time, TemporalPlainDateTimeToStringSettings toStringSettings) {
-        String hourMinute = String.format("%02d:%02d", time.hour(), time.minute());
-        if ("minute".equals(toStringSettings.smallestUnit())) {
-            return hourMinute;
-        }
-
-        String hourMinuteSecond = String.format("%s:%02d", hourMinute, time.second());
-        if (toStringSettings.autoFractionalSecondDigits()) {
-            String fullFraction = String.format("%03d%03d%03d",
-                    time.millisecond(),
-                    time.microsecond(),
-                    time.nanosecond());
-            int fractionEndIndex = fullFraction.length();
-            while (fractionEndIndex > 0 && fullFraction.charAt(fractionEndIndex - 1) == '0') {
-                fractionEndIndex--;
-            }
-            if (fractionEndIndex == 0) {
-                return hourMinuteSecond;
-            }
-            return hourMinuteSecond + "." + fullFraction.substring(0, fractionEndIndex);
-        }
-
-        int fractionDigits = toStringSettings.fractionalSecondDigits();
-        if (fractionDigits == 0) {
-            return hourMinuteSecond;
-        }
-        return hourMinuteSecond + "." + getToStringFractionalPart(time, fractionDigits);
+        return time.formatTimeString(
+                toStringSettings.smallestUnit(),
+                toStringSettings.autoFractionalSecondDigits(),
+                toStringSettings.fractionalSecondDigits());
     }
 
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
