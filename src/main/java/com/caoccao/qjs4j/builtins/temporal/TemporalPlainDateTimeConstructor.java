@@ -23,8 +23,8 @@ import com.caoccao.qjs4j.core.temporal.*;
  * Implementation of Temporal.PlainDateTime constructor and static methods.
  */
 public final class TemporalPlainDateTimeConstructor {
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
+    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
+    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
 
     private TemporalPlainDateTimeConstructor() {
     }

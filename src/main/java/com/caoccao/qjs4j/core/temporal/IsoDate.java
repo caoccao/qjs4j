@@ -29,20 +29,7 @@ import java.util.Locale;
  */
 public record IsoDate(int year, int month, int day) implements Comparable<IsoDate> {
 
-    private static final long COPTIC_EPOCH_DAY_OFFSET = -615_558L;
     private static final int[] DAYS_IN_MONTH = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    private static final long ETHIOPIC_EPOCH_DAY_OFFSET = -716_367L;
-    private static final long HEBREW_EPOCH_DAY_OFFSET = -2_092_591L;
-    private static final long ISLAMIC_CIVIL_EPOCH_DAY_OFFSET = -492_148L;
-    private static final long ISLAMIC_TBLA_EPOCH_DAY_OFFSET = -492_149L;
-    private static final int[] LUNISOLAR_MONTH_LENGTHS_YEAR_1899 = {
-            30, 29, 30, 30, 29, 30, 29, 30, 29, 30, 29, 30
-    };
-    private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
-            1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
-            1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
-            1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469
-    };
 
     public static IsoDate createFromEpochDay(long epochDay) {
         // Algorithm from https://howardhinnant.github.io/date_algorithms.html
@@ -326,7 +313,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     }
 
     private IsoCalendarDate toHebrewCalendarDate() {
-        long hebrewAbsoluteDay = toEpochDay() - HEBREW_EPOCH_DAY_OFFSET;
+        long hebrewAbsoluteDay = toEpochDay() - TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
         long estimatedYear = Math.floorDiv(hebrewAbsoluteDay * 98_496L, 35_975_351L) + 1L;
         while (hebrewAbsoluteDay < hebrewElapsedDays(estimatedYear)) {
             estimatedYear--;
@@ -432,7 +419,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             if (!gregorianDate.isBefore(yearStartDate)) {
                 long dayOffset = gregorianDate.toEpochDay() - yearStartDate.toEpochDay();
                 int monthNumber = 1;
-                for (int monthLength : LUNISOLAR_MONTH_LENGTHS_YEAR_1899) {
+                for (int monthLength : TemporalConstants.LUNISOLAR_MONTH_LENGTHS_YEAR_1899) {
                     if (dayOffset < monthLength) {
                         int dayOfMonth = (int) dayOffset + 1;
                         return new IsoCalendarDate(1899, monthNumber, TemporalUtils.monthCode(monthNumber), dayOfMonth);
@@ -500,10 +487,10 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     private IsoCalendarDate toNonIsoCalendarDate(String calendarId) {
         return switch (calendarId) {
-            case "coptic" -> toAlexandrianCalendarDate(COPTIC_EPOCH_DAY_OFFSET);
-            case "ethiopic" -> toAlexandrianCalendarDate(ETHIOPIC_EPOCH_DAY_OFFSET);
+            case "coptic" -> toAlexandrianCalendarDate(TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
+            case "ethiopic" -> toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
             case "ethioaa" -> {
-                IsoCalendarDate ethiopicDate = toAlexandrianCalendarDate(ETHIOPIC_EPOCH_DAY_OFFSET);
+                IsoCalendarDate ethiopicDate = toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
                 yield new IsoCalendarDate(
                         ethiopicDate.year() + 5500,
                         ethiopicDate.month(),
@@ -511,8 +498,8 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
                         ethiopicDate.day());
             }
             case "indian" -> toIndianCalendarDate();
-            case "islamic-civil" -> toIslamicCalendarDate(ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
-            case "islamic-tbla" -> toIslamicCalendarDate(ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+            case "islamic-civil" -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            case "islamic-tbla" -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
             case "islamic-umalqura" -> toUmalquraCalendarDate();
             case "persian" -> toPersianCalendarDate();
             case "hebrew" -> toHebrewCalendarDate();
@@ -611,7 +598,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             int dayValue = hijrahDate.get(ChronoField.DAY_OF_MONTH);
             return new IsoCalendarDate(yearValue, monthValue, TemporalUtils.monthCode(monthValue), dayValue);
         } catch (DateTimeException dateTimeException) {
-            return toIslamicCalendarDate(ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            return toIslamicCalendarDate(TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
     }
 

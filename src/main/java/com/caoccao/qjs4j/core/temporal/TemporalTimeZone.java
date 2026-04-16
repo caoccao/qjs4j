@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
 public final class TemporalTimeZone {
     private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
             createAvailableTimeZoneIdentifierLookup();
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
     private static final Pattern OFFSET_BASIC_PATTERN =
             Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
     private static final Pattern OFFSET_EXTENDED_PATTERN =

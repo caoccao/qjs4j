@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDateTimeOffset;
+import com.caoccao.qjs4j.core.temporal.TemporalConstants;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
@@ -31,7 +32,7 @@ public final class TemporalInstantConstructor {
 
     static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
 
     private TemporalInstantConstructor() {
     }

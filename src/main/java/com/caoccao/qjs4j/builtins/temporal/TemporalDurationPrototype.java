@@ -31,22 +31,21 @@ import java.util.Locale;
  * Implementation of Temporal.Duration prototype methods.
  */
 public final class TemporalDurationPrototype {
-    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
-    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
+    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
+    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final BigInteger MAX_FLOAT64_MICROSECONDS_COMPONENT =
             new BigInteger("9007199254740991475711");
     private static final BigInteger MAX_FLOAT64_MILLISECONDS_COMPONENT =
             new BigInteger("9007199254740991487");
     private static final BigInteger MAX_FLOAT64_NANOSECONDS_COMPONENT =
             new BigInteger("9007199254740991463129087");
-    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
-    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
-    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS =
-            BigInteger.valueOf(9_007_199_254_740_992L).multiply(SECOND_NANOSECONDS).subtract(BigInteger.ONE);
+    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
+    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final String TYPE_NAME = "Temporal.Duration";
-    private static final BigInteger WEEK_NANOSECONDS = DAY_NANOSECONDS.multiply(BigInteger.valueOf(7L));
+    private static final BigInteger WEEK_NANOSECONDS = TemporalConstants.BI_WEEK_NANOSECONDS;
 
     private TemporalDurationPrototype() {
     }
@@ -466,68 +465,21 @@ public final class TemporalDurationPrototype {
     }
 
     private static String canonicalizeDurationToStringSmallestUnit(JSContext context, String unitText) {
-        String canonicalizedUnit = switch (unitText) {
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
-        if (canonicalizedUnit == null) {
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        if (unit == null || unit.isLargerThan(TemporalUnit.SECOND)) {
             context.throwRangeError("Temporal error: Invalid smallestUnit.");
             return null;
         }
-        return canonicalizedUnit;
+        return unit.jsName();
     }
 
     private static String canonicalizeTemporalDurationUnit(JSContext context, String unitText, String optionName) {
-        String normalizedUnitText;
-        switch (unitText) {
-            case "year":
-            case "years":
-                normalizedUnitText = "year";
-                break;
-            case "month":
-            case "months":
-                normalizedUnitText = "month";
-                break;
-            case "week":
-            case "weeks":
-                normalizedUnitText = "week";
-                break;
-            case "day":
-            case "days":
-                normalizedUnitText = "day";
-                break;
-            case "hour":
-            case "hours":
-                normalizedUnitText = "hour";
-                break;
-            case "minute":
-            case "minutes":
-                normalizedUnitText = "minute";
-                break;
-            case "second":
-            case "seconds":
-                normalizedUnitText = "second";
-                break;
-            case "millisecond":
-            case "milliseconds":
-                normalizedUnitText = "millisecond";
-                break;
-            case "microsecond":
-            case "microseconds":
-                normalizedUnitText = "microsecond";
-                break;
-            case "nanosecond":
-            case "nanoseconds":
-                normalizedUnitText = "nanosecond";
-                break;
-            default:
-                context.throwRangeError("Temporal error: Invalid " + optionName + ".");
-                return null;
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        if (unit == null) {
+            context.throwRangeError("Temporal error: Invalid " + optionName + ".");
+            return null;
         }
-        return normalizedUnitText;
+        return unit.jsName();
     }
 
     private static JSTemporalDuration checkReceiver(JSContext context, JSValue thisArg, String methodName) {

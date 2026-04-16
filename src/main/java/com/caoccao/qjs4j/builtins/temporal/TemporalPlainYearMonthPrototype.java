@@ -29,9 +29,9 @@ public final class TemporalPlainYearMonthPrototype {
     private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
     private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
     private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
-    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = 1_000_000_000L;
+    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
+    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
+    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainYearMonth";
     private static final String UNIT_AUTO = "auto";
     private static final String UNIT_MONTH = "month";
@@ -219,11 +219,8 @@ public final class TemporalPlainYearMonthPrototype {
         if (allowAuto && UNIT_AUTO.equals(unitText)) {
             return UNIT_AUTO;
         }
-        return switch (unitText) {
-            case UNIT_YEAR, "years" -> UNIT_YEAR;
-            case UNIT_MONTH, "months" -> UNIT_MONTH;
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isLargerOrEqual(TemporalUnit.MONTH) ? unit.jsName() : null;
     }
 
     private static JSTemporalPlainYearMonth checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -790,15 +787,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     private static boolean isYearMonthUnit(String unit) {
@@ -903,13 +892,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
+        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
+        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     private static TemporalParsedMonthCode parseMonthCodeForWith(JSContext context, String monthCode) {
@@ -1195,11 +1179,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case UNIT_YEAR -> 0;
-            case UNIT_MONTH -> 1;
-            default -> 2;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

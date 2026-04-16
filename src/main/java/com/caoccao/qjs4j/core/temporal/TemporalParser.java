@@ -25,10 +25,10 @@ import java.math.BigInteger;
  * ISO 8601 string parser for Temporal types.
  */
 public final class TemporalParser {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
 
     private final String input;
     private int position;

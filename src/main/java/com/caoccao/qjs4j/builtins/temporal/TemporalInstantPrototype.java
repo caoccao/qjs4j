@@ -26,19 +26,19 @@ import java.util.Locale;
  * Implementation of Temporal.Instant prototype methods.
  */
 public final class TemporalInstantPrototype {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger NS_PER_SECOND = BILLION;
-    private static final BigInteger NS_PER_US = BigInteger.valueOf(1_000L);
-    private static final long SOLAR_DAY_HOURS = 24L;
-    private static final long SOLAR_DAY_MICROSECONDS = 86_400_000_000L;
-    private static final long SOLAR_DAY_MILLISECONDS = 86_400_000L;
-    private static final long SOLAR_DAY_MINUTES = 1_440L;
-    private static final long SOLAR_DAY_NANOSECONDS = 86_400_000_000_000L;
-    private static final long SOLAR_DAY_SECONDS = 86_400L;
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
+    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_US = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final long SOLAR_DAY_HOURS = TemporalConstants.SOLAR_DAY_HOURS;
+    private static final long SOLAR_DAY_MICROSECONDS = TemporalConstants.SOLAR_DAY_MICROSECONDS;
+    private static final long SOLAR_DAY_MILLISECONDS = TemporalConstants.SOLAR_DAY_MILLISECONDS;
+    private static final long SOLAR_DAY_MINUTES = TemporalConstants.SOLAR_DAY_MINUTES;
+    private static final long SOLAR_DAY_NANOSECONDS = TemporalConstants.SOLAR_DAY_NANOSECONDS;
+    private static final long SOLAR_DAY_SECONDS = TemporalConstants.SOLAR_DAY_SECONDS;
     private static final String TYPE_NAME = "Temporal.Instant";
 
     private TemporalInstantPrototype() {
@@ -313,39 +313,16 @@ public final class TemporalInstantPrototype {
     }
 
     private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     private static boolean isValidInstantToStringRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     private static String normalizeSmallestUnit(String unit) {
-        return switch (unit) {
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null && tu.isTimeUnit() ? tu.jsName() : null;
     }
 
     private static String normalizeToStringSmallestUnit(String unit) {

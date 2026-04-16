@@ -26,15 +26,15 @@ import java.time.DateTimeException;
  * Implementation of Temporal.PlainDateTime prototype methods.
  */
 public final class TemporalPlainDateTimePrototype {
-    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
-    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
-    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
-    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
-    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
+    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
+    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
+    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
+    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final String TYPE_NAME = "Temporal.PlainDateTime";
 
     private TemporalPlainDateTimePrototype() {
@@ -217,44 +217,21 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        return switch (unitText) {
-            case "auto" -> allowAuto ? "auto" : null;
-            case "year", "years" -> "year";
-            case "month", "months" -> "month";
-            case "week", "weeks" -> "week";
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        if ("auto".equals(unitText)) {
+            return allowAuto ? "auto" : null;
+        }
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null ? unit.jsName() : null;
     }
 
     private static String canonicalizeSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isSmallerOrEqual(TemporalUnit.MINUTE) ? unit.jsName() : null;
     }
 
     private static JSTemporalPlainDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -859,15 +836,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static boolean isValidRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -936,13 +905,8 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
+        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
+        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1088,19 +1052,8 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case "year" -> 0;
-            case "month" -> 1;
-            case "week" -> 2;
-            case "day" -> 3;
-            case "hour" -> 4;
-            case "minute" -> 5;
-            case "second" -> 6;
-            case "millisecond" -> 7;
-            case "microsecond" -> 8;
-            case "nanosecond" -> 9;
-            default -> 10;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -36,15 +36,14 @@ public final class TemporalDurationConstructor {
     static final String UNIT_MINUTE = "minute";
     static final String UNIT_NANOSECOND = "nanosecond";
     static final String UNIT_SECOND = "second";
-    private static final long CALENDAR_UNIT_MAX = 4_294_967_295L;
-    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
-    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
-    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
-    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS =
-            BigInteger.valueOf(9_007_199_254_740_992L).multiply(SECOND_NANOSECONDS).subtract(BigInteger.ONE);
+    private static final long CALENDAR_UNIT_MAX = TemporalConstants.CALENDAR_UNIT_MAX;
+    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
+    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
+    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final String UNIT_MONTH = "month";
     private static final String UNIT_WEEK = "week";
     private static final String UNIT_YEAR = "year";
@@ -1193,16 +1192,8 @@ public final class TemporalDurationConstructor {
     }
 
     private static int temporalUnitRank(String temporalUnit) {
-        return switch (temporalUnit) {
-            case UNIT_DAY -> 0;
-            case UNIT_HOUR -> 1;
-            case UNIT_MINUTE -> 2;
-            case UNIT_SECOND -> 3;
-            case UNIT_MILLISECOND -> 4;
-            case UNIT_MICROSECOND -> 5;
-            case UNIT_NANOSECOND -> 6;
-            default -> 7;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(temporalUnit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     private static BigInteger toBigIntegerFromIntegralDouble(double value) {

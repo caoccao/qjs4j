@@ -25,8 +25,8 @@ import java.math.BigInteger;
  * Implementation of Temporal.PlainTime prototype methods.
  */
 public final class TemporalPlainTimePrototype {
-    private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
-    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
+    private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
+    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainTime";
 
     private TemporalPlainTimePrototype() {
@@ -56,7 +56,7 @@ public final class TemporalPlainTimePrototype {
             durationNanoseconds = durationNanoseconds.negate();
         }
 
-        BigInteger dayNanoseconds = BigInteger.valueOf(86_400_000_000_000L);
+        BigInteger dayNanoseconds = DAY_NANOSECONDS;
         BigInteger timeNanoseconds = BigInteger.valueOf(plainTime.getIsoTime().totalNanoseconds());
         BigInteger resultNanoseconds = timeNanoseconds.add(durationNanoseconds).remainder(dayNanoseconds);
         if (resultNanoseconds.signum() < 0) {
@@ -72,26 +72,13 @@ public final class TemporalPlainTimePrototype {
         if ("auto".equals(unitText) && largestUnit) {
             return "auto";
         }
-        return switch (unitText) {
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isTimeUnit() ? unit.jsName() : null;
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isSmallerOrEqual(TemporalUnit.MINUTE) ? unit.jsName() : null;
     }
 
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -527,15 +514,8 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case "hour" -> 0;
-            case "minute" -> 1;
-            case "second" -> 2;
-            case "millisecond" -> 3;
-            case "microsecond" -> 4;
-            case "nanosecond" -> 5;
-            default -> 6;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

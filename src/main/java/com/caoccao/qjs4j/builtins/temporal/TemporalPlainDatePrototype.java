@@ -31,14 +31,14 @@ public final class TemporalPlainDatePrototype {
     private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
     private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
     private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
-    private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
-    private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
-    private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
-    private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
-    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = 1_000_000_000L;
+    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
+    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
+    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
+    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
+    private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainDate";
     private static final String UNIT_AUTO = "auto";
     private static final String UNIT_DAY = "day";
@@ -538,19 +538,8 @@ public final class TemporalPlainDatePrototype {
         if (allowAuto && UNIT_AUTO.equals(unitText)) {
             return UNIT_AUTO;
         }
-        return switch (unitText) {
-            case UNIT_YEAR, "years" -> UNIT_YEAR;
-            case UNIT_MONTH, "months" -> UNIT_MONTH;
-            case UNIT_WEEK, "weeks" -> UNIT_WEEK;
-            case UNIT_DAY, "days" -> UNIT_DAY;
-            case UNIT_HOUR, "hours" -> UNIT_HOUR;
-            case UNIT_MINUTE, "minutes" -> UNIT_MINUTE;
-            case UNIT_SECOND, "seconds" -> UNIT_SECOND;
-            case UNIT_MILLISECOND, "milliseconds" -> UNIT_MILLISECOND;
-            case UNIT_MICROSECOND, "microseconds" -> UNIT_MICROSECOND;
-            case UNIT_NANOSECOND, "nanoseconds" -> UNIT_NANOSECOND;
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null ? unit.jsName() : null;
     }
 
     private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -977,15 +966,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return "ceil".equals(roundingMode)
-                || "floor".equals(roundingMode)
-                || "trunc".equals(roundingMode)
-                || "expand".equals(roundingMode)
-                || "halfExpand".equals(roundingMode)
-                || "halfTrunc".equals(roundingMode)
-                || "halfEven".equals(roundingMode)
-                || "halfCeil".equals(roundingMode)
-                || "halfFloor".equals(roundingMode);
+        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
@@ -1095,13 +1076,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
+        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
+        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     private static TemporalNudgeResult nudgeToCalendarUnit(
@@ -1427,35 +1403,16 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static String temporalUnitByRank(int unitRank) {
-        return switch (unitRank) {
-            case 0 -> UNIT_YEAR;
-            case 1 -> UNIT_MONTH;
-            case 2 -> UNIT_WEEK;
-            case 3 -> UNIT_DAY;
-            case 4 -> UNIT_HOUR;
-            case 5 -> UNIT_MINUTE;
-            case 6 -> UNIT_SECOND;
-            case 7 -> UNIT_MILLISECOND;
-            case 8 -> UNIT_MICROSECOND;
-            case 9 -> UNIT_NANOSECOND;
-            default -> UNIT_NANOSECOND;
-        };
+        TemporalUnit[] units = TemporalUnit.values();
+        if (unitRank >= 0 && unitRank < units.length) {
+            return units[unitRank].jsName();
+        }
+        return TemporalUnit.NANOSECOND.jsName();
     }
 
     private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case UNIT_YEAR -> 0;
-            case UNIT_MONTH -> 1;
-            case UNIT_WEEK -> 2;
-            case UNIT_DAY -> 3;
-            case UNIT_HOUR -> 4;
-            case UNIT_MINUTE -> 5;
-            case UNIT_SECOND -> 6;
-            case UNIT_MILLISECOND -> 7;
-            case UNIT_MICROSECOND -> 8;
-            case UNIT_NANOSECOND -> 9;
-            default -> 10;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -27,14 +27,14 @@ import java.util.Map;
  * Implementation of Temporal.ZonedDateTime prototype methods.
  */
 public final class TemporalZonedDateTimePrototype {
-    private static final BigInteger BILLION = BigInteger.valueOf(1_000_000_000L);
-    private static final long DAY_NANOSECONDS = 86_400_000_000_000L;
-    private static final long MAX_ROUNDING_INCREMENT = 1_000_000_000L;
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger NS_PER_SECOND = BILLION;
-    private static final BigInteger NS_PER_US = BigInteger.valueOf(1_000L);
+    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
+    private static final long DAY_NANOSECONDS = TemporalConstants.DAY_NANOSECONDS;
+    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_BILLION;
+    private static final BigInteger NS_PER_US = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
     private static final Map<String, String> TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS = Map.ofEntries(
             Map.entry("europe/nicosia", "Asia/Nicosia"),
             Map.entry("asia/ashkhabad", "Asia/Ashgabat"),
@@ -256,49 +256,21 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        return switch (unitText) {
-            case "auto" -> allowAuto ? "auto" : null;
-            case "year", "years" -> "year";
-            case "month", "months" -> "month";
-            case "week", "weeks" -> "week";
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        if ("auto".equals(unitText)) {
+            return allowAuto ? "auto" : null;
+        }
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null ? unit.jsName() : null;
     }
 
     private static String canonicalizeRoundSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        return switch (unitText) {
-            case "year", "years" -> "year";
-            case "month", "months" -> "month";
-            case "week", "weeks" -> "week";
-            case "day", "days" -> "day";
-            case "hour", "hours" -> "hour";
-            case "minute", "minutes" -> "minute";
-            case "second", "seconds" -> "second";
-            case "millisecond", "milliseconds" -> "millisecond";
-            case "microsecond", "microseconds" -> "microsecond";
-            case "nanosecond", "nanoseconds" -> "nanosecond";
-            default -> null;
-        };
+        TemporalUnit unit = TemporalUnit.fromString(unitText);
+        return unit != null ? unit.jsName() : null;
     }
 
     private static JSTemporalZonedDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -1342,13 +1314,8 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String negateRoundingMode(String roundingMode) {
-        return switch (roundingMode) {
-            case "ceil" -> "floor";
-            case "floor" -> "ceil";
-            case "halfCeil" -> "halfFloor";
-            case "halfFloor" -> "halfCeil";
-            default -> roundingMode;
-        };
+        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
+        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1609,19 +1576,8 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static int temporalUnitRank(String unit) {
-        return switch (unit) {
-            case "year" -> 0;
-            case "month" -> 1;
-            case "week" -> 2;
-            case "day" -> 3;
-            case "hour" -> 4;
-            case "minute" -> 5;
-            case "second" -> 6;
-            case "millisecond" -> 7;
-            case "microsecond" -> 8;
-            case "nanosecond" -> 9;
-            default -> 10;
-        };
+        TemporalUnit tu = TemporalUnit.fromString(unit);
+        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {

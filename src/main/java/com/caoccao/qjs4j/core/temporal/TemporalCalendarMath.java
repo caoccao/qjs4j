@@ -32,29 +32,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * Temporal calendar math for non-ISO calendars used by Temporal.PlainDate.
  */
 public final class TemporalCalendarMath {
-    private static final long COPTIC_EPOCH_DAY_OFFSET = -615_558L;
     private static final int DEFAULT_REFERENCE_ISO_YEAR = 1972;
-    private static final long ETHIOPIC_EPOCH_DAY_OFFSET = -716_367L;
-    private static final long HEBREW_EPOCH_DAY_OFFSET = -2_092_591L;
-    private static final long ISLAMIC_CIVIL_EPOCH_DAY_OFFSET = -492_148L;
-    private static final long ISLAMIC_TBLA_EPOCH_DAY_OFFSET = -492_149L;
-    private static final int[] LUNISOLAR_MONTH_LENGTHS_YEAR_1899 = {
-            30, 29, 30, 30, 29, 30, 29, 30, 29, 30, 29, 30
-    };
     private static final int MAX_REFERENCE_ISO_DATE_CACHE_SIZE = 4_096;
     private static final int MAX_REFERENCE_ISO_YEAR = 2050;
-    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
     private static final int MIN_REFERENCE_ISO_YEAR = 1900;
-    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
     private static final ConcurrentHashMap<TemporalReferenceIsoDateLookupKey, IsoDate> REFERENCE_ISO_DATE_HIT_CACHE =
             new ConcurrentHashMap<>();
     private static final Set<TemporalReferenceIsoDateLookupKey> REFERENCE_ISO_DATE_MISS_CACHE =
             ConcurrentHashMap.newKeySet();
-    private static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
-            1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
-            1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
-            1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469
-    };
     private static final int YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS = 400;
 
     private TemporalCalendarMath() {
@@ -164,7 +149,7 @@ public final class TemporalCalendarMath {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
@@ -192,7 +177,7 @@ public final class TemporalCalendarMath {
         }
         long calendarOrdinalDay = alexandrianOrdinalDay(calendarYear, monthCodeData.month(), dayOfMonth);
         long epochDay = calendarOrdinalDay + offsetEpochDay;
-        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return IsoDate.createFromEpochDay(epochDay);
@@ -228,16 +213,16 @@ public final class TemporalCalendarMath {
             case "buddhist" -> toIsoDateFromGregorianLike(calendarYear - 543, monthSlot.monthCode(), regulatedDay);
             case "roc" -> toIsoDateFromGregorianLike(calendarYear + 1911, monthSlot.monthCode(), regulatedDay);
             case "coptic" ->
-                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, COPTIC_EPOCH_DAY_OFFSET);
+                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
             case "ethiopic" ->
-                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, ETHIOPIC_EPOCH_DAY_OFFSET);
+                    alexandrianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
             case "ethioaa" ->
-                    alexandrianToIsoDate(calendarYear - 5500, monthSlot.monthCode(), regulatedDay, ETHIOPIC_EPOCH_DAY_OFFSET);
+                    alexandrianToIsoDate(calendarYear - 5500, monthSlot.monthCode(), regulatedDay, TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
             case "indian" -> indianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case "islamic-civil" ->
-                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
             case "islamic-tbla" ->
-                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+                    islamicToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
             case "islamic-umalqura" -> umalquraToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case "persian" -> persianToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
             case "hebrew" -> hebrewToIsoDate(calendarYear, monthSlot.monthCode(), regulatedDay);
@@ -318,7 +303,7 @@ public final class TemporalCalendarMath {
                 calendarId,
                 targetYear,
                 targetMonthCode,
-                MIN_SUPPORTED_EPOCH_DAY);
+                TemporalConstants.MIN_SUPPORTED_EPOCH_DAY);
         if (minimumBoundaryIsoDate != null) {
             return minimumBoundaryIsoDate;
         } else {
@@ -326,7 +311,7 @@ public final class TemporalCalendarMath {
                     calendarId,
                     targetYear,
                     targetMonthCode,
-                    MAX_SUPPORTED_EPOCH_DAY);
+                    TemporalConstants.MAX_SUPPORTED_EPOCH_DAY);
         }
     }
 
@@ -570,10 +555,10 @@ public final class TemporalCalendarMath {
             return getPersianMonthSlots(calendarYear);
         }
         if ("islamic-civil".equals(calendarId)) {
-            return getIslamicMonthSlots(calendarYear, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
         if ("islamic-tbla".equals(calendarId)) {
-            return getIslamicMonthSlots(calendarYear, ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
         }
         if ("islamic-umalqura".equals(calendarId)) {
             return getUmalquraMonthSlots(calendarYear);
@@ -615,7 +600,7 @@ public final class TemporalCalendarMath {
                 HijrahDate monthStart = HijrahChronology.INSTANCE.date(calendarYear, monthNumber, 1);
                 dayCount = monthStart.lengthOfMonth();
             } catch (DateTimeException dateTimeException) {
-                dayCount = islamicDaysInMonth(calendarYear, monthNumber, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+                dayCount = islamicDaysInMonth(calendarYear, monthNumber, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
             }
             monthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), dayCount));
         }
@@ -674,8 +659,8 @@ public final class TemporalCalendarMath {
         if (hebrewAbsoluteDay == Long.MIN_VALUE) {
             return null;
         }
-        long epochDay = hebrewAbsoluteDay + HEBREW_EPOCH_DAY_OFFSET;
-        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        long epochDay = hebrewAbsoluteDay + TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return IsoDate.createFromEpochDay(epochDay);
@@ -717,7 +702,7 @@ public final class TemporalCalendarMath {
             dayOffset += dayOfMonth - 1L;
         }
         long resultEpochDay = yearStartIsoDate.toEpochDay() + dayOffset;
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return IsoDate.createFromEpochDay(resultEpochDay);
@@ -732,8 +717,8 @@ public final class TemporalCalendarMath {
             case "ethioaa" -> alexandrianLeapYear(calendarYear - 5500);
             case "hebrew" -> hebrewLeapYear(calendarYear);
             case "indian" -> IsoDate.isLeapYear(calendarYear + 78);
-            case "islamic-civil" -> islamicDaysInMonth(calendarYear, 12, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
-            case "islamic-tbla" -> islamicDaysInMonth(calendarYear, 12, ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
+            case "islamic-civil" -> islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
+            case "islamic-tbla" -> islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
             case "islamic-umalqura" -> isKnownUmalquraLeapYear(calendarYear)
                     || (calendarYear < 1390 || calendarYear > 1469)
                     && getUmalquraMonthSlots(calendarYear).get(11).daysInMonth() == 30;
@@ -750,7 +735,7 @@ public final class TemporalCalendarMath {
     }
 
     private static boolean isKnownUmalquraLeapYear(int islamicYear) {
-        for (int leapYear : UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469) {
+        for (int leapYear : TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469) {
             if (leapYear == islamicYear) {
                 return true;
             }
@@ -797,7 +782,7 @@ public final class TemporalCalendarMath {
                 + dayOfMonth
                 - 1L;
         long epochDay = ordinalDay + epochDayOffset;
-        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return IsoDate.createFromEpochDay(epochDay);
@@ -822,14 +807,14 @@ public final class TemporalCalendarMath {
                 if (monthNumber < 1 || monthNumber > 12) {
                     return null;
                 }
-                int maxDay = LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthNumber - 1];
+                int maxDay = TemporalConstants.LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthNumber - 1];
                 if (dayOfMonth < 1 || dayOfMonth > maxDay) {
                     return null;
                 }
                 LocalDate yearStartDate = LocalDate.of(1899, 2, 10);
                 int dayOffset = dayOfMonth - 1;
                 for (int monthIndex = 0; monthIndex < monthNumber - 1; monthIndex++) {
-                    dayOffset += LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthIndex];
+                    dayOffset += TemporalConstants.LUNISOLAR_MONTH_LENGTHS_YEAR_1899[monthIndex];
                 }
                 LocalDate targetDate = yearStartDate.plusDays(dayOffset);
                 return new IsoDate(targetDate.getYear(), targetDate.getMonthValue(), targetDate.getDayOfMonth());
@@ -953,13 +938,13 @@ public final class TemporalCalendarMath {
             IsoDate nowruzIsoDate = new IsoDate(persianYearInfo.gregorianYear(), 3, persianYearInfo.marchDay());
             long dayOfYearOffset = persianDayOfYearOffset(monthNumber, dayOfMonth);
             long resultEpochDay = nowruzIsoDate.toEpochDay() + dayOfYearOffset;
-            if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
                 return null;
             }
             return IsoDate.createFromEpochDay(resultEpochDay);
         }
         long resultEpochDay = IsoGregorianYear.persianCorrectedEpochDay(persianYear, monthNumber, dayOfMonth);
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
+        if (resultEpochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
             return null;
         }
         return IsoDate.createFromEpochDay(resultEpochDay);
@@ -1201,14 +1186,14 @@ public final class TemporalCalendarMath {
             return null;
         }
         if (isUnsupportedUmalquraYear(islamicYear)) {
-            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
         try {
             HijrahDate hijrahDate = HijrahChronology.INSTANCE.date(islamicYear, monthNumber, dayOfMonth);
             LocalDate localDate = LocalDate.from(hijrahDate);
             return new IsoDate(localDate.getYear(), localDate.getMonthValue(), localDate.getDayOfMonth());
         } catch (DateTimeException dateTimeException) {
-            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth, ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            return islamicToIsoDate(islamicYear, monthCode, dayOfMonth, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }
     }
 }

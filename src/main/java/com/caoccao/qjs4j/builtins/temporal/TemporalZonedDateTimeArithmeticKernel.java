@@ -24,10 +24,10 @@ import java.math.BigInteger;
 import java.time.DateTimeException;
 
 final class TemporalZonedDateTimeArithmeticKernel {
-    private static final BigInteger NS_PER_HOUR = BigInteger.valueOf(3_600_000_000_000L);
-    private static final BigInteger NS_PER_MINUTE = BigInteger.valueOf(60_000_000_000L);
-    private static final BigInteger NS_PER_MS = BigInteger.valueOf(1_000_000L);
-    private static final BigInteger NS_PER_SECOND = BigInteger.valueOf(1_000_000_000L);
+    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
+    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
+    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
 
     private TemporalZonedDateTimeArithmeticKernel() {
     }
