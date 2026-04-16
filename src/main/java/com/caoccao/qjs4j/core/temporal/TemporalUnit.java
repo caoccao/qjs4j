@@ -67,24 +67,10 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the JS-canonical singular name (e.g. "year", "nanosecond").
-     */
-    public String jsName() {
-        return jsName;
-    }
-
-    /**
      * Returns true for YEAR, MONTH, WEEK, DAY.
      */
     public boolean isDateUnit() {
         return ordinal() <= DAY.ordinal();
-    }
-
-    /**
-     * Returns true for HOUR through NANOSECOND.
-     */
-    public boolean isTimeUnit() {
-        return ordinal() >= HOUR.ordinal();
     }
 
     /**
@@ -95,13 +81,6 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns true if this unit is smaller than (or equal to) the other unit.
-     */
-    public boolean isSmallerOrEqual(TemporalUnit other) {
-        return this.ordinal() >= other.ordinal();
-    }
-
-    /**
      * Returns true if this unit is strictly larger than the other unit.
      */
     public boolean isLargerThan(TemporalUnit other) {
@@ -109,10 +88,31 @@ public enum TemporalUnit {
     }
 
     /**
+     * Returns true if this unit is smaller than (or equal to) the other unit.
+     */
+    public boolean isSmallerOrEqual(TemporalUnit other) {
+        return this.ordinal() >= other.ordinal();
+    }
+
+    /**
      * Returns true if this unit is strictly smaller than the other unit.
      */
     public boolean isSmallerThan(TemporalUnit other) {
         return this.ordinal() > other.ordinal();
+    }
+
+    /**
+     * Returns true for HOUR through NANOSECOND.
+     */
+    public boolean isTimeUnit() {
+        return ordinal() >= HOUR.ordinal();
+    }
+
+    /**
+     * Returns the JS-canonical singular name (e.g. "year", "nanosecond").
+     */
+    public String jsName() {
+        return jsName;
     }
 
     /**

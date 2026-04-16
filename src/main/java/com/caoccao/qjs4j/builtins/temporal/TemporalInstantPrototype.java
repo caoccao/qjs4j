@@ -87,18 +87,6 @@ public final class TemporalInstantPrototype {
         return TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME, methodName);
     }
 
-    private static int differenceUnitRank(String unit) {
-        return switch (unit) {
-            case "hour" -> 0;
-            case "minute" -> 1;
-            case "second" -> 2;
-            case "millisecond" -> 3;
-            case "microsecond" -> 4;
-            case "nanosecond" -> 5;
-            default -> Integer.MAX_VALUE;
-        };
-    }
-
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalInstant instant = checkReceiver(context, thisArg, "epochMilliseconds");
         if (instant == null) {
@@ -219,28 +207,6 @@ public final class TemporalInstantPrototype {
         return datePart + "T" + timePart;
     }
 
-    private static String getDefaultDifferenceLargestUnit(String smallestUnit) {
-        int smallestUnitRank = differenceUnitRank(smallestUnit);
-        int secondRank = differenceUnitRank("second");
-        if (smallestUnitRank < secondRank) {
-            return smallestUnit;
-        } else {
-            return "second";
-        }
-    }
-
-    private static long getDifferenceMaximumRoundingIncrement(String smallestUnit) {
-        return switch (smallestUnit) {
-            case "hour" -> 24L;
-            case "minute" -> 60L;
-            case "second" -> 60L;
-            case "millisecond" -> 1_000L;
-            case "microsecond" -> 1_000L;
-            case "nanosecond" -> 1_000L;
-            default -> -1L;
-        };
-    }
-
     private static long getMaximumRoundingIncrement(String unit) {
         return switch (unit) {
             case "hour" -> SOLAR_DAY_HOURS;
@@ -295,17 +261,6 @@ public final class TemporalInstantPrototype {
         return TemporalDurationConstructor.createDuration(context, normalizedDuration);
     }
 
-    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximum = getDifferenceMaximumRoundingIncrement(smallestUnit);
-        return maximum > 0
-                && roundingIncrement < maximum
-                && maximum % roundingIncrement == 0;
-    }
-
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return TemporalRoundingMode.isValid(roundingMode);
-    }
-
     private static boolean isValidInstantToStringRoundingMode(String roundingMode) {
         return TemporalRoundingMode.isValid(roundingMode);
     }
@@ -328,118 +283,11 @@ public final class TemporalInstantPrototype {
     }
 
     private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
-        String largestUnitText = null;
-        String smallestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-
-        JSObject optionsObject;
-        if (optionsArg instanceof JSUndefined || optionsArg == null) {
-            optionsObject = null;
-        } else if (optionsArg instanceof JSObject typedOptionsObject) {
-            optionsObject = typedOptionsObject;
-        } else {
-            context.throwTypeError("Temporal error: Options must be an object.");
-            return null;
-        }
-
-        if (optionsObject != null) {
-            JSValue largestUnitValue = optionsObject.get(PropertyKey.fromString("largestUnit"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(largestUnitValue instanceof JSUndefined) && largestUnitValue != null) {
-                largestUnitText = JSTypeConversions.toString(context, largestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-
-            JSValue roundingIncrementValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(roundingIncrementValue instanceof JSUndefined) && roundingIncrementValue != null) {
-                double numericRoundingIncrement = JSTypeConversions.toNumber(context, roundingIncrementValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
-                    context.throwRangeError("Temporal error: Invalid rounding increment.");
-                    return null;
-                }
-                roundingIncrement = (long) numericRoundingIncrement;
-                if (roundingIncrement < 1L || roundingIncrement > MAX_ROUNDING_INCREMENT) {
-                    context.throwRangeError("Temporal error: Invalid rounding increment.");
-                    return null;
-                }
-            }
-
-            JSValue roundingModeValue = optionsObject.get(PropertyKey.fromString("roundingMode"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
-                roundingMode = JSTypeConversions.toString(context, roundingModeValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-
-            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-                smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
-        }
-
-        String canonicalSmallestUnit;
-        if (smallestUnitText == null) {
-            canonicalSmallestUnit = "nanosecond";
-        } else {
-            canonicalSmallestUnit = normalizeSmallestUnit(smallestUnitText);
-            if (canonicalSmallestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid smallest unit.");
-                return null;
-            }
-        }
-
-        String canonicalLargestUnit;
-        if (largestUnitText == null || "auto".equals(largestUnitText)) {
-            canonicalLargestUnit = getDefaultDifferenceLargestUnit(canonicalSmallestUnit);
-        } else {
-            canonicalLargestUnit = normalizeSmallestUnit(largestUnitText);
-            if (canonicalLargestUnit == null) {
-                context.throwRangeError("Temporal error: Invalid largest unit.");
-                return null;
-            }
-        }
-
-        if (differenceUnitRank(canonicalSmallestUnit) < differenceUnitRank(canonicalLargestUnit)) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingIncrement(canonicalSmallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
-        }
-
-        return new TemporalDifferenceSettings(
-                canonicalLargestUnit,
-                canonicalSmallestUnit,
-                roundingIncrement,
-                roundingMode);
+        return TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.SECOND,
+                false, true);
     }
 
     private static Integer parseFractionalSecondDigits(JSContext context, JSValue value) {

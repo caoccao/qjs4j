@@ -33,6 +33,7 @@ import java.util.Locale;
 public final class TemporalDurationPrototype {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
     private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
+    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final BigInteger MAX_FLOAT64_MICROSECONDS_COMPONENT =
             new BigInteger("9007199254740991475711");
     private static final BigInteger MAX_FLOAT64_MILLISECONDS_COMPONENT =
@@ -43,7 +44,6 @@ public final class TemporalDurationPrototype {
     private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
     private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
-    private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final String TYPE_NAME = "Temporal.Duration";
     private static final BigInteger WEEK_NANOSECONDS = TemporalConstants.BI_WEEK_NANOSECONDS;
 

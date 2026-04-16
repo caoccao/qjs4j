@@ -607,126 +607,15 @@ public final class TemporalPlainYearMonthPrototype {
         return JSNumber.of(eraFields.eraYear());
     }
 
-    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(DIFFERENCE_ROUNDING_INCREMENT_OPTION));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TEMPORAL_MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
     private static TemporalDifferenceSettings getDifferenceSettings(
             JSContext context,
             boolean sinceOperation,
             JSValue optionsArgument) {
-        JSObject optionsObject = null;
-        if (!(optionsArgument instanceof JSUndefined) && optionsArgument != null) {
-            if (optionsArgument instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
-            }
-        }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_LARGEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingMode = getDifferenceStringOption(context, optionsObject, DIFFERENCE_ROUNDING_MODE_OPTION, "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-            smallestUnitText = getDifferenceStringOption(context, optionsObject, DIFFERENCE_SMALLEST_UNIT_OPTION, null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? UNIT_AUTO
-                : canonicalizeDifferenceUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? UNIT_MONTH
-                : canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-        if (!isValidDifferenceRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-        if (sinceOperation) {
-            roundingMode = negateRoundingMode(roundingMode);
-        }
-        if (!UNIT_AUTO.equals(largestUnit) && !isYearMonthUnit(largestUnit)) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        if (!isYearMonthUnit(smallestUnit)) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (UNIT_AUTO.equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits(UNIT_YEAR, smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
-    }
-
-    private static String getDifferenceStringOption(
-            JSContext context,
-            JSObject optionsObject,
-            String optionName,
-            String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
+        return TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArgument,
+                TemporalUnit.YEAR, TemporalUnit.MONTH,
+                TemporalUnit.MONTH, TemporalUnit.YEAR,
+                true, false);
     }
 
     private static String getUnsignedRoundingMode(String roundingMode, String sign) {

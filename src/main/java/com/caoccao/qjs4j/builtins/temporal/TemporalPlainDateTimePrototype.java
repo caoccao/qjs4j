@@ -282,123 +282,15 @@ public final class TemporalPlainDateTimePrototype {
         return TemporalPlainDatePrototype.eraYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
-    private static long getDifferenceRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double roundingIncrement = numericValue.value();
-        if (!Double.isFinite(roundingIncrement) || Double.isNaN(roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) roundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
     private static TemporalDifferenceSettings getDifferenceSettings(
             JSContext context,
             boolean sinceOperation,
             JSValue optionsArg) {
-        JSObject optionsObject = null;
-        if (!(optionsArg instanceof JSUndefined) && optionsArg != null) {
-            if (optionsArg instanceof JSObject castedOptionsObject) {
-                optionsObject = castedOptionsObject;
-            } else {
-                context.throwTypeError("Temporal error: Options must be an object.");
-                return null;
-            }
-        }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = getDifferenceStringOption(context, optionsObject, "largestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingIncrement = getDifferenceRoundingIncrementOption(context, optionsObject);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingMode = getDifferenceStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            smallestUnitText = getDifferenceStringOption(context, optionsObject, "smallestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? "auto"
-                : canonicalizeDifferenceUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? "nanosecond"
-                : canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (!isValidRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        if ("auto".equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits("day", smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingIncrement(smallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
-        }
-
-        if (sinceOperation) {
-            roundingMode = negateRoundingMode(roundingMode);
-        }
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
-    }
-
-    private static String getDifferenceStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
+        return TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.DAY,
+                true, true);
     }
 
     private static String getRequiredSmallestUnitOption(JSContext context, JSObject optionsObject) {
@@ -501,7 +393,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwTypeError("Temporal error: Option must be object: options.");
             return null;
         }
-        String disambiguation = getDifferenceStringOption(context, optionsObject, "disambiguation", "compatible");
+        String disambiguation = TemporalOptionResolver.getStringOption(context, optionsObject, "disambiguation", "compatible");
         if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
@@ -516,7 +408,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
-        String calendarNameOption = getDifferenceStringOption(context, optionsObject, "calendarName", "auto");
+        String calendarNameOption = TemporalOptionResolver.getStringOption(context, optionsObject, "calendarName", "auto");
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
@@ -600,7 +492,7 @@ public final class TemporalPlainDateTimePrototype {
                 return null;
             }
 
-            roundingMode = getDifferenceStringOption(context, optionsObject, "roundingMode", "trunc");
+            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
             if (context.hasPendingException() || roundingMode == null) {
                 return null;
             }

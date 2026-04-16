@@ -144,6 +144,19 @@ public final class TemporalUtils {
         return normalizedCalendarIdentifier;
     }
 
+    /**
+     * Generic receiver type check for Temporal prototype methods.
+     * Returns the cast value, or null after throwing TypeError.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName, String methodName) {
+        if (!expectedType.isInstance(thisArg)) {
+            context.throwTypeError("Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
+            return null;
+        }
+        return (T) thisArg;
+    }
+
     public static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
@@ -215,6 +228,22 @@ public final class TemporalUtils {
         return (int) numericValue;
     }
 
+    private static Integer getLunisolarYearInfo(String calendarId, int calendarYear) {
+        if ("dangi".equals(calendarId)) {
+            if (calendarYear < 1900 || calendarYear > 1900 + DANGI_LUNAR_YEAR_INFO.length - 1) {
+                return null;
+            }
+            return DANGI_LUNAR_YEAR_INFO[calendarYear - 1900];
+        }
+        if (calendarYear >= 1900 && calendarYear <= 1900 + CHINESE_LUNAR_YEAR_INFO.length - 1) {
+            return CHINESE_LUNAR_YEAR_INFO[calendarYear - 1900];
+        }
+        if (calendarYear >= 2051 && calendarYear <= 2100) {
+            return CHINESE_LUNAR_YEAR_INFO_EXTENSION_2051_TO_2100[calendarYear - 2051];
+        }
+        return null;
+    }
+
     /**
      * Gets the overflow option from an options object.
      * Returns "constrain" or "reject".
@@ -269,51 +298,8 @@ public final class TemporalUtils {
         return false;
     }
 
-    /**
-     * Appends calendar annotation to string if needed.
-     */
-    public static String maybeAppendCalendar(String dateTimeString, String calendarId, String calendarNameOption) {
-        switch (calendarNameOption) {
-            case "never":
-                return dateTimeString;
-            case "always":
-                return dateTimeString + "[u-ca=" + calendarId + "]";
-            case "critical":
-                return dateTimeString + "[!u-ca=" + calendarId + "]";
-            case "auto":
-            default:
-                if ("iso8601".equals(calendarId)) {
-                    return dateTimeString;
-                }
-                return dateTimeString + "[u-ca=" + calendarId + "]";
-        }
-    }
-
-    /**
-     * Formats a month code in "M01"..."M12" format.
-     */
-    public static String monthCode(int month) {
-        return String.format(Locale.ROOT, "M%02d", month);
-    }
-
     public static int islamicDaysBeforeYear(int islamicYear) {
         return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
-    }
-
-    private static Integer getLunisolarYearInfo(String calendarId, int calendarYear) {
-        if ("dangi".equals(calendarId)) {
-            if (calendarYear < 1900 || calendarYear > 1900 + DANGI_LUNAR_YEAR_INFO.length - 1) {
-                return null;
-            }
-            return DANGI_LUNAR_YEAR_INFO[calendarYear - 1900];
-        }
-        if (calendarYear >= 1900 && calendarYear <= 1900 + CHINESE_LUNAR_YEAR_INFO.length - 1) {
-            return CHINESE_LUNAR_YEAR_INFO[calendarYear - 1900];
-        }
-        if (calendarYear >= 2051 && calendarYear <= 2100) {
-            return CHINESE_LUNAR_YEAR_INFO_EXTENSION_2051_TO_2100[calendarYear - 2051];
-        }
-        return null;
     }
 
     public static int lunisolarLeapMonth(String calendarId, int calendarYear) {
@@ -366,6 +352,33 @@ public final class TemporalUtils {
             monthInfoMask >>= 1;
         }
         return totalDays + lunisolarLeapMonthDays(calendarId, calendarYear);
+    }
+
+    /**
+     * Appends calendar annotation to string if needed.
+     */
+    public static String maybeAppendCalendar(String dateTimeString, String calendarId, String calendarNameOption) {
+        switch (calendarNameOption) {
+            case "never":
+                return dateTimeString;
+            case "always":
+                return dateTimeString + "[u-ca=" + calendarId + "]";
+            case "critical":
+                return dateTimeString + "[!u-ca=" + calendarId + "]";
+            case "auto":
+            default:
+                if ("iso8601".equals(calendarId)) {
+                    return dateTimeString;
+                }
+                return dateTimeString + "[u-ca=" + calendarId + "]";
+        }
+    }
+
+    /**
+     * Formats a month code in "M01"..."M12" format.
+     */
+    public static String monthCode(int month) {
+        return String.format(Locale.ROOT, "M%02d", month);
     }
 
     public static int toArithmeticPersianYear(int persianYear) {
@@ -456,19 +469,6 @@ public final class TemporalUtils {
             return validatedCalendar;
         }
         return "iso8601";
-    }
-
-    /**
-     * Generic receiver type check for Temporal prototype methods.
-     * Returns the cast value, or null after throwing TypeError.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName, String methodName) {
-        if (!expectedType.isInstance(thisArg)) {
-            context.throwTypeError("Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return (T) thisArg;
     }
 
     /**

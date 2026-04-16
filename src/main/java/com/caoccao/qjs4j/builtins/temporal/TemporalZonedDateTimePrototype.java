@@ -609,88 +609,19 @@ public final class TemporalZonedDateTimePrototype {
             JSContext context,
             boolean sinceOperation,
             JSValue optionsArg) {
-        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
-                context,
-                optionsArg,
-                "Temporal error: Options must be an object.");
-        if (context.hasPendingException()) {
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
+                true, true);
+        if (settings == null) {
             return null;
         }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "largestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
-                    context,
-                    optionsObject,
-                    "roundingIncrement",
-                    1L,
-                    1L,
-                    MAX_ROUNDING_INCREMENT,
-                    "Temporal error: Invalid rounding increment.");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? "auto"
-                : canonicalizeDifferenceUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? "nanosecond"
-                : canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        if ("auto".equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits("hour", smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!isValidDifferenceRoundingIncrement(smallestUnit, roundingIncrement)) {
+        if ("day".equals(settings.smallestUnit()) && Math.abs(settings.roundingIncrement()) > 100_000_000L) {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return null;
         }
-        if ("day".equals(smallestUnit) && Math.abs(roundingIncrement) > 100_000_000L) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
-        }
-
-        if (sinceOperation) {
-            roundingMode = negateRoundingMode(roundingMode);
-        }
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+        return settings;
     }
 
     private static String getDirectionOption(JSContext context, JSValue directionParam) {

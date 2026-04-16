@@ -140,81 +140,11 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static TemporalDifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
-        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
-                context,
-                optionsArg,
-                "Temporal error: Options must be an object.");
-        if (context.hasPendingException()) {
-            return null;
-        }
-
-        String largestUnitText = null;
-        long roundingIncrement = 1L;
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            largestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "largestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
-                    context,
-                    optionsObject,
-                    "roundingIncrement",
-                    1L,
-                    1L,
-                    MAX_ROUNDING_INCREMENT,
-                    "Temporal error: Invalid roundingIncrement option.");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException()) {
-                return null;
-            }
-
-            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
-        }
-
-        String largestUnit = largestUnitText == null
-                ? "auto"
-                : canonicalizeDifferenceUnit(largestUnitText, true);
-        if (largestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid largest unit.");
-            return null;
-        }
-        String smallestUnit = smallestUnitText == null
-                ? "nanosecond"
-                : canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid smallest unit.");
-            return null;
-        }
-
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return null;
-        }
-
-        if ("auto".equals(largestUnit)) {
-            largestUnit = largerOfTwoTemporalUnits("hour", smallestUnit);
-        }
-        if (!largestUnit.equals(largerOfTwoTemporalUnits(largestUnit, smallestUnit))) {
-            context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid rounding increment.");
-            return null;
-        }
-
-        return new TemporalDifferenceSettings(largestUnit, smallestUnit, roundingIncrement, roundingMode);
+        return TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
+                false, true);
     }
 
     private static TemporalRoundSettings getRoundSettings(JSContext context, JSValue roundTo) {

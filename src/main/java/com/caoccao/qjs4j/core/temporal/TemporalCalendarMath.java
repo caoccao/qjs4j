@@ -717,8 +717,10 @@ public final class TemporalCalendarMath {
             case "ethioaa" -> alexandrianLeapYear(calendarYear - 5500);
             case "hebrew" -> hebrewLeapYear(calendarYear);
             case "indian" -> IsoDate.isLeapYear(calendarYear + 78);
-            case "islamic-civil" -> islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
-            case "islamic-tbla" -> islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
+            case "islamic-civil" ->
+                    islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
+            case "islamic-tbla" ->
+                    islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
             case "islamic-umalqura" -> isKnownUmalquraLeapYear(calendarYear)
                     || (calendarYear < 1390 || calendarYear > 1469)
                     && getUmalquraMonthSlots(calendarYear).get(11).daysInMonth() == 30;
