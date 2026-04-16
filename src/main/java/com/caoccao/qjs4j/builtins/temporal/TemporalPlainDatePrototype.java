@@ -31,11 +31,6 @@ public final class TemporalPlainDatePrototype {
     private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
     private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
     private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
-    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
-    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
-    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
     private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;

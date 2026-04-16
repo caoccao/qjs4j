@@ -27,7 +27,6 @@ import java.time.DateTimeException;
  */
 public final class TemporalPlainDateTimePrototype {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
-    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
     private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
@@ -63,27 +62,11 @@ public final class TemporalPlainDateTimePrototype {
             JSContext context,
             IsoTime time,
             TemporalDuration durationRecord) {
-        BigInteger durationTimeNanoseconds = durationRecord.timeNanoseconds();
-
-        BigInteger totalNanoseconds = BigInteger.valueOf(time.totalNanoseconds()).add(durationTimeNanoseconds);
-        BigInteger[] dayAndRemainder = totalNanoseconds.divideAndRemainder(DAY_NANOSECONDS);
-        BigInteger dayCarryBigInteger = dayAndRemainder[0];
-        BigInteger remainder = dayAndRemainder[1];
-        if (remainder.signum() < 0) {
-            remainder = remainder.add(DAY_NANOSECONDS);
-            dayCarryBigInteger = dayCarryBigInteger.subtract(BigInteger.ONE);
-        }
-
-        long dayCarry;
-        try {
-            dayCarry = dayCarryBigInteger.longValueExact();
-        } catch (ArithmeticException arithmeticException) {
+        TemporalTimeAddResult result = durationRecord.addToTime(time);
+        if (result == null) {
             context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
         }
-        long normalizedTimeNanoseconds = remainder.longValue();
-        IsoTime normalizedTime = IsoTime.createFromNanoseconds(normalizedTimeNanoseconds);
-        return new TemporalTimeAddResult(normalizedTime, dayCarry);
+        return result;
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDateTime plainDateTime, JSValue[] args, int sign) {

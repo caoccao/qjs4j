@@ -26,7 +26,6 @@ import java.util.Locale;
  * Implementation of Temporal.Instant prototype methods.
  */
 public final class TemporalInstantPrototype {
-    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;

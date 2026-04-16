@@ -38,10 +38,6 @@ public final class TemporalDurationConstructor {
     static final String UNIT_SECOND = "second";
     private static final long CALENDAR_UNIT_MAX = TemporalConstants.CALENDAR_UNIT_MAX;
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
-    private static final BigInteger HOUR_NANOSECONDS = TemporalConstants.BI_HOUR_NANOSECONDS;
-    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final String UNIT_MONTH = "month";
@@ -49,19 +45,6 @@ public final class TemporalDurationConstructor {
     private static final String UNIT_YEAR = "year";
 
     private TemporalDurationConstructor() {
-    }
-
-    private static boolean areDurationRecordsEqual(TemporalDuration firstRecord, TemporalDuration secondRecord) {
-        return firstRecord.years() == secondRecord.years()
-                && firstRecord.months() == secondRecord.months()
-                && firstRecord.weeks() == secondRecord.weeks()
-                && firstRecord.days() == secondRecord.days()
-                && firstRecord.hours() == secondRecord.hours()
-                && firstRecord.minutes() == secondRecord.minutes()
-                && firstRecord.seconds() == secondRecord.seconds()
-                && firstRecord.milliseconds() == secondRecord.milliseconds()
-                && firstRecord.microseconds() == secondRecord.microseconds()
-                && firstRecord.nanoseconds() == secondRecord.nanoseconds();
     }
 
     private static long calendarDaysFromRelativeTo(
@@ -150,7 +133,7 @@ public final class TemporalDurationConstructor {
         boolean firstHasCalendarUnits = hasCalendarUnits(firstRecord);
         boolean secondHasCalendarUnits = hasCalendarUnits(secondRecord);
         if ((firstHasCalendarUnits || secondHasCalendarUnits) && relativeToReference == null) {
-            if (areDurationRecordsEqual(firstRecord, secondRecord)) {
+            if (firstRecord.equals(secondRecord)) {
                 return JSNumber.of(0);
             } else {
                 context.throwRangeError("Temporal error: A starting point is required for years, months, or weeks arithmetic.");

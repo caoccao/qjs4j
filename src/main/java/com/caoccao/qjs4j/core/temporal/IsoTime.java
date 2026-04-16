@@ -30,18 +30,17 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
      * Creates an IsoTime from total nanoseconds (mod 24 hours).
      */
     public static IsoTime createFromNanoseconds(long totalNanoseconds) {
-        long nanosecondsPerDay = 86_400_000_000_000L;
-        totalNanoseconds = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
-        int hourValue = (int) (totalNanoseconds / 3_600_000_000_000L);
-        totalNanoseconds %= 3_600_000_000_000L;
-        int minuteValue = (int) (totalNanoseconds / 60_000_000_000L);
-        totalNanoseconds %= 60_000_000_000L;
-        int secondValue = (int) (totalNanoseconds / 1_000_000_000L);
-        totalNanoseconds %= 1_000_000_000L;
-        int millisecondValue = (int) (totalNanoseconds / 1_000_000L);
-        totalNanoseconds %= 1_000_000L;
-        int microsecondValue = (int) (totalNanoseconds / 1_000L);
-        int nanosecondValue = (int) (totalNanoseconds % 1_000L);
+        totalNanoseconds = Math.floorMod(totalNanoseconds, TemporalConstants.DAY_NANOSECONDS);
+        int hourValue = (int) (totalNanoseconds / TemporalConstants.HOUR_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.HOUR_NANOSECONDS;
+        int minuteValue = (int) (totalNanoseconds / TemporalConstants.MINUTE_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.MINUTE_NANOSECONDS;
+        int secondValue = (int) (totalNanoseconds / TemporalConstants.SECOND_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.SECOND_NANOSECONDS;
+        int millisecondValue = (int) (totalNanoseconds / TemporalConstants.MILLISECOND_NANOSECONDS);
+        totalNanoseconds %= TemporalConstants.MILLISECOND_NANOSECONDS;
+        int microsecondValue = (int) (totalNanoseconds / TemporalConstants.MICROSECOND_NANOSECONDS);
+        int nanosecondValue = (int) (totalNanoseconds % TemporalConstants.MICROSECOND_NANOSECONDS);
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
@@ -129,11 +128,11 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
      * Returns total nanoseconds from midnight.
      */
     public long totalNanoseconds() {
-        return ((long) hour * 3_600_000_000_000L)
-                + ((long) minute * 60_000_000_000L)
-                + ((long) second * 1_000_000_000L)
-                + ((long) millisecond * 1_000_000L)
-                + ((long) microsecond * 1_000L)
+        return ((long) hour * TemporalConstants.HOUR_NANOSECONDS)
+                + ((long) minute * TemporalConstants.MINUTE_NANOSECONDS)
+                + ((long) second * TemporalConstants.SECOND_NANOSECONDS)
+                + ((long) millisecond * TemporalConstants.MILLISECOND_NANOSECONDS)
+                + ((long) microsecond * TemporalConstants.MICROSECOND_NANOSECONDS)
                 + nanosecond;
     }
 }
