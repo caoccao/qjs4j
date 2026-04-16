@@ -296,13 +296,6 @@ public final class TemporalPlainTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringTimeString(IsoTime time, TemporalPlainTimeToStringSettings toStringSettings) {
-        return time.formatTimeString(
-                toStringSettings.smallestUnit(),
-                toStringSettings.autoFractionalSecondDigits(),
-                toStringSettings.fractionalSecondDigits());
-    }
-
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainTime plainTime = checkReceiver(context, thisArg, "hour");
         if (plainTime == null) {
@@ -459,7 +452,10 @@ public final class TemporalPlainTimePrototype {
             roundedNanoseconds = 0L;
         }
         IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-        return new JSString(getToStringTimeString(roundedTime, toStringSettings));
+        return new JSString(roundedTime.formatTimeString(
+                toStringSettings.smallestUnit(),
+                toStringSettings.autoFractionalSecondDigits(),
+                toStringSettings.fractionalSecondDigits()));
     }
 
     private static long unitToNanoseconds(String unit) {

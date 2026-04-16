@@ -16,8 +16,6 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-import java.math.BigInteger;
-
 /**
  * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
  * Ordinal values provide a natural ordering where smaller ordinal = larger unit.
@@ -67,17 +65,12 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns true for YEAR, MONTH, WEEK, DAY.
+     * Returns the ordinal rank for a unit string, or {@code values().length} if unrecognized.
+     * Suitable for comparison: smaller ordinal = larger unit.
      */
-    public boolean isDateUnit() {
-        return ordinal() <= DAY.ordinal();
-    }
-
-    /**
-     * Returns true if this unit is larger than (or equal to) the other unit.
-     */
-    public boolean isLargerOrEqual(TemporalUnit other) {
-        return this.ordinal() <= other.ordinal();
+    public static int rank(String unitText) {
+        TemporalUnit temporalUnit = fromString(unitText);
+        return temporalUnit != null ? temporalUnit.ordinal() : values().length;
     }
 
     /**
@@ -95,13 +88,6 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns true if this unit is strictly smaller than the other unit.
-     */
-    public boolean isSmallerThan(TemporalUnit other) {
-        return this.ordinal() > other.ordinal();
-    }
-
-    /**
      * Returns true for HOUR through NANOSECOND.
      */
     public boolean isTimeUnit() {
@@ -113,39 +99,5 @@ public enum TemporalUnit {
      */
     public String jsName() {
         return jsName;
-    }
-
-    /**
-     * Returns the nanosecond factor for time units (HOUR through NANOSECOND) and DAY.
-     * For YEAR, MONTH, WEEK, returns {@code null} since they are calendar-dependent.
-     */
-    public BigInteger nanosecondFactor() {
-        return switch (this) {
-            case DAY -> TemporalConstants.BI_DAY_NANOSECONDS;
-            case HOUR -> TemporalConstants.BI_HOUR_NANOSECONDS;
-            case MINUTE -> TemporalConstants.BI_MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.BI_SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> BigInteger.ONE;
-            default -> null;
-        };
-    }
-
-    /**
-     * Returns the number of this unit per solar day (for Instant rounding).
-     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
-     */
-    public long solarDayDivisor() {
-        return switch (this) {
-            case DAY -> 1L;
-            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
-            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
-            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
-            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
-            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
-            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
-            default -> -1L;
-        };
     }
 }

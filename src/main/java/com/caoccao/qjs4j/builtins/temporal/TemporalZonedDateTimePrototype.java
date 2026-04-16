@@ -949,13 +949,6 @@ public final class TemporalZonedDateTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringTimeString(IsoTime time, TemporalZonedDateTimeToStringSettings toStringSettings) {
-        return time.formatTimeString(
-                toStringSettings.smallestUnit(),
-                toStringSettings.autoFractionalSecondDigits(),
-                toStringSettings.fractionalSecondDigits());
-    }
-
     private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
         String timeZoneNameOption = TemporalOptionResolver.getStringOption(context, optionsObject, "timeZoneName", "auto");
         if (context.hasPendingException() || timeZoneNameOption == null) {
@@ -1112,8 +1105,8 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
+        int leftRank = TemporalUnit.rank(leftUnit);
+        int rightRank = TemporalUnit.rank(rightUnit);
         if (leftRank > rightRank) {
             return rightUnit;
         }
@@ -1449,11 +1442,6 @@ public final class TemporalZonedDateTimePrototype {
         return addOrSubtract(context, zonedDateTime, args, -1);
     }
 
-    private static int temporalUnitRank(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
-    }
-
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "timeZoneId");
         if (zonedDateTime == null) {
@@ -1597,7 +1585,10 @@ public final class TemporalZonedDateTimePrototype {
                 roundedEpochNanoseconds,
                 zonedDateTime.getTimeZoneId());
         String dateString = localDateTime.date().toString();
-        String timeString = getToStringTimeString(localDateTime.time(), toStringSettings);
+        String timeString = localDateTime.time().formatTimeString(
+                toStringSettings.smallestUnit(),
+                toStringSettings.autoFractionalSecondDigits(),
+                toStringSettings.fractionalSecondDigits());
 
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(dateString).append('T').append(timeString);

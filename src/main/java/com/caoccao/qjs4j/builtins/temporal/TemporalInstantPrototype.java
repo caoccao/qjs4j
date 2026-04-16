@@ -261,17 +261,9 @@ public final class TemporalInstantPrototype {
         return TemporalDurationConstructor.createDuration(context, normalizedDuration);
     }
 
-    private static boolean isValidInstantToStringRoundingMode(String roundingMode) {
-        return TemporalRoundingMode.isValid(roundingMode);
-    }
-
-    private static String normalizeSmallestUnit(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null && tu.isTimeUnit() ? tu.jsName() : null;
-    }
-
     private static String normalizeToStringSmallestUnit(String unit) {
-        String normalizedUnit = normalizeSmallestUnit(unit);
+        TemporalUnit temporalUnit = TemporalUnit.fromString(unit);
+        String normalizedUnit = temporalUnit != null && temporalUnit.isTimeUnit() ? temporalUnit.jsName() : null;
         if ("minute".equals(normalizedUnit)
                 || "second".equals(normalizedUnit)
                 || "millisecond".equals(normalizedUnit)
@@ -383,7 +375,7 @@ public final class TemporalInstantPrototype {
             }
         }
 
-        if (!isValidInstantToStringRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -477,7 +469,8 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String smallestUnit = normalizeSmallestUnit(smallestUnitText);
+        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnitText);
+        String smallestUnit = parsedUnit != null && parsedUnit.isTimeUnit() ? parsedUnit.jsName() : null;
         if (smallestUnit == null) {
             context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);
             return JSUndefined.INSTANCE;

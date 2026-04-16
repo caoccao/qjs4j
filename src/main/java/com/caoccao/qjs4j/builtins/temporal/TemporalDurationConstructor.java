@@ -585,7 +585,7 @@ public final class TemporalDurationConstructor {
     }
 
     static String largerTemporalUnit(String leftUnit, String rightUnit) {
-        if (temporalUnitRank(leftUnit) <= temporalUnitRank(rightUnit)) {
+        if (TemporalUnit.rank(leftUnit) <= TemporalUnit.rank(rightUnit)) {
             return leftUnit;
         } else {
             return rightUnit;
@@ -1159,11 +1159,6 @@ public final class TemporalDurationConstructor {
             absoluteOffsetMinutes++;
         }
         return sign * absoluteOffsetMinutes * 60;
-    }
-
-    private static int temporalUnitRank(String temporalUnit) {
-        TemporalUnit tu = TemporalUnit.fromString(temporalUnit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     private static BigInteger toBigIntegerFromIntegralDouble(double value) {

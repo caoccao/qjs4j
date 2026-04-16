@@ -47,17 +47,6 @@ public final class TemporalPlainDateTimePrototype {
         return addOrSubtract(context, plainDateTime, args, 1);
     }
 
-    private static IsoDate addDurationToDate(
-            JSContext context,
-            IsoDate date,
-            long years,
-            long months,
-            long weeks,
-            long days,
-            String overflow) {
-        return TemporalDurationArithmeticKernel.addDurationToIsoDate(context, date, years, months, weeks, days, overflow);
-    }
-
     private static TemporalTimeAddResult addDurationToTime(
             JSContext context,
             IsoTime time,
@@ -106,7 +95,7 @@ public final class TemporalPlainDateTimePrototype {
         String calendarId = plainDateTime.getCalendarId();
         IsoDate newDate;
         if ("iso8601".equals(calendarId)) {
-            newDate = addDurationToDate(
+            newDate = TemporalDurationArithmeticKernel.addDurationToIsoDate(
                     context,
                     plainDateTime.getIsoDateTime().date(),
                     durationRecord.years(),
@@ -544,13 +533,6 @@ public final class TemporalPlainDateTimePrototype {
                 roundingIncrementNanoseconds);
     }
 
-    private static String getToStringTimeString(IsoTime time, TemporalPlainDateTimeToStringSettings toStringSettings) {
-        return time.formatTimeString(
-                toStringSettings.smallestUnit(),
-                toStringSettings.autoFractionalSecondDigits(),
-                toStringSettings.fractionalSecondDigits());
-    }
-
     public static JSValue hour(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "hour");
         if (plainDateTime == null) {
@@ -792,11 +774,6 @@ public final class TemporalPlainDateTimePrototype {
         return addOrSubtract(context, plainDateTime, args, -1);
     }
 
-    private static int temporalUnitRank(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
-    }
-
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDateTime plainDateTime = checkReceiver(context, thisArg, "toJSON");
         if (plainDateTime == null) {
@@ -895,7 +872,10 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         String dateString = roundedDate.toString();
-        String timeString = getToStringTimeString(roundedTime, toStringSettings);
+        String timeString = roundedTime.formatTimeString(
+                toStringSettings.smallestUnit(),
+                toStringSettings.autoFractionalSecondDigits(),
+                toStringSettings.fractionalSecondDigits());
         String dateTimeString = dateString + "T" + timeString;
         return TemporalUtils.maybeAppendCalendar(dateTimeString, plainDateTime.getCalendarId(), toStringSettings.calendarNameOption());
     }

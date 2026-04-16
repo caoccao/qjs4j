@@ -200,8 +200,8 @@ public final class TemporalPlainDatePrototype {
         if (smallestUnit.equals(largestUnit)) {
             return duration;
         }
-        int largestUnitIndex = temporalUnitRank(largestUnit);
-        int smallestUnitIndex = temporalUnitRank(smallestUnit);
+        int largestUnitIndex = TemporalUnit.rank(largestUnit);
+        int smallestUnitIndex = TemporalUnit.rank(smallestUnit);
         for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
             String unit = temporalUnitByRank(unitIndex);
             if (UNIT_WEEK.equals(unit) && !UNIT_WEEK.equals(largestUnit)) {
@@ -786,8 +786,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
+        int leftRank = TemporalUnit.rank(leftUnit);
+        int rightRank = TemporalUnit.rank(rightUnit);
         if (leftRank > rightRank) {
             return rightUnit;
         }
@@ -1185,11 +1185,6 @@ public final class TemporalPlainDatePrototype {
             return units[unitRank].jsName();
         }
         return TemporalUnit.NANOSECOND.jsName();
-    }
-
-    private static int temporalUnitRank(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
