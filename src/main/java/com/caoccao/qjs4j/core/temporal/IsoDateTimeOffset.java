@@ -16,9 +16,5 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalCalendarMonthSlot(
-        int monthNumber,
-        boolean leapMonth,
-        String monthCode,
-        int daysInMonth) {
+public record IsoDateTimeOffset(IsoDate date, IsoTime time, IsoOffset offset) {
 }

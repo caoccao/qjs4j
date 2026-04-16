@@ -62,7 +62,8 @@ public final class TemporalPlainMonthDayConstructor {
             }
         }
 
-        if (!IsoDate.isValidIsoDate(referenceYear, isoMonth, isoDay)) {
+        IsoDate isoDate = new IsoDate(referenceYear, isoMonth, isoDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -71,7 +72,7 @@ public final class TemporalPlainMonthDayConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainMonthDay(context, new IsoDate(referenceYear, isoMonth, isoDay), calendarId, resolvedPrototype);
+        return createPlainMonthDay(context, isoDate, calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainMonthDay createPlainMonthDay(JSContext context, IsoDate isoDate, String calendarId) {
@@ -338,8 +339,7 @@ public final class TemporalPlainMonthDayConstructor {
             if (context.hasPendingException() || resolvedIsoDate == null) {
                 return JSUndefined.INSTANCE;
             }
-            TemporalCalendarMath.CalendarDateFields resolvedCalendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(resolvedIsoDate, calendarId);
+            IsoCalendarDate resolvedCalendarDateFields = resolvedIsoDate.toIsoCalendarDate(calendarId);
             resolvedMonthCode = resolvedCalendarDateFields.monthCode();
             resolvedDay = resolvedCalendarDateFields.day();
         } else {
@@ -377,8 +377,7 @@ public final class TemporalPlainMonthDayConstructor {
                         new IsoDate(DEFAULT_REFERENCE_ISO_YEAR, parsedDate.month(), parsedDate.day()),
                         calendar);
             }
-            TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(parsedDate, calendar);
+            IsoCalendarDate calendarDateFields = parsedDate.toIsoCalendarDate(calendar);
             JSTemporalPlainMonthDay plainMonthDay = createPlainMonthDayFromCalendarMonthDay(
                     context,
                     calendar,

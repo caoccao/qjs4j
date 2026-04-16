@@ -16,22 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-/**
- * Represents an ISO 8601 date-time combining IsoDate and IsoTime.
- */
-public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoDateTime> {
+import java.math.BigInteger;
 
-    @Override
-    public int compareTo(IsoDateTime otherIsoDateTime) {
-        int dateCompare = date.compareTo(otherIsoDateTime.date);
-        if (dateCompare != 0) {
-            return dateCompare;
-        }
-        return time.compareTo(otherIsoDateTime.time);
-    }
-
-    @Override
-    public String toString() {
-        return date.toString() + "T" + time.toString();
-    }
+public record IsoOffset(int totalSeconds, BigInteger totalNanoseconds) {
 }

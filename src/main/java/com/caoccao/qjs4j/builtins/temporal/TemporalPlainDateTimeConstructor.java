@@ -45,7 +45,7 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoDateTime.compareIsoDateTime(firstDateTime.getIsoDateTime(), secondDateTime.getIsoDateTime()));
+        return JSNumber.of(firstDateTime.getIsoDateTime().compareTo(secondDateTime.getIsoDateTime()));
     }
 
     /**
@@ -116,24 +116,24 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
 
-        if (!IsoDate.isValidIsoDate(isoYear, isoMonth, isoDay)) {
+        IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
-        IsoTime time = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-        if (!time.isValidTime()) {
+        IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+        if (!isoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate date = new IsoDate(isoYear, isoMonth, isoDay);
-        if (!isValidPlainDateTimeRange(date, time)) {
+        if (!isValidPlainDateTimeRange(isoDate, isoTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime isoDateTime = new IsoDateTime(date, time);
+        IsoDateTime isoDateTime = new IsoDateTime(isoDate, isoTime);
         JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -352,12 +352,12 @@ public final class TemporalPlainDateTimeConstructor {
         IsoTime resultTime;
         if ("reject".equals(overflow)) {
             resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!resultTime.isValidTime()) {
+            if (!resultTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
         } else {
-            resultTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
+            resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
         if (!isValidPlainDateTimeRange(resultDate, resultTime)) {
@@ -368,7 +368,7 @@ public final class TemporalPlainDateTimeConstructor {
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {
-        IsoDateTimeCalendar parsed = TemporalParser.parseDateTimeString(context, input);
+        IsoCalendarDateTime parsed = TemporalParser.parseDateTimeString(context, input);
         if (parsed == null) {
             return JSUndefined.INSTANCE;
         }

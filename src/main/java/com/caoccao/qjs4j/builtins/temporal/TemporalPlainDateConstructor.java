@@ -43,7 +43,7 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return JSNumber.of(IsoDate.compareIsoDate(firstDate.getIsoDate(), secondDate.getIsoDate()));
+        return JSNumber.of(firstDate.getIsoDate().compareTo(secondDate.getIsoDate()));
     }
 
     /**
@@ -75,7 +75,8 @@ public final class TemporalPlainDateConstructor {
             }
         }
 
-        if (!IsoDate.isValidIsoDate(isoYear, isoMonth, isoDay)) {
+        IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -84,7 +85,7 @@ public final class TemporalPlainDateConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainDate(context, new IsoDate(isoYear, isoMonth, isoDay), calendarId, resolvedPrototype);
+        return createPlainDate(context, isoDate, calendarId, resolvedPrototype);
     }
 
     public static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, String calendarId) {

@@ -477,7 +477,7 @@ public final class TemporalZonedDateTimePrototype {
 
         if (isDateUnit(settings.largestUnit()) && !isDateUnit(settings.smallestUnit())) {
             boolean sameDate = startLocalDateTime.date().equals(endLocalDateTime.date());
-            int wallClockSign = Integer.signum(IsoDateTime.compareIsoDateTime(endLocalDateTime, startLocalDateTime));
+            int wallClockSign = Integer.signum(endLocalDateTime.compareTo(startLocalDateTime));
             int epochSign = Integer.signum(endZonedDateTime.getEpochNanoseconds().compareTo(
                     startZonedDateTime.getEpochNanoseconds()));
             if (sameDate && wallClockSign != 0 && epochSign != 0 && wallClockSign != epochSign) {
@@ -507,7 +507,7 @@ public final class TemporalZonedDateTimePrototype {
 
         boolean noRounding = settings.roundingIncrement() == 1L
                 && "nanosecond".equals(settings.smallestUnit());
-        boolean sameTime = IsoTime.compareIsoTime(startLocalDateTime.time(), endLocalDateTime.time()) == 0;
+        boolean sameTime = startLocalDateTime.time().compareTo(endLocalDateTime.time()) == 0;
         boolean dateLargestUnit = isDateUnit(settings.largestUnit());
         if (noRounding && sameTime && dateLargestUnit) {
             return TemporalPlainDatePrototype.differenceCalendarDates(
@@ -1421,7 +1421,7 @@ public final class TemporalZonedDateTimePrototype {
                     return JSUndefined.INSTANCE;
                 }
             }
-            IsoTime roundedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+            IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
             IsoDateTime roundedLocalDateTime = new IsoDateTime(roundedDate, roundedTime);
             try {
                 roundedEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
@@ -2054,12 +2054,12 @@ public final class TemporalZonedDateTimePrototype {
                     mergedMillisecond,
                     mergedMicrosecond,
                     mergedNanosecond);
-            if (!mergedIsoTime.isValidTime()) {
+            if (!mergedIsoTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
         } else {
-            mergedIsoTime = IsoTime.constrain(
+            mergedIsoTime = IsoTime.createNormalized(
                     mergedHour,
                     mergedMinute,
                     mergedSecond,
@@ -2068,9 +2068,7 @@ public final class TemporalZonedDateTimePrototype {
                     mergedNanosecond);
         }
 
-        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(
-                mergedDate,
-                calendarId);
+        IsoCalendarDate calendarDateFields = mergedDate.toIsoCalendarDate(calendarId);
 
         JSObject mergedFieldsObject = new JSObject(context);
         mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(calendarDateFields.year()));

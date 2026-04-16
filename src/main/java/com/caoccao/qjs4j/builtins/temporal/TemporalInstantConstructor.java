@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.IsoDateTimeOffset;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
@@ -180,11 +181,14 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalParser.ParsedInstant parsed = TemporalParser.parseInstantString(context, instantString.value());
+        IsoDateTimeOffset parsed = TemporalParser.parseInstantString(context, instantString.value());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(parsed.date(), parsed.time(), parsed.offsetNanoseconds());
+        BigInteger epochNs = TemporalTimeZone.utcDateTimeToEpochNs(
+                parsed.date(),
+                parsed.time(),
+                parsed.offset().totalNanoseconds());
         if (!isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;

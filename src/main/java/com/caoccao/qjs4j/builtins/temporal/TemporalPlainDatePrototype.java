@@ -124,12 +124,12 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
 
-        IsoDate result = IsoDate.fromEpochDay(resultEpochDay);
-        if (!IsoDate.isValidIsoDate(result.year(), result.month(), result.day())) {
+        IsoDate isoDate = IsoDate.createFromEpochDay(resultEpochDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        return result;
+        return isoDate;
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDate plainDate, JSValue[] args, int sign) {
@@ -335,7 +335,7 @@ public final class TemporalPlainDatePrototype {
         if ("iso8601".equals(calendarId)) {
             return calendarDateUntilIso(firstDate, secondDate, largestUnit);
         }
-        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
+        int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDateDurationFields.ZERO;
         }
@@ -343,10 +343,8 @@ public final class TemporalPlainDatePrototype {
         long years = 0;
         long months = 0;
         if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(firstDate, calendarId);
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(secondDate, calendarId);
+            IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
+            IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
             long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
             if (candidateYears != 0L) {
                 candidateYears -= sign;
@@ -477,7 +475,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static TemporalDateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
-        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
+        int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDateDurationFields.ZERO;
         }
@@ -705,7 +703,7 @@ public final class TemporalPlainDatePrototype {
 
         IsoDate thisDate = plainDate.getIsoDate();
         IsoDate otherDate = other.getIsoDate();
-        if (IsoDate.compareIsoDate(thisDate, otherDate) == 0) {
+        if (thisDate.compareTo(otherDate) == 0) {
             return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
         }
 
@@ -748,9 +746,9 @@ public final class TemporalPlainDatePrototype {
 
     private static boolean doesConceptualYearDateSurpassSecondDate(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             long candidateYears,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+            IsoCalendarDate secondCalendarDateFields) {
         long candidateYear = firstCalendarDateFields.year() + candidateYears;
         int comparison = compareCalendarDateFields(
                 candidateYear,
@@ -764,12 +762,11 @@ public final class TemporalPlainDatePrototype {
 
     private static boolean doesConstrainedCalendarDaySurpassSecondDate(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             IsoDate constrainedCandidateDate,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            IsoCalendarDate secondCalendarDateFields,
             String calendarId) {
-        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
         if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
             return false;
         }
@@ -792,7 +789,7 @@ public final class TemporalPlainDatePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean equal = IsoDate.compareIsoDate(plainDate.getIsoDate(), other.getIsoDate()) == 0
+        boolean equal = plainDate.getIsoDate().compareTo(other.getIsoDate()) == 0
                 && plainDate.getCalendarId().equals(other.getCalendarId());
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
@@ -1005,7 +1002,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * IsoDate.compareIsoDate(firstDate, secondDate) > 0;
+        return sign * firstDate.compareTo(secondDate) > 0;
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -1140,7 +1137,7 @@ public final class TemporalPlainDatePrototype {
                 return null;
             }
             long weeksEndEpochDay = weeksStart.toEpochDay() + duration.days();
-            IsoDate weeksEnd = IsoDate.fromEpochDay(weeksEndEpochDay);
+            IsoDate weeksEnd = IsoDate.createFromEpochDay(weeksEndEpochDay);
             TemporalDateDurationFields weekDifference = calendarDateUntil(
                     context,
                     weeksStart,
@@ -1244,8 +1241,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static IsoDate resolveCalendarDate(JSContext context, JSTemporalPlainDate plainDate) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
         return new IsoDate(
                 calendarDateFields.year(),
                 calendarDateFields.month(),
@@ -1253,8 +1250,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static String resolveCalendarMonthCode(JSContext context, JSTemporalPlainDate plainDate) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
         return calendarDateFields.monthCode();
     }
 
@@ -1511,7 +1508,7 @@ public final class TemporalPlainDatePrototype {
         }
 
         IsoDate isoDate = plainDate.getIsoDate();
-        if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY && IsoTime.compareIsoTime(time, IsoTime.MIDNIGHT) == 0) {
+        if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY && time.compareTo(IsoTime.MIDNIGHT) == 0) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -1525,8 +1522,8 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainDate.getIsoDate(), plainDate.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
         JSTemporalPlainMonthDay plainMonthDay = TemporalPlainMonthDayConstructor.createPlainMonthDayFromCalendarMonthDay(
                 context,
                 plainDate.getCalendarId(),
@@ -1617,7 +1614,7 @@ public final class TemporalPlainDatePrototype {
             }
             isoTime = plainTime.getIsoTime();
             if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY
-                    && IsoTime.compareIsoTime(isoTime, IsoTime.MIDNIGHT) == 0) {
+                    && isoTime.compareTo(IsoTime.MIDNIGHT) == 0) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }

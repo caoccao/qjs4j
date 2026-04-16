@@ -65,7 +65,7 @@ public final class TemporalPlainTimePrototype {
 
         return TemporalPlainTimeConstructor.createPlainTime(
                 context,
-                IsoTime.fromNanoseconds(resultNanoseconds.longValue()));
+                IsoTime.createFromNanoseconds(resultNanoseconds.longValue()));
     }
 
     private static String canonicalizeDifferenceUnit(String unitText, boolean largestUnit) {
@@ -152,7 +152,7 @@ public final class TemporalPlainTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean equal = IsoTime.compareIsoTime(plainTime.getIsoTime(), other.getIsoTime()) == 0;
+        boolean equal = plainTime.getIsoTime().compareTo(other.getIsoTime()) == 0;
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
@@ -493,7 +493,7 @@ public final class TemporalPlainTimePrototype {
             roundedNs = 0L;
         }
 
-        return TemporalPlainTimeConstructor.createPlainTime(context, IsoTime.fromNanoseconds(roundedNs));
+        return TemporalPlainTimeConstructor.createPlainTime(context, IsoTime.createFromNanoseconds(roundedNs));
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -594,7 +594,7 @@ public final class TemporalPlainTimePrototype {
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
             roundedNanoseconds = 0L;
         }
-        IsoTime roundedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+        IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
         return new JSString(getToStringTimeString(roundedTime, toStringSettings));
     }
 
@@ -765,13 +765,13 @@ public final class TemporalPlainTimePrototype {
 
         if ("reject".equals(overflow)) {
             IsoTime isoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!isoTime.isValidTime()) {
+            if (!isoTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
             return TemporalPlainTimeConstructor.createPlainTime(context, isoTime);
         } else {
-            IsoTime constrained = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
+            IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
             return TemporalPlainTimeConstructor.createPlainTime(context, constrained);
         }
     }

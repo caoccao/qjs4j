@@ -117,7 +117,7 @@ public final class TemporalParser {
         }
         int month = parseFixedTwoDigits(value, 0);
         int dayOfMonth = parseFixedTwoDigits(value, 2);
-        return IsoDate.isValidIsoDate(1972, month, dayOfMonth);
+        return new IsoDate(1972, month, dayOfMonth).isValid();
     }
 
     private static boolean isAmbiguousSixDigitTime(String value) {
@@ -151,7 +151,7 @@ public final class TemporalParser {
                 && Character.isDigit(candidate.charAt(4))) {
             int month = parseFixedTwoDigits(candidate, 0);
             int dayOfMonth = parseFixedTwoDigits(candidate, 3);
-            return IsoDate.isValidIsoDate(1972, month, dayOfMonth);
+            return new IsoDate(1972, month, dayOfMonth).isValid();
         }
         if (candidate.length() == 7
                 && Character.isDigit(candidate.charAt(0))
@@ -227,7 +227,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -250,7 +250,7 @@ public final class TemporalParser {
      * Parse an ISO date-time string.
      * Returns null and sets pending exception on error.
      */
-    public static IsoDateTimeCalendar parseDateTimeString(JSContext context, String input) {
+    public static IsoCalendarDateTime parseDateTimeString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -286,7 +286,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -310,7 +310,7 @@ public final class TemporalParser {
                 return null;
             }
         }
-        return new IsoDateTimeCalendar(date, time, calendar);
+        return new IsoCalendarDateTime(date, time, calendar);
     }
 
     /**
@@ -333,7 +333,7 @@ public final class TemporalParser {
      * Parse an Instant string like "1970-01-01T00:00:00Z" or "1970-01-01T00:00:00+00:00".
      * Returns null and sets pending exception on error.
      */
-    public static ParsedInstant parseInstantString(JSContext context, String input) {
+    public static IsoDateTimeOffset parseInstantString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -357,7 +357,7 @@ public final class TemporalParser {
         if (time == null) {
             return null;
         }
-        TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+        IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
         if (parsedOffset == null || context.hasPendingException()) {
             return null;
         }
@@ -369,7 +369,7 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        return new ParsedInstant(date, time, parsedOffset.totalSeconds(), parsedOffset.totalNanoseconds());
+        return new IsoDateTimeOffset(date, time, parsedOffset);
     }
 
     /**
@@ -525,7 +525,7 @@ public final class TemporalParser {
                 return null;
             }
             if (marker == '+' || marker == '-') {
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -626,7 +626,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -649,7 +649,7 @@ public final class TemporalParser {
      * Parse a ZonedDateTime string like "2024-01-15T12:00:00+00:00[UTC]".
      * Returns null and sets pending exception on error.
      */
-    public static ParsedZonedDateTime parseZonedDateTimeString(JSContext context, String input) {
+    public static IsoZonedDateTimeOffset parseZonedDateTimeString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return null;
@@ -681,7 +681,7 @@ public final class TemporalParser {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return null;
                 }
-                TemporalParsedOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
+                IsoOffset parsedOffset = parser.parseInstantOffsetNanoseconds(context);
                 if (parsedOffset == null || context.hasPendingException()) {
                     return null;
                 }
@@ -713,7 +713,7 @@ public final class TemporalParser {
             }
         }
 
-        return new ParsedZonedDateTime(date, time, offsetSeconds, timeZoneId, calendarId);
+        return new IsoZonedDateTimeOffset(date, time, offsetSeconds, timeZoneId, calendarId);
     }
 
     private char current() {
@@ -816,7 +816,7 @@ public final class TemporalParser {
         if (!enforceIsoDateRange) {
             return true;
         }
-        return IsoDate.isValidIsoDate(year, month, dayOfMonth);
+        return new IsoDate(year, month, dayOfMonth).isValid();
     }
 
     private IsoDate parseDate(JSContext context) {
@@ -1137,7 +1137,7 @@ public final class TemporalParser {
         }
     }
 
-    private TemporalParsedOffset parseInstantOffsetNanoseconds(JSContext context) {
+    private IsoOffset parseInstantOffsetNanoseconds(JSContext context) {
         if (position >= input.length()) {
             context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
             return null;
@@ -1145,7 +1145,7 @@ public final class TemporalParser {
         char signCharacter = input.charAt(position);
         if (signCharacter == 'Z' || signCharacter == 'z') {
             position++;
-            return new TemporalParsedOffset(0, BigInteger.ZERO);
+            return new IsoOffset(0, BigInteger.ZERO);
         }
         int sign;
         if (signCharacter == '+') {
@@ -1247,7 +1247,7 @@ public final class TemporalParser {
         if (sign < 0) {
             offsetNanoseconds = offsetNanoseconds.negate();
         }
-        return new TemporalParsedOffset(offsetSeconds, offsetNanoseconds);
+        return new IsoOffset(offsetSeconds, offsetNanoseconds);
     }
 
     private IsoTime parseInstantTime(JSContext context) {
@@ -1315,7 +1315,7 @@ public final class TemporalParser {
 
         int constrainedSecond = second == 60 ? 59 : second;
         IsoTime parsedIsoTime = new IsoTime(hour, minute, constrainedSecond, millisecond, microsecond, nanosecond);
-        if (!parsedIsoTime.isValidTime()) {
+        if (!parsedIsoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
@@ -1373,7 +1373,7 @@ public final class TemporalParser {
         }
 
         IsoTime parsedIsoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-        if (!parsedIsoTime.isValidTime()) {
+        if (!parsedIsoTime.isValid()) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
@@ -1455,12 +1455,5 @@ public final class TemporalParser {
             return Long.MIN_VALUE;
         }
         return value.longValue();
-    }
-
-    public record ParsedInstant(IsoDate date, IsoTime time, int offsetSeconds, BigInteger offsetNanoseconds) {
-    }
-
-    public record ParsedZonedDateTime(IsoDate date, IsoTime time, int offsetSeconds, String timeZoneId,
-                                      String calendarId) {
     }
 }

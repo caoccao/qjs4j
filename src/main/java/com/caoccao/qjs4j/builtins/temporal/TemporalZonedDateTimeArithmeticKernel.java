@@ -141,7 +141,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
         }
 
         try {
-            return IsoDate.fromEpochDay(resultEpochDay);
+            return IsoDate.createFromEpochDay(resultEpochDay);
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;

@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
 
 import java.time.*;
 import java.time.chrono.*;
@@ -370,7 +370,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
 
     private static LunarDate toLunisolarDate(LocalDate gregorianDate, String calendarId) {
         IsoDate isoDate = new IsoDate(gregorianDate.getYear(), gregorianDate.getMonthValue(), gregorianDate.getDayOfMonth());
-        TemporalCalendarMath.CalendarDateFields calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
+        IsoCalendarDate calendarDateFields = isoDate.toIsoCalendarDate(calendarId);
         String monthCode = calendarDateFields.monthCode();
         int monthNumber = Integer.parseInt(monthCode.substring(1, 3));
         boolean leapMonth = monthCode.endsWith("L");
@@ -743,13 +743,13 @@ public final class JSIntlDateTimeFormat extends JSObject {
             return resolveEnglishDayPeriod(dateTime.getHour(), dayPeriodOption);
         }
         Chronology chronology = resolveChronology();
-        TemporalCalendarMath.CalendarDateFields calendarDateFields = null;
+        IsoCalendarDate calendarDateFields = null;
         boolean useTemporalIslamicFields = isIslamicCalendar() && hasExplicitNumericDateOptions();
         boolean useTemporalCalendarFields = (chronology == null && calendar != null && !isChineseOrDangiCalendar())
                 || useTemporalIslamicFields;
         if (useTemporalCalendarFields) {
             IsoDate isoDate = new IsoDate(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth());
-            calendarDateFields = TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendar);
+            calendarDateFields = isoDate.toIsoCalendarDate(calendar);
         }
         if (field == 'G' && eraOption != null) {
             int year = dateTime.getYear();

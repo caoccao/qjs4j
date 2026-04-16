@@ -216,15 +216,15 @@ public final class TemporalInstantPrototype {
         if ("minute".equals(smallestUnit)) {
             timePart = String.format(Locale.ROOT, "%02d:%02d", isoDateTime.time().hour(), isoDateTime.time().minute());
         } else if ("second".equals(smallestUnit)) {
-            timePart = isoDateTime.time().formatSecondsAndFraction(0);
+            timePart = isoDateTime.time().toString(0);
         } else if ("millisecond".equals(smallestUnit)) {
-            timePart = isoDateTime.time().formatSecondsAndFraction(3);
+            timePart = isoDateTime.time().toString(3);
         } else if ("microsecond".equals(smallestUnit)) {
-            timePart = isoDateTime.time().formatSecondsAndFraction(6);
+            timePart = isoDateTime.time().toString(6);
         } else if ("nanosecond".equals(smallestUnit)) {
-            timePart = isoDateTime.time().formatSecondsAndFraction(9);
+            timePart = isoDateTime.time().toString(9);
         } else {
-            timePart = isoDateTime.time().formatSecondsAndFraction(fractionalSecondDigits);
+            timePart = isoDateTime.time().toString(fractionalSecondDigits);
         }
         return datePart + "T" + timePart;
     }

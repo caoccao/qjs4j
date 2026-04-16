@@ -97,12 +97,12 @@ public final class TemporalPlainDateTimePrototype {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        IsoDate resultDate = IsoDate.fromEpochDay(resultEpochDay);
-        if (!IsoDate.isValidIsoDate(resultDate.year(), resultDate.month(), resultDate.day())) {
+        IsoDate isoDate = IsoDate.createFromEpochDay(resultEpochDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
-        return resultDate;
+        return isoDate;
     }
 
     private static TemporalTimeAddResult addDurationToTime(
@@ -133,7 +133,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
         long normalizedTimeNanoseconds = remainder.longValue();
-        IsoTime normalizedTime = IsoTime.fromNanoseconds(normalizedTimeNanoseconds);
+        IsoTime normalizedTime = IsoTime.createFromNanoseconds(normalizedTimeNanoseconds);
         return new TemporalTimeAddResult(normalizedTime, dayCarry);
     }
 
@@ -321,8 +321,7 @@ public final class TemporalPlainDateTimePrototype {
         String calendarId = firstDateTime.getCalendarId();
         boolean noRounding = settings.roundingIncrement() == 1L
                 && "nanosecond".equals(settings.smallestUnit());
-        boolean sameTime = IsoTime.compareIsoTime(
-                firstDateTime.getIsoDateTime().time(),
+        boolean sameTime = firstDateTime.getIsoDateTime().time().compareTo(
                 secondDateTime.getIsoDateTime().time()) == 0;
         boolean dateLargestUnit = "year".equals(settings.largestUnit())
                 || "month".equals(settings.largestUnit())
@@ -357,7 +356,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        boolean equal = IsoDateTime.compareIsoDateTime(plainDateTime.getIsoDateTime(), other.getIsoDateTime()) == 0
+        boolean equal = plainDateTime.getIsoDateTime().compareTo(other.getIsoDateTime()) == 0
                 && plainDateTime.getCalendarId().equals(other.getCalendarId());
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
@@ -979,7 +978,7 @@ public final class TemporalPlainDateTimePrototype {
         if (dayAdjust != 0) {
             adjustedDate = adjustedDate.addDays(dayAdjust);
         }
-        IsoTime adjustedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+        IsoTime adjustedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
         if (!isValidPlainDateTimeRange(adjustedDate, adjustedTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
@@ -1195,7 +1194,7 @@ public final class TemporalPlainDateTimePrototype {
         if (dayAdjust != 0) {
             roundedDate = roundedDate.addDays(dayAdjust);
         }
-        IsoTime roundedTime = IsoTime.fromNanoseconds(roundedNanoseconds);
+        IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
         if (!isValidPlainDateTimeRange(roundedDate, roundedTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -1596,12 +1595,12 @@ public final class TemporalPlainDateTimePrototype {
         IsoTime resultTime;
         if ("reject".equals(overflow)) {
             resultTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-            if (!resultTime.isValidTime()) {
+            if (!resultTime.isValid()) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
         } else {
-            resultTime = IsoTime.constrain(hour, minute, second, millisecond, microsecond, nanosecond);
+            resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
         if (!isValidPlainDateTimeRange(resultDate, resultTime)) {

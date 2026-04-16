@@ -21,43 +21,15 @@ import java.util.Locale;
 /**
  * Represents an ISO 8601 time with hour, minute, second, millisecond, microsecond, and nanosecond components.
  */
-public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+public record IsoTime(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond)
+        implements Comparable<IsoTime> {
 
     public static final IsoTime MIDNIGHT = new IsoTime(0, 0, 0, 0, 0, 0);
-
-    public static int compareIsoTime(IsoTime firstTime, IsoTime secondTime) {
-        if (firstTime.hour != secondTime.hour) {
-            return Integer.compare(firstTime.hour, secondTime.hour);
-        }
-        if (firstTime.minute != secondTime.minute) {
-            return Integer.compare(firstTime.minute, secondTime.minute);
-        }
-        if (firstTime.second != secondTime.second) {
-            return Integer.compare(firstTime.second, secondTime.second);
-        }
-        if (firstTime.millisecond != secondTime.millisecond) {
-            return Integer.compare(firstTime.millisecond, secondTime.millisecond);
-        }
-        if (firstTime.microsecond != secondTime.microsecond) {
-            return Integer.compare(firstTime.microsecond, secondTime.microsecond);
-        }
-        return Integer.compare(firstTime.nanosecond, secondTime.nanosecond);
-    }
-
-    public static IsoTime constrain(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
-        hour = Math.max(0, Math.min(23, hour));
-        minute = Math.max(0, Math.min(59, minute));
-        second = Math.max(0, Math.min(59, second));
-        millisecond = Math.max(0, Math.min(999, millisecond));
-        microsecond = Math.max(0, Math.min(999, microsecond));
-        nanosecond = Math.max(0, Math.min(999, nanosecond));
-        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-    }
 
     /**
      * Creates an IsoTime from total nanoseconds (mod 24 hours).
      */
-    public static IsoTime fromNanoseconds(long totalNanoseconds) {
+    public static IsoTime createFromNanoseconds(long totalNanoseconds) {
         long nanosecondsPerDay = 86_400_000_000_000L;
         totalNanoseconds = Math.floorMod(totalNanoseconds, nanosecondsPerDay);
         int hourValue = (int) (totalNanoseconds / 3_600_000_000_000L);
@@ -73,7 +45,56 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hourValue, minuteValue, secondValue, millisecondValue, microsecondValue, nanosecondValue);
     }
 
-    public String formatSecondsAndFraction(Integer fractionalSecondDigits) {
+    public static IsoTime createNormalized(int hour, int minute, int second, int millisecond, int microsecond, int nanosecond) {
+        hour = Math.max(0, Math.min(23, hour));
+        minute = Math.max(0, Math.min(59, minute));
+        second = Math.max(0, Math.min(59, second));
+        millisecond = Math.max(0, Math.min(999, millisecond));
+        microsecond = Math.max(0, Math.min(999, microsecond));
+        nanosecond = Math.max(0, Math.min(999, nanosecond));
+        return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+    }
+
+    @Override
+    public int compareTo(IsoTime otherIsoTime) {
+        if (hour != otherIsoTime.hour) {
+            return Integer.compare(hour, otherIsoTime.hour);
+        }
+        if (minute != otherIsoTime.minute) {
+            return Integer.compare(minute, otherIsoTime.minute);
+        }
+        if (second != otherIsoTime.second) {
+            return Integer.compare(second, otherIsoTime.second);
+        }
+        if (millisecond != otherIsoTime.millisecond) {
+            return Integer.compare(millisecond, otherIsoTime.millisecond);
+        }
+        if (microsecond != otherIsoTime.microsecond) {
+            return Integer.compare(microsecond, otherIsoTime.microsecond);
+        }
+        return Integer.compare(nanosecond, otherIsoTime.nanosecond);
+    }
+
+    public boolean isValid() {
+        if (hour < 0 || hour > 23) {
+            return false;
+        }
+        if (minute < 0 || minute > 59) {
+            return false;
+        }
+        if (second < 0 || second > 59) {
+            return false;
+        }
+        if (millisecond < 0 || millisecond > 999) {
+            return false;
+        }
+        if (microsecond < 0 || microsecond > 999) {
+            return false;
+        }
+        return nanosecond >= 0 && nanosecond <= 999;
+    }
+
+    public String toString(Integer fractionalSecondDigits) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(String.format(
                 Locale.ROOT,
@@ -99,28 +120,9 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return stringBuilder.toString();
     }
 
-    public boolean isValidTime() {
-        if (hour < 0 || hour > 23) {
-            return false;
-        }
-        if (minute < 0 || minute > 59) {
-            return false;
-        }
-        if (second < 0 || second > 59) {
-            return false;
-        }
-        if (millisecond < 0 || millisecond > 999) {
-            return false;
-        }
-        if (microsecond < 0 || microsecond > 999) {
-            return false;
-        }
-        return nanosecond >= 0 && nanosecond <= 999;
-    }
-
     @Override
     public String toString() {
-        return formatSecondsAndFraction(null);
+        return toString(null);
     }
 
     /**

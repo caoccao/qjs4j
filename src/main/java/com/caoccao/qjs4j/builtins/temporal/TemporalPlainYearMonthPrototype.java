@@ -99,12 +99,13 @@ public final class TemporalPlainYearMonthPrototype {
             normalizedDay = daysInNormalizedMonth;
         }
 
-        if (!IsoDate.isValidIsoDate(normalizedYear, normalizedMonth, normalizedDay)) {
+        IsoDate isoDate = new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
 
-        return new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
+        return isoDate;
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainYearMonth plainYearMonth, JSValue[] args, int sign) {
@@ -128,8 +129,8 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate originalDate = plainYearMonth.getIsoDate();
-        if (!IsoDate.isValidIsoDate(originalDate.year(), originalDate.month(), originalDate.day())) {
+        IsoDate isoDate = plainYearMonth.getIsoDate();
+        if (!isoDate.isValid()) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
@@ -151,14 +152,14 @@ public final class TemporalPlainYearMonthPrototype {
         if ("iso8601".equals(calendarId)) {
             resultDate = addDateDurationToPlainYearMonth(
                     context,
-                    originalDate,
+                    isoDate,
                     durationRecord.years(),
                     durationRecord.months(),
                     overflow);
         } else {
             resultDate = TemporalCalendarMath.addCalendarDate(
                     context,
-                    originalDate,
+                    isoDate,
                     calendarId,
                     durationRecord.years(),
                     durationRecord.months(),
@@ -313,17 +314,15 @@ public final class TemporalPlainYearMonthPrototype {
             IsoDate secondDate,
             String calendarId,
             String largestUnit) {
-        int sign = -Integer.signum(IsoDate.compareIsoDate(firstDate, secondDate));
+        int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDurationYearMonthFields.ZERO;
         }
 
         long years = 0L;
         long months = 0L;
-        TemporalCalendarMath.CalendarDateFields firstCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(firstDate, calendarId);
-        TemporalCalendarMath.CalendarDateFields secondCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(secondDate, calendarId);
+        IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
+        IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
 
         long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
         if (candidateYears != 0L) {
@@ -538,9 +537,9 @@ public final class TemporalPlainYearMonthPrototype {
 
     private static boolean doesConceptualYearDateSurpassTarget(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             long candidateYears,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields) {
+            IsoCalendarDate secondCalendarDateFields) {
         long candidateYear = firstCalendarDateFields.year() + candidateYears;
         int comparison = compareCalendarDateFields(
                 candidateYear,
@@ -554,12 +553,11 @@ public final class TemporalPlainYearMonthPrototype {
 
     private static boolean doesConstrainedCalendarDaySurpassTarget(
             int sign,
-            TemporalCalendarMath.CalendarDateFields firstCalendarDateFields,
+            IsoCalendarDate firstCalendarDateFields,
             IsoDate constrainedCandidateDate,
-            TemporalCalendarMath.CalendarDateFields secondCalendarDateFields,
+            IsoCalendarDate secondCalendarDateFields,
             String calendarId) {
-        TemporalCalendarMath.CalendarDateFields candidateCalendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(constrainedCandidateDate, calendarId);
+        IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
         if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
             return false;
         }
@@ -808,7 +806,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * IsoDate.compareIsoDate(firstDate, secondDate) > 0;
+        return sign * firstDate.compareTo(secondDate) > 0;
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
@@ -969,8 +967,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static IsoDate resolveCalendarDate(JSTemporalPlainYearMonth plainYearMonth) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         return new IsoDate(
                 calendarDateFields.year(),
                 calendarDateFields.month(),
@@ -978,8 +976,8 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static String resolveCalendarMonthCode(JSTemporalPlainYearMonth plainYearMonth) {
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         return calendarDateFields.monthCode();
     }
 
@@ -1259,8 +1257,8 @@ public final class TemporalPlainYearMonthPrototype {
 
         JSTemporalPlainYearMonth plainYearMonthForFormatting = plainYearMonth;
         if (!"iso8601".equals(plainYearMonth.getCalendarId())) {
-            TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                    TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+            IsoCalendarDate calendarDateFields =
+                    plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
             IsoDate midMonthIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
                     context,
                     plainYearMonth.getCalendarId(),
@@ -1299,8 +1297,8 @@ public final class TemporalPlainYearMonthPrototype {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                TemporalCalendarMath.isoDateToCalendarDate(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+        IsoCalendarDate calendarDateFields =
+                plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
         JSObject mergedFields = context.createJSObject();
         mergedFields.set(PropertyKey.fromString("calendar"), new JSString(plainYearMonth.getCalendarId()));
         mergedFields.set(PropertyKey.fromString("year"), JSNumber.of(calendarDateFields.year()));

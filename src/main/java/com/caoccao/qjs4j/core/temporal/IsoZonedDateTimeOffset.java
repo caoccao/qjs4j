@@ -16,5 +16,10 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalPersianYearInfo(int gregorianYear, int marchDay, boolean leapYear) {
+public record IsoZonedDateTimeOffset(
+        IsoDate date,
+        IsoTime time,
+        int offsetSeconds,
+        String timeZoneId,
+        String calendarId) {
 }

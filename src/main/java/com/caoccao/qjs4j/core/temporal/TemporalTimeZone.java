@@ -523,7 +523,7 @@ public final class TemporalTimeZone {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;
             }
-            TemporalParser.ParsedZonedDateTime parsedZonedDateTime =
+            IsoZonedDateTimeOffset parsedZonedDateTime =
                     TemporalParser.parseZonedDateTimeString(context, adjustedTimeZoneText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
@@ -540,14 +540,14 @@ public final class TemporalTimeZone {
             context.throwRangeError("Temporal error: Invalid offset string.");
             return null;
         }
-        TemporalParser.ParsedInstant parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
+        IsoDateTimeOffset parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
         if (parsedInstant == null || context.hasPendingException()) {
             return null;
         }
-        if (parsedInstant.offsetSeconds() == 0) {
+        if (parsedInstant.offset().totalSeconds() == 0) {
             return "UTC";
         } else {
-            return formatOffset(parsedInstant.offsetSeconds());
+            return formatOffset(parsedInstant.offset().totalSeconds());
         }
     }
 
