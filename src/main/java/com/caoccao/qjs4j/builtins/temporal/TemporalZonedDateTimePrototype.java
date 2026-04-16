@@ -256,13 +256,16 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String canonicalizeRoundSmallestUnit(String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .filter(u -> u.isSmallerOrEqual(TemporalUnit.DAY))
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null ? unit.jsName() : null;
+        return TemporalUnit.fromString(unitText)
+                .map(TemporalUnit::jsName)
+                .orElse(null);
     }
 
     private static JSTemporalZonedDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -1101,17 +1104,18 @@ public final class TemporalZonedDateTimePrototype {
         if ("day".equals(smallestUnit)) {
             return roundingIncrement == 1L;
         }
-        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
-        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
-            long maximumIncrement = switch (parsedUnit) {
-                case HOUR -> 24L;
-                case MINUTE, SECOND -> 60L;
-                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-                default -> -1L;
-            };
-            return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
-        }
-        return true;
+        return TemporalUnit.fromString(smallestUnit)
+                .filter(TemporalUnit::isTimeUnit)
+                .map(parsedUnit -> {
+                    long maximumIncrement = switch (parsedUnit) {
+                        case HOUR -> 24L;
+                        case MINUTE, SECOND -> 60L;
+                        case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+                        default -> -1L;
+                    };
+                    return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
+                })
+                .orElse(true);
     }
 
     private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {

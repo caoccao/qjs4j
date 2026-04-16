@@ -460,21 +460,24 @@ public final class TemporalDurationPrototype {
     }
 
     private static String canonicalizeDurationToStringSmallestUnit(JSContext context, String unitText) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        if (unit == null || unit.isLargerThan(TemporalUnit.SECOND)) {
+        String result = TemporalUnit.fromString(unitText)
+                .filter(u -> !u.isLargerThan(TemporalUnit.SECOND))
+                .map(TemporalUnit::jsName)
+                .orElse(null);
+        if (result == null) {
             context.throwRangeError("Temporal error: Invalid smallestUnit.");
-            return null;
         }
-        return unit.jsName();
+        return result;
     }
 
     private static String canonicalizeTemporalDurationUnit(JSContext context, String unitText, String optionName) {
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        if (unit == null) {
+        String result = TemporalUnit.fromString(unitText)
+                .map(TemporalUnit::jsName)
+                .orElse(null);
+        if (result == null) {
             context.throwRangeError("Temporal error: Invalid " + optionName + ".");
-            return null;
         }
-        return unit.jsName();
+        return result;
     }
 
     private static JSTemporalDuration checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -761,7 +764,9 @@ public final class TemporalDurationPrototype {
     }
 
     private static boolean isCalendarUnit(String unit) {
-        return "year".equals(unit) || "month".equals(unit) || "week".equals(unit) || "day".equals(unit);
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::isDateUnit)
+                .orElse(false);
     }
 
     private static boolean isDateTimeWithinTemporalRange(LocalDateTime dateTime) {
@@ -785,30 +790,30 @@ public final class TemporalDurationPrototype {
     }
 
     private static boolean isRelativeToRequiredUnit(String unit) {
-        return "year".equals(unit) || "month".equals(unit) || "week".equals(unit);
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::requiresRelativeTo)
+                .orElse(false);
     }
 
     private static boolean isTimeUnit(String unit) {
-        return "hour".equals(unit)
-                || "minute".equals(unit)
-                || "second".equals(unit)
-                || "millisecond".equals(unit)
-                || "microsecond".equals(unit)
-                || "nanosecond".equals(unit);
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::isTimeUnit)
+                .orElse(false);
     }
 
     private static boolean isValidIncrementForUnit(String smallestUnit, long roundingIncrement) {
-        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnit);
-        if (parsedUnit != null && parsedUnit.isTimeUnit()) {
-            long maximumIncrement = switch (parsedUnit) {
-                case HOUR -> 24L;
-                case MINUTE, SECOND -> 60L;
-                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-                default -> -1L;
-            };
-            return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
-        }
-        return true;
+        return TemporalUnit.fromString(smallestUnit)
+                .filter(TemporalUnit::isTimeUnit)
+                .map(parsedUnit -> {
+                    long maximumIncrement = switch (parsedUnit) {
+                        case HOUR -> 24L;
+                        case MINUTE, SECOND -> 60L;
+                        case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+                        default -> -1L;
+                    };
+                    return maximumIncrement <= 0 || (roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0);
+                })
+                .orElse(true);
     }
 
     private static String largestDayTimeUnit(TemporalDuration durationRecord) {
@@ -2400,17 +2405,19 @@ public final class TemporalDurationPrototype {
     }
 
     private static BigInteger unitToNanosecondsBigInteger(String unit) {
-        return switch (unit) {
-            case "day" -> DAY_NANOSECONDS;
-            case "hour" -> HOUR_NANOSECONDS;
-            case "minute" -> MINUTE_NANOSECONDS;
-            case "second" -> SECOND_NANOSECONDS;
-            case "millisecond" -> MILLISECOND_NANOSECONDS;
-            case "microsecond" -> MICROSECOND_NANOSECONDS;
-            case "nanosecond" -> BigInteger.ONE;
-            case "week" -> WEEK_NANOSECONDS;
-            default -> BigInteger.ZERO;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(temporalUnit -> switch (temporalUnit) {
+                    case WEEK -> WEEK_NANOSECONDS;
+                    case DAY -> DAY_NANOSECONDS;
+                    case HOUR -> HOUR_NANOSECONDS;
+                    case MINUTE -> MINUTE_NANOSECONDS;
+                    case SECOND -> SECOND_NANOSECONDS;
+                    case MILLISECOND -> MILLISECOND_NANOSECONDS;
+                    case MICROSECOND -> MICROSECOND_NANOSECONDS;
+                    case NANOSECOND -> BigInteger.ONE;
+                    default -> BigInteger.ZERO;
+                })
+                .orElse(BigInteger.ZERO);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
