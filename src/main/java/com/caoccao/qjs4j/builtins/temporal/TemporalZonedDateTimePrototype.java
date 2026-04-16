@@ -255,14 +255,6 @@ public final class TemporalZonedDateTimePrototype {
         return new JSString(zonedDateTime.getCalendarId());
     }
 
-    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        if ("auto".equals(unitText)) {
-            return allowAuto ? "auto" : null;
-        }
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null ? unit.jsName() : null;
-    }
-
     private static String canonicalizeRoundSmallestUnit(String unitText) {
         TemporalUnit unit = TemporalUnit.fromString(unitText);
         return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
@@ -821,10 +813,6 @@ public final class TemporalZonedDateTimePrototype {
         return calendarNameOption;
     }
 
-    private static String getToStringFractionalPart(IsoTime time, int digits) {
-        return time.formatFractionalPart(digits);
-    }
-
     private static String getToStringOffsetOption(JSContext context, JSObject optionsObject) {
         String offsetOption = TemporalOptionResolver.getStringOption(context, optionsObject, "offset", "auto");
         if (context.hasPendingException() || offsetOption == null) {
@@ -1116,13 +1104,6 @@ public final class TemporalZonedDateTimePrototype {
         return timeZoneId.charAt(0) == '+' || timeZoneId.charAt(0) == '-';
     }
 
-    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        if (isDateUnit(smallestUnit)) {
-            return true;
-        }
-        return TemporalMathKernel.isValidSubDayRoundingIncrement(smallestUnit, roundingIncrement);
-    }
-
     private static boolean isValidRoundingIncrementForSmallestUnit(String smallestUnit, long roundingIncrement) {
         if ("day".equals(smallestUnit)) {
             return roundingIncrement == 1L;
@@ -1209,11 +1190,6 @@ public final class TemporalZonedDateTimePrototype {
         }
         IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
         return JSNumber.of(localDateTime.time().nanosecond());
-    }
-
-    private static String negateRoundingMode(String roundingMode) {
-        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
-        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     public static JSValue offset(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -40,9 +40,6 @@ public final class TemporalDurationConstructor {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
-    private static final String UNIT_MONTH = "month";
-    private static final String UNIT_WEEK = "week";
-    private static final String UNIT_YEAR = "year";
 
     private TemporalDurationConstructor() {
     }

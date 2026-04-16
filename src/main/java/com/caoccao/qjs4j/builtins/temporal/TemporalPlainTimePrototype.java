@@ -203,10 +203,6 @@ public final class TemporalPlainTimePrototype {
         return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 
-    private static String getToStringFractionalPart(IsoTime time, int digits) {
-        return time.formatFractionalPart(digits);
-    }
-
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
@@ -315,10 +311,6 @@ public final class TemporalPlainTimePrototype {
         return JSNumber.of(plainTime.getIsoTime().hour());
     }
 
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        return temporalUnitRank(leftUnit) <= temporalUnitRank(rightUnit) ? leftUnit : rightUnit;
-    }
-
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainTime plainTime = checkReceiver(context, thisArg, "microsecond");
         if (plainTime == null) {
@@ -408,11 +400,6 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
         return addOrSubtract(context, plainTime, args, -1);
-    }
-
-    private static int temporalUnitRank(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -148,14 +148,6 @@ public final class TemporalPlainDateTimePrototype {
         return new JSString(plainDateTime.getCalendarId());
     }
 
-    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        if ("auto".equals(unitText)) {
-            return allowAuto ? "auto" : null;
-        }
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null ? unit.jsName() : null;
-    }
-
     private static String canonicalizeSmallestUnit(String unitText) {
         TemporalUnit unit = TemporalUnit.fromString(unitText);
         return unit != null && unit.isSmallerOrEqual(TemporalUnit.DAY) ? unit.jsName() : null;
@@ -422,10 +414,6 @@ public final class TemporalPlainDateTimePrototype {
         return calendarNameOption;
     }
 
-    private static String getToStringFractionalPart(IsoTime time, int digits) {
-        return time.formatFractionalPart(digits);
-    }
-
     private static TemporalFractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
         if (value instanceof JSUndefined) {
             return new TemporalFractionalSecondDigitsOption(true, -1);
@@ -579,30 +567,6 @@ public final class TemporalPlainDateTimePrototype {
         return TemporalPlainDatePrototype.inLeapYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
-    private static boolean isValidDifferenceRoundingIncrement(String smallestUnit, long roundingIncrement) {
-        long maximumIncrement;
-        switch (smallestUnit) {
-            case "hour":
-                maximumIncrement = 24L;
-                break;
-            case "minute":
-            case "second":
-                maximumIncrement = 60L;
-                break;
-            case "millisecond":
-            case "microsecond":
-            case "nanosecond":
-                maximumIncrement = 1000L;
-                break;
-            default:
-                return true;
-        }
-        if (roundingIncrement >= maximumIncrement) {
-            return false;
-        }
-        return maximumIncrement % roundingIncrement == 0L;
-    }
-
     private static boolean isValidPlainDateTimeRange(IsoDate date, IsoTime time) {
         long epochDay = date.toEpochDay();
         if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
@@ -628,15 +592,6 @@ public final class TemporalPlainDateTimePrototype {
 
     private static boolean isValidRoundingMode(String roundingMode) {
         return TemporalRoundingMode.isValid(roundingMode);
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -693,11 +648,6 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(plainDateTime.getIsoDateTime().time().nanosecond());
-    }
-
-    private static String negateRoundingMode(String roundingMode) {
-        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
-        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     public static JSValue round(JSContext context, JSValue thisArg, JSValue[] args) {

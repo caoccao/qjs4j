@@ -27,23 +27,13 @@ import java.time.LocalDate;
  * Implementation of Temporal.PlainDate prototype methods.
  */
 public final class TemporalPlainDatePrototype {
-    private static final String DIFFERENCE_LARGEST_UNIT_OPTION = "largestUnit";
-    private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
-    private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
-    private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
     private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainDate";
     private static final String UNIT_AUTO = "auto";
     private static final String UNIT_DAY = "day";
-    private static final String UNIT_HOUR = "hour";
-    private static final String UNIT_MICROSECOND = "microsecond";
-    private static final String UNIT_MILLISECOND = "millisecond";
-    private static final String UNIT_MINUTE = "minute";
     private static final String UNIT_MONTH = "month";
-    private static final String UNIT_NANOSECOND = "nanosecond";
-    private static final String UNIT_SECOND = "second";
     private static final String UNIT_WEEK = "week";
     private static final String UNIT_YEAR = "year";
 
@@ -476,17 +466,6 @@ public final class TemporalPlainDatePrototype {
                 && !"dangi".equals(calendarId);
     }
 
-    private static String canonicalizeTemporalUnit(String unitText, boolean allowAuto) {
-        if (unitText == null) {
-            return null;
-        }
-        if (allowAuto && UNIT_AUTO.equals(unitText)) {
-            return UNIT_AUTO;
-        }
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null ? unit.jsName() : null;
-    }
-
     private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
         return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, methodName);
     }
@@ -789,17 +768,6 @@ public final class TemporalPlainDatePrototype {
         return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit) || UNIT_WEEK.equals(unit);
     }
 
-    private static boolean isDateUnit(String unit) {
-        return UNIT_YEAR.equals(unit)
-                || UNIT_MONTH.equals(unit)
-                || UNIT_WEEK.equals(unit)
-                || UNIT_DAY.equals(unit);
-    }
-
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return TemporalRoundingMode.isValid(roundingMode);
-    }
-
     private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
         if (year != isoDate.year()) {
             return sign * (year - isoDate.year()) > 0;
@@ -904,11 +872,6 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(TemporalCalendarMath.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
-    }
-
-    private static String negateRoundingMode(String roundingMode) {
-        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
-        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     private static TemporalNudgeResult nudgeToCalendarUnit(

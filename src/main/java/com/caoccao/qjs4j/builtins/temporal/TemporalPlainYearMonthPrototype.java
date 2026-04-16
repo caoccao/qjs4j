@@ -25,10 +25,6 @@ import java.time.LocalDate;
  * Implementation of Temporal.PlainYearMonth prototype methods.
  */
 public final class TemporalPlainYearMonthPrototype {
-    private static final String DIFFERENCE_LARGEST_UNIT_OPTION = "largestUnit";
-    private static final String DIFFERENCE_ROUNDING_INCREMENT_OPTION = "roundingIncrement";
-    private static final String DIFFERENCE_ROUNDING_MODE_OPTION = "roundingMode";
-    private static final String DIFFERENCE_SMALLEST_UNIT_OPTION = "smallestUnit";
     private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
     private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
     private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
@@ -210,17 +206,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         return new JSString(plainYearMonth.getCalendarId());
-    }
-
-    private static String canonicalizeDifferenceUnit(String unitText, boolean allowAuto) {
-        if (unitText == null) {
-            return null;
-        }
-        if (allowAuto && UNIT_AUTO.equals(unitText)) {
-            return UNIT_AUTO;
-        }
-        TemporalUnit unit = TemporalUnit.fromString(unitText);
-        return unit != null && unit.isLargerOrEqual(TemporalUnit.MONTH) ? unit.jsName() : null;
     }
 
     private static JSTemporalPlainYearMonth checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -671,25 +656,8 @@ public final class TemporalPlainYearMonthPrototype {
         return differenceEpochDay >= MIN_SUPPORTED_EPOCH_DAY && differenceEpochDay <= MAX_SUPPORTED_EPOCH_DAY;
     }
 
-    private static boolean isValidDifferenceRoundingMode(String roundingMode) {
-        return TemporalRoundingMode.isValid(roundingMode);
-    }
-
-    private static boolean isYearMonthUnit(String unit) {
-        return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit);
-    }
-
     private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
         return sign * firstDate.compareTo(secondDate) > 0;
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = temporalUnitRank(leftUnit);
-        int rightRank = temporalUnitRank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
     }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -774,11 +742,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(TemporalCalendarMath.monthsInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
-    }
-
-    private static String negateRoundingMode(String roundingMode) {
-        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
-        return mode != null ? mode.negate().jsName() : roundingMode;
     }
 
     private static TemporalParsedMonthCode parseMonthCodeForWith(JSContext context, String monthCode) {
@@ -1061,11 +1024,6 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
         return addOrSubtract(context, plainYearMonth, args, -1);
-    }
-
-    private static int temporalUnitRank(String unit) {
-        TemporalUnit tu = TemporalUnit.fromString(unit);
-        return tu != null ? tu.ordinal() : TemporalUnit.values().length;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
