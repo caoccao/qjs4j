@@ -101,7 +101,7 @@ public final class TemporalUtils {
         return normalizedCalendarIdentifier;
     }
 
-    private static String firstCalendarAnnotation(String text) {
+    public static String firstCalendarAnnotation(String text) {
         int annotationStart = text.indexOf('[');
         while (annotationStart >= 0) {
             int annotationEnd = text.indexOf(']', annotationStart);

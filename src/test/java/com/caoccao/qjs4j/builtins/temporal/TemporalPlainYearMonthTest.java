@@ -97,6 +97,16 @@ public class TemporalPlainYearMonthTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromWithHebrewMissingLeapMonthCodeConstrain() {
+        assertStringWithJavet("Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'constrain' }).monthCode");
+    }
+
+    @Test
+    public void testFromWithHebrewMissingLeapMonthCodeReject() {
+        assertBooleanWithJavet("(() => { try { Temporal.PlainYearMonth.from({ year: 5783, monthCode: 'M05L', calendar: 'hebrew' }, { overflow: 'reject' }); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
     public void testInLeapYear() {
         assertBooleanWithJavet("new Temporal.PlainYearMonth(2024, 1).inLeapYear");
     }

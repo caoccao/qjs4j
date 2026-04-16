@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
+import com.caoccao.qjs4j.core.temporal.TemporalParsedMonthCode;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 import java.util.Locale;
@@ -99,7 +100,7 @@ public final class TemporalPlainMonthDayPrototype {
         return new JSString(calendarDateFields.monthCode());
     }
 
-    private static ParsedMonthCode parseMonthCodeSyntaxForWith(JSContext context, String monthCode) {
+    private static TemporalParsedMonthCode parseMonthCodeSyntaxForWith(JSContext context, String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -121,7 +122,7 @@ public final class TemporalPlainMonthDayPrototype {
             leapMonth = true;
         }
         int month = Integer.parseInt(monthCode.substring(1, 3));
-        return new ParsedMonthCode(month, leapMonth);
+        return new TemporalParsedMonthCode(month, leapMonth);
     }
 
     public static JSValue referenceISOYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -355,7 +356,7 @@ public final class TemporalPlainMonthDayPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        ParsedMonthCode parsedMonthCode = null;
+        TemporalParsedMonthCode parsedMonthCode = null;
         if (hasMonthCode) {
             parsedMonthCode = parseMonthCodeSyntaxForWith(context, monthCode);
             if (context.hasPendingException()) {
@@ -483,6 +484,4 @@ public final class TemporalPlainMonthDayPrototype {
         return TemporalPlainMonthDayConstructor.monthDayFromFields(context, mergedFields, options);
     }
 
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
 }

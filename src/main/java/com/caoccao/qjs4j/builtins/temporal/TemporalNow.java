@@ -46,7 +46,7 @@ public final class TemporalNow {
             return null;
         }
 
-        String normalizedTimeZoneId = TemporalDurationConstructor.parseTimeZoneIdentifierString(
+        String normalizedTimeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(
                 context,
                 timeZoneString.value());
         if (context.hasPendingException() || normalizedTimeZoneId == null) {

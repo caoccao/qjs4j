@@ -17,115 +17,15 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalCalendarMath;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
-
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import com.caoccao.qjs4j.core.temporal.*;
 
 /**
  * Implementation of Temporal.PlainMonthDay constructor and static methods.
  */
 public final class TemporalPlainMonthDayConstructor {
     private static final int DEFAULT_REFERENCE_ISO_YEAR = 1972;
-    private static final int MAX_REFERENCE_ISO_YEAR = 2050;
-    private static final int MIN_REFERENCE_ISO_YEAR = 1900;
-    private static final ConcurrentHashMap<String, ConcurrentHashMap<Integer, Map<MonthDayLookupKey, IsoDate>>>
-            REFERENCE_LOOKUP_BY_CALENDAR_AND_ISO_YEAR = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<ReferenceLookupKey, IsoDate> REFERENCE_LOOKUP_HIT_CACHE = new ConcurrentHashMap<>();
-    private static final Set<ReferenceLookupKey> REFERENCE_LOOKUP_MISS_CACHE = ConcurrentHashMap.newKeySet();
 
     private TemporalPlainMonthDayConstructor() {
-    }
-
-    private static Map<MonthDayLookupKey, IsoDate> buildReferenceLookupForIsoYear(
-            String calendarId,
-            int isoYear) {
-        Map<MonthDayLookupKey, IsoDate> latestIsoDateByMonthDay = new HashMap<>();
-        for (int isoMonth = 1; isoMonth <= 12; isoMonth++) {
-            int daysInMonth = IsoDate.daysInMonth(isoYear, isoMonth);
-            for (int isoDay = 1; isoDay <= daysInMonth; isoDay++) {
-                IsoDate isoDate = new IsoDate(isoYear, isoMonth, isoDay);
-                TemporalCalendarMath.CalendarDateFields calendarDateFields =
-                        TemporalCalendarMath.isoDateToCalendarDate(isoDate, calendarId);
-                MonthDayLookupKey monthDayLookupKey = new MonthDayLookupKey(
-                        calendarDateFields.monthCode(),
-                        calendarDateFields.day());
-                latestIsoDateByMonthDay.put(monthDayLookupKey, isoDate);
-            }
-        }
-        return Map.copyOf(latestIsoDateByMonthDay);
-    }
-
-    private static boolean calendarUsesEras(String calendarId) {
-        return "buddhist".equals(calendarId)
-                || "coptic".equals(calendarId)
-                || "ethioaa".equals(calendarId)
-                || "ethiopic".equals(calendarId)
-                || "gregory".equals(calendarId)
-                || "hebrew".equals(calendarId)
-                || "indian".equals(calendarId)
-                || "islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)
-                || "japanese".equals(calendarId)
-                || "persian".equals(calendarId)
-                || "roc".equals(calendarId);
-    }
-
-    private static String canonicalizeEraForCalendar(JSContext context, String calendarId, String era) {
-        if (era == null) {
-            context.throwRangeError("Temporal error: Invalid era.");
-            return null;
-        }
-        String normalizedEra = era.toLowerCase();
-        return switch (calendarId) {
-            case "gregory" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "japanese" -> switch (normalizedEra) {
-                case "ce", "ad" -> "ce";
-                case "bce", "bc" -> "bce";
-                case "meiji", "taisho", "showa", "heisei", "reiwa" -> normalizedEra;
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "roc" -> switch (normalizedEra) {
-                case "roc", "minguo" -> "roc";
-                case "broc", "before-roc" -> "broc";
-                default -> {
-                    context.throwRangeError("Temporal error: Invalid era.");
-                    yield null;
-                }
-            };
-            case "buddhist" -> "be".equals(normalizedEra) ? "be" : invalidEra(context);
-            case "coptic" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "ethioaa" -> "aa".equals(normalizedEra) ? "aa" : invalidEra(context);
-            case "ethiopic" -> ("aa".equals(normalizedEra) || "am".equals(normalizedEra))
-                    ? normalizedEra
-                    : invalidEra(context);
-            case "hebrew" -> "am".equals(normalizedEra) ? "am" : invalidEra(context);
-            case "indian" -> ("shaka".equals(normalizedEra) || "saka".equals(normalizedEra))
-                    ? "shaka"
-                    : invalidEra(context);
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> switch (normalizedEra) {
-                case "ah", "bh" -> normalizedEra;
-                default -> invalidEra(context);
-            };
-            case "persian" -> "ap".equals(normalizedEra) ? "ap" : invalidEra(context);
-            default -> invalidEra(context);
-        };
     }
 
     /**
@@ -200,98 +100,7 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, referenceIsoDate, calendarId);
     }
 
-    private static IsoDate findReferenceIsoDateExact(String calendarId, String monthCode, int dayOfMonth) {
-        ReferenceLookupKey referenceLookupKey = new ReferenceLookupKey(calendarId, monthCode, dayOfMonth);
-        IsoDate cachedReferenceIsoDate = REFERENCE_LOOKUP_HIT_CACHE.get(referenceLookupKey);
-        if (cachedReferenceIsoDate != null) {
-            return cachedReferenceIsoDate;
-        }
-        if (REFERENCE_LOOKUP_MISS_CACHE.contains(referenceLookupKey)) {
-            return null;
-        }
-
-        IsoDate resolvedReferenceIsoDate = findReferenceIsoDateExactUncached(calendarId, monthCode, dayOfMonth);
-        if (resolvedReferenceIsoDate == null) {
-            REFERENCE_LOOKUP_MISS_CACHE.add(referenceLookupKey);
-            return null;
-        }
-        REFERENCE_LOOKUP_HIT_CACHE.put(referenceLookupKey, resolvedReferenceIsoDate);
-        return resolvedReferenceIsoDate;
-    }
-
-    private static IsoDate findReferenceIsoDateExactUncached(String calendarId, String monthCode, int dayOfMonth) {
-        if (dayOfMonth < 1 || dayOfMonth > 31) {
-            return null;
-        }
-
-        for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR; isoYear >= MIN_REFERENCE_ISO_YEAR; isoYear--) {
-            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear = findReferenceLookupForIsoYear(calendarId, isoYear);
-            IsoDate candidateIsoDate = findReferenceIsoDateFromReferenceLookup(
-                    referenceLookupForIsoYear,
-                    monthCode,
-                    dayOfMonth);
-            if (candidateIsoDate != null) {
-                return candidateIsoDate;
-            }
-        }
-
-        for (int isoYear = DEFAULT_REFERENCE_ISO_YEAR + 1; isoYear <= MAX_REFERENCE_ISO_YEAR; isoYear++) {
-            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear = findReferenceLookupForIsoYear(calendarId, isoYear);
-            IsoDate candidateIsoDate = findReferenceIsoDateFromReferenceLookup(
-                    referenceLookupForIsoYear,
-                    monthCode,
-                    dayOfMonth);
-            if (candidateIsoDate != null) {
-                return candidateIsoDate;
-            }
-        }
-        return null;
-    }
-
-    private static IsoDate findReferenceIsoDateFromReferenceLookup(
-            Map<MonthDayLookupKey, IsoDate> referenceLookupForIsoYear,
-            String monthCode,
-            int dayOfMonth) {
-        MonthDayLookupKey monthDayLookupKey = new MonthDayLookupKey(monthCode, dayOfMonth);
-        return referenceLookupForIsoYear.get(monthDayLookupKey);
-    }
-
-    private static Map<MonthDayLookupKey, IsoDate> findReferenceLookupForIsoYear(
-            String calendarId,
-            int isoYear) {
-        ConcurrentHashMap<Integer, Map<MonthDayLookupKey, IsoDate>> referenceLookupByIsoYear =
-                REFERENCE_LOOKUP_BY_CALENDAR_AND_ISO_YEAR.computeIfAbsent(
-                        calendarId,
-                        key -> new ConcurrentHashMap<>());
-        return referenceLookupByIsoYear.computeIfAbsent(
-                isoYear,
-                key -> buildReferenceLookupForIsoYear(calendarId, isoYear));
-    }
-
-    private static String firstCalendarAnnotation(String text) {
-        int annotationStart = text.indexOf('[');
-        while (annotationStart >= 0) {
-            int annotationEnd = text.indexOf(']', annotationStart);
-            if (annotationEnd <= annotationStart) {
-                return null;
-            }
-            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
-            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
-                annotationContent = annotationContent.substring(1);
-            }
-            int equalSignIndex = annotationContent.indexOf('=');
-            if (equalSignIndex > 0) {
-                String annotationKey = annotationContent.substring(0, equalSignIndex);
-                if ("u-ca".equals(annotationKey)) {
-                    return annotationContent.substring(equalSignIndex + 1);
-                }
-            }
-            annotationStart = text.indexOf('[', annotationEnd + 1);
-        }
-        return null;
-    }
-
-    private static String formatMonthCode(ParsedMonthCode parsedMonthCode) {
+    private static String formatMonthCode(TemporalParsedMonthCode parsedMonthCode) {
         String formattedMonthCode = TemporalUtils.monthCode(parsedMonthCode.month());
         if (parsedMonthCode.leapMonth()) {
             formattedMonthCode = formattedMonthCode + "L";
@@ -306,15 +115,6 @@ public final class TemporalPlainMonthDayConstructor {
         JSValue item = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
         JSValue options = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
         return toTemporalMonthDay(context, item, options);
-    }
-
-    private static String invalidEra(JSContext context) {
-        context.throwRangeError("Temporal error: Invalid era.");
-        return null;
-    }
-
-    private static boolean isChineseOrDangiCalendar(String calendarId) {
-        return "chinese".equals(calendarId) || "dangi".equals(calendarId);
     }
 
     private static boolean isIsoLeapYearWithoutRangeCheck(int year) {
@@ -399,7 +199,7 @@ public final class TemporalPlainMonthDayConstructor {
         boolean hasYear = !(yearValue instanceof JSUndefined) && yearValue != null;
         int year = Integer.MIN_VALUE;
 
-        boolean calendarSupportsEras = calendarUsesEras(calendarId);
+        boolean calendarSupportsEras = TemporalFieldResolver.calendarUsesEras(calendarId);
         if (calendarSupportsEras) {
             JSValue eraValue = fields.get(PropertyKey.fromString("era"));
             if (context.hasPendingException()) {
@@ -432,21 +232,21 @@ public final class TemporalPlainMonthDayConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!hasYear && hasEra && hasEraYear) {
-                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                year = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                year = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
                 hasYear = true;
             } else if (hasEra && hasEraYear) {
-                String canonicalEra = canonicalizeEraForCalendar(context, calendarId, era);
+                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                int expectedYear = yearFromEraAndEraYear(context, calendarId, canonicalEra, eraYear);
+                int expectedYear = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -470,7 +270,7 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        ParsedMonthCode parsedMonthCode = null;
+        TemporalParsedMonthCode parsedMonthCode = null;
         if (hasMonthCode) {
             parsedMonthCode = parseMonthCodeSyntaxForMonthDayFrom(context, monthCode);
             if (context.hasPendingException()) {
@@ -494,7 +294,7 @@ public final class TemporalPlainMonthDayConstructor {
         int resolvedDay;
         if (hasYear || hasMonth) {
             if ("iso8601".equals(calendarId)) {
-                ResolvedMonthDay resolvedIsoMonthDay = resolveIsoMonthDay(
+                TemporalResolvedMonthDay resolvedIsoMonthDay = resolveIsoMonthDay(
                         context,
                         hasYear ? year : DEFAULT_REFERENCE_ISO_YEAR,
                         hasMonth ? month : null,
@@ -561,7 +361,7 @@ public final class TemporalPlainMonthDayConstructor {
 
     static JSValue monthDayFromString(JSContext context, String input) {
         String calendar = "iso8601";
-        String calendarAnnotation = firstCalendarAnnotation(input);
+        String calendarAnnotation = TemporalUtils.firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
             calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
@@ -605,36 +405,22 @@ public final class TemporalPlainMonthDayConstructor {
         return createPlainMonthDay(context, parsedMonthDay, calendar);
     }
 
-    private static ParsedMonthCode parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
-        if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
+    private static TemporalParsedMonthCode parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
+        TemporalParsedMonthCode parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
+                context,
+                monthCode,
+                "Temporal error: Invalid ISO date.");
+        if (parsedMonthCode == null) {
             return null;
         }
-        if (monthCode.charAt(0) != 'M') {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        int month = Integer.parseInt(monthCode.substring(1, 3));
-        boolean leapMonth = false;
-        if (monthCode.length() == 4) {
-            if (monthCode.charAt(3) != 'L') {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            leapMonth = true;
-        }
-        return new ParsedMonthCode(month, leapMonth);
+        return new TemporalParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
     }
 
-    private static ResolvedMonthDay resolveIsoMonthDay(
+    private static TemporalResolvedMonthDay resolveIsoMonthDay(
             JSContext context,
             int year,
             Integer monthFromProperty,
-            ParsedMonthCode monthCodeFromProperty,
+            TemporalParsedMonthCode monthCodeFromProperty,
             int dayOfMonth,
             String overflow) {
         if (dayOfMonth < 1) {
@@ -687,32 +473,7 @@ public final class TemporalPlainMonthDayConstructor {
         } else if (constrainedDay > maximumDay) {
             constrainedDay = maximumDay;
         }
-        return new ResolvedMonthDay(TemporalUtils.monthCode(constrainedMonth), constrainedDay);
-    }
-
-    private static int resolveJapaneseYearFromEra(String era, int eraYear) {
-        if ("ce".equals(era)) {
-            return eraYear;
-        }
-        if ("bce".equals(era)) {
-            return 1 - eraYear;
-        }
-        if ("meiji".equals(era)) {
-            return 1867 + eraYear;
-        }
-        if ("taisho".equals(era)) {
-            return 1911 + eraYear;
-        }
-        if ("showa".equals(era)) {
-            return 1925 + eraYear;
-        }
-        if ("heisei".equals(era)) {
-            return 1988 + eraYear;
-        }
-        if ("reiwa".equals(era)) {
-            return 2018 + eraYear;
-        }
-        return eraYear;
+        return new TemporalResolvedMonthDay(TemporalUtils.monthCode(constrainedMonth), constrainedDay);
     }
 
     static IsoDate resolveReferenceIsoDate(
@@ -721,58 +482,12 @@ public final class TemporalPlainMonthDayConstructor {
             String monthCode,
             int dayOfMonth,
             String overflow) {
-        if (dayOfMonth < 1) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        ParsedMonthCode parsedMonthCode = parseMonthCodeSyntaxForMonthDayFrom(context, monthCode);
-        if (context.hasPendingException() || parsedMonthCode == null) {
-            return null;
-        }
-
-        String normalizedMonthCode = formatMonthCode(parsedMonthCode);
-        int searchDay = dayOfMonth;
-
-        if (isChineseOrDangiCalendar(calendarId) && parsedMonthCode.leapMonth()) {
-            if ("reject".equals(overflow)) {
-                IsoDate exactLeapDate = findReferenceIsoDateExact(calendarId, normalizedMonthCode, searchDay);
-                if (exactLeapDate == null) {
-                    context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return null;
-                }
-                return exactLeapDate;
-            }
-
-            int constrainedLeapDay = Math.min(searchDay, 30);
-            IsoDate exactLeapDate = findReferenceIsoDateExact(calendarId, normalizedMonthCode, constrainedLeapDay);
-            if (exactLeapDate != null) {
-                return exactLeapDate;
-            }
-
-            normalizedMonthCode = TemporalUtils.monthCode(parsedMonthCode.month());
-            searchDay = constrainedLeapDay;
-        }
-
-        if ("reject".equals(overflow)) {
-            IsoDate exactReferenceDate = findReferenceIsoDateExact(calendarId, normalizedMonthCode, searchDay);
-            if (exactReferenceDate == null) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-            return exactReferenceDate;
-        }
-
-        int constrainedSearchDay = Math.min(searchDay, 31);
-        for (int candidateDay = constrainedSearchDay; candidateDay >= 1; candidateDay--) {
-            IsoDate candidateReferenceDate = findReferenceIsoDateExact(calendarId, normalizedMonthCode, candidateDay);
-            if (candidateReferenceDate != null) {
-                return candidateReferenceDate;
-            }
-        }
-
-        context.throwRangeError("Temporal error: Invalid ISO date.");
-        return null;
+        return TemporalCalendarMath.resolveReferenceIsoDateForMonthDay(
+                context,
+                calendarId,
+                monthCode,
+                dayOfMonth,
+                overflow);
     }
 
     public static JSValue toTemporalMonthDay(JSContext context, JSValue item, JSValue options) {
@@ -814,27 +529,4 @@ public final class TemporalPlainMonthDayConstructor {
         return (JSTemporalPlainMonthDay) result;
     }
 
-    private static int yearFromEraAndEraYear(JSContext context, String calendarId, String era, int eraYear) {
-        return switch (calendarId) {
-            case "gregory" -> "bce".equals(era) ? 1 - eraYear : eraYear;
-            case "japanese" -> resolveJapaneseYearFromEra(era, eraYear);
-            case "roc" -> "broc".equals(era) ? 1 - eraYear : eraYear;
-            case "buddhist" -> eraYear;
-            case "ethiopic" -> "aa".equals(era) ? eraYear - 5500 : eraYear;
-            case "islamic-civil", "islamic-tbla", "islamic-umalqura" -> "bh".equals(era) ? 1 - eraYear : eraYear;
-            default -> eraYear;
-        };
-    }
-
-    private record MonthDayLookupKey(String monthCode, int dayOfMonth) {
-    }
-
-    private record ParsedMonthCode(int month, boolean leapMonth) {
-    }
-
-    private record ReferenceLookupKey(String calendarId, String monthCode, int dayOfMonth) {
-    }
-
-    private record ResolvedMonthDay(String monthCode, int dayOfMonth) {
-    }
 }

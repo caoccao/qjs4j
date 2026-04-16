@@ -22,9 +22,8 @@ import com.caoccao.qjs4j.core.temporal.*;
 import java.math.BigInteger;
 import java.time.*;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * Implementation of Temporal.Duration constructor and static methods.
@@ -37,31 +36,15 @@ public final class TemporalDurationConstructor {
     static final String UNIT_MINUTE = "minute";
     static final String UNIT_NANOSECOND = "nanosecond";
     static final String UNIT_SECOND = "second";
-    private static final Map<String, String> AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE =
-            createAvailableTimeZoneIdentifierLookup();
     private static final long CALENDAR_UNIT_MAX = 4_294_967_295L;
     private static final BigInteger DAY_NANOSECONDS = BigInteger.valueOf(86_400_000_000_000L);
     private static final BigInteger HOUR_NANOSECONDS = BigInteger.valueOf(3_600_000_000_000L);
     private static final BigInteger MICROSECOND_NANOSECONDS = BigInteger.valueOf(1_000L);
     private static final BigInteger MILLISECOND_NANOSECONDS = BigInteger.valueOf(1_000_000L);
     private static final BigInteger MINUTE_NANOSECONDS = BigInteger.valueOf(60_000_000_000L);
-    private static final Pattern OFFSET_BASIC_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_EXTENDED_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
     private static final BigInteger SECOND_NANOSECONDS = BigInteger.valueOf(1_000_000_000L);
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS =
             BigInteger.valueOf(9_007_199_254_740_992L).multiply(SECOND_NANOSECONDS).subtract(BigInteger.ONE);
-    private static final Map<String, String> SUPPLEMENTARY_TIME_ZONE_IDS = Map.of(
-            "est", "EST",
-            "mst", "MST",
-            "hst", "HST",
-            "gmt+0", "GMT+0",
-            "gmt-0", "GMT-0",
-            "gmt0", "GMT0",
-            "roc", "ROC");
     private static final String UNIT_MONTH = "month";
     private static final String UNIT_WEEK = "week";
     private static final String UNIT_YEAR = "year";
@@ -133,31 +116,6 @@ public final class TemporalDurationConstructor {
         } catch (ArithmeticException | DateTimeException rangeException) {
             context.throwRangeError("Temporal error: Duration was not valid.");
             return BigInteger.ZERO;
-        }
-    }
-
-    private static String canonicalizeTimeZoneIdentifier(String timeZoneText) {
-        String normalizedTimeZoneText = timeZoneText.toLowerCase(Locale.ROOT);
-        String canonicalSupplementaryTimeZoneId = SUPPLEMENTARY_TIME_ZONE_IDS.get(normalizedTimeZoneText);
-        if (canonicalSupplementaryTimeZoneId != null) {
-            return canonicalSupplementaryTimeZoneId;
-        }
-        String canonicalAvailableTimeZoneId = AVAILABLE_TIME_ZONE_IDS_BY_LOWERCASE.get(normalizedTimeZoneText);
-        if (canonicalAvailableTimeZoneId != null) {
-            return canonicalAvailableTimeZoneId;
-        }
-        if ("ut".equalsIgnoreCase(timeZoneText)) {
-            return "UT";
-        }
-        try {
-            ZoneOffset zoneOffset = ZoneOffset.of(timeZoneText);
-            if (zoneOffset.getTotalSeconds() % 60 != 0) {
-                return timeZoneText;
-            } else {
-                return TemporalTimeZone.formatOffset(zoneOffset.getTotalSeconds());
-            }
-        } catch (DateTimeException ignored) {
-            return timeZoneText;
         }
     }
 
@@ -323,21 +281,6 @@ public final class TemporalDurationConstructor {
         return createDuration(context, record, resolvedPrototype);
     }
 
-    private static Map<String, String> createAvailableTimeZoneIdentifierLookup() {
-        List<String> availableTimeZoneIdentifiers = new ArrayList<>(ZoneId.getAvailableZoneIds());
-        Collections.sort(availableTimeZoneIdentifiers);
-        Map<String, String> availableTimeZoneIdentifiersByLowercase = new HashMap<>(availableTimeZoneIdentifiers.size());
-        for (String availableTimeZoneIdentifier : availableTimeZoneIdentifiers) {
-            String normalizedTimeZoneIdentifier = availableTimeZoneIdentifier.toLowerCase(Locale.ROOT);
-            if (!availableTimeZoneIdentifiersByLowercase.containsKey(normalizedTimeZoneIdentifier)) {
-                availableTimeZoneIdentifiersByLowercase.put(
-                        normalizedTimeZoneIdentifier,
-                        availableTimeZoneIdentifier);
-            }
-        }
-        return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
-    }
-
     public static JSTemporalDuration createDuration(JSContext context, TemporalDuration record) {
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Duration");
         return createDuration(context, record, prototype);
@@ -362,73 +305,73 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromFields(JSContext context, JSObject fields) {
-        DurationLikeFieldValue daysFieldValue = getDurationLikeField(context, fields, "days");
+        Optional<BigInteger> daysFieldValue = getDurationLikeField(context, fields, "days");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue hoursFieldValue = getDurationLikeField(context, fields, "hours");
+        Optional<BigInteger> hoursFieldValue = getDurationLikeField(context, fields, "hours");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue microsecondsFieldValue = getDurationLikeField(context, fields, "microseconds");
+        Optional<BigInteger> microsecondsFieldValue = getDurationLikeField(context, fields, "microseconds");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue millisecondsFieldValue = getDurationLikeField(context, fields, "milliseconds");
+        Optional<BigInteger> millisecondsFieldValue = getDurationLikeField(context, fields, "milliseconds");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue minutesFieldValue = getDurationLikeField(context, fields, "minutes");
+        Optional<BigInteger> minutesFieldValue = getDurationLikeField(context, fields, "minutes");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue monthsFieldValue = getDurationLikeField(context, fields, "months");
+        Optional<BigInteger> monthsFieldValue = getDurationLikeField(context, fields, "months");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue nanosecondsFieldValue = getDurationLikeField(context, fields, "nanoseconds");
+        Optional<BigInteger> nanosecondsFieldValue = getDurationLikeField(context, fields, "nanoseconds");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue secondsFieldValue = getDurationLikeField(context, fields, "seconds");
+        Optional<BigInteger> secondsFieldValue = getDurationLikeField(context, fields, "seconds");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue weeksFieldValue = getDurationLikeField(context, fields, "weeks");
+        Optional<BigInteger> weeksFieldValue = getDurationLikeField(context, fields, "weeks");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        DurationLikeFieldValue yearsFieldValue = getDurationLikeField(context, fields, "years");
+        Optional<BigInteger> yearsFieldValue = getDurationLikeField(context, fields, "years");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
 
         boolean hasRecognizedField =
-                daysFieldValue.present()
-                        || hoursFieldValue.present()
-                        || microsecondsFieldValue.present()
-                        || millisecondsFieldValue.present()
-                        || minutesFieldValue.present()
-                        || monthsFieldValue.present()
-                        || nanosecondsFieldValue.present()
-                        || secondsFieldValue.present()
-                        || weeksFieldValue.present()
-                        || yearsFieldValue.present();
+                daysFieldValue.isPresent()
+                        || hoursFieldValue.isPresent()
+                        || microsecondsFieldValue.isPresent()
+                        || millisecondsFieldValue.isPresent()
+                        || minutesFieldValue.isPresent()
+                        || monthsFieldValue.isPresent()
+                        || nanosecondsFieldValue.isPresent()
+                        || secondsFieldValue.isPresent()
+                        || weeksFieldValue.isPresent()
+                        || yearsFieldValue.isPresent();
         if (!hasRecognizedField) {
             context.throwTypeError("Temporal error: Must provide a duration.");
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger yearsBigInteger = yearsFieldValue.value();
-        BigInteger monthsBigInteger = monthsFieldValue.value();
-        BigInteger weeksBigInteger = weeksFieldValue.value();
-        BigInteger daysBigInteger = daysFieldValue.value();
-        BigInteger hoursBigInteger = hoursFieldValue.value();
-        BigInteger minutesBigInteger = minutesFieldValue.value();
-        BigInteger secondsBigInteger = secondsFieldValue.value();
-        BigInteger millisecondsBigInteger = millisecondsFieldValue.value();
-        BigInteger microsecondsBigInteger = microsecondsFieldValue.value();
-        BigInteger nanosecondsBigInteger = nanosecondsFieldValue.value();
+        BigInteger yearsBigInteger = yearsFieldValue.orElse(BigInteger.ZERO);
+        BigInteger monthsBigInteger = monthsFieldValue.orElse(BigInteger.ZERO);
+        BigInteger weeksBigInteger = weeksFieldValue.orElse(BigInteger.ZERO);
+        BigInteger daysBigInteger = daysFieldValue.orElse(BigInteger.ZERO);
+        BigInteger hoursBigInteger = hoursFieldValue.orElse(BigInteger.ZERO);
+        BigInteger minutesBigInteger = minutesFieldValue.orElse(BigInteger.ZERO);
+        BigInteger secondsBigInteger = secondsFieldValue.orElse(BigInteger.ZERO);
+        BigInteger millisecondsBigInteger = millisecondsFieldValue.orElse(BigInteger.ZERO);
+        BigInteger microsecondsBigInteger = microsecondsFieldValue.orElse(BigInteger.ZERO);
+        BigInteger nanosecondsBigInteger = nanosecondsFieldValue.orElse(BigInteger.ZERO);
 
         BigInteger normalizedMillisecondsBigInteger = millisecondsBigInteger;
         BigInteger normalizedMicrosecondsBigInteger = microsecondsBigInteger;
@@ -567,25 +510,25 @@ public final class TemporalDurationConstructor {
         return toTemporalDuration(context, item);
     }
 
-    private static DurationLikeFieldValue getDurationLikeField(JSContext context, JSObject durationLikeObject, String fieldKey) {
+    private static Optional<BigInteger> getDurationLikeField(JSContext context, JSObject durationLikeObject, String fieldKey) {
         JSValue value = durationLikeObject.get(PropertyKey.fromString(fieldKey));
         if (value instanceof JSUndefined || value == null) {
-            return new DurationLikeFieldValue(false, BigInteger.ZERO);
+            return Optional.empty();
         }
         double numericValueAsDouble = JSTypeConversions.toNumber(context, value).value();
         if (context.hasPendingException()) {
-            return new DurationLikeFieldValue(true, BigInteger.ZERO);
+            return Optional.of(BigInteger.ZERO);
         }
         if (!Double.isFinite(numericValueAsDouble)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
-            return new DurationLikeFieldValue(true, BigInteger.ZERO);
+            return Optional.of(BigInteger.ZERO);
         }
         if (numericValueAsDouble != Math.floor(numericValueAsDouble)) {
             context.throwRangeError("Temporal error: Expected finite integer.");
-            return new DurationLikeFieldValue(true, BigInteger.ZERO);
+            return Optional.of(BigInteger.ZERO);
         }
         BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
-        return new DurationLikeFieldValue(true, numericValue);
+        return Optional.of(numericValue);
     }
 
     private static boolean hasCalendarUnits(TemporalDuration durationRecord) {
@@ -624,14 +567,6 @@ public final class TemporalDurationConstructor {
             }
         }
         return false;
-    }
-
-    private static boolean isCalendarTemporalObject(JSValue value) {
-        return value instanceof JSTemporalPlainDate
-                || value instanceof JSTemporalPlainDateTime
-                || value instanceof JSTemporalPlainMonthDay
-                || value instanceof JSTemporalPlainYearMonth
-                || value instanceof JSTemporalZonedDateTime;
     }
 
     private static boolean isDateTimeWithinRelativeToRange(IsoDate isoDate, IsoTime isoTime) {
@@ -684,43 +619,6 @@ public final class TemporalDurationConstructor {
         return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
     }
 
-    private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
-        return isValidTimeZoneOffsetWithoutSeconds(timeZoneId);
-    }
-
-    private static boolean isValidOffsetString(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        String secondsGroup = offsetParts.secondsText();
-        if (hours > 23 || minutes > 59) {
-            return false;
-        }
-        if (secondsGroup != null) {
-            int seconds = Integer.parseInt(secondsGroup);
-            return seconds <= 59;
-        }
-        return true;
-    }
-
-    private static boolean isValidTimeZoneOffsetWithoutSeconds(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        String secondsGroup = offsetParts.secondsText();
-        String fractionGroup = offsetParts.fractionText();
-        if (hours > 23 || minutes > 59) {
-            return false;
-        }
-        return secondsGroup == null && fractionGroup == null;
-    }
-
     static String largerTemporalUnit(String leftUnit, String rightUnit) {
         if (temporalUnitRank(leftUnit) <= temporalUnitRank(rightUnit)) {
             return leftUnit;
@@ -755,11 +653,7 @@ public final class TemporalDurationConstructor {
     }
 
     private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            return false;
-        }
-        return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
+        return TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText);
     }
 
     private static long parseDurationConstructorArgument(JSContext context, JSValue value) {
@@ -779,48 +673,8 @@ public final class TemporalDurationConstructor {
         return toLongDurationField(context, numericValue);
     }
 
-    private static OffsetParts parseOffsetParts(String offsetText) {
-        Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
-        if (extendedMatcher.matches()) {
-            return new OffsetParts(
-                    extendedMatcher.group(1),
-                    Integer.parseInt(extendedMatcher.group(2)),
-                    Integer.parseInt(extendedMatcher.group(3)),
-                    extendedMatcher.group(4),
-                    extendedMatcher.group(5));
-        }
-        Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
-        if (basicMatcher.matches()) {
-            return new OffsetParts(
-                    basicMatcher.group(1),
-                    Integer.parseInt(basicMatcher.group(2)),
-                    Integer.parseInt(basicMatcher.group(3)),
-                    basicMatcher.group(4),
-                    basicMatcher.group(5));
-        }
-        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
-        if (hourOnlyMatcher.matches()) {
-            return new OffsetParts(
-                    hourOnlyMatcher.group(1),
-                    Integer.parseInt(hourOnlyMatcher.group(2)),
-                    0,
-                    null,
-                    null);
-        }
-        return null;
-    }
-
     private static int parseOffsetSeconds(String offsetText) {
-        OffsetParts offsetParts = parseOffsetParts(offsetText);
-        if (offsetParts == null) {
-            throw new DateTimeException("Invalid offset string: " + offsetText);
-        }
-        String signGroup = offsetParts.signText();
-        int sign = ("-".equals(signGroup) || "\u2212".equals(signGroup)) ? -1 : 1;
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        int seconds = offsetParts.secondsText() == null ? 0 : Integer.parseInt(offsetParts.secondsText());
-        return sign * (hours * 3600 + minutes * 60 + seconds);
+        return TemporalTimeZone.parseOffsetSeconds(offsetText);
     }
 
     private static RelativeToReference parseRelativeToOption(JSContext context, JSValue optionsValue) {
@@ -977,7 +831,7 @@ public final class TemporalDurationConstructor {
                 context.throwTypeError("Temporal error: Offset must be string.");
                 return null;
             }
-            if (!isValidOffsetString(offsetText)) {
+            if (!TemporalTimeZone.isValidOffsetString(offsetText)) {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;
             }
@@ -1060,11 +914,11 @@ public final class TemporalDurationConstructor {
             return null;
         }
         String timeZoneText = timeZoneString.value();
-        String normalizedTimeZoneId = parseTimeZoneIdentifierString(context, timeZoneText);
+        String normalizedTimeZoneId = TemporalTimeZone.parseTimeZoneIdentifierString(context, timeZoneText);
         if (context.hasPendingException()) {
             return null;
         }
-        boolean offsetTimeZoneIdentifier = isOffsetTimeZoneIdentifier(normalizedTimeZoneId);
+        boolean offsetTimeZoneIdentifier = TemporalTimeZone.isValidTimeZoneOffsetWithoutSeconds(normalizedTimeZoneId);
         if (!offsetTimeZoneIdentifier) {
             try {
                 TemporalTimeZone.resolveTimeZone(normalizedTimeZoneId);
@@ -1135,7 +989,7 @@ public final class TemporalDurationConstructor {
             }
             if (!hasTimeZoneAnnotation) {
                 String offsetText = extractOffsetText(relativeToText);
-                if (offsetText != null && !isValidOffsetString(offsetText)) {
+                if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
                 }
@@ -1151,7 +1005,7 @@ public final class TemporalDurationConstructor {
             }
 
             String offsetText = extractOffsetText(relativeToText);
-            if (offsetText != null && !isValidOffsetString(offsetText)) {
+            if (offsetText != null && !TemporalTimeZone.isValidOffsetString(offsetText)) {
                 context.throwRangeError("Temporal error: Invalid offset string.");
                 return null;
             }
@@ -1165,7 +1019,7 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             String timeZoneId = parsedZonedDateTime.timeZoneId();
-            boolean offsetTimeZoneIdentifier = isOffsetTimeZoneIdentifier(timeZoneId);
+            boolean offsetTimeZoneIdentifier = TemporalTimeZone.isValidTimeZoneOffsetWithoutSeconds(timeZoneId);
             if (!offsetTimeZoneIdentifier) {
                 try {
                     TemporalTimeZone.resolveTimeZone(timeZoneId);
@@ -1333,62 +1187,6 @@ public final class TemporalDurationConstructor {
         return null;
     }
 
-    static String parseTimeZoneIdentifierString(JSContext context, String timeZoneText) {
-        if (timeZoneText.isEmpty()) {
-            context.throwRangeError("Temporal error: Invalid time zone.");
-            return null;
-        }
-        char firstCharacter = timeZoneText.charAt(0);
-        boolean startsWithDateCharacter =
-                Character.isDigit(firstCharacter)
-                        || firstCharacter == '+'
-                        || firstCharacter == '-'
-                        || firstCharacter == '\u2212';
-        boolean looksLikeIsoDateTime =
-                startsWithDateCharacter
-                        && (timeZoneText.contains("T") || timeZoneText.contains("t"))
-                        && timeZoneText.contains("-");
-        if (!looksLikeIsoDateTime) {
-            return canonicalizeTimeZoneIdentifier(timeZoneText);
-        }
-
-        if (timeZoneText.contains("[")) {
-            String adjustedTimeZoneText = timeZoneText;
-            if (adjustedTimeZoneText.contains(":60")) {
-                adjustedTimeZoneText = adjustedTimeZoneText.replace(":60", ":59");
-            }
-            String offsetText = extractOffsetText(adjustedTimeZoneText);
-            if (offsetText != null && !isValidOffsetString(offsetText)) {
-                context.throwRangeError("Temporal error: Invalid offset string.");
-                return null;
-            }
-            TemporalParser.ParsedZonedDateTime parsedZonedDateTime =
-                    TemporalParser.parseZonedDateTimeString(context, adjustedTimeZoneText);
-            if (parsedZonedDateTime == null || context.hasPendingException()) {
-                return null;
-            }
-            return canonicalizeTimeZoneIdentifier(parsedZonedDateTime.timeZoneId());
-        }
-
-        if (!hasOffsetDesignator(timeZoneText)) {
-            context.throwRangeError("Temporal error: Invalid time zone.");
-            return null;
-        }
-        String offsetText = extractOffsetText(timeZoneText);
-        if (offsetText != null && !isValidTimeZoneOffsetWithoutSeconds(offsetText)) {
-            context.throwRangeError("Temporal error: Invalid offset string.");
-            return null;
-        }
-        TemporalParser.ParsedInstant parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
-        if (parsedInstant == null || context.hasPendingException()) {
-            return null;
-        }
-        if (parsedInstant.offsetSeconds() == 0) {
-            return "UTC";
-        }
-        return TemporalTimeZone.formatOffset(parsedInstant.offsetSeconds());
-    }
-
     private static int roundOffsetSecondsToMinute(int offsetSeconds) {
         int sign = offsetSeconds < 0 ? -1 : 1;
         int absoluteOffsetSeconds = Math.abs(offsetSeconds);
@@ -1550,12 +1348,6 @@ public final class TemporalDurationConstructor {
             }
         }
         return totalNanoseconds;
-    }
-
-    private record DurationLikeFieldValue(boolean present, BigInteger value) {
-    }
-
-    private record OffsetParts(String signText, int hours, int minutes, String secondsText, String fractionText) {
     }
 
     record RelativeToReference(
