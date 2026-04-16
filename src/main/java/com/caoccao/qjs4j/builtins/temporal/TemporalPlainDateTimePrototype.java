@@ -56,65 +56,14 @@ public final class TemporalPlainDateTimePrototype {
             long weeks,
             long days,
             String overflow) {
-        long totalDays;
-        try {
-            totalDays = Math.addExact(days, Math.multiplyExact(weeks, 7L));
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-
-        long monthIndex = Math.addExact(date.month() - 1L, months);
-        long yearDelta = Math.floorDiv(monthIndex, 12L);
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        long balancedYear = Math.addExact(date.year(), years);
-        balancedYear = Math.addExact(balancedYear, yearDelta);
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        int balancedYearInt = (int) balancedYear;
-        int maxDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
-        int regulatedDay = date.day();
-        if ("reject".equals(overflow)) {
-            if (regulatedDay > maxDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            regulatedDay = Math.min(regulatedDay, maxDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
-        long resultEpochDay;
-        try {
-            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        IsoDate isoDate = IsoDate.createFromEpochDay(resultEpochDay);
-        if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return isoDate;
+        return TemporalDurationArithmeticKernel.addDurationToIsoDate(context, date, years, months, weeks, days, overflow);
     }
 
     private static TemporalTimeAddResult addDurationToTime(
             JSContext context,
             IsoTime time,
             TemporalDuration durationRecord) {
-        BigInteger durationTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        BigInteger durationTimeNanoseconds = durationRecord.timeNanoseconds();
 
         BigInteger totalNanoseconds = BigInteger.valueOf(time.totalNanoseconds()).add(durationTimeNanoseconds);
         BigInteger[] dayAndRemainder = totalNanoseconds.divideAndRemainder(DAY_NANOSECONDS);
@@ -235,11 +184,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static JSTemporalPlainDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainDateTime plainDateTime)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainDateTime;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDateTime.class, TYPE_NAME, methodName);
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {

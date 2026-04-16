@@ -224,11 +224,7 @@ public final class TemporalPlainYearMonthPrototype {
     }
 
     private static JSTemporalPlainYearMonth checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainYearMonth plainYearMonth)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainYearMonth;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainYearMonth.class, TYPE_NAME, methodName);
     }
 
     private static int compareCalendarDateFields(

@@ -293,16 +293,6 @@ public final class TemporalDurationConstructor {
         return duration;
     }
 
-    static BigInteger dayTimeNanoseconds(TemporalDuration durationRecord) {
-        return BigInteger.valueOf(durationRecord.days()).multiply(DAY_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-    }
-
     static JSValue durationFromFields(JSContext context, JSObject fields) {
         Optional<BigInteger> daysFieldValue = getDurationLikeField(context, fields, "days");
         if (context.hasPendingException()) {
@@ -601,7 +591,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return false;
         }
-        BigInteger dayTimeNanoseconds = dayTimeNanoseconds(durationRecord);
+        BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         if (dayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return false;
@@ -610,7 +600,7 @@ public final class TemporalDurationConstructor {
     }
 
     static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
-        BigInteger totalNanoseconds = dayTimeNanoseconds(durationRecord);
+        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
     }
 
@@ -1294,7 +1284,7 @@ public final class TemporalDurationConstructor {
             TemporalDuration durationRecord,
             RelativeToReference relativeToReference) {
         if (relativeToReference == null) {
-            return dayTimeNanoseconds(durationRecord);
+            return durationRecord.dayTimeNanoseconds();
         }
         BigInteger calendarNanoseconds;
         if (relativeToReference.epochNanoseconds() != null && relativeToReference.timeZoneId() != null) {
@@ -1309,13 +1299,7 @@ public final class TemporalDurationConstructor {
         if (context.hasPendingException()) {
             return BigInteger.ZERO;
         }
-        BigInteger timeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
-        BigInteger totalNanoseconds = calendarNanoseconds.add(timeNanoseconds);
+        BigInteger totalNanoseconds = calendarNanoseconds.add(durationRecord.timeNanoseconds());
         if (totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return BigInteger.ZERO;

@@ -274,11 +274,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static JSTemporalZonedDateTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalZonedDateTime zonedDateTime)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return zonedDateTime;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalZonedDateTime.class, TYPE_NAME, methodName);
     }
 
     private static JSObject createDateTimeFormatOptionsForZonedDateTime(

@@ -68,12 +68,7 @@ public final class TemporalPlainDatePrototype {
             IsoDate date,
             TemporalDuration durationRecord,
             String overflow) {
-        BigInteger totalTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
         TemporalDuration balancedTimeDuration =
                 TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
 
@@ -87,49 +82,9 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
 
-        long monthIndex = Math.addExact(date.month() - 1L, durationRecord.months());
-        long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        long balancedYear = Math.addExact(date.year(), durationRecord.years());
-        balancedYear = Math.addExact(balancedYear, balancedYearDelta);
-
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        int balancedYearInt = (int) balancedYear;
-        int maxDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
-        int regulatedDay = date.day();
-        if ("reject".equals(overflow)) {
-            if (regulatedDay > maxDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            regulatedDay = Math.min(regulatedDay, maxDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, regulatedDay);
-        long intermediateEpochDay = intermediateDate.toEpochDay();
-        long resultEpochDay;
-        try {
-            resultEpochDay = Math.addExact(intermediateEpochDay, totalDays);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        if (resultEpochDay < MIN_SUPPORTED_EPOCH_DAY || resultEpochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        IsoDate isoDate = IsoDate.createFromEpochDay(resultEpochDay);
-        if (!isoDate.isValid()) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-        return isoDate;
+        return TemporalDurationArithmeticKernel.addDurationToIsoDate(
+                context, date, durationRecord.years(), durationRecord.months(),
+                0L, totalDays, overflow);
     }
 
     private static JSValue addOrSubtract(JSContext context, JSTemporalPlainDate plainDate, JSValue[] args, int sign) {
@@ -161,12 +116,7 @@ public final class TemporalPlainDatePrototype {
                 return JSUndefined.INSTANCE;
             }
         } else {
-            BigInteger totalTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                    .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                    .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                    .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                    .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                    .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+            BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
             TemporalDuration balancedTimeDuration =
                     TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
             long dayDelta;
@@ -543,11 +493,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainDate plainDate)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainDate;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, methodName);
     }
 
     private static int compareCalendarDateFields(
@@ -1196,24 +1142,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static TemporalParsedMonthCode parseMonthCodeParts(String monthCodeText) {
-        if (monthCodeText == null || monthCodeText.length() < 3 || monthCodeText.length() > 4) {
-            return null;
-        }
-        if (monthCodeText.charAt(0) != 'M') {
-            return null;
-        }
-        if (!Character.isDigit(monthCodeText.charAt(1)) || !Character.isDigit(monthCodeText.charAt(2))) {
-            return null;
-        }
-        int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
-        boolean leapMonth = false;
-        if (monthCodeText.length() == 4) {
-            if (monthCodeText.charAt(3) != 'L') {
-                return null;
-            }
-            leapMonth = true;
-        }
-        return new TemporalParsedMonthCode(monthNumber, leapMonth);
+        return TemporalCalendarMath.parseMonthCode(monthCodeText);
     }
 
     private static IsoDate resolveCalendarDate(JSContext context, JSTemporalPlainDate plainDate) {

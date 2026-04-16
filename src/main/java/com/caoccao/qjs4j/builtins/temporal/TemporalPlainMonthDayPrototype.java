@@ -42,11 +42,7 @@ public final class TemporalPlainMonthDayPrototype {
     }
 
     private static JSTemporalPlainMonthDay checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainMonthDay plainMonthDay)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainMonthDay;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainMonthDay.class, TYPE_NAME, methodName);
     }
 
     private static void copyFieldIfPresent(

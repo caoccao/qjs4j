@@ -85,8 +85,8 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger leftNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(leftRecord);
-        BigInteger rightNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(rightRecord);
+        BigInteger leftNanoseconds = leftRecord.dayTimeNanoseconds();
+        BigInteger rightNanoseconds = rightRecord.dayTimeNanoseconds();
         BigInteger signedRightNanoseconds;
         if (sign < 0) {
             signedRightNanoseconds = rightNanoseconds.negate();
@@ -263,12 +263,7 @@ public final class TemporalDurationPrototype {
                 .plusMonths(durationRecord.months())
                 .plusWeeks(durationRecord.weeks())
                 .plusDays(durationRecord.days());
-        BigInteger remainingTimeNanoseconds = BigInteger.valueOf(durationRecord.hours()).multiply(HOUR_NANOSECONDS)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(MINUTE_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(SECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        BigInteger remainingTimeNanoseconds = durationRecord.timeNanoseconds();
         long additionalDayCount = 0L;
         while (remainingTimeNanoseconds.signum() != 0) {
             int direction = remainingTimeNanoseconds.signum() < 0 ? -1 : 1;
@@ -483,11 +478,7 @@ public final class TemporalDurationPrototype {
     }
 
     private static JSTemporalDuration checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalDuration duration)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return duration;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME, methodName);
     }
 
     private static String coarserDurationUnit(String leftUnit, String rightUnit) {
@@ -1556,12 +1547,7 @@ public final class TemporalDurationPrototype {
                 return null;
             }
             BigInteger roundedTimeNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
-                    BigInteger.valueOf(balancedDurationWithoutRounding.hours()).multiply(HOUR_NANOSECONDS)
-                            .add(BigInteger.valueOf(balancedDurationWithoutRounding.minutes()).multiply(MINUTE_NANOSECONDS))
-                            .add(BigInteger.valueOf(balancedDurationWithoutRounding.seconds()).multiply(SECOND_NANOSECONDS))
-                            .add(BigInteger.valueOf(balancedDurationWithoutRounding.milliseconds()).multiply(MILLISECOND_NANOSECONDS))
-                            .add(BigInteger.valueOf(balancedDurationWithoutRounding.microseconds()).multiply(MICROSECOND_NANOSECONDS))
-                            .add(BigInteger.valueOf(balancedDurationWithoutRounding.nanoseconds())),
+                    balancedDurationWithoutRounding.timeNanoseconds(),
                     unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)),
                     roundingMode);
             BigInteger beyondDaySpanNanoseconds = roundedTimeNanoseconds.subtract(daySpanNanoseconds);
@@ -1817,7 +1803,7 @@ public final class TemporalDurationPrototype {
             return null;
         }
         if (relativeToOption.zoned() && !hasCalendarUnits(durationRecord)) {
-            BigInteger dayTimeNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+            BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
             if (dayTimeNanoseconds.abs().compareTo(MAX_FLOAT64_NANOSECONDS_COMPONENT) >= 0) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
@@ -1926,7 +1912,7 @@ public final class TemporalDurationPrototype {
             context.throwRangeError("Temporal error: A starting point is required for years, months, or weeks arithmetic.");
             return null;
         }
-        BigInteger totalNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger roundingUnitNanoseconds = unitToNanosecondsBigInteger(roundOptions.smallestUnit());
         BigInteger incrementNanoseconds = roundingUnitNanoseconds.multiply(BigInteger.valueOf(roundOptions.roundingIncrement()));
         BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundOptions.roundingMode());
@@ -2123,7 +2109,7 @@ public final class TemporalDurationPrototype {
         }
 
         TemporalDuration durationRecord = duration.getDuration();
-        BigInteger dayTimeNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+        BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger incrementNanoseconds = BigInteger.valueOf(options.roundingIncrementNanoseconds());
         BigInteger roundedDayTimeNanoseconds =
                 TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
@@ -2314,7 +2300,7 @@ public final class TemporalDurationPrototype {
             return Double.NaN;
         }
         if (relativeToOption.zoned() && !hasCalendarUnits(durationRecord)) {
-            BigInteger dayTimeNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+            BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
             if (dayTimeNanoseconds.abs().compareTo(MAX_FLOAT64_NANOSECONDS_COMPONENT) >= 0) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return Double.NaN;
@@ -2393,7 +2379,7 @@ public final class TemporalDurationPrototype {
             context.throwRangeError("Temporal error: A starting point is required for years, months, or weeks arithmetic.");
             return Double.NaN;
         }
-        BigInteger totalNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger divisorNanoseconds = unitDivisorNanosecondsForTotal(unit);
         return divideBigIntegersToDouble(totalNanoseconds, divisorNanoseconds);
     }

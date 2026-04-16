@@ -44,18 +44,13 @@ public record TemporalDuration(
 
     public boolean isValid() {
         // All non-zero fields must have the same sign
-        int positive = 0;
-        int negative = 0;
-        long[] fields = {years, months, weeks, days, hours, minutes, seconds, milliseconds, microseconds, nanoseconds};
-        for (long f : fields) {
-            if (f > 0) {
-                positive++;
-            }
-            if (f < 0) {
-                negative++;
-            }
-        }
-        return positive == 0 || negative == 0;
+        boolean hasPositive = years > 0 || months > 0 || weeks > 0 || days > 0
+                || hours > 0 || minutes > 0 || seconds > 0
+                || milliseconds > 0 || microseconds > 0 || nanoseconds > 0;
+        boolean hasNegative = years < 0 || months < 0 || weeks < 0 || days < 0
+                || hours < 0 || minutes < 0 || seconds < 0
+                || milliseconds < 0 || microseconds < 0 || nanoseconds < 0;
+        return !hasPositive || !hasNegative;
     }
 
     public TemporalDuration negated() {
@@ -176,5 +171,25 @@ public record TemporalDuration(
                 + milliseconds * 1_000_000L
                 + microseconds * 1_000L
                 + nanoseconds;
+    }
+
+    /**
+     * Returns total nanoseconds for hours through nanoseconds (excluding days).
+     */
+    public BigInteger timeNanoseconds() {
+        return BigInteger.valueOf(hours).multiply(TemporalConstants.BI_HOUR_NANOSECONDS)
+                .add(BigInteger.valueOf(minutes).multiply(TemporalConstants.BI_MINUTE_NANOSECONDS))
+                .add(BigInteger.valueOf(seconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(milliseconds).multiply(TemporalConstants.BI_MILLISECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(microseconds).multiply(TemporalConstants.BI_MICROSECOND_NANOSECONDS))
+                .add(BigInteger.valueOf(nanoseconds));
+    }
+
+    /**
+     * Returns total nanoseconds for days through nanoseconds.
+     */
+    public BigInteger dayTimeNanoseconds() {
+        return BigInteger.valueOf(days).multiply(TemporalConstants.BI_DAY_NANOSECONDS)
+                .add(timeNanoseconds());
     }
 }

@@ -71,12 +71,7 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger totalNs = BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(NS_PER_US))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
+        BigInteger totalNs = durationRecord.timeNanoseconds();
         if (sign < 0) {
             totalNs = totalNs.negate();
         }
@@ -90,11 +85,7 @@ public final class TemporalInstantPrototype {
     }
 
     private static JSTemporalInstant checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalInstant instant)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver.");
-            return null;
-        }
-        return instant;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalInstant.class, TYPE_NAME, methodName);
     }
 
     private static int differenceUnitRank(String unit) {

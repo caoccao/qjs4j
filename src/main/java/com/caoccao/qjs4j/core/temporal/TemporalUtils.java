@@ -459,6 +459,19 @@ public final class TemporalUtils {
     }
 
     /**
+     * Generic receiver type check for Temporal prototype methods.
+     * Returns the cast value, or null after throwing TypeError.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T> T checkReceiver(JSContext context, JSValue thisArg, Class<T> expectedType, String typeName, String methodName) {
+        if (!expectedType.isInstance(thisArg)) {
+            context.throwTypeError("Method " + typeName + ".prototype." + methodName + " called on incompatible receiver");
+            return null;
+        }
+        return (T) thisArg;
+    }
+
+    /**
      * Validates that a calendar value is a string, matching V8's error message.
      */
     public static String validateCalendar(JSContext context, JSValue calendarValue) {

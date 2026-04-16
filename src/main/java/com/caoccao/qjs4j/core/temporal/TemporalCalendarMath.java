@@ -870,7 +870,7 @@ public final class TemporalCalendarMath {
         return new TemporalYearMonthIndex(currentIndex.year() + 1, 1);
     }
 
-    private static TemporalParsedMonthCode parseMonthCode(String monthCode) {
+    public static TemporalParsedMonthCode parseMonthCode(String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             return null;
         }

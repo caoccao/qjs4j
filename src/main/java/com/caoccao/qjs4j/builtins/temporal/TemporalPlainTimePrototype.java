@@ -51,7 +51,7 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
         TemporalDuration durationRecord = temporalDuration.getDuration();
-        BigInteger durationNanoseconds = TemporalDurationConstructor.dayTimeNanoseconds(durationRecord);
+        BigInteger durationNanoseconds = durationRecord.dayTimeNanoseconds();
         if (sign < 0) {
             durationNanoseconds = durationNanoseconds.negate();
         }
@@ -82,11 +82,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static JSTemporalPlainTime checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        if (!(thisArg instanceof JSTemporalPlainTime plainTime)) {
-            context.throwTypeError("Method " + TYPE_NAME + ".prototype." + methodName + " called on incompatible receiver");
-            return null;
-        }
-        return plainTime;
+        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainTime.class, TYPE_NAME, methodName);
     }
 
     private static JSValue differencePlainTime(

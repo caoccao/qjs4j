@@ -24,10 +24,6 @@ import java.math.BigInteger;
 import java.time.DateTimeException;
 
 final class TemporalZonedDateTimeArithmeticKernel {
-    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
-    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
-    private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
 
     private TemporalZonedDateTimeArithmeticKernel() {
     }
@@ -82,7 +78,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
             }
         }
 
-        BigInteger timeNanoseconds = durationTimeToNanoseconds(durationRecord);
+        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         BigInteger resultEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(resultEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
@@ -163,14 +159,5 @@ final class TemporalZonedDateTimeArithmeticKernel {
                 incrementNanoseconds,
                 roundingMode);
         return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
-    }
-
-    private static BigInteger durationTimeToNanoseconds(TemporalDuration durationRecord) {
-        return BigInteger.valueOf(durationRecord.hours()).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(durationRecord.minutes()).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(durationRecord.seconds()).multiply(NS_PER_SECOND))
-                .add(BigInteger.valueOf(durationRecord.milliseconds()).multiply(NS_PER_MS))
-                .add(BigInteger.valueOf(durationRecord.microseconds()).multiply(BigInteger.valueOf(1_000L)))
-                .add(BigInteger.valueOf(durationRecord.nanoseconds()));
     }
 }
