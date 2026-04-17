@@ -59,7 +59,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return TemporalCalendarMath.isLeapYear(year) ? 366 : 365;
     }
 
-    private static IsoCalendarMonth findMonthSlotByCode(String calendarId, int calendarYear, String monthCode) {
+    private static IsoCalendarMonth findMonthSlotByCode(TemporalCalendarId calendarId, int calendarYear, String monthCode) {
         List<IsoCalendarMonth> monthSlots = getLunisolarMonthSlots(calendarId, calendarYear);
         for (IsoCalendarMonth monthSlot : monthSlots) {
             if (monthSlot.monthCode().equals(monthCode)) {
@@ -116,7 +116,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return monthSlots;
     }
 
-    private static List<IsoCalendarMonth> getLunisolarMonthSlots(String calendarId, int calendarYear) {
+    private static List<IsoCalendarMonth> getLunisolarMonthSlots(TemporalCalendarId calendarId, int calendarYear) {
         if (calendarYear < 1900 || calendarYear > TemporalUtils.lunisolarMaxYear(calendarId)) {
             List<IsoCalendarMonth> fallbackMonthSlots = new ArrayList<>();
             for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
@@ -347,19 +347,19 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return new IsoCalendarDate(islamicYear, islamicMonth, TemporalUtils.monthCode(islamicMonth), dayOfMonth);
     }
 
-    public IsoCalendarDate toIsoCalendarDate(String calendarId) {
+    public IsoCalendarDate toIsoCalendarDate(TemporalCalendarId calendarId) {
         return switch (calendarId) {
-            case "iso8601", "gregory", "japanese" -> new IsoCalendarDate(
+            case ISO8601, GREGORY, JAPANESE -> new IsoCalendarDate(
                     year,
                     month,
                     TemporalUtils.monthCode(month),
                     day);
-            case "buddhist" -> new IsoCalendarDate(
+            case BUDDHIST -> new IsoCalendarDate(
                     year + 543,
                     month,
                     TemporalUtils.monthCode(month),
                     day);
-            case "roc" -> new IsoCalendarDate(
+            case ROC -> new IsoCalendarDate(
                     year - 1911,
                     month,
                     TemporalUtils.monthCode(month),
@@ -368,9 +368,9 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         };
     }
 
-    private IsoCalendarDate toLunisolarCalendarDate(String calendarId) {
+    private IsoCalendarDate toLunisolarCalendarDate(TemporalCalendarId calendarId) {
         LocalDate gregorianDate = LocalDate.of(year, month, day);
-        if ("chinese".equals(calendarId) && LocalDate.of(2100, 1, 1).equals(gregorianDate)) {
+        if (calendarId == TemporalCalendarId.CHINESE && LocalDate.of(2100, 1, 1).equals(gregorianDate)) {
             return new IsoCalendarDate(2099, 11, "M11", 21);
         }
         LocalDate lunarBaseDate = LocalDate.of(1900, 1, 31);
@@ -445,11 +445,11 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return new IsoCalendarDate(lunarYear, monthNumber, monthCode, lunarDay);
     }
 
-    private IsoCalendarDate toNonIsoCalendarDate(String calendarId) {
+    private IsoCalendarDate toNonIsoCalendarDate(TemporalCalendarId calendarId) {
         return switch (calendarId) {
-            case "coptic" -> toAlexandrianCalendarDate(TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
-            case "ethiopic" -> toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
-            case "ethioaa" -> {
+            case COPTIC -> toAlexandrianCalendarDate(TemporalConstants.COPTIC_EPOCH_DAY_OFFSET);
+            case ETHIOPIC -> toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
+            case ETHIOAA -> {
                 IsoCalendarDate ethiopicDate = toAlexandrianCalendarDate(TemporalConstants.ETHIOPIC_EPOCH_DAY_OFFSET);
                 yield new IsoCalendarDate(
                         ethiopicDate.year() + 5500,
@@ -457,13 +457,13 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
                         ethiopicDate.monthCode(),
                         ethiopicDate.day());
             }
-            case "indian" -> toIndianCalendarDate();
-            case "islamic-civil" -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
-            case "islamic-tbla" -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
-            case "islamic-umalqura" -> toUmalquraCalendarDate();
-            case "persian" -> toPersianCalendarDate();
-            case "hebrew" -> toHebrewCalendarDate();
-            case "chinese", "dangi" -> toLunisolarCalendarDate(calendarId);
+            case INDIAN -> toIndianCalendarDate();
+            case ISLAMIC_CIVIL -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            case ISLAMIC_TBLA -> toIslamicCalendarDate(TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+            case ISLAMIC_UMALQURA -> toUmalquraCalendarDate();
+            case PERSIAN -> toPersianCalendarDate();
+            case HEBREW -> toHebrewCalendarDate();
+            case CHINESE, DANGI -> toLunisolarCalendarDate(calendarId);
             default -> new IsoCalendarDate(year, month, TemporalUtils.monthCode(month), day);
         };
     }

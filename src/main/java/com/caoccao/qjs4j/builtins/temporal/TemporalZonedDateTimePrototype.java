@@ -244,7 +244,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(zonedDateTime.getCalendarId());
+        return new JSString(zonedDateTime.getCalendarId().identifier());
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -252,7 +252,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(zonedDateTime.getCalendarId());
+        return new JSString(zonedDateTime.getCalendarId().identifier());
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
@@ -448,8 +448,8 @@ public final class TemporalZonedDateTimePrototype {
             }
         }
 
-        String calendarId = startZonedDateTime.getCalendarId();
-        if ("iso8601".equals(calendarId)) {
+        TemporalCalendarId calendarId = startZonedDateTime.getCalendarId();
+        if (calendarId == TemporalCalendarId.ISO8601) {
             return TemporalDurationPrototype.differenceZonedDateTime(
                     context,
                     startZonedDateTime.getEpochNanoseconds(),
@@ -580,7 +580,7 @@ public final class TemporalZonedDateTimePrototype {
 
     private static String formatZonedDateTime(JSTemporalZonedDateTime zonedDateTime) {
         String base = formatZonedDateTimeBase(zonedDateTime);
-        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
             base += "[u-ca=" + zonedDateTime.getCalendarId() + "]";
         }
         return base;
@@ -745,10 +745,7 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
-        if (!"auto".equals(calendarNameOption)
-                && !"always".equals(calendarNameOption)
-                && !"never".equals(calendarNameOption)
-                && !"critical".equals(calendarNameOption)) {
+        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
@@ -760,7 +757,7 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException() || offsetOption == null) {
             return null;
         }
-        if (!"auto".equals(offsetOption) && !"never".equals(offsetOption)) {
+        if (!TemporalDisplayOffset.isValid(offsetOption)) {
             context.throwRangeError("Temporal error: Invalid offset option.");
             return null;
         }
@@ -896,9 +893,7 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException() || timeZoneNameOption == null) {
             return null;
         }
-        if (!"auto".equals(timeZoneNameOption)
-                && !"never".equals(timeZoneNameOption)
-                && !"critical".equals(timeZoneNameOption)) {
+        if (!TemporalDisplayTimeZone.isValid(timeZoneNameOption)) {
             context.throwRangeError("Temporal error: Invalid timeZoneName option.");
             return null;
         }
@@ -1134,7 +1129,7 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         TemporalRoundSettings roundSettings =
-            TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
+                TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1410,7 +1405,7 @@ public final class TemporalZonedDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
             JSValue resolvedOptionsValue = JSIntlObject.dateTimeFormatResolvedOptions(
                     context,
                     dateTimeFormat,
@@ -1423,7 +1418,7 @@ public final class TemporalZonedDateTimePrototype {
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                String formatterCalendarId = TemporalUtils.validateCalendar(context, formatterCalendarValue);
+                TemporalCalendarId formatterCalendarId = TemporalUtils.validateCalendar(context, formatterCalendarValue);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1586,7 +1581,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
             return JSUndefined.INSTANCE;
         }
         IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
@@ -1677,10 +1672,10 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String calendarId = zonedDateTime.getCalendarId();
-        boolean calendarSupportsEraFields = !"iso8601".equals(calendarId)
-                && !"chinese".equals(calendarId)
-                && !"dangi".equals(calendarId);
+        TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
+        boolean calendarSupportsEraFields = calendarId != TemporalCalendarId.ISO8601
+                && calendarId != TemporalCalendarId.CHINESE
+                && calendarId != TemporalCalendarId.DANGI;
         String eraField = null;
         Integer eraYearField = null;
         if (calendarSupportsEraFields) {
@@ -1817,7 +1812,7 @@ public final class TemporalZonedDateTimePrototype {
         mergedFieldsObject.set(PropertyKey.fromString("microsecond"), JSNumber.of(mergedIsoTime.microsecond()));
         mergedFieldsObject.set(PropertyKey.fromString("nanosecond"), JSNumber.of(mergedIsoTime.nanosecond()));
         mergedFieldsObject.set(PropertyKey.fromString("timeZone"), new JSString(zonedDateTime.getTimeZoneId()));
-        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(zonedDateTime.getCalendarId()));
+        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(zonedDateTime.getCalendarId().identifier()));
         if (offsetField != null) {
             mergedFieldsObject.set(PropertyKey.fromString("offset"), new JSString(offsetField));
         } else {
@@ -1848,7 +1843,7 @@ public final class TemporalZonedDateTimePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        String calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1930,7 +1925,7 @@ public final class TemporalZonedDateTimePrototype {
         if (zonedDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!"iso8601".equals(zonedDateTime.getCalendarId())) {
+        if (zonedDateTime.getCalendarId() != TemporalCalendarId.ISO8601) {
             return JSUndefined.INSTANCE;
         }
         IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());

@@ -92,9 +92,9 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String calendarId = plainDateTime.getCalendarId();
+        TemporalCalendarId calendarId = plainDateTime.getCalendarId();
         IsoDate newDate;
-        if ("iso8601".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
             newDate = TemporalDurationArithmeticKernel.addDurationToIsoDate(
                     context,
                     plainDateTime.getIsoDateTime().date(),
@@ -134,7 +134,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(plainDateTime.getCalendarId());
+        return new JSString(plainDateTime.getCalendarId().identifier());
     }
 
     private static String canonicalizeToStringSmallestUnit(String unitText) {
@@ -201,7 +201,7 @@ public final class TemporalPlainDateTimePrototype {
             JSTemporalPlainDateTime firstDateTime,
             JSTemporalPlainDateTime secondDateTime,
             TemporalDifferenceSettings settings) {
-        String calendarId = firstDateTime.getCalendarId();
+        TemporalCalendarId calendarId = firstDateTime.getCalendarId();
         boolean noRounding = settings.roundingIncrement() == 1L
                 && "nanosecond".equals(settings.smallestUnit());
         boolean sameTime = firstDateTime.getIsoDateTime().time().compareTo(
@@ -210,7 +210,7 @@ public final class TemporalPlainDateTimePrototype {
                 || "month".equals(settings.largestUnit())
                 || "week".equals(settings.largestUnit())
                 || "day".equals(settings.largestUnit());
-        if (!"iso8601".equals(calendarId) && noRounding && sameTime && dateLargestUnit) {
+        if (calendarId != TemporalCalendarId.ISO8601 && noRounding && sameTime && dateLargestUnit) {
             return TemporalPlainDatePrototype.differenceCalendarDates(
                     context,
                     firstDateTime.getIsoDateTime().date(),
@@ -295,10 +295,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
-        if (!"auto".equals(calendarNameOption)
-                && !"always".equals(calendarNameOption)
-                && !"never".equals(calendarNameOption)
-                && !"critical".equals(calendarNameOption)) {
+        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
@@ -526,7 +523,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         TemporalRoundSettings roundSettings =
-            TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
+                TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -909,10 +906,10 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         IsoTime originalTime = plainDateTime.getIsoDateTime().time();
-        String calendarId = plainDateTime.getCalendarId();
-        boolean calendarSupportsEraFields = !"iso8601".equals(calendarId)
-                && !"chinese".equals(calendarId)
-                && !"dangi".equals(calendarId);
+        TemporalCalendarId calendarId = plainDateTime.getCalendarId();
+        boolean calendarSupportsEraFields = calendarId != TemporalCalendarId.ISO8601
+                && calendarId != TemporalCalendarId.CHINESE
+                && calendarId != TemporalCalendarId.DANGI;
 
         JSValue dayFieldValue = fields.get(PropertyKey.fromString("day"));
         if (context.hasPendingException()) {
@@ -1174,7 +1171,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        String calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

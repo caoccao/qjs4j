@@ -640,7 +640,7 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
         return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
-                instant.getEpochNanoseconds(), timeZoneId, "iso8601");
+                instant.getEpochNanoseconds(), timeZoneId, TemporalCalendarId.ISO8601);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

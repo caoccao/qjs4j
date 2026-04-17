@@ -40,10 +40,24 @@ public record TemporalDuration(
     /**
      * Adds this duration's time components to the given IsoTime, returning
      * the new time and day carry. Mirrors Rust's TimeDuration.addToTime().
+     * <p>
+     * Fast path: pure {@code long} arithmetic via {@link Math#addExact};
+     * falls back to BigInteger on overflow.
      *
      * @return result with normalized time and day overflow, or null on overflow
      */
     public TemporalTimeAddResult addToTime(IsoTime time) {
+        // Fast path: long arithmetic (covers virtually all real-world durations).
+        try {
+            long durationNs = timeNanosecondsLong();
+            long totalNs = Math.addExact(time.totalNanoseconds(), durationNs);
+            long dayCarry = Math.floorDiv(totalNs, TemporalConstants.DAY_NANOSECONDS);
+            long remainder = Math.floorMod(totalNs, TemporalConstants.DAY_NANOSECONDS);
+            return new TemporalTimeAddResult(IsoTime.createFromNanoseconds(remainder), dayCarry);
+        } catch (ArithmeticException overflow) {
+            // Fallback: BigInteger path for extreme durations that exceed long range.
+        }
+
         BigInteger durationTimeNs = timeNanoseconds();
         BigInteger totalNs = BigInteger.valueOf(time.totalNanoseconds()).add(durationTimeNs);
         BigInteger[] dayAndRemainder = totalNs.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
@@ -64,10 +78,18 @@ public record TemporalDuration(
 
     /**
      * Returns total nanoseconds for days through nanoseconds.
+     * Fast path uses {@code long} arithmetic; falls back to BigInteger on overflow.
      */
     public BigInteger dayTimeNanoseconds() {
-        return BigInteger.valueOf(days).multiply(TemporalConstants.BI_DAY_NANOSECONDS)
-                .add(timeNanoseconds());
+        try {
+            long dayTimeLong = Math.addExact(
+                    Math.multiplyExact(days, TemporalConstants.DAY_NANOSECONDS),
+                    timeNanosecondsLong());
+            return BigInteger.valueOf(dayTimeLong);
+        } catch (ArithmeticException overflow) {
+            return BigInteger.valueOf(days).multiply(TemporalConstants.BI_DAY_NANOSECONDS)
+                    .add(timeNanosecondsSlow());
+        }
     }
 
     public boolean isBlank() {
@@ -110,8 +132,35 @@ public record TemporalDuration(
 
     /**
      * Returns total nanoseconds for hours through nanoseconds (excluding days).
+     * Fast path uses {@code long} arithmetic; falls back to BigInteger on overflow.
      */
     public BigInteger timeNanoseconds() {
+        try {
+            return BigInteger.valueOf(timeNanosecondsLong());
+        } catch (ArithmeticException overflow) {
+            return timeNanosecondsSlow();
+        }
+    }
+
+    /**
+     * Fast-path time nanosecond computation using {@code long} arithmetic.
+     * Throws {@link ArithmeticException} if the result exceeds long range.
+     */
+    private long timeNanosecondsLong() {
+        long total = Math.multiplyExact(hours, TemporalConstants.HOUR_NANOSECONDS);
+        total = Math.addExact(total, Math.multiplyExact(minutes, TemporalConstants.MINUTE_NANOSECONDS));
+        total = Math.addExact(total, Math.multiplyExact(seconds, TemporalConstants.SECOND_NANOSECONDS));
+        total = Math.addExact(total, Math.multiplyExact(milliseconds, TemporalConstants.MILLISECOND_NANOSECONDS));
+        total = Math.addExact(total, Math.multiplyExact(microseconds, TemporalConstants.MICROSECOND_NANOSECONDS));
+        total = Math.addExact(total, nanoseconds);
+        return total;
+    }
+
+    /**
+     * Slow-path time nanosecond computation using BigInteger arithmetic.
+     * Handles values that exceed long range.
+     */
+    private BigInteger timeNanosecondsSlow() {
         return BigInteger.valueOf(hours).multiply(TemporalConstants.BI_HOUR_NANOSECONDS)
                 .add(BigInteger.valueOf(minutes).multiply(TemporalConstants.BI_MINUTE_NANOSECONDS))
                 .add(BigInteger.valueOf(seconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS))

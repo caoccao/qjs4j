@@ -21,5 +21,5 @@ public record IsoZonedDateTimeOffset(
         IsoTime time,
         int offsetSeconds,
         String timeZoneId,
-        String calendarId) {
+        TemporalCalendarId calendarId) {
 }

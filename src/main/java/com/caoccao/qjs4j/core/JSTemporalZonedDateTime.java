@@ -16,21 +16,23 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
+
 import java.math.BigInteger;
 
 public final class JSTemporalZonedDateTime extends JSObject {
-    private final String calendarId;
+    private final TemporalCalendarId calendarId;
     private final BigInteger epochNanoseconds;
     private final String timeZoneId;
 
-    public JSTemporalZonedDateTime(JSContext context, BigInteger epochNanoseconds, String timeZoneId, String calendarId) {
+    public JSTemporalZonedDateTime(JSContext context, BigInteger epochNanoseconds, String timeZoneId, TemporalCalendarId calendarId) {
         super(context);
         this.epochNanoseconds = epochNanoseconds;
         this.timeZoneId = timeZoneId;
         this.calendarId = calendarId;
     }
 
-    public String getCalendarId() {
+    public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 

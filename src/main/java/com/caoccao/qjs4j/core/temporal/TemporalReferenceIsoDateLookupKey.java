@@ -16,5 +16,5 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalReferenceIsoDateLookupKey(String calendarId, String monthCode, int dayOfMonth) {
+public record TemporalReferenceIsoDateLookupKey(TemporalCalendarId calendarId, String monthCode, int dayOfMonth) {
 }

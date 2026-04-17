@@ -67,11 +67,6 @@ public final class TemporalUtils {
             0x0b6a0, 0x096d0, 0x055b2, 0x049b0, 0x0a577, 0x0a4b0, 0x0b250, 0x1b255, 0x06d40, 0x0ada0,
             0x18b63
     };
-    private static final String[] SUPPORTED_CALENDAR_IDENTIFIERS = {
-            "buddhist", "chinese", "coptic", "dangi", "ethioaa", "ethiopic",
-            "gregory", "hebrew", "indian", "islamic-civil", "islamic-tbla",
-            "islamic-umalqura", "iso8601", "japanese", "persian", "roc"
-    };
 
     private TemporalUtils() {
     }
@@ -127,23 +122,6 @@ public final class TemporalUtils {
         return false;
     }
 
-    private static String canonicalizeCalendarIdentifier(String calendarIdentifier) {
-        if (calendarIdentifier == null) {
-            return null;
-        }
-        String normalizedCalendarIdentifier = calendarIdentifier.toLowerCase(Locale.ROOT);
-        if ("islamicc".equals(normalizedCalendarIdentifier)) {
-            return "islamic-civil";
-        }
-        if ("ethiopic-amete-alem".equals(normalizedCalendarIdentifier)) {
-            return "ethioaa";
-        }
-        if ("gregorian".equals(normalizedCalendarIdentifier)) {
-            return "gregory";
-        }
-        return normalizedCalendarIdentifier;
-    }
-
     /**
      * Generic receiver type check for Temporal prototype methods.
      * Returns the cast value, or null after throwing TypeError.
@@ -196,10 +174,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!"auto".equals(calendarNameOption)
-                && !"always".equals(calendarNameOption)
-                && !"never".equals(calendarNameOption)
-                && !"critical".equals(calendarNameOption)) {
+        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
@@ -228,8 +203,8 @@ public final class TemporalUtils {
         return (int) numericValue;
     }
 
-    private static Integer getLunisolarYearInfo(String calendarId, int calendarYear) {
-        if ("dangi".equals(calendarId)) {
+    private static Integer getLunisolarYearInfo(TemporalCalendarId calendarId, int calendarYear) {
+        if (calendarId == TemporalCalendarId.DANGI) {
             if (calendarYear < 1900 || calendarYear > 1900 + DANGI_LUNAR_YEAR_INFO.length - 1) {
                 return null;
             }
@@ -289,13 +264,7 @@ public final class TemporalUtils {
         if (calendarIdentifier == null) {
             return false;
         }
-        String canonicalCalendarIdentifier = canonicalizeCalendarIdentifier(calendarIdentifier);
-        for (String supportedCalendarIdentifier : SUPPORTED_CALENDAR_IDENTIFIERS) {
-            if (supportedCalendarIdentifier.equals(canonicalCalendarIdentifier)) {
-                return true;
-            }
-        }
-        return false;
+        return TemporalCalendarId.fromIdentifier(calendarIdentifier) != null;
     }
 
     public static int islamicDaysBeforeYear(int islamicYear) {
@@ -310,7 +279,7 @@ public final class TemporalUtils {
         return sign * firstDate.compareTo(secondDate) > 0;
     }
 
-    public static int lunisolarLeapMonth(String calendarId, int calendarYear) {
+    public static int lunisolarLeapMonth(TemporalCalendarId calendarId, int calendarYear) {
         Integer yearInfo = getLunisolarYearInfo(calendarId, calendarYear);
         if (yearInfo == null) {
             return 0;
@@ -318,7 +287,7 @@ public final class TemporalUtils {
         return yearInfo & 0x0F;
     }
 
-    public static int lunisolarLeapMonthDays(String calendarId, int calendarYear) {
+    public static int lunisolarLeapMonthDays(TemporalCalendarId calendarId, int calendarYear) {
         int leapMonth = lunisolarLeapMonth(calendarId, calendarYear);
         if (leapMonth == 0) {
             return 0;
@@ -330,14 +299,14 @@ public final class TemporalUtils {
         return (yearInfo & 0x10000) != 0 ? 30 : 29;
     }
 
-    public static int lunisolarMaxYear(String calendarId) {
-        if ("dangi".equals(calendarId)) {
+    public static int lunisolarMaxYear(TemporalCalendarId calendarId) {
+        if (calendarId == TemporalCalendarId.DANGI) {
             return 1900 + DANGI_LUNAR_YEAR_INFO.length - 1;
         }
         return 2100;
     }
 
-    public static int lunisolarMonthDays(String calendarId, int calendarYear, int calendarMonth) {
+    public static int lunisolarMonthDays(TemporalCalendarId calendarId, int calendarYear, int calendarMonth) {
         Integer yearInfo = getLunisolarYearInfo(calendarId, calendarYear);
         if (yearInfo == null) {
             return 0;
@@ -346,7 +315,7 @@ public final class TemporalUtils {
         return (yearInfo & monthMask) != 0 ? 30 : 29;
     }
 
-    public static int lunisolarYearDays(String calendarId, int calendarYear) {
+    public static int lunisolarYearDays(TemporalCalendarId calendarId, int calendarYear) {
         Integer yearInfo = getLunisolarYearInfo(calendarId, calendarYear);
         if (yearInfo == null) {
             return 0;
@@ -365,20 +334,20 @@ public final class TemporalUtils {
     /**
      * Appends calendar annotation to string if needed.
      */
-    public static String maybeAppendCalendar(String dateTimeString, String calendarId, String calendarNameOption) {
+    public static String maybeAppendCalendar(String dateTimeString, TemporalCalendarId calendarId, String calendarNameOption) {
         switch (calendarNameOption) {
             case "never":
                 return dateTimeString;
             case "always":
-                return dateTimeString + "[u-ca=" + calendarId + "]";
+                return dateTimeString + "[u-ca=" + calendarId.identifier() + "]";
             case "critical":
-                return dateTimeString + "[!u-ca=" + calendarId + "]";
+                return dateTimeString + "[!u-ca=" + calendarId.identifier() + "]";
             case "auto":
             default:
-                if ("iso8601".equals(calendarId)) {
+                if (calendarId == TemporalCalendarId.ISO8601) {
                     return dateTimeString;
                 }
-                return dateTimeString + "[u-ca=" + calendarId + "]";
+                return dateTimeString + "[u-ca=" + calendarId.identifier() + "]";
         }
     }
 
@@ -433,9 +402,9 @@ public final class TemporalUtils {
         return (long) numericValue;
     }
 
-    public static String toTemporalCalendarWithISODefault(JSContext context, JSValue calendarValue) {
+    public static TemporalCalendarId toTemporalCalendarWithISODefault(JSContext context, JSValue calendarValue) {
         if (calendarValue instanceof JSUndefined || calendarValue == null) {
-            return "iso8601";
+            return TemporalCalendarId.ISO8601;
         }
         if (calendarValue instanceof JSTemporalPlainDate temporalPlainDate) {
             return temporalPlainDate.getCalendarId();
@@ -457,8 +426,8 @@ public final class TemporalUtils {
             return null;
         }
 
-        String canonicalCalendarId = canonicalizeCalendarIdentifier(calendarString.value());
-        if (isSupportedCalendarIdentifier(canonicalCalendarId)) {
+        TemporalCalendarId canonicalCalendarId = TemporalCalendarId.fromIdentifier(calendarString.value());
+        if (canonicalCalendarId != null) {
             return canonicalCalendarId;
         }
 
@@ -470,28 +439,28 @@ public final class TemporalUtils {
 
         String firstCalendarAnnotation = firstCalendarAnnotation(calendarStringValue);
         if (firstCalendarAnnotation != null) {
-            String validatedCalendar = validateCalendar(context, new JSString(firstCalendarAnnotation));
+            TemporalCalendarId validatedCalendar = validateCalendar(context, new JSString(firstCalendarAnnotation));
             if (context.hasPendingException()) {
                 return null;
             }
             return validatedCalendar;
         }
-        return "iso8601";
+        return TemporalCalendarId.ISO8601;
     }
 
     /**
      * Validates that a calendar value is a string, matching V8's error message.
      */
-    public static String validateCalendar(JSContext context, JSValue calendarValue) {
+    public static TemporalCalendarId validateCalendar(JSContext context, JSValue calendarValue) {
         if (calendarValue instanceof JSUndefined || calendarValue == null) {
-            return "iso8601";
+            return TemporalCalendarId.ISO8601;
         }
         if (!(calendarValue instanceof JSString calendarString)) {
             context.throwTypeError("Temporal error: Calendar must be string.");
             return null;
         }
-        String canonicalCalendarId = canonicalizeCalendarIdentifier(calendarString.value());
-        if (!isSupportedCalendarIdentifier(canonicalCalendarId)) {
+        TemporalCalendarId canonicalCalendarId = TemporalCalendarId.fromIdentifier(calendarString.value());
+        if (canonicalCalendarId == null) {
             context.throwRangeError("Temporal error: Invalid calendar.");
             return null;
         }

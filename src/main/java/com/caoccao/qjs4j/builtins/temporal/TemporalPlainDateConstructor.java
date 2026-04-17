@@ -67,7 +67,7 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (args.length > 3 && !(args[3] instanceof JSUndefined)) {
             calendarId = TemporalUtils.validateCalendar(context, args[3]);
             if (context.hasPendingException()) {
@@ -88,12 +88,12 @@ public final class TemporalPlainDateConstructor {
         return createPlainDate(context, isoDate, calendarId, resolvedPrototype);
     }
 
-    public static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, String calendarId) {
+    public static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
         JSObject prototype = getTemporalPrototype(context, "PlainDate");
         return createPlainDate(context, isoDate, calendarId, prototype);
     }
 
-    static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, String calendarId, JSObject prototype) {
+    static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId, JSObject prototype) {
         JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
         if (prototype != null) {
             plainDate.setPrototype(prototype);
@@ -106,7 +106,7 @@ public final class TemporalPlainDateConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
             calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
             if (context.hasPendingException()) {
@@ -145,7 +145,7 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        TemporalParsedMonthCode parsedMonthCode = null;
+        IsoMonth parsedMonthCode = null;
         if (hasMonthCode) {
             String monthCodeText;
             if (monthCodeValue instanceof JSString monthCodeString) {
@@ -188,7 +188,7 @@ public final class TemporalPlainDateConstructor {
         }
         boolean yearDerivedFromEra = false;
 
-        boolean calendarSupportsEras = TemporalFieldResolver.calendarUsesEras(calendarId);
+        boolean calendarSupportsEras = calendarId.hasEra();
         if (!calendarSupportsEras) {
             if (!hasYear) {
                 context.throwTypeError("Temporal error: Date argument must be object or string.");
@@ -226,22 +226,22 @@ public final class TemporalPlainDateConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!hasYear && hasEra && hasEraYear) {
-                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                year = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                year = calendarId.getEraYearFromEra(canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
                 hasYear = true;
                 yearDerivedFromEra = true;
             } else if (hasEra && hasEraYear) {
-                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                int expectedYear = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                int expectedYear = calendarId.getEraYearFromEra(canonicalEra, eraYear);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -304,7 +304,7 @@ public final class TemporalPlainDateConstructor {
         if (date == null) {
             return JSUndefined.INSTANCE;
         }
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         int annotationStart = input.indexOf('[');
         while (annotationStart >= 0) {
             int annotationEnd = input.indexOf(']', annotationStart);

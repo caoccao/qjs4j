@@ -49,20 +49,6 @@ public enum TemporalDisambiguation {
     }
 
     /**
-     * Checks whether the given string is a valid disambiguation mode.
-     */
-    public static boolean isValid(String text) {
-        return fromString(text) != null;
-    }
-
-    /**
-     * Returns true if the given disambiguation string matches "reject".
-     */
-    public static boolean isReject(String text) {
-        return "reject".equals(text);
-    }
-
-    /**
      * Returns true if the given disambiguation string matches "earlier".
      */
     public static boolean isEarlier(String text) {
@@ -74,6 +60,20 @@ public enum TemporalDisambiguation {
      */
     public static boolean isLater(String text) {
         return "later".equals(text);
+    }
+
+    /**
+     * Returns true if the given disambiguation string matches "reject".
+     */
+    public static boolean isReject(String text) {
+        return "reject".equals(text);
+    }
+
+    /**
+     * Checks whether the given string is a valid disambiguation mode.
+     */
+    public static boolean isValid(String text) {
+        return fromString(text) != null;
     }
 
     /**

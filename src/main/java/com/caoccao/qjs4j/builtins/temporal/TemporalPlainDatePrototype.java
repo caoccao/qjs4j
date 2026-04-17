@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
 import java.time.DateTimeException;
-import java.time.LocalDate;
 
 /**
  * Implementation of Temporal.PlainDate prototype methods.
@@ -93,9 +92,9 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String calendarId = plainDate.getCalendarId();
+        TemporalCalendarId calendarId = plainDate.getCalendarId();
         IsoDate resultIsoDate;
-        if ("iso8601".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
             resultIsoDate = addDurationToDate(context, plainDate.getIsoDate(), durationRecord, overflow);
             if (context.hasPendingException() || resultIsoDate == null) {
                 return JSUndefined.INSTANCE;
@@ -168,7 +167,7 @@ public final class TemporalPlainDatePrototype {
             TemporalDateDurationFields duration,
             long nudgedEpochDay,
             IsoDate originDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             String largestUnit,
             String smallestUnit) {
         if (smallestUnit.equals(largestUnit)) {
@@ -208,9 +207,9 @@ public final class TemporalPlainDatePrototype {
     private static IsoDate calendarDateAddConstrain(
             JSContext context,
             IsoDate baseDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             TemporalDateDurationFields dateDuration) {
-        if ("iso8601".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
             TemporalDuration durationRecord = new TemporalDuration(
                     dateDuration.years(),
                     dateDuration.months(),
@@ -239,9 +238,9 @@ public final class TemporalPlainDatePrototype {
             JSContext context,
             IsoDate firstDate,
             IsoDate secondDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             String largestUnit) {
-        if ("iso8601".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
             return calendarDateUntilIso(firstDate, secondDate, largestUnit);
         }
         int sign = -Integer.signum(firstDate.compareTo(secondDate));
@@ -431,13 +430,13 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(plainDate.getCalendarId());
+        return new JSString(plainDate.getCalendarId().identifier());
     }
 
-    private static boolean calendarSupportsEraFields(String calendarId) {
-        return !"iso8601".equals(calendarId)
-                && !"chinese".equals(calendarId)
-                && !"dangi".equals(calendarId);
+    private static boolean calendarSupportsEraFields(TemporalCalendarId calendarId) {
+        return calendarId != TemporalCalendarId.ISO8601
+                && calendarId != TemporalCalendarId.CHINESE
+                && calendarId != TemporalCalendarId.DANGI;
     }
 
     private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -463,8 +462,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        TemporalParsedMonthCode firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        TemporalParsedMonthCode secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        IsoMonth firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
+        IsoMonth secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
@@ -491,7 +490,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
         return JSNumber.of(calendarDate.day());
     }
 
@@ -539,7 +538,7 @@ public final class TemporalPlainDatePrototype {
             JSContext context,
             IsoDate firstDate,
             IsoDate secondDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             String largestUnit) {
         TemporalDateDurationFields dateDifference = calendarDateUntil(
                 context,
@@ -648,7 +647,7 @@ public final class TemporalPlainDatePrototype {
             IsoCalendarDate firstCalendarDateFields,
             IsoDate constrainedCandidateDate,
             IsoCalendarDate secondCalendarDateFields,
-            String calendarId) {
+            TemporalCalendarId calendarId) {
         IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
         if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
             return false;
@@ -682,11 +681,11 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalEraFields eraFields = resolveEraFields(plainDate);
-        if (eraFields == null || eraFields.era() == null) {
+        TemporalEraYear temporalEraYear = plainDate.toTemporalEraYear();
+        if (temporalEraYear == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(eraFields.era());
+        return new JSString(temporalEraYear.era().identifier());
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -694,11 +693,11 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalEraFields eraFields = resolveEraFields(plainDate);
-        if (eraFields == null || eraFields.eraYear() == null) {
+        TemporalEraYear temporalEraYear = plainDate.toTemporalEraYear();
+        if (temporalEraYear == null || temporalEraYear.eraYear() == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(eraFields.eraYear());
+        return JSNumber.of(temporalEraYear.eraYear());
     }
 
     private static TemporalDifferenceSettings getDifferenceSettings(
@@ -746,7 +745,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
         return JSNumber.of(calendarDate.month());
     }
 
@@ -755,18 +754,18 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return new JSString(resolveCalendarMonthCode(context, plainDate));
+        return new JSString(plainDate.toIsoCalendarDate().monthCode());
     }
 
     private static long monthsForYearDelta(
             JSContext context,
             IsoDate firstDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             long yearDelta) {
         if (yearDelta == 0L) {
             return 0L;
         }
-        if ("coptic".equals(calendarId) || "ethiopic".equals(calendarId) || "ethioaa".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.COPTIC || calendarId == TemporalCalendarId.ETHIOPIC || calendarId == TemporalCalendarId.ETHIOAA) {
             try {
                 return Math.multiplyExact(yearDelta, 13L);
             } catch (ArithmeticException arithmeticException) {
@@ -774,16 +773,16 @@ public final class TemporalPlainDatePrototype {
                 return 0L;
             }
         }
-        if ("iso8601".equals(calendarId)
-                || "gregory".equals(calendarId)
-                || "japanese".equals(calendarId)
-                || "buddhist".equals(calendarId)
-                || "roc".equals(calendarId)
-                || "indian".equals(calendarId)
-                || "persian".equals(calendarId)
-                || "islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601
+                || calendarId == TemporalCalendarId.GREGORY
+                || calendarId == TemporalCalendarId.JAPANESE
+                || calendarId == TemporalCalendarId.BUDDHIST
+                || calendarId == TemporalCalendarId.ROC
+                || calendarId == TemporalCalendarId.INDIAN
+                || calendarId == TemporalCalendarId.PERSIAN
+                || calendarId == TemporalCalendarId.ISLAMIC_CIVIL
+                || calendarId == TemporalCalendarId.ISLAMIC_TBLA
+                || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
             try {
                 return Math.multiplyExact(yearDelta, 12L);
             } catch (ArithmeticException arithmeticException) {
@@ -827,7 +826,7 @@ public final class TemporalPlainDatePrototype {
             TemporalDateDurationFields duration,
             long destinationEpochDay,
             IsoDate originDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             TemporalDifferenceSettings settings) {
         String smallestUnit = settings.smallestUnit();
         long increment = settings.roundingIncrement();
@@ -936,121 +935,16 @@ public final class TemporalPlainDatePrototype {
         return new TemporalNudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
     }
 
-    private static TemporalParsedMonthCode parseMonthCodeParts(String monthCodeText) {
-        return TemporalCalendarMath.parseMonthCode(monthCodeText);
+    private static IsoMonth parseMonthCodeParts(String monthCodeText) {
+        return IsoMonth.parseMonthCode(monthCodeText);
     }
-
-    private static IsoDate resolveCalendarDate(JSContext context, JSTemporalPlainDate plainDate) {
-        IsoCalendarDate calendarDateFields =
-                plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
-        return new IsoDate(
-                calendarDateFields.year(),
-                calendarDateFields.month(),
-                calendarDateFields.day());
-    }
-
-    private static String resolveCalendarMonthCode(JSContext context, JSTemporalPlainDate plainDate) {
-        IsoCalendarDate calendarDateFields =
-                plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
-        return calendarDateFields.monthCode();
-    }
-
-    private static TemporalEraFields resolveEraFields(JSTemporalPlainDate plainDate) {
-        String calendarId = plainDate.getCalendarId();
-        if ("iso8601".equals(calendarId) || "chinese".equals(calendarId) || "dangi".equals(calendarId)) {
-            return null;
-        }
-
-        IsoDate isoDate = plainDate.getIsoDate();
-        IsoDate calendarDate = resolveCalendarDate(plainDate.getContext(), plainDate);
-        int calendarYear = calendarDate.year();
-
-        if ("gregory".equals(calendarId)) {
-            if (calendarYear <= 0) {
-                return new TemporalEraFields("bce", 1 - calendarYear);
-            }
-            return new TemporalEraFields("ce", calendarYear);
-        }
-
-        if ("japanese".equals(calendarId)) {
-            LocalDate date = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
-            LocalDate reiwaStart = LocalDate.of(2019, 5, 1);
-            LocalDate heiseiStart = LocalDate.of(1989, 1, 8);
-            LocalDate showaStart = LocalDate.of(1926, 12, 25);
-            LocalDate taishoStart = LocalDate.of(1912, 7, 30);
-            LocalDate meijiStart = LocalDate.of(1873, 1, 1);
-
-            if (!date.isBefore(reiwaStart)) {
-                return new TemporalEraFields("reiwa", isoDate.year() - 2018);
-            }
-            if (!date.isBefore(heiseiStart)) {
-                return new TemporalEraFields("heisei", isoDate.year() - 1988);
-            }
-            if (!date.isBefore(showaStart)) {
-                return new TemporalEraFields("showa", isoDate.year() - 1925);
-            }
-            if (!date.isBefore(taishoStart)) {
-                return new TemporalEraFields("taisho", isoDate.year() - 1911);
-            }
-            if (!date.isBefore(meijiStart)) {
-                return new TemporalEraFields("meiji", isoDate.year() - 1867);
-            }
-            if (isoDate.year() <= 0) {
-                return new TemporalEraFields("bce", 1 - isoDate.year());
-            }
-            return new TemporalEraFields("ce", isoDate.year());
-        }
-
-        if ("roc".equals(calendarId)) {
-            if (calendarYear >= 1) {
-                return new TemporalEraFields("roc", calendarYear);
-            }
-            return new TemporalEraFields("broc", 1 - calendarYear);
-        }
-
-        if ("buddhist".equals(calendarId)) {
-            return new TemporalEraFields("be", calendarYear);
-        }
-        if ("coptic".equals(calendarId)) {
-            return new TemporalEraFields("am", calendarYear);
-        }
-        if ("ethiopic".equals(calendarId)) {
-            if (calendarYear <= 0) {
-                return new TemporalEraFields("aa", 5500 + calendarYear);
-            }
-            return new TemporalEraFields("am", calendarYear);
-        }
-        if ("ethioaa".equals(calendarId)) {
-            return new TemporalEraFields("aa", calendarYear);
-        }
-        if ("hebrew".equals(calendarId)) {
-            return new TemporalEraFields("am", calendarYear);
-        }
-        if ("indian".equals(calendarId)) {
-            return new TemporalEraFields("shaka", calendarYear);
-        }
-        if ("persian".equals(calendarId)) {
-            return new TemporalEraFields("ap", calendarYear);
-        }
-        if ("islamic-civil".equals(calendarId)
-                || "islamic-tbla".equals(calendarId)
-                || "islamic-umalqura".equals(calendarId)) {
-            if (calendarYear > 0) {
-                return new TemporalEraFields("ah", calendarYear);
-            }
-            return new TemporalEraFields("bh", 1 - calendarYear);
-        }
-
-        return null;
-    }
-
 
     private static TemporalDateDurationFields roundRelativeDurationDate(
             JSContext context,
             TemporalDateDurationFields duration,
             long destinationEpochDay,
             IsoDate originDate,
-            String calendarId,
+            TemporalCalendarId calendarId,
             TemporalDifferenceSettings settings) {
         int sign = duration.sign() < 0 ? -1 : 1;
         TemporalNudgeResult nudgeResult;
@@ -1197,7 +1091,7 @@ public final class TemporalPlainDatePrototype {
         }
         IsoDate isoDate = plainDate.getIsoDate();
         IsoDate plainYearMonthIsoDate;
-        if ("iso8601".equals(plainDate.getCalendarId())) {
+        if (plainDate.getCalendarId() == TemporalCalendarId.ISO8601) {
             plainYearMonthIsoDate = new IsoDate(isoDate.year(), isoDate.month(), 1);
         } else {
             plainYearMonthIsoDate = isoDate;
@@ -1316,7 +1210,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!"iso8601".equals(plainDate.getCalendarId())) {
+        if (plainDate.getCalendarId() != TemporalCalendarId.ISO8601) {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(plainDate.getIsoDate().weekOfYear());
@@ -1358,7 +1252,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String calendarId = plainDate.getCalendarId();
+        TemporalCalendarId calendarId = plainDate.getCalendarId();
         boolean calendarSupportsEraFields = calendarSupportsEraFields(calendarId);
 
         JSValue dayFieldValue = fields.get(PropertyKey.fromString("day"));
@@ -1462,28 +1356,26 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
         if (context.hasPendingException() || calendarDate == null) {
             return JSUndefined.INSTANCE;
         }
-        String calendarMonthCode = resolveCalendarMonthCode(context, plainDate);
+        String calendarMonthCode = plainDate.toIsoCalendarDate().monthCode();
         if (context.hasPendingException() || calendarMonthCode == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalEraFields eraFields = resolveEraFields(plainDate);
+        TemporalEraYear eraFields = plainDate.toTemporalEraYear();
 
         JSObject mergedFieldsObject = new JSObject(context);
-        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId));
+        mergedFieldsObject.set(PropertyKey.fromString("calendar"), new JSString(calendarId.identifier()));
         mergedFieldsObject.set(PropertyKey.fromString("day"), JSNumber.of(calendarDate.day()));
-        if ("iso8601".equals(calendarId)) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
             mergedFieldsObject.set(PropertyKey.fromString("month"), JSNumber.of(calendarDate.month()));
         }
         mergedFieldsObject.set(PropertyKey.fromString("monthCode"), new JSString(calendarMonthCode));
         mergedFieldsObject.set(PropertyKey.fromString("year"), JSNumber.of(calendarDate.year()));
         if (eraFields != null) {
-            if (eraFields.era() != null) {
-                mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(eraFields.era()));
-            }
+            mergedFieldsObject.set(PropertyKey.fromString("era"), new JSString(eraFields.era().identifier()));
             if (eraFields.eraYear() != null) {
                 mergedFieldsObject.set(PropertyKey.fromString("eraYear"), JSNumber.of(eraFields.eraYear()));
             }
@@ -1576,7 +1468,7 @@ public final class TemporalPlainDatePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        String calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
@@ -1588,7 +1480,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        IsoDate calendarDate = resolveCalendarDate(context, plainDate);
+        IsoDate calendarDate = plainDate.toIsoCalendarDate().toIsoDate();
         return JSNumber.of(calendarDate.year());
     }
 
@@ -1597,7 +1489,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!"iso8601".equals(plainDate.getCalendarId())) {
+        if (plainDate.getCalendarId() != TemporalCalendarId.ISO8601) {
             return JSUndefined.INSTANCE;
         }
         return JSNumber.of(plainDate.getIsoDate().yearOfWeek());
