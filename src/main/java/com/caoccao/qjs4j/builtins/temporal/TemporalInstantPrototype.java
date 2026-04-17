@@ -27,17 +27,10 @@ import java.util.Locale;
  */
 public final class TemporalInstantPrototype {
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
-    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
     private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
     private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final BigInteger NS_PER_US = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-    private static final long SOLAR_DAY_HOURS = TemporalConstants.SOLAR_DAY_HOURS;
-    private static final long SOLAR_DAY_MICROSECONDS = TemporalConstants.SOLAR_DAY_MICROSECONDS;
-    private static final long SOLAR_DAY_MILLISECONDS = TemporalConstants.SOLAR_DAY_MILLISECONDS;
-    private static final long SOLAR_DAY_MINUTES = TemporalConstants.SOLAR_DAY_MINUTES;
-    private static final long SOLAR_DAY_NANOSECONDS = TemporalConstants.SOLAR_DAY_NANOSECONDS;
-    private static final long SOLAR_DAY_SECONDS = TemporalConstants.SOLAR_DAY_SECONDS;
     private static final String TYPE_NAME = "Temporal.Instant";
 
     private TemporalInstantPrototype() {
@@ -226,7 +219,11 @@ public final class TemporalInstantPrototype {
             JSTemporalInstant leftInstant,
             JSTemporalInstant rightInstant,
             JSValue optionsArg) {
-        TemporalDifferenceSettings differenceOptions = parseDifferenceOptions(context, optionsArg);
+        TemporalDifferenceSettings differenceOptions = TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.SECOND,
+                false, true);
         if (context.hasPendingException() || differenceOptions == null) {
             return JSUndefined.INSTANCE;
         }
@@ -256,14 +253,6 @@ public final class TemporalInstantPrototype {
                 .filter(u -> u.isTimeUnit() && u != TemporalUnit.HOUR)
                 .map(TemporalUnit::jsName)
                 .orElse(null);
-    }
-
-    private static TemporalDifferenceSettings parseDifferenceOptions(JSContext context, JSValue optionsArg) {
-        return TemporalDifferenceSettings.parse(
-                context, false, optionsArg,
-                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
-                TemporalUnit.NANOSECOND, TemporalUnit.SECOND,
-                false, true);
     }
 
     private static Integer parseFractionalSecondDigits(JSContext context, JSValue value) {
