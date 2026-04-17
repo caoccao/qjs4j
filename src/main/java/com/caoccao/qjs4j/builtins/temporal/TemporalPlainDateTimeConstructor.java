@@ -108,7 +108,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
 
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (args.length > 9 && !(args[9] instanceof JSUndefined)) {
             calendarId = TemporalUtils.validateCalendar(context, args[9]);
             if (context.hasPendingException()) {
@@ -141,12 +141,12 @@ public final class TemporalPlainDateTimeConstructor {
         return createPlainDateTime(context, isoDateTime, calendarId, resolvedPrototype);
     }
 
-    public static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, String calendarId) {
+    public static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, TemporalCalendarId calendarId) {
         JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainDateTime");
         return createPlainDateTime(context, isoDateTime, calendarId, prototype);
     }
 
-    static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, String calendarId, JSObject prototype) {
+    static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, TemporalCalendarId calendarId, JSObject prototype) {
         JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
         if (prototype != null) {
             plainDateTime.setPrototype(prototype);
@@ -206,7 +206,7 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
         boolean hasMonthCode = !(monthCodeValue instanceof JSUndefined) && monthCodeValue != null;
-        TemporalParsedMonthCode parsedMonthCode = null;
+        IsoMonth parsedMonthCode = null;
         if (hasMonthCode) {
             String monthCodeText;
             if (monthCodeValue instanceof JSString monthCodeString) {
@@ -258,7 +258,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
 
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
             calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
             if (context.hasPendingException()) {
@@ -270,7 +270,7 @@ public final class TemporalPlainDateTimeConstructor {
         boolean hasEraYear = false;
         String era = null;
         Integer eraYear = null;
-        if (TemporalFieldResolver.calendarUsesEras(calendarId)) {
+        if (calendarId.hasEra()) {
             JSValue eraValue = fields.get(PropertyKey.fromString("era"));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -300,18 +300,18 @@ public final class TemporalPlainDateTimeConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!hasYear && hasEra && hasEraYear) {
-                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                year = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                year = calendarId.getEraYearFromEra(canonicalEra, eraYear);
                 hasYear = true;
             } else if (hasEra && hasEraYear) {
-                String canonicalEra = TemporalFieldResolver.canonicalizeEraForCalendar(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                int expectedYear = TemporalFieldResolver.yearFromEraAndEraYear(calendarId, canonicalEra, eraYear);
+                int expectedYear = calendarId.getEraYearFromEra(canonicalEra, eraYear);
                 if (year != expectedYear) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return JSUndefined.INSTANCE;

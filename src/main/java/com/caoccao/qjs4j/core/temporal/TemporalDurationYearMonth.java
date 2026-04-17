@@ -16,5 +16,15 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalEraFields(String era, Integer eraYear) {
+public record TemporalDurationYearMonth(long years, long months) {
+    public static final TemporalDurationYearMonth ZERO = new TemporalDurationYearMonth(0L, 0L);
+
+    public static TemporalDurationYearMonth fromTotalMonths(long totalMonthsDifference, String largestUnit) {
+        if (TemporalUnit.YEAR.jsName().equals(largestUnit)) {
+            long years = totalMonthsDifference / 12L;
+            long months = totalMonthsDifference % 12L;
+            return new TemporalDurationYearMonth(years, months);
+        }
+        return new TemporalDurationYearMonth(0L, totalMonthsDifference);
+    }
 }

@@ -302,7 +302,7 @@ public final class TemporalParser {
             return null;
         }
 
-        String calendar = "iso8601";
+        TemporalCalendarId calendar = TemporalCalendarId.ISO8601;
         String calendarAnnotation = firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
             calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
@@ -704,7 +704,7 @@ public final class TemporalParser {
             return null;
         }
 
-        String calendarId = "iso8601";
+        TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         String calendarAnnotation = firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
             calendarId = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));

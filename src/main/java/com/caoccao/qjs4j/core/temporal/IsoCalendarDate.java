@@ -21,4 +21,7 @@ public record IsoCalendarDate(
         int month,
         String monthCode,
         int day) {
+    public IsoDate toIsoDate() {
+        return new IsoDate(year, month, day);
+    }
 }

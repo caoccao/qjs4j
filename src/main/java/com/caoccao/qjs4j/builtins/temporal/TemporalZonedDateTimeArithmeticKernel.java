@@ -41,9 +41,9 @@ final class TemporalZonedDateTimeArithmeticKernel {
             IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
-            String calendarId = zonedDateTime.getCalendarId();
+            TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
             IsoDate addedDate;
-            if ("iso8601".equals(calendarId)) {
+            if (calendarId == TemporalCalendarId.ISO8601) {
                 addedDate = addIsoDateWithOverflow(
                         context,
                         localDateTime.date(),

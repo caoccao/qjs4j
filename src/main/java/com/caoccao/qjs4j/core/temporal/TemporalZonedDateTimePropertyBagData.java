@@ -17,10 +17,10 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalZonedDateTimePropertyBagData(
-        String calendarId,
+        TemporalCalendarId calendarId,
         int year,
         Integer month,
-        TemporalParsedMonthCode parsedMonthCode,
+        IsoMonth parsedMonthCode,
         int day,
         int hour,
         int minute,

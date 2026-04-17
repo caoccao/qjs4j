@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.math.BigDecimal;
@@ -4621,11 +4622,11 @@ public final class JSIntlObject {
             JSContext context,
             DateTimeFormattable formattable,
             JSIntlDateTimeFormat dateTimeFormat) {
-        String temporalCalendarId = formattable.calendarId();
-        if (temporalCalendarId == null || temporalCalendarId.isEmpty()) {
+        TemporalCalendarId temporalCalendarId = formattable.calendarId();
+        if (temporalCalendarId == null) {
             return true;
         }
-        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId);
+        String canonicalTemporalCalendarId = canonicalizeCalendar(temporalCalendarId.identifier());
         if ("iso8601".equals(canonicalTemporalCalendarId)) {
             return true;
         }
@@ -6890,6 +6891,6 @@ public final class JSIntlObject {
             String dayOption) {
     }
 
-    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, String calendarId) {
+    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, TemporalCalendarId calendarId) {
     }
 }

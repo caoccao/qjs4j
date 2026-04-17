@@ -17,18 +17,19 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 
 public final class JSTemporalPlainMonthDay extends JSObject {
-    private final String calendarId;
+    private final TemporalCalendarId calendarId;
     private final IsoDate isoDate;
 
-    public JSTemporalPlainMonthDay(JSContext context, IsoDate isoDate, String calendarId) {
+    public JSTemporalPlainMonthDay(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
         super(context);
         this.isoDate = isoDate;
         this.calendarId = calendarId;
     }
 
-    public String getCalendarId() {
+    public TemporalCalendarId getCalendarId() {
         return calendarId;
     }
 

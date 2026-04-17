@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoCalendarDate;
 import com.caoccao.qjs4j.core.temporal.IsoDate;
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 
 import java.time.*;
 import java.time.chrono.*;
@@ -368,7 +369,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return new LunarDate(lunarYear, lunarMonth, lunarDay, inLeapMonth);
     }
 
-    private static LunarDate toLunisolarDate(LocalDate gregorianDate, String calendarId) {
+    private static LunarDate toLunisolarDate(LocalDate gregorianDate, TemporalCalendarId calendarId) {
         IsoDate isoDate = new IsoDate(gregorianDate.getYear(), gregorianDate.getMonthValue(), gregorianDate.getDayOfMonth());
         IsoCalendarDate calendarDateFields = isoDate.toIsoCalendarDate(calendarId);
         String monthCode = calendarDateFields.monthCode();
@@ -659,7 +660,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
         LunarDate lunarDate = null;
         boolean useLunarParts = isChineseOrDangiCalendar();
         if (useLunarParts) {
-            lunarDate = toLunisolarDate(dateTime.toLocalDate(), calendar);
+            lunarDate = toLunisolarDate(dateTime.toLocalDate(), resolveTemporalCalendarId());
             if (isLunarYearOnlyPattern()) {
                 String yearName = chineseYearName(lunarDate.relatedYear());
                 if ("zh".equals(locale.getLanguage())) {
@@ -749,7 +750,7 @@ public final class JSIntlDateTimeFormat extends JSObject {
                 || useTemporalIslamicFields;
         if (useTemporalCalendarFields) {
             IsoDate isoDate = new IsoDate(dateTime.getYear(), dateTime.getMonthValue(), dateTime.getDayOfMonth());
-            calendarDateFields = isoDate.toIsoCalendarDate(calendar);
+            calendarDateFields = isoDate.toIsoCalendarDate(resolveTemporalCalendarId());
         }
         if (field == 'G' && eraOption != null) {
             int year = dateTime.getYear();
@@ -988,6 +989,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
      */
     public boolean hasTextMonth() {
         return "short".equals(monthOption) || "long".equals(monthOption) || "narrow".equals(monthOption);
+    }
+
+    private TemporalCalendarId resolveTemporalCalendarId() {
+        TemporalCalendarId temporalCalendarId = TemporalCalendarId.fromIdentifier(calendar);
+        if (temporalCalendarId == null) {
+            return TemporalCalendarId.ISO8601;
+        }
+        return temporalCalendarId;
     }
 
     private boolean isChineseOrDangiCalendar() {

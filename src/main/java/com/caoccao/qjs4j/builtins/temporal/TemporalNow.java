@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
+import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 
@@ -74,7 +75,7 @@ public final class TemporalNow {
         }
         BigInteger epochNs = systemEpochNs();
         IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
-        return TemporalPlainDateConstructor.createPlainDate(context, isoDateTime.date(), "iso8601");
+        return TemporalPlainDateConstructor.createPlainDate(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -84,7 +85,7 @@ public final class TemporalNow {
         }
         BigInteger epochNs = systemEpochNs();
         IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, isoDateTime, "iso8601");
+        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, isoDateTime, TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -113,6 +114,6 @@ public final class TemporalNow {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = systemEpochNs();
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs, timeZoneId, "iso8601");
+        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs, timeZoneId, TemporalCalendarId.ISO8601);
     }
 }
