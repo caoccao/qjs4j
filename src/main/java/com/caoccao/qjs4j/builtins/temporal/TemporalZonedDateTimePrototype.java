@@ -444,7 +444,7 @@ public final class TemporalZonedDateTimePrototype {
             int epochSign = Integer.signum(endZonedDateTime.getEpochNanoseconds().compareTo(
                     startZonedDateTime.getEpochNanoseconds()));
             if (sameDate && wallClockSign != 0 && epochSign != 0 && wallClockSign != epochSign) {
-                String timeLargestUnit = largerOfTwoTemporalUnits("hour", settings.smallestUnit());
+                String timeLargestUnit = TemporalUnit.larger("hour", settings.smallestUnit());
                 return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
                         startZonedDateTime.getEpochNanoseconds(),
                         endZonedDateTime.getEpochNanoseconds(),
@@ -1112,15 +1112,6 @@ public final class TemporalZonedDateTimePrototype {
                 .orElse(true);
     }
 
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = TemporalUnit.rank(leftUnit);
-        int rightRank = TemporalUnit.rank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
-    }
-
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalZonedDateTime zonedDateTime = checkReceiver(context, thisArg, "microsecond");
         if (zonedDateTime == null) {
@@ -1620,16 +1611,9 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static long unitToNanoseconds(String unit) {
-        return switch (unit) {
-            case "day" -> DAY_NANOSECONDS;
-            case "hour" -> NS_PER_HOUR.longValue();
-            case "minute" -> NS_PER_MINUTE.longValue();
-            case "second" -> NS_PER_SECOND.longValue();
-            case "millisecond" -> NS_PER_MS.longValue();
-            case "microsecond" -> NS_PER_US.longValue();
-            case "nanosecond" -> 1L;
-            default -> 0L;
-        };
+        return TemporalUnit.fromString(unit)
+                .map(TemporalUnit::nanosecondFactorLong)
+                .orElse(0L);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

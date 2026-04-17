@@ -302,6 +302,14 @@ public final class TemporalUtils {
         return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
     }
 
+    /**
+     * Returns true if firstDate surpasses secondDate in the direction indicated by sign.
+     * Positive sign means firstDate is later; negative sign means firstDate is earlier.
+     */
+    public static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
+        return sign * firstDate.compareTo(secondDate) > 0;
+    }
+
     public static int lunisolarLeapMonth(String calendarId, int calendarYear) {
         Integer yearInfo = getLunisolarYearInfo(calendarId, calendarYear);
         if (yearInfo == null) {

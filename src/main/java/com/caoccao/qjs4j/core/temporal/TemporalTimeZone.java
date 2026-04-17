@@ -440,7 +440,7 @@ public final class TemporalTimeZone {
         return sign * (hourValue * SECONDS_PER_HOUR + minuteValue * SECONDS_PER_MINUTE);
     }
 
-    private static TemporalOffsetParts parseOffsetParts(String offsetText) {
+    public static TemporalOffsetParts parseOffsetParts(String offsetText) {
         Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
         if (extendedMatcher.matches()) {
             return new TemporalOffsetParts(

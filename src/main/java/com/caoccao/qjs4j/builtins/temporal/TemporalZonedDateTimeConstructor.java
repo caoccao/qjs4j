@@ -23,19 +23,11 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import java.math.BigInteger;
 import java.time.*;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Implementation of Temporal.ZonedDateTime constructor and static methods.
  */
 public final class TemporalZonedDateTimeConstructor {
-    private static final Pattern OFFSET_BASIC_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})(\\d{2})(?:(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_EXTENDED_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2}):(\\d{2})(?::(\\d{2})(?:\\.(\\d{1,9}))?)?$");
-    private static final Pattern OFFSET_HOUR_ONLY_PATTERN =
-            Pattern.compile("^([+\\-\\u2212])(\\d{2})$");
 
     private TemporalZonedDateTimeConstructor() {
     }
@@ -565,7 +557,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean isMinutePrecisionOffsetIdentifier(String text) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(text);
+        TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(text);
         if (offsetParts == null) {
             return false;
         }
@@ -612,7 +604,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean isValidOffsetString(String offsetText) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
@@ -679,7 +671,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return false;
         }
@@ -737,50 +729,14 @@ public final class TemporalZonedDateTimeConstructor {
         return new TemporalParsedMonthCode(parsedMonthCode.month(), parsedMonthCode.leapMonth());
     }
 
-    private static TemporalOffsetParts parseOffsetParts(String offsetText) {
-        Matcher extendedMatcher = OFFSET_EXTENDED_PATTERN.matcher(offsetText);
-        if (extendedMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    extendedMatcher.group(1),
-                    Integer.parseInt(extendedMatcher.group(2)),
-                    Integer.parseInt(extendedMatcher.group(3)),
-                    extendedMatcher.group(4),
-                    extendedMatcher.group(5));
-        }
-
-        Matcher basicMatcher = OFFSET_BASIC_PATTERN.matcher(offsetText);
-        if (basicMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    basicMatcher.group(1),
-                    Integer.parseInt(basicMatcher.group(2)),
-                    Integer.parseInt(basicMatcher.group(3)),
-                    basicMatcher.group(4),
-                    basicMatcher.group(5));
-        }
-        Matcher hourOnlyMatcher = OFFSET_HOUR_ONLY_PATTERN.matcher(offsetText);
-        if (hourOnlyMatcher.matches()) {
-            return new TemporalOffsetParts(
-                    hourOnlyMatcher.group(1),
-                    Integer.parseInt(hourOnlyMatcher.group(2)),
-                    0,
-                    null,
-                    null);
-        }
-
-        return null;
-    }
-
     private static int parseOffsetSeconds(String offsetText) {
-        TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
+        TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(offsetText);
         if (offsetParts == null) {
             return 0;
         }
-
         String signText = offsetParts.signText();
         int sign = ("-".equals(signText) || "\u2212".equals(signText)) ? -1 : 1;
-        int hours = offsetParts.hours();
-        int minutes = offsetParts.minutes();
-        return sign * (hours * 3600 + minutes * 60);
+        return sign * (offsetParts.hours() * 3600 + offsetParts.minutes() * 60);
     }
 
     private static TemporalZonedDateTimePropertyBagData parseZonedDateTimePropertyBag(JSContext context, JSObject itemObject) {
