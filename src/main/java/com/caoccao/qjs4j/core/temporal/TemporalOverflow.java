@@ -54,6 +54,14 @@ public enum TemporalOverflow {
     }
 
     /**
+     * Returns true if the given overflow string matches "reject".
+     * Convenience method that avoids re-parsing to enum at comparison sites.
+     */
+    public static boolean isReject(String text) {
+        return "reject".equals(text);
+    }
+
+    /**
      * Returns the JS-canonical name (e.g. "constrain").
      */
     public String jsName() {

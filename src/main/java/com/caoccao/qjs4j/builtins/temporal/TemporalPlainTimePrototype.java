@@ -152,72 +152,6 @@ public final class TemporalPlainTimePrototype {
                 false, true);
     }
 
-    private static TemporalRoundSettings getRoundSettings(JSContext context, JSValue roundTo) {
-        long roundingIncrement = 1L;
-        String roundingMode = "halfExpand";
-        String smallestUnitText;
-
-        if (roundTo instanceof JSString unitString) {
-            smallestUnitText = unitString.value();
-        } else if (roundTo instanceof JSObject optionsObject) {
-            // Read and coerce all option properties before algorithmic validation.
-            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
-                    context,
-                    optionsObject,
-                    "roundingIncrement",
-                    1L,
-                    1L,
-                    MAX_ROUNDING_INCREMENT,
-                    "Temporal error: Invalid roundingIncrement option.");
-            if (context.hasPendingException()) {
-                return null;
-            }
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
-            if (context.hasPendingException() || roundingMode == null) {
-                return null;
-            }
-            smallestUnitText = TemporalOptionResolver.getRequiredStringOption(
-                    context,
-                    optionsObject,
-                    "smallestUnit",
-                    "Temporal error: Must specify a roundTo parameter.");
-            if (context.hasPendingException() || smallestUnitText == null) {
-                return null;
-            }
-        } else {
-            context.throwTypeError("Temporal error: roundTo must be an object.");
-            return null;
-        }
-
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingMode);
-            return null;
-        }
-
-        String smallestUnit = canonicalizeDifferenceUnit(smallestUnitText, false);
-        if (smallestUnit == null) {
-            context.throwRangeError("Temporal error: Invalid unit for rounding.");
-            return null;
-        }
-
-        Optional<TemporalUnit> parsedUnit = TemporalUnit.fromString(smallestUnit)
-                .filter(TemporalUnit::isTimeUnit);
-        if (parsedUnit.isPresent()) {
-            long maximumIncrement = switch (parsedUnit.get()) {
-                case HOUR -> 24L;
-                case MINUTE, SECOND -> 60L;
-                case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-                default -> -1L;
-            };
-            if (maximumIncrement > 0 && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
-                context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-                return null;
-            }
-        }
-
-        return new TemporalRoundSettings(smallestUnit, roundingIncrement, TemporalRoundingMode.fromString(roundingMode));
-    }
-
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
@@ -361,7 +295,8 @@ public final class TemporalPlainTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalRoundSettings roundSettings = getRoundSettings(context, args[0]);
+        TemporalRoundSettings roundSettings =
+            TemporalRoundSettings.parse(context, args[0], TemporalUnit.HOUR, TemporalUnit.NANOSECOND);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }

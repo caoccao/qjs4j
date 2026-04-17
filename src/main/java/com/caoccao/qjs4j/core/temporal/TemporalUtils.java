@@ -260,7 +260,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!"constrain".equals(overflow) && !"reject".equals(overflow)) {
+        if (!TemporalOverflow.isValid(overflow)) {
             context.throwRangeError("Temporal error: Invalid overflow option: " + overflow);
             return null;
         }

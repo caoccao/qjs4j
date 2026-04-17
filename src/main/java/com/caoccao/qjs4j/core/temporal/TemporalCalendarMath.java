@@ -85,7 +85,7 @@ public final class TemporalCalendarMath {
 
         IsoCalendarMonth yearAdjustedMonthSlot = findMonthSlotByCode(calendarId, targetYear, baseMonthSlot.monthCode());
         if (yearAdjustedMonthSlot == null && baseMonthSlot.leapMonth()) {
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;
             }
@@ -840,7 +840,7 @@ public final class TemporalCalendarMath {
             if (fallbackIsoDate != null) {
                 return fallbackIsoDate;
             }
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 return null;
             }
             int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(fallbackIsoYear, monthCodeData.month()));
@@ -1003,7 +1003,7 @@ public final class TemporalCalendarMath {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return 0;
         }
-        if ("reject".equals(overflow) && dayOfMonth > daysInMonth) {
+        if (TemporalOverflow.isReject(overflow) && dayOfMonth > daysInMonth) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return 0;
         }
@@ -1040,7 +1040,7 @@ public final class TemporalCalendarMath {
                 return null;
             }
             if (monthNumber > monthSlots.size()) {
-                if (!"reject".equals(overflow) && monthCodeFromProperty == null) {
+                if (!TemporalOverflow.isReject(overflow) && monthCodeFromProperty == null) {
                     monthNumber = monthSlots.size();
                 } else {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -1064,7 +1064,7 @@ public final class TemporalCalendarMath {
                 }
             }
             if (monthSlotFromCode == null) {
-                if (!"reject".equals(overflow) && monthCodeData.leapMonth()) {
+                if (!TemporalOverflow.isReject(overflow) && monthCodeData.leapMonth()) {
                     String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(
                             calendarId,
                             monthCodeFromProperty);
@@ -1122,7 +1122,7 @@ public final class TemporalCalendarMath {
         int searchDay = dayOfMonth;
 
         if (isChineseOrDangiCalendar(calendarId) && monthCodeData.leapMonth()) {
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 IsoDate exactLeapReferenceIsoDate = findReferenceIsoDateExact(
                         calendarId,
                         normalizedMonthCode,
@@ -1148,7 +1148,7 @@ public final class TemporalCalendarMath {
             searchDay = constrainedLeapDay;
         }
 
-        if ("reject".equals(overflow)) {
+        if (TemporalOverflow.isReject(overflow)) {
             IsoDate exactReferenceIsoDate = findReferenceIsoDateExact(
                     calendarId,
                     normalizedMonthCode,

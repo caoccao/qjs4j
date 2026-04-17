@@ -56,6 +56,27 @@ public enum TemporalDisambiguation {
     }
 
     /**
+     * Returns true if the given disambiguation string matches "reject".
+     */
+    public static boolean isReject(String text) {
+        return "reject".equals(text);
+    }
+
+    /**
+     * Returns true if the given disambiguation string matches "earlier".
+     */
+    public static boolean isEarlier(String text) {
+        return "earlier".equals(text);
+    }
+
+    /**
+     * Returns true if the given disambiguation string matches "later".
+     */
+    public static boolean isLater(String text) {
+        return "later".equals(text);
+    }
+
+    /**
      * Returns the JS-canonical name (e.g. "compatible").
      */
     public String jsName() {
