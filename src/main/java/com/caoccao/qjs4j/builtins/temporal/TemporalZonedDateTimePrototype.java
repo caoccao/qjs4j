@@ -990,21 +990,15 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
 
-        if (!"compatible".equals(disambiguation)
-                && !"earlier".equals(disambiguation)
-                && !"later".equals(disambiguation)
-                && !"reject".equals(disambiguation)) {
+        if (!TemporalDisambiguation.isValid(disambiguation)) {
             context.throwRangeError("Temporal error: Invalid disambiguation option.");
             return null;
         }
-        if (!"prefer".equals(offsetOption)
-                && !"use".equals(offsetOption)
-                && !"ignore".equals(offsetOption)
-                && !"reject".equals(offsetOption)) {
+        if (!TemporalOffsetOption.isValid(offsetOption)) {
             context.throwRangeError("Temporal error: Invalid offset option.");
             return null;
         }
-        if (!"constrain".equals(overflow) && !"reject".equals(overflow)) {
+        if (!TemporalOverflow.isValid(overflow)) {
             context.throwRangeError("Temporal error: Invalid overflow option.");
             return null;
         }

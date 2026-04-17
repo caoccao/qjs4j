@@ -436,27 +436,6 @@ public final class TemporalZonedDateTimeConstructor {
         return JSUndefined.INSTANCE;
     }
 
-    private static String getStringOption(
-            JSContext context,
-            JSObject optionsObject,
-            String propertyName,
-            String defaultValue,
-            String[] validValues,
-            String rangeErrorMessage) {
-        String optionValue = TemporalUtils.getStringOption(context, optionsObject, propertyName, defaultValue);
-        if (context.hasPendingException() || optionValue == null) {
-            return null;
-        }
-        for (String validValue : validValues) {
-            if (validValue.equals(optionValue)) {
-                return optionValue;
-            }
-        }
-
-        context.throwRangeError(rangeErrorMessage);
-        return null;
-    }
-
     private static boolean hasOffsetDesignator(String text) {
         int timeSeparatorIndex = findDateTimeSeparatorIndex(text);
         if (timeSeparatorIndex < 0) {
@@ -717,36 +696,30 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
 
-        String disambiguation = getStringOption(
-                context,
-                optionsObject,
-                "disambiguation",
-                "compatible",
-                new String[]{"compatible", "earlier", "later", "reject"},
-                "Temporal error: Invalid disambiguation option.");
+        String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");
         if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
-
-        String offset = getStringOption(
-                context,
-                optionsObject,
-                "offset",
-                "reject",
-                new String[]{"prefer", "use", "ignore", "reject"},
-                "Temporal error: Invalid offset option.");
-        if (context.hasPendingException() || offset == null) {
+        if (!TemporalDisambiguation.isValid(disambiguation)) {
+            context.throwRangeError("Temporal error: Invalid disambiguation option.");
             return null;
         }
 
-        String overflow = getStringOption(
-                context,
-                optionsObject,
-                "overflow",
-                "constrain",
-                new String[]{"constrain", "reject"},
-                "Temporal error: Invalid overflow option.");
+        String offset = TemporalUtils.getStringOption(context, optionsObject, "offset", "reject");
+        if (context.hasPendingException() || offset == null) {
+            return null;
+        }
+        if (!TemporalOffsetOption.isValid(offset)) {
+            context.throwRangeError("Temporal error: Invalid offset option.");
+            return null;
+        }
+
+        String overflow = TemporalUtils.getStringOption(context, optionsObject, "overflow", "constrain");
         if (context.hasPendingException() || overflow == null) {
+            return null;
+        }
+        if (!TemporalOverflow.isValid(overflow)) {
+            context.throwRangeError("Temporal error: Invalid overflow option.");
             return null;
         }
 

@@ -382,10 +382,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
-        if (!"compatible".equals(disambiguation)
-                && !"earlier".equals(disambiguation)
-                && !"later".equals(disambiguation)
-                && !"reject".equals(disambiguation)) {
+        if (!TemporalDisambiguation.isValid(disambiguation)) {
             context.throwRangeError("Temporal error: Invalid disambiguation option.");
             return null;
         }
