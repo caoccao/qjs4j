@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
-import java.util.Optional;
 
 /**
  * Implementation of Temporal.PlainTime prototype methods.
@@ -296,7 +295,7 @@ public final class TemporalPlainTimePrototype {
         }
 
         TemporalRoundSettings roundSettings =
-            TemporalRoundSettings.parse(context, args[0], TemporalUnit.HOUR, TemporalUnit.NANOSECOND);
+                TemporalRoundSettings.parse(context, args[0], TemporalUnit.HOUR, TemporalUnit.NANOSECOND);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }

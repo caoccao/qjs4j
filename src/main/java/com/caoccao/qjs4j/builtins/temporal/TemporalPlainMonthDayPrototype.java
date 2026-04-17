@@ -17,10 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.IsoCalendarDate;
-import com.caoccao.qjs4j.core.temporal.IsoDate;
-import com.caoccao.qjs4j.core.temporal.TemporalParsedMonthCode;
-import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+import com.caoccao.qjs4j.core.temporal.*;
 
 import java.util.Locale;
 
@@ -228,7 +225,7 @@ public final class TemporalPlainMonthDayPrototype {
         IsoDate isoDate = plainMonthDay.getIsoDate();
         boolean includeReferenceYear;
         if ("iso8601".equals(plainMonthDay.getCalendarId())) {
-            includeReferenceYear = "always".equals(calendarNameOption) || "critical".equals(calendarNameOption);
+            includeReferenceYear = TemporalDisplayCalendar.requiresAnnotation(calendarNameOption);
         } else {
             includeReferenceYear = true;
         }

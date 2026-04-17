@@ -295,10 +295,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
-        if (!"auto".equals(calendarNameOption)
-                && !"always".equals(calendarNameOption)
-                && !"never".equals(calendarNameOption)
-                && !"critical".equals(calendarNameOption)) {
+        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
@@ -526,7 +523,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         TemporalRoundSettings roundSettings =
-            TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
+                TemporalRoundSettings.parse(context, args[0], TemporalUnit.DAY, TemporalUnit.NANOSECOND);
         if (context.hasPendingException() || roundSettings == null) {
             return JSUndefined.INSTANCE;
         }

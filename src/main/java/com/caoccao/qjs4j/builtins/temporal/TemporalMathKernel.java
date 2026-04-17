@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.temporal.TemporalRoundingMode;
+import com.caoccao.qjs4j.core.temporal.TemporalUnsignedRoundingMode;
 
 import java.math.BigInteger;
 
@@ -71,18 +72,11 @@ final class TemporalMathKernel {
      */
     static String getUnsignedRoundingMode(String roundingMode, String sign) {
         boolean negativeSign = "negative".equals(sign);
-        return switch (roundingMode) {
-            case "ceil" -> negativeSign ? "zero" : "infinity";
-            case "floor" -> negativeSign ? "infinity" : "zero";
-            case "expand" -> "infinity";
-            case "trunc" -> "zero";
-            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
-            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
-            case "halfExpand" -> "half-infinity";
-            case "halfTrunc" -> "half-zero";
-            case "halfEven" -> "half-even";
-            default -> "half-infinity";
-        };
+        TemporalRoundingMode mode = TemporalRoundingMode.fromString(roundingMode);
+        if (mode == null) {
+            return TemporalUnsignedRoundingMode.HALF_INFINITY.jsName();
+        }
+        return TemporalUnsignedRoundingMode.of(mode, negativeSign).jsName();
     }
 
     static BigInteger roundBigIntegerToIncrementAsIfPositive(

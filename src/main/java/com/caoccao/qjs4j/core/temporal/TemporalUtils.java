@@ -196,10 +196,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!"auto".equals(calendarNameOption)
-                && !"always".equals(calendarNameOption)
-                && !"never".equals(calendarNameOption)
-                && !"critical".equals(calendarNameOption)) {
+        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }

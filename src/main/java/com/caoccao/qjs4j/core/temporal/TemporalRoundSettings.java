@@ -26,13 +26,70 @@ import com.caoccao.qjs4j.core.*;
  */
 public record TemporalRoundSettings(String smallestUnit, long roundingIncrement, TemporalRoundingMode roundingMode) {
 
+    private static String getRequiredStringOption(
+            JSContext context, JSObject optionsObject, String optionName, String missingMessage) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            context.throwRangeError(missingMessage);
+            return null;
+        }
+        JSString optionText = JSTypeConversions.toString(context, optionValue);
+        if (context.hasPendingException() || optionText == null) {
+            return null;
+        }
+        return optionText.value();
+    }
+
+    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return 1L;
+        }
+        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || numericValue == null) {
+            return Long.MIN_VALUE;
+        }
+        double numericRoundingIncrement = numericValue.value();
+        if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return Long.MIN_VALUE;
+        }
+        long integerIncrement = (long) numericRoundingIncrement;
+        if (integerIncrement < 1L || integerIncrement > TemporalConstants.MAX_ROUNDING_INCREMENT) {
+            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
+            return Long.MIN_VALUE;
+        }
+        return integerIncrement;
+    }
+
+    private static String getStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return defaultValue;
+        }
+        JSString optionText = JSTypeConversions.toString(context, optionValue);
+        if (context.hasPendingException() || optionText == null) {
+            return null;
+        }
+        return optionText.value();
+    }
+
     /**
      * Parses round options from a JS value (either a unit string or an options object).
      *
-     * @param context     the JS context
-     * @param roundTo     the raw JS argument (string or options object)
-     * @param allowedMin  the largest allowed unit (e.g. HOUR for PlainTime, DAY for others)
-     * @param allowedMax  the smallest allowed unit (typically NANOSECOND)
+     * @param context    the JS context
+     * @param roundTo    the raw JS argument (string or options object)
+     * @param allowedMin the largest allowed unit (e.g. HOUR for PlainTime, DAY for others)
+     * @param allowedMax the smallest allowed unit (typically NANOSECOND)
      * @return parsed settings, or null if a JS error was thrown
      */
     public static TemporalRoundSettings parse(
@@ -102,62 +159,5 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
         }
 
         return new TemporalRoundSettings(smallestUnit, roundingIncrement, parsedRoundingMode);
-    }
-
-    private static long getRoundingIncrementOption(JSContext context, JSObject optionsObject) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString("roundingIncrement"));
-        if (context.hasPendingException()) {
-            return Long.MIN_VALUE;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return 1L;
-        }
-        JSNumber numericValue = JSTypeConversions.toNumber(context, optionValue);
-        if (context.hasPendingException() || numericValue == null) {
-            return Long.MIN_VALUE;
-        }
-        double numericRoundingIncrement = numericValue.value();
-        if (!Double.isFinite(numericRoundingIncrement) || Double.isNaN(numericRoundingIncrement)) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        long integerIncrement = (long) numericRoundingIncrement;
-        if (integerIncrement < 1L || integerIncrement > TemporalConstants.MAX_ROUNDING_INCREMENT) {
-            context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
-            return Long.MIN_VALUE;
-        }
-        return integerIncrement;
-    }
-
-    private static String getStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
-    }
-
-    private static String getRequiredStringOption(
-            JSContext context, JSObject optionsObject, String optionName, String missingMessage) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            context.throwRangeError(missingMessage);
-            return null;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
     }
 }

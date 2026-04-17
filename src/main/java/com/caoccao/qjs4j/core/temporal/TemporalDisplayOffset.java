@@ -17,52 +17,42 @@
 package com.caoccao.qjs4j.core.temporal;
 
 /**
- * Temporal overflow handling mode enum.
- * <p>
- * Replaces scattered {@code "reject".equals(overflow)} and
- * {@code "constrain".equals(overflow)} string comparisons.
+ * Temporal offset display option enum (auto / never) used by
+ * ZonedDateTime {@code toString()} to control UTC offset rendering.
  */
-public enum TemporalOverflow {
-    CONSTRAIN("constrain"),
-    REJECT("reject");
+public enum TemporalDisplayOffset {
+    AUTO("auto"),
+    NEVER("never");
 
     private final String jsName;
 
-    TemporalOverflow(String jsName) {
+    TemporalDisplayOffset(String jsName) {
         this.jsName = jsName;
     }
 
     /**
-     * Parses a JS overflow string. Returns {@code null} if not recognized.
+     * Parses a JS offset display option. Returns {@code null} if not recognized.
      */
-    public static TemporalOverflow fromString(String text) {
+    public static TemporalDisplayOffset fromString(String text) {
         if (text == null) {
             return null;
         }
         return switch (text) {
-            case "constrain" -> CONSTRAIN;
-            case "reject" -> REJECT;
+            case "auto" -> AUTO;
+            case "never" -> NEVER;
             default -> null;
         };
     }
 
     /**
-     * Returns true if the given overflow string matches "reject".
-     * Convenience method that avoids re-parsing to enum at comparison sites.
-     */
-    public static boolean isReject(String text) {
-        return "reject".equals(text);
-    }
-
-    /**
-     * Checks whether the given string is a valid overflow mode.
+     * Checks whether the given string is a valid offset display option.
      */
     public static boolean isValid(String text) {
         return fromString(text) != null;
     }
 
     /**
-     * Returns the JS-canonical name (e.g. "constrain").
+     * Returns the JS-canonical name (e.g. "auto").
      */
     public String jsName() {
         return jsName;
