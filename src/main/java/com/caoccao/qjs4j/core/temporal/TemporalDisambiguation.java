@@ -17,52 +17,67 @@
 package com.caoccao.qjs4j.core.temporal;
 
 /**
- * Temporal overflow handling mode enum.
- * <p>
- * Replaces scattered {@code "reject".equals(overflow)} and
- * {@code "constrain".equals(overflow)} string comparisons.
+ * Temporal disambiguation mode enum for resolving ambiguous or invalid local times
+ * during timezone conversions.
  */
-public enum TemporalOverflow {
-    CONSTRAIN("constrain"),
+public enum TemporalDisambiguation {
+    COMPATIBLE("compatible"),
+    EARLIER("earlier"),
+    LATER("later"),
     REJECT("reject");
 
     private final String jsName;
 
-    TemporalOverflow(String jsName) {
+    TemporalDisambiguation(String jsName) {
         this.jsName = jsName;
     }
 
     /**
-     * Parses a JS overflow string. Returns {@code null} if not recognized.
+     * Parses a JS disambiguation string. Returns {@code null} if not recognized.
      */
-    public static TemporalOverflow fromString(String text) {
+    public static TemporalDisambiguation fromString(String text) {
         if (text == null) {
             return null;
         }
         return switch (text) {
-            case "constrain" -> CONSTRAIN;
+            case "compatible" -> COMPATIBLE;
+            case "earlier" -> EARLIER;
+            case "later" -> LATER;
             case "reject" -> REJECT;
             default -> null;
         };
     }
 
     /**
-     * Checks whether the given string is a valid overflow mode.
+     * Checks whether the given string is a valid disambiguation mode.
      */
     public static boolean isValid(String text) {
         return fromString(text) != null;
     }
 
     /**
-     * Returns true if the given overflow string matches "reject".
-     * Convenience method that avoids re-parsing to enum at comparison sites.
+     * Returns true if the given disambiguation string matches "reject".
      */
     public static boolean isReject(String text) {
         return "reject".equals(text);
     }
 
     /**
-     * Returns the JS-canonical name (e.g. "constrain").
+     * Returns true if the given disambiguation string matches "earlier".
+     */
+    public static boolean isEarlier(String text) {
+        return "earlier".equals(text);
+    }
+
+    /**
+     * Returns true if the given disambiguation string matches "later".
+     */
+    public static boolean isLater(String text) {
+        return "later".equals(text);
+    }
+
+    /**
+     * Returns the JS-canonical name (e.g. "compatible").
      */
     public String jsName() {
         return jsName;

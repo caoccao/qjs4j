@@ -170,35 +170,6 @@ public final class TemporalPlainYearMonthPrototype {
         return TemporalPlainYearMonthConstructor.createPlainYearMonth(context, resultDate, calendarId);
     }
 
-    private static long applyUnsignedRoundingMode(
-            long roundingFloor,
-            long roundingCeiling,
-            int comparison,
-            boolean evenCardinality,
-            String unsignedRoundingMode) {
-        if ("zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        if (comparison < 0) {
-            return roundingFloor;
-        }
-        if (comparison > 0) {
-            return roundingCeiling;
-        }
-        if ("half-zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("half-infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        if (evenCardinality) {
-            return roundingFloor;
-        }
-        return roundingCeiling;
-    }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth plainYearMonth = checkReceiver(context, thisArg, "calendarId");
@@ -311,7 +282,7 @@ public final class TemporalPlainYearMonthPrototype {
             if (context.hasPendingException() || candidateYearDate == null) {
                 return null;
             }
-            if (isoDateSurpasses(sign, candidateYearDate, secondDate)) {
+            if (TemporalUtils.isoDateSurpasses(sign, candidateYearDate, secondDate)) {
                 break;
             }
             if (doesConceptualYearDateSurpassTarget(
@@ -339,7 +310,7 @@ public final class TemporalPlainYearMonthPrototype {
             if (context.hasPendingException() || candidateMonthDate == null) {
                 return null;
             }
-            if (isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
+            if (TemporalUtils.isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
                 break;
             }
             if (doesConstrainedCalendarDaySurpassTarget(
@@ -372,7 +343,7 @@ public final class TemporalPlainYearMonthPrototype {
                 if (context.hasPendingException() || totalMonthDate == null) {
                     return null;
                 }
-                if (isoDateSurpasses(sign, totalMonthDate, secondDate)) {
+                if (TemporalUtils.isoDateSurpasses(sign, totalMonthDate, secondDate)) {
                     totalMonths -= sign;
                     continue;
                 }
@@ -396,7 +367,7 @@ public final class TemporalPlainYearMonthPrototype {
                 if (context.hasPendingException() || nextTotalMonthDate == null) {
                     return null;
                 }
-                if (isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
+                if (TemporalUtils.isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
                     break;
                 }
                 if (doesConstrainedCalendarDaySurpassTarget(
@@ -603,21 +574,6 @@ public final class TemporalPlainYearMonthPrototype {
                 true, false);
     }
 
-    private static String getUnsignedRoundingMode(String roundingMode, String sign) {
-        boolean negativeSign = "negative".equals(sign);
-        return switch (roundingMode) {
-            case "ceil" -> negativeSign ? "zero" : "infinity";
-            case "floor" -> negativeSign ? "infinity" : "zero";
-            case "expand" -> "infinity";
-            case "trunc" -> "zero";
-            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
-            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
-            case "halfExpand" -> "half-infinity";
-            case "halfTrunc" -> "half-zero";
-            case "halfEven" -> "half-even";
-            default -> "half-infinity";
-        };
-    }
 
     private static IsoDate getYearMonthRoundedDate(
             JSContext context,
@@ -656,9 +612,6 @@ public final class TemporalPlainYearMonthPrototype {
         return differenceEpochDay >= MIN_SUPPORTED_EPOCH_DAY && differenceEpochDay <= MAX_SUPPORTED_EPOCH_DAY;
     }
 
-    private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * firstDate.compareTo(secondDate) > 0;
-    }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainYearMonth plainYearMonth = checkReceiver(context, thisArg, "month");
@@ -898,31 +851,6 @@ public final class TemporalPlainYearMonthPrototype {
         return null;
     }
 
-    private static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
-        long quotient = quantity / increment;
-        long remainder = quantity % increment;
-        String sign = quantity < 0 ? "negative" : "positive";
-        long roundingFloor = Math.abs(quotient);
-        long roundingCeiling = roundingFloor + 1L;
-        int comparison = Integer.compare(Long.compare(Math.abs(remainder * 2L), increment), 0);
-        boolean evenCardinality = Math.floorMod(roundingFloor, 2L) == 0L;
-        String unsignedRoundingMode = getUnsignedRoundingMode(roundingMode, sign);
-        long rounded;
-        if (remainder == 0L) {
-            rounded = roundingFloor;
-        } else {
-            rounded = applyUnsignedRoundingMode(
-                    roundingFloor,
-                    roundingCeiling,
-                    comparison,
-                    evenCardinality,
-                    unsignedRoundingMode);
-        }
-        if ("positive".equals(sign)) {
-            return increment * rounded;
-        }
-        return -increment * rounded;
-    }
 
     private static TemporalDurationYearMonthFields roundRelativeYearMonthDuration(
             JSContext context,
@@ -945,14 +873,14 @@ public final class TemporalPlainYearMonthPrototype {
         long endYears;
         long endMonths;
         if (UNIT_YEAR.equals(differenceSettings.smallestUnit())) {
-            roundingStartValue = roundNumberToIncrement(years, increment, "trunc");
+            roundingStartValue = TemporalMathKernel.roundNumberToIncrement(years, increment, "trunc");
             roundingEndValue = roundingStartValue + increment * sign;
             startYears = roundingStartValue;
             startMonths = 0L;
             endYears = roundingEndValue;
             endMonths = 0L;
         } else {
-            roundingStartValue = roundNumberToIncrement(months, increment, "trunc");
+            roundingStartValue = TemporalMathKernel.roundNumberToIncrement(months, increment, "trunc");
             roundingEndValue = roundingStartValue + increment * sign;
             startYears = years;
             startMonths = roundingStartValue;
@@ -979,7 +907,7 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         String signText = sign < 0L ? "negative" : "positive";
-        String unsignedRoundingMode = getUnsignedRoundingMode(differenceSettings.roundingMode().jsName(), signText);
+        String unsignedRoundingMode = TemporalMathKernel.getUnsignedRoundingMode(differenceSettings.roundingMode().jsName(), signText);
         int comparison = Long.compare(Math.abs(numerator) * 2L, Math.abs(denominator));
         boolean evenCardinality = Math.floorMod(Math.abs(roundingStartValue) / increment, 2L) == 0L;
 
@@ -989,7 +917,7 @@ public final class TemporalPlainYearMonthPrototype {
         } else if (numerator == denominator) {
             roundedUnit = Math.abs(roundingEndValue);
         } else {
-            roundedUnit = applyUnsignedRoundingMode(
+            roundedUnit = TemporalMathKernel.applyUnsignedRoundingMode(
                     Math.abs(roundingStartValue),
                     Math.abs(roundingEndValue),
                     comparison,

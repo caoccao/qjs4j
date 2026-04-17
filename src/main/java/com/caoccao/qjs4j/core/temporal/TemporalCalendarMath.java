@@ -85,7 +85,7 @@ public final class TemporalCalendarMath {
 
         IsoCalendarMonth yearAdjustedMonthSlot = findMonthSlotByCode(calendarId, targetYear, baseMonthSlot.monthCode());
         if (yearAdjustedMonthSlot == null && baseMonthSlot.leapMonth()) {
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;
             }
@@ -457,9 +457,9 @@ public final class TemporalCalendarMath {
     }
 
     private static List<IsoCalendarMonth> getHebrewMonthSlots(int calendarYear) {
-        boolean leapYear = hebrewLeapYear(calendarYear);
-        boolean longHeshvan = hebrewYearLength(calendarYear) % 10L == 5L;
-        boolean shortKislev = hebrewYearLength(calendarYear) % 10L == 3L;
+        boolean leapYear = isHebrewLeapYear(calendarYear);
+        boolean longHeshvan = isHebrewYearLength(calendarYear) % 10L == 5L;
+        boolean shortKislev = isHebrewYearLength(calendarYear) % 10L == 3L;
         List<IsoCalendarMonth> monthSlots = new ArrayList<>();
         int monthNumberInYear = 1;
         monthSlots.add(new IsoCalendarMonth(monthNumberInYear++, false, "M01", 30));
@@ -485,7 +485,7 @@ public final class TemporalCalendarMath {
     private static List<IsoCalendarMonth> getIndianMonthSlots(int calendarYear) {
         List<IsoCalendarMonth> monthSlots = new ArrayList<>();
         int gregorianYear = calendarYear + 78;
-        boolean gregorianLeapYear = IsoDate.isLeapYear(gregorianYear);
+        boolean gregorianLeapYear = isLeapYear(gregorianYear);
         monthSlots.add(new IsoCalendarMonth(1, false, "M01", gregorianLeapYear ? 31 : 30));
         for (int monthNumber = 2; monthNumber <= 6; monthNumber++) {
             monthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), 31));
@@ -637,8 +637,8 @@ public final class TemporalCalendarMath {
         long dayNumber = 1L + 29L * monthsElapsed + Math.floorDiv(hoursElapsed, 24L);
 
         boolean shouldPostpone = conjunctionParts >= 19_440L
-                || (!hebrewLeapYear(hebrewYear) && floorMod(dayNumber, 7L) == 2L && conjunctionParts >= 9_924L)
-                || (hebrewLeapYear(hebrewYear - 1L) && floorMod(dayNumber, 7L) == 1L && conjunctionParts >= 16_789L);
+                || (!isHebrewLeapYear(hebrewYear) && floorMod(dayNumber, 7L) == 2L && conjunctionParts >= 9_924L)
+                || (isHebrewLeapYear(hebrewYear - 1L) && floorMod(dayNumber, 7L) == 1L && conjunctionParts >= 16_789L);
         if (shouldPostpone) {
             dayNumber++;
         }
@@ -648,10 +648,6 @@ public final class TemporalCalendarMath {
             dayNumber++;
         }
         return dayNumber;
-    }
-
-    public static boolean hebrewLeapYear(long hebrewYear) {
-        return floorMod(7L * hebrewYear + 1L, 19L) < 7L;
     }
 
     private static IsoDate hebrewToIsoDate(int hebrewYear, String monthCode, int dayOfMonth) {
@@ -664,10 +660,6 @@ public final class TemporalCalendarMath {
             return null;
         }
         return IsoDate.createFromEpochDay(epochDay);
-    }
-
-    public static long hebrewYearLength(long hebrewYear) {
-        return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
     }
 
     public static boolean inLeapYear(IsoDate isoDate, String calendarId) {
@@ -685,13 +677,13 @@ public final class TemporalCalendarMath {
             return null;
         }
         int gregorianYear = indianYear + 78;
-        int startDay = IsoDate.isLeapYear(gregorianYear) ? 21 : 22;
+        int startDay = isLeapYear(gregorianYear) ? 21 : 22;
         IsoDate yearStartIsoDate = new IsoDate(gregorianYear, 3, startDay);
         long dayOffset = 0L;
         if (monthNumber == 1) {
             dayOffset = dayOfMonth - 1L;
         } else {
-            int chaitraLength = IsoDate.isLeapYear(gregorianYear) ? 31 : 30;
+            int chaitraLength = isLeapYear(gregorianYear) ? 31 : 30;
             dayOffset += chaitraLength;
             if (monthNumber <= 6) {
                 dayOffset += 31L * (monthNumber - 2L);
@@ -710,13 +702,13 @@ public final class TemporalCalendarMath {
 
     private static boolean isCalendarLeapYear(String calendarId, int calendarYear) {
         return switch (calendarId) {
-            case "iso8601", "gregory", "japanese" -> IsoDate.isLeapYear(calendarYear);
-            case "buddhist" -> IsoDate.isLeapYear(calendarYear - 543);
-            case "roc" -> IsoDate.isLeapYear(calendarYear + 1911);
+            case "iso8601", "gregory", "japanese" -> isLeapYear(calendarYear);
+            case "buddhist" -> isLeapYear(calendarYear - 543);
+            case "roc" -> isLeapYear(calendarYear + 1911);
             case "coptic", "ethiopic" -> alexandrianLeapYear(calendarYear);
             case "ethioaa" -> alexandrianLeapYear(calendarYear - 5500);
-            case "hebrew" -> hebrewLeapYear(calendarYear);
-            case "indian" -> IsoDate.isLeapYear(calendarYear + 78);
+            case "hebrew" -> isHebrewLeapYear(calendarYear);
+            case "indian" -> isLeapYear(calendarYear + 78);
             case "islamic-civil" ->
                     islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
             case "islamic-tbla" ->
@@ -736,6 +728,14 @@ public final class TemporalCalendarMath {
         return "chinese".equals(calendarId) || "dangi".equals(calendarId);
     }
 
+    public static boolean isHebrewLeapYear(long hebrewYear) {
+        return floorMod(7L * hebrewYear + 1L, 19L) < 7L;
+    }
+
+    public static long isHebrewYearLength(long hebrewYear) {
+        return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
+    }
+
     private static boolean isKnownUmalquraLeapYear(int islamicYear) {
         for (int leapYear : TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469) {
             if (leapYear == islamicYear) {
@@ -743,6 +743,16 @@ public final class TemporalCalendarMath {
             }
         }
         return false;
+    }
+
+    public static boolean isLeapYear(int year) {
+        if (year % 4 != 0) {
+            return false;
+        }
+        if (year % 100 != 0) {
+            return true;
+        }
+        return year % 400 == 0;
     }
 
     private static boolean isUnsupportedUmalquraYear(int islamicYear) {
@@ -830,7 +840,7 @@ public final class TemporalCalendarMath {
             if (fallbackIsoDate != null) {
                 return fallbackIsoDate;
             }
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 return null;
             }
             int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(fallbackIsoYear, monthCodeData.month()));
@@ -993,7 +1003,7 @@ public final class TemporalCalendarMath {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return 0;
         }
-        if ("reject".equals(overflow) && dayOfMonth > daysInMonth) {
+        if (TemporalOverflow.isReject(overflow) && dayOfMonth > daysInMonth) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return 0;
         }
@@ -1030,7 +1040,7 @@ public final class TemporalCalendarMath {
                 return null;
             }
             if (monthNumber > monthSlots.size()) {
-                if (!"reject".equals(overflow) && monthCodeFromProperty == null) {
+                if (!TemporalOverflow.isReject(overflow) && monthCodeFromProperty == null) {
                     monthNumber = monthSlots.size();
                 } else {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -1054,7 +1064,7 @@ public final class TemporalCalendarMath {
                 }
             }
             if (monthSlotFromCode == null) {
-                if (!"reject".equals(overflow) && monthCodeData.leapMonth()) {
+                if (!TemporalOverflow.isReject(overflow) && monthCodeData.leapMonth()) {
                     String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(
                             calendarId,
                             monthCodeFromProperty);
@@ -1112,7 +1122,7 @@ public final class TemporalCalendarMath {
         int searchDay = dayOfMonth;
 
         if (isChineseOrDangiCalendar(calendarId) && monthCodeData.leapMonth()) {
-            if ("reject".equals(overflow)) {
+            if (TemporalOverflow.isReject(overflow)) {
                 IsoDate exactLeapReferenceIsoDate = findReferenceIsoDateExact(
                         calendarId,
                         normalizedMonthCode,
@@ -1138,7 +1148,7 @@ public final class TemporalCalendarMath {
             searchDay = constrainedLeapDay;
         }
 
-        if ("reject".equals(overflow)) {
+        if (TemporalOverflow.isReject(overflow)) {
             IsoDate exactReferenceIsoDate = findReferenceIsoDateExact(
                     calendarId,
                     normalizedMonthCode,

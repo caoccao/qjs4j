@@ -49,14 +49,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     }
 
     public static int daysInMonth(int year, int month) {
-        if (month == 2 && isLeapYear(year)) {
+        if (month == 2 && TemporalCalendarMath.isLeapYear(year)) {
             return 29;
         }
         return DAYS_IN_MONTH[month];
     }
 
     public static int daysInYear(int year) {
-        return isLeapYear(year) ? 366 : 365;
+        return TemporalCalendarMath.isLeapYear(year) ? 366 : 365;
     }
 
     private static IsoCalendarMonth findMonthSlotByCode(String calendarId, int calendarYear, String monthCode) {
@@ -77,9 +77,9 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     }
 
     private static List<IsoCalendarMonth> getHebrewMonthSlots(int calendarYear) {
-        boolean leapYear = isHebrewLeapYear(calendarYear);
-        boolean longHeshvan = hebrewYearLength(calendarYear) % 10L == 5L;
-        boolean shortKislev = hebrewYearLength(calendarYear) % 10L == 3L;
+        boolean leapYear = TemporalCalendarMath.isHebrewLeapYear(calendarYear);
+        boolean longHeshvan = TemporalCalendarMath.isHebrewYearLength(calendarYear) % 10L == 5L;
+        boolean shortKislev = TemporalCalendarMath.isHebrewYearLength(calendarYear) % 10L == 3L;
         List<IsoCalendarMonth> monthSlots = new ArrayList<>();
         int monthNumberInYear = 1;
         monthSlots.add(new IsoCalendarMonth(monthNumberInYear++, false, "M01", 30));
@@ -105,7 +105,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     private static List<IsoCalendarMonth> getIndianMonthSlots(int calendarYear) {
         List<IsoCalendarMonth> monthSlots = new ArrayList<>();
         int gregorianYear = calendarYear + 78;
-        boolean gregorianLeapYear = IsoDate.isLeapYear(gregorianYear);
+        boolean gregorianLeapYear = TemporalCalendarMath.isLeapYear(gregorianYear);
         monthSlots.add(new IsoCalendarMonth(1, false, "M01", gregorianLeapYear ? 31 : 30));
         for (int monthNumber = 2; monthNumber <= 6; monthNumber++) {
             monthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), 31));
@@ -138,28 +138,6 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             }
         }
         return monthSlots;
-    }
-
-    private static long hebrewElapsedDays(long hebrewYear) {
-        return TemporalCalendarMath.hebrewElapsedDays(hebrewYear);
-    }
-
-    private static long hebrewYearLength(long hebrewYear) {
-        return TemporalCalendarMath.hebrewYearLength(hebrewYear);
-    }
-
-    private static boolean isHebrewLeapYear(long hebrewYear) {
-        return TemporalCalendarMath.hebrewLeapYear(hebrewYear);
-    }
-
-    public static boolean isLeapYear(int year) {
-        if (year % 4 != 0) {
-            return false;
-        }
-        if (year % 100 != 0) {
-            return true;
-        }
-        return year % 400 == 0;
     }
 
     private static int islamicDaysInMonth(int islamicYear, int islamicMonth, long epochDayOffset) {
@@ -297,15 +275,15 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
     private IsoCalendarDate toHebrewCalendarDate() {
         long hebrewAbsoluteDay = toEpochDay() - TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
         long estimatedYear = Math.floorDiv(hebrewAbsoluteDay * 98_496L, 35_975_351L) + 1L;
-        while (hebrewAbsoluteDay < hebrewElapsedDays(estimatedYear)) {
+        while (hebrewAbsoluteDay < TemporalCalendarMath.hebrewElapsedDays(estimatedYear)) {
             estimatedYear--;
         }
-        while (hebrewAbsoluteDay >= hebrewElapsedDays(estimatedYear + 1L)) {
+        while (hebrewAbsoluteDay >= TemporalCalendarMath.hebrewElapsedDays(estimatedYear + 1L)) {
             estimatedYear++;
         }
         int hebrewYear = (int) estimatedYear;
         List<IsoCalendarMonth> monthSlots = getHebrewMonthSlots(hebrewYear);
-        long dayInYear = hebrewAbsoluteDay - hebrewElapsedDays(estimatedYear);
+        long dayInYear = hebrewAbsoluteDay - TemporalCalendarMath.hebrewElapsedDays(estimatedYear);
         for (IsoCalendarMonth monthSlot : monthSlots) {
             if (dayInYear < monthSlot.daysInMonth()) {
                 int dayOfMonth = (int) dayInYear + 1;
@@ -319,7 +297,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     private IsoCalendarDate toIndianCalendarDate() {
         int gregorianYear = year;
-        int startDay = IsoDate.isLeapYear(gregorianYear) ? 21 : 22;
+        int startDay = TemporalCalendarMath.isLeapYear(gregorianYear) ? 21 : 22;
         IsoDate yearStartIsoDate = new IsoDate(gregorianYear, 3, startDay);
         long dayDifference = toEpochDay() - yearStartIsoDate.toEpochDay();
         int indianYear;
@@ -327,7 +305,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             indianYear = gregorianYear - 78;
         } else {
             gregorianYear--;
-            startDay = IsoDate.isLeapYear(gregorianYear) ? 21 : 22;
+            startDay = TemporalCalendarMath.isLeapYear(gregorianYear) ? 21 : 22;
             yearStartIsoDate = new IsoDate(gregorianYear, 3, startDay);
             dayDifference = toEpochDay() - yearStartIsoDate.toEpochDay();
             indianYear = gregorianYear - 78;

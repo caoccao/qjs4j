@@ -67,6 +67,14 @@ public enum TemporalUnit {
     }
 
     /**
+     * Returns the larger of two unit strings (smaller ordinal = larger unit).
+     * If both strings are invalid, returns the left unit.
+     */
+    public static String larger(String leftUnit, String rightUnit) {
+        return rank(leftUnit) > rank(rightUnit) ? rightUnit : leftUnit;
+    }
+
+    /**
      * Returns the ordinal rank for a unit string, or {@code values().length} if unrecognized.
      * Suitable for comparison: smaller ordinal = larger unit.
      */

@@ -153,32 +153,6 @@ public final class TemporalPlainDatePrototype {
                 newDays);
     }
 
-    private static long applyUnsignedRoundingMode(
-            long roundingFloor,
-            long roundingCeiling,
-            int comparison,
-            boolean evenCardinality,
-            String unsignedRoundingMode) {
-        if ("zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        if (comparison < 0) {
-            return roundingFloor;
-        }
-        if (comparison > 0) {
-            return roundingCeiling;
-        }
-        if ("half-zero".equals(unsignedRoundingMode)) {
-            return roundingFloor;
-        }
-        if ("half-infinity".equals(unsignedRoundingMode)) {
-            return roundingCeiling;
-        }
-        return evenCardinality ? roundingFloor : roundingCeiling;
-    }
 
     private static TemporalYearMonthBalance balanceIsoYearMonth(long year, long month) {
         long monthIndex = month - 1;
@@ -290,7 +264,7 @@ public final class TemporalPlainDatePrototype {
                 if (context.hasPendingException() || candidateYearDate == null) {
                     return null;
                 }
-                if (isoDateSurpasses(sign, candidateYearDate, secondDate)) {
+                if (TemporalUtils.isoDateSurpasses(sign, candidateYearDate, secondDate)) {
                     break;
                 }
                 if (doesConceptualYearDateSurpassSecondDate(
@@ -319,7 +293,7 @@ public final class TemporalPlainDatePrototype {
                 if (context.hasPendingException() || candidateMonthDate == null) {
                     return null;
                 }
-                if (isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
+                if (TemporalUtils.isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
                     break;
                 }
                 if (doesConstrainedCalendarDaySurpassSecondDate(
@@ -352,7 +326,7 @@ public final class TemporalPlainDatePrototype {
                     if (context.hasPendingException() || totalMonthDate == null) {
                         return null;
                     }
-                    if (isoDateSurpasses(sign, totalMonthDate, secondDate)) {
+                    if (TemporalUtils.isoDateSurpasses(sign, totalMonthDate, secondDate)) {
                         totalMonths -= sign;
                         continue;
                     }
@@ -377,7 +351,7 @@ public final class TemporalPlainDatePrototype {
                     if (context.hasPendingException() || nextTotalMonthDate == null) {
                         return null;
                     }
-                    if (isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
+                    if (TemporalUtils.isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
                         break;
                     }
                     if (doesConstrainedCalendarDaySurpassSecondDate(
@@ -738,21 +712,6 @@ public final class TemporalPlainDatePrototype {
                 true, false);
     }
 
-    private static String getUnsignedRoundingMode(String roundingMode, String sign) {
-        boolean negativeSign = "negative".equals(sign);
-        return switch (roundingMode) {
-            case "ceil" -> negativeSign ? "zero" : "infinity";
-            case "floor" -> negativeSign ? "infinity" : "zero";
-            case "expand" -> "infinity";
-            case "trunc" -> "zero";
-            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
-            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
-            case "halfExpand" -> "half-infinity";
-            case "halfTrunc" -> "half-zero";
-            case "halfEven" -> "half-even";
-            default -> "half-infinity";
-        };
-    }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "inLeapYear");
@@ -781,18 +740,6 @@ public final class TemporalPlainDatePrototype {
         return false;
     }
 
-    private static boolean isoDateSurpasses(int sign, IsoDate firstDate, IsoDate secondDate) {
-        return sign * firstDate.compareTo(secondDate) > 0;
-    }
-
-    private static String largerOfTwoTemporalUnits(String leftUnit, String rightUnit) {
-        int leftRank = TemporalUnit.rank(leftUnit);
-        int rightRank = TemporalUnit.rank(rightUnit);
-        if (leftRank > rightRank) {
-            return rightUnit;
-        }
-        return leftUnit;
-    }
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "month");
@@ -889,13 +836,13 @@ public final class TemporalPlainDatePrototype {
         TemporalDateDurationFields startDuration;
         TemporalDateDurationFields endDuration;
         if (UNIT_YEAR.equals(smallestUnit)) {
-            long roundedYears = roundNumberToIncrement(duration.years(), increment, "trunc");
+            long roundedYears = TemporalMathKernel.roundNumberToIncrement(duration.years(), increment, "trunc");
             roundingStartValue = roundedYears;
             roundingEndValue = roundedYears + increment * sign;
             startDuration = new TemporalDateDurationFields(roundedYears, 0, 0, 0);
             endDuration = new TemporalDateDurationFields(roundingEndValue, 0, 0, 0);
         } else if (UNIT_MONTH.equals(smallestUnit)) {
-            long roundedMonths = roundNumberToIncrement(duration.months(), increment, "trunc");
+            long roundedMonths = TemporalMathKernel.roundNumberToIncrement(duration.months(), increment, "trunc");
             roundingStartValue = roundedMonths;
             roundingEndValue = roundedMonths + increment * sign;
             startDuration = adjustDateDurationRecord(duration, 0, 0L, roundedMonths);
@@ -917,13 +864,13 @@ public final class TemporalPlainDatePrototype {
             if (context.hasPendingException() || weekDifference == null) {
                 return null;
             }
-            long roundedWeeks = roundNumberToIncrement(duration.weeks() + weekDifference.weeks(), increment, "trunc");
+            long roundedWeeks = TemporalMathKernel.roundNumberToIncrement(duration.weeks() + weekDifference.weeks(), increment, "trunc");
             roundingStartValue = roundedWeeks;
             roundingEndValue = roundedWeeks + increment * sign;
             startDuration = adjustDateDurationRecord(duration, 0, roundedWeeks, null);
             endDuration = adjustDateDurationRecord(duration, 0, roundingEndValue, null);
         } else {
-            long roundedDays = roundNumberToIncrement(duration.days(), increment, "trunc");
+            long roundedDays = TemporalMathKernel.roundNumberToIncrement(duration.days(), increment, "trunc");
             roundingStartValue = roundedDays;
             roundingEndValue = roundedDays + increment * sign;
             startDuration = adjustDateDurationRecord(duration, roundedDays, null, null);
@@ -947,7 +894,7 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
 
-        String unsignedRoundingMode = getUnsignedRoundingMode(
+        String unsignedRoundingMode = TemporalMathKernel.getUnsignedRoundingMode(
                 settings.roundingMode().jsName(),
                 sign < 0 ? "negative" : "positive");
         int comparison = BigInteger.valueOf(Math.abs(numerator)).shiftLeft(1)
@@ -960,7 +907,7 @@ public final class TemporalPlainDatePrototype {
         } else if (numerator == denominator) {
             roundedUnit = Math.abs(roundingEndValue);
         } else {
-            roundedUnit = applyUnsignedRoundingMode(
+            roundedUnit = TemporalMathKernel.applyUnsignedRoundingMode(
                     Math.abs(roundingStartValue),
                     Math.abs(roundingEndValue),
                     roundingComparison,
@@ -979,7 +926,7 @@ public final class TemporalPlainDatePrototype {
             long destinationEpochDay,
             TemporalDifferenceSettings settings) {
         long originalDays = duration.days();
-        long roundedDays = roundNumberToIncrement(originalDays, settings.roundingIncrement(), settings.roundingMode().jsName());
+        long roundedDays = TemporalMathKernel.roundNumberToIncrement(originalDays, settings.roundingIncrement(), settings.roundingMode().jsName());
         long dayDelta = roundedDays - originalDays;
         int durationSign = Long.compare(originalDays, 0);
         int deltaSign = Long.compare(dayDelta, 0);
@@ -1097,28 +1044,6 @@ public final class TemporalPlainDatePrototype {
         return null;
     }
 
-    private static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
-        long quotient = quantity / increment;
-        long remainder = quantity % increment;
-        String sign = quantity < 0 ? "negative" : "positive";
-        long roundingFloor = Math.abs(quotient);
-        long roundingCeiling = roundingFloor + 1L;
-        int comparison = Integer.compare(Long.compare(Math.abs(remainder * 2L), increment), 0);
-        boolean evenCardinality = Math.floorMod(roundingFloor, 2L) == 0L;
-        String unsignedRoundingMode = getUnsignedRoundingMode(roundingMode, sign);
-        long rounded;
-        if (remainder == 0L) {
-            rounded = roundingFloor;
-        } else {
-            rounded = applyUnsignedRoundingMode(
-                    roundingFloor,
-                    roundingCeiling,
-                    comparison,
-                    evenCardinality,
-                    unsignedRoundingMode);
-        }
-        return "positive".equals(sign) ? increment * rounded : -increment * rounded;
-    }
 
     private static TemporalDateDurationFields roundRelativeDurationDate(
             JSContext context,
@@ -1146,7 +1071,7 @@ public final class TemporalPlainDatePrototype {
         }
         TemporalDateDurationFields roundedDuration = nudgeResult.duration();
         if (nudgeResult.didExpandCalendarUnit() && !UNIT_WEEK.equals(settings.smallestUnit())) {
-            String bubbleSmallestUnit = largerOfTwoTemporalUnits(settings.smallestUnit(), UNIT_DAY);
+            String bubbleSmallestUnit = TemporalUnit.larger(settings.smallestUnit(), UNIT_DAY);
             roundedDuration = bubbleRelativeDuration(
                     context,
                     sign,

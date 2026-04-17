@@ -24,6 +24,36 @@ final class TemporalMathKernel {
     private TemporalMathKernel() {
     }
 
+    /**
+     * Selects floor or ceiling based on an unsigned rounding mode string.
+     */
+    static long applyUnsignedRoundingMode(
+            long roundingFloor,
+            long roundingCeiling,
+            int comparison,
+            boolean evenCardinality,
+            String unsignedRoundingMode) {
+        if ("zero".equals(unsignedRoundingMode)) {
+            return roundingFloor;
+        }
+        if ("infinity".equals(unsignedRoundingMode)) {
+            return roundingCeiling;
+        }
+        if (comparison < 0) {
+            return roundingFloor;
+        }
+        if (comparison > 0) {
+            return roundingCeiling;
+        }
+        if ("half-zero".equals(unsignedRoundingMode)) {
+            return roundingFloor;
+        }
+        if ("half-infinity".equals(unsignedRoundingMode)) {
+            return roundingCeiling;
+        }
+        return evenCardinality ? roundingFloor : roundingCeiling;
+    }
+
     static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
         BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
         BigInteger quotient = quotientAndRemainder[0];
@@ -33,6 +63,26 @@ final class TemporalMathKernel {
             remainder = remainder.add(divisor);
         }
         return new BigInteger[]{quotient, remainder};
+    }
+
+    /**
+     * Maps a signed rounding mode to an unsigned rounding mode string given the sign.
+     * Used by long-based increment rounding (roundNumberToIncrement).
+     */
+    static String getUnsignedRoundingMode(String roundingMode, String sign) {
+        boolean negativeSign = "negative".equals(sign);
+        return switch (roundingMode) {
+            case "ceil" -> negativeSign ? "zero" : "infinity";
+            case "floor" -> negativeSign ? "infinity" : "zero";
+            case "expand" -> "infinity";
+            case "trunc" -> "zero";
+            case "halfCeil" -> negativeSign ? "half-zero" : "half-infinity";
+            case "halfFloor" -> negativeSign ? "half-infinity" : "half-zero";
+            case "halfExpand" -> "half-infinity";
+            case "halfTrunc" -> "half-zero";
+            case "halfEven" -> "half-even";
+            default -> "half-infinity";
+        };
     }
 
     static BigInteger roundBigIntegerToIncrementAsIfPositive(
@@ -142,5 +192,31 @@ final class TemporalMathKernel {
                 }
             }
         };
+    }
+
+    /**
+     * Rounds a signed long to the nearest multiple of increment using the given rounding mode.
+     */
+    static long roundNumberToIncrement(long quantity, long increment, String roundingMode) {
+        long quotient = quantity / increment;
+        long remainder = quantity % increment;
+        String sign = quantity < 0 ? "negative" : "positive";
+        long roundingFloor = Math.abs(quotient);
+        long roundingCeiling = roundingFloor + 1L;
+        int comparison = Integer.compare(Long.compare(Math.abs(remainder * 2L), increment), 0);
+        boolean evenCardinality = Math.floorMod(roundingFloor, 2L) == 0L;
+        String unsignedRoundingMode = getUnsignedRoundingMode(roundingMode, sign);
+        long rounded;
+        if (remainder == 0L) {
+            rounded = roundingFloor;
+        } else {
+            rounded = applyUnsignedRoundingMode(
+                    roundingFloor,
+                    roundingCeiling,
+                    comparison,
+                    evenCardinality,
+                    unsignedRoundingMode);
+        }
+        return "positive".equals(sign) ? increment * rounded : -increment * rounded;
     }
 }
