@@ -435,7 +435,7 @@ public final class TemporalPlainDateTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
             return createPlainDateTime(context, localDateTime, zonedDateTime.getCalendarId());

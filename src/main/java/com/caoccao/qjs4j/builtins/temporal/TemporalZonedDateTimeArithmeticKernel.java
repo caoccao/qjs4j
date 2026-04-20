@@ -38,7 +38,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
                 || durationRecord.months() != 0
                 || durationRecord.weeks() != 0
                 || durationRecord.days() != 0) {
-            IsoDateTime localDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
             TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
@@ -69,9 +69,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
 
             IsoDateTime addedDateTime = new IsoDateTime(addedDate, localDateTime.time());
             try {
-                intermediateEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                        addedDateTime,
-                        zonedDateTime.getTimeZoneId());
+                intermediateEpochNanoseconds = addedDateTime.toEpochNs(zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return null;

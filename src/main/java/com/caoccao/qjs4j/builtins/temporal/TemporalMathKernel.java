@@ -76,7 +76,7 @@ final class TemporalMathKernel {
         if (mode == null) {
             return TemporalUnsignedRoundingMode.HALF_INFINITY.jsName();
         }
-        return TemporalUnsignedRoundingMode.of(mode, negativeSign).jsName();
+        return mode.toUnsigned(negativeSign).jsName();
     }
 
     static BigInteger roundBigIntegerToIncrementAsIfPositive(

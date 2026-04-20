@@ -62,7 +62,7 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
         try {
-            return TemporalTimeZone.localDateTimeToEpochNs(new IsoDateTime(isoDate, isoTime), timeZoneId, disambiguation);
+            return new IsoDateTime(isoDate, isoTime).toEpochNs(timeZoneId, disambiguation);
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;

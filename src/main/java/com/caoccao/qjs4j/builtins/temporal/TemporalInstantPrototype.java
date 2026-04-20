@@ -169,10 +169,10 @@ public final class TemporalInstantPrototype {
         IsoDateTime isoDateTime;
         String zoneSuffix;
         if (timeZoneId == null) {
-            isoDateTime = TemporalTimeZone.epochNsToUtcDateTime(roundedEpochNanoseconds);
+            isoDateTime = IsoDateTime.createByEpochNs(roundedEpochNanoseconds);
             zoneSuffix = "Z";
         } else {
-            isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(roundedEpochNanoseconds, timeZoneId);
+            isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(roundedEpochNanoseconds, timeZoneId);
             int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(roundedEpochNanoseconds, timeZoneId);
             zoneSuffix = TemporalTimeZone.formatOffsetRoundedToMinute(offsetSeconds);
         }

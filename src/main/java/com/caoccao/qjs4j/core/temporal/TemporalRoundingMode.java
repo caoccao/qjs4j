@@ -87,4 +87,20 @@ public enum TemporalRoundingMode {
             default -> this;
         };
     }
+
+    public TemporalUnsignedRoundingMode toUnsigned(boolean negativeSign) {
+        return switch (this) {
+            case CEIL -> negativeSign ? TemporalUnsignedRoundingMode.ZERO : TemporalUnsignedRoundingMode.INFINITY;
+            case FLOOR -> negativeSign ? TemporalUnsignedRoundingMode.INFINITY : TemporalUnsignedRoundingMode.ZERO;
+            case EXPAND -> TemporalUnsignedRoundingMode.INFINITY;
+            case TRUNC -> TemporalUnsignedRoundingMode.ZERO;
+            case HALF_CEIL ->
+                    negativeSign ? TemporalUnsignedRoundingMode.HALF_ZERO : TemporalUnsignedRoundingMode.HALF_INFINITY;
+            case HALF_FLOOR ->
+                    negativeSign ? TemporalUnsignedRoundingMode.HALF_INFINITY : TemporalUnsignedRoundingMode.HALF_ZERO;
+            case HALF_EXPAND -> TemporalUnsignedRoundingMode.HALF_INFINITY;
+            case HALF_TRUNC -> TemporalUnsignedRoundingMode.HALF_ZERO;
+            default -> TemporalUnsignedRoundingMode.HALF_EVEN;
+        };
+    }
 }

@@ -789,8 +789,7 @@ public final class TemporalPlainDateTimePrototype {
 
         BigInteger epochNanoseconds;
         try {
-            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    plainDateTime.getIsoDateTime(),
+            epochNanoseconds = plainDateTime.getIsoDateTime().toEpochNs(
                     timeZoneId,
                     disambiguation);
         } catch (DateTimeException dateTimeException) {

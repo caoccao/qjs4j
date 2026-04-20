@@ -1322,64 +1322,6 @@ public final class TemporalParser {
         return parsedIsoTime;
     }
 
-    IsoTime parseTime(JSContext context) {
-        int hour = parseTwoDigits(context, "hour");
-        if (context.hasPendingException()) {
-            return null;
-        }
-        boolean hasSep = position < input.length() && input.charAt(position) == ':';
-        if (hasSep) {
-            position++;
-        }
-        int minute = 0;
-        int second = 0;
-        int millisecond = 0;
-        int microsecond = 0;
-        int nanosecond = 0;
-
-        if (position < input.length() && Character.isDigit(input.charAt(position))) {
-            minute = parseTwoDigits(context, "minute");
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (hasSep && position < input.length() && input.charAt(position) == ':') {
-                position++;
-            }
-            if (position < input.length() && Character.isDigit(input.charAt(position))) {
-                second = parseTwoDigits(context, "second");
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                // Parse fractional seconds
-                if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
-                    position++;
-                    int fracStart = position;
-                    while (position < input.length() && Character.isDigit(input.charAt(position))) {
-                        position++;
-                    }
-                    String fracStr = input.substring(fracStart, position);
-                    // Pad to 9 digits
-                    while (fracStr.length() < 9) {
-                        fracStr += "0";
-                    }
-                    if (fracStr.length() > 9) {
-                        fracStr = fracStr.substring(0, 9);
-                    }
-                    millisecond = Integer.parseInt(fracStr.substring(0, 3));
-                    microsecond = Integer.parseInt(fracStr.substring(3, 6));
-                    nanosecond = Integer.parseInt(fracStr.substring(6, 9));
-                }
-            }
-        }
-
-        IsoTime parsedIsoTime = new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
-        if (!parsedIsoTime.isValid()) {
-            context.throwRangeError("Temporal error: Invalid time");
-            return null;
-        }
-        return parsedIsoTime;
-    }
-
     private int parseTwoDigitNumber(String value, int index) {
         return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
     }

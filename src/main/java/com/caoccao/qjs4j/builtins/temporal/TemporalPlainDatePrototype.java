@@ -1171,9 +1171,7 @@ public final class TemporalPlainDatePrototype {
         BigInteger epochNanoseconds;
         try {
             if (hasPlainTimeArgument) {
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                        new IsoDateTime(isoDate, isoTime),
-                        timeZoneId);
+                epochNanoseconds = new IsoDateTime(isoDate, isoTime).toEpochNs(timeZoneId);
             } else {
                 epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(isoDate, timeZoneId);
             }

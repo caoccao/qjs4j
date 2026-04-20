@@ -86,8 +86,7 @@ public final class TemporalDurationConstructor {
                     .plusDays(durationRecord.days());
             IsoDate endIsoDate = new IsoDate(endDate.getYear(), endDate.getMonthValue(), endDate.getDayOfMonth());
             IsoDateTime endDateTime = new IsoDateTime(endIsoDate, startTime);
-            BigInteger endEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    endDateTime,
+            BigInteger endEpochNanoseconds = endDateTime.toEpochNs(
                     timeZoneId,
                     "compatible",
                     preferredOffsetSeconds);
@@ -928,7 +927,7 @@ public final class TemporalDurationConstructor {
                 epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, relativeTime, offsetSeconds);
                 referenceOffsetSeconds = offsetSeconds;
             } else {
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(relativeDateTime, normalizedTimeZoneId);
+                epochNanoseconds = relativeDateTime.toEpochNs(normalizedTimeZoneId);
                 referenceOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, normalizedTimeZoneId);
             }
         }
@@ -1006,7 +1005,7 @@ public final class TemporalDurationConstructor {
             int zoneOffsetSeconds;
             if (offsetText == null && !offsetTimeZoneIdentifier) {
                 IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
+                epochNanoseconds = parsedIsoDateTime.toEpochNs(timeZoneId, "compatible");
                 try {
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
                 } catch (DateTimeException invalidTimeZoneException) {
@@ -1052,7 +1051,7 @@ public final class TemporalDurationConstructor {
                     epochNanoseconds = selectedEpochNanoseconds;
                     zoneOffsetSeconds = selectedOffsetSeconds;
                 } else {
-                    epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
+                    epochNanoseconds = parsedIsoDateTime.toEpochNs(timeZoneId, "compatible");
                     try {
                         zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
                     } catch (DateTimeException invalidTimeZoneException) {
@@ -1134,7 +1133,7 @@ public final class TemporalDurationConstructor {
                     null);
         }
         if (relativeToValue instanceof JSTemporalZonedDateTime zonedDateTime) {
-            IsoDateTime relativeDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+            IsoDateTime relativeDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
             int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(

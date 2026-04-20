@@ -20,27 +20,29 @@ import java.util.Optional;
 
 /**
  * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
- * Ordinal values provide a natural ordering where smaller ordinal = larger unit.
  * <p>
  * Replaces duplicated {@code temporalUnitRank()}, {@code canonicalizeDifferenceUnit()},
  * {@code canonicalizeTemporalUnit()}, and {@code UNIT_*} string constants.
  */
 public enum TemporalUnit {
-    YEAR("year"),
-    MONTH("month"),
-    WEEK("week"),
-    DAY("day"),
-    HOUR("hour"),
-    MINUTE("minute"),
-    SECOND("second"),
-    MILLISECOND("millisecond"),
-    MICROSECOND("microsecond"),
-    NANOSECOND("nanosecond");
+    YEAR("year", 0),
+    MONTH("month", 1),
+    WEEK("week", 2),
+    DAY("day", 3),
+    HOUR("hour", 4),
+    MINUTE("minute", 5),
+    SECOND("second", 6),
+    MILLISECOND("millisecond", 7),
+    MICROSECOND("microsecond", 8),
+    NANOSECOND("nanosecond", 9);
 
+    private static final int UNKNOWN_RANK = 10;
     private final String jsName;
+    private final int rank;
 
-    TemporalUnit(String jsName) {
+    TemporalUnit(String jsName, int rank) {
         this.jsName = jsName;
+        this.rank = rank;
     }
 
     /**
@@ -67,7 +69,7 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the larger of two unit strings (smaller ordinal = larger unit).
+     * Returns the larger of two unit strings (smaller rank = larger unit).
      * If both strings are invalid, returns the left unit.
      */
     public static String larger(String leftUnit, String rightUnit) {
@@ -75,41 +77,41 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the ordinal rank for a unit string, or {@code values().length} if unrecognized.
-     * Suitable for comparison: smaller ordinal = larger unit.
+     * Returns the rank for a unit string, or {@code UNKNOWN_RANK} if unrecognized.
+     * Suitable for comparison: smaller rank = larger unit.
      */
     public static int rank(String unitText) {
         return fromString(unitText)
-                .map(Enum::ordinal)
-                .orElse(values().length);
+                .map(unit -> unit.rank)
+                .orElse(UNKNOWN_RANK);
     }
 
     /**
      * Returns true for YEAR, MONTH, WEEK, DAY.
      */
     public boolean isDateUnit() {
-        return ordinal() <= DAY.ordinal();
+        return rank <= DAY.rank;
     }
 
     /**
      * Returns true if this unit is strictly larger than the other unit.
      */
     public boolean isLargerThan(TemporalUnit other) {
-        return this.ordinal() < other.ordinal();
+        return rank < other.rank;
     }
 
     /**
      * Returns true if this unit is smaller than (or equal to) the other unit.
      */
     public boolean isSmallerOrEqual(TemporalUnit other) {
-        return this.ordinal() >= other.ordinal();
+        return rank >= other.rank;
     }
 
     /**
      * Returns true for HOUR through NANOSECOND.
      */
     public boolean isTimeUnit() {
-        return ordinal() >= HOUR.ordinal();
+        return rank >= HOUR.rank;
     }
 
     /**
@@ -136,11 +138,15 @@ public enum TemporalUnit {
         };
     }
 
+    public int rank() {
+        return rank;
+    }
+
     /**
      * Returns true for YEAR, MONTH, WEEK (units that require a relativeTo argument).
      */
     public boolean requiresRelativeTo() {
-        return ordinal() <= WEEK.ordinal();
+        return rank <= WEEK.rank;
     }
 
     /**
