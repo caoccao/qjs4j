@@ -25,11 +25,11 @@ import java.math.BigInteger;
  * ISO 8601 string parser for Temporal types.
  */
 public final class TemporalParser {
-    private static final BigInteger BILLION = TemporalConstants.BI_BILLION;
-    private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
-    private static final BigInteger NS_PER_MINUTE = TemporalConstants.BI_MINUTE_NANOSECONDS;
-    private static final BigInteger NS_PER_SECOND = TemporalConstants.BI_SECOND_NANOSECONDS;
-
+    private static final long NANOSECONDS_PER_HOUR = 3_600_000_000_000L;
+    private static final long NANOSECONDS_PER_MICROSECOND = 1_000L;
+    private static final long NANOSECONDS_PER_MILLISECOND = 1_000_000L;
+    private static final long NANOSECONDS_PER_MINUTE = 60_000_000_000L;
+    private static final long NANOSECONDS_PER_SECOND = 1_000_000_000L;
     private final String input;
     private int position;
 
@@ -38,22 +38,15 @@ public final class TemporalParser {
         this.position = 0;
     }
 
-    private static long[] decomposeTimeFraction(BigInteger fractionalNanoseconds) {
-        BigInteger[] minuteDivision = fractionalNanoseconds.divideAndRemainder(BigInteger.valueOf(60_000_000_000L));
-        long minutePortion = minuteDivision[0].longValue();
-        BigInteger remainingAfterMinutes = minuteDivision[1];
-
-        BigInteger[] secondDivision = remainingAfterMinutes.divideAndRemainder(BigInteger.valueOf(1_000_000_000L));
-        long secondPortion = secondDivision[0].longValue();
-        BigInteger remainingAfterSeconds = secondDivision[1];
-
-        BigInteger[] millisecondDivision = remainingAfterSeconds.divideAndRemainder(BigInteger.valueOf(1_000_000L));
-        long millisecondPortion = millisecondDivision[0].longValue();
-        BigInteger remainingAfterMilliseconds = millisecondDivision[1];
-
-        BigInteger[] microsecondDivision = remainingAfterMilliseconds.divideAndRemainder(BigInteger.valueOf(1_000L));
-        long microsecondPortion = microsecondDivision[0].longValue();
-        long nanosecondPortion = microsecondDivision[1].longValue();
+    private static long[] decomposeTimeFraction(long fractionalNanoseconds) {
+        long minutePortion = fractionalNanoseconds / NANOSECONDS_PER_MINUTE;
+        long remainingAfterMinutes = fractionalNanoseconds % NANOSECONDS_PER_MINUTE;
+        long secondPortion = remainingAfterMinutes / NANOSECONDS_PER_SECOND;
+        long remainingAfterSeconds = remainingAfterMinutes % NANOSECONDS_PER_SECOND;
+        long millisecondPortion = remainingAfterSeconds / NANOSECONDS_PER_MILLISECOND;
+        long remainingAfterMilliseconds = remainingAfterSeconds % NANOSECONDS_PER_MILLISECOND;
+        long microsecondPortion = remainingAfterMilliseconds / NANOSECONDS_PER_MICROSECOND;
+        long nanosecondPortion = remainingAfterMilliseconds % NANOSECONDS_PER_MICROSECOND;
 
         return new long[]{
                 minutePortion,
@@ -64,55 +57,12 @@ public final class TemporalParser {
         };
     }
 
-    private static String firstCalendarAnnotation(String text) {
-        int annotationStart = text.indexOf('[');
-        while (annotationStart >= 0) {
-            int annotationEnd = text.indexOf(']', annotationStart);
-            if (annotationEnd <= annotationStart) {
-                return null;
-            }
-            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
-            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
-                annotationContent = annotationContent.substring(1);
-            }
-            int equalSignIndex = annotationContent.indexOf('=');
-            if (equalSignIndex > 0) {
-                String annotationKey = annotationContent.substring(0, equalSignIndex);
-                if ("u-ca".equals(annotationKey)) {
-                    return annotationContent.substring(equalSignIndex + 1);
-                }
-            }
-            annotationStart = text.indexOf('[', annotationEnd + 1);
-        }
-        return null;
-    }
-
-    private static String firstTimeZoneAnnotation(String text) {
-        int annotationStart = text.indexOf('[');
-        while (annotationStart >= 0) {
-            int annotationEnd = text.indexOf(']', annotationStart);
-            if (annotationEnd <= annotationStart) {
-                return null;
-            }
-            String annotationContent = text.substring(annotationStart + 1, annotationEnd);
-            if (!annotationContent.isEmpty() && annotationContent.charAt(0) == '!') {
-                annotationContent = annotationContent.substring(1);
-            }
-            int equalSignIndex = annotationContent.indexOf('=');
-            if (equalSignIndex < 0) {
-                return annotationContent;
-            }
-            annotationStart = text.indexOf('[', annotationEnd + 1);
-        }
-        return null;
-    }
-
     private static boolean isAmbiguousFourDigitTime(String value) {
         if (value.length() != 4
-                || !Character.isDigit(value.charAt(0))
-                || !Character.isDigit(value.charAt(1))
-                || !Character.isDigit(value.charAt(2))
-                || !Character.isDigit(value.charAt(3))) {
+                || !isAsciiDigit(value.charAt(0))
+                || !isAsciiDigit(value.charAt(1))
+                || !isAsciiDigit(value.charAt(2))
+                || !isAsciiDigit(value.charAt(3))) {
             return false;
         }
         int month = parseFixedTwoDigits(value, 0);
@@ -122,12 +72,12 @@ public final class TemporalParser {
 
     private static boolean isAmbiguousSixDigitTime(String value) {
         if (value.length() != 6
-                || !Character.isDigit(value.charAt(0))
-                || !Character.isDigit(value.charAt(1))
-                || !Character.isDigit(value.charAt(2))
-                || !Character.isDigit(value.charAt(3))
-                || !Character.isDigit(value.charAt(4))
-                || !Character.isDigit(value.charAt(5))) {
+                || !isAsciiDigit(value.charAt(0))
+                || !isAsciiDigit(value.charAt(1))
+                || !isAsciiDigit(value.charAt(2))
+                || !isAsciiDigit(value.charAt(3))
+                || !isAsciiDigit(value.charAt(4))
+                || !isAsciiDigit(value.charAt(5))) {
             return false;
         }
         int month = parseFixedTwoDigits(value, 4);
@@ -144,27 +94,31 @@ public final class TemporalParser {
             return true;
         }
         if (candidate.length() == 5
-                && Character.isDigit(candidate.charAt(0))
-                && Character.isDigit(candidate.charAt(1))
+                && isAsciiDigit(candidate.charAt(0))
+                && isAsciiDigit(candidate.charAt(1))
                 && candidate.charAt(2) == '-'
-                && Character.isDigit(candidate.charAt(3))
-                && Character.isDigit(candidate.charAt(4))) {
+                && isAsciiDigit(candidate.charAt(3))
+                && isAsciiDigit(candidate.charAt(4))) {
             int month = parseFixedTwoDigits(candidate, 0);
             int dayOfMonth = parseFixedTwoDigits(candidate, 3);
             return new IsoDate(1972, month, dayOfMonth).isValid();
         }
         if (candidate.length() == 7
-                && Character.isDigit(candidate.charAt(0))
-                && Character.isDigit(candidate.charAt(1))
-                && Character.isDigit(candidate.charAt(2))
-                && Character.isDigit(candidate.charAt(3))
+                && isAsciiDigit(candidate.charAt(0))
+                && isAsciiDigit(candidate.charAt(1))
+                && isAsciiDigit(candidate.charAt(2))
+                && isAsciiDigit(candidate.charAt(3))
                 && candidate.charAt(4) == '-'
-                && Character.isDigit(candidate.charAt(5))
-                && Character.isDigit(candidate.charAt(6))) {
+                && isAsciiDigit(candidate.charAt(5))
+                && isAsciiDigit(candidate.charAt(6))) {
             int month = parseFixedTwoDigits(candidate, 5);
             return month >= 1 && month <= 12;
         }
         return false;
+    }
+
+    private static boolean isAsciiDigit(char character) {
+        return character >= '0' && character <= '9';
     }
 
     private static boolean isValidIsoYearMonthDateForParsing(int year, int month, int dayOfMonth) {
@@ -293,8 +247,8 @@ public final class TemporalParser {
             }
         }
 
-        parser.parseInstantAnnotations(context);
-        if (context.hasPendingException()) {
+        ParsedAnnotations parsedAnnotations = parser.parseInstantAnnotations(context);
+        if (context.hasPendingException() || parsedAnnotations == null) {
             return null;
         }
         if (parser.position != parser.input.length()) {
@@ -303,7 +257,7 @@ public final class TemporalParser {
         }
 
         TemporalCalendarId calendar = TemporalCalendarId.ISO8601;
-        String calendarAnnotation = firstCalendarAnnotation(input);
+        String calendarAnnotation = parsedAnnotations.calendarAnnotation;
         if (calendarAnnotation != null) {
             calendar = TemporalCalendarId.createFromCalendarString(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
@@ -387,21 +341,21 @@ public final class TemporalParser {
 
         if (input.startsWith("--")
                 && input.length() >= 6
-                && Character.isDigit(input.charAt(2))
-                && Character.isDigit(input.charAt(3))) {
+                && isAsciiDigit(input.charAt(2))
+                && isAsciiDigit(input.charAt(3))) {
             month = parseFixedTwoDigits(input, 2);
             if (input.length() >= 7 && input.charAt(4) == '-') {
                 if (input.length() >= 7
-                        && Character.isDigit(input.charAt(5))
-                        && Character.isDigit(input.charAt(6))) {
+                        && isAsciiDigit(input.charAt(5))
+                        && isAsciiDigit(input.charAt(6))) {
                     dayOfMonth = parseFixedTwoDigits(input, 5);
                     prefixLength = 7;
                 } else {
                     dayOfMonth = -1;
                 }
             } else if (input.length() >= 6
-                    && Character.isDigit(input.charAt(4))
-                    && Character.isDigit(input.charAt(5))) {
+                    && isAsciiDigit(input.charAt(4))
+                    && isAsciiDigit(input.charAt(5))) {
                 dayOfMonth = parseFixedTwoDigits(input, 4);
                 prefixLength = 6;
             } else {
@@ -421,11 +375,11 @@ public final class TemporalParser {
                 return new IsoDate(1972, parsedDate.month(), parsedDate.day());
             }
         } else if (input.length() >= 5
-                && Character.isDigit(input.charAt(0))
-                && Character.isDigit(input.charAt(1))
+                && isAsciiDigit(input.charAt(0))
+                && isAsciiDigit(input.charAt(1))
                 && input.charAt(2) == '-'
-                && Character.isDigit(input.charAt(3))
-                && Character.isDigit(input.charAt(4))) {
+                && isAsciiDigit(input.charAt(3))
+                && isAsciiDigit(input.charAt(4))) {
             month = parseFixedTwoDigits(input, 0);
             dayOfMonth = parseFixedTwoDigits(input, 3);
             prefixLength = 5;
@@ -443,10 +397,10 @@ public final class TemporalParser {
                 return new IsoDate(1972, parsedDate.month(), parsedDate.day());
             }
         } else if (input.length() >= 4
-                && Character.isDigit(input.charAt(0))
-                && Character.isDigit(input.charAt(1))
-                && Character.isDigit(input.charAt(2))
-                && Character.isDigit(input.charAt(3))
+                && isAsciiDigit(input.charAt(0))
+                && isAsciiDigit(input.charAt(1))
+                && isAsciiDigit(input.charAt(2))
+                && isAsciiDigit(input.charAt(3))
                 && (input.length() == 4 || input.charAt(4) == '[')) {
             month = parseFixedTwoDigits(input, 0);
             dayOfMonth = parseFixedTwoDigits(input, 2);
@@ -587,7 +541,7 @@ public final class TemporalParser {
                 }
             }
         } else {
-            if (parser.position < parser.input.length() && Character.isDigit(parser.input.charAt(parser.position))) {
+            if (parser.position < parser.input.length() && isAsciiDigit(parser.input.charAt(parser.position))) {
                 dayOfMonth = parser.parseTwoDigits(context, "day");
                 if (context.hasPendingException()) {
                     return null;
@@ -689,8 +643,8 @@ public final class TemporalParser {
             }
         }
 
-        parser.parseInstantAnnotations(context);
-        if (context.hasPendingException()) {
+        ParsedAnnotations parsedAnnotations = parser.parseInstantAnnotations(context);
+        if (context.hasPendingException() || parsedAnnotations == null) {
             return null;
         }
         if (parser.position != parser.input.length()) {
@@ -698,14 +652,14 @@ public final class TemporalParser {
             return null;
         }
 
-        String timeZoneId = firstTimeZoneAnnotation(input);
+        String timeZoneId = parsedAnnotations.timeZoneAnnotation;
         if (timeZoneId == null) {
             context.throwRangeError("Temporal error: Must specify time zone.");
             return null;
         }
 
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
-        String calendarAnnotation = firstCalendarAnnotation(input);
+        String calendarAnnotation = parsedAnnotations.calendarAnnotation;
         if (calendarAnnotation != null) {
             calendarId = TemporalCalendarId.createFromCalendarString(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
@@ -726,8 +680,8 @@ public final class TemporalParser {
 
     private boolean hasTwoDigits(String value, int index) {
         return index + 2 <= value.length()
-                && Character.isDigit(value.charAt(index))
-                && Character.isDigit(value.charAt(index + 1));
+                && isAsciiDigit(value.charAt(index))
+                && isAsciiDigit(value.charAt(index + 1));
     }
 
     private boolean isLowercaseAnnotationKey(String annotationKey) {
@@ -771,15 +725,15 @@ public final class TemporalParser {
         if (value.charAt(index) == ':') {
             extendedFormat = true;
             index++;
-        } else if (Character.isDigit(value.charAt(index))) {
+        } else if (isAsciiDigit(value.charAt(index))) {
             extendedFormat = false;
         } else {
             return false;
         }
 
         if (index + 2 > value.length()
-                || !Character.isDigit(value.charAt(index))
-                || !Character.isDigit(value.charAt(index + 1))) {
+                || !isAsciiDigit(value.charAt(index))
+                || !isAsciiDigit(value.charAt(index + 1))) {
             return false;
         }
         int minutes = parseTwoDigitNumber(value, index);
@@ -795,7 +749,7 @@ public final class TemporalParser {
             if (value.charAt(index) != ':') {
                 return false;
             }
-        } else if (!Character.isDigit(value.charAt(index))) {
+        } else if (!isAsciiDigit(value.charAt(index))) {
             return false;
         }
         return false;
@@ -897,43 +851,33 @@ public final class TemporalParser {
                 position++;
                 continue;
             }
-            if (!Character.isDigit(currentChar)) {
+            if (!isAsciiDigit(currentChar)) {
                 context.throwRangeError("Temporal error: Invalid duration string.");
                 return null;
             }
             // Parse number
             int numberStart = position;
-            while (position < input.length() && Character.isDigit(input.charAt(position))) {
+            while (position < input.length() && isAsciiDigit(input.charAt(position))) {
                 position++;
             }
-            BigInteger numberBigInteger = new BigInteger(input.substring(numberStart, position));
-            long number = toLongWithRangeCheck(context, numberBigInteger);
+            long number = parseLongWithRangeCheckFromDigits(context, numberStart, position);
             if (context.hasPendingException()) {
                 return null;
             }
             // Parse optional fractional part
-            BigInteger fractionalNanoseconds = BigInteger.ZERO;
+            int fractionalNanoseconds = 0;
             boolean hasFraction = false;
             if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
                 hasFraction = true;
                 position++;
-                int fracStart = position;
-                while (position < input.length() && Character.isDigit(input.charAt(position))) {
-                    position++;
-                }
-                if (fracStart == position) {
-                    context.throwRangeError("Temporal error: Invalid duration string.");
+                fractionalNanoseconds = parseFractionalNanoseconds(
+                        context,
+                        true,
+                        "Temporal error: Invalid duration string.",
+                        "Temporal error: Invalid duration string.");
+                if (context.hasPendingException()) {
                     return null;
                 }
-                String fracStr = input.substring(fracStart, position);
-                if (fracStr.length() > 9) {
-                    context.throwRangeError("Temporal error: Invalid duration string.");
-                    return null;
-                }
-                while (fracStr.length() < 9) {
-                    fracStr += "0";
-                }
-                fractionalNanoseconds = new BigInteger(fracStr);
             }
 
             if (position >= input.length()) {
@@ -989,9 +933,7 @@ public final class TemporalParser {
                         hours = number;
                         if (hasFraction) {
                             hasFractionalTimeComponent = true;
-                            BigInteger fractionalHourNanoseconds = fractionalNanoseconds
-                                    .multiply(BigInteger.valueOf(3_600_000_000_000L))
-                                    .divide(BILLION);
+                            long fractionalHourNanoseconds = fractionalNanoseconds * 3_600L;
                             long[] decomposition = decomposeTimeFraction(fractionalHourNanoseconds);
                             minutes = decomposition[0];
                             seconds = decomposition[1];
@@ -1004,9 +946,7 @@ public final class TemporalParser {
                         minutes = number;
                         if (hasFraction) {
                             hasFractionalTimeComponent = true;
-                            BigInteger fractionalMinuteNanoseconds = fractionalNanoseconds
-                                    .multiply(BigInteger.valueOf(60_000_000_000L))
-                                    .divide(BILLION);
+                            long fractionalMinuteNanoseconds = fractionalNanoseconds * 60L;
                             long[] decomposition = decomposeTimeFraction(fractionalMinuteNanoseconds);
                             seconds = decomposition[1];
                             milliseconds = decomposition[2];
@@ -1018,12 +958,10 @@ public final class TemporalParser {
                         seconds = number;
                         if (hasFraction) {
                             hasFractionalTimeComponent = true;
-                            BigInteger[] millisecondDivision = fractionalNanoseconds.divideAndRemainder(BigInteger.valueOf(1_000_000L));
-                            milliseconds = millisecondDivision[0].longValue();
-                            BigInteger remainingFractionalNanoseconds = millisecondDivision[1];
-                            BigInteger[] microsecondDivision = remainingFractionalNanoseconds.divideAndRemainder(BigInteger.valueOf(1_000L));
-                            microseconds = microsecondDivision[0].longValue();
-                            nanoseconds = microsecondDivision[1].longValue();
+                            milliseconds = fractionalNanoseconds / NANOSECONDS_PER_MILLISECOND;
+                            int remainingFractionalNanoseconds = (int) (fractionalNanoseconds % NANOSECONDS_PER_MILLISECOND);
+                            microseconds = remainingFractionalNanoseconds / NANOSECONDS_PER_MICROSECOND;
+                            nanoseconds = remainingFractionalNanoseconds % NANOSECONDS_PER_MICROSECOND;
                         }
                     }
                     default -> {
@@ -1056,35 +994,41 @@ public final class TemporalParser {
         );
     }
 
-    private BigInteger parseFractionalNanoseconds(JSContext context, boolean rejectMoreThanNineDigits) {
+    private int parseFractionalNanoseconds(
+            JSContext context,
+            boolean rejectMoreThanNineDigits,
+            String emptyFractionErrorMessage,
+            String overflowFractionErrorMessage) {
         int fractionStart = position;
-        while (position < input.length() && Character.isDigit(input.charAt(position))) {
+        while (position < input.length() && isAsciiDigit(input.charAt(position))) {
             position++;
         }
         if (fractionStart == position) {
-            context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
-            return BigInteger.ZERO;
+            context.throwRangeError(emptyFractionErrorMessage);
+            return 0;
         }
-
-        String fraction = input.substring(fractionStart, position);
-        if (fraction.length() > 9 && rejectMoreThanNineDigits) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return BigInteger.ZERO;
+        int digitCount = position - fractionStart;
+        if (digitCount > 9 && rejectMoreThanNineDigits) {
+            context.throwRangeError(overflowFractionErrorMessage);
+            return 0;
         }
-        if (fraction.length() > 9) {
-            fraction = fraction.substring(0, 9);
-        } else {
-            while (fraction.length() < 9) {
-                fraction += "0";
-            }
+        int parseDigitCount = Math.min(digitCount, 9);
+        int value = 0;
+        for (int index = 0; index < parseDigitCount; index++) {
+            value = value * 10 + (input.charAt(fractionStart + index) - '0');
         }
-        return new BigInteger(fraction);
+        for (int index = parseDigitCount; index < 9; index++) {
+            value *= 10;
+        }
+        return value;
     }
 
-    private void parseInstantAnnotations(JSContext context) {
+    private ParsedAnnotations parseInstantAnnotations(JSContext context) {
         int timeZoneAnnotationCount = 0;
         int calendarAnnotationCount = 0;
         boolean hasCriticalCalendarAnnotation = false;
+        String firstTimeZoneAnnotation = null;
+        String firstCalendarAnnotation = null;
         while (position < input.length() && input.charAt(position) == '[') {
             position++;
             boolean critical = false;
@@ -1098,7 +1042,7 @@ public final class TemporalParser {
             }
             if (position >= input.length() || contentStart == position) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
-                return;
+                return null;
             }
             String content = input.substring(contentStart, position);
             position++;
@@ -1108,33 +1052,41 @@ public final class TemporalParser {
                 String annotationKey = content.substring(0, equalSignIndex);
                 if (equalSignIndex == content.length() - 1 || !isLowercaseAnnotationKey(annotationKey)) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return;
+                    return null;
                 }
                 if ("u-ca".equals(annotationKey)) {
                     calendarAnnotationCount++;
+                    if (firstCalendarAnnotation == null) {
+                        firstCalendarAnnotation = content.substring(equalSignIndex + 1);
+                    }
                     if (critical) {
                         hasCriticalCalendarAnnotation = true;
                     }
                 } else if (critical) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return;
+                    return null;
                 }
             } else {
                 timeZoneAnnotationCount++;
                 if (timeZoneAnnotationCount > 1) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return;
+                    return null;
                 }
                 if (isOffsetTimeZoneAnnotation(content)
                         && !isMinutePrecisionOffsetTimeZoneAnnotation(content)) {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
-                    return;
+                    return null;
+                }
+                if (firstTimeZoneAnnotation == null) {
+                    firstTimeZoneAnnotation = content;
                 }
             }
         }
         if (calendarAnnotationCount > 1 && hasCriticalCalendarAnnotation) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
         }
+        return new ParsedAnnotations(firstCalendarAnnotation, firstTimeZoneAnnotation);
     }
 
     private IsoOffset parseInstantOffsetNanoseconds(JSContext context) {
@@ -1169,7 +1121,7 @@ public final class TemporalParser {
 
         int offsetMinute = 0;
         int offsetSecond = 0;
-        BigInteger fractionalNanoseconds = BigInteger.ZERO;
+        int fractionalNanoseconds = 0;
         boolean hasMinute = false;
         boolean hasSecond = false;
         boolean extendedFormat = false;
@@ -1182,7 +1134,7 @@ public final class TemporalParser {
             if (context.hasPendingException()) {
                 return null;
             }
-        } else if (position < input.length() && Character.isDigit(input.charAt(position))) {
+        } else if (position < input.length() && isAsciiDigit(input.charAt(position))) {
             hasMinute = true;
             offsetMinute = parseTwoDigits(context, "offset minute");
             if (context.hasPendingException()) {
@@ -1203,11 +1155,11 @@ public final class TemporalParser {
                     if (context.hasPendingException()) {
                         return null;
                     }
-                } else if (position < input.length() && Character.isDigit(input.charAt(position))) {
+                } else if (position < input.length() && isAsciiDigit(input.charAt(position))) {
                     context.throwRangeError("Temporal error: Instant argument must be Instant or string.");
                     return null;
                 }
-            } else if (position < input.length() && Character.isDigit(input.charAt(position))) {
+            } else if (position < input.length() && isAsciiDigit(input.charAt(position))) {
                 hasSecond = true;
                 offsetSecond = parseTwoDigits(context, "offset second");
                 if (context.hasPendingException()) {
@@ -1229,7 +1181,11 @@ public final class TemporalParser {
             }
             if (position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
                 position++;
-                fractionalNanoseconds = parseFractionalNanoseconds(context, true);
+                fractionalNanoseconds = parseFractionalNanoseconds(
+                        context,
+                        true,
+                        "Temporal error: Instant argument must be Instant or string.",
+                        "Temporal error: Invalid ISO date.");
                 if (context.hasPendingException()) {
                     return null;
                 }
@@ -1240,14 +1196,14 @@ public final class TemporalParser {
         }
 
         int offsetSeconds = sign * (offsetHour * 3600 + offsetMinute * 60 + offsetSecond);
-        BigInteger offsetNanoseconds = BigInteger.valueOf(offsetHour).multiply(NS_PER_HOUR)
-                .add(BigInteger.valueOf(offsetMinute).multiply(NS_PER_MINUTE))
-                .add(BigInteger.valueOf(offsetSecond).multiply(NS_PER_SECOND))
-                .add(fractionalNanoseconds);
+        long offsetNanoseconds = offsetHour * NANOSECONDS_PER_HOUR
+                + offsetMinute * NANOSECONDS_PER_MINUTE
+                + offsetSecond * NANOSECONDS_PER_SECOND
+                + fractionalNanoseconds;
         if (sign < 0) {
-            offsetNanoseconds = offsetNanoseconds.negate();
+            offsetNanoseconds = -offsetNanoseconds;
         }
-        return new IsoOffset(offsetSeconds, offsetNanoseconds);
+        return new IsoOffset(offsetSeconds, BigInteger.valueOf(offsetNanoseconds));
     }
 
     private IsoTime parseInstantTime(JSContext context) {
@@ -1280,16 +1236,16 @@ public final class TemporalParser {
                 if (context.hasPendingException()) {
                     return null;
                 }
-            } else if (position < input.length() && Character.isDigit(input.charAt(position))) {
+            } else if (position < input.length() && isAsciiDigit(input.charAt(position))) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return null;
             }
-        } else if (position < input.length() && Character.isDigit(input.charAt(position))) {
+        } else if (position < input.length() && isAsciiDigit(input.charAt(position))) {
             minute = parseTwoDigits(context, "minute");
             if (context.hasPendingException()) {
                 return null;
             }
-            if (position < input.length() && Character.isDigit(input.charAt(position))) {
+            if (position < input.length() && isAsciiDigit(input.charAt(position))) {
                 hasSecond = true;
                 second = parseTwoDigits(context, "second");
                 if (context.hasPendingException()) {
@@ -1300,14 +1256,18 @@ public final class TemporalParser {
 
         if (hasSecond && position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
             position++;
-            BigInteger fractionalNanoseconds = parseFractionalNanoseconds(context, true);
+            int fractionalNanoseconds = parseFractionalNanoseconds(
+                    context,
+                    true,
+                    "Temporal error: Instant argument must be Instant or string.",
+                    "Temporal error: Invalid ISO date.");
             if (context.hasPendingException()) {
                 return null;
             }
-            millisecond = fractionalNanoseconds.divide(BigInteger.valueOf(1_000_000L)).intValue();
-            BigInteger remainingAfterMilliseconds = fractionalNanoseconds.remainder(BigInteger.valueOf(1_000_000L));
-            microsecond = remainingAfterMilliseconds.divide(BigInteger.valueOf(1_000L)).intValue();
-            nanosecond = remainingAfterMilliseconds.remainder(BigInteger.valueOf(1_000L)).intValue();
+            millisecond = (int) (fractionalNanoseconds / NANOSECONDS_PER_MILLISECOND);
+            int remainingAfterMilliseconds = (int) (fractionalNanoseconds % NANOSECONDS_PER_MILLISECOND);
+            microsecond = (int) (remainingAfterMilliseconds / NANOSECONDS_PER_MICROSECOND);
+            nanosecond = (int) (remainingAfterMilliseconds % NANOSECONDS_PER_MICROSECOND);
         } else if (!hasSecond && position < input.length() && (input.charAt(position) == '.' || input.charAt(position) == ',')) {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
@@ -1322,6 +1282,19 @@ public final class TemporalParser {
         return parsedIsoTime;
     }
 
+    private long parseLongWithRangeCheckFromDigits(JSContext context, int startIndex, int endIndex) {
+        long value = 0L;
+        for (int index = startIndex; index < endIndex; index++) {
+            int digit = input.charAt(index) - '0';
+            if (value > (Long.MAX_VALUE - digit) / 10L) {
+                BigInteger fallbackValue = new BigInteger(input.substring(startIndex, endIndex));
+                return toLongWithRangeCheck(context, fallbackValue);
+            }
+            value = value * 10L + digit;
+        }
+        return value;
+    }
+
     private int parseTwoDigitNumber(String value, int index) {
         return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
     }
@@ -1333,7 +1306,7 @@ public final class TemporalParser {
         }
         char firstDigit = input.charAt(position);
         char secondDigit = input.charAt(position + 1);
-        if (!Character.isDigit(firstDigit) || !Character.isDigit(secondDigit)) {
+        if (!isAsciiDigit(firstDigit) || !isAsciiDigit(secondDigit)) {
             context.throwRangeError("Temporal error: Invalid character while parsing " + fieldName + " value.");
             return 0;
         }
@@ -1356,14 +1329,16 @@ public final class TemporalParser {
             }
             int startPos = position;
             int endPos = position + 6;
+            int year = 0;
             for (int index = startPos; index < endPos; index++) {
-                if (!Character.isDigit(input.charAt(index))) {
+                char currentCharacter = input.charAt(index);
+                if (!isAsciiDigit(currentCharacter)) {
                     context.throwRangeError("Temporal error: Invalid character while parsing year value.");
                     return 0;
                 }
+                year = year * 10 + (currentCharacter - '0');
             }
             position = endPos;
-            int year = Integer.parseInt(input.substring(startPos, endPos));
             if (negative && year == 0) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return 0;
@@ -1371,7 +1346,7 @@ public final class TemporalParser {
             return negative ? -year : year;
         }
 
-        if (!Character.isDigit(signCharacter)) {
+        if (!isAsciiDigit(signCharacter)) {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return 0;
         }
@@ -1380,15 +1355,17 @@ public final class TemporalParser {
             context.throwRangeError("Temporal error: Invalid character while parsing year value.");
             return 0;
         }
-        String yearStr = input.substring(position, position + 4);
+        int year = 0;
         for (int digitIndex = 0; digitIndex < 4; digitIndex++) {
-            if (!Character.isDigit(yearStr.charAt(digitIndex))) {
+            char currentCharacter = input.charAt(position + digitIndex);
+            if (!isAsciiDigit(currentCharacter)) {
                 context.throwRangeError("Temporal error: Invalid character while parsing year value.");
                 return 0;
             }
+            year = year * 10 + (currentCharacter - '0');
         }
         position += 4;
-        return Integer.parseInt(yearStr);
+        return year;
     }
 
     private long toLongWithRangeCheck(JSContext context, BigInteger value) {
@@ -1397,5 +1374,15 @@ public final class TemporalParser {
             return Long.MIN_VALUE;
         }
         return value.longValue();
+    }
+
+    private static final class ParsedAnnotations {
+        private final String calendarAnnotation;
+        private final String timeZoneAnnotation;
+
+        private ParsedAnnotations(String calendarAnnotation, String timeZoneAnnotation) {
+            this.calendarAnnotation = calendarAnnotation;
+            this.timeZoneAnnotation = timeZoneAnnotation;
+        }
     }
 }
