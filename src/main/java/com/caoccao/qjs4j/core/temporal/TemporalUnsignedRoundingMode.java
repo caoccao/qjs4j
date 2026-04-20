@@ -53,26 +53,6 @@ public enum TemporalUnsignedRoundingMode {
     }
 
     /**
-     * Maps a signed rounding mode to its unsigned counterpart given the value's sign.
-     *
-     * @param mode         the signed rounding mode
-     * @param negativeSign whether the value being rounded is negative
-     */
-    public static TemporalUnsignedRoundingMode of(TemporalRoundingMode mode, boolean negativeSign) {
-        return switch (mode) {
-            case CEIL -> negativeSign ? ZERO : INFINITY;
-            case FLOOR -> negativeSign ? INFINITY : ZERO;
-            case EXPAND -> INFINITY;
-            case TRUNC -> ZERO;
-            case HALF_CEIL -> negativeSign ? HALF_ZERO : HALF_INFINITY;
-            case HALF_FLOOR -> negativeSign ? HALF_INFINITY : HALF_ZERO;
-            case HALF_EXPAND -> HALF_INFINITY;
-            case HALF_TRUNC -> HALF_ZERO;
-            case HALF_EVEN -> HALF_EVEN;
-        };
-    }
-
-    /**
      * Returns the JS-canonical name (e.g. "half-infinity").
      */
     public String jsName() {

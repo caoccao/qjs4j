@@ -564,10 +564,10 @@ public final class TemporalDurationPrototype {
             String smallestUnit,
             long roundingIncrement,
             String roundingMode) {
-        IsoDateTime startIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+        IsoDateTime startIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 startEpochNanoseconds,
                 timeZoneId);
-        IsoDateTime endIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+        IsoDateTime endIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 endEpochNanoseconds,
                 timeZoneId);
         LocalDateTime startDateTime = toLocalDateTime(
@@ -1163,7 +1163,7 @@ public final class TemporalDurationPrototype {
             }
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1310,7 +1310,7 @@ public final class TemporalDurationPrototype {
             return null;
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1353,7 +1353,7 @@ public final class TemporalDurationPrototype {
         IsoDateTime localIsoDateTime;
         if (isOffsetTimeZoneIdentifier(relativeToReference.timeZoneId())) {
             int offsetSeconds = parseOffsetSecondsFromTimeZoneId(relativeToReference.timeZoneId());
-            IsoDateTime utcDateTime = TemporalTimeZone.epochNsToUtcDateTime(relativeToReference.epochNanoseconds());
+            IsoDateTime utcDateTime = IsoDateTime.createByEpochNs(relativeToReference.epochNanoseconds());
             LocalDateTime utcLocalDateTime = toLocalDateTime(utcDateTime.date(), utcDateTime.time());
             LocalDateTime offsetLocalDateTime = utcLocalDateTime.plusSeconds(offsetSeconds);
             localIsoDateTime = new IsoDateTime(
@@ -1369,7 +1369,7 @@ public final class TemporalDurationPrototype {
                             (offsetLocalDateTime.getNano() / 1_000) % 1_000,
                             offsetLocalDateTime.getNano() % 1_000));
         } else {
-            localIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+            localIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     relativeToReference.epochNanoseconds(),
                     relativeToReference.timeZoneId());
         }
@@ -2536,8 +2536,7 @@ public final class TemporalDurationPrototype {
             LocalDateTime localDateTime) {
         IsoDateTime isoDateTime = toIsoDateTime(localDateTime);
         try {
-            return TemporalTimeZone.localDateTimeToEpochNs(
-                    isoDateTime,
+            return isoDateTime.toEpochNs(
                     relativeToOption.timeZoneId(),
                     "compatible");
         } catch (DateTimeException dateTimeException) {

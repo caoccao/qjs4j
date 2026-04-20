@@ -988,7 +988,7 @@ public final class TemporalPlainYearMonthPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            TemporalCalendarId formatterCalendarId = TemporalUtils.validateCalendar(context, formatterCalendarValue);
+            TemporalCalendarId formatterCalendarId = TemporalCalendarId.createFromCalendarString(context, formatterCalendarValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -1300,7 +1300,7 @@ public final class TemporalPlainYearMonthPrototype {
         }
         if (hasMonthCode) {
             if (monthCodeInfo != null) {
-                mergedFieldsObject.set(monthCodeKey, new JSString(TemporalUtils.monthCode(monthCodeInfo.month())
+                mergedFieldsObject.set(monthCodeKey, new JSString(IsoMonth.toMonthCode(monthCodeInfo.month())
                         + (monthCodeInfo.leapMonth() ? "L" : "")));
             }
         }

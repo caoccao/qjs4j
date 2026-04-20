@@ -16,8 +16,21 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
+import java.util.Locale;
+
 public record IsoMonth(int month, boolean leapMonth) {
-    public static IsoMonth parseMonthCode(String monthCode) {
+    public static IsoMonth parseByMonthCode(JSContext context, String monthCode, String rangeErrorMessage) {
+        IsoMonth isoMonth = parseByMonthCode(monthCode);
+        if (isoMonth == null) {
+            context.throwRangeError(rangeErrorMessage);
+            return null;
+        }
+        return isoMonth;
+    }
+
+    public static IsoMonth parseByMonthCode(String monthCode) {
         if (monthCode == null || monthCode.length() < 3 || monthCode.length() > 4) {
             return null;
         }
@@ -36,5 +49,9 @@ public record IsoMonth(int month, boolean leapMonth) {
             isLeapMonth = true;
         }
         return new IsoMonth(monthNumber, isLeapMonth);
+    }
+
+    public static String toMonthCode(int month) {
+        return String.format(Locale.ROOT, "M%02d", month);
     }
 }

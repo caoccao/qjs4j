@@ -86,8 +86,7 @@ public final class TemporalDurationConstructor {
                     .plusDays(durationRecord.days());
             IsoDate endIsoDate = new IsoDate(endDate.getYear(), endDate.getMonthValue(), endDate.getDayOfMonth());
             IsoDateTime endDateTime = new IsoDateTime(endIsoDate, startTime);
-            BigInteger endEpochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    endDateTime,
+            BigInteger endEpochNanoseconds = endDateTime.toEpochNs(
                     timeZoneId,
                     "compatible",
                     preferredOffsetSeconds);
@@ -658,7 +657,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            TemporalCalendarId.createFromCalendarValue(context, calendarValue);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -833,8 +832,17 @@ public final class TemporalDurationConstructor {
         if (month != null) {
             monthNumber = month.intValue();
         } else if (monthCode != null) {
-            monthNumber = TemporalPlainDateConstructor.parseMonthCode(context, monthCode);
-            if (context.hasPendingException()) {
+            if (monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
+                context.throwRangeError("Temporal error: Month code out of range.");
+                return null;
+            }
+            if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
+                context.throwRangeError("Temporal error: Month code out of range.");
+                return null;
+            }
+            monthNumber = Integer.parseInt(monthCode.substring(1));
+            if (monthNumber < 1 || monthNumber > 12) {
+                context.throwRangeError("Temporal error: Month code out of range.");
                 return null;
             }
         } else {
@@ -919,7 +927,7 @@ public final class TemporalDurationConstructor {
                 epochNanoseconds = TemporalTimeZone.utcDateTimeToEpochNs(isoDate, relativeTime, offsetSeconds);
                 referenceOffsetSeconds = offsetSeconds;
             } else {
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(relativeDateTime, normalizedTimeZoneId);
+                epochNanoseconds = relativeDateTime.toEpochNs(normalizedTimeZoneId);
                 referenceOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, normalizedTimeZoneId);
             }
         }
@@ -997,7 +1005,7 @@ public final class TemporalDurationConstructor {
             int zoneOffsetSeconds;
             if (offsetText == null && !offsetTimeZoneIdentifier) {
                 IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
+                epochNanoseconds = parsedIsoDateTime.toEpochNs(timeZoneId, "compatible");
                 try {
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
                 } catch (DateTimeException invalidTimeZoneException) {
@@ -1043,7 +1051,7 @@ public final class TemporalDurationConstructor {
                     epochNanoseconds = selectedEpochNanoseconds;
                     zoneOffsetSeconds = selectedOffsetSeconds;
                 } else {
-                    epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(parsedIsoDateTime, timeZoneId, "compatible");
+                    epochNanoseconds = parsedIsoDateTime.toEpochNs(timeZoneId, "compatible");
                     try {
                         zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
                     } catch (DateTimeException invalidTimeZoneException) {
@@ -1125,7 +1133,7 @@ public final class TemporalDurationConstructor {
                     null);
         }
         if (relativeToValue instanceof JSTemporalZonedDateTime zonedDateTime) {
-            IsoDateTime relativeDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+            IsoDateTime relativeDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
             int offsetSeconds = TemporalTimeZone.getOffsetSecondsFor(

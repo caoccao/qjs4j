@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.JSContext;
 import java.math.BigInteger;
 import java.time.*;
 import java.time.zone.ZoneOffsetTransition;
-import java.time.zone.ZoneRules;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -123,29 +122,6 @@ public final class TemporalTimeZone {
         return Map.copyOf(availableTimeZoneIdentifiersByLowercase);
     }
 
-    /**
-     * Converts epoch nanoseconds to a local IsoDateTime in the given timezone.
-     */
-    public static IsoDateTime epochNsToDateTimeInZone(BigInteger epochNs, String timeZoneId) {
-        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
-        if (fixedOffsetSeconds != null) {
-            BigInteger localEpochNanoseconds = epochNs.add(BigInteger.valueOf(fixedOffsetSeconds).multiply(BILLION));
-            return epochNsToUtcDateTime(localEpochNanoseconds);
-        }
-        Instant javaInstant = toJavaInstant(epochNs);
-        ZonedDateTime zonedDateTime = javaInstant.atZone(resolveTimeZone(timeZoneId));
-        return fromZonedDateTime(zonedDateTime);
-    }
-
-    /**
-     * Converts epoch nanoseconds to a UTC IsoDateTime.
-     */
-    public static IsoDateTime epochNsToUtcDateTime(BigInteger epochNs) {
-        Instant javaInstant = toJavaInstant(epochNs);
-        LocalDateTime localDateTime = LocalDateTime.ofInstant(javaInstant, ZoneOffset.UTC);
-        return fromLocalDateTime(localDateTime);
-    }
-
     private static String extractOffsetText(String text) {
         int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
         if (timeSeparatorIndex < 0) {
@@ -198,22 +174,6 @@ public final class TemporalTimeZone {
         }
         int roundedTotalSeconds = sign * absoluteMinutes * 60;
         return formatOffset(roundedTotalSeconds);
-    }
-
-    private static IsoDateTime fromLocalDateTime(LocalDateTime localDateTime) {
-        IsoDate date = new IsoDate(localDateTime.getYear(), localDateTime.getMonthValue(), localDateTime.getDayOfMonth());
-        int nano = localDateTime.getNano();
-        IsoTime time = new IsoTime(localDateTime.getHour(), localDateTime.getMinute(), localDateTime.getSecond(),
-                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
-        return new IsoDateTime(date, time);
-    }
-
-    private static IsoDateTime fromZonedDateTime(ZonedDateTime zonedDateTime) {
-        IsoDate date = new IsoDate(zonedDateTime.getYear(), zonedDateTime.getMonthValue(), zonedDateTime.getDayOfMonth());
-        int nano = zonedDateTime.getNano();
-        IsoTime time = new IsoTime(zonedDateTime.getHour(), zonedDateTime.getMinute(), zonedDateTime.getSecond(),
-                nano / 1_000_000, (nano / 1_000) % 1000, nano % 1000);
-        return new IsoDateTime(date, time);
     }
 
     /**
@@ -321,95 +281,6 @@ public final class TemporalTimeZone {
         return secondsText == null && fractionText == null;
     }
 
-    /**
-     * Converts a local date-time in a timezone to epoch nanoseconds using 'compatible' disambiguation.
-     */
-    public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId) {
-        return localDateTimeToEpochNs(isoDateTime, timeZoneId, "compatible");
-    }
-
-    /**
-     * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation.
-     */
-    public static BigInteger localDateTimeToEpochNs(IsoDateTime isoDateTime, String timeZoneId, String disambiguation) {
-        return localDateTimeToEpochNs(isoDateTime, timeZoneId, disambiguation, null);
-    }
-
-    /**
-     * Converts a local date-time in a timezone to epoch nanoseconds using the specified disambiguation and
-     * optionally preferring a matching offset when the local date-time is ambiguous.
-     */
-    public static BigInteger localDateTimeToEpochNs(
-            IsoDateTime isoDateTime,
-            String timeZoneId,
-            String disambiguation,
-            Integer preferredOffsetSeconds) {
-        Integer fixedOffsetSeconds = parseFixedOffsetSeconds(timeZoneId);
-        if (fixedOffsetSeconds != null) {
-            return utcDateTimeToEpochNs(isoDateTime.date(), isoDateTime.time(), fixedOffsetSeconds);
-        }
-
-        LocalDateTime localDateTime = LocalDateTime.of(
-                isoDateTime.date().year(), isoDateTime.date().month(), isoDateTime.date().day(),
-                isoDateTime.time().hour(), isoDateTime.time().minute(), isoDateTime.time().second(),
-                isoDateTime.time().millisecond() * 1_000_000 + isoDateTime.time().microsecond() * 1_000 + isoDateTime.time().nanosecond());
-        ZoneId zoneId = resolveTimeZone(timeZoneId);
-        ZoneRules zoneRules = zoneId.getRules();
-        List<ZoneOffset> validOffsets = zoneRules.getValidOffsets(localDateTime);
-
-        Instant instant;
-        if (validOffsets.size() == 1) {
-            instant = localDateTime.atOffset(validOffsets.get(0)).toInstant();
-        } else if (validOffsets.size() == 2) {
-            ZoneOffset firstOffset = validOffsets.get(0);
-            ZoneOffset secondOffset = validOffsets.get(1);
-            if (preferredOffsetSeconds != null) {
-                if (firstOffset.getTotalSeconds() == preferredOffsetSeconds.intValue()) {
-                    instant = localDateTime.atOffset(firstOffset).toInstant();
-                    return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
-                            .add(BigInteger.valueOf(instant.getNano()));
-                }
-                if (secondOffset.getTotalSeconds() == preferredOffsetSeconds.intValue()) {
-                    instant = localDateTime.atOffset(secondOffset).toInstant();
-                    return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
-                            .add(BigInteger.valueOf(instant.getNano()));
-                }
-            }
-            Instant firstInstant = localDateTime.atOffset(firstOffset).toInstant();
-            Instant secondInstant = localDateTime.atOffset(secondOffset).toInstant();
-            Instant earlierInstant = firstInstant.isBefore(secondInstant) ? firstInstant : secondInstant;
-            Instant laterInstant = firstInstant.isAfter(secondInstant) ? firstInstant : secondInstant;
-
-            if (TemporalDisambiguation.isReject(disambiguation)) {
-                throw new DateTimeException("Ambiguous local time for time zone: " + timeZoneId);
-            } else if (TemporalDisambiguation.isLater(disambiguation)) {
-                instant = laterInstant;
-            } else {
-                instant = earlierInstant;
-            }
-        } else {
-            ZoneOffsetTransition transition = zoneRules.getTransition(localDateTime);
-            if (transition == null) {
-                throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
-            }
-            if (TemporalDisambiguation.isReject(disambiguation)) {
-                throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
-            }
-
-            Duration gapDuration = transition.getDuration().abs();
-            if (TemporalDisambiguation.isEarlier(disambiguation)) {
-                LocalDateTime shiftedLocalDateTime = localDateTime.minusSeconds(gapDuration.getSeconds());
-                instant = shiftedLocalDateTime.atOffset(transition.getOffsetBefore()).toInstant();
-            } else {
-                LocalDateTime shiftedLocalDateTime = localDateTime.plusSeconds(gapDuration.getSeconds());
-                instant = shiftedLocalDateTime.atOffset(transition.getOffsetAfter()).toInstant();
-            }
-        }
-
-        return BigInteger.valueOf(instant.getEpochSecond()).multiply(BILLION)
-                .add(BigInteger.valueOf(instant.getNano()));
-    }
-
     public static boolean offsetTextIncludesSecondsOrFraction(String offsetText) {
         TemporalOffsetParts offsetParts = parseOffsetParts(offsetText);
         if (offsetParts == null) {
@@ -418,7 +289,7 @@ public final class TemporalTimeZone {
         return offsetParts.secondsText() != null || offsetParts.fractionText() != null;
     }
 
-    private static Integer parseFixedOffsetSeconds(String timeZoneId) {
+    static Integer parseFixedOffsetSeconds(String timeZoneId) {
         if (timeZoneId == null || timeZoneId.isEmpty()) {
             return null;
         }

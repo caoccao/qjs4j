@@ -17,9 +17,9 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.temporal.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.IsoTime;
 import com.caoccao.qjs4j.core.temporal.TemporalParser;
-import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
@@ -260,7 +260,7 @@ public final class TemporalPlainTimeConstructor {
             }
             return createPlainTime(
                     context,
-                    TemporalTimeZone.epochNsToDateTimeInZone(
+                    IsoDateTime.createFromEpochNsAndTimeZoneId(
                             zonedDateTime.getEpochNanoseconds(),
                             zonedDateTime.getTimeZoneId()).time());
         }

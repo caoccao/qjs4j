@@ -74,7 +74,7 @@ public final class TemporalNow {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
         return TemporalPlainDateConstructor.createPlainDate(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
     }
 
@@ -84,7 +84,7 @@ public final class TemporalNow {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context, isoDateTime, TemporalCalendarId.ISO8601);
     }
 
@@ -94,7 +94,7 @@ public final class TemporalNow {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = systemEpochNs();
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(epochNs, timeZoneId);
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
         return TemporalPlainTimeConstructor.createPlainTime(context, isoDateTime.time());
     }
 

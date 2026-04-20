@@ -142,7 +142,7 @@ final class TemporalDurationArithmeticKernel {
             return null;
         }
 
-        IsoDateTime endIsoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+        IsoDateTime endIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 endEpochNanoseconds,
                 relativeToOption.timeZoneId());
         LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
@@ -209,7 +209,7 @@ final class TemporalDurationArithmeticKernel {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
-        IsoDateTime isoDateTime = TemporalTimeZone.epochNsToDateTimeInZone(
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 resultEpochNanoseconds,
                 relativeToOption.timeZoneId());
         return isoDateTime.toLocalDateTime();
@@ -221,8 +221,7 @@ final class TemporalDurationArithmeticKernel {
             LocalDateTime localDateTime) {
         IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
         try {
-            return TemporalTimeZone.localDateTimeToEpochNs(
-                    isoDateTime,
+            return isoDateTime.toEpochNs(
                     relativeToOption.timeZoneId(),
                     "compatible");
         } catch (DateTimeException dateTimeException) {

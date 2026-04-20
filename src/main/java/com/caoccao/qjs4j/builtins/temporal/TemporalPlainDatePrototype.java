@@ -936,7 +936,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static IsoMonth parseMonthCodeParts(String monthCodeText) {
-        return IsoMonth.parseMonthCode(monthCodeText);
+        return IsoMonth.parseByMonthCode(monthCodeText);
     }
 
     private static TemporalDateDurationFields roundRelativeDurationDate(
@@ -1171,9 +1171,7 @@ public final class TemporalPlainDatePrototype {
         BigInteger epochNanoseconds;
         try {
             if (hasPlainTimeArgument) {
-                epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                        new IsoDateTime(isoDate, isoTime),
-                        timeZoneId);
+                epochNanoseconds = new IsoDateTime(isoDate, isoTime).toEpochNs(timeZoneId);
             } else {
                 epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(isoDate, timeZoneId);
             }
@@ -1468,7 +1466,7 @@ public final class TemporalPlainDatePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

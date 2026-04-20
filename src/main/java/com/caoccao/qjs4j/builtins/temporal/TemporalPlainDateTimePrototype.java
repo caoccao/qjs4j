@@ -789,8 +789,7 @@ public final class TemporalPlainDateTimePrototype {
 
         BigInteger epochNanoseconds;
         try {
-            epochNanoseconds = TemporalTimeZone.localDateTimeToEpochNs(
-                    plainDateTime.getIsoDateTime(),
+            epochNanoseconds = plainDateTime.getIsoDateTime().toEpochNs(
                     timeZoneId,
                     disambiguation);
         } catch (DateTimeException dateTimeException) {
@@ -1171,7 +1170,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
