@@ -189,10 +189,28 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     private static IsoMonth parseMonthCodeForYearMonthFrom(JSContext context, JSValue monthCodeValue) {
-        IsoMonth parsedMonthCode = TemporalFieldResolver.parseMonthCodeValue(
+        String monthCodeText;
+        if (monthCodeValue instanceof JSString monthCodeString) {
+            monthCodeText = monthCodeString.value();
+        } else if (monthCodeValue instanceof JSObject) {
+            JSValue primitiveMonthCode =
+                    JSTypeConversions.toPrimitive(context, monthCodeValue, JSTypeConversions.PreferredType.STRING);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (primitiveMonthCode instanceof JSString primitiveMonthCodeString) {
+                monthCodeText = primitiveMonthCodeString.value();
+            } else {
+                context.throwTypeError("Temporal error: Month code must be string.");
+                return null;
+            }
+        } else {
+            context.throwTypeError("Temporal error: Month code must be string.");
+            return null;
+        }
+        IsoMonth parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
                 context,
-                monthCodeValue,
-                "Temporal error: Month code must be string.",
+                monthCodeText,
                 "Temporal error: Month code out of range.");
         if (parsedMonthCode == null) {
             return null;

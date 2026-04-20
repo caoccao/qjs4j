@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
-import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.core.JSContext;
 import com.caoccao.qjs4j.core.temporal.IsoMonth;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalEra;
@@ -81,32 +81,6 @@ final class TemporalFieldResolver {
 
         int monthNumber = Integer.parseInt(monthCodeText.substring(1, 3));
         return new IsoMonth(monthNumber, leapMonth);
-    }
-
-    static IsoMonth parseMonthCodeValue(
-            JSContext context,
-            JSValue monthCodeValue,
-            String typeErrorMessage,
-            String rangeErrorMessage) {
-        String monthCodeText;
-        if (monthCodeValue instanceof JSString monthCodeString) {
-            monthCodeText = monthCodeString.value();
-        } else if (monthCodeValue instanceof JSObject) {
-            JSValue primitiveMonthCode =
-                    JSTypeConversions.toPrimitive(context, monthCodeValue, JSTypeConversions.PreferredType.STRING);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(primitiveMonthCode instanceof JSString primitiveMonthCodeString)) {
-                context.throwTypeError(typeErrorMessage);
-                return null;
-            }
-            monthCodeText = primitiveMonthCodeString.value();
-        } else {
-            context.throwTypeError(typeErrorMessage);
-            return null;
-        }
-        return parseMonthCodeSyntax(context, monthCodeText, rangeErrorMessage);
     }
 
 }
