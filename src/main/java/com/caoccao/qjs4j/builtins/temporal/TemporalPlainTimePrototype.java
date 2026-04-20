@@ -191,7 +191,7 @@ public final class TemporalPlainTimePrototype {
             }
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }

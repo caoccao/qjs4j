@@ -822,7 +822,7 @@ public final class TemporalZonedDateTimePrototype {
             }
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1418,7 +1418,7 @@ public final class TemporalZonedDateTimePrototype {
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                TemporalCalendarId formatterCalendarId = TemporalUtils.validateCalendar(context, formatterCalendarValue);
+                TemporalCalendarId formatterCalendarId = TemporalCalendarId.createFromCalendarString(context, formatterCalendarValue);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -1843,7 +1843,7 @@ public final class TemporalZonedDateTimePrototype {
             context.throwTypeError("Temporal error: Calendar is required.");
             return JSUndefined.INSTANCE;
         }
-        TemporalCalendarId calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, args[0]);
+        TemporalCalendarId calendarId = TemporalCalendarId.createFromCalendarValue(context, args[0]);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

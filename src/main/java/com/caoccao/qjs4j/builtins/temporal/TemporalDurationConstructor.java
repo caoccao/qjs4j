@@ -658,7 +658,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            TemporalCalendarId.createFromCalendarValue(context, calendarValue);
             if (context.hasPendingException()) {
                 return null;
             }
@@ -833,8 +833,17 @@ public final class TemporalDurationConstructor {
         if (month != null) {
             monthNumber = month.intValue();
         } else if (monthCode != null) {
-            monthNumber = TemporalPlainDateConstructor.parseMonthCode(context, monthCode);
-            if (context.hasPendingException()) {
+            if (monthCode.length() != 3 || monthCode.charAt(0) != 'M') {
+                context.throwRangeError("Temporal error: Month code out of range.");
+                return null;
+            }
+            if (!Character.isDigit(monthCode.charAt(1)) || !Character.isDigit(monthCode.charAt(2))) {
+                context.throwRangeError("Temporal error: Month code out of range.");
+                return null;
+            }
+            monthNumber = Integer.parseInt(monthCode.substring(1));
+            if (monthNumber < 1 || monthNumber > 12) {
+                context.throwRangeError("Temporal error: Month code out of range.");
                 return null;
             }
         } else {

@@ -305,7 +305,7 @@ public final class TemporalParser {
         TemporalCalendarId calendar = TemporalCalendarId.ISO8601;
         String calendarAnnotation = firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
-            calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
+            calendar = TemporalCalendarId.createFromCalendarString(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
                 return null;
             }
@@ -707,7 +707,7 @@ public final class TemporalParser {
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         String calendarAnnotation = firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
-            calendarId = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
+            calendarId = TemporalCalendarId.createFromCalendarString(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
                 return null;
             }

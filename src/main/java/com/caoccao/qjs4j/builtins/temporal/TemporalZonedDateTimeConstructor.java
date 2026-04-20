@@ -121,7 +121,7 @@ public final class TemporalZonedDateTimeConstructor {
 
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            calendarId = TemporalUtils.validateCalendar(context, args[2]);
+            calendarId = TemporalCalendarId.createFromCalendarString(context, args[2]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -183,7 +183,7 @@ public final class TemporalZonedDateTimeConstructor {
 
         String monthCodeFromProperty = null;
         if (parsedMonthCode != null) {
-            monthCodeFromProperty = TemporalUtils.monthCode(parsedMonthCode.month());
+            monthCodeFromProperty = IsoMonth.toMonthCode(parsedMonthCode.month());
             if (parsedMonthCode.leapMonth()) {
                 monthCodeFromProperty += "L";
             }
@@ -718,17 +718,6 @@ public final class TemporalZonedDateTimeConstructor {
         return new TemporalZonedDateTimeOptions(disambiguation, offset, overflow);
     }
 
-    private static IsoMonth parseMonthCodeSyntax(JSContext context, String monthCode) {
-        IsoMonth parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
-                context,
-                monthCode,
-                "Temporal error: Month code out of range.");
-        if (parsedMonthCode == null) {
-            return null;
-        }
-        return new IsoMonth(parsedMonthCode.month(), parsedMonthCode.leapMonth());
-    }
-
     private static int parseOffsetSeconds(String offsetText) {
         TemporalOffsetParts offsetParts = TemporalTimeZone.parseOffsetParts(offsetText);
         if (offsetParts == null) {
@@ -746,7 +735,7 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            calendarId = TemporalCalendarId.createFromCalendarValue(context, calendarValue);
             if (context.hasPendingException() || calendarId == null) {
                 return null;
             }
@@ -801,7 +790,10 @@ public final class TemporalZonedDateTimeConstructor {
             if (context.hasPendingException() || monthCodeText == null) {
                 return null;
             }
-            parsedMonthCode = parseMonthCodeSyntax(context, monthCodeText);
+            parsedMonthCode = IsoMonth.parseByMonthCode(
+                    context,
+                    monthCodeText,
+                    "Temporal error: Month code out of range.");
             if (context.hasPendingException() || parsedMonthCode == null) {
                 return null;
             }
@@ -899,14 +891,14 @@ public final class TemporalZonedDateTimeConstructor {
             }
 
             if (!hasYear && hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return null;
                 }
                 year = calendarId.getEraYearFromEra(canonicalEra, eraYear);
                 hasYear = true;
             } else if (hasYear && hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return null;
                 }

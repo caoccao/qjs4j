@@ -1163,7 +1163,7 @@ public final class TemporalDurationPrototype {
             }
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1310,7 +1310,7 @@ public final class TemporalDurationPrototype {
             return null;
         }
 
-        if (!TemporalOptionResolver.isValidRoundingMode(roundingMode)) {
+        if (!TemporalRoundingMode.isValid(roundingMode)) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }

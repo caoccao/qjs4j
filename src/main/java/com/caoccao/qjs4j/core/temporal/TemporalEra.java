@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 public enum TemporalEra {
     BCE("bce"),
     CE("ce"),
@@ -38,6 +40,19 @@ public enum TemporalEra {
 
     TemporalEra(String identifier) {
         this.identifier = identifier;
+    }
+
+    public static TemporalEra createByCalendarId(JSContext context, TemporalCalendarId calendarId, String era) {
+        if (era == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+        TemporalEra temporalEra = calendarId.toTemporalEra(era);
+        if (temporalEra == null) {
+            context.throwRangeError("Temporal error: Invalid era.");
+            return null;
+        }
+        return temporalEra;
     }
 
     public int getEraYearByJapaneseEraYear(int eraYear) {

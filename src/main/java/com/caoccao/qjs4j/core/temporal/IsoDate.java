@@ -108,31 +108,31 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         boolean gregorianLeapYear = TemporalCalendarMath.isLeapYear(gregorianYear);
         monthSlots.add(new IsoCalendarMonth(1, false, "M01", gregorianLeapYear ? 31 : 30));
         for (int monthNumber = 2; monthNumber <= 6; monthNumber++) {
-            monthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), 31));
+            monthSlots.add(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 31));
         }
         for (int monthNumber = 7; monthNumber <= 12; monthNumber++) {
-            monthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), 30));
+            monthSlots.add(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
         }
         return monthSlots;
     }
 
     private static List<IsoCalendarMonth> getLunisolarMonthSlots(TemporalCalendarId calendarId, int calendarYear) {
-        if (calendarYear < 1900 || calendarYear > TemporalUtils.lunisolarMaxYear(calendarId)) {
+        if (calendarYear < 1900 || calendarYear > calendarId.getLunisolarMaxYear()) {
             List<IsoCalendarMonth> fallbackMonthSlots = new ArrayList<>();
             for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-                fallbackMonthSlots.add(new IsoCalendarMonth(monthNumber, false, TemporalUtils.monthCode(monthNumber), 30));
+                fallbackMonthSlots.add(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
             }
             return fallbackMonthSlots;
         }
         List<IsoCalendarMonth> monthSlots = new ArrayList<>();
         int monthNumberInYear = 1;
-        int leapMonth = TemporalUtils.lunisolarLeapMonth(calendarId, calendarYear);
+        int leapMonth = calendarId.getLunisolarLeapMonth(calendarYear);
         for (int regularMonth = 1; regularMonth <= 12; regularMonth++) {
-            int regularMonthLength = TemporalUtils.lunisolarMonthDays(calendarId, calendarYear, regularMonth);
-            String regularMonthCode = TemporalUtils.monthCode(regularMonth);
+            int regularMonthLength = calendarId.getLunisolarMonthDays(calendarYear, regularMonth);
+            String regularMonthCode = IsoMonth.toMonthCode(regularMonth);
             monthSlots.add(new IsoCalendarMonth(monthNumberInYear++, false, regularMonthCode, regularMonthLength));
             if (leapMonth == regularMonth) {
-                int leapMonthLength = TemporalUtils.lunisolarLeapMonthDays(calendarId, calendarYear);
+                int leapMonthLength = calendarId.lunisolarLeapMonthDays(calendarYear);
                 String leapMonthCode = regularMonthCode + "L";
                 monthSlots.add(new IsoCalendarMonth(monthNumberInYear++, true, leapMonthCode, leapMonthLength));
             }
@@ -163,7 +163,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             monthNumber = (int) (secondHalfDayOfYear / 30L) + 7;
             dayOfMonth = (int) (secondHalfDayOfYear % 30L) + 1;
         }
-        return new IsoCalendarDate(persianYear, monthNumber, TemporalUtils.monthCode(monthNumber), dayOfMonth);
+        return new IsoCalendarDate(persianYear, monthNumber, IsoMonth.toMonthCode(monthNumber), dayOfMonth);
     }
 
     private static IsoDate persianNowruzIsoDate(int persianYear) {
@@ -254,7 +254,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         int calendarYear = (int) (cycleIndex * 4L + yearInCycle + 1L);
         int calendarMonth = dayOfYear / 30 + 1;
         int dayOfMonth = dayOfYear % 30 + 1;
-        return new IsoCalendarDate(calendarYear, calendarMonth, TemporalUtils.monthCode(calendarMonth), dayOfMonth);
+        return new IsoCalendarDate(calendarYear, calendarMonth, IsoMonth.toMonthCode(calendarMonth), dayOfMonth);
     }
 
     public long toEpochDay() {
@@ -344,7 +344,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             islamicMonth++;
         }
         int dayOfMonth = dayInYear + 1;
-        return new IsoCalendarDate(islamicYear, islamicMonth, TemporalUtils.monthCode(islamicMonth), dayOfMonth);
+        return new IsoCalendarDate(islamicYear, islamicMonth, IsoMonth.toMonthCode(islamicMonth), dayOfMonth);
     }
 
     public IsoCalendarDate toIsoCalendarDate(TemporalCalendarId calendarId) {
@@ -352,17 +352,17 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             case ISO8601, GREGORY, JAPANESE -> new IsoCalendarDate(
                     year,
                     month,
-                    TemporalUtils.monthCode(month),
+                    IsoMonth.toMonthCode(month),
                     day);
             case BUDDHIST -> new IsoCalendarDate(
                     year + 543,
                     month,
-                    TemporalUtils.monthCode(month),
+                    IsoMonth.toMonthCode(month),
                     day);
             case ROC -> new IsoCalendarDate(
                     year - 1911,
                     month,
-                    TemporalUtils.monthCode(month),
+                    IsoMonth.toMonthCode(month),
                     day);
             default -> toNonIsoCalendarDate(calendarId);
         };
@@ -382,7 +382,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
                 for (int monthLength : TemporalConstants.LUNISOLAR_MONTH_LENGTHS_YEAR_1899) {
                     if (dayOffset < monthLength) {
                         int dayOfMonth = (int) dayOffset + 1;
-                        return new IsoCalendarDate(1899, monthNumber, TemporalUtils.monthCode(monthNumber), dayOfMonth);
+                        return new IsoCalendarDate(1899, monthNumber, IsoMonth.toMonthCode(monthNumber), dayOfMonth);
                     }
                     dayOffset -= monthLength;
                     monthNumber++;
@@ -393,15 +393,15 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             int fallbackYear = gregorianDate.getYear() - 1;
             int fallbackMonth = gregorianDate.getMonthValue();
             int fallbackDay = gregorianDate.getDayOfMonth();
-            String fallbackMonthCode = TemporalUtils.monthCode(fallbackMonth);
+            String fallbackMonthCode = IsoMonth.toMonthCode(fallbackMonth);
             return new IsoCalendarDate(fallbackYear, fallbackMonth, fallbackMonthCode, fallbackDay);
         }
 
         long dayOffset = gregorianDate.toEpochDay() - lunarBaseDate.toEpochDay();
         int lunarYear = 1900;
-        int maxSupportedYear = TemporalUtils.lunisolarMaxYear(calendarId);
+        int maxSupportedYear = calendarId.getLunisolarMaxYear();
         while (lunarYear <= maxSupportedYear) {
-            int yearDayCount = TemporalUtils.lunisolarYearDays(calendarId, lunarYear);
+            int yearDayCount = calendarId.getLunisolarYearDays(lunarYear);
             if (dayOffset < yearDayCount) {
                 break;
             }
@@ -412,16 +412,16 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             int fallbackMonth = gregorianDate.getMonthValue();
             int fallbackDay = gregorianDate.getDayOfMonth();
             int fallbackYear = gregorianDate.getYear();
-            return new IsoCalendarDate(fallbackYear, fallbackMonth, TemporalUtils.monthCode(fallbackMonth), fallbackDay);
+            return new IsoCalendarDate(fallbackYear, fallbackMonth, IsoMonth.toMonthCode(fallbackMonth), fallbackDay);
         }
 
-        int leapMonth = TemporalUtils.lunisolarLeapMonth(calendarId, lunarYear);
+        int leapMonth = calendarId.getLunisolarLeapMonth(lunarYear);
         int lunarMonth = 1;
         boolean inLeapMonth = false;
         while (lunarMonth <= 12) {
             int monthDayCount = inLeapMonth
-                    ? TemporalUtils.lunisolarLeapMonthDays(calendarId, lunarYear)
-                    : TemporalUtils.lunisolarMonthDays(calendarId, lunarYear, lunarMonth);
+                    ? calendarId.lunisolarLeapMonthDays(lunarYear)
+                    : calendarId.getLunisolarMonthDays(lunarYear, lunarMonth);
             if (dayOffset < monthDayCount) {
                 break;
             }
@@ -436,7 +436,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             }
         }
         int lunarDay = (int) dayOffset + 1;
-        String monthCode = TemporalUtils.monthCode(lunarMonth);
+        String monthCode = IsoMonth.toMonthCode(lunarMonth);
         if (inLeapMonth) {
             monthCode = monthCode + "L";
         }
@@ -464,7 +464,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             case PERSIAN -> toPersianCalendarDate();
             case HEBREW -> toHebrewCalendarDate();
             case CHINESE, DANGI -> toLunisolarCalendarDate(calendarId);
-            default -> new IsoCalendarDate(year, month, TemporalUtils.monthCode(month), day);
+            default -> new IsoCalendarDate(year, month, IsoMonth.toMonthCode(month), day);
         };
     }
 
@@ -556,7 +556,7 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             int yearValue = hijrahDate.get(ChronoField.YEAR);
             int monthValue = hijrahDate.get(ChronoField.MONTH_OF_YEAR);
             int dayValue = hijrahDate.get(ChronoField.DAY_OF_MONTH);
-            return new IsoCalendarDate(yearValue, monthValue, TemporalUtils.monthCode(monthValue), dayValue);
+            return new IsoCalendarDate(yearValue, monthValue, IsoMonth.toMonthCode(monthValue), dayValue);
         } catch (DateTimeException dateTimeException) {
             return toIslamicCalendarDate(TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
         }

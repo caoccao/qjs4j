@@ -167,7 +167,7 @@ public final class TemporalPlainMonthDayPrototype {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            TemporalCalendarId formatterCalendarId = TemporalUtils.validateCalendar(context, formatterCalendarValue);
+            TemporalCalendarId formatterCalendarId = TemporalCalendarId.createFromCalendarString(context, formatterCalendarValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }

@@ -18,30 +18,9 @@ package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.TemporalFractionalSecondDigitsOption;
-import com.caoccao.qjs4j.core.temporal.TemporalRoundingMode;
 
 final class TemporalOptionResolver {
     private TemporalOptionResolver() {
-    }
-
-    static String getRequiredStringOption(
-            JSContext context,
-            JSObject optionsObject,
-            String optionName,
-            String missingOptionMessage) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            context.throwRangeError(missingOptionMessage);
-            return null;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
     }
 
     static long getRoundingIncrementOption(
@@ -92,10 +71,6 @@ final class TemporalOptionResolver {
             return null;
         }
         return optionText.value();
-    }
-
-    static boolean isValidRoundingMode(String roundingMode) {
-        return TemporalRoundingMode.isValid(roundingMode);
     }
 
     static TemporalFractionalSecondDigitsOption parseFractionalSecondDigitsOption(

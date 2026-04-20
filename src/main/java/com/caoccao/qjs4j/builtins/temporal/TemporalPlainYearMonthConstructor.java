@@ -75,7 +75,7 @@ public final class TemporalPlainYearMonthConstructor {
 
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (args.length > 2 && !(args[2] instanceof JSUndefined)) {
-            calendarId = TemporalUtils.validateCalendar(context, args[2]);
+            calendarId = TemporalCalendarId.createFromCalendarString(context, args[2]);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -208,7 +208,7 @@ public final class TemporalPlainYearMonthConstructor {
             context.throwTypeError("Temporal error: Month code must be string.");
             return null;
         }
-        IsoMonth parsedMonthCode = TemporalFieldResolver.parseMonthCodeSyntax(
+        IsoMonth parsedMonthCode = IsoMonth.parseByMonthCode(
                 context,
                 monthCodeText,
                 "Temporal error: Month code out of range.");
@@ -261,7 +261,7 @@ public final class TemporalPlainYearMonthConstructor {
         }
         TemporalCalendarId calendarId = TemporalCalendarId.ISO8601;
         if (!(calendarValue instanceof JSUndefined) && calendarValue != null) {
-            calendarId = TemporalUtils.toTemporalCalendarWithISODefault(context, calendarValue);
+            calendarId = TemporalCalendarId.createFromCalendarValue(context, calendarValue);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -292,7 +292,7 @@ public final class TemporalPlainYearMonthConstructor {
             if (context.hasPendingException() || parsedMonthCode == null) {
                 return JSUndefined.INSTANCE;
             }
-            monthCodeFromProperty = TemporalUtils.monthCode(parsedMonthCode.month());
+            monthCodeFromProperty = IsoMonth.toMonthCode(parsedMonthCode.month());
             if (parsedMonthCode.leapMonth()) {
                 monthCodeFromProperty = monthCodeFromProperty + "L";
             }
@@ -349,7 +349,7 @@ public final class TemporalPlainYearMonthConstructor {
                 return JSUndefined.INSTANCE;
             }
             if (!hasYear && hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -359,7 +359,7 @@ public final class TemporalPlainYearMonthConstructor {
                 }
                 hasYear = true;
             } else if (hasEra && hasEraYear) {
-                TemporalEra canonicalEra = TemporalFieldResolver.getEraByCalendarId(context, calendarId, era);
+                TemporalEra canonicalEra = TemporalEra.createByCalendarId(context, calendarId, era);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
@@ -489,7 +489,7 @@ public final class TemporalPlainYearMonthConstructor {
         TemporalCalendarId calendar = TemporalCalendarId.ISO8601;
         String calendarAnnotation = TemporalUtils.firstCalendarAnnotation(input);
         if (calendarAnnotation != null) {
-            calendar = TemporalUtils.validateCalendar(context, new JSString(calendarAnnotation));
+            calendar = TemporalCalendarId.createFromCalendarString(context, new JSString(calendarAnnotation));
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
