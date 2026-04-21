@@ -365,7 +365,7 @@ public final class TemporalPlainDateTimeConstructor {
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {
-        IsoCalendarDateTime parsed = TemporalParser.parseDateTimeString(context, input);
+        IsoCalendarDateTime parsed = IsoCalendarDateTime.parseDateTimeString(context, input);
         if (parsed == null) {
             return JSUndefined.INSTANCE;
         }

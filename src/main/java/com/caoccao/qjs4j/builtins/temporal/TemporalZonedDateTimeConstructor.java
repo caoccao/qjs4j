@@ -411,7 +411,7 @@ public final class TemporalZonedDateTimeConstructor {
 
         if (item instanceof JSString zonedDateTimeString) {
             IsoZonedDateTimeOffset parsed =
-                    TemporalParser.parseZonedDateTimeString(context, zonedDateTimeString.value());
+                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, zonedDateTimeString.value());
             if (context.hasPendingException() || parsed == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -1020,7 +1020,7 @@ public final class TemporalZonedDateTimeConstructor {
 
         if (item instanceof JSString zonedDateTimeString) {
             IsoZonedDateTimeOffset parsed =
-                    TemporalParser.parseZonedDateTimeString(context, zonedDateTimeString.value());
+                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, zonedDateTimeString.value());
             if (context.hasPendingException() || parsed == null) {
                 return JSUndefined.INSTANCE;
             }

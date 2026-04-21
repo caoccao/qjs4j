@@ -300,7 +300,7 @@ public final class TemporalPlainDateConstructor {
     }
 
     static JSValue dateFromString(JSContext context, String input) {
-        IsoDate date = TemporalParser.parseDateString(context, input);
+        IsoDate date = IsoDate.parseDateString(context, input);
         if (date == null) {
             return JSUndefined.INSTANCE;
         }

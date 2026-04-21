@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDateTimeOffset;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 
@@ -182,7 +181,7 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTimeOffset parsed = TemporalParser.parseInstantString(context, instantString.value());
+        IsoDateTimeOffset parsed = IsoDateTimeOffset.parseInstantString(context, instantString.value());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

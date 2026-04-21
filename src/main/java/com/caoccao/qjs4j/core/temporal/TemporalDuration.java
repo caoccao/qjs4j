@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 import java.math.BigInteger;
 import java.util.Locale;
 
@@ -35,6 +37,15 @@ public record TemporalDuration(
                 Math.abs(years), Math.abs(months), Math.abs(weeks), Math.abs(days),
                 Math.abs(hours), Math.abs(minutes), Math.abs(seconds),
                 Math.abs(milliseconds), Math.abs(microseconds), Math.abs(nanoseconds));
+    }
+
+    public static TemporalDuration parseDurationString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid duration string.");
+            return null;
+        }
+        IsoParsingState parsingState = new IsoParsingState(input);
+        return parsingState.parseDuration(context);
     }
 
     /**

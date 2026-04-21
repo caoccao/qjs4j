@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.builtins.temporal;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.IsoTime;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
 import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
@@ -221,7 +220,7 @@ public final class TemporalPlainTimeConstructor {
     }
 
     static JSValue timeFromString(JSContext context, String input) {
-        IsoTime time = TemporalParser.parseTimeString(context, input);
+        IsoTime time = IsoTime.parseTimeString(context, input);
         if (time == null) {
             return JSUndefined.INSTANCE;
         }

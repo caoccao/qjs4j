@@ -424,7 +424,7 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromString(JSContext context, String input) {
-        TemporalDuration record = TemporalParser.parseDurationString(context, input);
+        TemporalDuration record = TemporalDuration.parseDurationString(context, input);
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -937,7 +937,7 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
                 }
-                IsoCalendarDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+                IsoCalendarDateTime parsedDateTime = IsoCalendarDateTime.parseDateTimeString(context, constrainedRelativeToText);
                 if (parsedDateTime == null || context.hasPendingException()) {
                     return null;
                 }
@@ -954,7 +954,7 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             IsoZonedDateTimeOffset parsedZonedDateTime =
-                    TemporalParser.parseZonedDateTimeString(context, constrainedRelativeToText);
+                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, constrainedRelativeToText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
@@ -1072,7 +1072,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        IsoCalendarDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+        IsoCalendarDateTime parsedDateTime = IsoCalendarDateTime.parseDateTimeString(context, constrainedRelativeToText);
         if (parsedDateTime == null || context.hasPendingException()) {
             return null;
         }

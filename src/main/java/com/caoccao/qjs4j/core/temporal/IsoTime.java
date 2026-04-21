@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 import java.util.Locale;
 
 /**
@@ -52,6 +54,76 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         microsecond = Math.max(0, Math.min(999, microsecond));
         nanosecond = Math.max(0, Math.min(999, nanosecond));
         return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
+    }
+
+    public static IsoTime parseTimeString(JSContext context, String input) {
+        if (input == null || input.isEmpty()) {
+            context.throwRangeError("Temporal error: Invalid time");
+            return null;
+        }
+        if (input.indexOf('\u2212') >= 0) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        IsoParsingState parsingState = new IsoParsingState(input);
+        IsoTime time;
+        if (parsingState.position() < parsingState.inputLength()
+                && (parsingState.current() == 'T' || parsingState.current() == 't')) {
+            parsingState.advanceOne();
+            time = parsingState.parseInstantTime(context);
+        } else {
+            int initialPosition = parsingState.position();
+            IsoDate parsedDate = parsingState.parseDate(context);
+            if (parsedDate != null && !context.hasPendingException()) {
+                if (parsingState.position() >= parsingState.inputLength()) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                char separator = parsingState.current();
+                if (separator != 'T' && separator != 't' && separator != ' ') {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                parsingState.advanceOne();
+                time = parsingState.parseInstantTime(context);
+            } else {
+                context.clearPendingException();
+                parsingState.setPosition(initialPosition);
+                if (IsoParsingState.isAmbiguousTimeStringWithoutDesignator(input)) {
+                    context.throwRangeError("Temporal error: Invalid ISO date.");
+                    return null;
+                }
+                time = parsingState.parseInstantTime(context);
+            }
+        }
+        if (time == null || context.hasPendingException()) {
+            return null;
+        }
+
+        if (parsingState.position() < parsingState.inputLength()) {
+            char marker = parsingState.current();
+            if (marker == 'Z' || marker == 'z') {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+            if (marker == '+' || marker == '-') {
+                IsoOffset parsedOffset = parsingState.parseInstantOffsetNanoseconds(context);
+                if (parsedOffset == null || context.hasPendingException()) {
+                    return null;
+                }
+            }
+        }
+
+        parsingState.parseInstantAnnotations(context);
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (parsingState.position() != parsingState.inputLength()) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+        return time;
     }
 
     public IsoTime clampSecondToValidRange() {

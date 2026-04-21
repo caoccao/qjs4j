@@ -98,27 +98,27 @@ public enum TemporalCalendarId {
             calendarLikeBaseText = calendarLikeBaseText.substring(0, annotationStart);
         }
 
-        if (TemporalParser.parseDateString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+        if (IsoDate.parseDateString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
 
-        if (TemporalParser.parseDateTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+        if (IsoCalendarDateTime.parseDateTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
 
-        if (TemporalParser.parseYearMonthString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+        if (IsoDate.parseYearMonthString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
 
-        if (TemporalParser.parseMonthDayString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+        if (IsoDate.parseMonthDayString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
 
-        if (TemporalParser.parseTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
+        if (IsoTime.parseTimeString(context, calendarLikeBaseText) != null && !context.hasPendingException()) {
             return true;
         }
         context.clearPendingException();
@@ -129,7 +129,7 @@ public enum TemporalCalendarId {
                 && calendarLikeBaseText.charAt(2) == '-'
                 && Character.isDigit(calendarLikeBaseText.charAt(3))
                 && Character.isDigit(calendarLikeBaseText.charAt(4))
-                && TemporalParser.parseMonthDayString(context, "--" + calendarLikeBaseText) != null
+                && IsoDate.parseMonthDayString(context, "--" + calendarLikeBaseText) != null
                 && !context.hasPendingException()) {
             return true;
         }
