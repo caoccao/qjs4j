@@ -30,39 +30,33 @@ public class TemporalMathKernelTest extends BaseTest {
     public void testRoundBigIntegerToIncrementAsIfPositive() {
         BigInteger value = BigInteger.valueOf(15L);
         BigInteger increment = BigInteger.TEN;
-        assertThat(TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
+        assertThat(TemporalRoundingMode.HALF_EXPAND.roundBigIntegerToIncrementAsIfPositive(
                 value,
-                increment,
-                TemporalRoundingMode.HALF_EXPAND)).isEqualTo(BigInteger.valueOf(20L));
-        assertThat(TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
+                increment)).isEqualTo(BigInteger.valueOf(20L));
+        assertThat(TemporalRoundingMode.HALF_TRUNC.roundBigIntegerToIncrementAsIfPositive(
                 value,
-                increment,
-                TemporalRoundingMode.HALF_TRUNC)).isEqualTo(BigInteger.valueOf(10L));
+                increment)).isEqualTo(BigInteger.valueOf(10L));
     }
 
     @Test
     public void testRoundBigIntegerToIncrementSigned() {
         BigInteger value = BigInteger.valueOf(-15L);
         BigInteger increment = BigInteger.TEN;
-        assertThat(TemporalMathKernel.roundBigIntegerToIncrementSigned(
+        assertThat(TemporalRoundingMode.TRUNC.roundBigIntegerToIncrementSigned(
                 value,
-                increment,
-                TemporalRoundingMode.TRUNC)).isEqualTo(BigInteger.valueOf(-10L));
-        assertThat(TemporalMathKernel.roundBigIntegerToIncrementSigned(
+                increment)).isEqualTo(BigInteger.valueOf(-10L));
+        assertThat(TemporalRoundingMode.FLOOR.roundBigIntegerToIncrementSigned(
                 value,
-                increment,
-                TemporalRoundingMode.FLOOR)).isEqualTo(BigInteger.valueOf(-20L));
+                increment)).isEqualTo(BigInteger.valueOf(-20L));
     }
 
     @Test
     public void testRoundLongToIncrementAsIfPositive() {
-        assertThat(TemporalMathKernel.roundLongToIncrementAsIfPositive(
+        assertThat(TemporalRoundingMode.HALF_FLOOR.roundLongToIncrementAsIfPositive(
                 155L,
-                10L,
-                TemporalRoundingMode.HALF_FLOOR)).isEqualTo(150L);
-        assertThat(TemporalMathKernel.roundLongToIncrementAsIfPositive(
+                10L)).isEqualTo(150L);
+        assertThat(TemporalRoundingMode.HALF_EXPAND.roundLongToIncrementAsIfPositive(
                 155L,
-                10L,
-                TemporalRoundingMode.HALF_EXPAND)).isEqualTo(160L);
+                10L)).isEqualTo(160L);
     }
 }

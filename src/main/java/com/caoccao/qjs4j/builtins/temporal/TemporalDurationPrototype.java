@@ -367,13 +367,13 @@ public final class TemporalDurationPrototype {
         long weeks = 0;
         long days = 0;
         LocalDateTime cursorDateTime = startDateTime;
-        int smallestUnitRank = temporalDurationUnitRank(smallestUnit);
+        int smallestUnitRank = TemporalUnit.rank(smallestUnit);
 
         if ("year".equals(largestUnit)) {
             TemporalUnitStepResult yearStepResult = moveByWholeCalendarUnits(cursorDateTime, endDateTime, "year");
             years = yearStepResult.count();
             cursorDateTime = yearStepResult.boundaryDateTime();
-            if (smallestUnitRank == temporalDurationUnitRank("year")) {
+            if (smallestUnitRank == TemporalUnit.rank("year")) {
                 return new TemporalDuration(years, 0, 0, 0, 0, 0, 0, 0, 0, 0);
             }
         }
@@ -382,7 +382,7 @@ public final class TemporalDurationPrototype {
             TemporalUnitStepResult monthStepResult = moveByWholeCalendarUnits(cursorDateTime, endDateTime, "month");
             months = monthStepResult.count();
             cursorDateTime = monthStepResult.boundaryDateTime();
-            if (smallestUnitRank == temporalDurationUnitRank("month")) {
+            if (smallestUnitRank == TemporalUnit.rank("month")) {
                 return new TemporalDuration(years, months, 0, 0, 0, 0, 0, 0, 0, 0);
             }
         }
@@ -405,12 +405,12 @@ public final class TemporalDurationPrototype {
             }
             weeks = weekStepResult.count();
             cursorDateTime = weekStepResult.boundaryDateTime();
-            if (smallestUnitRank == temporalDurationUnitRank("week")) {
+            if (smallestUnitRank == TemporalUnit.rank("week")) {
                 return new TemporalDuration(years, months, weeks, 0, 0, 0, 0, 0, 0, 0);
             }
         }
 
-        if (smallestUnitRank >= temporalDurationUnitRank("day")) {
+        if (smallestUnitRank >= TemporalUnit.rank("day")) {
             TemporalUnitStepResult dayStepResult;
             if (relativeToOption != null && relativeToOption.zoned()) {
                 dayStepResult = moveByWholeCalendarUnits(
@@ -427,7 +427,7 @@ public final class TemporalDurationPrototype {
             }
             days = dayStepResult.count();
             cursorDateTime = dayStepResult.boundaryDateTime();
-            if (smallestUnitRank == temporalDurationUnitRank("day")) {
+            if (smallestUnitRank == TemporalUnit.rank("day")) {
                 return new TemporalDuration(years, months, weeks, days, 0, 0, 0, 0, 0, 0);
             }
         }
@@ -487,7 +487,7 @@ public final class TemporalDurationPrototype {
     }
 
     private static String coarserDurationUnit(String leftUnit, String rightUnit) {
-        if (temporalDurationUnitRank(leftUnit) <= temporalDurationUnitRank(rightUnit)) {
+        if (TemporalUnit.rank(leftUnit) <= TemporalUnit.rank(rightUnit)) {
             return leftUnit;
         } else {
             return rightUnit;
@@ -509,7 +509,7 @@ public final class TemporalDurationPrototype {
             String largestUnit,
             String smallestUnit,
             long roundingIncrement,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         LocalDateTime startDateTime = startIsoDateTime.toLocalDateTime();
         LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
 
@@ -534,7 +534,7 @@ public final class TemporalDurationPrototype {
                 smallestUnit,
                 largestUnit,
                 roundingIncrement,
-                TemporalRoundingMode.fromString(roundingMode),
+                roundingMode,
                 relativeToOption);
         LocalDateTime roundedEndDateTime = roundDateTimeDifference(
                 context,
@@ -565,7 +565,7 @@ public final class TemporalDurationPrototype {
             String largestUnit,
             String smallestUnit,
             long roundingIncrement,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         IsoDateTime startIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 startEpochNanoseconds,
                 timeZoneId);
@@ -601,7 +601,7 @@ public final class TemporalDurationPrototype {
                 smallestUnit,
                 largestUnit,
                 roundingIncrement,
-                TemporalRoundingMode.fromString(roundingMode),
+                roundingMode,
                 relativeToOption);
         LocalDateTime roundedEndDateTime = roundDateTimeDifference(
                 context,
@@ -1213,7 +1213,7 @@ public final class TemporalDurationPrototype {
         TemporalRelativeToOption relativeToOption = null;
         boolean largestUnitProvided = false;
         long roundingIncrement = 1L;
-        String roundingMode = "halfExpand";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.HALF_EXPAND;
 
         if (roundToArg instanceof JSString smallestUnitStringValue) {
             smallestUnitText = smallestUnitStringValue.value();
@@ -1247,8 +1247,13 @@ public final class TemporalDurationPrototype {
                 return null;
             }
 
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
-            if (context.hasPendingException() || roundingMode == null) {
+            String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            if (context.hasPendingException() || roundingModeText == null) {
+                return null;
+            }
+            roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+            if (roundingMode == null) {
+                context.throwRangeError("Temporal error: Invalid rounding mode.");
                 return null;
             }
 
@@ -1292,13 +1297,8 @@ public final class TemporalDurationPrototype {
             canonicalLargestUnit = coarserDurationUnit(canonicalSmallestUnit, durationLargestUnit);
         }
 
-        if (temporalDurationUnitRank(canonicalSmallestUnit) < temporalDurationUnitRank(canonicalLargestUnit)) {
+        if (TemporalUnit.rank(canonicalSmallestUnit) < TemporalUnit.rank(canonicalLargestUnit)) {
             context.throwRangeError("Temporal error: smallestUnit must be smaller than largestUnit.");
-            return null;
-        }
-
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
 
@@ -1309,7 +1309,7 @@ public final class TemporalDurationPrototype {
 
         if (roundingIncrement != 1
                 && isCalendarUnit(canonicalSmallestUnit)
-                && temporalDurationUnitRank(canonicalLargestUnit) < temporalDurationUnitRank(canonicalSmallestUnit)) {
+                && TemporalUnit.rank(canonicalLargestUnit) < TemporalUnit.rank(canonicalSmallestUnit)) {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return null;
         }
@@ -1318,7 +1318,7 @@ public final class TemporalDurationPrototype {
                 canonicalSmallestUnit,
                 canonicalLargestUnit,
                 roundingIncrement,
-                TemporalRoundingMode.fromString(roundingMode),
+                roundingMode,
                 relativeToOption);
     }
 
@@ -1454,7 +1454,7 @@ public final class TemporalDurationPrototype {
                     unroundedEndEpochNanoseconds,
                     smallestUnit,
                     roundingIncrement,
-                    roundingMode.jsName(),
+                    roundingMode,
                     relativeToOption);
         }
 
@@ -1481,7 +1481,7 @@ public final class TemporalDurationPrototype {
                     relativeToOption);
             BigInteger weekIncrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedWeekRemainderNanoseconds =
-                    TemporalMathKernel.roundBigIntegerToIncrementSigned(weekRemainderNanoseconds, weekIncrementNanoseconds, roundingMode);
+                    roundingMode.roundBigIntegerToIncrementSigned(weekRemainderNanoseconds, weekIncrementNanoseconds);
             return IsoDateTime.createFromLocalDateTime(weekAnchorDateTime).addNanosecondsToDateTime(
                     context,
                     roundedWeekRemainderNanoseconds,
@@ -1527,17 +1527,15 @@ public final class TemporalDurationPrototype {
             if (context.hasPendingException()) {
                 return null;
             }
-            BigInteger roundedTimeNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+            BigInteger roundedTimeNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
                     balancedDurationWithoutRounding.timeNanoseconds(),
-                    unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)),
-                    roundingMode);
+                    unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)));
             BigInteger beyondDaySpanNanoseconds = roundedTimeNanoseconds.subtract(daySpanNanoseconds);
             boolean roundedBeyondOneDay = beyondDaySpanNanoseconds.signum() != -durationSign;
             if (roundedBeyondOneDay) {
-                roundedTimeNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+                roundedTimeNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
                         beyondDaySpanNanoseconds,
-                        unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)),
-                        roundingMode);
+                        unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)));
                 return IsoDateTime.createFromLocalDateTime(endAnchorDateTime).addNanosecondsToDateTime(
                         context,
                         roundedTimeNanoseconds,
@@ -1574,7 +1572,7 @@ public final class TemporalDurationPrototype {
             BigInteger incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit)
                     .multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedTimeRemainderNanoseconds =
-                    TemporalMathKernel.roundBigIntegerToIncrementSigned(timeRemainderNanoseconds, incrementNanoseconds, roundingMode);
+                    roundingMode.roundBigIntegerToIncrementSigned(timeRemainderNanoseconds, incrementNanoseconds);
             return IsoDateTime.createFromLocalDateTime(dayAdjustedDateTime).addNanosecondsToDateTime(
                     context,
                     roundedTimeRemainderNanoseconds,
@@ -1597,14 +1595,14 @@ public final class TemporalDurationPrototype {
                     unroundedEndEpochNanoseconds,
                     "day",
                     roundingIncrement,
-                    roundingMode.jsName(),
+                    roundingMode,
                     relativeToOption);
         } else if ("week".equals(smallestUnit)) {
             incrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
         } else {
             incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement));
         }
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundingMode);
+        BigInteger roundedNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds);
         return IsoDateTime.createFromLocalDateTime(startDateTime).addNanosecondsToDateTime(
                 context,
                 roundedNanoseconds,
@@ -1618,7 +1616,7 @@ public final class TemporalDurationPrototype {
             BigInteger knownEndEpochNanoseconds,
             String calendarUnit,
             long roundingIncrement,
-            String roundingMode,
+            TemporalRoundingMode roundingMode,
             TemporalRelativeToOption relativeToOption) {
         TemporalUnitStepResult truncatedStepResult = moveByWholeCalendarUnits(startDateTime, endDateTime, calendarUnit);
         if (relativeToOption != null && relativeToOption.zoned()) {
@@ -1709,27 +1707,27 @@ public final class TemporalDurationPrototype {
             direction = 1;
         }
         switch (roundingMode) {
-            case "ceil":
+            case CEIL:
                 return upperBoundaryDateTime;
-            case "floor":
+            case FLOOR:
                 return lowerBoundaryDateTime;
-            case "trunc":
+            case TRUNC:
                 if (direction < 0) {
                     return upperBoundaryDateTime;
                 } else {
                     return lowerBoundaryDateTime;
                 }
-            case "expand":
+            case EXPAND:
                 if (direction < 0) {
                     return lowerBoundaryDateTime;
                 } else {
                     return upperBoundaryDateTime;
                 }
-            case "halfEven":
-            case "halfExpand":
-            case "halfTrunc":
-            case "halfCeil":
-            case "halfFloor":
+            case HALF_EVEN:
+            case HALF_EXPAND:
+            case HALF_TRUNC:
+            case HALF_CEIL:
+            case HALF_FLOOR:
                 BigInteger lowerDistanceNanoseconds = nanosecondsBetween(
                         context,
                         lowerBoundaryDateTime,
@@ -1752,29 +1750,29 @@ public final class TemporalDurationPrototype {
                     return upperBoundaryDateTime;
                 }
                 return switch (roundingMode) {
-                    case "halfEven" -> {
+                    case HALF_EVEN -> {
                         if (Math.floorMod(lowerMultipleCount / roundingIncrement, 2L) == 0L) {
                             yield lowerBoundaryDateTime;
                         } else {
                             yield upperBoundaryDateTime;
                         }
                     }
-                    case "halfExpand" -> {
+                    case HALF_EXPAND -> {
                         if (direction < 0) {
                             yield lowerBoundaryDateTime;
                         } else {
                             yield upperBoundaryDateTime;
                         }
                     }
-                    case "halfTrunc" -> {
+                    case HALF_TRUNC -> {
                         if (direction < 0) {
                             yield upperBoundaryDateTime;
                         } else {
                             yield lowerBoundaryDateTime;
                         }
                     }
-                    case "halfCeil" -> upperBoundaryDateTime;
-                    case "halfFloor" -> lowerBoundaryDateTime;
+                    case HALF_CEIL -> upperBoundaryDateTime;
+                    case HALF_FLOOR -> lowerBoundaryDateTime;
                     default -> lowerBoundaryDateTime;
                 };
             default:
@@ -1908,7 +1906,7 @@ public final class TemporalDurationPrototype {
         BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger roundingUnitNanoseconds = unitToNanosecondsBigInteger(roundOptions.smallestUnit());
         BigInteger incrementNanoseconds = roundingUnitNanoseconds.multiply(BigInteger.valueOf(roundOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundOptions.roundingMode());
+        BigInteger roundedNanoseconds = roundOptions.roundingMode().roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds);
         TemporalDurationFieldOverrides durationFieldOverrides = null;
         String balancingLargestUnit = roundOptions.largestUnit();
         if ("millisecond".equals(roundOptions.largestUnit())) {
@@ -2016,22 +2014,6 @@ public final class TemporalDurationPrototype {
         return addOrSubtract(context, duration, args, -1);
     }
 
-    private static int temporalDurationUnitRank(String unit) {
-        return switch (unit) {
-            case "year" -> 0;
-            case "month" -> 1;
-            case "week" -> 2;
-            case "day" -> 3;
-            case "hour" -> 4;
-            case "minute" -> 5;
-            case "second" -> 6;
-            case "millisecond" -> 7;
-            case "microsecond" -> 8;
-            case "nanosecond" -> 9;
-            default -> 10;
-        };
-    }
-
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "toJSON");
         if (duration == null) {
@@ -2073,7 +2055,7 @@ public final class TemporalDurationPrototype {
         BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger incrementNanoseconds = BigInteger.valueOf(options.roundingIncrementNanoseconds());
         BigInteger roundedDayTimeNanoseconds =
-                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
+                options.roundingMode().roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds);
         if (roundedDayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;

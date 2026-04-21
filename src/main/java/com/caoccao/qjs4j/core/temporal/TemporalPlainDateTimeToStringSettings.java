@@ -19,10 +19,10 @@ package com.caoccao.qjs4j.core.temporal;
 public record TemporalPlainDateTimeToStringSettings(
         String calendarNameOption,
         String smallestUnit,
-        String roundingMode,
+        TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,
         long roundingIncrementNanoseconds) {
     public static final TemporalPlainDateTimeToStringSettings DEFAULT =
-            new TemporalPlainDateTimeToStringSettings("auto", null, "trunc", true, -1, 1L);
+            new TemporalPlainDateTimeToStringSettings("auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
 }

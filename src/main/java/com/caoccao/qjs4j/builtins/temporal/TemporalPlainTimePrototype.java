@@ -114,10 +114,9 @@ public final class TemporalPlainTimePrototype {
         long smallestUnitNanoseconds = unitToNanoseconds(differenceSettings.smallestUnit());
         BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
                 .multiply(BigInteger.valueOf(differenceSettings.roundingIncrement()));
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = differenceSettings.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
-                incrementNanoseconds,
-                differenceSettings.roundingMode());
+                incrementNanoseconds);
 
         TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
                 roundedNanoseconds,
@@ -158,7 +157,7 @@ public final class TemporalPlainTimePrototype {
         }
 
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
-        String roundingMode = "trunc";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
         String smallestUnitText = null;
         JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
         if (context.hasPendingException()) {
@@ -174,8 +173,8 @@ public final class TemporalPlainTimePrototype {
         }
         fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-        roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingMode == null) {
+        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
@@ -184,7 +183,8 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -279,10 +279,9 @@ public final class TemporalPlainTimePrototype {
         long totalNs = plainTime.getIsoTime().totalNanoseconds();
         long unitNs = unitToNanoseconds(roundSettings.smallestUnit());
         long incrementNs = unitNs * roundSettings.roundingIncrement();
-        long roundedNs = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+        long roundedNs = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                 totalNs,
-                incrementNs,
-                roundSettings.roundingMode());
+                incrementNs);
         if (roundedNs == DAY_NANOSECONDS.longValue()) {
             roundedNs = 0L;
         }
@@ -368,10 +367,9 @@ public final class TemporalPlainTimePrototype {
 
         long roundedNanoseconds = plainTime.getIsoTime().totalNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+            roundedNanoseconds = toStringSettings.roundingMode().roundLongToIncrementAsIfPositive(
                     roundedNanoseconds,
-                    toStringSettings.roundingIncrementNanoseconds(),
-                    TemporalRoundingMode.fromString(toStringSettings.roundingMode()));
+                    toStringSettings.roundingIncrementNanoseconds());
         }
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
             roundedNanoseconds = 0L;

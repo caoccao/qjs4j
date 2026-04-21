@@ -21,10 +21,11 @@ public record TemporalZonedDateTimeToStringSettings(
         String offsetOption,
         String timeZoneNameOption,
         String smallestUnit,
-        String roundingMode,
+        TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,
         long roundingIncrementNanoseconds) {
     public static final TemporalZonedDateTimeToStringSettings DEFAULT =
-            new TemporalZonedDateTimeToStringSettings("auto", "auto", "auto", null, "trunc", true, -1, 1L);
+            new TemporalZonedDateTimeToStringSettings(
+                    "auto", "auto", "auto", null, TemporalRoundingMode.TRUNC, true, -1, 1L);
 }

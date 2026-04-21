@@ -403,7 +403,7 @@ public final class TemporalZonedDateTimePrototype {
                     settings.largestUnit(),
                     unitToNanoseconds(settings.smallestUnit()),
                     settings.roundingIncrement(),
-                    settings.roundingMode().jsName());
+                    settings.roundingMode());
         }
 
         String startCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(
@@ -445,7 +445,7 @@ public final class TemporalZonedDateTimePrototype {
                         timeLargestUnit,
                         unitToNanoseconds(settings.smallestUnit()),
                         settings.roundingIncrement(),
-                        settings.roundingMode().jsName());
+                        settings.roundingMode());
             }
         }
 
@@ -459,7 +459,7 @@ public final class TemporalZonedDateTimePrototype {
                     settings.largestUnit(),
                     settings.smallestUnit(),
                     settings.roundingIncrement(),
-                    settings.roundingMode().jsName());
+                    settings.roundingMode());
         }
 
         boolean noRounding = settings.roundingIncrement() == 1L
@@ -481,7 +481,7 @@ public final class TemporalZonedDateTimePrototype {
                 settings.largestUnit(),
                 settings.smallestUnit(),
                 settings.roundingIncrement(),
-                settings.roundingMode().jsName());
+                settings.roundingMode());
     }
 
     public static JSValue epochMilliseconds(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -780,7 +780,7 @@ public final class TemporalZonedDateTimePrototype {
         String calendarNameOption = "auto";
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
         String offsetOption = "auto";
-        String roundingMode = "trunc";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
         String smallestUnitText = null;
         String timeZoneNameOption = "auto";
 
@@ -808,8 +808,8 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
 
-        roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingMode == null) {
+        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
@@ -823,7 +823,8 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1071,7 +1072,7 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger roundedEpochNanoseconds;
         if ("day".equals(roundSettings.smallestUnit())) {
-            roundedEpochNanoseconds = roundZonedDateTimeToDay(context, zonedDateTime, roundSettings.roundingMode().jsName());
+            roundedEpochNanoseconds = roundZonedDateTimeToDay(context, zonedDateTime, roundSettings.roundingMode());
             if (context.hasPendingException() || roundedEpochNanoseconds == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -1086,10 +1087,9 @@ public final class TemporalZonedDateTimePrototype {
             long totalNanoseconds = localDateTime.time().totalNanoseconds();
             long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
             long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
-            long roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+            long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                     totalNanoseconds,
-                    incrementNanoseconds,
-                    roundSettings.roundingMode());
+                    incrementNanoseconds);
 
             int dayAdjust = 0;
             if (roundedNanoseconds == DAY_NANOSECONDS) {
@@ -1131,7 +1131,7 @@ public final class TemporalZonedDateTimePrototype {
     private static BigInteger roundZonedDateTimeToDay(
             JSContext context,
             JSTemporalZonedDateTime zonedDateTime,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         IsoDateTime localDateTime;
         try {
             localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(zonedDateTime.getEpochNanoseconds(), zonedDateTime.getTimeZoneId());
@@ -1170,10 +1170,9 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger dayLengthNanoseconds = endNanoseconds.subtract(startNanoseconds);
         BigInteger elapsedNanoseconds = zonedDateTime.getEpochNanoseconds().subtract(startNanoseconds);
-        BigInteger roundedElapsedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
+        BigInteger roundedElapsedNanoseconds = roundingMode.roundBigIntegerToIncrementAsIfPositive(
                 elapsedNanoseconds,
-                dayLengthNanoseconds,
-                TemporalRoundingMode.fromString(roundingMode));
+                dayLengthNanoseconds);
         return startNanoseconds.add(roundedElapsedNanoseconds);
     }
 
@@ -1420,10 +1419,9 @@ public final class TemporalZonedDateTimePrototype {
 
         BigInteger roundedEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedEpochNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementAsIfPositive(
+            roundedEpochNanoseconds = toStringSettings.roundingMode().roundBigIntegerToIncrementAsIfPositive(
                     roundedEpochNanoseconds,
-                    BigInteger.valueOf(toStringSettings.roundingIncrementNanoseconds()),
-                    TemporalRoundingMode.fromString(toStringSettings.roundingMode()));
+                    BigInteger.valueOf(toStringSettings.roundingIncrementNanoseconds()));
             if (!TemporalInstantConstructor.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Nanoseconds out of range.");
                 return JSUndefined.INSTANCE;

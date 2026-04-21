@@ -826,13 +826,13 @@ public final class TemporalPlainDatePrototype {
         TemporalDateDurationFields startDuration;
         TemporalDateDurationFields endDuration;
         if (UNIT_YEAR.equals(smallestUnit)) {
-            long roundedYears = TemporalMathKernel.roundNumberToIncrement(duration.years(), increment, "trunc");
+            long roundedYears = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.years(), increment);
             roundingStartValue = roundedYears;
             roundingEndValue = roundedYears + increment * sign;
             startDuration = new TemporalDateDurationFields(roundedYears, 0, 0, 0);
             endDuration = new TemporalDateDurationFields(roundingEndValue, 0, 0, 0);
         } else if (UNIT_MONTH.equals(smallestUnit)) {
-            long roundedMonths = TemporalMathKernel.roundNumberToIncrement(duration.months(), increment, "trunc");
+            long roundedMonths = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.months(), increment);
             roundingStartValue = roundedMonths;
             roundingEndValue = roundedMonths + increment * sign;
             startDuration = adjustDateDurationRecord(duration, 0, 0L, roundedMonths);
@@ -854,13 +854,15 @@ public final class TemporalPlainDatePrototype {
             if (context.hasPendingException() || weekDifference == null) {
                 return null;
             }
-            long roundedWeeks = TemporalMathKernel.roundNumberToIncrement(duration.weeks() + weekDifference.weeks(), increment, "trunc");
+            long roundedWeeks = TemporalRoundingMode.TRUNC.roundNumberToIncrement(
+                    duration.weeks() + weekDifference.weeks(),
+                    increment);
             roundingStartValue = roundedWeeks;
             roundingEndValue = roundedWeeks + increment * sign;
             startDuration = adjustDateDurationRecord(duration, 0, roundedWeeks, null);
             endDuration = adjustDateDurationRecord(duration, 0, roundingEndValue, null);
         } else {
-            long roundedDays = TemporalMathKernel.roundNumberToIncrement(duration.days(), increment, "trunc");
+            long roundedDays = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.days(), increment);
             roundingStartValue = roundedDays;
             roundingEndValue = roundedDays + increment * sign;
             startDuration = adjustDateDurationRecord(duration, roundedDays, null, null);
@@ -884,9 +886,8 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
 
-        String unsignedRoundingMode = TemporalMathKernel.getUnsignedRoundingMode(
-                settings.roundingMode().jsName(),
-                sign < 0 ? "negative" : "positive");
+        TemporalUnsignedRoundingMode unsignedRoundingMode = settings.roundingMode().toUnsigned(
+                TemporalSign.fromSignum(sign));
         int comparison = BigInteger.valueOf(Math.abs(numerator)).shiftLeft(1)
                 .compareTo(BigInteger.valueOf(Math.abs(denominator)));
         int roundingComparison = Integer.compare(comparison, 0);
@@ -897,12 +898,11 @@ public final class TemporalPlainDatePrototype {
         } else if (numerator == denominator) {
             roundedUnit = Math.abs(roundingEndValue);
         } else {
-            roundedUnit = TemporalMathKernel.applyUnsignedRoundingMode(
+            roundedUnit = unsignedRoundingMode.getRoundedUnit(
                     Math.abs(roundingStartValue),
                     Math.abs(roundingEndValue),
                     roundingComparison,
-                    isEvenCardinality,
-                    unsignedRoundingMode);
+                    isEvenCardinality);
         }
 
         boolean didExpandCalendarUnit = roundedUnit == Math.abs(roundingEndValue);
@@ -916,7 +916,9 @@ public final class TemporalPlainDatePrototype {
             long destinationEpochDay,
             TemporalDifferenceSettings settings) {
         long originalDays = duration.days();
-        long roundedDays = TemporalMathKernel.roundNumberToIncrement(originalDays, settings.roundingIncrement(), settings.roundingMode().jsName());
+        long roundedDays = settings.roundingMode().roundNumberToIncrement(
+                originalDays,
+                settings.roundingIncrement());
         long dayDelta = roundedDays - originalDays;
         int durationSign = Long.compare(originalDays, 0);
         int deltaSign = Long.compare(dayDelta, 0);

@@ -217,7 +217,7 @@ public final class TemporalPlainDateTimePrototype {
                     settings.largestUnit(),
                     settings.smallestUnit(),
                     settings.roundingIncrement(),
-                    settings.roundingMode().jsName());
+                    settings.roundingMode());
         }
     }
 
@@ -299,7 +299,7 @@ public final class TemporalPlainDateTimePrototype {
 
         String calendarNameOption = "auto";
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
-        String roundingMode = "trunc";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
         String smallestUnitText = null;
         calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
         if (context.hasPendingException() || calendarNameOption == null) {
@@ -320,8 +320,8 @@ public final class TemporalPlainDateTimePrototype {
         }
         fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-        roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-        if (context.hasPendingException() || roundingMode == null) {
+        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
@@ -336,7 +336,8 @@ public final class TemporalPlainDateTimePrototype {
             }
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -464,10 +465,9 @@ public final class TemporalPlainDateTimePrototype {
         long totalNanoseconds = plainDateTime.getIsoDateTime().time().totalNanoseconds();
         long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
         long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
-        long roundedNanoseconds = roundToIncrementAsIfPositive(
+        long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                 totalNanoseconds,
-                incrementNanoseconds,
-                roundSettings.roundingMode().jsName());
+                incrementNanoseconds);
 
         int dayAdjust = 0;
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
@@ -489,48 +489,6 @@ public final class TemporalPlainDateTimePrototype {
                 context,
                 adjustedDate.atTime(adjustedTime),
                 plainDateTime.getCalendarId());
-    }
-
-    private static long roundToIncrementAsIfPositive(long quantity, long increment, String roundingMode) {
-        long quotient = Math.floorDiv(quantity, increment);
-        long lower = quotient * increment;
-        long remainder = quantity - lower;
-        if (remainder == 0L) {
-            return quantity;
-        }
-        long upper = lower + increment;
-
-        return switch (roundingMode) {
-            case "ceil", "expand" -> upper;
-            case "floor", "trunc" -> lower;
-            case "halfExpand", "halfCeil" -> {
-                if (remainder * 2L >= increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfTrunc", "halfFloor" -> {
-                if (remainder * 2L > increment) {
-                    yield upper;
-                } else {
-                    yield lower;
-                }
-            }
-            case "halfEven" -> {
-                long doubleRemainder = remainder * 2L;
-                if (doubleRemainder < increment) {
-                    yield lower;
-                } else if (doubleRemainder > increment) {
-                    yield upper;
-                } else if (Math.floorMod(quotient, 2L) == 0L) {
-                    yield lower;
-                } else {
-                    yield upper;
-                }
-            }
-            default -> lower;
-        };
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -597,7 +555,13 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        TemporalPlainDateTimeToStringSettings toStringSettings = new TemporalPlainDateTimeToStringSettings("auto", null, "trunc", true, -1, 1L);
+        TemporalPlainDateTimeToStringSettings toStringSettings = new TemporalPlainDateTimeToStringSettings(
+                "auto",
+                null,
+                TemporalRoundingMode.TRUNC,
+                true,
+                -1,
+                1L);
         String formattedString = toTemporalPlainDateTimeString(context, plainDateTime, toStringSettings);
         if (context.hasPendingException() || formattedString == null) {
             return JSUndefined.INSTANCE;
@@ -667,10 +631,9 @@ public final class TemporalPlainDateTimePrototype {
 
         long roundedNanoseconds = isoTime.totalNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = roundToIncrementAsIfPositive(
+            roundedNanoseconds = toStringSettings.roundingMode().roundLongToIncrementAsIfPositive(
                     roundedNanoseconds,
-                    toStringSettings.roundingIncrementNanoseconds(),
-                    toStringSettings.roundingMode());
+                    toStringSettings.roundingIncrementNanoseconds());
         }
 
         int dayAdjust = 0;

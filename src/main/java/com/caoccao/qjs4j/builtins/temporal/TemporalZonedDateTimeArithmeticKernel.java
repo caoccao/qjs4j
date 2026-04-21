@@ -148,14 +148,13 @@ final class TemporalZonedDateTimeArithmeticKernel {
             String largestUnit,
             long smallestUnitNanoseconds,
             long roundingIncrement,
-            String roundingMode) {
+            TemporalRoundingMode roundingMode) {
         BigInteger differenceNanoseconds = endEpochNanoseconds.subtract(startEpochNanoseconds);
         BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
                 .multiply(BigInteger.valueOf(roundingIncrement));
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
-                incrementNanoseconds,
-                TemporalRoundingMode.fromString(roundingMode));
+                incrementNanoseconds);
         return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
     }
 }

@@ -20,9 +20,6 @@ import java.util.Optional;
 
 /**
  * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
- * <p>
- * Replaces duplicated {@code temporalUnitRank()}, {@code canonicalizeDifferenceUnit()},
- * {@code canonicalizeTemporalUnit()}, and {@code UNIT_*} string constants.
  */
 public enum TemporalUnit {
     YEAR("year", 0),

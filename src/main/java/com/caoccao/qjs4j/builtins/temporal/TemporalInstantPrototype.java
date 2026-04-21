@@ -119,17 +119,6 @@ public final class TemporalInstantPrototype {
         return quotientAndRemainder[0];
     }
 
-    private static BigInteger[] floorDivideAndRemainder(BigInteger value, BigInteger divisor) {
-        BigInteger[] quotientAndRemainder = value.divideAndRemainder(divisor);
-        BigInteger quotient = quotientAndRemainder[0];
-        BigInteger remainder = quotientAndRemainder[1];
-        if (remainder.signum() < 0) {
-            quotient = quotient.subtract(BigInteger.ONE);
-            remainder = remainder.add(divisor);
-        }
-        return new BigInteger[]{quotient, remainder};
-    }
-
     private static JSString formatInstantWithOptions(JSContext context, JSTemporalInstant instant, JSValue optionsArg) {
         TemporalInstantToStringOptions instantToStringOptions = parseInstantToStringOptions(context, optionsArg);
         if (context.hasPendingException() || instantToStringOptions == null) {
@@ -237,10 +226,9 @@ public final class TemporalInstantPrototype {
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds().subtract(rightInstant.getEpochNanoseconds());
         BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
         BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = differenceOptions.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
-                incrementNanoseconds,
-                differenceOptions.roundingMode());
+                incrementNanoseconds);
 
         TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
                 roundedNanoseconds,
@@ -370,7 +358,7 @@ public final class TemporalInstantPrototype {
         }
         String smallestUnitText;
         long roundingIncrement = 1L;
-        String roundingMode = "halfExpand";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.HALF_EXPAND;
         if (args[0] instanceof JSString unitStr) {
             smallestUnitText = unitStr.value();
         } else if (args[0] instanceof JSObject optionsObj) {
@@ -395,8 +383,13 @@ public final class TemporalInstantPrototype {
                 return JSUndefined.INSTANCE;
             }
             if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
-                roundingMode = JSTypeConversions.toString(context, roundingModeValue).value();
+                String roundingModeText = JSTypeConversions.toString(context, roundingModeValue).value();
                 if (context.hasPendingException()) {
+                    return JSUndefined.INSTANCE;
+                }
+                roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+                if (roundingMode == null) {
+                    context.throwRangeError("Temporal error: Invalid rounding mode.");
                     return JSUndefined.INSTANCE;
                 }
             }
@@ -432,12 +425,6 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalRoundingMode parsedRoundingMode = TemporalRoundingMode.fromString(roundingMode);
-        if (parsedRoundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid rounding mode.");
-            return JSUndefined.INSTANCE;
-        }
-
         if (roundingIncrement < 1 || roundingIncrement > MAX_ROUNDING_INCREMENT) {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return JSUndefined.INSTANCE;
@@ -459,7 +446,7 @@ public final class TemporalInstantPrototype {
         BigInteger incrementNs = unitNs.multiply(BigInteger.valueOf(roundingIncrement));
 
         BigInteger epochNs = instant.getEpochNanoseconds();
-        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, parsedRoundingMode);
+        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, roundingMode);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(rounded)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -475,9 +462,13 @@ public final class TemporalInstantPrototype {
             return value;
         }
 
-        BigInteger[] floorQuotientAndRemainder = floorDivideAndRemainder(value, increment);
-        BigInteger floorQuotient = floorQuotientAndRemainder[0];
-        BigInteger remainder = floorQuotientAndRemainder[1];
+        BigInteger[] quotientAndRemainder = value.divideAndRemainder(increment);
+        BigInteger floorQuotient = quotientAndRemainder[0];
+        BigInteger remainder = quotientAndRemainder[1];
+        if (remainder.signum() < 0) {
+            floorQuotient = floorQuotient.subtract(BigInteger.ONE);
+            remainder = remainder.add(increment);
+        }
         BigInteger floorValue = floorQuotient.multiply(increment);
         if (remainder.signum() == 0) {
             return floorValue;
