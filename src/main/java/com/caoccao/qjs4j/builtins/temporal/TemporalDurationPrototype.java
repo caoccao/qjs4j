@@ -146,10 +146,6 @@ public final class TemporalDurationPrototype {
                 PropertyDescriptor.defaultData(JSNumber.of(durationFieldOverrides.nanoseconds())));
     }
 
-    static TemporalDuration balanceTimeDuration(long totalNs, String largestUnit) {
-        return balanceTimeDuration(BigInteger.valueOf(totalNs), largestUnit);
-    }
-
     static TemporalDuration balanceTimeDuration(BigInteger totalNs, String largestUnit) {
         boolean negative = totalNs.signum() < 0;
         if (negative) {
@@ -271,7 +267,9 @@ public final class TemporalDurationPrototype {
             BigInteger oneDayNanoseconds = nanosecondsBetween(
                     context,
                     dayBalanceAnchorDateTime,
+                    null,
                     adjacentDayDateTime,
+                    null,
                     relativeToOption).abs();
             if (context.hasPendingException()) {
                 return null;
@@ -343,7 +341,9 @@ public final class TemporalDurationPrototype {
             BigInteger totalNanoseconds = nanosecondsBetween(
                     context,
                     startDateTime,
+                    null,
                     endDateTime,
+                    null,
                     relativeToOption);
             if (context.hasPendingException()) {
                 return null;
@@ -435,7 +435,9 @@ public final class TemporalDurationPrototype {
         BigInteger remainingNanoseconds = nanosecondsBetween(
                 context,
                 cursorDateTime,
+                null,
                 endDateTime,
+                null,
                 relativeToOption);
         if (context.hasPendingException()) {
             return null;
@@ -945,7 +947,9 @@ public final class TemporalDurationPrototype {
         BigInteger startToEndNanoseconds = nanosecondsBetween(
                 context,
                 startDateTime,
+                null,
                 endDateTime,
+                null,
                 relativeToOption);
         if (context.hasPendingException()) {
             return new TemporalUnitStepResult(0L, startDateTime);
@@ -959,7 +963,9 @@ public final class TemporalDurationPrototype {
                 BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
                         context,
                         boundaryDateTime,
+                        null,
                         endDateTime,
+                        null,
                         relativeToOption);
                 if (context.hasPendingException()) {
                     return new TemporalUnitStepResult(unitCount, boundaryDateTime);
@@ -976,7 +982,9 @@ public final class TemporalDurationPrototype {
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
+                        null,
                         endDateTime,
+                        null,
                         relativeToOption);
                 if (context.hasPendingException()) {
                     return new TemporalUnitStepResult(unitCount, boundaryDateTime);
@@ -992,7 +1000,9 @@ public final class TemporalDurationPrototype {
                 BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
                         context,
                         boundaryDateTime,
+                        null,
                         endDateTime,
+                        null,
                         relativeToOption);
                 if (context.hasPendingException()) {
                     return new TemporalUnitStepResult(unitCount, boundaryDateTime);
@@ -1010,7 +1020,9 @@ public final class TemporalDurationPrototype {
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
+                        null,
                         endDateTime,
+                        null,
                         relativeToOption);
                 if (context.hasPendingException()) {
                     return new TemporalUnitStepResult(unitCount, boundaryDateTime);
@@ -1054,20 +1066,6 @@ public final class TemporalDurationPrototype {
         BigInteger secondDifference = endSeconds.subtract(startSeconds).multiply(SECOND_NANOSECONDS);
         long nanosecondDifference = endDateTime.getNano() - startDateTime.getNano();
         return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
-    }
-
-    private static BigInteger nanosecondsBetween(
-            JSContext context,
-            LocalDateTime startDateTime,
-            LocalDateTime endDateTime,
-            TemporalRelativeToOption relativeToOption) {
-        return nanosecondsBetween(
-                context,
-                startDateTime,
-                null,
-                endDateTime,
-                null,
-                relativeToOption);
     }
 
     private static BigInteger nanosecondsBetween(
@@ -1132,7 +1130,7 @@ public final class TemporalDurationPrototype {
             return null;
         }
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption =
-                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                TemporalFractionalSecondDigitsOption.parse(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");
@@ -1727,12 +1725,16 @@ public final class TemporalDurationPrototype {
                 BigInteger lowerDistanceNanoseconds = nanosecondsBetween(
                         context,
                         lowerBoundaryDateTime,
+                        null,
                         endDateTime,
+                        null,
                         relativeToOption).abs();
                 BigInteger upperDistanceNanoseconds = nanosecondsBetween(
                         context,
                         endDateTime,
+                        null,
                         upperBoundaryDateTime,
+                        null,
                         relativeToOption).abs();
                 int distanceComparison = lowerDistanceNanoseconds.compareTo(upperDistanceNanoseconds);
                 if (distanceComparison < 0) {

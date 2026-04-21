@@ -392,7 +392,11 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         JSValue optionsArgument = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings differenceSettings = getDifferenceSettings(context, sinceOperation, optionsArgument);
+        TemporalDifferenceSettings differenceSettings = TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArgument,
+                TemporalUnit.YEAR, TemporalUnit.MONTH,
+                TemporalUnit.MONTH, TemporalUnit.YEAR,
+                true, false);
         if (context.hasPendingException() || differenceSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -553,18 +557,6 @@ public final class TemporalPlainYearMonthPrototype {
         }
         return JSNumber.of(eraFields.eraYear());
     }
-
-    private static TemporalDifferenceSettings getDifferenceSettings(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArgument) {
-        return TemporalDifferenceSettings.parse(
-                context, sinceOperation, optionsArgument,
-                TemporalUnit.YEAR, TemporalUnit.MONTH,
-                TemporalUnit.MONTH, TemporalUnit.YEAR,
-                true, false);
-    }
-
 
     private static IsoDate getYearMonthRoundedDate(
             JSContext context,

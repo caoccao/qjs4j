@@ -93,7 +93,11 @@ public final class TemporalPlainTimePrototype {
             JSTemporalPlainTime other,
             JSValue optionsArg,
             boolean sinceOperation) {
-        TemporalDifferenceSettings differenceSettings = getDifferenceSettings(context, optionsArg);
+        TemporalDifferenceSettings differenceSettings = TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
+                false, true);
         if (context.hasPendingException() || differenceSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -141,14 +145,6 @@ public final class TemporalPlainTimePrototype {
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
-    private static TemporalDifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
-        return TemporalDifferenceSettings.parse(
-                context, false, optionsArg,
-                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
-                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
-                false, true);
-    }
-
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
@@ -169,7 +165,7 @@ public final class TemporalPlainTimePrototype {
             return null;
         }
         TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
-                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                TemporalFractionalSecondDigitsOption.parse(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");

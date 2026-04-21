@@ -794,7 +794,7 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
         TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
-                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                TemporalFractionalSecondDigitsOption.parse(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");
@@ -872,10 +872,6 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
         return timeZoneNameOption;
-    }
-
-    private static TemporalZonedDateTimeOptions getWithOptions(JSContext context, JSValue optionsValue) {
-        return TemporalZonedDateTimeOptions.parse(context, optionsValue, "prefer");
     }
 
     private static boolean hasDefinedDateTimeFormatOption(JSContext context, JSObject optionsObject, String optionName) {
@@ -1650,7 +1646,7 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         JSValue optionsValue = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalZonedDateTimeOptions withOptions = getWithOptions(context, optionsValue);
+        TemporalZonedDateTimeOptions withOptions = TemporalZonedDateTimeOptions.parse(context, optionsValue, "prefer");
         if (context.hasPendingException() || withOptions == null) {
             return JSUndefined.INSTANCE;
         }

@@ -461,8 +461,8 @@ public final class TemporalPlainDatePrototype {
     }
 
     private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        IsoMonth firstMonthCodeParts = parseMonthCodeParts(firstMonthCode);
-        IsoMonth secondMonthCodeParts = parseMonthCodeParts(secondMonthCode);
+        IsoMonth firstMonthCodeParts = IsoMonth.parseByMonthCode(firstMonthCode);
+        IsoMonth secondMonthCodeParts = IsoMonth.parseByMonthCode(secondMonthCode);
         if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
             return firstMonthCode.compareTo(secondMonthCode);
         }
@@ -577,7 +577,11 @@ public final class TemporalPlainDatePrototype {
         }
 
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings settings = getDifferenceSettings(context, sinceOperation, optionsArg);
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.DAY,
+                TemporalUnit.DAY, TemporalUnit.DAY,
+                true, false);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -698,18 +702,6 @@ public final class TemporalPlainDatePrototype {
         }
         return JSNumber.of(temporalEraYear.eraYear());
     }
-
-    private static TemporalDifferenceSettings getDifferenceSettings(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArg) {
-        return TemporalDifferenceSettings.parse(
-                context, sinceOperation, optionsArg,
-                TemporalUnit.YEAR, TemporalUnit.DAY,
-                TemporalUnit.DAY, TemporalUnit.DAY,
-                true, false);
-    }
-
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "inLeapYear");
@@ -932,10 +924,6 @@ public final class TemporalPlainDatePrototype {
         TemporalDateDurationFields roundedDuration = adjustDateDurationRecord(duration, roundedDays, null, null);
         long nudgedEpochDay = destinationEpochDay + dayDelta;
         return new TemporalNudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
-    }
-
-    private static IsoMonth parseMonthCodeParts(String monthCodeText) {
-        return IsoMonth.parseByMonthCode(monthCodeText);
     }
 
     private static TemporalDateDurationFields roundRelativeDurationDate(

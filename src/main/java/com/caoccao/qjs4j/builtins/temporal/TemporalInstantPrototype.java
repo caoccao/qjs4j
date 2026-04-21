@@ -280,7 +280,7 @@ public final class TemporalInstantPrototype {
             return null;
         }
         TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
-                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                TemporalFractionalSecondDigitsOption.parse(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");

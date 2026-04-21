@@ -533,14 +533,6 @@ public final class TemporalDurationConstructor {
         return false;
     }
 
-    private static boolean isDateTimeWithinRelativeToRange(IsoDate isoDate, IsoTime isoTime) {
-        return isoDate.isWithinInstantDateTimeRange(isoTime);
-    }
-
-    private static boolean isDateWithinRelativeToRange(IsoDate isoDate) {
-        return isoDate.isWithinSupportedRange();
-    }
-
     private static boolean isDurationRecordInRange(JSContext context, TemporalDuration durationRecord) {
         if (durationRecord.years() > CALENDAR_UNIT_MAX
                 || durationRecord.years() < -CALENDAR_UNIT_MAX
@@ -949,7 +941,7 @@ public final class TemporalDurationConstructor {
                 if (parsedDateTime == null || context.hasPendingException()) {
                     return null;
                 }
-                if (!isDateWithinRelativeToRange(parsedDateTime.date())) {
+                if (!parsedDateTime.date().isWithinSupportedRange()) {
                     context.throwRangeError("Temporal error: Duration field out of range.");
                     return null;
                 }
@@ -966,7 +958,7 @@ public final class TemporalDurationConstructor {
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
-            if (!isDateTimeWithinRelativeToRange(parsedZonedDateTime.date(), parsedZonedDateTime.time())) {
+            if (!parsedZonedDateTime.date().isWithinInstantDateTimeRange(parsedZonedDateTime.time())) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1085,7 +1077,7 @@ public final class TemporalDurationConstructor {
             return null;
         }
         IsoDate isoDate = parsedDateTime.date();
-        if (!isDateWithinRelativeToRange(isoDate)) {
+        if (!isoDate.isWithinSupportedRange()) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }

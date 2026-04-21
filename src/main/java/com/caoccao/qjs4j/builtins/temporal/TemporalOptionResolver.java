@@ -73,13 +73,6 @@ final class TemporalOptionResolver {
         return optionText.value();
     }
 
-    static TemporalFractionalSecondDigitsOption parseFractionalSecondDigitsOption(
-            JSContext context,
-            JSValue fractionalSecondDigitsValue,
-            String invalidOptionMessage) {
-        return TemporalFractionalSecondDigitsOption.parse(context, fractionalSecondDigitsValue, invalidOptionMessage);
-    }
-
     static JSObject toOptionalOptionsObject(JSContext context, JSValue optionsValue, String invalidTypeMessage) {
         if (optionsValue instanceof JSUndefined || optionsValue == null) {
             return null;

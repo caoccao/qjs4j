@@ -253,17 +253,6 @@ public final class TemporalPlainDateTimePrototype {
         return TemporalPlainDatePrototype.eraYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
-    private static TemporalDifferenceSettings getDifferenceSettings(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArg) {
-        return TemporalDifferenceSettings.parse(
-                context, sinceOperation, optionsArg,
-                TemporalUnit.YEAR, TemporalUnit.NANOSECOND,
-                TemporalUnit.NANOSECOND, TemporalUnit.DAY,
-                true, true);
-    }
-
     private static String getTemporalDisambiguation(JSContext context, JSValue optionsArg) {
         if (optionsArg instanceof JSUndefined || optionsArg == null) {
             return "compatible";
@@ -323,7 +312,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
         TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
-                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                TemporalFractionalSecondDigitsOption.parse(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");
@@ -569,7 +558,11 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings settings = getDifferenceSettings(context, true, optionsArg);
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(
+                context, true, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.DAY,
+                true, true);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -775,7 +768,11 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         JSValue optionsArg = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings settings = getDifferenceSettings(context, false, optionsArg);
+        TemporalDifferenceSettings settings = TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.YEAR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.DAY,
+                true, true);
         if (context.hasPendingException() || settings == null) {
             return JSUndefined.INSTANCE;
         }
