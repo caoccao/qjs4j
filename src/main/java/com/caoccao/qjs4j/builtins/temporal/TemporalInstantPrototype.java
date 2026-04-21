@@ -137,7 +137,14 @@ public final class TemporalInstantPrototype {
         }
 
         String smallestUnit = instantToStringOptions.smallestUnit();
-        Integer fractionalSecondDigits = instantToStringOptions.fractionalSecondDigits();
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption =
+                instantToStringOptions.fractionalSecondDigitsOption();
+        Integer fractionalSecondDigits;
+        if (fractionalSecondDigitsOption.auto()) {
+            fractionalSecondDigits = null;
+        } else {
+            fractionalSecondDigits = fractionalSecondDigitsOption.digits();
+        }
         BigInteger incrementNanoseconds;
         if ("minute".equals(smallestUnit)) {
             incrementNanoseconds = NS_PER_MINUTE;
@@ -152,8 +159,7 @@ public final class TemporalInstantPrototype {
         } else if (fractionalSecondDigits == null) {
             incrementNanoseconds = BigInteger.ONE;
         } else {
-            int power = 9 - fractionalSecondDigits;
-            incrementNanoseconds = BigInteger.TEN.pow(power);
+            incrementNanoseconds = BigInteger.valueOf(fractionalSecondDigitsOption.roundingIncrementNanoseconds());
         }
 
         BigInteger roundedEpochNanoseconds = roundBigIntegerToIncrement(
@@ -248,45 +254,16 @@ public final class TemporalInstantPrototype {
         return TemporalDurationConstructor.createDuration(context, normalizedDuration);
     }
 
-    private static String normalizeToStringSmallestUnit(String unit) {
+    private static TemporalUnit normalizeToStringSmallestUnit(String unit) {
         return TemporalUnit.fromString(unit)
                 .filter(u -> u.isTimeUnit() && u != TemporalUnit.HOUR)
-                .map(TemporalUnit::jsName)
                 .orElse(null);
-    }
-
-    private static Integer parseFractionalSecondDigits(JSContext context, JSValue value) {
-        if (value instanceof JSUndefined || value == null) {
-            return null;
-        }
-        if (value instanceof JSNumber numberValue) {
-            double numericValue = numberValue.value();
-            if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            int flooredValue = (int) Math.floor(numericValue);
-            if (flooredValue < 0 || flooredValue > 9) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            return flooredValue;
-        }
-        String stringValue = JSTypeConversions.toString(context, value).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if ("auto".equals(stringValue)) {
-            return null;
-        }
-        context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-        return null;
     }
 
     private static TemporalInstantToStringOptions parseInstantToStringOptions(JSContext context, JSValue optionsArg) {
         JSObject optionsObject;
         if (optionsArg instanceof JSUndefined || optionsArg == null) {
-            optionsObject = null;
+            return TemporalInstantToStringOptions.DEFAULT;
         } else if (optionsArg instanceof JSObject typedOptionsObject) {
             optionsObject = typedOptionsObject;
         } else {
@@ -294,46 +271,49 @@ public final class TemporalInstantPrototype {
             return null;
         }
 
-        Integer fractionalSecondDigits = null;
-        String roundingMode = "trunc";
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
+        String roundingModeText = "trunc";
         String smallestUnitText = null;
         JSValue timeZoneValue = JSUndefined.INSTANCE;
-        if (optionsObject != null) {
-            JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            fractionalSecondDigits = parseFractionalSecondDigits(context, fractionalSecondDigitsValue);
-            if (context.hasPendingException()) {
-                return null;
-            }
+        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                        context,
+                        fractionalSecondDigitsValue,
+                        "Temporal error: Invalid fractionalSecondDigits.");
+        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
+            return null;
+        }
+        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-            JSValue roundingModeValue = optionsObject.get(PropertyKey.fromString("roundingMode"));
+        JSValue roundingModeValue = optionsObject.get(PropertyKey.fromString("roundingMode"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
+            roundingModeText = JSTypeConversions.toString(context, roundingModeValue).value();
             if (context.hasPendingException()) {
                 return null;
             }
-            if (!(roundingModeValue instanceof JSUndefined) && roundingModeValue != null) {
-                roundingMode = JSTypeConversions.toString(context, roundingModeValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
+        }
 
-            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+        JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
+            smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
             if (context.hasPendingException()) {
                 return null;
             }
-            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-                smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
-            }
+        }
 
-            timeZoneValue = optionsObject.get(PropertyKey.fromString("timeZone"));
-            if (context.hasPendingException()) {
-                return null;
-            }
+        timeZoneValue = optionsObject.get(PropertyKey.fromString("timeZone"));
+        if (context.hasPendingException()) {
+            return null;
         }
 
         String timeZoneId = null;
@@ -348,12 +328,13 @@ public final class TemporalInstantPrototype {
             }
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
 
-        String smallestUnit = null;
+        TemporalUnit smallestUnit = null;
         if (smallestUnitText != null) {
             smallestUnit = normalizeToStringSmallestUnit(smallestUnitText);
             if (smallestUnit == null) {
@@ -372,9 +353,9 @@ public final class TemporalInstantPrototype {
         }
 
         return new TemporalInstantToStringOptions(
-                fractionalSecondDigits,
+                fractionalSecondDigitsOption,
                 roundingMode,
-                smallestUnit,
+                smallestUnit == null ? null : smallestUnit.jsName(),
                 timeZoneId);
     }
 
@@ -451,17 +432,8 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        boolean validRoundingMode =
-                "ceil".equals(roundingMode)
-                        || "floor".equals(roundingMode)
-                        || "trunc".equals(roundingMode)
-                        || "expand".equals(roundingMode)
-                        || "halfExpand".equals(roundingMode)
-                        || "halfTrunc".equals(roundingMode)
-                        || "halfEven".equals(roundingMode)
-                        || "halfCeil".equals(roundingMode)
-                        || "halfFloor".equals(roundingMode);
-        if (!validRoundingMode) {
+        TemporalRoundingMode parsedRoundingMode = TemporalRoundingMode.fromString(roundingMode);
+        if (parsedRoundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return JSUndefined.INSTANCE;
         }
@@ -487,7 +459,7 @@ public final class TemporalInstantPrototype {
         BigInteger incrementNs = unitNs.multiply(BigInteger.valueOf(roundingIncrement));
 
         BigInteger epochNs = instant.getEpochNanoseconds();
-        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, roundingMode);
+        BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, parsedRoundingMode);
         if (!TemporalInstantConstructor.isValidEpochNanoseconds(rounded)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
@@ -495,7 +467,10 @@ public final class TemporalInstantPrototype {
         return TemporalInstantConstructor.createInstant(context, rounded);
     }
 
-    private static BigInteger roundBigIntegerToIncrement(BigInteger value, BigInteger increment, String roundingMode) {
+    private static BigInteger roundBigIntegerToIncrement(
+            BigInteger value,
+            BigInteger increment,
+            TemporalRoundingMode roundingMode) {
         if (increment.signum() == 0) {
             return value;
         }
@@ -510,19 +485,19 @@ public final class TemporalInstantPrototype {
         BigInteger ceilValue = floorValue.add(increment);
 
         switch (roundingMode) {
-            case "floor":
+            case FLOOR:
                 return floorValue;
-            case "ceil":
+            case CEIL:
                 return ceilValue;
-            case "trunc":
+            case TRUNC:
                 return floorValue;
-            case "expand":
+            case EXPAND:
                 return ceilValue;
-            case "halfExpand":
-            case "halfTrunc":
-            case "halfEven":
-            case "halfCeil":
-            case "halfFloor":
+            case HALF_EXPAND:
+            case HALF_TRUNC:
+            case HALF_EVEN:
+            case HALF_CEIL:
+            case HALF_FLOOR:
                 BigInteger twoRemainder = remainder.shiftLeft(1);
                 int halfComparison = twoRemainder.compareTo(increment);
                 if (halfComparison < 0) {
@@ -532,21 +507,21 @@ public final class TemporalInstantPrototype {
                     return ceilValue;
                 }
                 return switch (roundingMode) {
-                    case "halfExpand" -> {
+                    case HALF_EXPAND -> {
                         yield ceilValue;
                     }
-                    case "halfTrunc" -> {
+                    case HALF_TRUNC -> {
                         yield floorValue;
                     }
-                    case "halfEven" -> {
+                    case HALF_EVEN -> {
                         if (floorQuotient.testBit(0)) {
                             yield ceilValue;
                         } else {
                             yield floorValue;
                         }
                     }
-                    case "halfCeil" -> ceilValue;
-                    case "halfFloor" -> floorValue;
+                    case HALF_CEIL -> ceilValue;
+                    case HALF_FLOOR -> floorValue;
                     default -> ceilValue;
                 };
             default:

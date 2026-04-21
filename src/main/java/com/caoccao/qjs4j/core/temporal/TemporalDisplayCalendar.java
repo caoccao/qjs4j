@@ -50,24 +50,13 @@ public enum TemporalDisplayCalendar {
     }
 
     /**
-     * Checks whether the given string is a valid calendarName option.
-     */
-    public static boolean isValid(String text) {
-        return fromString(text) != null;
-    }
-
-    /**
-     * Returns true if the option requires including the calendar annotation
-     * (i.e. "always" or "critical").
-     */
-    public static boolean requiresAnnotation(String text) {
-        return "always".equals(text) || "critical".equals(text);
-    }
-
-    /**
      * Returns the JS-canonical name (e.g. "auto").
      */
     public String jsName() {
         return jsName;
+    }
+
+    public boolean requiresAnnotation() {
+        return this == ALWAYS || this == CRITICAL;
     }
 }

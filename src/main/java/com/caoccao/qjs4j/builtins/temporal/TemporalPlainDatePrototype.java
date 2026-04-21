@@ -26,7 +26,6 @@ import java.time.DateTimeException;
  * Implementation of Temporal.PlainDate prototype methods.
  */
 public final class TemporalPlainDatePrototype {
-    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
     private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final long TEMPORAL_MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainDate";
@@ -1056,13 +1055,13 @@ public final class TemporalPlainDatePrototype {
         }
 
         IsoDate isoDate = plainDate.getIsoDate();
-        if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY && time.compareTo(IsoTime.MIDNIGHT) == 0) {
+        if (!isoDate.isWithinPlainDateTimeRange(time)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new IsoDateTime(isoDate, time), plainDate.getCalendarId());
+                isoDate.atTime(time), plainDate.getCalendarId());
     }
 
     public static JSValue toPlainMonthDay(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1161,8 +1160,7 @@ public final class TemporalPlainDatePrototype {
                 return JSUndefined.INSTANCE;
             }
             isoTime = plainTime.getIsoTime();
-            if (isoDate.toEpochDay() == MIN_SUPPORTED_EPOCH_DAY
-                    && isoTime.compareTo(IsoTime.MIDNIGHT) == 0) {
+            if (!isoDate.isWithinPlainDateTimeRange(isoTime)) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
@@ -1171,7 +1169,7 @@ public final class TemporalPlainDatePrototype {
         BigInteger epochNanoseconds;
         try {
             if (hasPlainTimeArgument) {
-                epochNanoseconds = new IsoDateTime(isoDate, isoTime).toEpochNs(timeZoneId);
+                epochNanoseconds = isoDate.atTime(isoTime).toEpochNs(timeZoneId);
             } else {
                 epochNanoseconds = TemporalTimeZone.startOfDayToEpochNs(isoDate, timeZoneId);
             }

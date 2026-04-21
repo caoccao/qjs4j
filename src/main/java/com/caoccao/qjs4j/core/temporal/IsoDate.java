@@ -30,6 +30,11 @@ import java.util.Locale;
 public record IsoDate(int year, int month, int day) implements Comparable<IsoDate> {
 
     private static final int[] DAYS_IN_MONTH = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    private static final long MIN_SUPPORTED_EPOCH_DAY = new IsoDate(-271821, 4, 19).toEpochDay();
+    private static final long MAX_SUPPORTED_EPOCH_DAY = new IsoDate(275760, 9, 13).toEpochDay();
+    private static final long MIN_SUPPORTED_INSTANT_EPOCH_DAY = new IsoDate(-271821, 4, 20).toEpochDay();
+    public static final IsoDate MIN_SUPPORTED = new IsoDate(-271821, 4, 19);
+    public static final IsoDate MAX_SUPPORTED = new IsoDate(275760, 9, 13);
 
     public static IsoDate createFromEpochDay(long epochDay) {
         // Algorithm from https://howardhinnant.github.io/date_algorithms.html
@@ -57,6 +62,19 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
 
     public static int daysInYear(int year) {
         return TemporalCalendarMath.isLeapYear(year) ? 366 : 365;
+    }
+
+    public IsoDate atDayConstrained(int candidateDay) {
+        int constrainedDay = Math.min(candidateDay, daysInMonth(year, month));
+        return new IsoDate(year, month, constrainedDay);
+    }
+
+    public IsoDateTime atMidnight() {
+        return new IsoDateTime(this, IsoTime.MIDNIGHT);
+    }
+
+    public IsoDateTime atTime(IsoTime isoTime) {
+        return new IsoDateTime(this, isoTime);
     }
 
     private static IsoCalendarMonth findMonthSlotByCode(TemporalCalendarId calendarId, int calendarYear, String monthCode) {
@@ -179,6 +197,14 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return createFromEpochDay(epochDay);
     }
 
+    public int daysInMonth() {
+        return daysInMonth(year, month);
+    }
+
+    public int daysInYear() {
+        return daysInYear(year);
+    }
+
     @Override
     public int compareTo(IsoDate otherIsoDate) {
         if (year != otherIsoDate.year) {
@@ -230,6 +256,30 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return month != 9 || day <= 13;
         }
         return true;
+    }
+
+    public boolean isWithinSupportedRange() {
+        return compareTo(MIN_SUPPORTED) >= 0 && compareTo(MAX_SUPPORTED) <= 0;
+    }
+
+    public boolean isWithinInstantDateTimeRange(IsoTime isoTime) {
+        long epochDay = toEpochDay();
+        if (epochDay < MIN_SUPPORTED_INSTANT_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            return false;
+        }
+        IsoTime clampedIsoTime = isoTime.clampSecondToValidRange();
+        return clampedIsoTime.isValid();
+    }
+
+    public boolean isWithinPlainDateTimeRange(IsoTime isoTime) {
+        long epochDay = toEpochDay();
+        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
+            return false;
+        }
+        if (!isoTime.isValid()) {
+            return false;
+        }
+        return epochDay != MIN_SUPPORTED_EPOCH_DAY || isoTime.totalNanoseconds() != 0L;
     }
 
     private IsoCalendarDate toAlexandrianCalendarDate(long offsetEpochDay) {

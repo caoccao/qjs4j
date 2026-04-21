@@ -26,6 +26,10 @@ import java.util.List;
  * Represents an ISO 8601 date-time combining IsoDate and IsoTime.
  */
 public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoDateTime> {
+    public static final IsoDateTime MIN_SUPPORTED = new IsoDateTime(new IsoDate(-271821, 4, 20), IsoTime.MIDNIGHT);
+    public static final IsoDateTime MAX_SUPPORTED = new IsoDateTime(
+            IsoDate.MAX_SUPPORTED,
+            new IsoTime(23, 59, 59, 999, 999, 999));
 
     public static IsoDateTime createByEpochNs(BigInteger epochNanoseconds) {
         BigInteger[] secondAndNanosecond = epochNanoseconds.divideAndRemainder(TemporalConstants.BI_BILLION);
@@ -128,9 +132,9 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
                 laterInstant = secondInstant;
             }
 
-            if (TemporalDisambiguation.isReject(disambiguation)) {
+            if (TemporalDisambiguation.REJECT.matches(disambiguation)) {
                 throw new DateTimeException("Ambiguous local time for time zone: " + timeZoneId);
-            } else if (TemporalDisambiguation.isLater(disambiguation)) {
+            } else if (TemporalDisambiguation.LATER.matches(disambiguation)) {
                 instant = laterInstant;
             } else {
                 instant = earlierInstant;
@@ -140,12 +144,12 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             if (transition == null) {
                 throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
             }
-            if (TemporalDisambiguation.isReject(disambiguation)) {
+            if (TemporalDisambiguation.REJECT.matches(disambiguation)) {
                 throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
             }
 
             Duration gapDuration = transition.getDuration().abs();
-            if (TemporalDisambiguation.isEarlier(disambiguation)) {
+            if (TemporalDisambiguation.EARLIER.matches(disambiguation)) {
                 LocalDateTime shiftedLocalDateTime = localDateTime.minusSeconds(gapDuration.getSeconds());
                 instant = shiftedLocalDateTime.atOffset(transition.getOffsetBefore()).toInstant();
             } else {
@@ -162,6 +166,27 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         return toEpochNs(timeZoneId, "compatible");
     }
 
+    public IsoDateTime withClampedSecondToValidRange() {
+        IsoTime clampedTime = time.clampSecondToValidRange();
+        if (clampedTime == time) {
+            return this;
+        } else {
+            return new IsoDateTime(date, clampedTime);
+        }
+    }
+
+    public IsoDateTime withDate(IsoDate isoDate) {
+        return new IsoDateTime(isoDate, time);
+    }
+
+    public IsoDateTime withTime(IsoTime isoTime) {
+        return new IsoDateTime(date, isoTime);
+    }
+
+    public boolean isWithinSupportedRange() {
+        return compareTo(MIN_SUPPORTED) >= 0 && compareTo(MAX_SUPPORTED) <= 0;
+    }
+
     public LocalDateTime toLocalDateTime() {
         return LocalDateTime.of(
                 date.year(),
@@ -170,9 +195,19 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
                 time.hour(),
                 time.minute(),
                 time.second(),
-                time.millisecond() * 1_000_000
-                        + time.microsecond() * 1_000
-                        + time.nanosecond());
+                time.totalNanosecondsWithinSecond());
+    }
+
+    public LocalDateTime toLocalDateTimeWithClampedSecond() {
+        IsoTime clampedTime = time.clampSecondToValidRange();
+        return LocalDateTime.of(
+                date.year(),
+                date.month(),
+                date.day(),
+                clampedTime.hour(),
+                clampedTime.minute(),
+                clampedTime.second(),
+                clampedTime.totalNanosecondsWithinSecond());
     }
 
     @Override

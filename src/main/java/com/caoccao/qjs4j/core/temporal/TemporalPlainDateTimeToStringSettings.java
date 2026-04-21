@@ -23,4 +23,6 @@ public record TemporalPlainDateTimeToStringSettings(
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,
         long roundingIncrementNanoseconds) {
+    public static final TemporalPlainDateTimeToStringSettings DEFAULT =
+            new TemporalPlainDateTimeToStringSettings("auto", null, "trunc", true, -1, 1L);
 }

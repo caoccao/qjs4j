@@ -22,4 +22,6 @@ public record TemporalPlainTimeToStringSettings(
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,
         long roundingIncrementNanoseconds) {
+    public static final TemporalPlainTimeToStringSettings DEFAULT =
+            new TemporalPlainTimeToStringSettings(null, "trunc", true, -1, 1L);
 }

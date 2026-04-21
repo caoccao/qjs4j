@@ -28,12 +28,6 @@ import java.time.DateTimeException;
 public final class TemporalPlainDateTimePrototype {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
-    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
-    private static final BigInteger MICROSECOND_NANOSECONDS = TemporalConstants.BI_MICROSECOND_NANOSECONDS;
-    private static final BigInteger MILLISECOND_NANOSECONDS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final BigInteger MINUTE_NANOSECONDS = TemporalConstants.BI_MINUTE_NANOSECONDS;
-    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
-    private static final BigInteger SECOND_NANOSECONDS = TemporalConstants.BI_SECOND_NANOSECONDS;
     private static final String TYPE_NAME = "Temporal.PlainDateTime";
 
     private TemporalPlainDateTimePrototype() {
@@ -118,14 +112,14 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        if (!isValidPlainDateTimeRange(newDate, timeResult.time())) {
+        if (!newDate.isWithinPlainDateTimeRange(timeResult.time())) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
         return TemporalPlainDateTimeConstructor.createPlainDateTime(
                 context,
-                new IsoDateTime(newDate, timeResult.time()),
+                newDate.atTime(timeResult.time()),
                 plainDateTime.getCalendarId());
     }
 
@@ -137,10 +131,9 @@ public final class TemporalPlainDateTimePrototype {
         return new JSString(plainDateTime.getCalendarId().identifier());
     }
 
-    private static String canonicalizeToStringSmallestUnit(String unitText) {
+    private static TemporalUnit canonicalizeToStringSmallestUnit(String unitText) {
         return TemporalUnit.fromString(unitText)
                 .filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE))
-                .map(TemporalUnit::jsName)
                 .orElse(null);
     }
 
@@ -283,7 +276,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
-        if (!TemporalDisambiguation.isValid(disambiguation)) {
+        if (TemporalDisambiguation.fromString(disambiguation) == null) {
             context.throwRangeError("Temporal error: Invalid disambiguation option.");
             return null;
         }
@@ -295,40 +288,11 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
-        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
+        if (TemporalDisplayCalendar.fromString(calendarNameOption) == null) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
         return calendarNameOption;
-    }
-
-    private static TemporalFractionalSecondDigitsOption getToStringFractionalSecondDigitsOption(JSContext context, JSValue value) {
-        if (value instanceof JSUndefined) {
-            return new TemporalFractionalSecondDigitsOption(true, -1);
-        }
-        if (value instanceof JSNumber numberValue) {
-            double numericValue = numberValue.value();
-            if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            int flooredValue = (int) Math.floor(numericValue);
-            if (flooredValue < 0 || flooredValue > 9) {
-                context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-                return null;
-            }
-            return new TemporalFractionalSecondDigitsOption(false, flooredValue);
-        }
-
-        String stringValue = JSTypeConversions.toString(context, value).value();
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if ("auto".equals(stringValue)) {
-            return new TemporalFractionalSecondDigitsOption(true, -1);
-        }
-        context.throwRangeError("Temporal error: Invalid fractionalSecondDigits.");
-        return null;
     }
 
     private static TemporalPlainDateTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
@@ -341,40 +305,46 @@ public final class TemporalPlainDateTimePrototype {
                 return null;
             }
         }
+        if (optionsObject == null) {
+            return TemporalPlainDateTimeToStringSettings.DEFAULT;
+        }
 
         String calendarNameOption = "auto";
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(true, -1);
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
         String roundingMode = "trunc";
         String smallestUnitText = null;
-        if (optionsObject != null) {
-            calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
-            if (context.hasPendingException() || calendarNameOption == null) {
-                return null;
-            }
+        calendarNameOption = getToStringCalendarNameOption(context, optionsObject);
+        if (context.hasPendingException() || calendarNameOption == null) {
+            return null;
+        }
 
-            JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+                TemporalOptionResolver.parseFractionalSecondDigitsOption(
+                        context,
+                        fractionalSecondDigitsValue,
+                        "Temporal error: Invalid fractionalSecondDigits.");
+        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
+            return null;
+        }
+        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
+
+        roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingMode == null) {
+            return null;
+        }
+
+        JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
+            smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
             if (context.hasPendingException()) {
                 return null;
-            }
-            fractionalSecondDigitsOption = getToStringFractionalSecondDigitsOption(context, fractionalSecondDigitsValue);
-            if (context.hasPendingException() || fractionalSecondDigitsOption == null) {
-                return null;
-            }
-
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException() || roundingMode == null) {
-                return null;
-            }
-
-            JSValue smallestUnitValue = optionsObject.get(PropertyKey.fromString("smallestUnit"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (!(smallestUnitValue instanceof JSUndefined) && smallestUnitValue != null) {
-                smallestUnitText = JSTypeConversions.toString(context, smallestUnitValue).value();
-                if (context.hasPendingException()) {
-                    return null;
-                }
             }
         }
 
@@ -383,7 +353,7 @@ public final class TemporalPlainDateTimePrototype {
             return null;
         }
 
-        String smallestUnit = null;
+        TemporalUnit smallestUnit = null;
         if (smallestUnitText != null) {
             smallestUnit = canonicalizeToStringSmallestUnit(smallestUnitText);
             if (smallestUnit == null) {
@@ -396,36 +366,19 @@ public final class TemporalPlainDateTimePrototype {
         int fractionalSecondDigits;
         long roundingIncrementNanoseconds;
         if (smallestUnit != null) {
-            fractionalSecondDigits = switch (smallestUnit) {
-                case "second" -> 0;
-                case "millisecond" -> 3;
-                case "microsecond" -> 6;
-                case "nanosecond" -> 9;
-                default -> 0;
-            };
-            roundingIncrementNanoseconds = switch (smallestUnit) {
-                case "minute" -> MINUTE_NANOSECONDS.longValue();
-                case "second" -> SECOND_NANOSECONDS.longValue();
-                case "millisecond" -> MILLISECOND_NANOSECONDS.longValue();
-                case "microsecond" -> MICROSECOND_NANOSECONDS.longValue();
-                case "nanosecond" -> 1L;
-                default -> 1L;
-            };
+            fractionalSecondDigits = smallestUnit.toStringFractionalSecondDigits();
+            roundingIncrementNanoseconds = smallestUnit.toStringRoundingIncrementNanoseconds();
         } else if (autoFractionalSecondDigits) {
             fractionalSecondDigits = -1;
             roundingIncrementNanoseconds = 1L;
         } else {
             fractionalSecondDigits = fractionalSecondDigitsOption.digits();
-            if (fractionalSecondDigits == 0) {
-                roundingIncrementNanoseconds = SECOND_NANOSECONDS.longValue();
-            } else {
-                roundingIncrementNanoseconds = (long) Math.pow(10, 9 - fractionalSecondDigits);
-            }
+            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
         }
 
         return new TemporalPlainDateTimeToStringSettings(
                 calendarNameOption,
-                smallestUnit,
+                smallestUnit == null ? null : smallestUnit.jsName(),
                 roundingMode,
                 autoFractionalSecondDigits,
                 fractionalSecondDigits,
@@ -446,14 +399,6 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         return TemporalPlainDatePrototype.inLeapYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
-    }
-
-    private static boolean isValidPlainDateTimeRange(IsoDate date, IsoTime time) {
-        long epochDay = date.toEpochDay();
-        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            return false;
-        }
-        return epochDay != MIN_SUPPORTED_EPOCH_DAY || time.totalNanoseconds() != 0L;
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -547,14 +492,14 @@ public final class TemporalPlainDateTimePrototype {
             adjustedDate = adjustedDate.addDays(dayAdjust);
         }
         IsoTime adjustedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-        if (!isValidPlainDateTimeRange(adjustedDate, adjustedTime)) {
+        if (!adjustedDate.isWithinPlainDateTimeRange(adjustedTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
         return TemporalPlainDateTimeConstructor.createPlainDateTime(
                 context,
-                new IsoDateTime(adjustedDate, adjustedTime),
+                adjustedDate.atTime(adjustedTime),
                 plainDateTime.getCalendarId());
     }
 
@@ -747,7 +692,7 @@ public final class TemporalPlainDateTimePrototype {
             roundedDate = roundedDate.addDays(dayAdjust);
         }
         IsoTime roundedTime = IsoTime.createFromNanoseconds(roundedNanoseconds);
-        if (!isValidPlainDateTimeRange(roundedDate, roundedTime)) {
+        if (!roundedDate.isWithinPlainDateTimeRange(roundedTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
         }
@@ -1150,14 +1095,14 @@ public final class TemporalPlainDateTimePrototype {
             resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
-        if (!isValidPlainDateTimeRange(resultDate, resultTime)) {
+        if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
         return TemporalPlainDateTimeConstructor.createPlainDateTime(
                 context,
-                new IsoDateTime(resultDate, resultTime),
+                resultDate.atTime(resultTime),
                 plainDateTime.getCalendarId());
     }
 
@@ -1195,12 +1140,12 @@ public final class TemporalPlainDateTimePrototype {
             }
             time = plainTime.getIsoTime();
         }
-        if (!isValidPlainDateTimeRange(plainDateTime.getIsoDateTime().date(), time)) {
+        if (!plainDateTime.getIsoDateTime().date().isWithinPlainDateTimeRange(time)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
         return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
-                new IsoDateTime(plainDateTime.getIsoDateTime().date(), time), plainDateTime.getCalendarId());
+                plainDateTime.getIsoDateTime().withTime(time), plainDateTime.getCalendarId());
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {

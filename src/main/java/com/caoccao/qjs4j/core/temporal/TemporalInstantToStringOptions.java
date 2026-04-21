@@ -17,8 +17,14 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalInstantToStringOptions(
-        Integer fractionalSecondDigits,
-        String roundingMode,
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption,
+        TemporalRoundingMode roundingMode,
         String smallestUnit,
         String timeZoneId) {
+    public static final TemporalInstantToStringOptions DEFAULT =
+            new TemporalInstantToStringOptions(
+                    TemporalFractionalSecondDigitsOption.autoOption(),
+                    TemporalRoundingMode.TRUNC,
+                    null,
+                    null);
 }

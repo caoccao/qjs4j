@@ -23,9 +23,6 @@ import com.caoccao.qjs4j.core.temporal.*;
  * Implementation of Temporal.PlainDateTime constructor and static methods.
  */
 public final class TemporalPlainDateTimeConstructor {
-    private static final long MAX_SUPPORTED_EPOCH_DAY = TemporalConstants.MAX_SUPPORTED_EPOCH_DAY;
-    private static final long MIN_SUPPORTED_EPOCH_DAY = TemporalConstants.MIN_SUPPORTED_EPOCH_DAY;
-
     private TemporalPlainDateTimeConstructor() {
     }
 
@@ -128,12 +125,12 @@ public final class TemporalPlainDateTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        if (!isValidPlainDateTimeRange(isoDate, isoTime)) {
+        if (!isoDate.isWithinPlainDateTimeRange(isoTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
 
-        IsoDateTime isoDateTime = new IsoDateTime(isoDate, isoTime);
+        IsoDateTime isoDateTime = isoDate.atTime(isoTime);
         JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -360,11 +357,11 @@ public final class TemporalPlainDateTimeConstructor {
             resultTime = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
         }
 
-        if (!isValidPlainDateTimeRange(resultDate, resultTime)) {
+        if (!resultDate.isWithinPlainDateTimeRange(resultTime)) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, new IsoDateTime(resultDate, resultTime), calendarId);
+        return createPlainDateTime(context, resultDate.atTime(resultTime), calendarId);
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {
@@ -372,11 +369,11 @@ public final class TemporalPlainDateTimeConstructor {
         if (parsed == null) {
             return JSUndefined.INSTANCE;
         }
-        if (!isValidPlainDateTimeRange(parsed.date(), parsed.time())) {
+        if (!parsed.date().isWithinPlainDateTimeRange(parsed.time())) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, new IsoDateTime(parsed.date(), parsed.time()), parsed.calendar());
+        return createPlainDateTime(context, parsed.date().atTime(parsed.time()), parsed.calendar());
     }
 
     /**
@@ -401,14 +398,6 @@ public final class TemporalPlainDateTimeConstructor {
         return prototype == candidate;
     }
 
-    private static boolean isValidPlainDateTimeRange(IsoDate date, IsoTime time) {
-        long epochDay = date.toEpochDay();
-        if (epochDay < MIN_SUPPORTED_EPOCH_DAY || epochDay > MAX_SUPPORTED_EPOCH_DAY) {
-            return false;
-        }
-        return epochDay != MIN_SUPPORTED_EPOCH_DAY || time.totalNanoseconds() != 0L;
-    }
-
     /**
      * ToTemporalDateTime abstract operation.
      */
@@ -427,7 +416,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
             return createPlainDateTime(
                     context,
-                    new IsoDateTime(plainDate.getIsoDate(), IsoTime.MIDNIGHT),
+                    plainDate.getIsoDate().atMidnight(),
                     plainDate.getCalendarId());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {

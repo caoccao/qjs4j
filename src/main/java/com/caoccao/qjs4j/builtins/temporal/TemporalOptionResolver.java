@@ -77,33 +77,7 @@ final class TemporalOptionResolver {
             JSContext context,
             JSValue fractionalSecondDigitsValue,
             String invalidOptionMessage) {
-        if (fractionalSecondDigitsValue instanceof JSUndefined || fractionalSecondDigitsValue == null) {
-            return new TemporalFractionalSecondDigitsOption(true, -1);
-        }
-        if (fractionalSecondDigitsValue instanceof JSNumber fractionalSecondDigitsNumberValue) {
-            double numericValue = fractionalSecondDigitsNumberValue.value();
-            if (!Double.isFinite(numericValue) || Double.isNaN(numericValue)) {
-                context.throwRangeError(invalidOptionMessage);
-                return null;
-            }
-            int flooredValue = (int) Math.floor(numericValue);
-            if (flooredValue < 0 || flooredValue > 9) {
-                context.throwRangeError(invalidOptionMessage);
-                return null;
-            }
-            return new TemporalFractionalSecondDigitsOption(false, flooredValue);
-        }
-
-        JSString stringValue = JSTypeConversions.toString(context, fractionalSecondDigitsValue);
-        if (context.hasPendingException() || stringValue == null) {
-            return null;
-        }
-        if ("auto".equals(stringValue.value())) {
-            return new TemporalFractionalSecondDigitsOption(true, -1);
-        }
-
-        context.throwRangeError(invalidOptionMessage);
-        return null;
+        return TemporalFractionalSecondDigitsOption.parse(context, fractionalSecondDigitsValue, invalidOptionMessage);
     }
 
     static JSObject toOptionalOptionsObject(JSContext context, JSValue optionsValue, String invalidTypeMessage) {

@@ -25,4 +25,6 @@ public record TemporalZonedDateTimeToStringSettings(
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,
         long roundingIncrementNanoseconds) {
+    public static final TemporalZonedDateTimeToStringSettings DEFAULT =
+            new TemporalZonedDateTimeToStringSettings("auto", "auto", "auto", null, "trunc", true, -1, 1L);
 }

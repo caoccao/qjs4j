@@ -508,8 +508,8 @@ public final class TemporalDurationPrototype {
             String smallestUnit,
             long roundingIncrement,
             String roundingMode) {
-        LocalDateTime startDateTime = toLocalDateTime(startIsoDateTime.date(), startIsoDateTime.time());
-        LocalDateTime endDateTime = toLocalDateTime(endIsoDateTime.date(), endIsoDateTime.time());
+        LocalDateTime startDateTime = startIsoDateTime.toLocalDateTime();
+        LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
 
         TemporalDuration unroundedDuration = buildBalancedDurationFromDateTimes(
                 context,
@@ -570,12 +570,8 @@ public final class TemporalDurationPrototype {
         IsoDateTime endIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                 endEpochNanoseconds,
                 timeZoneId);
-        LocalDateTime startDateTime = toLocalDateTime(
-                startIsoDateTime.date(),
-                startIsoDateTime.time());
-        LocalDateTime endDateTime = toLocalDateTime(
-                endIsoDateTime.date(),
-                endIsoDateTime.time());
+        LocalDateTime startDateTime = startIsoDateTime.toLocalDateTime();
+        LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
         TemporalRelativeToOption relativeToOption = new TemporalRelativeToOption(
                 startDateTime,
                 true,
@@ -1127,43 +1123,35 @@ public final class TemporalDurationPrototype {
         if (context.hasPendingException()) {
             return null;
         }
-
-        JSValue fractionalSecondDigitsValue = JSUndefined.INSTANCE;
-        if (optionsObject != null) {
-            fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-            if (context.hasPendingException()) {
-                return null;
-            }
+        if (optionsObject == null) {
+            return TemporalDurationToStringOptions.DEFAULT;
         }
-        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+
+        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption =
                 TemporalOptionResolver.parseFractionalSecondDigitsOption(
                         context,
                         fractionalSecondDigitsValue,
                         "Temporal error: Invalid fractionalSecondDigits.");
-        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
+        if (context.hasPendingException() || fractionalSecondDigitsOption == null) {
             return null;
         }
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(
-                resolvedFractionalSecondDigitsOption.auto(),
-                resolvedFractionalSecondDigitsOption.digits());
 
-        String roundingMode = "trunc";
-        if (optionsObject != null) {
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException() || roundingMode == null) {
-                return null;
-            }
+        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
+            return null;
         }
 
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
+        String smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
+        if (context.hasPendingException()) {
+            return null;
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
@@ -1192,7 +1180,7 @@ public final class TemporalDurationPrototype {
             precisionAuto = false;
             fractionalSecondDigits = fractionalSecondDigitsOption.digits();
             smallestUnit = smallestUnitFromFractionalSecondDigits(fractionalSecondDigits);
-            roundingIncrementNanoseconds = Math.round(Math.pow(10, 9 - fractionalSecondDigits));
+            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
         }
 
         return new TemporalDurationToStringOptions(
@@ -1345,35 +1333,24 @@ public final class TemporalDurationPrototype {
             return null;
         }
         if (relativeToReference.epochNanoseconds() == null || relativeToReference.timeZoneId() == null) {
-            LocalDateTime startDateTime = toLocalDateTime(
-                    relativeToReference.relativeDate(),
-                    relativeToReference.relativeTime());
+            LocalDateTime startDateTime = relativeToReference.relativeDate()
+                    .atTime(relativeToReference.relativeTime())
+                    .toLocalDateTime();
             return new TemporalRelativeToOption(startDateTime, false, null, null, null);
         }
         IsoDateTime localIsoDateTime;
         if (isOffsetTimeZoneIdentifier(relativeToReference.timeZoneId())) {
             int offsetSeconds = parseOffsetSecondsFromTimeZoneId(relativeToReference.timeZoneId());
             IsoDateTime utcDateTime = IsoDateTime.createByEpochNs(relativeToReference.epochNanoseconds());
-            LocalDateTime utcLocalDateTime = toLocalDateTime(utcDateTime.date(), utcDateTime.time());
+            LocalDateTime utcLocalDateTime = utcDateTime.toLocalDateTime();
             LocalDateTime offsetLocalDateTime = utcLocalDateTime.plusSeconds(offsetSeconds);
-            localIsoDateTime = new IsoDateTime(
-                    new IsoDate(
-                            offsetLocalDateTime.getYear(),
-                            offsetLocalDateTime.getMonthValue(),
-                            offsetLocalDateTime.getDayOfMonth()),
-                    new IsoTime(
-                            offsetLocalDateTime.getHour(),
-                            offsetLocalDateTime.getMinute(),
-                            offsetLocalDateTime.getSecond(),
-                            offsetLocalDateTime.getNano() / 1_000_000,
-                            (offsetLocalDateTime.getNano() / 1_000) % 1_000,
-                            offsetLocalDateTime.getNano() % 1_000));
+            localIsoDateTime = IsoDateTime.createFromLocalDateTime(offsetLocalDateTime);
         } else {
             localIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     relativeToReference.epochNanoseconds(),
                     relativeToReference.timeZoneId());
         }
-        LocalDateTime startDateTime = toLocalDateTime(localIsoDateTime.date(), localIsoDateTime.time());
+        LocalDateTime startDateTime = localIsoDateTime.toLocalDateTime();
         return new TemporalRelativeToOption(
                 startDateTime,
                 true,
@@ -2045,44 +2022,12 @@ public final class TemporalDurationPrototype {
         };
     }
 
-    private static IsoDateTime toIsoDateTime(LocalDateTime localDateTime) {
-        int nanosecondOfSecond = localDateTime.getNano();
-        int millisecond = nanosecondOfSecond / 1_000_000;
-        int microsecond = (nanosecondOfSecond / 1_000) % 1_000;
-        int nanosecond = nanosecondOfSecond % 1_000;
-        IsoDate isoDate = new IsoDate(
-                localDateTime.getYear(),
-                localDateTime.getMonthValue(),
-                localDateTime.getDayOfMonth());
-        IsoTime isoTime = new IsoTime(
-                localDateTime.getHour(),
-                localDateTime.getMinute(),
-                localDateTime.getSecond(),
-                millisecond,
-                microsecond,
-                nanosecond);
-        return new IsoDateTime(isoDate, isoTime);
-    }
-
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = checkReceiver(context, thisArg, "toJSON");
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
         return new JSString(duration.getDuration().toString());
-    }
-
-    private static LocalDateTime toLocalDateTime(IsoDate isoDate, IsoTime isoTime) {
-        return LocalDateTime.of(
-                isoDate.year(),
-                isoDate.month(),
-                isoDate.day(),
-                isoTime.hour(),
-                isoTime.minute(),
-                isoTime.second(),
-                isoTime.millisecond() * 1_000_000
-                        + isoTime.microsecond() * 1_000
-                        + isoTime.nanosecond());
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -2118,7 +2063,7 @@ public final class TemporalDurationPrototype {
         BigInteger dayTimeNanoseconds = durationRecord.dayTimeNanoseconds();
         BigInteger incrementNanoseconds = BigInteger.valueOf(options.roundingIncrementNanoseconds());
         BigInteger roundedDayTimeNanoseconds =
-                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, TemporalRoundingMode.fromString(options.roundingMode()));
+                TemporalMathKernel.roundBigIntegerToIncrementSigned(dayTimeNanoseconds, incrementNanoseconds, options.roundingMode());
         if (roundedDayTimeNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) > 0) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
@@ -2534,7 +2479,7 @@ public final class TemporalDurationPrototype {
             JSContext context,
             TemporalRelativeToOption relativeToOption,
             LocalDateTime localDateTime) {
-        IsoDateTime isoDateTime = toIsoDateTime(localDateTime);
+        IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
         try {
             return isoDateTime.toEpochNs(
                     relativeToOption.timeZoneId(),

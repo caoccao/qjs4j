@@ -67,7 +67,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
                 return null;
             }
 
-            IsoDateTime addedDateTime = new IsoDateTime(addedDate, localDateTime.time());
+            IsoDateTime addedDateTime = addedDate.atTime(localDateTime.time());
             try {
                 intermediateEpochNanoseconds = addedDateTime.toEpochNs(zonedDateTime.getTimeZoneId());
             } catch (DateTimeException dateTimeException) {

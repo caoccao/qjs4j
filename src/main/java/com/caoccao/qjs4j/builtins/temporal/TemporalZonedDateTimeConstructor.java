@@ -62,7 +62,7 @@ public final class TemporalZonedDateTimeConstructor {
             return null;
         }
         try {
-            return new IsoDateTime(isoDate, isoTime).toEpochNs(timeZoneId, disambiguation);
+            return isoDate.atTime(isoTime).toEpochNs(timeZoneId, disambiguation);
         } catch (DateTimeException dateTimeException) {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return null;
@@ -636,23 +636,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static boolean isZonedDateTimeWithinRange(IsoDate isoDate, IsoTime isoTime) {
-        int second = isoTime.second();
-        if (second == 60) {
-            second = 59;
-        }
-        LocalDateTime localDateTime = LocalDateTime.of(
-                isoDate.year(),
-                isoDate.month(),
-                isoDate.day(),
-                isoTime.hour(),
-                isoTime.minute(),
-                second,
-                isoTime.millisecond() * 1_000_000
-                        + isoTime.microsecond() * 1_000
-                        + isoTime.nanosecond());
-        LocalDateTime minimumDateTime = LocalDateTime.of(-271821, 4, 20, 0, 0, 0, 0);
-        LocalDateTime maximumDateTime = LocalDateTime.of(275760, 9, 13, 23, 59, 59, 999_999_999);
-        return !localDateTime.isBefore(minimumDateTime) && !localDateTime.isAfter(maximumDateTime);
+        return isoDate.isWithinInstantDateTimeRange(isoTime);
     }
 
     static String normalizeTimeZoneIdentifier(JSContext context, String timeZoneText) {
@@ -679,43 +663,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     private static TemporalZonedDateTimeOptions parseFromOptions(JSContext context, JSValue optionsValue) {
-        if (optionsValue instanceof JSUndefined || optionsValue == null) {
-            return new TemporalZonedDateTimeOptions("compatible", "reject", "constrain");
-        }
-
-        if (!(optionsValue instanceof JSObject optionsObject)) {
-            context.throwTypeError("Temporal error: Option must be object: options.");
-            return null;
-        }
-
-        String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");
-        if (context.hasPendingException() || disambiguation == null) {
-            return null;
-        }
-        if (!TemporalDisambiguation.isValid(disambiguation)) {
-            context.throwRangeError("Temporal error: Invalid disambiguation option.");
-            return null;
-        }
-
-        String offset = TemporalUtils.getStringOption(context, optionsObject, "offset", "reject");
-        if (context.hasPendingException() || offset == null) {
-            return null;
-        }
-        if (!TemporalOffsetOption.isValid(offset)) {
-            context.throwRangeError("Temporal error: Invalid offset option.");
-            return null;
-        }
-
-        String overflow = TemporalUtils.getStringOption(context, optionsObject, "overflow", "constrain");
-        if (context.hasPendingException() || overflow == null) {
-            return null;
-        }
-        if (!TemporalOverflow.isValid(overflow)) {
-            context.throwRangeError("Temporal error: Invalid overflow option.");
-            return null;
-        }
-
-        return new TemporalZonedDateTimeOptions(disambiguation, offset, overflow);
+        return TemporalZonedDateTimeOptions.parse(context, optionsValue, "reject");
     }
 
     private static int parseOffsetSeconds(String offsetText) {
@@ -966,20 +914,12 @@ public final class TemporalZonedDateTimeConstructor {
         int second = isoTime.second();
         BigInteger leapSecondNanoseconds = BigInteger.ZERO;
         if (second == 60) {
-            second = 59;
             leapSecondNanoseconds = BigInteger.valueOf(1_000_000_000L);
         }
 
-        LocalDateTime localDateTime = LocalDateTime.of(
-                isoDate.year(),
-                isoDate.month(),
-                isoDate.day(),
-                isoTime.hour(),
-                isoTime.minute(),
-                second,
-                isoTime.millisecond() * 1_000_000
-                        + isoTime.microsecond() * 1_000
-                        + isoTime.nanosecond());
+        LocalDateTime localDateTime = isoDate.atTime(isoTime)
+                .withClampedSecondToValidRange()
+                .toLocalDateTime();
         ZoneId zoneId = TemporalTimeZone.resolveTimeZone(timeZoneId);
         List<ZoneOffset> validOffsets = zoneId.getRules().getValidOffsets(localDateTime);
         BigInteger selectedEpochNanoseconds = null;
@@ -1068,7 +1008,7 @@ public final class TemporalZonedDateTimeConstructor {
     }
 
     public static JSValue toTemporalZonedDateTime(JSContext context, JSValue item) {
-        TemporalZonedDateTimeOptions defaultOptions = new TemporalZonedDateTimeOptions("compatible", "reject", "constrain");
+        TemporalZonedDateTimeOptions defaultOptions = TemporalZonedDateTimeOptions.DEFAULT_FROM;
 
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             return createZonedDateTime(

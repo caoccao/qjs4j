@@ -54,6 +54,14 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
         return new IsoTime(hour, minute, second, millisecond, microsecond, nanosecond);
     }
 
+    public IsoTime clampSecondToValidRange() {
+        if (second == 60) {
+            return new IsoTime(hour, minute, 59, millisecond, microsecond, nanosecond);
+        } else {
+            return this;
+        }
+    }
+
     @Override
     public int compareTo(IsoTime otherIsoTime) {
         if (hour != otherIsoTime.hour) {
@@ -181,5 +189,9 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
                 + ((long) millisecond * TemporalConstants.MILLISECOND_NANOSECONDS)
                 + ((long) microsecond * TemporalConstants.MICROSECOND_NANOSECONDS)
                 + nanosecond;
+    }
+
+    public int totalNanosecondsWithinSecond() {
+        return millisecond * 1_000_000 + microsecond * 1_000 + nanosecond;
     }
 }
