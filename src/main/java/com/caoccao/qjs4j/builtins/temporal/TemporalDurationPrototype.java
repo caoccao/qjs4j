@@ -902,15 +902,15 @@ public final class TemporalDurationPrototype {
             LocalDateTime endDateTime,
             String calendarUnit) {
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
-        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+        LocalDateTime boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
         if (!endDateTime.isBefore(startDateTime)) {
             while (boundaryDateTime.isAfter(endDateTime)) {
                 unitCount--;
-                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, nextUnitCount);
                 if (nextDateTime.isAfter(endDateTime)) {
                     break;
                 }
@@ -920,11 +920,11 @@ public final class TemporalDurationPrototype {
         } else {
             while (boundaryDateTime.isBefore(endDateTime)) {
                 unitCount++;
-                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, nextUnitCount);
                 if (nextDateTime.isBefore(endDateTime)) {
                     break;
                 }
@@ -957,7 +957,7 @@ public final class TemporalDurationPrototype {
 
         int direction = startToEndNanoseconds.signum();
         long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime, calendarUnit);
-        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+        LocalDateTime boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
         if (direction >= 0) {
             while (true) {
                 BigInteger boundaryToEndNanoseconds = nanosecondsBetween(
@@ -974,11 +974,11 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount--;
-                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount + 1L;
-                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, nextUnitCount);
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
@@ -1012,11 +1012,11 @@ public final class TemporalDurationPrototype {
                     break;
                 }
                 unitCount++;
-                boundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, unitCount);
+                boundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, unitCount);
             }
             while (true) {
                 long nextUnitCount = unitCount - 1L;
-                LocalDateTime nextDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, nextUnitCount);
+                LocalDateTime nextDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, nextUnitCount);
                 BigInteger nextToEndNanoseconds = nanosecondsBetween(
                         context,
                         nextDateTime,
@@ -1048,7 +1048,8 @@ public final class TemporalDurationPrototype {
         }
         BigInteger deltaNanoseconds = nanosecondsBetween(startDateTime, endDateTime);
         long unitCount = deltaNanoseconds.divide(unitNanoseconds).longValue();
-        LocalDateTime boundaryDateTime = TemporalDurationArithmeticKernel.addFixedUnits(startDateTime, unit, unitCount);
+        LocalDateTime boundaryDateTime =
+                IsoDateTime.createFromLocalDateTime(startDateTime).addFixedUnitsToLocalDateTime(unit, unitCount);
         return new TemporalUnitStepResult(unitCount, boundaryDateTime);
     }
 
@@ -1085,7 +1086,7 @@ public final class TemporalDurationPrototype {
             startEpochNanoseconds = relativeToOption.epochNanoseconds();
         } else {
             startEpochNanoseconds =
-                    zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, startDateTime);
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, startDateTime);
         }
         if (context.hasPendingException() || startEpochNanoseconds == null) {
             return BigInteger.ZERO;
@@ -1097,7 +1098,7 @@ public final class TemporalDurationPrototype {
             endEpochNanoseconds = relativeToOption.epochNanoseconds();
         } else {
             endEpochNanoseconds =
-                    zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, endDateTime);
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, endDateTime);
         }
         if (context.hasPendingException() || endEpochNanoseconds == null) {
             return BigInteger.ZERO;
@@ -1481,9 +1482,8 @@ public final class TemporalDurationPrototype {
             BigInteger weekIncrementNanoseconds = WEEK_NANOSECONDS.multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedWeekRemainderNanoseconds =
                     TemporalMathKernel.roundBigIntegerToIncrementSigned(weekRemainderNanoseconds, weekIncrementNanoseconds, roundingMode);
-            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(
+            return IsoDateTime.createFromLocalDateTime(weekAnchorDateTime).addNanosecondsToDateTime(
                     context,
-                    weekAnchorDateTime,
                     roundedWeekRemainderNanoseconds,
                     relativeToOption);
         }
@@ -1538,9 +1538,15 @@ public final class TemporalDurationPrototype {
                         beyondDaySpanNanoseconds,
                         unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement)),
                         roundingMode);
-                return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, endAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
+                return IsoDateTime.createFromLocalDateTime(endAnchorDateTime).addNanosecondsToDateTime(
+                        context,
+                        roundedTimeNanoseconds,
+                        relativeToOption);
             }
-            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, startAnchorDateTime, roundedTimeNanoseconds, relativeToOption);
+            return IsoDateTime.createFromLocalDateTime(startAnchorDateTime).addNanosecondsToDateTime(
+                    context,
+                    roundedTimeNanoseconds,
+                    relativeToOption);
         }
 
         if (relativeToOption.zoned()
@@ -1569,9 +1575,8 @@ public final class TemporalDurationPrototype {
                     .multiply(BigInteger.valueOf(roundingIncrement));
             BigInteger roundedTimeRemainderNanoseconds =
                     TemporalMathKernel.roundBigIntegerToIncrementSigned(timeRemainderNanoseconds, incrementNanoseconds, roundingMode);
-            return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(
+            return IsoDateTime.createFromLocalDateTime(dayAdjustedDateTime).addNanosecondsToDateTime(
                     context,
-                    dayAdjustedDateTime,
                     roundedTimeRemainderNanoseconds,
                     relativeToOption);
         }
@@ -1600,7 +1605,10 @@ public final class TemporalDurationPrototype {
             incrementNanoseconds = unitToNanosecondsBigInteger(smallestUnit).multiply(BigInteger.valueOf(roundingIncrement));
         }
         BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(totalNanoseconds, incrementNanoseconds, roundingMode);
-        return TemporalDurationArithmeticKernel.addNanosecondsToDateTime(context, startDateTime, roundedNanoseconds, relativeToOption);
+        return IsoDateTime.createFromLocalDateTime(startDateTime).addNanosecondsToDateTime(
+                context,
+                roundedNanoseconds,
+                relativeToOption);
     }
 
     private static LocalDateTime roundDateTimeToCalendarUnit(
@@ -1664,8 +1672,8 @@ public final class TemporalDurationPrototype {
         long lowerMultipleCount = Math.floorDiv(lowerUnitCount, roundingIncrement) * roundingIncrement;
         long upperMultipleCount = lowerMultipleCount + roundingIncrement;
 
-        LocalDateTime lowerBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, lowerMultipleCount);
-        LocalDateTime upperBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, upperMultipleCount);
+        LocalDateTime lowerBoundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, lowerMultipleCount);
+        LocalDateTime upperBoundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, upperMultipleCount);
         if (!isDateWithinTemporalRange(lowerBoundaryDateTime.toLocalDate())
                 || !isDateWithinTemporalRange(upperBoundaryDateTime.toLocalDate())) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -1804,14 +1812,14 @@ public final class TemporalDurationPrototype {
         BigInteger unroundedEndEpochNanoseconds = null;
         if (relativeToOption.zoned()) {
             TemporalZonedDateTimeComputation zonedDateTimeComputation =
-                    TemporalDurationArithmeticKernel.addDurationToZonedDateTime(context, relativeToOption, durationRecord);
+                    durationRecord.addDurationToZonedDateTime(context, relativeToOption);
             if (context.hasPendingException() || zonedDateTimeComputation == null) {
                 return null;
             }
             unroundedEndDateTime = zonedDateTimeComputation.localDateTime();
             unroundedEndEpochNanoseconds = zonedDateTimeComputation.epochNanoseconds();
         } else {
-            unroundedEndDateTime = TemporalDurationArithmeticKernel.addDurationToDateTime(context, startDateTime, durationRecord);
+            unroundedEndDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addDurationToLocalDateTime(context, durationRecord);
         }
         if (context.hasPendingException()) {
             return null;
@@ -2195,7 +2203,7 @@ public final class TemporalDurationPrototype {
         } else {
             direction = endDateTime.isBefore(startDateTime) ? -1L : 1L;
         }
-        LocalDateTime nextBoundaryDateTime = TemporalDurationArithmeticKernel.addCalendarUnits(startDateTime, calendarUnit, wholeUnits + direction);
+        LocalDateTime nextBoundaryDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addCalendarUnitsToLocalDateTime(calendarUnit, wholeUnits + direction);
         if (zoned) {
             if (!isDateTimeWithinTemporalRange(nextBoundaryDateTime)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
@@ -2269,14 +2277,14 @@ public final class TemporalDurationPrototype {
         BigInteger endEpochNanoseconds = null;
         if (relativeToOption.zoned()) {
             TemporalZonedDateTimeComputation zonedDateTimeComputation =
-                    TemporalDurationArithmeticKernel.addDurationToZonedDateTime(context, relativeToOption, durationRecord);
+                    durationRecord.addDurationToZonedDateTime(context, relativeToOption);
             if (context.hasPendingException() || zonedDateTimeComputation == null) {
                 return Double.NaN;
             }
             endDateTime = zonedDateTimeComputation.localDateTime();
             endEpochNanoseconds = zonedDateTimeComputation.epochNanoseconds();
         } else {
-            endDateTime = TemporalDurationArithmeticKernel.addDurationToDateTime(context, startDateTime, durationRecord);
+            endDateTime = IsoDateTime.createFromLocalDateTime(startDateTime).addDurationToLocalDateTime(context, durationRecord);
         }
         if (context.hasPendingException()) {
             return Double.NaN;
@@ -2477,18 +2485,4 @@ public final class TemporalDurationPrototype {
         return JSNumber.of(duration.getDuration().years());
     }
 
-    private static BigInteger zonedLocalDateTimeToEpochNanoseconds(
-            JSContext context,
-            TemporalRelativeToOption relativeToOption,
-            LocalDateTime localDateTime) {
-        IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
-        try {
-            return isoDateTime.toEpochNs(
-                    relativeToOption.timeZoneId(),
-                    "compatible");
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Duration field out of range.");
-            return null;
-        }
-    }
 }

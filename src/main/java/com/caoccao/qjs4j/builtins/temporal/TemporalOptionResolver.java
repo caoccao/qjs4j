@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.builtins.temporal;
 
 import com.caoccao.qjs4j.core.*;
-import com.caoccao.qjs4j.core.temporal.TemporalFractionalSecondDigitsOption;
 
 final class TemporalOptionResolver {
     private TemporalOptionResolver() {

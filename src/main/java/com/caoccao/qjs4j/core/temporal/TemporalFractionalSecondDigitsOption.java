@@ -16,12 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.JSTypeConversions;
+import com.caoccao.qjs4j.core.*;
 
 public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
     public static final TemporalFractionalSecondDigitsOption AUTO = new TemporalFractionalSecondDigitsOption(true, -1);

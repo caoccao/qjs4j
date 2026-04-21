@@ -89,9 +89,8 @@ public final class TemporalPlainDateTimePrototype {
         TemporalCalendarId calendarId = plainDateTime.getCalendarId();
         IsoDate newDate;
         if (calendarId == TemporalCalendarId.ISO8601) {
-            newDate = TemporalDurationArithmeticKernel.addDurationToIsoDate(
+            newDate = plainDateTime.getIsoDateTime().date().addDurationToIsoDate(
                     context,
-                    plainDateTime.getIsoDateTime().date(),
                     durationRecord.years(),
                     durationRecord.months(),
                     durationRecord.weeks(),

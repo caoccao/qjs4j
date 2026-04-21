@@ -65,8 +65,8 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
 
-        return TemporalDurationArithmeticKernel.addDurationToIsoDate(
-                context, date, durationRecord.years(), durationRecord.months(),
+        return date.addDurationToIsoDate(
+                context, durationRecord.years(), durationRecord.months(),
                 0L, totalDays, overflow);
     }
 

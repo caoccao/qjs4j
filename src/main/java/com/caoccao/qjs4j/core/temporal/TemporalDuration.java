@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.JSContext;
 
 import java.math.BigInteger;
+import java.time.LocalDateTime;
 import java.util.Locale;
 
 /**
@@ -28,16 +29,10 @@ public record TemporalDuration(
         long years, long months, long weeks, long days,
         long hours, long minutes, long seconds,
         long milliseconds, long microseconds, long nanoseconds) {
-
     public static final TemporalDuration ZERO = new TemporalDuration(
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-
-    public TemporalDuration abs() {
-        return new TemporalDuration(
-                Math.abs(years), Math.abs(months), Math.abs(weeks), Math.abs(days),
-                Math.abs(hours), Math.abs(minutes), Math.abs(seconds),
-                Math.abs(milliseconds), Math.abs(microseconds), Math.abs(nanoseconds));
-    }
+    private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
+    private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
     public static TemporalDuration parseDurationString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
@@ -46,6 +41,52 @@ public record TemporalDuration(
         }
         IsoParsingState parsingState = new IsoParsingState(input);
         return parsingState.parseDuration(context);
+    }
+
+    public TemporalDuration abs() {
+        return new TemporalDuration(
+                Math.abs(years), Math.abs(months), Math.abs(weeks), Math.abs(days),
+                Math.abs(hours), Math.abs(minutes), Math.abs(seconds),
+                Math.abs(milliseconds), Math.abs(microseconds), Math.abs(nanoseconds));
+    }
+
+    public TemporalZonedDateTimeComputation addDurationToZonedDateTime(
+            JSContext context,
+            TemporalRelativeToOption relativeToOption) {
+        LocalDateTime dateBalancedDateTime = relativeToOption.startDateTime()
+                .plusYears(years)
+                .plusMonths(months)
+                .plusWeeks(weeks)
+                .plusDays(days);
+        BigInteger intermediateEpochNanoseconds;
+        if (dateBalancedDateTime.equals(relativeToOption.startDateTime())) {
+            intermediateEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            intermediateEpochNanoseconds = IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(
+                    context,
+                    relativeToOption,
+                    dateBalancedDateTime);
+        }
+        if (context.hasPendingException() || intermediateEpochNanoseconds == null) {
+            return null;
+        }
+
+        BigInteger timeNanoseconds = timeNanoseconds();
+        BigInteger endEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
+        if (endEpochNanoseconds.compareTo(NS_MIN_INSTANT) < 0
+                || endEpochNanoseconds.compareTo(NS_MAX_INSTANT) > 0) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+
+        IsoDateTime endIsoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
+                endEpochNanoseconds,
+                relativeToOption.timeZoneId());
+        LocalDateTime endDateTime = endIsoDateTime.toLocalDateTime();
+        int endOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(
+                endEpochNanoseconds,
+                relativeToOption.timeZoneId());
+        return new TemporalZonedDateTimeComputation(endDateTime, endEpochNanoseconds, endOffsetSeconds);
     }
 
     /**
