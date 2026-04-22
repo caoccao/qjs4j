@@ -17,7 +17,6 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.TemporalDuration;
-import com.caoccao.qjs4j.core.temporal.TemporalParser;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -541,7 +540,7 @@ public final class JSIntlDurationFormat extends JSObject {
 
         if (input instanceof JSString durationString) {
             TemporalDuration parsedDuration =
-                    TemporalParser.parseDurationString(context, durationString.value());
+                    TemporalDuration.parseDurationString(context, durationString.value());
             if (parsedDuration == null || context.hasPendingException()) {
                 return null;
             }

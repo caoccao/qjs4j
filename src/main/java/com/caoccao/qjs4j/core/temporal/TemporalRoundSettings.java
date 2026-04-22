@@ -98,7 +98,7 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             TemporalUnit allowedMin,
             TemporalUnit allowedMax) {
         long roundingIncrement = 1L;
-        String roundingMode = "halfExpand";
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.HALF_EXPAND;
         String smallestUnitText;
 
         if (roundTo instanceof JSString unitString) {
@@ -108,8 +108,13 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             if (context.hasPendingException()) {
                 return null;
             }
-            roundingMode = getStringOption(context, optionsObject, "roundingMode", "halfExpand");
-            if (context.hasPendingException() || roundingMode == null) {
+            String roundingModeText = getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            if (context.hasPendingException() || roundingModeText == null) {
+                return null;
+            }
+            roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+            if (roundingMode == null) {
+                context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingModeText);
                 return null;
             }
             smallestUnitText = getRequiredStringOption(
@@ -120,12 +125,6 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             }
         } else {
             context.throwTypeError("Temporal error: roundTo must be an object.");
-            return null;
-        }
-
-        TemporalRoundingMode parsedRoundingMode = TemporalRoundingMode.fromString(roundingMode);
-        if (parsedRoundingMode == null) {
-            context.throwRangeError("Temporal error: Invalid roundingMode option: " + roundingMode);
             return null;
         }
 
@@ -158,6 +157,6 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             }
         }
 
-        return new TemporalRoundSettings(smallestUnit, roundingIncrement, parsedRoundingMode);
+        return new TemporalRoundSettings(smallestUnit, roundingIncrement, roundingMode);
     }
 }

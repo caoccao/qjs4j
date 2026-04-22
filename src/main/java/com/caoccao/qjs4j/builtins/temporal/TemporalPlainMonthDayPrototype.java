@@ -225,7 +225,8 @@ public final class TemporalPlainMonthDayPrototype {
         IsoDate isoDate = plainMonthDay.getIsoDate();
         boolean includeReferenceYear;
         if (plainMonthDay.getCalendarId() == TemporalCalendarId.ISO8601) {
-            includeReferenceYear = TemporalDisplayCalendar.requiresAnnotation(calendarNameOption);
+            TemporalDisplayCalendar displayCalendar = TemporalDisplayCalendar.fromString(calendarNameOption);
+            includeReferenceYear = displayCalendar != null && displayCalendar.requiresAnnotation();
         } else {
             includeReferenceYear = true;
         }

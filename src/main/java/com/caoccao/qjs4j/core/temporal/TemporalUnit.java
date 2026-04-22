@@ -20,9 +20,6 @@ import java.util.Optional;
 
 /**
  * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
- * <p>
- * Replaces duplicated {@code temporalUnitRank()}, {@code canonicalizeDifferenceUnit()},
- * {@code canonicalizeTemporalUnit()}, and {@code UNIT_*} string constants.
  */
 public enum TemporalUnit {
     YEAR("year", 0),
@@ -163,6 +160,36 @@ public enum TemporalUnit {
             case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
             case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
             default -> -1L;
+        };
+    }
+
+    /**
+     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
+     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
+     */
+    public int toStringFractionalSecondDigits() {
+        return switch (this) {
+            case SECOND -> 0;
+            case MILLISECOND -> 3;
+            case MICROSECOND -> 6;
+            case NANOSECOND -> 9;
+            default -> 0;
+        };
+    }
+
+    /**
+     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
+     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
+     * Returns 1 for other units.
+     */
+    public long toStringRoundingIncrementNanoseconds() {
+        return switch (this) {
+            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> 1L;
+            default -> 1L;
         };
     }
 }

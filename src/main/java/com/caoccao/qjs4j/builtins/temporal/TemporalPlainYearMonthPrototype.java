@@ -392,7 +392,11 @@ public final class TemporalPlainYearMonthPrototype {
         }
 
         JSValue optionsArgument = args.length > 1 ? args[1] : JSUndefined.INSTANCE;
-        TemporalDifferenceSettings differenceSettings = getDifferenceSettings(context, sinceOperation, optionsArgument);
+        TemporalDifferenceSettings differenceSettings = TemporalDifferenceSettings.parse(
+                context, sinceOperation, optionsArgument,
+                TemporalUnit.YEAR, TemporalUnit.MONTH,
+                TemporalUnit.MONTH, TemporalUnit.YEAR,
+                true, false);
         if (context.hasPendingException() || differenceSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -553,18 +557,6 @@ public final class TemporalPlainYearMonthPrototype {
         }
         return JSNumber.of(eraFields.eraYear());
     }
-
-    private static TemporalDifferenceSettings getDifferenceSettings(
-            JSContext context,
-            boolean sinceOperation,
-            JSValue optionsArgument) {
-        return TemporalDifferenceSettings.parse(
-                context, sinceOperation, optionsArgument,
-                TemporalUnit.YEAR, TemporalUnit.MONTH,
-                TemporalUnit.MONTH, TemporalUnit.YEAR,
-                true, false);
-    }
-
 
     private static IsoDate getYearMonthRoundedDate(
             JSContext context,
@@ -864,14 +856,14 @@ public final class TemporalPlainYearMonthPrototype {
         long endYears;
         long endMonths;
         if (UNIT_YEAR.equals(differenceSettings.smallestUnit())) {
-            roundingStartValue = TemporalMathKernel.roundNumberToIncrement(years, increment, "trunc");
+            roundingStartValue = TemporalRoundingMode.TRUNC.roundNumberToIncrement(years, increment);
             roundingEndValue = roundingStartValue + increment * sign;
             startYears = roundingStartValue;
             startMonths = 0L;
             endYears = roundingEndValue;
             endMonths = 0L;
         } else {
-            roundingStartValue = TemporalMathKernel.roundNumberToIncrement(months, increment, "trunc");
+            roundingStartValue = TemporalRoundingMode.TRUNC.roundNumberToIncrement(months, increment);
             roundingEndValue = roundingStartValue + increment * sign;
             startYears = years;
             startMonths = roundingStartValue;
@@ -897,8 +889,8 @@ public final class TemporalPlainYearMonthPrototype {
             return null;
         }
 
-        String signText = sign < 0L ? "negative" : "positive";
-        String unsignedRoundingMode = TemporalMathKernel.getUnsignedRoundingMode(differenceSettings.roundingMode().jsName(), signText);
+        TemporalUnsignedRoundingMode unsignedRoundingMode = differenceSettings.roundingMode().toUnsigned(
+                TemporalSign.fromSignum(sign));
         int comparison = Long.compare(Math.abs(numerator) * 2L, Math.abs(denominator));
         boolean evenCardinality = Math.floorMod(Math.abs(roundingStartValue) / increment, 2L) == 0L;
 
@@ -908,12 +900,11 @@ public final class TemporalPlainYearMonthPrototype {
         } else if (numerator == denominator) {
             roundedUnit = Math.abs(roundingEndValue);
         } else {
-            roundedUnit = TemporalMathKernel.applyUnsignedRoundingMode(
+            roundedUnit = unsignedRoundingMode.getRoundedUnit(
                     Math.abs(roundingStartValue),
                     Math.abs(roundingEndValue),
                     comparison,
-                    evenCardinality,
-                    unsignedRoundingMode);
+                    evenCardinality);
         }
         boolean didExpandCalendarUnit = roundedUnit == Math.abs(roundingEndValue);
 
@@ -1062,7 +1053,8 @@ public final class TemporalPlainYearMonthPrototype {
         IsoDate isoDate = plainYearMonth.getIsoDate();
         boolean includeReferenceDay;
         if (plainYearMonth.getCalendarId() == TemporalCalendarId.ISO8601) {
-            includeReferenceDay = TemporalDisplayCalendar.requiresAnnotation(calendarNameOption);
+            TemporalDisplayCalendar displayCalendar = TemporalDisplayCalendar.fromString(calendarNameOption);
+            includeReferenceDay = displayCalendar != null && displayCalendar.requiresAnnotation();
         } else {
             includeReferenceDay = true;
         }

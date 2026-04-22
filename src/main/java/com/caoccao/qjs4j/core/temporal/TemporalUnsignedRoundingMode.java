@@ -52,6 +52,42 @@ public enum TemporalUnsignedRoundingMode {
         };
     }
 
+    public long getRoundedUnit(
+            long roundingFloor,
+            long roundingCeiling,
+            int comparison,
+            boolean evenCardinality) {
+        return switch (this) {
+            case ZERO -> roundingFloor;
+            case INFINITY -> roundingCeiling;
+            case HALF_ZERO -> {
+                if (comparison <= 0) {
+                    yield roundingFloor;
+                } else {
+                    yield roundingCeiling;
+                }
+            }
+            case HALF_INFINITY -> {
+                if (comparison < 0) {
+                    yield roundingFloor;
+                } else {
+                    yield roundingCeiling;
+                }
+            }
+            case HALF_EVEN -> {
+                if (comparison < 0) {
+                    yield roundingFloor;
+                } else if (comparison > 0) {
+                    yield roundingCeiling;
+                } else if (evenCardinality) {
+                    yield roundingFloor;
+                } else {
+                    yield roundingCeiling;
+                }
+            }
+        };
+    }
+
     /**
      * Returns the JS-canonical name (e.g. "half-infinity").
      */

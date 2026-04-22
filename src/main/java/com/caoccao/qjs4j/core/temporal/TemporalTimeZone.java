@@ -395,7 +395,7 @@ public final class TemporalTimeZone {
                 return null;
             }
             IsoZonedDateTimeOffset parsedZonedDateTime =
-                    TemporalParser.parseZonedDateTimeString(context, adjustedTimeZoneText);
+                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, adjustedTimeZoneText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
@@ -411,7 +411,7 @@ public final class TemporalTimeZone {
             context.throwRangeError("Temporal error: Invalid offset string.");
             return null;
         }
-        IsoDateTimeOffset parsedInstant = TemporalParser.parseInstantString(context, timeZoneText);
+        IsoDateTimeOffset parsedInstant = IsoDateTimeOffset.parseInstantString(context, timeZoneText);
         if (parsedInstant == null || context.hasPendingException()) {
             return null;
         }

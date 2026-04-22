@@ -77,7 +77,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!TemporalDisplayCalendar.isValid(calendarNameOption)) {
+        if (TemporalDisplayCalendar.fromString(calendarNameOption) == null) {
             context.throwRangeError("Temporal error: Invalid calendarName option: " + calendarNameOption);
             return null;
         }
@@ -122,7 +122,7 @@ public final class TemporalUtils {
         if (context.hasPendingException()) {
             return null;
         }
-        if (!TemporalOverflow.isValid(overflow)) {
+        if (TemporalOverflow.fromString(overflow) == null) {
             context.throwRangeError("Temporal error: Invalid overflow option: " + overflow);
             return null;
         }

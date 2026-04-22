@@ -49,13 +49,6 @@ public enum TemporalOffsetOption {
     }
 
     /**
-     * Checks whether the given string is a valid offset option.
-     */
-    public static boolean isValid(String text) {
-        return fromString(text) != null;
-    }
-
-    /**
      * Returns the JS-canonical name (e.g. "prefer").
      */
     public String jsName() {

@@ -47,13 +47,6 @@ public enum TemporalDisplayTimeZone {
     }
 
     /**
-     * Checks whether the given string is a valid timeZoneName display option.
-     */
-    public static boolean isValid(String text) {
-        return fromString(text) != null;
-    }
-
-    /**
      * Returns the JS-canonical name (e.g. "auto").
      */
     public String jsName() {

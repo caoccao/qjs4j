@@ -26,7 +26,6 @@ import java.math.BigInteger;
  */
 public final class TemporalPlainTimePrototype {
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
-    private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final String TYPE_NAME = "Temporal.PlainTime";
 
     private TemporalPlainTimePrototype() {
@@ -78,10 +77,9 @@ public final class TemporalPlainTimePrototype {
                 .orElse(null);
     }
 
-    private static String canonicalizeToStringSmallestUnit(String unitText) {
+    private static TemporalUnit canonicalizeToStringSmallestUnit(String unitText) {
         return TemporalUnit.fromString(unitText)
                 .filter(u -> u.isSmallerOrEqual(TemporalUnit.MINUTE))
-                .map(TemporalUnit::jsName)
                 .orElse(null);
     }
 
@@ -95,7 +93,11 @@ public final class TemporalPlainTimePrototype {
             JSTemporalPlainTime other,
             JSValue optionsArg,
             boolean sinceOperation) {
-        TemporalDifferenceSettings differenceSettings = getDifferenceSettings(context, optionsArg);
+        TemporalDifferenceSettings differenceSettings = TemporalDifferenceSettings.parse(
+                context, false, optionsArg,
+                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
+                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
+                false, true);
         if (context.hasPendingException() || differenceSettings == null) {
             return JSUndefined.INSTANCE;
         }
@@ -112,10 +114,9 @@ public final class TemporalPlainTimePrototype {
         long smallestUnitNanoseconds = unitToNanoseconds(differenceSettings.smallestUnit());
         BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
                 .multiply(BigInteger.valueOf(differenceSettings.roundingIncrement()));
-        BigInteger roundedNanoseconds = TemporalMathKernel.roundBigIntegerToIncrementSigned(
+        BigInteger roundedNanoseconds = differenceSettings.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
-                incrementNanoseconds,
-                differenceSettings.roundingMode());
+                incrementNanoseconds);
 
         TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
                 roundedNanoseconds,
@@ -143,14 +144,6 @@ public final class TemporalPlainTimePrototype {
         return equal ? JSBoolean.TRUE : JSBoolean.FALSE;
     }
 
-    private static TemporalDifferenceSettings getDifferenceSettings(JSContext context, JSValue optionsArg) {
-        return TemporalDifferenceSettings.parse(
-                context, false, optionsArg,
-                TemporalUnit.HOUR, TemporalUnit.NANOSECOND,
-                TemporalUnit.NANOSECOND, TemporalUnit.HOUR,
-                false, true);
-    }
-
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
         JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
                 context,
@@ -159,44 +152,44 @@ public final class TemporalPlainTimePrototype {
         if (context.hasPendingException()) {
             return null;
         }
-
-        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(true, -1);
-        String roundingMode = "trunc";
-        String smallestUnitText = null;
-        if (optionsObject != null) {
-            JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
-            if (context.hasPendingException()) {
-                return null;
-            }
-            TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
-                    TemporalOptionResolver.parseFractionalSecondDigitsOption(
-                            context,
-                            fractionalSecondDigitsValue,
-                            "Temporal error: Invalid fractionalSecondDigits.");
-            if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
-                return null;
-            }
-            fractionalSecondDigitsOption = new TemporalFractionalSecondDigitsOption(
-                    resolvedFractionalSecondDigitsOption.auto(),
-                    resolvedFractionalSecondDigitsOption.digits());
-
-            roundingMode = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
-            if (context.hasPendingException() || roundingMode == null) {
-                return null;
-            }
-
-            smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
-            if (context.hasPendingException()) {
-                return null;
-            }
+        if (optionsObject == null) {
+            return TemporalPlainTimeToStringSettings.DEFAULT;
         }
 
-        if (!TemporalRoundingMode.isValid(roundingMode)) {
+        TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption = TemporalFractionalSecondDigitsOption.autoOption();
+        TemporalRoundingMode roundingMode = TemporalRoundingMode.TRUNC;
+        String smallestUnitText = null;
+        JSValue fractionalSecondDigitsValue = optionsObject.get(PropertyKey.fromString("fractionalSecondDigits"));
+        if (context.hasPendingException()) {
+            return null;
+        }
+        TemporalFractionalSecondDigitsOption resolvedFractionalSecondDigitsOption =
+                TemporalFractionalSecondDigitsOption.parse(
+                        context,
+                        fractionalSecondDigitsValue,
+                        "Temporal error: Invalid fractionalSecondDigits.");
+        if (context.hasPendingException() || resolvedFractionalSecondDigitsOption == null) {
+            return null;
+        }
+        fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
+
+        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        if (context.hasPendingException() || roundingModeText == null) {
+            return null;
+        }
+
+        smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
+        if (context.hasPendingException()) {
+            return null;
+        }
+
+        roundingMode = TemporalRoundingMode.fromString(roundingModeText);
+        if (roundingMode == null) {
             context.throwRangeError("Temporal error: Invalid rounding mode.");
             return null;
         }
 
-        String smallestUnit = null;
+        TemporalUnit smallestUnit = null;
         if (smallestUnitText != null) {
             smallestUnit = canonicalizeToStringSmallestUnit(smallestUnitText);
             if (smallestUnit == null) {
@@ -209,35 +202,18 @@ public final class TemporalPlainTimePrototype {
         int fractionalSecondDigits;
         long roundingIncrementNanoseconds;
         if (smallestUnit != null) {
-            fractionalSecondDigits = switch (smallestUnit) {
-                case "second" -> 0;
-                case "millisecond" -> 3;
-                case "microsecond" -> 6;
-                case "nanosecond" -> 9;
-                default -> 0;
-            };
-            roundingIncrementNanoseconds = switch (smallestUnit) {
-                case "minute" -> 60_000_000_000L;
-                case "second" -> 1_000_000_000L;
-                case "millisecond" -> 1_000_000L;
-                case "microsecond" -> 1_000L;
-                case "nanosecond" -> 1L;
-                default -> 1L;
-            };
+            fractionalSecondDigits = smallestUnit.toStringFractionalSecondDigits();
+            roundingIncrementNanoseconds = smallestUnit.toStringRoundingIncrementNanoseconds();
         } else if (autoFractionalSecondDigits) {
             fractionalSecondDigits = -1;
             roundingIncrementNanoseconds = 1L;
         } else {
             fractionalSecondDigits = fractionalSecondDigitsOption.digits();
-            if (fractionalSecondDigits == 0) {
-                roundingIncrementNanoseconds = 1_000_000_000L;
-            } else {
-                roundingIncrementNanoseconds = (long) Math.pow(10, 9 - fractionalSecondDigits);
-            }
+            roundingIncrementNanoseconds = fractionalSecondDigitsOption.roundingIncrementNanoseconds();
         }
 
         return new TemporalPlainTimeToStringSettings(
-                smallestUnit,
+                smallestUnit == null ? null : smallestUnit.jsName(),
                 roundingMode,
                 autoFractionalSecondDigits,
                 fractionalSecondDigits,
@@ -303,10 +279,9 @@ public final class TemporalPlainTimePrototype {
         long totalNs = plainTime.getIsoTime().totalNanoseconds();
         long unitNs = unitToNanoseconds(roundSettings.smallestUnit());
         long incrementNs = unitNs * roundSettings.roundingIncrement();
-        long roundedNs = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+        long roundedNs = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                 totalNs,
-                incrementNs,
-                roundSettings.roundingMode());
+                incrementNs);
         if (roundedNs == DAY_NANOSECONDS.longValue()) {
             roundedNs = 0L;
         }
@@ -392,10 +367,9 @@ public final class TemporalPlainTimePrototype {
 
         long roundedNanoseconds = plainTime.getIsoTime().totalNanoseconds();
         if (toStringSettings.roundingIncrementNanoseconds() > 1L) {
-            roundedNanoseconds = TemporalMathKernel.roundLongToIncrementAsIfPositive(
+            roundedNanoseconds = toStringSettings.roundingMode().roundLongToIncrementAsIfPositive(
                     roundedNanoseconds,
-                    toStringSettings.roundingIncrementNanoseconds(),
-                    TemporalRoundingMode.fromString(toStringSettings.roundingMode()));
+                    toStringSettings.roundingIncrementNanoseconds());
         }
         if (roundedNanoseconds == DAY_NANOSECONDS.longValue()) {
             roundedNanoseconds = 0L;

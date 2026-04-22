@@ -16,12 +16,27 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalPlainTimeToStringSettings(
-        String smallestUnit,
-        TemporalRoundingMode roundingMode,
-        boolean autoFractionalSecondDigits,
-        int fractionalSecondDigits,
-        long roundingIncrementNanoseconds) {
-    public static final TemporalPlainTimeToStringSettings DEFAULT =
-            new TemporalPlainTimeToStringSettings(null, TemporalRoundingMode.TRUNC, true, -1, 1L);
+/**
+ * Temporal sign marker used by rounding and sign-sensitive operations.
+ */
+public enum TemporalSign {
+    POSITIVE,
+    NEGATIVE;
+
+    public static TemporalSign fromSignum(long signum) {
+        if (signum < 0L) {
+            return NEGATIVE;
+        } else {
+            return POSITIVE;
+        }
+    }
+
+    public boolean isNegative() {
+        return this == NEGATIVE;
+    }
+
+    public boolean isPositive() {
+        return this == POSITIVE;
+    }
 }
+

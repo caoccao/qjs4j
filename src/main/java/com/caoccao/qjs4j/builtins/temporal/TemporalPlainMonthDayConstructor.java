@@ -369,7 +369,7 @@ public final class TemporalPlainMonthDayConstructor {
             }
         }
 
-        IsoDate parsedDate = TemporalParser.parseDateString(context, input);
+        IsoDate parsedDate = IsoDate.parseDateString(context, input);
         if (parsedDate != null && !context.hasPendingException()) {
             if (calendar == TemporalCalendarId.ISO8601) {
                 return createPlainMonthDay(
@@ -391,7 +391,7 @@ public final class TemporalPlainMonthDayConstructor {
         }
         context.clearPendingException();
 
-        IsoDate parsedMonthDay = TemporalParser.parseMonthDayString(context, input);
+        IsoDate parsedMonthDay = IsoDate.parseMonthDayString(context, input);
         if (parsedMonthDay == null) {
             return JSUndefined.INSTANCE;
         }

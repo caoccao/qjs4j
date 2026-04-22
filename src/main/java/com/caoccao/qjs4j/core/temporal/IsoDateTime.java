@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
 import java.math.BigInteger;
 import java.time.*;
 import java.time.zone.ZoneOffsetTransition;
@@ -26,6 +28,12 @@ import java.util.List;
  * Represents an ISO 8601 date-time combining IsoDate and IsoTime.
  */
 public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoDateTime> {
+    public static final IsoDateTime MAX_SUPPORTED = new IsoDateTime(
+            IsoDate.MAX_SUPPORTED,
+            new IsoTime(23, 59, 59, 999, 999, 999));
+    public static final IsoDateTime MIN_SUPPORTED = new IsoDateTime(new IsoDate(-271821, 4, 20), IsoTime.MIDNIGHT);
+    private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
+    private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
     public static IsoDateTime createByEpochNs(BigInteger epochNanoseconds) {
         BigInteger[] secondAndNanosecond = epochNanoseconds.divideAndRemainder(TemporalConstants.BI_BILLION);
@@ -69,6 +77,127 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         return createFromLocalDateTime(zonedDateTime.toLocalDateTime());
     }
 
+    public static BigInteger zonedLocalDateTimeToEpochNanoseconds(
+            JSContext context,
+            TemporalRelativeToOption relativeToOption,
+            LocalDateTime localDateTime) {
+        IsoDateTime isoDateTime = IsoDateTime.createFromLocalDateTime(localDateTime);
+        try {
+            return isoDateTime.toEpochNs(
+                    relativeToOption.timeZoneId(),
+                    "compatible");
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+    }
+
+    public LocalDateTime addCalendarUnitsToLocalDateTime(String calendarUnit, long amount) {
+        LocalDateTime localDateTime = toLocalDateTime();
+        if ("year".equals(calendarUnit)) {
+            return localDateTime.plusYears(amount);
+        } else if ("month".equals(calendarUnit)) {
+            return localDateTime.plusMonths(amount);
+        } else if ("week".equals(calendarUnit)) {
+            return localDateTime.plusWeeks(amount);
+        } else {
+            return localDateTime.plusDays(amount);
+        }
+    }
+
+    public LocalDateTime addDurationToLocalDateTime(JSContext context, TemporalDuration durationRecord) {
+        LocalDateTime dateBalancedDateTime = toLocalDateTime()
+                .plusYears(durationRecord.years())
+                .plusMonths(durationRecord.months())
+                .plusWeeks(durationRecord.weeks())
+                .plusDays(durationRecord.days());
+        BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
+        BigInteger[] dayQuotientAndRemainder = timeNanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
+        long dayAdjustment;
+        try {
+            dayAdjustment = dayQuotientAndRemainder[0].longValueExact();
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+        BigInteger nanosecondRemainder = dayQuotientAndRemainder[1];
+        if (nanosecondRemainder.signum() < 0) {
+            dayAdjustment--;
+            nanosecondRemainder = nanosecondRemainder.add(TemporalConstants.BI_DAY_NANOSECONDS);
+        }
+        long nanosecondAdjustment = nanosecondRemainder.longValueExact();
+        try {
+            return dateBalancedDateTime.plusDays(dayAdjustment).plusNanos(nanosecondAdjustment);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+    }
+
+    public LocalDateTime addFixedUnitsToLocalDateTime(String unit, long amount) {
+        LocalDateTime localDateTime = toLocalDateTime();
+        if ("week".equals(unit)) {
+            return localDateTime.plusWeeks(amount);
+        } else {
+            return localDateTime.plusDays(amount);
+        }
+    }
+
+    public LocalDateTime addNanosecondsToDateTime(
+            JSContext context,
+            BigInteger nanoseconds) {
+        BigInteger[] dayQuotientAndRemainder = nanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
+        long dayAdjustment;
+        try {
+            dayAdjustment = dayQuotientAndRemainder[0].longValueExact();
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+        BigInteger nanosecondRemainder = dayQuotientAndRemainder[1];
+        if (nanosecondRemainder.signum() < 0) {
+            dayAdjustment--;
+            nanosecondRemainder = nanosecondRemainder.add(TemporalConstants.BI_DAY_NANOSECONDS);
+        }
+        long nanosecondAdjustment = nanosecondRemainder.longValueExact();
+        try {
+            return toLocalDateTime().plusDays(dayAdjustment).plusNanos(nanosecondAdjustment);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+    }
+
+    public LocalDateTime addNanosecondsToDateTime(
+            JSContext context,
+            BigInteger nanoseconds,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return addNanosecondsToDateTime(context, nanoseconds);
+        }
+        LocalDateTime localDateTime = toLocalDateTime();
+        BigInteger startEpochNanoseconds;
+        if (localDateTime.equals(relativeToOption.startDateTime())) {
+            startEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            startEpochNanoseconds =
+                    zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, localDateTime);
+        }
+        if (context.hasPendingException() || startEpochNanoseconds == null) {
+            return null;
+        }
+        BigInteger resultEpochNanoseconds = startEpochNanoseconds.add(nanoseconds);
+        if (resultEpochNanoseconds.compareTo(NS_MIN_INSTANT) < 0
+                || resultEpochNanoseconds.compareTo(NS_MAX_INSTANT) > 0) {
+            context.throwRangeError("Temporal error: Duration field out of range.");
+            return null;
+        }
+        IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
+                resultEpochNanoseconds,
+                relativeToOption.timeZoneId());
+        return isoDateTime.toLocalDateTime();
+    }
+
     @Override
     public int compareTo(IsoDateTime otherIsoDateTime) {
         int dateCompare = date.compareTo(otherIsoDateTime.date);
@@ -76,6 +205,10 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             return dateCompare;
         }
         return time.compareTo(otherIsoDateTime.time);
+    }
+
+    public boolean isWithinSupportedRange() {
+        return compareTo(MIN_SUPPORTED) >= 0 && compareTo(MAX_SUPPORTED) <= 0;
     }
 
     public BigInteger toEpochNs(String timeZoneId, String disambiguation) {
@@ -128,9 +261,9 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
                 laterInstant = secondInstant;
             }
 
-            if (TemporalDisambiguation.isReject(disambiguation)) {
+            if (TemporalDisambiguation.REJECT.matches(disambiguation)) {
                 throw new DateTimeException("Ambiguous local time for time zone: " + timeZoneId);
-            } else if (TemporalDisambiguation.isLater(disambiguation)) {
+            } else if (TemporalDisambiguation.LATER.matches(disambiguation)) {
                 instant = laterInstant;
             } else {
                 instant = earlierInstant;
@@ -140,12 +273,12 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
             if (transition == null) {
                 throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
             }
-            if (TemporalDisambiguation.isReject(disambiguation)) {
+            if (TemporalDisambiguation.REJECT.matches(disambiguation)) {
                 throw new DateTimeException("Invalid local time for time zone: " + timeZoneId);
             }
 
             Duration gapDuration = transition.getDuration().abs();
-            if (TemporalDisambiguation.isEarlier(disambiguation)) {
+            if (TemporalDisambiguation.EARLIER.matches(disambiguation)) {
                 LocalDateTime shiftedLocalDateTime = localDateTime.minusSeconds(gapDuration.getSeconds());
                 instant = shiftedLocalDateTime.atOffset(transition.getOffsetBefore()).toInstant();
             } else {
@@ -170,13 +303,40 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
                 time.hour(),
                 time.minute(),
                 time.second(),
-                time.millisecond() * 1_000_000
-                        + time.microsecond() * 1_000
-                        + time.nanosecond());
+                time.totalNanosecondsWithinSecond());
+    }
+
+    public LocalDateTime toLocalDateTimeWithClampedSecond() {
+        IsoTime clampedTime = time.clampSecondToValidRange();
+        return LocalDateTime.of(
+                date.year(),
+                date.month(),
+                date.day(),
+                clampedTime.hour(),
+                clampedTime.minute(),
+                clampedTime.second(),
+                clampedTime.totalNanosecondsWithinSecond());
     }
 
     @Override
     public String toString() {
         return date.toString() + "T" + time.toString();
+    }
+
+    public IsoDateTime withClampedSecondToValidRange() {
+        IsoTime clampedTime = time.clampSecondToValidRange();
+        if (clampedTime == time) {
+            return this;
+        } else {
+            return new IsoDateTime(date, clampedTime);
+        }
+    }
+
+    public IsoDateTime withDate(IsoDate isoDate) {
+        return new IsoDateTime(isoDate, time);
+    }
+
+    public IsoDateTime withTime(IsoTime isoTime) {
+        return new IsoDateTime(date, isoTime);
     }
 }

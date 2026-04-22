@@ -85,7 +85,7 @@ public final class TemporalDurationConstructor {
                     .plusWeeks(durationRecord.weeks())
                     .plusDays(durationRecord.days());
             IsoDate endIsoDate = new IsoDate(endDate.getYear(), endDate.getMonthValue(), endDate.getDayOfMonth());
-            IsoDateTime endDateTime = new IsoDateTime(endIsoDate, startTime);
+            IsoDateTime endDateTime = endIsoDate.atTime(startTime);
             BigInteger endEpochNanoseconds = endDateTime.toEpochNs(
                     timeZoneId,
                     "compatible",
@@ -424,7 +424,7 @@ public final class TemporalDurationConstructor {
     }
 
     static JSValue durationFromString(JSContext context, String input) {
-        TemporalDuration record = TemporalParser.parseDurationString(context, input);
+        TemporalDuration record = TemporalDuration.parseDurationString(context, input);
         if (record == null) {
             return JSUndefined.INSTANCE;
         }
@@ -531,33 +531,6 @@ public final class TemporalDurationConstructor {
             }
         }
         return false;
-    }
-
-    private static boolean isDateTimeWithinRelativeToRange(IsoDate isoDate, IsoTime isoTime) {
-        int constrainedSecond = isoTime.second();
-        if (constrainedSecond == 60) {
-            constrainedSecond = 59;
-        }
-        LocalDateTime dateTime = LocalDateTime.of(
-                isoDate.year(),
-                isoDate.month(),
-                isoDate.day(),
-                isoTime.hour(),
-                isoTime.minute(),
-                constrainedSecond,
-                isoTime.millisecond() * 1_000_000
-                        + isoTime.microsecond() * 1_000
-                        + isoTime.nanosecond());
-        LocalDateTime minDateTime = LocalDateTime.of(-271821, 4, 20, 0, 0, 0, 0);
-        LocalDateTime maxDateTime = LocalDateTime.of(275760, 9, 13, 23, 59, 59, 999_999_999);
-        return !dateTime.isBefore(minDateTime) && !dateTime.isAfter(maxDateTime);
-    }
-
-    private static boolean isDateWithinRelativeToRange(IsoDate isoDate) {
-        LocalDate date = LocalDate.of(isoDate.year(), isoDate.month(), isoDate.day());
-        LocalDate minDate = LocalDate.of(-271821, 4, 19);
-        LocalDate maxDate = LocalDate.of(275760, 9, 13);
-        return !date.isBefore(minDate) && !date.isAfter(maxDate);
     }
 
     private static boolean isDurationRecordInRange(JSContext context, TemporalDuration durationRecord) {
@@ -876,7 +849,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Invalid time");
             return null;
         }
-        IsoDateTime relativeDateTime = new IsoDateTime(isoDate, relativeTime);
+        IsoDateTime relativeDateTime = isoDate.atTime(relativeTime);
         if (timeZoneValue instanceof JSUndefined || timeZoneValue == null) {
             return new RelativeToReference(isoDate, relativeTime, null, null, null);
         }
@@ -964,11 +937,11 @@ public final class TemporalDurationConstructor {
                     context.throwRangeError("Temporal error: Invalid offset string.");
                     return null;
                 }
-                IsoCalendarDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+                IsoCalendarDateTime parsedDateTime = IsoCalendarDateTime.parseDateTimeString(context, constrainedRelativeToText);
                 if (parsedDateTime == null || context.hasPendingException()) {
                     return null;
                 }
-                if (!isDateWithinRelativeToRange(parsedDateTime.date())) {
+                if (!parsedDateTime.date().isWithinSupportedRange()) {
                     context.throwRangeError("Temporal error: Duration field out of range.");
                     return null;
                 }
@@ -981,11 +954,11 @@ public final class TemporalDurationConstructor {
                 return null;
             }
             IsoZonedDateTimeOffset parsedZonedDateTime =
-                    TemporalParser.parseZonedDateTimeString(context, constrainedRelativeToText);
+                    IsoZonedDateTimeOffset.parseZonedDateTimeString(context, constrainedRelativeToText);
             if (parsedZonedDateTime == null || context.hasPendingException()) {
                 return null;
             }
-            if (!isDateTimeWithinRelativeToRange(parsedZonedDateTime.date(), parsedZonedDateTime.time())) {
+            if (!parsedZonedDateTime.date().isWithinInstantDateTimeRange(parsedZonedDateTime.time())) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1004,7 +977,7 @@ public final class TemporalDurationConstructor {
             BigInteger epochNanoseconds;
             int zoneOffsetSeconds;
             if (offsetText == null && !offsetTimeZoneIdentifier) {
-                IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
+                IsoDateTime parsedIsoDateTime = parsedZonedDateTime.date().atTime(parsedZonedDateTime.time());
                 epochNanoseconds = parsedIsoDateTime.toEpochNs(timeZoneId, "compatible");
                 try {
                     zoneOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, timeZoneId);
@@ -1013,18 +986,9 @@ public final class TemporalDurationConstructor {
                     return null;
                 }
             } else if (offsetText != null && !hasSecondOrFractionOffset && !offsetTimeZoneIdentifier) {
-                IsoDateTime parsedIsoDateTime = new IsoDateTime(parsedZonedDateTime.date(), parsedZonedDateTime.time());
+                IsoDateTime parsedIsoDateTime = parsedZonedDateTime.date().atTime(parsedZonedDateTime.time());
                 int parsedOffsetSeconds = parsedZonedDateTime.offsetSeconds();
-                LocalDateTime parsedLocalDateTime = LocalDateTime.of(
-                        parsedIsoDateTime.date().year(),
-                        parsedIsoDateTime.date().month(),
-                        parsedIsoDateTime.date().day(),
-                        parsedIsoDateTime.time().hour(),
-                        parsedIsoDateTime.time().minute(),
-                        parsedIsoDateTime.time().second(),
-                        parsedIsoDateTime.time().millisecond() * 1_000_000
-                                + parsedIsoDateTime.time().microsecond() * 1_000
-                                + parsedIsoDateTime.time().nanosecond());
+                LocalDateTime parsedLocalDateTime = parsedIsoDateTime.toLocalDateTime();
                 ZoneId zoneId = TemporalTimeZone.resolveTimeZone(timeZoneId);
                 List<ZoneOffset> validOffsets = zoneId.getRules().getValidOffsets(parsedLocalDateTime);
                 BigInteger selectedEpochNanoseconds = null;
@@ -1108,12 +1072,12 @@ public final class TemporalDurationConstructor {
             return null;
         }
 
-        IsoCalendarDateTime parsedDateTime = TemporalParser.parseDateTimeString(context, constrainedRelativeToText);
+        IsoCalendarDateTime parsedDateTime = IsoCalendarDateTime.parseDateTimeString(context, constrainedRelativeToText);
         if (parsedDateTime == null || context.hasPendingException()) {
             return null;
         }
         IsoDate isoDate = parsedDateTime.date();
-        if (!isDateWithinRelativeToRange(isoDate)) {
+        if (!isoDate.isWithinSupportedRange()) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
