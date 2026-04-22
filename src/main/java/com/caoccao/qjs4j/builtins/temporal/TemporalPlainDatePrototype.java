@@ -53,7 +53,7 @@ public final class TemporalPlainDatePrototype {
             String overflow) {
         BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
         TemporalDuration balancedTimeDuration =
-                TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
+                TemporalDuration.createBalance(totalTimeNanoseconds, TemporalUnit.DAY);
 
         long totalDays;
         try {
@@ -101,7 +101,7 @@ public final class TemporalPlainDatePrototype {
         } else {
             BigInteger totalTimeNanoseconds = durationRecord.timeNanoseconds();
             TemporalDuration balancedTimeDuration =
-                    TemporalDurationPrototype.balanceTimeDuration(totalTimeNanoseconds, "day");
+                    TemporalDuration.createBalance(totalTimeNanoseconds, TemporalUnit.DAY);
             long dayDelta;
             try {
                 dayDelta = Math.addExact(durationRecord.days(), balancedTimeDuration.days());
@@ -597,8 +597,8 @@ public final class TemporalPlainDatePrototype {
                 thisDate,
                 otherDate,
                 plainDate.getCalendarId(),
-                settings.largestUnit());
-        boolean roundingNoOp = UNIT_DAY.equals(settings.smallestUnit()) && settings.roundingIncrement() == 1L;
+                settings.largestUnit().jsName());
+        boolean roundingNoOp = settings.smallestUnit() == TemporalUnit.DAY && settings.roundingIncrement() == 1L;
         if (!roundingNoOp) {
             dateDifference = roundRelativeDurationDate(
                     context,
@@ -713,8 +713,8 @@ public final class TemporalPlainDatePrototype {
                 : JSBoolean.FALSE;
     }
 
-    private static boolean isCalendarUnit(String unit) {
-        return UNIT_YEAR.equals(unit) || UNIT_MONTH.equals(unit) || UNIT_WEEK.equals(unit);
+    private static boolean isCalendarUnit(TemporalUnit unit) {
+        return unit == TemporalUnit.YEAR || unit == TemporalUnit.MONTH || unit == TemporalUnit.WEEK;
     }
 
     private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
@@ -819,25 +819,25 @@ public final class TemporalPlainDatePrototype {
             IsoDate originDate,
             TemporalCalendarId calendarId,
             TemporalDifferenceSettings settings) {
-        String smallestUnit = settings.smallestUnit();
+        TemporalUnit smallestUnit = settings.smallestUnit();
         long increment = settings.roundingIncrement();
         long roundingStartValue;
         long roundingEndValue;
         TemporalDateDurationFields startDuration;
         TemporalDateDurationFields endDuration;
-        if (UNIT_YEAR.equals(smallestUnit)) {
+        if (smallestUnit == TemporalUnit.YEAR) {
             long roundedYears = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.years(), increment);
             roundingStartValue = roundedYears;
             roundingEndValue = roundedYears + increment * sign;
             startDuration = new TemporalDateDurationFields(roundedYears, 0, 0, 0);
             endDuration = new TemporalDateDurationFields(roundingEndValue, 0, 0, 0);
-        } else if (UNIT_MONTH.equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.MONTH) {
             long roundedMonths = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.months(), increment);
             roundingStartValue = roundedMonths;
             roundingEndValue = roundedMonths + increment * sign;
             startDuration = adjustDateDurationRecord(duration, 0, 0L, roundedMonths);
             endDuration = adjustDateDurationRecord(duration, 0, 0L, roundingEndValue);
-        } else if (UNIT_WEEK.equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.WEEK) {
             TemporalDateDurationFields yearsAndMonthsDuration = adjustDateDurationRecord(duration, 0, 0L, null);
             IsoDate weeksStart = calendarDateAddConstrain(context, originDate, calendarId, yearsAndMonthsDuration);
             if (context.hasPendingException() || weeksStart == null) {
@@ -953,8 +953,8 @@ public final class TemporalPlainDatePrototype {
             return null;
         }
         TemporalDateDurationFields roundedDuration = nudgeResult.duration();
-        if (nudgeResult.didExpandCalendarUnit() && !UNIT_WEEK.equals(settings.smallestUnit())) {
-            String bubbleSmallestUnit = TemporalUnit.larger(settings.smallestUnit(), UNIT_DAY);
+        if (nudgeResult.didExpandCalendarUnit() && settings.smallestUnit() != TemporalUnit.WEEK) {
+            String bubbleSmallestUnit = TemporalUnit.larger(settings.smallestUnit().jsName(), UNIT_DAY);
             roundedDuration = bubbleRelativeDuration(
                     context,
                     sign,
@@ -962,7 +962,7 @@ public final class TemporalPlainDatePrototype {
                     nudgeResult.nudgedEpochDay(),
                     originDate,
                     calendarId,
-                    settings.largestUnit(),
+                    settings.largestUnit().jsName(),
                     bubbleSmallestUnit);
             if (context.hasPendingException() || roundedDuration == null) {
                 return null;

@@ -111,14 +111,14 @@ public final class TemporalPlainTimePrototype {
             differenceNanoseconds = BigInteger.valueOf(rightNanoseconds - leftNanoseconds);
         }
 
-        long smallestUnitNanoseconds = unitToNanoseconds(differenceSettings.smallestUnit());
+        long smallestUnitNanoseconds = unitToNanoseconds(differenceSettings.smallestUnit().jsName());
         BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
                 .multiply(BigInteger.valueOf(differenceSettings.roundingIncrement()));
         BigInteger roundedNanoseconds = differenceSettings.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds);
 
-        TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
+        TemporalDuration balancedDuration = TemporalDuration.createBalance(
                 roundedNanoseconds,
                 differenceSettings.largestUnit());
         TemporalDuration normalizedDuration =
@@ -173,12 +173,12 @@ public final class TemporalPlainTimePrototype {
         }
         fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
-        smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
+        smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
         if (context.hasPendingException()) {
             return null;
         }

@@ -17,8 +17,8 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalRoundOptions(
-        String smallestUnit,
-        String largestUnit,
+        TemporalUnit smallestUnit,
+        TemporalUnit largestUnit,
         long roundingIncrement,
         TemporalRoundingMode roundingMode,
         TemporalRelativeToOption relativeToOption) {

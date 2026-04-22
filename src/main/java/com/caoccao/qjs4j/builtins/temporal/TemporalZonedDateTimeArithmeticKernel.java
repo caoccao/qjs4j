@@ -145,7 +145,7 @@ final class TemporalZonedDateTimeArithmeticKernel {
     static TemporalDuration differenceEpochNanoseconds(
             BigInteger startEpochNanoseconds,
             BigInteger endEpochNanoseconds,
-            String largestUnit,
+            TemporalUnit largestUnit,
             long smallestUnitNanoseconds,
             long roundingIncrement,
             TemporalRoundingMode roundingMode) {
@@ -155,6 +155,6 @@ final class TemporalZonedDateTimeArithmeticKernel {
         BigInteger roundedNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds);
-        return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
+        return TemporalDuration.createBalance(roundedNanoseconds, largestUnit);
     }
 }

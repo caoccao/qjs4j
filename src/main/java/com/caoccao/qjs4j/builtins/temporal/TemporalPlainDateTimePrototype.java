@@ -195,27 +195,24 @@ public final class TemporalPlainDateTimePrototype {
             TemporalDifferenceSettings settings) {
         TemporalCalendarId calendarId = firstDateTime.getCalendarId();
         boolean noRounding = settings.roundingIncrement() == 1L
-                && "nanosecond".equals(settings.smallestUnit());
+                && settings.smallestUnit() == TemporalUnit.NANOSECOND;
         boolean sameTime = firstDateTime.getIsoDateTime().time().compareTo(
                 secondDateTime.getIsoDateTime().time()) == 0;
-        boolean dateLargestUnit = "year".equals(settings.largestUnit())
-                || "month".equals(settings.largestUnit())
-                || "week".equals(settings.largestUnit())
-                || "day".equals(settings.largestUnit());
+        boolean dateLargestUnit = settings.largestUnit().isDateUnit();
         if (calendarId != TemporalCalendarId.ISO8601 && noRounding && sameTime && dateLargestUnit) {
             return TemporalPlainDatePrototype.differenceCalendarDates(
                     context,
                     firstDateTime.getIsoDateTime().date(),
                     secondDateTime.getIsoDateTime().date(),
                     calendarId,
-                    settings.largestUnit());
+                    settings.largestUnit().jsName());
         } else {
             return TemporalDurationPrototype.differencePlainDateTime(
                     context,
                     firstDateTime.getIsoDateTime(),
                     secondDateTime.getIsoDateTime(),
-                    settings.largestUnit(),
-                    settings.smallestUnit(),
+                    settings.largestUnit().jsName(),
+                    settings.smallestUnit().jsName(),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -260,7 +257,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwTypeError("Temporal error: Option must be object: options.");
             return null;
         }
-        String disambiguation = TemporalOptionResolver.getStringOption(context, optionsObject, "disambiguation", "compatible");
+        String disambiguation = TemporalUtils.getStringOption(context, optionsObject, "disambiguation", "compatible");
         if (context.hasPendingException() || disambiguation == null) {
             return null;
         }
@@ -272,7 +269,7 @@ public final class TemporalPlainDateTimePrototype {
     }
 
     private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
-        String calendarNameOption = TemporalOptionResolver.getStringOption(context, optionsObject, "calendarName", "auto");
+        String calendarNameOption = TemporalUtils.getStringOption(context, optionsObject, "calendarName", "auto");
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
@@ -320,7 +317,7 @@ public final class TemporalPlainDateTimePrototype {
         }
         fractionalSecondDigitsOption = resolvedFractionalSecondDigitsOption;
 
-        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }

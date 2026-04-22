@@ -224,13 +224,13 @@ public final class TemporalInstantPrototype {
         }
 
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds().subtract(rightInstant.getEpochNanoseconds());
-        BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
+        BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit().jsName());
         BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
         BigInteger roundedNanoseconds = differenceOptions.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds);
 
-        TemporalDuration balancedDuration = TemporalDurationPrototype.balanceTimeDuration(
+        TemporalDuration balancedDuration = TemporalDuration.createBalance(
                 roundedNanoseconds,
                 differenceOptions.largestUnit());
         TemporalDuration normalizedDuration =

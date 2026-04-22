@@ -68,21 +68,6 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
         return integerIncrement;
     }
 
-    private static String getStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
-    }
-
     /**
      * Parses round options from a JS value (either a unit string or an options object).
      *
@@ -108,7 +93,7 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             if (context.hasPendingException()) {
                 return null;
             }
-            String roundingModeText = getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
             if (context.hasPendingException() || roundingModeText == null) {
                 return null;
             }

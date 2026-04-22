@@ -395,13 +395,13 @@ public final class TemporalZonedDateTimePrototype {
             JSTemporalZonedDateTime startZonedDateTime,
             JSTemporalZonedDateTime endZonedDateTime,
             TemporalDifferenceSettings settings) {
-        boolean requiresDateUnits = isDateUnit(settings.largestUnit()) || isDateUnit(settings.smallestUnit());
+        boolean requiresDateUnits = settings.largestUnit().isDateUnit() || settings.smallestUnit().isDateUnit();
         if (!requiresDateUnits) {
             return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     settings.largestUnit(),
-                    unitToNanoseconds(settings.smallestUnit()),
+                    unitToNanoseconds(settings.smallestUnit().jsName()),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -432,18 +432,23 @@ public final class TemporalZonedDateTimePrototype {
                 endZonedDateTime.getEpochNanoseconds(),
                 startZonedDateTime.getTimeZoneId());
 
-        if (isDateUnit(settings.largestUnit()) && !isDateUnit(settings.smallestUnit())) {
+        if (settings.largestUnit().isDateUnit() && !settings.smallestUnit().isDateUnit()) {
             boolean sameDate = startLocalDateTime.date().equals(endLocalDateTime.date());
             int wallClockSign = Integer.signum(endLocalDateTime.compareTo(startLocalDateTime));
             int epochSign = Integer.signum(endZonedDateTime.getEpochNanoseconds().compareTo(
                     startZonedDateTime.getEpochNanoseconds()));
             if (sameDate && wallClockSign != 0 && epochSign != 0 && wallClockSign != epochSign) {
-                String timeLargestUnit = TemporalUnit.larger("hour", settings.smallestUnit());
+                TemporalUnit timeLargestUnit;
+                if (TemporalUnit.HOUR.isLargerThan(settings.smallestUnit())) {
+                    timeLargestUnit = TemporalUnit.HOUR;
+                } else {
+                    timeLargestUnit = settings.smallestUnit();
+                }
                 return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
                         startZonedDateTime.getEpochNanoseconds(),
                         endZonedDateTime.getEpochNanoseconds(),
                         timeLargestUnit,
-                        unitToNanoseconds(settings.smallestUnit()),
+                        unitToNanoseconds(settings.smallestUnit().jsName()),
                         settings.roundingIncrement(),
                         settings.roundingMode());
             }
@@ -456,30 +461,30 @@ public final class TemporalZonedDateTimePrototype {
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     startZonedDateTime.getTimeZoneId(),
-                    settings.largestUnit(),
-                    settings.smallestUnit(),
+                    settings.largestUnit().jsName(),
+                    settings.smallestUnit().jsName(),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
 
         boolean noRounding = settings.roundingIncrement() == 1L
-                && "nanosecond".equals(settings.smallestUnit());
+                && settings.smallestUnit() == TemporalUnit.NANOSECOND;
         boolean sameTime = startLocalDateTime.time().compareTo(endLocalDateTime.time()) == 0;
-        boolean dateLargestUnit = isDateUnit(settings.largestUnit());
+        boolean dateLargestUnit = settings.largestUnit().isDateUnit();
         if (noRounding && sameTime && dateLargestUnit) {
             return TemporalPlainDatePrototype.differenceCalendarDates(
                     context,
                     startLocalDateTime.date(),
                     endLocalDateTime.date(),
                     calendarId,
-                    settings.largestUnit());
+                    settings.largestUnit().jsName());
         }
         return TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 startLocalDateTime,
                 endLocalDateTime,
-                settings.largestUnit(),
-                settings.smallestUnit(),
+                settings.largestUnit().jsName(),
+                settings.smallestUnit().jsName(),
                 settings.roundingIncrement(),
                 settings.roundingMode());
     }
@@ -606,7 +611,7 @@ public final class TemporalZonedDateTimePrototype {
         if (settings == null) {
             return null;
         }
-        if ("day".equals(settings.smallestUnit()) && Math.abs(settings.roundingIncrement()) > 100_000_000L) {
+        if (settings.smallestUnit() == TemporalUnit.DAY && Math.abs(settings.roundingIncrement()) > 100_000_000L) {
             context.throwRangeError("Temporal error: Invalid rounding increment.");
             return null;
         }
@@ -742,7 +747,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String getToStringCalendarNameOption(JSContext context, JSObject optionsObject) {
-        String calendarNameOption = TemporalOptionResolver.getStringOption(context, optionsObject, "calendarName", "auto");
+        String calendarNameOption = TemporalUtils.getStringOption(context, optionsObject, "calendarName", "auto");
         if (context.hasPendingException() || calendarNameOption == null) {
             return null;
         }
@@ -754,7 +759,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String getToStringOffsetOption(JSContext context, JSObject optionsObject) {
-        String offsetOption = TemporalOptionResolver.getStringOption(context, optionsObject, "offset", "auto");
+        String offsetOption = TemporalUtils.getStringOption(context, optionsObject, "offset", "auto");
         if (context.hasPendingException() || offsetOption == null) {
             return null;
         }
@@ -808,12 +813,12 @@ public final class TemporalZonedDateTimePrototype {
             return null;
         }
 
-        String roundingModeText = TemporalOptionResolver.getStringOption(context, optionsObject, "roundingMode", "trunc");
+        String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "trunc");
         if (context.hasPendingException() || roundingModeText == null) {
             return null;
         }
 
-        smallestUnitText = TemporalOptionResolver.getStringOption(context, optionsObject, "smallestUnit", null);
+        smallestUnitText = TemporalUtils.getStringOption(context, optionsObject, "smallestUnit", null);
         if (context.hasPendingException()) {
             return null;
         }
@@ -864,7 +869,7 @@ public final class TemporalZonedDateTimePrototype {
     }
 
     private static String getToStringTimeZoneNameOption(JSContext context, JSObject optionsObject) {
-        String timeZoneNameOption = TemporalOptionResolver.getStringOption(context, optionsObject, "timeZoneName", "auto");
+        String timeZoneNameOption = TemporalUtils.getStringOption(context, optionsObject, "timeZoneName", "auto");
         if (context.hasPendingException() || timeZoneNameOption == null) {
             return null;
         }
@@ -943,18 +948,6 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
         return TemporalPlainDatePrototype.inLeapYear(context, plainDate, args);
-    }
-
-    private static boolean isDateUnit(String unit) {
-        if ("year".equals(unit)) {
-            return true;
-        } else if ("month".equals(unit)) {
-            return true;
-        } else if ("week".equals(unit)) {
-            return true;
-        } else {
-            return "day".equals(unit);
-        }
     }
 
     private static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {

@@ -426,14 +426,14 @@ public final class TemporalPlainYearMonthPrototype {
                     + (otherDifferenceDate.month() - thisDifferenceDate.month());
             durationFields = TemporalDurationYearMonth.fromTotalMonths(
                     totalMonthsDifference,
-                    differenceSettings.largestUnit());
+                    differenceSettings.largestUnit().jsName());
         } else {
             durationFields = differenceCalendarYearMonth(
                     context,
                     thisDifferenceDate,
                     otherDifferenceDate,
                     calendarId,
-                    differenceSettings.largestUnit());
+                    differenceSettings.largestUnit().jsName());
             if (context.hasPendingException() || durationFields == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -448,7 +448,7 @@ public final class TemporalPlainYearMonthPrototype {
             }
             totalMonthsDifference = monthDifferenceFields.months();
         }
-        boolean roundingNoOp = UNIT_MONTH.equals(differenceSettings.smallestUnit())
+        boolean roundingNoOp = differenceSettings.smallestUnit() == TemporalUnit.MONTH
                 && differenceSettings.roundingIncrement() == 1L;
         if (!roundingNoOp) {
             durationFields = roundRelativeYearMonthDuration(
@@ -855,7 +855,7 @@ public final class TemporalPlainYearMonthPrototype {
         long startMonths;
         long endYears;
         long endMonths;
-        if (UNIT_YEAR.equals(differenceSettings.smallestUnit())) {
+        if (differenceSettings.smallestUnit() == TemporalUnit.YEAR) {
             roundingStartValue = TemporalRoundingMode.TRUNC.roundNumberToIncrement(years, increment);
             roundingEndValue = roundingStartValue + increment * sign;
             startYears = roundingStartValue;
@@ -911,8 +911,8 @@ public final class TemporalPlainYearMonthPrototype {
         long roundedYears = didExpandCalendarUnit ? endYears : startYears;
         long roundedMonths = didExpandCalendarUnit ? endMonths : startMonths;
         if (didExpandCalendarUnit
-                && UNIT_YEAR.equals(differenceSettings.largestUnit())
-                && UNIT_MONTH.equals(differenceSettings.smallestUnit())) {
+                && differenceSettings.largestUnit() == TemporalUnit.YEAR
+                && differenceSettings.smallestUnit() == TemporalUnit.MONTH) {
             long balancedTotalMonths = roundedYears * 12L + roundedMonths;
             roundedYears = balancedTotalMonths / 12L;
             roundedMonths = balancedTotalMonths % 12L;

@@ -135,6 +135,20 @@ public enum TemporalUnit {
         };
     }
 
+    /**
+     * Returns the maximum valid rounding increment for sub-day difference rounding.
+     * hour -> 24, minute/second -> 60, millisecond/microsecond/nanosecond -> 1000.
+     * Returns -1 for non-sub-day units.
+     */
+    public long maximumSubDayIncrement() {
+        return switch (this) {
+            case HOUR -> 24L;
+            case MINUTE, SECOND -> 60L;
+            case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+            default -> -1L;
+        };
+    }
+
     public int rank() {
         return rank;
     }
