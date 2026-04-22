@@ -18,10 +18,22 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
 /**
  * Shared utilities for Temporal types.
  */
 public final class TemporalUtils {
+    private static final LocalDate MAXIMUM_TEMPORAL_DATE = LocalDate.of(275760, 9, 13);
+    private static final LocalDateTime MAXIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
+            275760, 9, 13, 23, 59, 59, 999_999_999);
+    private static final LocalDate MINIMUM_TEMPORAL_DATE = LocalDate.of(-271821, 4, 19);
+    private static final LocalDateTime MINIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
+            -271821, 4, 20, 0, 0, 0, 0);
+
     private TemporalUtils() {
     }
 
@@ -147,6 +159,22 @@ public final class TemporalUtils {
         return stringValue.value();
     }
 
+    public static boolean isDateTimeWithinTemporalRange(LocalDateTime dateTime) {
+        return !dateTime.isBefore(MINIMUM_TEMPORAL_DATE_TIME) && !dateTime.isAfter(MAXIMUM_TEMPORAL_DATE_TIME);
+    }
+
+    public static boolean isDateWithinTemporalRange(LocalDate date) {
+        return !date.isBefore(MINIMUM_TEMPORAL_DATE) && !date.isAfter(MAXIMUM_TEMPORAL_DATE);
+    }
+
+    public static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return false;
+        }
+        char signCharacter = timeZoneId.charAt(0);
+        return signCharacter == '+' || signCharacter == '-' || signCharacter == '\u2212';
+    }
+
     public static int islamicDaysBeforeYear(int islamicYear) {
         return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
     }
@@ -177,6 +205,31 @@ public final class TemporalUtils {
                 }
                 return dateTimeString + "[u-ca=" + calendarId.identifier() + "]";
         }
+    }
+
+    public static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        BigInteger startSeconds = BigInteger.valueOf(startDateTime.toEpochSecond(ZoneOffset.UTC));
+        BigInteger endSeconds = BigInteger.valueOf(endDateTime.toEpochSecond(ZoneOffset.UTC));
+        BigInteger secondDifference = endSeconds.subtract(startSeconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS);
+        long nanosecondDifference = endDateTime.getNano() - startDateTime.getNano();
+        return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
+    }
+
+    public static int parseOffsetSecondsFromTimeZoneId(String timeZoneId) {
+        String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
+        int sign = normalizedTimeZoneId.charAt(0) == '-' ? -1 : 1;
+        int hours;
+        int minutes;
+        if (normalizedTimeZoneId.length() == 6 && normalizedTimeZoneId.charAt(3) == ':') {
+            hours = Integer.parseInt(normalizedTimeZoneId.substring(1, 3));
+            minutes = Integer.parseInt(normalizedTimeZoneId.substring(4, 6));
+        } else if (normalizedTimeZoneId.length() == 5) {
+            hours = Integer.parseInt(normalizedTimeZoneId.substring(1, 3));
+            minutes = Integer.parseInt(normalizedTimeZoneId.substring(3, 5));
+        } else {
+            throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
+        }
+        return sign * (hours * 3600 + minutes * 60);
     }
 
     public static int toArithmeticPersianYear(int persianYear) {

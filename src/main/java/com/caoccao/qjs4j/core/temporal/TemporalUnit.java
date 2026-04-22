@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
+import java.math.BigInteger;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
@@ -65,6 +69,60 @@ public enum TemporalUnit {
         });
     }
 
+    private static BigInteger nanosecondsBetween(
+            JSContext context,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
+        }
+
+        BigInteger startEpochNanoseconds;
+        if (startDateTime.equals(relativeToOption.startDateTime())) {
+            startEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            startEpochNanoseconds =
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, startDateTime);
+        }
+        if (context.hasPendingException() || startEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        BigInteger endEpochNanoseconds;
+        if (endDateTime.equals(relativeToOption.startDateTime())) {
+            endEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            endEpochNanoseconds =
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, endDateTime);
+        }
+        if (context.hasPendingException() || endEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        return endEpochNanoseconds.subtract(startEpochNanoseconds);
+    }
+
+    public LocalDateTime addCalendarUnits(LocalDateTime startDateTime, long amount) {
+        if (this == YEAR) {
+            return startDateTime.plusYears(amount);
+        } else if (this == MONTH) {
+            return startDateTime.plusMonths(amount);
+        } else if (this == WEEK) {
+            return startDateTime.plusWeeks(amount);
+        } else {
+            return startDateTime.plusDays(amount);
+        }
+    }
+
+    public LocalDateTime addFixedUnits(LocalDateTime startDateTime, long amount) {
+        if (this == WEEK) {
+            return startDateTime.plusWeeks(amount);
+        } else {
+            return startDateTime.plusDays(amount);
+        }
+    }
+
     /**
      * Returns the coarser (larger) unit between this unit and another parsed unit.
      */
@@ -74,6 +132,23 @@ public enum TemporalUnit {
         } else {
             return otherUnit;
         }
+    }
+
+    public long estimateCalendarUnitCount(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        long dayDifference = endDateTime.toLocalDate().toEpochDay() - startDateTime.toLocalDate().toEpochDay();
+        if (this == DAY) {
+            return dayDifference;
+        } else if (this == WEEK) {
+            return dayDifference / 7L;
+        }
+
+        long yearDifference = (long) endDateTime.getYear() - startDateTime.getYear();
+        if (this == YEAR) {
+            return yearDifference;
+        }
+
+        long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
+        return yearDifference * 12L + monthDifference;
     }
 
     /**
@@ -196,6 +271,130 @@ public enum TemporalUnit {
         } else {
             return roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0L;
         }
+    }
+
+    public long moveByWholeCalendarUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+        if (!endDateTime.isBefore(startDateTime)) {
+            while (boundaryDateTime.isAfter(endDateTime)) {
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount + 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                if (nextDateTime.isAfter(endDateTime)) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        } else {
+            while (boundaryDateTime.isBefore(endDateTime)) {
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount - 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                if (nextDateTime.isBefore(endDateTime)) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        }
+        return unitCount;
+    }
+
+    public long moveByWholeCalendarUnitsWithRelativeTo(
+            JSContext context,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return moveByWholeCalendarUnits(startDateTime, endDateTime);
+        }
+
+        BigInteger startToEndNanoseconds = nanosecondsBetween(context, startDateTime, endDateTime, relativeToOption);
+        if (context.hasPendingException()) {
+            return 0L;
+        }
+
+        int direction = startToEndNanoseconds.signum();
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+        if (direction >= 0) {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds =
+                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (boundaryToEndNanoseconds.signum() >= 0) {
+                    break;
+                }
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount + 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (nextToEndNanoseconds.signum() < 0) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        } else {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds =
+                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (boundaryToEndNanoseconds.signum() < 0
+                        || (boundaryToEndNanoseconds.signum() == 0 && boundaryDateTime.equals(endDateTime))) {
+                    break;
+                }
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount - 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (nextToEndNanoseconds.signum() > 0
+                        || (nextToEndNanoseconds.signum() == 0 && !nextDateTime.equals(endDateTime))) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        }
+        return unitCount;
+    }
+
+    public long moveByWholeFixedUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        BigInteger unitNanoseconds;
+        if (this == WEEK) {
+            unitNanoseconds = TemporalConstants.BI_WEEK_NANOSECONDS;
+        } else if (this == DAY) {
+            unitNanoseconds = TemporalConstants.BI_DAY_NANOSECONDS;
+        } else {
+            return 0L;
+        }
+
+        BigInteger deltaNanoseconds = TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
+        return deltaNanoseconds.divide(unitNanoseconds).longValue();
     }
 
     public int rank() {
