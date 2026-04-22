@@ -530,9 +530,8 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDuration resultRecord =
-                TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord.negated());
-        if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
+        TemporalDuration resultRecord = durationRecord.negated().normalizeFloat64RepresentableFields();
+        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
@@ -739,9 +738,8 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        TemporalDuration resultRecord =
-                TemporalDurationConstructor.normalizeFloat64RepresentableFields(durationRecord);
-        if (!resultRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(resultRecord)) {
+        TemporalDuration resultRecord = durationRecord.normalizeFloat64RepresentableFields();
+        if (!resultRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(resultRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }

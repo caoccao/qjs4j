@@ -100,8 +100,8 @@ public final class TemporalDurationPrototype {
         TemporalUnit otherLargestUnit = rightRecord.largestUnitOfDuration();
         TemporalUnit largestUnit = receiverLargestUnit.coarserDurationUnit(otherLargestUnit);
         TemporalDuration balanced = TemporalDuration.createBalance(totalNanoseconds, largestUnit);
-        TemporalDuration normalized = TemporalDurationConstructor.normalizeFloat64RepresentableFields(balanced);
-        if (!TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalized)) {
+        TemporalDuration normalized = balanced.normalizeFloat64RepresentableFields();
+        if (!TemporalDuration.isDurationRecordTimeRangeValid(normalized)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
@@ -901,8 +901,8 @@ public final class TemporalDurationPrototype {
         }
 
         TemporalDuration normalizedDurationRecord =
-                TemporalDurationConstructor.normalizeFloat64RepresentableFields(roundComputationResult.durationRecord());
-        if (!normalizedDurationRecord.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalizedDurationRecord)) {
+                roundComputationResult.durationRecord().normalizeFloat64RepresentableFields();
+        if (!normalizedDurationRecord.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(normalizedDurationRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
@@ -1537,7 +1537,7 @@ public final class TemporalDurationPrototype {
                 balancedDayTime.microseconds(),
                 balancedDayTime.nanoseconds());
         if (!roundedDurationRecord.isValid()
-                || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(roundedDurationRecord)) {
+                || !TemporalDuration.isDurationRecordTimeRangeValid(roundedDurationRecord)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }

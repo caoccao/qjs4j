@@ -31,6 +31,7 @@ public record TemporalDuration(
         long milliseconds, long microseconds, long nanoseconds) {
     public static final TemporalDuration ZERO = new TemporalDuration(
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final long FLOAT64_SAFE_INTEGER_MAX = 9_007_199_254_740_991L;
     private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
@@ -143,6 +144,19 @@ public record TemporalDuration(
                 milliseconds, microseconds, nanoseconds);
     }
 
+    public static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
+        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
+        return totalNanoseconds.abs().compareTo(TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
+    }
+
+    private static boolean isFloat64RepresentableLong(long value) {
+        if (value >= -FLOAT64_SAFE_INTEGER_MAX && value <= FLOAT64_SAFE_INTEGER_MAX) {
+            return true;
+        } else {
+            return toFloat64RepresentableLong(value) == value;
+        }
+    }
+
     public static TemporalDuration parseDurationString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
             context.throwRangeError("Temporal error: Invalid duration string.");
@@ -150,6 +164,10 @@ public record TemporalDuration(
         }
         IsoParsingState parsingState = new IsoParsingState(input);
         return parsingState.parseDuration(context);
+    }
+
+    private static long toFloat64RepresentableLong(long value) {
+        return (long) ((double) value);
     }
 
     public TemporalDuration abs() {
@@ -402,6 +420,35 @@ public record TemporalDuration(
                 -years, -months, -weeks, -days,
                 -hours, -minutes, -seconds,
                 -milliseconds, -microseconds, -nanoseconds);
+    }
+
+    public TemporalDuration normalizeFloat64RepresentableFields() {
+        boolean allFieldsAlreadyRepresentable =
+                isFloat64RepresentableLong(years)
+                        && isFloat64RepresentableLong(months)
+                        && isFloat64RepresentableLong(weeks)
+                        && isFloat64RepresentableLong(days)
+                        && isFloat64RepresentableLong(hours)
+                        && isFloat64RepresentableLong(minutes)
+                        && isFloat64RepresentableLong(seconds)
+                        && isFloat64RepresentableLong(milliseconds)
+                        && isFloat64RepresentableLong(microseconds)
+                        && isFloat64RepresentableLong(nanoseconds);
+        if (allFieldsAlreadyRepresentable) {
+            return this;
+        }
+
+        return new TemporalDuration(
+                toFloat64RepresentableLong(years),
+                toFloat64RepresentableLong(months),
+                toFloat64RepresentableLong(weeks),
+                toFloat64RepresentableLong(days),
+                toFloat64RepresentableLong(hours),
+                toFloat64RepresentableLong(minutes),
+                toFloat64RepresentableLong(seconds),
+                toFloat64RepresentableLong(milliseconds),
+                toFloat64RepresentableLong(microseconds),
+                toFloat64RepresentableLong(nanoseconds));
     }
 
     public int sign() {

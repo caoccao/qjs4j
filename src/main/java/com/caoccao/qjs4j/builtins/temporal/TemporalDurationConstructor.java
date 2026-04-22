@@ -29,13 +29,6 @@ import java.util.Optional;
  * Implementation of Temporal.Duration constructor and static methods.
  */
 public final class TemporalDurationConstructor {
-    static final String UNIT_DAY = "day";
-    static final String UNIT_HOUR = "hour";
-    static final String UNIT_MICROSECOND = "microsecond";
-    static final String UNIT_MILLISECOND = "millisecond";
-    static final String UNIT_MINUTE = "minute";
-    static final String UNIT_NANOSECOND = "nanosecond";
-    static final String UNIT_SECOND = "second";
     private static final long CALENDAR_UNIT_MAX = TemporalConstants.CALENDAR_UNIT_MAX;
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
@@ -491,7 +484,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Optional.of(BigInteger.ZERO);
         }
-        BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
+        BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return Optional.of(numericValue);
     }
 
@@ -547,25 +540,6 @@ public final class TemporalDurationConstructor {
         return true;
     }
 
-    static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
-        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
-        return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
-    }
-
-    static TemporalDuration normalizeFloat64RepresentableFields(TemporalDuration durationRecord) {
-        return new TemporalDuration(
-                toFloat64RepresentableLong(durationRecord.years()),
-                toFloat64RepresentableLong(durationRecord.months()),
-                toFloat64RepresentableLong(durationRecord.weeks()),
-                toFloat64RepresentableLong(durationRecord.days()),
-                toFloat64RepresentableLong(durationRecord.hours()),
-                toFloat64RepresentableLong(durationRecord.minutes()),
-                toFloat64RepresentableLong(durationRecord.seconds()),
-                toFloat64RepresentableLong(durationRecord.milliseconds()),
-                toFloat64RepresentableLong(durationRecord.microseconds()),
-                toFloat64RepresentableLong(durationRecord.nanoseconds()));
-    }
-
     private static boolean offsetMatchesTimeZoneOffsetForString(
             String offsetText,
             int parsedOffsetSeconds,
@@ -573,7 +547,7 @@ public final class TemporalDurationConstructor {
         if (TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText)) {
             return parsedOffsetSeconds == zoneOffsetSeconds;
         }
-        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
+        int roundedZoneOffsetSeconds = TemporalUtils.roundOffsetSecondsToMinute(zoneOffsetSeconds);
         return parsedOffsetSeconds == roundedZoneOffsetSeconds;
     }
 
@@ -590,7 +564,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Long.MIN_VALUE;
         }
-        BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
+        BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return toLongDurationField(context, numericValue);
     }
 
@@ -1108,50 +1082,6 @@ public final class TemporalDurationConstructor {
         }
         context.throwTypeError("Temporal error: Invalid relativeTo option.");
         return null;
-    }
-
-    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
-        int sign = offsetSeconds < 0 ? -1 : 1;
-        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
-        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
-        int remainingSeconds = absoluteOffsetSeconds % 60;
-        if (remainingSeconds >= 30) {
-            absoluteOffsetMinutes++;
-        }
-        return sign * absoluteOffsetMinutes * 60;
-    }
-
-    private static BigInteger toBigIntegerFromIntegralDouble(double value) {
-        long bits = Double.doubleToRawLongBits(value);
-        boolean negative = (bits & (1L << 63)) != 0;
-        int exponentBits = (int) ((bits >>> 52) & 0x7FFL);
-        long mantissaBits = bits & ((1L << 52) - 1);
-
-        long significand;
-        int shift;
-        if (exponentBits == 0) {
-            significand = mantissaBits;
-            shift = -1074;
-        } else {
-            significand = (1L << 52) | mantissaBits;
-            shift = exponentBits - 1075;
-        }
-
-        BigInteger integerValue = BigInteger.valueOf(significand);
-        if (shift > 0) {
-            integerValue = integerValue.shiftLeft(shift);
-        } else if (shift < 0) {
-            integerValue = integerValue.shiftRight(-shift);
-        }
-
-        if (negative) {
-            return integerValue.negate();
-        }
-        return integerValue;
-    }
-
-    private static long toFloat64RepresentableLong(long value) {
-        return (long) ((double) value);
     }
 
     private static long toLongDurationField(JSContext context, BigInteger value) {

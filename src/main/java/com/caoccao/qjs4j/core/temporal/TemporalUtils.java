@@ -232,11 +232,51 @@ public final class TemporalUtils {
         return sign * (hours * 3600 + minutes * 60);
     }
 
+    public static int roundOffsetSecondsToMinute(int offsetSeconds) {
+        int sign = offsetSeconds < 0 ? -1 : 1;
+        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
+        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
+        int remainingSeconds = absoluteOffsetSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteOffsetMinutes++;
+        }
+        return sign * absoluteOffsetMinutes * 60;
+    }
+
     public static int toArithmeticPersianYear(int persianYear) {
         if (persianYear <= 0) {
             return persianYear - 1;
         }
         return persianYear;
+    }
+
+    public static BigInteger toBigIntegerFromIntegralDouble(double value) {
+        long bits = Double.doubleToRawLongBits(value);
+        boolean negative = (bits & (1L << 63)) != 0;
+        int exponentBits = (int) ((bits >>> 52) & 0x7FFL);
+        long mantissaBits = bits & ((1L << 52) - 1);
+
+        long significand;
+        int shift;
+        if (exponentBits == 0) {
+            significand = mantissaBits;
+            shift = -1074;
+        } else {
+            significand = (1L << 52) | mantissaBits;
+            shift = exponentBits - 1075;
+        }
+
+        BigInteger integerValue = BigInteger.valueOf(significand);
+        if (shift > 0) {
+            integerValue = integerValue.shiftLeft(shift);
+        } else if (shift < 0) {
+            integerValue = integerValue.shiftRight(-shift);
+        }
+
+        if (negative) {
+            return integerValue.negate();
+        }
+        return integerValue;
     }
 
     /**

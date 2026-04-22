@@ -354,7 +354,7 @@ public final class TemporalZonedDateTimeConstructor {
         if (offsetTimeZoneIdentifier) {
             int timeZoneOffsetSeconds = parseOffsetSeconds(timeZoneId);
             boolean offsetMatches = allowMinuteRounding
-                    ? roundOffsetSecondsToMinute(timeZoneOffsetSeconds) == explicitOffsetSeconds
+                    ? TemporalUtils.roundOffsetSecondsToMinute(timeZoneOffsetSeconds) == explicitOffsetSeconds
                     : timeZoneOffsetSeconds == explicitOffsetSeconds;
             if (offsetMatches) {
                 return TemporalTimeZone.utcDateTimeToEpochNs(isoDate, isoTime, timeZoneOffsetSeconds);
@@ -886,17 +886,6 @@ public final class TemporalZonedDateTimeConstructor {
         }
     }
 
-    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
-        int sign = offsetSeconds < 0 ? -1 : 1;
-        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
-        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
-        int remainingSeconds = absoluteOffsetSeconds % 60;
-        if (remainingSeconds >= 30) {
-            absoluteOffsetMinutes++;
-        }
-        return sign * absoluteOffsetMinutes * 60;
-    }
-
     private static BigInteger selectMatchingEpochNanosecondsForExplicitOffset(
             IsoDate isoDate,
             IsoTime isoTime,
@@ -919,7 +908,7 @@ public final class TemporalZonedDateTimeConstructor {
             int candidateOffsetSeconds = validOffset.getTotalSeconds();
             boolean offsetMatches;
             if (allowMinuteRounding) {
-                int roundedCandidateOffsetSeconds = roundOffsetSecondsToMinute(candidateOffsetSeconds);
+                int roundedCandidateOffsetSeconds = TemporalUtils.roundOffsetSecondsToMinute(candidateOffsetSeconds);
                 offsetMatches = roundedCandidateOffsetSeconds == parsedOffsetSeconds;
             } else {
                 offsetMatches = candidateOffsetSeconds == parsedOffsetSeconds;

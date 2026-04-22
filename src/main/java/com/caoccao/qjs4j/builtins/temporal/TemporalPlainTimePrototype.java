@@ -107,9 +107,8 @@ public final class TemporalPlainTimePrototype {
         TemporalDuration balancedDuration = TemporalDuration.createBalance(
                 roundedNanoseconds,
                 differenceSettings.largestUnit());
-        TemporalDuration normalizedDuration =
-                TemporalDurationConstructor.normalizeFloat64RepresentableFields(balancedDuration);
-        if (!normalizedDuration.isValid() || !TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalizedDuration)) {
+        TemporalDuration normalizedDuration = balancedDuration.normalizeFloat64RepresentableFields();
+        if (!normalizedDuration.isValid() || !TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }

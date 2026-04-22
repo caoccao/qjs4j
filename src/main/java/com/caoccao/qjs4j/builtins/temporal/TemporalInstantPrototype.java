@@ -231,9 +231,8 @@ public final class TemporalInstantPrototype {
         TemporalDuration balancedDuration = TemporalDuration.createBalance(
                 roundedNanoseconds,
                 differenceOptions.largestUnit());
-        TemporalDuration normalizedDuration =
-                TemporalDurationConstructor.normalizeFloat64RepresentableFields(balancedDuration);
-        if (!TemporalDurationConstructor.isDurationRecordTimeRangeValid(normalizedDuration)) {
+        TemporalDuration normalizedDuration = balancedDuration.normalizeFloat64RepresentableFields();
+        if (!TemporalDuration.isDurationRecordTimeRangeValid(normalizedDuration)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
