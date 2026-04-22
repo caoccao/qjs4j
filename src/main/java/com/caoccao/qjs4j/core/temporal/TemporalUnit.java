@@ -66,21 +66,92 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the larger of two unit strings (smaller rank = larger unit).
-     * If both strings are invalid, returns the left unit.
+     * Returns the coarser (larger) unit between this unit and another parsed unit.
      */
-    public static String larger(String leftUnit, String rightUnit) {
-        return rank(leftUnit) > rank(rightUnit) ? rightUnit : leftUnit;
+    public TemporalUnit coarserDurationUnit(TemporalUnit otherUnit) {
+        if (rank <= otherUnit.rank) {
+            return this;
+        } else {
+            return otherUnit;
+        }
     }
 
     /**
-     * Returns the rank for a unit string, or {@code UNKNOWN_RANK} if unrecognized.
-     * Suitable for comparison: smaller rank = larger unit.
+     * Returns the maximum valid rounding increment for sub-day difference rounding.
+     * hour -> 24, minute/second -> 60, millisecond/microsecond/nanosecond -> 1000.
+     * Returns -1 for non-sub-day units.
      */
-    public static int rank(String unitText) {
-        return fromString(unitText)
-                .map(unit -> unit.rank)
-                .orElse(UNKNOWN_RANK);
+    public long getMaximumSubDayIncrement() {
+        return switch (this) {
+            case HOUR -> 24L;
+            case MINUTE, SECOND -> 60L;
+            case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+            default -> -1L;
+        };
+    }
+
+    /**
+     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY.
+     * Returns 0 for YEAR, MONTH, WEEK.
+     */
+    public long getNanosecondFactor() {
+        return switch (this) {
+            case DAY -> TemporalConstants.DAY_NANOSECONDS;
+            case HOUR -> TemporalConstants.HOUR_NANOSECONDS;
+            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> 1L;
+            default -> 0L;
+        };
+    }
+
+    /**
+     * Returns the number of this unit per solar day (for Instant rounding).
+     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
+     */
+    public long getSolarDayDivisor() {
+        return switch (this) {
+            case DAY -> 1L;
+            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
+            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
+            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
+            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
+            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
+            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
+            default -> -1L;
+        };
+    }
+
+    /**
+     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
+     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
+     */
+    public int getStringFractionalSecondDigits() {
+        return switch (this) {
+            case SECOND -> 0;
+            case MILLISECOND -> 3;
+            case MICROSECOND -> 6;
+            case NANOSECOND -> 9;
+            default -> 0;
+        };
+    }
+
+    /**
+     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
+     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
+     * Returns 1 for other units.
+     */
+    public long getStringRoundingIncrementNanoseconds() {
+        return switch (this) {
+            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> 1L;
+            default -> 1L;
+        };
     }
 
     /**
@@ -112,41 +183,19 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the JS-canonical singular name (e.g. "year", "nanosecond").
+     * Validates rounding increment constraints for a unit-specific Temporal rounding operation.
+     * Non-time units do not impose an increment bound here.
      */
-    public String jsName() {
-        return jsName;
-    }
-
-    /**
-     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY.
-     * Returns 0 for YEAR, MONTH, WEEK.
-     */
-    public long nanosecondFactorLong() {
-        return switch (this) {
-            case DAY -> TemporalConstants.DAY_NANOSECONDS;
-            case HOUR -> TemporalConstants.HOUR_NANOSECONDS;
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 0L;
-        };
-    }
-
-    /**
-     * Returns the maximum valid rounding increment for sub-day difference rounding.
-     * hour -> 24, minute/second -> 60, millisecond/microsecond/nanosecond -> 1000.
-     * Returns -1 for non-sub-day units.
-     */
-    public long maximumSubDayIncrement() {
-        return switch (this) {
-            case HOUR -> 24L;
-            case MINUTE, SECOND -> 60L;
-            case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
-            default -> -1L;
-        };
+    public boolean isValidIncrement(long roundingIncrement) {
+        if (!isTimeUnit()) {
+            return true;
+        }
+        long maximumIncrement = getMaximumSubDayIncrement();
+        if (maximumIncrement <= 0L) {
+            return true;
+        } else {
+            return roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0L;
+        }
     }
 
     public int rank() {
@@ -158,52 +207,5 @@ public enum TemporalUnit {
      */
     public boolean requiresRelativeTo() {
         return rank <= WEEK.rank;
-    }
-
-    /**
-     * Returns the number of this unit per solar day (for Instant rounding).
-     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
-     */
-    public long solarDayDivisor() {
-        return switch (this) {
-            case DAY -> 1L;
-            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
-            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
-            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
-            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
-            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
-            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
-            default -> -1L;
-        };
-    }
-
-    /**
-     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
-     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
-     */
-    public int toStringFractionalSecondDigits() {
-        return switch (this) {
-            case SECOND -> 0;
-            case MILLISECOND -> 3;
-            case MICROSECOND -> 6;
-            case NANOSECOND -> 9;
-            default -> 0;
-        };
-    }
-
-    /**
-     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
-     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
-     * Returns 1 for other units.
-     */
-    public long toStringRoundingIncrementNanoseconds() {
-        return switch (this) {
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 1L;
-        };
     }
 }

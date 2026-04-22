@@ -171,13 +171,13 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
      * Formats this time as a string with configurable precision.
      * Shared by PlainTime, PlainDateTime, and ZonedDateTime toString operations.
      *
-     * @param smallestUnit               the smallest unit to include (e.g. "minute" truncates seconds)
+     * @param smallestUnit               the smallest unit to include (e.g. minute truncates seconds)
      * @param autoFractionalSecondDigits if true, auto-trim trailing zeros from fractional part
      * @param fractionalSecondDigits     number of fractional digits (0-9), ignored if auto
      */
-    public String formatTimeString(String smallestUnit, boolean autoFractionalSecondDigits, int fractionalSecondDigits) {
+    public String formatTimeString(TemporalUnit smallestUnit, boolean autoFractionalSecondDigits, int fractionalSecondDigits) {
         String hourMinute = String.format(Locale.ROOT, "%02d:%02d", hour, minute);
-        if ("minute".equals(smallestUnit)) {
+        if (smallestUnit == TemporalUnit.MINUTE) {
             return hourMinute;
         }
 

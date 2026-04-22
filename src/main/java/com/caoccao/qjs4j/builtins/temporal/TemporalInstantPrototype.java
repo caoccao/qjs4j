@@ -125,7 +125,7 @@ public final class TemporalInstantPrototype {
             return null;
         }
 
-        String smallestUnit = instantToStringOptions.smallestUnit();
+        TemporalUnit smallestUnit = instantToStringOptions.smallestUnit();
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption =
                 instantToStringOptions.fractionalSecondDigitsOption();
         Integer fractionalSecondDigits;
@@ -135,15 +135,15 @@ public final class TemporalInstantPrototype {
             fractionalSecondDigits = fractionalSecondDigitsOption.digits();
         }
         BigInteger incrementNanoseconds;
-        if ("minute".equals(smallestUnit)) {
+        if (smallestUnit == TemporalUnit.MINUTE) {
             incrementNanoseconds = NS_PER_MINUTE;
-        } else if ("second".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.SECOND) {
             incrementNanoseconds = NS_PER_SECOND;
-        } else if ("millisecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.MILLISECOND) {
             incrementNanoseconds = NS_PER_MS;
-        } else if ("microsecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.MICROSECOND) {
             incrementNanoseconds = NS_PER_US;
-        } else if ("nanosecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.NANOSECOND) {
             incrementNanoseconds = BigInteger.ONE;
         } else if (fractionalSecondDigits == null) {
             incrementNanoseconds = BigInteger.ONE;
@@ -176,18 +176,18 @@ public final class TemporalInstantPrototype {
         return new JSString(dateTimeText + zoneSuffix);
     }
 
-    private static String formatWithPrecision(IsoDateTime isoDateTime, String smallestUnit, Integer fractionalSecondDigits) {
+    private static String formatWithPrecision(IsoDateTime isoDateTime, TemporalUnit smallestUnit, Integer fractionalSecondDigits) {
         String datePart = isoDateTime.date().toString();
         String timePart;
-        if ("minute".equals(smallestUnit)) {
+        if (smallestUnit == TemporalUnit.MINUTE) {
             timePart = String.format(Locale.ROOT, "%02d:%02d", isoDateTime.time().hour(), isoDateTime.time().minute());
-        } else if ("second".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.SECOND) {
             timePart = isoDateTime.time().toString(0);
-        } else if ("millisecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.MILLISECOND) {
             timePart = isoDateTime.time().toString(3);
-        } else if ("microsecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.MICROSECOND) {
             timePart = isoDateTime.time().toString(6);
-        } else if ("nanosecond".equals(smallestUnit)) {
+        } else if (smallestUnit == TemporalUnit.NANOSECOND) {
             timePart = isoDateTime.time().toString(9);
         } else {
             timePart = isoDateTime.time().toString(fractionalSecondDigits);
@@ -195,18 +195,16 @@ public final class TemporalInstantPrototype {
         return datePart + "T" + timePart;
     }
 
-    private static long getMaximumRoundingIncrement(String unit) {
-        return TemporalUnit.fromString(unit)
-                .map(TemporalUnit::solarDayDivisor)
-                .orElse(-1L);
+    private static long getMaximumRoundingIncrement(TemporalUnit unit) {
+        return unit.getSolarDayDivisor();
     }
 
-    private static BigInteger getUnitNs(String unit) {
-        return TemporalUnit.fromString(unit)
-                .map(TemporalUnit::nanosecondFactorLong)
-                .filter(factor -> factor > 0)
-                .map(BigInteger::valueOf)
-                .orElse(null);
+    private static BigInteger getUnitNs(TemporalUnit unit) {
+        long nanosecondFactor = unit.getNanosecondFactor();
+        if (nanosecondFactor <= 0L) {
+            return null;
+        }
+        return BigInteger.valueOf(nanosecondFactor);
     }
 
     private static JSValue instantDifference(
@@ -224,7 +222,7 @@ public final class TemporalInstantPrototype {
         }
 
         BigInteger differenceNanoseconds = leftInstant.getEpochNanoseconds().subtract(rightInstant.getEpochNanoseconds());
-        BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit().jsName());
+        BigInteger smallestUnitNanoseconds = getUnitNs(differenceOptions.smallestUnit());
         BigInteger incrementNanoseconds = smallestUnitNanoseconds.multiply(BigInteger.valueOf(differenceOptions.roundingIncrement()));
         BigInteger roundedNanoseconds = differenceOptions.roundingMode().roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
@@ -343,7 +341,7 @@ public final class TemporalInstantPrototype {
         return new TemporalInstantToStringOptions(
                 fractionalSecondDigitsOption,
                 roundingMode,
-                smallestUnit == null ? null : smallestUnit.jsName(),
+                smallestUnit,
                 timeZoneId);
     }
 
@@ -416,9 +414,8 @@ public final class TemporalInstantPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        String smallestUnit = TemporalUnit.fromString(smallestUnitText)
+        TemporalUnit smallestUnit = TemporalUnit.fromString(smallestUnitText)
                 .filter(TemporalUnit::isTimeUnit)
-                .map(TemporalUnit::jsName)
                 .orElse(null);
         if (smallestUnit == null) {
             context.throwRangeError("Temporal error: Invalid unit for Instant.round: " + smallestUnitText);

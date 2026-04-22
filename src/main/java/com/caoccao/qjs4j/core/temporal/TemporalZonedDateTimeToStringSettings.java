@@ -20,7 +20,7 @@ public record TemporalZonedDateTimeToStringSettings(
         String calendarNameOption,
         String offsetOption,
         String timeZoneNameOption,
-        String smallestUnit,
+        TemporalUnit smallestUnit,
         TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,

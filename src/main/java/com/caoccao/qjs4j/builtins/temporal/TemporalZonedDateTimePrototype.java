@@ -401,7 +401,7 @@ public final class TemporalZonedDateTimePrototype {
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     settings.largestUnit(),
-                    unitToNanoseconds(settings.smallestUnit().jsName()),
+                    settings.smallestUnit().getNanosecondFactor(),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -448,7 +448,7 @@ public final class TemporalZonedDateTimePrototype {
                         startZonedDateTime.getEpochNanoseconds(),
                         endZonedDateTime.getEpochNanoseconds(),
                         timeLargestUnit,
-                        unitToNanoseconds(settings.smallestUnit().jsName()),
+                        settings.smallestUnit().getNanosecondFactor(),
                         settings.roundingIncrement(),
                         settings.roundingMode());
             }
@@ -461,8 +461,8 @@ public final class TemporalZonedDateTimePrototype {
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     startZonedDateTime.getTimeZoneId(),
-                    settings.largestUnit().jsName(),
-                    settings.smallestUnit().jsName(),
+                    settings.largestUnit(),
+                    settings.smallestUnit(),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -477,14 +477,14 @@ public final class TemporalZonedDateTimePrototype {
                     startLocalDateTime.date(),
                     endLocalDateTime.date(),
                     calendarId,
-                    settings.largestUnit().jsName());
+                    settings.largestUnit());
         }
         return TemporalDurationPrototype.differencePlainDateTime(
                 context,
                 startLocalDateTime,
                 endLocalDateTime,
-                settings.largestUnit().jsName(),
-                settings.smallestUnit().jsName(),
+                settings.largestUnit(),
+                settings.smallestUnit(),
                 settings.roundingIncrement(),
                 settings.roundingMode());
     }
@@ -847,8 +847,8 @@ public final class TemporalZonedDateTimePrototype {
         int fractionalSecondDigits;
         long roundingIncrementNanoseconds;
         if (smallestUnit != null) {
-            fractionalSecondDigits = smallestUnit.toStringFractionalSecondDigits();
-            roundingIncrementNanoseconds = smallestUnit.toStringRoundingIncrementNanoseconds();
+            fractionalSecondDigits = smallestUnit.getStringFractionalSecondDigits();
+            roundingIncrementNanoseconds = smallestUnit.getStringRoundingIncrementNanoseconds();
         } else if (autoFractionalSecondDigits) {
             fractionalSecondDigits = -1;
             roundingIncrementNanoseconds = 1L;
@@ -861,7 +861,7 @@ public final class TemporalZonedDateTimePrototype {
                 calendarNameOption,
                 offsetOption,
                 timeZoneNameOption,
-                smallestUnit == null ? null : smallestUnit.jsName(),
+                smallestUnit,
                 roundingMode,
                 autoFractionalSecondDigits,
                 fractionalSecondDigits,
@@ -1064,7 +1064,7 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         BigInteger roundedEpochNanoseconds;
-        if ("day".equals(roundSettings.smallestUnit())) {
+        if (roundSettings.smallestUnit() == TemporalUnit.DAY) {
             roundedEpochNanoseconds = roundZonedDateTimeToDay(context, zonedDateTime, roundSettings.roundingMode());
             if (context.hasPendingException() || roundedEpochNanoseconds == null) {
                 return JSUndefined.INSTANCE;
@@ -1078,7 +1078,7 @@ public final class TemporalZonedDateTimePrototype {
                 return JSUndefined.INSTANCE;
             }
             long totalNanoseconds = localDateTime.time().totalNanoseconds();
-            long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
+            long unitNanoseconds = roundSettings.smallestUnit().getNanosecondFactor();
             long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
             long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                     totalNanoseconds,
@@ -1449,12 +1449,6 @@ public final class TemporalZonedDateTimePrototype {
                 zonedDateTime.getCalendarId(),
                 toStringSettings.calendarNameOption());
         return new JSString(result);
-    }
-
-    private static long unitToNanoseconds(String unit) {
-        return TemporalUnit.fromString(unit)
-                .map(TemporalUnit::nanosecondFactorLong)
-                .orElse(0L);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

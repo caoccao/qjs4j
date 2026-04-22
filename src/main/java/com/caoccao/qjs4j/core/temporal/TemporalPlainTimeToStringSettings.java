@@ -17,7 +17,7 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalPlainTimeToStringSettings(
-        String smallestUnit,
+        TemporalUnit smallestUnit,
         TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,

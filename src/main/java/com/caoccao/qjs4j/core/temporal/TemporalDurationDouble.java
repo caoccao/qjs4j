@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalDurationFieldOverrides(
+public record TemporalDurationDouble(
         double years,
         double months,
         double weeks,

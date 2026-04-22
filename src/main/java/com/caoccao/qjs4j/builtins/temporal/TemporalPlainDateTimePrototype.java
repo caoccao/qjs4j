@@ -205,14 +205,14 @@ public final class TemporalPlainDateTimePrototype {
                     firstDateTime.getIsoDateTime().date(),
                     secondDateTime.getIsoDateTime().date(),
                     calendarId,
-                    settings.largestUnit().jsName());
+                    settings.largestUnit());
         } else {
             return TemporalDurationPrototype.differencePlainDateTime(
                     context,
                     firstDateTime.getIsoDateTime(),
                     secondDateTime.getIsoDateTime(),
-                    settings.largestUnit().jsName(),
-                    settings.smallestUnit().jsName(),
+                    settings.largestUnit(),
+                    settings.smallestUnit(),
                     settings.roundingIncrement(),
                     settings.roundingMode());
         }
@@ -352,8 +352,8 @@ public final class TemporalPlainDateTimePrototype {
         int fractionalSecondDigits;
         long roundingIncrementNanoseconds;
         if (smallestUnit != null) {
-            fractionalSecondDigits = smallestUnit.toStringFractionalSecondDigits();
-            roundingIncrementNanoseconds = smallestUnit.toStringRoundingIncrementNanoseconds();
+            fractionalSecondDigits = smallestUnit.getStringFractionalSecondDigits();
+            roundingIncrementNanoseconds = smallestUnit.getStringRoundingIncrementNanoseconds();
         } else if (autoFractionalSecondDigits) {
             fractionalSecondDigits = -1;
             roundingIncrementNanoseconds = 1L;
@@ -364,7 +364,7 @@ public final class TemporalPlainDateTimePrototype {
 
         return new TemporalPlainDateTimeToStringSettings(
                 calendarNameOption,
-                smallestUnit == null ? null : smallestUnit.jsName(),
+                smallestUnit,
                 roundingMode,
                 autoFractionalSecondDigits,
                 fractionalSecondDigits,
@@ -460,7 +460,7 @@ public final class TemporalPlainDateTimePrototype {
         }
 
         long totalNanoseconds = plainDateTime.getIsoDateTime().time().totalNanoseconds();
-        long unitNanoseconds = unitToNanoseconds(roundSettings.smallestUnit());
+        long unitNanoseconds = roundSettings.smallestUnit().getNanosecondFactor();
         long incrementNanoseconds = unitNanoseconds * roundSettings.roundingIncrement();
         long roundedNanoseconds = roundSettings.roundingMode().roundLongToIncrementAsIfPositive(
                 totalNanoseconds,
@@ -703,12 +703,6 @@ public final class TemporalPlainDateTimePrototype {
                 epochNanoseconds,
                 timeZoneId,
                 plainDateTime.getCalendarId());
-    }
-
-    private static long unitToNanoseconds(String unit) {
-        return TemporalUnit.fromString(unit)
-                .map(TemporalUnit::nanosecondFactorLong)
-                .orElse(0L);
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {

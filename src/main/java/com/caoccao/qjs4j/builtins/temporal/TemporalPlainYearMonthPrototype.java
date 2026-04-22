@@ -253,7 +253,7 @@ public final class TemporalPlainYearMonthPrototype {
             IsoDate firstDate,
             IsoDate secondDate,
             TemporalCalendarId calendarId,
-            String largestUnit) {
+            TemporalUnit largestUnit) {
         int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDurationYearMonth.ZERO;
@@ -316,7 +316,7 @@ public final class TemporalPlainYearMonthPrototype {
             candidateMonths += sign;
         }
 
-        if (UNIT_MONTH.equals(largestUnit)) {
+        if (largestUnit == TemporalUnit.MONTH) {
             long monthsFromYears = monthsForYearDelta(context, firstDate, calendarId, years);
             if (context.hasPendingException()) {
                 return null;
@@ -426,14 +426,14 @@ public final class TemporalPlainYearMonthPrototype {
                     + (otherDifferenceDate.month() - thisDifferenceDate.month());
             durationFields = TemporalDurationYearMonth.fromTotalMonths(
                     totalMonthsDifference,
-                    differenceSettings.largestUnit().jsName());
+                    differenceSettings.largestUnit());
         } else {
             durationFields = differenceCalendarYearMonth(
                     context,
                     thisDifferenceDate,
                     otherDifferenceDate,
                     calendarId,
-                    differenceSettings.largestUnit().jsName());
+                    differenceSettings.largestUnit());
             if (context.hasPendingException() || durationFields == null) {
                 return JSUndefined.INSTANCE;
             }
@@ -442,7 +442,7 @@ public final class TemporalPlainYearMonthPrototype {
                     thisDifferenceDate,
                     otherDifferenceDate,
                     calendarId,
-                    UNIT_MONTH);
+                    TemporalUnit.MONTH);
             if (context.hasPendingException() || monthDifferenceFields == null) {
                 return JSUndefined.INSTANCE;
             }

@@ -179,7 +179,7 @@ public record TemporalDifferenceSettings(
         // 9. Validate rounding increment
         if (validateSubDayIncrement) {
             if (smallestUnit.isTimeUnit()) {
-                long maximumIncrement = smallestUnit.maximumSubDayIncrement();
+                long maximumIncrement = smallestUnit.getMaximumSubDayIncrement();
                 if (maximumIncrement > 0 && (roundingIncrement >= maximumIncrement || maximumIncrement % roundingIncrement != 0)) {
                     context.throwRangeError("Temporal error: Invalid rounding increment.");
                     return null;

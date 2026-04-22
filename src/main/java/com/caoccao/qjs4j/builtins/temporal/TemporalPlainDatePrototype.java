@@ -167,23 +167,23 @@ public final class TemporalPlainDatePrototype {
             long nudgedEpochDay,
             IsoDate originDate,
             TemporalCalendarId calendarId,
-            String largestUnit,
-            String smallestUnit) {
-        if (smallestUnit.equals(largestUnit)) {
+            TemporalUnit largestUnit,
+            TemporalUnit smallestUnit) {
+        if (smallestUnit == largestUnit) {
             return duration;
         }
-        int largestUnitIndex = TemporalUnit.rank(largestUnit);
-        int smallestUnitIndex = TemporalUnit.rank(smallestUnit);
+        int largestUnitIndex = largestUnit.rank();
+        int smallestUnitIndex = smallestUnit.rank();
         for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
-            String unit = temporalUnitByRank(unitIndex);
-            if (UNIT_WEEK.equals(unit) && !UNIT_WEEK.equals(largestUnit)) {
+            TemporalUnit unit = temporalUnitByRank(unitIndex);
+            if (unit == TemporalUnit.WEEK && largestUnit != TemporalUnit.WEEK) {
                 continue;
             }
 
             TemporalDateDurationFields endDuration;
-            if (UNIT_YEAR.equals(unit)) {
+            if (unit == TemporalUnit.YEAR) {
                 endDuration = new TemporalDateDurationFields(duration.years() + sign, 0, 0, 0);
-            } else if (UNIT_MONTH.equals(unit)) {
+            } else if (unit == TemporalUnit.MONTH) {
                 endDuration = adjustDateDurationRecord(duration, 0, 0L, duration.months() + sign);
             } else {
                 endDuration = adjustDateDurationRecord(duration, 0, duration.weeks() + sign, null);
@@ -238,7 +238,7 @@ public final class TemporalPlainDatePrototype {
             IsoDate firstDate,
             IsoDate secondDate,
             TemporalCalendarId calendarId,
-            String largestUnit) {
+            TemporalUnit largestUnit) {
         if (calendarId == TemporalCalendarId.ISO8601) {
             return calendarDateUntilIso(firstDate, secondDate, largestUnit);
         }
@@ -249,7 +249,7 @@ public final class TemporalPlainDatePrototype {
 
         long years = 0;
         long months = 0;
-        if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
+        if (largestUnit == TemporalUnit.YEAR || largestUnit == TemporalUnit.MONTH) {
             IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
             IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
             long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
@@ -306,7 +306,7 @@ public final class TemporalPlainDatePrototype {
                 candidateMonths += sign;
             }
 
-            if (UNIT_MONTH.equals(largestUnit)) {
+            if (largestUnit == TemporalUnit.MONTH) {
                 long monthsFromYears = monthsForYearDelta(context, firstDate, calendarId, years);
                 if (context.hasPendingException()) {
                     return null;
@@ -374,14 +374,14 @@ public final class TemporalPlainDatePrototype {
         }
         long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
         long weeks = 0;
-        if (UNIT_WEEK.equals(largestUnit)) {
+        if (largestUnit == TemporalUnit.WEEK) {
             weeks = dayDifference / 7;
             dayDifference = dayDifference % 7;
         }
         return new TemporalDateDurationFields(years, months, weeks, dayDifference);
     }
 
-    private static TemporalDateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, String largestUnit) {
+    private static TemporalDateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, TemporalUnit largestUnit) {
         int sign = -Integer.signum(firstDate.compareTo(secondDate));
         if (sign == 0) {
             return TemporalDateDurationFields.ZERO;
@@ -389,7 +389,7 @@ public final class TemporalPlainDatePrototype {
 
         long years = 0;
         long months = 0;
-        if (UNIT_YEAR.equals(largestUnit) || UNIT_MONTH.equals(largestUnit)) {
+        if (largestUnit == TemporalUnit.YEAR || largestUnit == TemporalUnit.MONTH) {
             long candidateYears = (long) secondDate.year() - firstDate.year();
             if (candidateYears != 0) {
                 candidateYears -= sign;
@@ -407,7 +407,7 @@ public final class TemporalPlainDatePrototype {
                 intermediateYearMonth = balanceIsoYearMonth(intermediateYearMonth.year(), intermediateYearMonth.month() + sign);
             }
 
-            if (UNIT_MONTH.equals(largestUnit)) {
+            if (largestUnit == TemporalUnit.MONTH) {
                 months += years * 12;
                 years = 0;
             }
@@ -417,7 +417,7 @@ public final class TemporalPlainDatePrototype {
         IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day());
         long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
         long weeks = 0;
-        if (UNIT_WEEK.equals(largestUnit)) {
+        if (largestUnit == TemporalUnit.WEEK) {
             weeks = dayDifference / 7;
             dayDifference = dayDifference % 7;
         }
@@ -538,7 +538,7 @@ public final class TemporalPlainDatePrototype {
             IsoDate firstDate,
             IsoDate secondDate,
             TemporalCalendarId calendarId,
-            String largestUnit) {
+            TemporalUnit largestUnit) {
         TemporalDateDurationFields dateDifference = calendarDateUntil(
                 context,
                 firstDate,
@@ -597,7 +597,7 @@ public final class TemporalPlainDatePrototype {
                 thisDate,
                 otherDate,
                 plainDate.getCalendarId(),
-                settings.largestUnit().jsName());
+                settings.largestUnit());
         boolean roundingNoOp = settings.smallestUnit() == TemporalUnit.DAY && settings.roundingIncrement() == 1L;
         if (!roundingNoOp) {
             dateDifference = roundRelativeDurationDate(
@@ -850,7 +850,7 @@ public final class TemporalPlainDatePrototype {
                     weeksStart,
                     weeksEnd,
                     calendarId,
-                    UNIT_WEEK);
+                    TemporalUnit.WEEK);
             if (context.hasPendingException() || weekDifference == null) {
                 return null;
             }
@@ -954,7 +954,12 @@ public final class TemporalPlainDatePrototype {
         }
         TemporalDateDurationFields roundedDuration = nudgeResult.duration();
         if (nudgeResult.didExpandCalendarUnit() && settings.smallestUnit() != TemporalUnit.WEEK) {
-            String bubbleSmallestUnit = TemporalUnit.larger(settings.smallestUnit().jsName(), UNIT_DAY);
+            TemporalUnit bubbleSmallestUnit;
+            if (settings.smallestUnit().isLargerThan(TemporalUnit.DAY)) {
+                bubbleSmallestUnit = settings.smallestUnit();
+            } else {
+                bubbleSmallestUnit = TemporalUnit.DAY;
+            }
             roundedDuration = bubbleRelativeDuration(
                     context,
                     sign,
@@ -962,7 +967,7 @@ public final class TemporalPlainDatePrototype {
                     nudgeResult.nudgedEpochDay(),
                     originDate,
                     calendarId,
-                    settings.largestUnit().jsName(),
+                    settings.largestUnit(),
                     bubbleSmallestUnit);
             if (context.hasPendingException() || roundedDuration == null) {
                 return null;
@@ -987,12 +992,12 @@ public final class TemporalPlainDatePrototype {
         return addOrSubtract(context, plainDate, args, -1);
     }
 
-    private static String temporalUnitByRank(int unitRank) {
+    private static TemporalUnit temporalUnitByRank(int unitRank) {
         TemporalUnit[] units = TemporalUnit.values();
         if (unitRank >= 0 && unitRank < units.length) {
-            return units[unitRank].jsName();
+            return units[unitRank];
         }
-        return TemporalUnit.NANOSECOND.jsName();
+        return TemporalUnit.NANOSECOND;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

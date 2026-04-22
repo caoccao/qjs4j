@@ -92,17 +92,22 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         }
     }
 
-    public LocalDateTime addCalendarUnitsToLocalDateTime(String calendarUnit, long amount) {
+    public LocalDateTime addCalendarUnitsToLocalDateTime(TemporalUnit calendarUnit, long amount) {
         LocalDateTime localDateTime = toLocalDateTime();
-        if ("year".equals(calendarUnit)) {
+        if (calendarUnit == TemporalUnit.YEAR) {
             return localDateTime.plusYears(amount);
-        } else if ("month".equals(calendarUnit)) {
+        } else if (calendarUnit == TemporalUnit.MONTH) {
             return localDateTime.plusMonths(amount);
-        } else if ("week".equals(calendarUnit)) {
+        } else if (calendarUnit == TemporalUnit.WEEK) {
             return localDateTime.plusWeeks(amount);
         } else {
             return localDateTime.plusDays(amount);
         }
+    }
+
+    public LocalDateTime addCalendarUnitsToLocalDateTime(String calendarUnit, long amount) {
+        TemporalUnit parsedCalendarUnit = TemporalUnit.fromString(calendarUnit).orElse(TemporalUnit.DAY);
+        return addCalendarUnitsToLocalDateTime(parsedCalendarUnit, amount);
     }
 
     public LocalDateTime addDurationToLocalDateTime(JSContext context, TemporalDuration durationRecord) {
@@ -134,13 +139,18 @@ public record IsoDateTime(IsoDate date, IsoTime time) implements Comparable<IsoD
         }
     }
 
-    public LocalDateTime addFixedUnitsToLocalDateTime(String unit, long amount) {
+    public LocalDateTime addFixedUnitsToLocalDateTime(TemporalUnit unit, long amount) {
         LocalDateTime localDateTime = toLocalDateTime();
-        if ("week".equals(unit)) {
+        if (unit == TemporalUnit.WEEK) {
             return localDateTime.plusWeeks(amount);
         } else {
             return localDateTime.plusDays(amount);
         }
+    }
+
+    public LocalDateTime addFixedUnitsToLocalDateTime(String unit, long amount) {
+        TemporalUnit parsedUnit = TemporalUnit.fromString(unit).orElse(TemporalUnit.DAY);
+        return addFixedUnitsToLocalDateTime(parsedUnit, amount);
     }
 
     public LocalDateTime addNanosecondsToDateTime(

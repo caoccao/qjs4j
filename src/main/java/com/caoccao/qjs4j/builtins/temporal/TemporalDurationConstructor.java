@@ -126,8 +126,8 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        boolean firstHasCalendarUnits = hasCalendarUnits(firstRecord);
-        boolean secondHasCalendarUnits = hasCalendarUnits(secondRecord);
+        boolean firstHasCalendarUnits = firstRecord.hasCalendarUnits();
+        boolean secondHasCalendarUnits = secondRecord.hasCalendarUnits();
         if ((firstHasCalendarUnits || secondHasCalendarUnits) && relativeToReference == null) {
             if (firstRecord.equals(secondRecord)) {
                 return JSNumber.of(0);
@@ -495,10 +495,6 @@ public final class TemporalDurationConstructor {
         return Optional.of(numericValue);
     }
 
-    private static boolean hasCalendarUnits(TemporalDuration durationRecord) {
-        return durationRecord.years() != 0 || durationRecord.months() != 0 || durationRecord.weeks() != 0;
-    }
-
     private static boolean hasOffsetDesignator(String text) {
         int timeSeparatorIndex = Math.max(text.indexOf('T'), text.indexOf('t'));
         if (timeSeparatorIndex < 0) {
@@ -554,14 +550,6 @@ public final class TemporalDurationConstructor {
     static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
         BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
-    }
-
-    static String largerTemporalUnit(String leftUnit, String rightUnit) {
-        if (TemporalUnit.rank(leftUnit) <= TemporalUnit.rank(rightUnit)) {
-            return leftUnit;
-        } else {
-            return rightUnit;
-        }
     }
 
     static TemporalDuration normalizeFloat64RepresentableFields(TemporalDuration durationRecord) {
