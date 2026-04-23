@@ -384,7 +384,7 @@ public final class TemporalPlainMonthDayPrototype {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            return TemporalPlainMonthDayConstructor.createPlainMonthDay(
+            return JSTemporalPlainMonthDay.create(
                     context,
                     new IsoDate(1972, month, dayOfMonth),
                     plainMonthDay.getCalendarId());
@@ -393,7 +393,7 @@ public final class TemporalPlainMonthDayPrototype {
         int constrainedMonth = Math.max(1, Math.min(12, month));
         int maximumDay = IsoDate.daysInMonth(year, constrainedMonth);
         int constrainedDay = Math.max(1, Math.min(maximumDay, dayOfMonth));
-        return TemporalPlainMonthDayConstructor.createPlainMonthDay(context,
+        return JSTemporalPlainMonthDay.create(context,
                 new IsoDate(1972, constrainedMonth, constrainedDay), plainMonthDay.getCalendarId());
     }
 

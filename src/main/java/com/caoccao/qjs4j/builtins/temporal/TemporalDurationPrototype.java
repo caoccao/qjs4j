@@ -52,7 +52,7 @@ public final class TemporalDurationPrototype {
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, duration.getDuration().abs());
+        return JSTemporalDuration.create(context, duration.getDuration().abs());
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -105,7 +105,7 @@ public final class TemporalDurationPrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, normalized);
+        return JSTemporalDuration.create(context, normalized);
     }
 
     private static void applyDurationFieldOverrides(
@@ -513,6 +513,41 @@ public final class TemporalDurationPrototype {
         return quotient.doubleValue();
     }
 
+    private static long getRoundingIncrementOption(
+            JSContext context,
+            JSObject optionsObject,
+            String optionName,
+            long defaultValue,
+            long minimumValue,
+            long maximumValue,
+            String invalidOptionMessage) {
+        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
+        if (context.hasPendingException()) {
+            return Long.MIN_VALUE;
+        }
+        if (optionValue instanceof JSUndefined || optionValue == null) {
+            return defaultValue;
+        }
+
+        JSNumber optionNumber = JSTypeConversions.toNumber(context, optionValue);
+        if (context.hasPendingException() || optionNumber == null) {
+            return Long.MIN_VALUE;
+        }
+
+        double numericOptionValue = optionNumber.value();
+        if (!Double.isFinite(numericOptionValue) || Double.isNaN(numericOptionValue)) {
+            context.throwRangeError(invalidOptionMessage);
+            return Long.MIN_VALUE;
+        }
+
+        long integerOptionValue = (long) numericOptionValue;
+        if (integerOptionValue < minimumValue || integerOptionValue > maximumValue) {
+            context.throwRangeError(invalidOptionMessage);
+            return Long.MIN_VALUE;
+        }
+        return integerOptionValue;
+    }
+
     public static JSValue hours(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalDuration duration = TemporalUtils.checkReceiver(context, thisArg, JSTemporalDuration.class, TYPE_NAME, "hours");
         if (duration == null) {
@@ -603,11 +638,11 @@ public final class TemporalDurationPrototype {
         if (duration == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, duration.getDuration().negated());
+        return JSTemporalDuration.create(context, duration.getDuration().negated());
     }
 
     private static TemporalDurationToStringOptions parseDurationToStringOptions(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(
                 context,
                 optionsValue,
                 "Temporal error: Options must be an object.");
@@ -712,7 +747,7 @@ public final class TemporalDurationPrototype {
                 return null;
             }
 
-            roundingIncrement = TemporalOptionResolver.getRoundingIncrementOption(
+            roundingIncrement = getRoundingIncrementOption(
                     context,
                     optionsObject,
                     "roundingIncrement",
@@ -906,7 +941,7 @@ public final class TemporalDurationPrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        JSTemporalDuration roundedDuration = TemporalDurationConstructor.createDuration(context, normalizedDurationRecord);
+        JSTemporalDuration roundedDuration = JSTemporalDuration.create(context, normalizedDurationRecord);
         TemporalDurationDouble durationFieldOverrides = roundComputationResult.durationFieldOverrides();
         if (durationFieldOverrides != null) {
             applyDurationFieldOverrides(roundedDuration, durationFieldOverrides);
@@ -971,7 +1006,7 @@ public final class TemporalDurationPrototype {
 
         if (relativeToOption.zoned() && largestUnit == TemporalUnit.DAY && smallestUnit.isTimeUnit()) {
             BigInteger nextDayEpochNanoseconds = relativeToOption.epochNanoseconds().add(DAY_NANOSECONDS);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1279,7 +1314,7 @@ public final class TemporalDurationPrototype {
                 return null;
             }
             BigInteger endEpochNanoseconds = relativeToOption.epochNanoseconds().add(dayTimeNanoseconds);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(endEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(endEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1709,7 +1744,7 @@ public final class TemporalDurationPrototype {
                 return Double.NaN;
             }
             BigInteger endEpochNanoseconds = relativeToOption.epochNanoseconds().add(dayTimeNanoseconds);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(endEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(endEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return Double.NaN;
             }
@@ -1745,7 +1780,7 @@ public final class TemporalDurationPrototype {
 
         if (relativeToOption.zoned() && unit == TemporalUnit.DAY) {
             BigInteger nextDayEpochNanoseconds = relativeToOption.epochNanoseconds().add(DAY_NANOSECONDS);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(nextDayEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return Double.NaN;
             }
@@ -1930,7 +1965,7 @@ public final class TemporalDurationPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalDurationConstructor.createDuration(context, newRecord);
+        return JSTemporalDuration.create(context, newRecord);
     }
 
     public static JSValue years(JSContext context, JSValue thisArg, JSValue[] args) {

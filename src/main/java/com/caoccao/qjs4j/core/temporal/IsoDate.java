@@ -489,6 +489,62 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return isoDate;
     }
 
+    public IsoDate addIsoDateWithOverflow(
+            JSContext context,
+            long years,
+            long months,
+            long weeks,
+            long days,
+            String overflow) {
+        long monthIndex;
+        long balancedYear;
+        try {
+            monthIndex = Math.addExact(month - 1L, months);
+            long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
+            balancedYear = Math.addExact(year, years);
+            balancedYear = Math.addExact(balancedYear, balancedYearDelta);
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        int balancedYearInt = (int) balancedYear;
+        int maximumDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
+        int balancedDay = day;
+        if ("reject".equals(overflow)) {
+            if (balancedDay > maximumDay) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return null;
+            }
+        } else {
+            balancedDay = Math.min(balancedDay, maximumDay);
+        }
+
+        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, balancedDay);
+        long resultEpochDay;
+        try {
+            long daysFromWeeks = Math.multiplyExact(weeks, 7L);
+            long totalDays = Math.addExact(days, daysFromWeeks);
+            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
+        } catch (ArithmeticException arithmeticException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+
+        try {
+            return IsoDate.createFromEpochDay(resultEpochDay);
+        } catch (DateTimeException dateTimeException) {
+            context.throwRangeError("Temporal error: Invalid ISO date.");
+            return null;
+        }
+    }
+
     public IsoDate atDayConstrained(int candidateDay) {
         int constrainedDay = Math.min(candidateDay, daysInMonth(year, month));
         return new IsoDate(year, month, constrainedDay);

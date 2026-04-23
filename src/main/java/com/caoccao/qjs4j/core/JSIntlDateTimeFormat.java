@@ -991,14 +991,6 @@ public final class JSIntlDateTimeFormat extends JSObject {
         return "short".equals(monthOption) || "long".equals(monthOption) || "narrow".equals(monthOption);
     }
 
-    private TemporalCalendarId resolveTemporalCalendarId() {
-        TemporalCalendarId temporalCalendarId = TemporalCalendarId.fromIdentifier(calendar);
-        if (temporalCalendarId == null) {
-            return TemporalCalendarId.ISO8601;
-        }
-        return temporalCalendarId;
-    }
-
     private boolean isChineseOrDangiCalendar() {
         if (calendar == null) {
             return false;
@@ -1132,6 +1124,14 @@ public final class JSIntlDateTimeFormat extends JSObject {
             case "M12" -> "Elul";
             default -> monthCode;
         };
+    }
+
+    private TemporalCalendarId resolveTemporalCalendarId() {
+        TemporalCalendarId temporalCalendarId = TemporalCalendarId.fromIdentifier(calendar);
+        if (temporalCalendarId == null) {
+            return TemporalCalendarId.ISO8601;
+        }
+        return temporalCalendarId;
     }
 
     private ZoneId resolveZoneId() {

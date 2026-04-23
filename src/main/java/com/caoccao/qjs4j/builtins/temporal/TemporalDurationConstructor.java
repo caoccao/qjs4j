@@ -245,24 +245,11 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "Duration");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "Duration");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createDuration(context, record, resolvedPrototype);
-    }
-
-    public static JSTemporalDuration createDuration(JSContext context, TemporalDuration record) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Duration");
-        return createDuration(context, record, prototype);
-    }
-
-    static JSTemporalDuration createDuration(JSContext context, TemporalDuration record, JSObject prototype) {
-        JSTemporalDuration duration = new JSTemporalDuration(context, record);
-        if (prototype != null) {
-            duration.setPrototype(prototype);
-        }
-        return duration;
+        return JSTemporalDuration.create(context, record, resolvedPrototype);
     }
 
     static JSValue durationFromFields(JSContext context, JSObject fields) {
@@ -413,7 +400,7 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createDuration(context, record);
+        return JSTemporalDuration.create(context, record);
     }
 
     static JSValue durationFromString(JSContext context, String input) {
@@ -430,7 +417,7 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createDuration(context, record);
+        return JSTemporalDuration.create(context, record);
     }
 
     private static String extractOffsetText(String text) {
@@ -866,7 +853,7 @@ public final class TemporalDurationConstructor {
                 referenceOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, normalizedTimeZoneId);
             }
         }
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
@@ -1001,7 +988,7 @@ public final class TemporalDurationConstructor {
                     }
                 }
             }
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1124,7 +1111,7 @@ public final class TemporalDurationConstructor {
      */
     public static JSValue toTemporalDuration(JSContext context, JSValue item) {
         if (item instanceof JSTemporalDuration duration) {
-            return createDuration(context, duration.getDuration());
+            return JSTemporalDuration.create(context, duration.getDuration());
         }
         if (item instanceof JSString itemStr) {
             return durationFromString(context, itemStr.value());
@@ -1176,7 +1163,7 @@ public final class TemporalDurationConstructor {
                         || durationRecord.days() != 0;
         if (hasDateUnits && relativeToReference.epochNanoseconds() != null && relativeToReference.timeZoneId() != null) {
             BigInteger targetEpochNanoseconds = relativeToReference.epochNanoseconds().add(totalNanoseconds);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(targetEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(targetEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return BigInteger.ZERO;
             }

@@ -101,24 +101,11 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainTime");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainTime(context, isoTime, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainTime");
-        return createPlainTime(context, isoTime, prototype);
-    }
-
-    static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime, JSObject prototype) {
-        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
-        if (prototype != null) {
-            plainTime.setPrototype(prototype);
-        }
-        return plainTime;
+        return JSTemporalPlainTime.create(context, isoTime, resolvedPrototype);
     }
 
     /**
@@ -212,10 +199,10 @@ public final class TemporalPlainTimeConstructor {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, isoTime);
+            return JSTemporalPlainTime.create(context, isoTime);
         } else {
             IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
-            return createPlainTime(context, constrained);
+            return JSTemporalPlainTime.create(context, constrained);
         }
     }
 
@@ -224,7 +211,7 @@ public final class TemporalPlainTimeConstructor {
         if (time == null) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainTime(context, time);
+        return JSTemporalPlainTime.create(context, time);
     }
 
     private static int toIntegerFieldOrDefault(JSContext context, JSValue value, int defaultValue) {
@@ -243,21 +230,21 @@ public final class TemporalPlainTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, plainTime.getIsoTime());
+            return JSTemporalPlainTime.create(context, plainTime.getIsoTime());
         }
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, plainDateTime.getIsoDateTime().time());
+            return JSTemporalPlainTime.create(context, plainDateTime.getIsoDateTime().time());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(
+            return JSTemporalPlainTime.create(
                     context,
                     IsoDateTime.createFromEpochNsAndTimeZoneId(
                             zonedDateTime.getEpochNanoseconds(),

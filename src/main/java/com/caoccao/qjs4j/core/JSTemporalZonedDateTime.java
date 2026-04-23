@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 import java.math.BigInteger;
 
@@ -30,6 +31,28 @@ public final class JSTemporalZonedDateTime extends JSObject {
         this.epochNanoseconds = epochNanoseconds;
         this.timeZoneId = timeZoneId;
         this.calendarId = calendarId;
+    }
+
+    public static JSTemporalZonedDateTime create(
+            JSContext context,
+            BigInteger epochNanoseconds,
+            String timeZoneId,
+            TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "ZonedDateTime");
+        return create(context, epochNanoseconds, timeZoneId, calendarId, prototype);
+    }
+
+    public static JSTemporalZonedDateTime create(
+            JSContext context,
+            BigInteger epochNanoseconds,
+            String timeZoneId,
+            TemporalCalendarId calendarId,
+            JSObject prototype) {
+        JSTemporalZonedDateTime zonedDateTime = new JSTemporalZonedDateTime(context, epochNanoseconds, timeZoneId, calendarId);
+        if (prototype != null) {
+            zonedDateTime.setPrototype(prototype);
+        }
+        return zonedDateTime;
     }
 
     public TemporalCalendarId getCalendarId() {

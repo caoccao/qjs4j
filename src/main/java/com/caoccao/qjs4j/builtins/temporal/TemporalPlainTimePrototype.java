@@ -62,7 +62,7 @@ public final class TemporalPlainTimePrototype {
             resultNanoseconds = resultNanoseconds.add(dayNanoseconds);
         }
 
-        return TemporalPlainTimeConstructor.createPlainTime(
+        return JSTemporalPlainTime.create(
                 context,
                 IsoTime.createFromNanoseconds(resultNanoseconds.longValue()));
     }
@@ -112,7 +112,7 @@ public final class TemporalPlainTimePrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, normalizedDuration);
+        return JSTemporalDuration.create(context, normalizedDuration);
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -130,7 +130,7 @@ public final class TemporalPlainTimePrototype {
     }
 
     private static TemporalPlainTimeToStringSettings getToStringSettings(JSContext context, JSValue optionsValue) {
-        JSObject optionsObject = TemporalOptionResolver.toOptionalOptionsObject(
+        JSObject optionsObject = TemporalUtils.toOptionalOptionsObject(
                 context,
                 optionsValue,
                 "Temporal error: Option must be object: options.");
@@ -271,7 +271,7 @@ public final class TemporalPlainTimePrototype {
             roundedNs = 0L;
         }
 
-        return TemporalPlainTimeConstructor.createPlainTime(context, IsoTime.createFromNanoseconds(roundedNs));
+        return JSTemporalPlainTime.create(context, IsoTime.createFromNanoseconds(roundedNs));
     }
 
     public static JSValue second(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -525,10 +525,10 @@ public final class TemporalPlainTimePrototype {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            return TemporalPlainTimeConstructor.createPlainTime(context, isoTime);
+            return JSTemporalPlainTime.create(context, isoTime);
         } else {
             IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
-            return TemporalPlainTimeConstructor.createPlainTime(context, constrained);
+            return JSTemporalPlainTime.create(context, constrained);
         }
     }
 }

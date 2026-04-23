@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoDate;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 public final class JSTemporalPlainMonthDay extends JSObject {
     private final TemporalCalendarId calendarId;
@@ -27,6 +28,26 @@ public final class JSTemporalPlainMonthDay extends JSObject {
         super(context);
         this.isoDate = isoDate;
         this.calendarId = calendarId;
+    }
+
+    public static JSTemporalPlainMonthDay create(
+            JSContext context,
+            IsoDate isoDate,
+            TemporalCalendarId calendarId) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainMonthDay");
+        return create(context, isoDate, calendarId, prototype);
+    }
+
+    public static JSTemporalPlainMonthDay create(
+            JSContext context,
+            IsoDate isoDate,
+            TemporalCalendarId calendarId,
+            JSObject prototype) {
+        JSTemporalPlainMonthDay plainMonthDay = new JSTemporalPlainMonthDay(context, isoDate, calendarId);
+        if (prototype != null) {
+            plainMonthDay.setPrototype(prototype);
+        }
+        return plainMonthDay;
     }
 
     public TemporalCalendarId getCalendarId() {

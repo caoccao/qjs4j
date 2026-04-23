@@ -69,11 +69,11 @@ public final class TemporalInstantPrototype {
         }
 
         BigInteger result = instant.getEpochNanoseconds().add(totalNs);
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(result)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(result)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalInstantConstructor.createInstant(context, result);
+        return JSTemporalInstant.create(context, result);
     }
 
     private static JSTemporalInstant checkReceiver(JSContext context, JSValue thisArg, String methodName) {
@@ -155,7 +155,7 @@ public final class TemporalInstantPrototype {
                 instant.getEpochNanoseconds(),
                 incrementNanoseconds,
                 instantToStringOptions.roundingMode());
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(roundedEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return null;
         }
@@ -236,7 +236,7 @@ public final class TemporalInstantPrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, normalizedDuration);
+        return JSTemporalDuration.create(context, normalizedDuration);
     }
 
     private static TemporalUnit normalizeToStringSmallestUnit(String unit) {
@@ -443,11 +443,11 @@ public final class TemporalInstantPrototype {
 
         BigInteger epochNs = instant.getEpochNanoseconds();
         BigInteger rounded = roundBigIntegerToIncrement(epochNs, incrementNs, roundingMode);
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(rounded)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(rounded)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalInstantConstructor.createInstant(context, rounded);
+        return JSTemporalInstant.create(context, rounded);
     }
 
     private static BigInteger roundBigIntegerToIncrement(
@@ -601,7 +601,7 @@ public final class TemporalInstantPrototype {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context,
+        return JSTemporalZonedDateTime.create(context,
                 instant.getEpochNanoseconds(), timeZoneId, TemporalCalendarId.ISO8601);
     }
 

@@ -116,7 +116,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+        return JSTemporalPlainDateTime.create(
                 context,
                 newDate.atTime(timeResult.time()),
                 plainDateTime.getCalendarId());
@@ -145,7 +145,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.day(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.day(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -153,7 +153,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.dayOfWeek(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.dayOfWeek(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -161,7 +161,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.dayOfYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.dayOfYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -169,7 +169,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.daysInMonth(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.daysInMonth(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -185,7 +185,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.daysInYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.daysInYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     private static TemporalDuration differenceTemporalPlainDateTime(
@@ -238,7 +238,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.era(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.era(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -246,7 +246,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.eraYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.eraYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     private static String getTemporalDisambiguation(JSContext context, JSValue optionsArg) {
@@ -384,7 +384,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.inLeapYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.inLeapYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue microsecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -416,7 +416,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.month(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.month(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -424,7 +424,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.monthCode(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.monthCode(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -432,7 +432,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.monthsInYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.monthsInYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue nanosecond(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -482,7 +482,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+        return JSTemporalPlainDateTime.create(
                 context,
                 adjustedDate.atTime(adjustedTime),
                 plainDateTime.getCalendarId());
@@ -535,7 +535,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, resultRecord);
+        return JSTemporalDuration.create(context, resultRecord);
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -589,7 +589,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
+        return JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
     }
 
     public static JSValue toPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -597,7 +597,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainTimeConstructor.createPlainTime(context, plainDateTime.getIsoDateTime().time());
+        return JSTemporalPlainTime.create(context, plainDateTime.getIsoDateTime().time());
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -692,12 +692,12 @@ public final class TemporalPlainDateTimePrototype {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+        return JSTemporalZonedDateTime.create(
                 context,
                 epochNanoseconds,
                 timeZoneId,
@@ -743,7 +743,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalDurationConstructor.createDuration(context, resultRecord);
+        return JSTemporalDuration.create(context, resultRecord);
     }
 
     public static JSValue valueOf(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -756,7 +756,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.weekOfYear(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.weekOfYear(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1019,7 +1019,7 @@ public final class TemporalPlainDateTimePrototype {
             normalizedOptionsObject.set(PropertyKey.fromString("overflow"), new JSString(overflow));
             JSValue mergedDateValue = TemporalPlainDatePrototype.with(
                     context,
-                    TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()),
+                    JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()),
                     new JSValue[]{dateFieldsObject, normalizedOptionsObject});
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
@@ -1048,7 +1048,7 @@ public final class TemporalPlainDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(
+        return JSTemporalPlainDateTime.create(
                 context,
                 resultDate.atTime(resultTime),
                 plainDateTime.getCalendarId());
@@ -1067,7 +1067,7 @@ public final class TemporalPlainDateTimePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, plainDateTime.getIsoDateTime(), calendarId);
+        return JSTemporalPlainDateTime.create(context, plainDateTime.getIsoDateTime(), calendarId);
     }
 
     public static JSValue withPlainTime(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1092,7 +1092,7 @@ public final class TemporalPlainDateTimePrototype {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
+        return JSTemporalPlainDateTime.create(context,
                 plainDateTime.getIsoDateTime().withTime(time), plainDateTime.getCalendarId());
     }
 
@@ -1101,7 +1101,7 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.year(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.year(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -1109,6 +1109,6 @@ public final class TemporalPlainDateTimePrototype {
         if (plainDateTime == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDatePrototype.yearOfWeek(context, TemporalPlainDateConstructor.createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
+        return TemporalPlainDatePrototype.yearOfWeek(context, JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId()), args);
     }
 }

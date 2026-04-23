@@ -81,24 +81,11 @@ public final class TemporalPlainDateConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = resolveTemporalPrototype(context, "PlainDate");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainDate");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainDate(context, isoDate, calendarId, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        JSObject prototype = getTemporalPrototype(context, "PlainDate");
-        return createPlainDate(context, isoDate, calendarId, prototype);
-    }
-
-    static JSTemporalPlainDate createPlainDate(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalPlainDate plainDate = new JSTemporalPlainDate(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainDate.setPrototype(prototype);
-        }
-        return plainDate;
+        return JSTemporalPlainDate.create(context, isoDate, calendarId, resolvedPrototype);
     }
 
     static JSValue dateFromFields(JSContext context, JSObject fields, JSValue options) {
@@ -296,7 +283,7 @@ public final class TemporalPlainDateConstructor {
         if (context.hasPendingException() || convertedIsoDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainDate(context, convertedIsoDate, calendarId);
+        return JSTemporalPlainDate.create(context, convertedIsoDate, calendarId);
     }
 
     static JSValue dateFromString(JSContext context, String input) {
@@ -329,7 +316,7 @@ public final class TemporalPlainDateConstructor {
             }
             annotationStart = input.indexOf('[', annotationEnd + 1);
         }
-        return createPlainDate(context, date, calendarId);
+        return JSTemporalPlainDate.create(context, date, calendarId);
     }
 
     /**
@@ -341,38 +328,6 @@ public final class TemporalPlainDateConstructor {
         return toTemporalDate(context, item, options);
     }
 
-    static JSObject getTemporalPrototype(JSContext context, String typeName) {
-        JSValue temporal = context.getGlobalObject().get(PropertyKey.fromString("Temporal"));
-        if (temporal instanceof JSObject temporalObj) {
-            JSValue constructor = temporalObj.get(PropertyKey.fromString(typeName));
-            if (constructor instanceof JSObject constructorObj) {
-                JSValue prototype = constructorObj.get(PropertyKey.PROTOTYPE);
-                if (prototype instanceof JSObject prototypeObj) {
-                    return prototypeObj;
-                }
-            }
-        }
-        return null;
-    }
-
-    static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
-        JSValue constructorNewTarget = context.getConstructorNewTarget();
-        if (constructorNewTarget instanceof JSObject constructorObject) {
-            JSValue constructorPrototype = constructorObject.get(PropertyKey.PROTOTYPE);
-            if (context.hasPendingException()) {
-                return null;
-            }
-            if (constructorPrototype instanceof JSObject) {
-                JSObject resolvedPrototype = context.getPrototypeFromConstructor(constructorObject, JSObject.NAME);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                return resolvedPrototype;
-            }
-        }
-        return getTemporalPrototype(context, typeName);
-    }
-
     /**
      * ToTemporalDate abstract operation — converts item to JSTemporalPlainDate.
      */
@@ -382,14 +337,14 @@ public final class TemporalPlainDateConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDate(context, plainDate.getIsoDate(), plainDate.getCalendarId());
+            return JSTemporalPlainDate.create(context, plainDate.getIsoDate(), plainDate.getCalendarId());
         }
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDate(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
+            return JSTemporalPlainDate.create(context, plainDateTime.getIsoDateTime().date(), plainDateTime.getCalendarId());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             TemporalUtils.getOverflowOption(context, options);
@@ -399,7 +354,7 @@ public final class TemporalPlainDateConstructor {
             IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
-            return createPlainDate(context, localDateTime.date(), zonedDateTime.getCalendarId());
+            return JSTemporalPlainDate.create(context, localDateTime.date(), zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
             return dateFromFields(context, itemObj, options);

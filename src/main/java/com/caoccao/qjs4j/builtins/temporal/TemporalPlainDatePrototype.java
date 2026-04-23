@@ -122,7 +122,7 @@ public final class TemporalPlainDatePrototype {
                 return JSUndefined.INSTANCE;
             }
         }
-        return TemporalPlainDateConstructor.createPlainDate(context, resultIsoDate, calendarId);
+        return JSTemporalPlainDate.create(context, resultIsoDate, calendarId);
     }
 
     static IsoDate addToIsoDate(IsoDate date, int years, int months, int weeks, int days) {
@@ -589,7 +589,7 @@ public final class TemporalPlainDatePrototype {
         IsoDate thisDate = plainDate.getIsoDate();
         IsoDate otherDate = other.getIsoDate();
         if (thisDate.compareTo(otherDate) == 0) {
-            return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
+            return JSTemporalDuration.create(context, TemporalDuration.ZERO);
         }
 
         TemporalDateDurationFields dateDifference = calendarDateUntil(
@@ -626,7 +626,7 @@ public final class TemporalPlainDatePrototype {
         if (sinceOperation) {
             resultDuration = resultDuration.negated();
         }
-        return TemporalDurationConstructor.createDuration(context, resultDuration);
+        return JSTemporalDuration.create(context, resultDuration);
     }
 
     private static boolean doesConceptualYearDateSurpassSecondDate(
@@ -1055,7 +1055,7 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context,
+        return JSTemporalPlainDateTime.create(context,
                 isoDate.atTime(time), plainDate.getCalendarId());
     }
 
@@ -1090,7 +1090,7 @@ public final class TemporalPlainDatePrototype {
         } else {
             plainYearMonthIsoDate = isoDate;
         }
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(
+        return JSTemporalPlainYearMonth.create(
                 context,
                 plainYearMonthIsoDate,
                 plainDate.getCalendarId());
@@ -1172,11 +1172,11 @@ public final class TemporalPlainDatePrototype {
             context.throwRangeError("Temporal error: Invalid time zone: " + timeZoneId);
             return JSUndefined.INSTANCE;
         }
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(
+        return JSTemporalZonedDateTime.create(
                 context,
                 epochNanoseconds,
                 timeZoneId,
@@ -1444,7 +1444,7 @@ public final class TemporalPlainDatePrototype {
             context.throwTypeError("Temporal error: Date argument must be object or string.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateConstructor.createPlainDate(
+        return JSTemporalPlainDate.create(
                 context,
                 mergedDate.getIsoDate(),
                 calendarId);
@@ -1463,7 +1463,7 @@ public final class TemporalPlainDatePrototype {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainDateConstructor.createPlainDate(context, plainDate.getIsoDate(), calendarId);
+        return JSTemporalPlainDate.create(context, plainDate.getIsoDate(), calendarId);
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {

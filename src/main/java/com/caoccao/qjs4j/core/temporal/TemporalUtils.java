@@ -33,6 +33,8 @@ public final class TemporalUtils {
     private static final LocalDate MINIMUM_TEMPORAL_DATE = LocalDate.of(-271821, 4, 19);
     private static final LocalDateTime MINIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
             -271821, 4, 20, 0, 0, 0, 0);
+    private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
+    private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
 
     private TemporalUtils() {
     }
@@ -159,6 +161,20 @@ public final class TemporalUtils {
         return stringValue.value();
     }
 
+    public static JSObject getTemporalPrototype(JSContext context, String typeName) {
+        JSValue temporal = context.getGlobalObject().get(PropertyKey.fromString("Temporal"));
+        if (temporal instanceof JSObject temporalObject) {
+            JSValue constructor = temporalObject.get(PropertyKey.fromString(typeName));
+            if (constructor instanceof JSObject constructorObject) {
+                JSValue prototype = constructorObject.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject prototypeObject) {
+                    return prototypeObject;
+                }
+            }
+        }
+        return null;
+    }
+
     public static boolean isDateTimeWithinTemporalRange(LocalDateTime dateTime) {
         return !dateTime.isBefore(MINIMUM_TEMPORAL_DATE_TIME) && !dateTime.isAfter(MAXIMUM_TEMPORAL_DATE_TIME);
     }
@@ -173,6 +189,11 @@ public final class TemporalUtils {
         }
         char signCharacter = timeZoneId.charAt(0);
         return signCharacter == '+' || signCharacter == '-' || signCharacter == '\u2212';
+    }
+
+    public static boolean isValidEpochNanoseconds(BigInteger epochNanoseconds) {
+        return epochNanoseconds.compareTo(NS_MIN_INSTANT) >= 0
+                && epochNanoseconds.compareTo(NS_MAX_INSTANT) <= 0;
     }
 
     public static int islamicDaysBeforeYear(int islamicYear) {
@@ -230,6 +251,24 @@ public final class TemporalUtils {
             throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
         }
         return sign * (hours * 3600 + minutes * 60);
+    }
+
+    public static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
+        JSValue constructorNewTarget = context.getConstructorNewTarget();
+        if (constructorNewTarget instanceof JSObject constructorObject) {
+            JSValue constructorPrototype = constructorObject.get(PropertyKey.PROTOTYPE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (constructorPrototype instanceof JSObject) {
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(constructorObject, JSObject.NAME);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                return resolvedPrototype;
+            }
+        }
+        return getTemporalPrototype(context, typeName);
     }
 
     public static int roundOffsetSecondsToMinute(int offsetSeconds) {
@@ -314,6 +353,21 @@ public final class TemporalUtils {
             return Long.MIN_VALUE;
         }
         return (long) numericValue;
+    }
+
+    public static JSObject toOptionalOptionsObject(
+            JSContext context,
+            JSValue optionsValue,
+            String invalidTypeMessage) {
+        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+            return null;
+        }
+        if (optionsValue instanceof JSObject optionsObject) {
+            return optionsObject;
+        } else {
+            context.throwTypeError(invalidTypeMessage);
+            return null;
+        }
     }
 
 }

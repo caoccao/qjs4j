@@ -98,24 +98,15 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainYearMonth");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainYearMonth");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainYearMonth(context, new IsoDate(isoYear, isoMonth, referenceDay), calendarId, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainYearMonth createPlainYearMonth(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainYearMonth");
-        return createPlainYearMonth(context, isoDate, calendarId, prototype);
-    }
-
-    static JSTemporalPlainYearMonth createPlainYearMonth(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalPlainYearMonth plainYearMonth = new JSTemporalPlainYearMonth(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainYearMonth.setPrototype(prototype);
-        }
-        return plainYearMonth;
+        return JSTemporalPlainYearMonth.create(
+                context,
+                new IsoDate(isoYear, isoMonth, referenceDay),
+                calendarId,
+                resolvedPrototype);
     }
 
     /**
@@ -129,7 +120,7 @@ public final class TemporalPlainYearMonthConstructor {
             if (context.hasPendingException() || overflow == null) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainYearMonth(context, plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+            return JSTemporalPlainYearMonth.create(context, plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
         }
         return toTemporalYearMonth(context, item, options);
     }
@@ -220,7 +211,7 @@ public final class TemporalPlainYearMonthConstructor {
 
     public static JSValue toTemporalYearMonth(JSContext context, JSValue item, JSValue options) {
         if (item instanceof JSTemporalPlainYearMonth plainYearMonth) {
-            return createPlainYearMonth(context, plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
+            return JSTemporalPlainYearMonth.create(context, plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
             return yearMonthFromFields(context, itemObj, options);
@@ -249,7 +240,7 @@ public final class TemporalPlainYearMonthConstructor {
     }
 
     static JSValue yearMonthFromFields(JSContext context, JSObject fields, JSValue options) {
-        JSObject plainYearMonthPrototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainYearMonth");
+        JSObject plainYearMonthPrototype = TemporalUtils.getTemporalPrototype(context, "PlainYearMonth");
         if (fields == plainYearMonthPrototype) {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
@@ -410,7 +401,7 @@ public final class TemporalPlainYearMonthConstructor {
                     context.throwRangeError("Temporal error: Invalid ISO date.");
                     return JSUndefined.INSTANCE;
                 }
-                return createPlainYearMonth(context, new IsoDate(year, resolvedIsoMonth, 1), calendarId);
+                return JSTemporalPlainYearMonth.create(context, new IsoDate(year, resolvedIsoMonth, 1), calendarId);
             }
             if (resolvedIsoMonth < 1) {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
@@ -423,7 +414,7 @@ public final class TemporalPlainYearMonthConstructor {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            return createPlainYearMonth(context, new IsoDate(year, resolvedIsoMonth, 1), calendarId);
+            return JSTemporalPlainYearMonth.create(context, new IsoDate(year, resolvedIsoMonth, 1), calendarId);
         }
 
         int requestedMonthNumber = monthFromProperty != null
@@ -446,7 +437,7 @@ public final class TemporalPlainYearMonthConstructor {
                 1,
                 overflow);
         if (!context.hasPendingException() && convertedIsoDate != null) {
-            return createPlainYearMonth(context, convertedIsoDate, calendarId);
+            return JSTemporalPlainYearMonth.create(context, convertedIsoDate, calendarId);
         }
 
         JSValue pendingException = context.getPendingException();
@@ -459,7 +450,7 @@ public final class TemporalPlainYearMonthConstructor {
                         && constrainedIsoMonth <= 12
                         && isValidIsoYearMonth(year, constrainedIsoMonth)) {
                     context.clearPendingException();
-                    return createPlainYearMonth(context, new IsoDate(year, constrainedIsoMonth, 1), calendarId);
+                    return JSTemporalPlainYearMonth.create(context, new IsoDate(year, constrainedIsoMonth, 1), calendarId);
                 }
             }
             context.clearPendingException();
@@ -468,7 +459,7 @@ public final class TemporalPlainYearMonthConstructor {
                     year,
                     monthCodeFromProperty);
             if (boundaryIsoDate != null) {
-                return createPlainYearMonth(context, boundaryIsoDate, calendarId);
+                return JSTemporalPlainYearMonth.create(context, boundaryIsoDate, calendarId);
             }
         }
         if (pendingException != null) {
@@ -477,7 +468,7 @@ public final class TemporalPlainYearMonthConstructor {
         if (convertedIsoDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainYearMonth(context, convertedIsoDate, calendarId);
+        return JSTemporalPlainYearMonth.create(context, convertedIsoDate, calendarId);
     }
 
     static JSValue yearMonthFromString(JSContext context, String input) {
@@ -503,7 +494,7 @@ public final class TemporalPlainYearMonthConstructor {
             referenceDay = parsedDate.day();
         }
 
-        return createPlainYearMonth(
+        return JSTemporalPlainYearMonth.create(
                 context,
                 new IsoDate(parsedYearMonthDate.year(), parsedYearMonthDate.month(), referenceDay),
                 calendar);

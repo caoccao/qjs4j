@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.TemporalDuration;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 public final class JSTemporalDuration extends JSObject {
     private final TemporalDuration duration;
@@ -24,6 +25,19 @@ public final class JSTemporalDuration extends JSObject {
     public JSTemporalDuration(JSContext context, TemporalDuration duration) {
         super(context);
         this.duration = duration;
+    }
+
+    public static JSTemporalDuration create(JSContext context, TemporalDuration duration) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "Duration");
+        return create(context, duration, prototype);
+    }
+
+    public static JSTemporalDuration create(JSContext context, TemporalDuration duration, JSObject prototype) {
+        JSTemporalDuration temporalDuration = new JSTemporalDuration(context, duration);
+        if (prototype != null) {
+            temporalDuration.setPrototype(prototype);
+        }
+        return temporalDuration;
     }
 
     public TemporalDuration getDuration() {

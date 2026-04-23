@@ -167,7 +167,7 @@ public final class TemporalPlainYearMonthPrototype {
             return JSUndefined.INSTANCE;
         }
 
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(context, resultDate, calendarId);
+        return JSTemporalPlainYearMonth.create(context, resultDate, calendarId);
     }
 
 
@@ -406,7 +406,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (thisIsoDate.year() == otherIsoDate.year()
                 && thisIsoDate.month() == otherIsoDate.month()
                 && thisIsoDate.day() == otherIsoDate.day()) {
-            return TemporalDurationConstructor.createDuration(context, TemporalDuration.ZERO);
+            return JSTemporalDuration.create(context, TemporalDuration.ZERO);
         }
 
         IsoDate thisDifferenceDate = createDifferenceIsoDate(context, plainYearMonth);
@@ -476,7 +476,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (sinceOperation) {
             resultDuration = resultDuration.negated();
         }
-        return TemporalDurationConstructor.createDuration(context, resultDuration);
+        return JSTemporalDuration.create(context, resultDuration);
     }
 
     private static boolean doesConceptualYearDateSurpassTarget(
@@ -1005,7 +1005,7 @@ public final class TemporalPlainYearMonthPrototype {
                 return JSUndefined.INSTANCE;
             }
             if (midMonthIsoDate != null) {
-                plainYearMonthForFormatting = TemporalPlainYearMonthConstructor.createPlainYearMonth(
+                plainYearMonthForFormatting = JSTemporalPlainYearMonth.create(
                         context,
                         midMonthIsoDate,
                         plainYearMonth.getCalendarId());
@@ -1318,7 +1318,7 @@ public final class TemporalPlainYearMonthPrototype {
             context.throwTypeError("Temporal error: year argument must be an object.");
             return JSUndefined.INSTANCE;
         }
-        return TemporalPlainYearMonthConstructor.createPlainYearMonth(
+        return JSTemporalPlainYearMonth.create(
                 context,
                 mergedYearMonth.getIsoDate(),
                 calendarId);

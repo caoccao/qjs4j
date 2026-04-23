@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
+
 import java.math.BigInteger;
 
 public final class JSTemporalInstant extends JSObject {
@@ -24,6 +26,19 @@ public final class JSTemporalInstant extends JSObject {
     public JSTemporalInstant(JSContext context, BigInteger epochNanoseconds) {
         super(context);
         this.epochNanoseconds = epochNanoseconds;
+    }
+
+    public static JSTemporalInstant create(JSContext context, BigInteger epochNanoseconds) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "Instant");
+        return create(context, epochNanoseconds, prototype);
+    }
+
+    public static JSTemporalInstant create(JSContext context, BigInteger epochNanoseconds, JSObject prototype) {
+        JSTemporalInstant instant = new JSTemporalInstant(context, epochNanoseconds);
+        if (prototype != null) {
+            instant.setPrototype(prototype);
+        }
+        return instant;
     }
 
     public BigInteger getEpochNanoseconds() {
