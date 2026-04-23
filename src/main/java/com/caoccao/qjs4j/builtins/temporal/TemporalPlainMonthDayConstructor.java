@@ -315,7 +315,7 @@ public final class TemporalPlainMonthDayConstructor {
             if (parsedMonthCode != null) {
                 monthCodeFromProperty = formatMonthCode(parsedMonthCode);
             }
-            IsoDate resolvedIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+            IsoDate resolvedIsoDate = IsoDate.calendarDateToIsoDate(
                     context,
                     calendarId,
                     resolutionYear,

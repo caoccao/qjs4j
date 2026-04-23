@@ -428,7 +428,7 @@ public final class TemporalPlainYearMonthConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        IsoDate convertedIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(
                 context,
                 calendarId,
                 year,

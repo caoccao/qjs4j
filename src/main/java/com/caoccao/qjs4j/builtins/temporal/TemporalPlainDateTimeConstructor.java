@@ -321,7 +321,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
         Integer monthFromProperty = hasMonth ? month : null;
-        IsoDate resultDate = TemporalCalendarMath.calendarDateToIsoDate(
+        IsoDate resultDate = IsoDate.calendarDateToIsoDate(
                 context,
                 calendarId,
                 year,

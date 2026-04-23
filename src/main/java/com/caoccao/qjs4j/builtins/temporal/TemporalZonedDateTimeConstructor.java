@@ -186,7 +186,7 @@ public final class TemporalZonedDateTimeConstructor {
         int microsecond = propertyBagData.microsecond();
         int nanosecond = propertyBagData.nanosecond();
 
-        IsoDate isoDate = TemporalCalendarMath.calendarDateToIsoDate(
+        IsoDate isoDate = IsoDate.calendarDateToIsoDate(
                 context,
                 propertyBagData.calendarId(),
                 calendarYear,

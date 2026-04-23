@@ -272,7 +272,7 @@ public final class TemporalPlainDateConstructor {
             }
         }
         Integer monthFromProperty = hasMonth ? resolvedMonth : null;
-        IsoDate convertedIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+        IsoDate convertedIsoDate = IsoDate.calendarDateToIsoDate(
                 context,
                 calendarId,
                 year,

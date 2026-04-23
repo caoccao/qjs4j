@@ -52,9 +52,8 @@ final class TemporalZonedDateTimeArithmeticKernel {
                         durationRecord.days(),
                         overflow);
             } else {
-                addedDate = TemporalCalendarMath.addCalendarDate(
+                addedDate = localDateTime.date().addCalendarDate(
                         context,
-                        localDateTime.date(),
                         calendarId,
                         durationRecord.years(),
                         durationRecord.months(),

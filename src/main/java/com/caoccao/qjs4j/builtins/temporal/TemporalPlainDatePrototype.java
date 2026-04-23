@@ -109,9 +109,8 @@ public final class TemporalPlainDatePrototype {
                 context.throwRangeError("Temporal error: Invalid ISO date.");
                 return JSUndefined.INSTANCE;
             }
-            resultIsoDate = TemporalCalendarMath.addCalendarDate(
+            resultIsoDate = plainDate.getIsoDate().addCalendarDate(
                     context,
-                    plainDate.getIsoDate(),
                     calendarId,
                     durationRecord.years(),
                     durationRecord.months(),
@@ -222,9 +221,8 @@ public final class TemporalPlainDatePrototype {
                     0);
             return addDurationToDate(context, baseDate, durationRecord, "constrain");
         }
-        return TemporalCalendarMath.addCalendarDate(
+        return baseDate.addCalendarDate(
                 context,
-                baseDate,
                 calendarId,
                 dateDuration.years(),
                 dateDuration.months(),

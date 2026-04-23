@@ -53,9 +53,8 @@ public final class TemporalPlainYearMonthPrototype {
         if (calendarId == TemporalCalendarId.ISO8601) {
             return addDateDurationToPlainYearMonth(context, baseIsoDate, years, months, "constrain");
         }
-        return TemporalCalendarMath.addCalendarDate(
+        return baseIsoDate.addCalendarDate(
                 context,
-                baseIsoDate,
                 calendarId,
                 years,
                 months,
@@ -153,9 +152,8 @@ public final class TemporalPlainYearMonthPrototype {
                     durationRecord.months(),
                     overflow);
         } else {
-            resultDate = TemporalCalendarMath.addCalendarDate(
+            resultDate = isoDate.addCalendarDate(
                     context,
-                    isoDate,
                     calendarId,
                     durationRecord.years(),
                     durationRecord.months(),
@@ -993,7 +991,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth.getCalendarId() != TemporalCalendarId.ISO8601) {
             IsoCalendarDate calendarDateFields =
                     plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
-            IsoDate midMonthIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+            IsoDate midMonthIsoDate = IsoDate.calendarDateToIsoDate(
                     context,
                     plainYearMonth.getCalendarId(),
                     calendarDateFields.year(),

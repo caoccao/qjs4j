@@ -97,9 +97,8 @@ public final class TemporalPlainDateTimePrototype {
                     adjustedDays,
                     overflow);
         } else {
-            newDate = TemporalCalendarMath.addCalendarDate(
+            newDate = plainDateTime.getIsoDateTime().date().addCalendarDate(
                     context,
-                    plainDateTime.getIsoDateTime().date(),
                     calendarId,
                     durationRecord.years(),
                     durationRecord.months(),
