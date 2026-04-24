@@ -39,6 +39,20 @@ public final class TemporalUtils {
     private TemporalUtils() {
     }
 
+    public static boolean alexandrianLeapYear(int calendarYear) {
+        return Math.floorMod(calendarYear + 1, 4) == 0;
+    }
+
+    public static long alexandrianOrdinalDay(int calendarYear, int calendarMonth, int dayOfMonth) {
+        long yearValue = calendarYear;
+        long monthValue = calendarMonth;
+        long dayValue = dayOfMonth;
+        return 365L * (yearValue - 1L)
+                + Math.floorDiv(yearValue, 4L)
+                + 30L * (monthValue - 1L)
+                + (dayValue - 1L);
+    }
+
     /**
      * Generic receiver type check for Temporal prototype methods.
      * Returns the cast value, or null after throwing TypeError.
@@ -73,6 +87,14 @@ public final class TemporalUtils {
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
         return null;
+    }
+
+    public static long floorMod(long value, long modulus) {
+        long result = value % modulus;
+        if (result < 0L) {
+            result += modulus;
+        }
+        return result;
     }
 
     /**

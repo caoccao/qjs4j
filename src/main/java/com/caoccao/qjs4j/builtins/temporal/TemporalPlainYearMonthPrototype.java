@@ -235,7 +235,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.daysInMonth(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
+        return JSNumber.of(plainYearMonth.getIsoDate().daysInMonth(plainYearMonth.getCalendarId()));
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -243,7 +243,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.daysInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
+        return JSNumber.of(plainYearMonth.getIsoDate().daysInYear(plainYearMonth.getCalendarId()));
     }
 
     private static TemporalDurationYearMonth differenceCalendarYearMonth(

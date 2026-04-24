@@ -454,8 +454,7 @@ public final class TemporalPlainYearMonthConstructor {
                 }
             }
             context.clearPendingException();
-            IsoDate boundaryIsoDate = TemporalCalendarMath.findBoundaryIsoDateForYearMonth(
-                    calendarId,
+            IsoDate boundaryIsoDate = calendarId.findBoundaryIsoDateForYearMonth(
                     year,
                     monthCodeFromProperty);
             if (boundaryIsoDate != null) {

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import java.math.BigInteger;
+import java.util.Set;
 
 /**
  * Centralized constants for the Temporal implementation.
@@ -78,11 +79,10 @@ public final class TemporalConstants {
 
     // ── Absolute time duration limit ────────────────────────────────────────
     public static final long SOLAR_DAY_SECONDS = 86_400L;
-    public static final int[] UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = {
+    public static final Set<Integer> UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469 = Set.of(
             1390, 1392, 1397, 1399, 1403, 1405, 1406, 1411, 1412, 1414,
             1418, 1420, 1425, 1426, 1428, 1433, 1435, 1439, 1441, 1443,
-            1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469
-    };
+            1447, 1448, 1451, 1454, 1455, 1457, 1462, 1463, 1467, 1469);
 
     private TemporalConstants() {
     }

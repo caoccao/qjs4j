@@ -504,7 +504,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.dayOfYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
+        return JSNumber.of(plainDate.getIsoDate().dayOfYear(plainDate.getCalendarId()));
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -512,7 +512,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.daysInMonth(plainDate.getIsoDate(), plainDate.getCalendarId()));
+        return JSNumber.of(plainDate.getIsoDate().daysInMonth(plainDate.getCalendarId()));
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -528,7 +528,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.daysInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
+        return JSNumber.of(plainDate.getIsoDate().daysInYear(plainDate.getCalendarId()));
     }
 
     static TemporalDuration differenceCalendarDates(
@@ -1419,8 +1419,7 @@ public final class TemporalPlainDatePrototype {
                 return JSUndefined.INSTANCE;
             }
             if (mergedMonthCodeValue instanceof JSString mergedMonthCodeString) {
-                String constrainedMonthCode = TemporalCalendarMath.constrainMonthCode(
-                        calendarId,
+                String constrainedMonthCode = calendarId.constrainMonthCode(
                         year,
                         mergedMonthCodeString.value());
                 if (constrainedMonthCode != null
