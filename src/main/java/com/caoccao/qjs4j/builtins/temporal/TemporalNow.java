@@ -16,10 +16,7 @@
 
 package com.caoccao.qjs4j.builtins.temporal;
 
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDateTime;
 import com.caoccao.qjs4j.core.temporal.TemporalCalendarId;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
@@ -65,7 +62,7 @@ public final class TemporalNow {
 
     public static JSValue instant(JSContext context, JSValue thisArg, JSValue[] args) {
         BigInteger epochNs = systemEpochNs();
-        return TemporalInstantConstructor.createInstant(context, epochNs);
+        return JSTemporalInstant.create(context, epochNs);
     }
 
     public static JSValue plainDateISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -75,7 +72,7 @@ public final class TemporalNow {
         }
         BigInteger epochNs = systemEpochNs();
         IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return TemporalPlainDateConstructor.createPlainDate(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
+        return JSTemporalPlainDate.create(context, isoDateTime.date(), TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -85,7 +82,7 @@ public final class TemporalNow {
         }
         BigInteger epochNs = systemEpochNs();
         IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return TemporalPlainDateTimeConstructor.createPlainDateTime(context, isoDateTime, TemporalCalendarId.ISO8601);
+        return JSTemporalPlainDateTime.create(context, isoDateTime, TemporalCalendarId.ISO8601);
     }
 
     public static JSValue plainTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -95,7 +92,7 @@ public final class TemporalNow {
         }
         BigInteger epochNs = systemEpochNs();
         IsoDateTime isoDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(epochNs, timeZoneId);
-        return TemporalPlainTimeConstructor.createPlainTime(context, isoDateTime.time());
+        return JSTemporalPlainTime.create(context, isoDateTime.time());
     }
 
     private static BigInteger systemEpochNs() {
@@ -105,7 +102,7 @@ public final class TemporalNow {
     }
 
     public static JSValue timeZoneId(JSContext context, JSValue thisArg, JSValue[] args) {
-        return new JSString(java.time.ZoneId.systemDefault().getId());
+        return new JSString(ZoneId.systemDefault().getId());
     }
 
     public static JSValue zonedDateTimeISO(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -114,6 +111,6 @@ public final class TemporalNow {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = systemEpochNs();
-        return TemporalZonedDateTimeConstructor.createZonedDateTime(context, epochNs, timeZoneId, TemporalCalendarId.ISO8601);
+        return JSTemporalZonedDateTime.create(context, epochNs, timeZoneId, TemporalCalendarId.ISO8601);
     }
 }

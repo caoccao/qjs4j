@@ -16,6 +16,10 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.core.JSContext;
+
+import java.math.BigInteger;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
@@ -65,22 +69,164 @@ public enum TemporalUnit {
         });
     }
 
-    /**
-     * Returns the larger of two unit strings (smaller rank = larger unit).
-     * If both strings are invalid, returns the left unit.
-     */
-    public static String larger(String leftUnit, String rightUnit) {
-        return rank(leftUnit) > rank(rightUnit) ? rightUnit : leftUnit;
+    private static BigInteger nanosecondsBetween(
+            JSContext context,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
+        }
+
+        BigInteger startEpochNanoseconds;
+        if (startDateTime.equals(relativeToOption.startDateTime())) {
+            startEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            startEpochNanoseconds =
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, startDateTime);
+        }
+        if (context.hasPendingException() || startEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        BigInteger endEpochNanoseconds;
+        if (endDateTime.equals(relativeToOption.startDateTime())) {
+            endEpochNanoseconds = relativeToOption.epochNanoseconds();
+        } else {
+            endEpochNanoseconds =
+                    IsoDateTime.zonedLocalDateTimeToEpochNanoseconds(context, relativeToOption, endDateTime);
+        }
+        if (context.hasPendingException() || endEpochNanoseconds == null) {
+            return BigInteger.ZERO;
+        }
+
+        return endEpochNanoseconds.subtract(startEpochNanoseconds);
+    }
+
+    public LocalDateTime addCalendarUnits(LocalDateTime startDateTime, long amount) {
+        if (this == YEAR) {
+            return startDateTime.plusYears(amount);
+        } else if (this == MONTH) {
+            return startDateTime.plusMonths(amount);
+        } else if (this == WEEK) {
+            return startDateTime.plusWeeks(amount);
+        } else {
+            return startDateTime.plusDays(amount);
+        }
+    }
+
+    public LocalDateTime addFixedUnits(LocalDateTime startDateTime, long amount) {
+        if (this == WEEK) {
+            return startDateTime.plusWeeks(amount);
+        } else {
+            return startDateTime.plusDays(amount);
+        }
     }
 
     /**
-     * Returns the rank for a unit string, or {@code UNKNOWN_RANK} if unrecognized.
-     * Suitable for comparison: smaller rank = larger unit.
+     * Returns the coarser (larger) unit between this unit and another parsed unit.
      */
-    public static int rank(String unitText) {
-        return fromString(unitText)
-                .map(unit -> unit.rank)
-                .orElse(UNKNOWN_RANK);
+    public TemporalUnit coarserDurationUnit(TemporalUnit otherUnit) {
+        if (rank <= otherUnit.rank) {
+            return this;
+        } else {
+            return otherUnit;
+        }
+    }
+
+    public long estimateCalendarUnitCount(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        long dayDifference = endDateTime.toLocalDate().toEpochDay() - startDateTime.toLocalDate().toEpochDay();
+        if (this == DAY) {
+            return dayDifference;
+        } else if (this == WEEK) {
+            return dayDifference / 7L;
+        }
+
+        long yearDifference = (long) endDateTime.getYear() - startDateTime.getYear();
+        if (this == YEAR) {
+            return yearDifference;
+        }
+
+        long monthDifference = (long) endDateTime.getMonthValue() - startDateTime.getMonthValue();
+        return yearDifference * 12L + monthDifference;
+    }
+
+    /**
+     * Returns the maximum valid rounding increment for sub-day difference rounding.
+     * hour -> 24, minute/second -> 60, millisecond/microsecond/nanosecond -> 1000.
+     * Returns -1 for non-sub-day units.
+     */
+    public long getMaximumSubDayIncrement() {
+        return switch (this) {
+            case HOUR -> 24L;
+            case MINUTE, SECOND -> 60L;
+            case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;
+            default -> -1L;
+        };
+    }
+
+    /**
+     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY.
+     * Returns 0 for YEAR, MONTH, WEEK.
+     */
+    public long getNanosecondFactor() {
+        return switch (this) {
+            case DAY -> TemporalConstants.DAY_NANOSECONDS;
+            case HOUR -> TemporalConstants.HOUR_NANOSECONDS;
+            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> 1L;
+            default -> 0L;
+        };
+    }
+
+    /**
+     * Returns the number of this unit per solar day (for Instant rounding).
+     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
+     */
+    public long getSolarDayDivisor() {
+        return switch (this) {
+            case DAY -> 1L;
+            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
+            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
+            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
+            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
+            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
+            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
+            default -> -1L;
+        };
+    }
+
+    /**
+     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
+     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
+     */
+    public int getStringFractionalSecondDigits() {
+        return switch (this) {
+            case SECOND -> 0;
+            case MILLISECOND -> 3;
+            case MICROSECOND -> 6;
+            case NANOSECOND -> 9;
+            default -> 0;
+        };
+    }
+
+    /**
+     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
+     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
+     * Returns 1 for other units.
+     */
+    public long getStringRoundingIncrementNanoseconds() {
+        return switch (this) {
+            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
+            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
+            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
+            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
+            case NANOSECOND -> 1L;
+            default -> 1L;
+        };
     }
 
     /**
@@ -112,27 +258,143 @@ public enum TemporalUnit {
     }
 
     /**
-     * Returns the JS-canonical singular name (e.g. "year", "nanosecond").
+     * Validates rounding increment constraints for a unit-specific Temporal rounding operation.
+     * Non-time units do not impose an increment bound here.
      */
-    public String jsName() {
-        return jsName;
+    public boolean isValidIncrement(long roundingIncrement) {
+        if (!isTimeUnit()) {
+            return true;
+        }
+        long maximumIncrement = getMaximumSubDayIncrement();
+        if (maximumIncrement <= 0L) {
+            return true;
+        } else {
+            return roundingIncrement < maximumIncrement && maximumIncrement % roundingIncrement == 0L;
+        }
     }
 
-    /**
-     * Returns the nanosecond factor as a long for time units (HOUR through NANOSECOND) and DAY.
-     * Returns 0 for YEAR, MONTH, WEEK.
-     */
-    public long nanosecondFactorLong() {
-        return switch (this) {
-            case DAY -> TemporalConstants.DAY_NANOSECONDS;
-            case HOUR -> TemporalConstants.HOUR_NANOSECONDS;
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 0L;
-        };
+    public long moveByWholeCalendarUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+        if (!endDateTime.isBefore(startDateTime)) {
+            while (boundaryDateTime.isAfter(endDateTime)) {
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount + 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                if (nextDateTime.isAfter(endDateTime)) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        } else {
+            while (boundaryDateTime.isBefore(endDateTime)) {
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount - 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                if (nextDateTime.isBefore(endDateTime)) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        }
+        return unitCount;
+    }
+
+    public long moveByWholeCalendarUnitsWithRelativeTo(
+            JSContext context,
+            LocalDateTime startDateTime,
+            LocalDateTime endDateTime,
+            TemporalRelativeToOption relativeToOption) {
+        if (relativeToOption == null || !relativeToOption.zoned()) {
+            return moveByWholeCalendarUnits(startDateTime, endDateTime);
+        }
+
+        BigInteger startToEndNanoseconds = nanosecondsBetween(context, startDateTime, endDateTime, relativeToOption);
+        if (context.hasPendingException()) {
+            return 0L;
+        }
+
+        int direction = startToEndNanoseconds.signum();
+        long unitCount = estimateCalendarUnitCount(startDateTime, endDateTime);
+        LocalDateTime boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+        if (direction >= 0) {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds =
+                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (boundaryToEndNanoseconds.signum() >= 0) {
+                    break;
+                }
+                unitCount--;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount + 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (nextToEndNanoseconds.signum() < 0) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        } else {
+            while (true) {
+                BigInteger boundaryToEndNanoseconds =
+                        nanosecondsBetween(context, boundaryDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (boundaryToEndNanoseconds.signum() < 0
+                        || (boundaryToEndNanoseconds.signum() == 0 && boundaryDateTime.equals(endDateTime))) {
+                    break;
+                }
+                unitCount++;
+                boundaryDateTime = addCalendarUnits(startDateTime, unitCount);
+            }
+            while (true) {
+                long nextUnitCount = unitCount - 1L;
+                LocalDateTime nextDateTime = addCalendarUnits(startDateTime, nextUnitCount);
+                BigInteger nextToEndNanoseconds = nanosecondsBetween(context, nextDateTime, endDateTime, relativeToOption);
+                if (context.hasPendingException()) {
+                    return unitCount;
+                }
+                if (nextToEndNanoseconds.signum() > 0
+                        || (nextToEndNanoseconds.signum() == 0 && !nextDateTime.equals(endDateTime))) {
+                    break;
+                }
+                unitCount = nextUnitCount;
+                boundaryDateTime = nextDateTime;
+            }
+        }
+        return unitCount;
+    }
+
+    public long moveByWholeFixedUnits(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        BigInteger unitNanoseconds;
+        if (this == WEEK) {
+            unitNanoseconds = TemporalConstants.BI_WEEK_NANOSECONDS;
+        } else if (this == DAY) {
+            unitNanoseconds = TemporalConstants.BI_DAY_NANOSECONDS;
+        } else {
+            return 0L;
+        }
+
+        BigInteger deltaNanoseconds = TemporalUtils.nanosecondsBetween(startDateTime, endDateTime);
+        return deltaNanoseconds.divide(unitNanoseconds).longValue();
     }
 
     public int rank() {
@@ -144,52 +406,5 @@ public enum TemporalUnit {
      */
     public boolean requiresRelativeTo() {
         return rank <= WEEK.rank;
-    }
-
-    /**
-     * Returns the number of this unit per solar day (for Instant rounding).
-     * Only valid for DAY through NANOSECOND. Returns -1 for YEAR, MONTH, WEEK.
-     */
-    public long solarDayDivisor() {
-        return switch (this) {
-            case DAY -> 1L;
-            case HOUR -> TemporalConstants.SOLAR_DAY_HOURS;
-            case MINUTE -> TemporalConstants.SOLAR_DAY_MINUTES;
-            case SECOND -> TemporalConstants.SOLAR_DAY_SECONDS;
-            case MILLISECOND -> TemporalConstants.SOLAR_DAY_MILLISECONDS;
-            case MICROSECOND -> TemporalConstants.SOLAR_DAY_MICROSECONDS;
-            case NANOSECOND -> TemporalConstants.SOLAR_DAY_NANOSECONDS;
-            default -> -1L;
-        };
-    }
-
-    /**
-     * Returns fractional second digits implied by this smallestUnit in Temporal toString.
-     * second -> 0, millisecond -> 3, microsecond -> 6, nanosecond -> 9, others -> 0.
-     */
-    public int toStringFractionalSecondDigits() {
-        return switch (this) {
-            case SECOND -> 0;
-            case MILLISECOND -> 3;
-            case MICROSECOND -> 6;
-            case NANOSECOND -> 9;
-            default -> 0;
-        };
-    }
-
-    /**
-     * Returns nanoseconds for one increment of this smallestUnit in Temporal toString.
-     * minute -> 60e9, second -> 1e9, millisecond -> 1e6, microsecond -> 1e3, nanosecond -> 1.
-     * Returns 1 for other units.
-     */
-    public long toStringRoundingIncrementNanoseconds() {
-        return switch (this) {
-            case MINUTE -> TemporalConstants.MINUTE_NANOSECONDS;
-            case SECOND -> TemporalConstants.SECOND_NANOSECONDS;
-            case MILLISECOND -> TemporalConstants.MILLISECOND_NANOSECONDS;
-            case MICROSECOND -> TemporalConstants.MICROSECOND_NANOSECONDS;
-            case NANOSECOND -> 1L;
-            default -> 1L;
-        };
     }
 }

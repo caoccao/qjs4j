@@ -18,11 +18,39 @@ package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.math.BigInteger;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+
 /**
  * Shared utilities for Temporal types.
  */
 public final class TemporalUtils {
+    private static final LocalDate MAXIMUM_TEMPORAL_DATE = LocalDate.of(275760, 9, 13);
+    private static final LocalDateTime MAXIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
+            275760, 9, 13, 23, 59, 59, 999_999_999);
+    private static final LocalDate MINIMUM_TEMPORAL_DATE = LocalDate.of(-271821, 4, 19);
+    private static final LocalDateTime MINIMUM_TEMPORAL_DATE_TIME = LocalDateTime.of(
+            -271821, 4, 20, 0, 0, 0, 0);
+    private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
+    private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
+
     private TemporalUtils() {
+    }
+
+    public static boolean alexandrianLeapYear(int calendarYear) {
+        return Math.floorMod(calendarYear + 1, 4) == 0;
+    }
+
+    public static long alexandrianOrdinalDay(int calendarYear, int calendarMonth, int dayOfMonth) {
+        long yearValue = calendarYear;
+        long monthValue = calendarMonth;
+        long dayValue = dayOfMonth;
+        return 365L * (yearValue - 1L)
+                + Math.floorDiv(yearValue, 4L)
+                + 30L * (monthValue - 1L)
+                + (dayValue - 1L);
     }
 
     /**
@@ -59,6 +87,14 @@ public final class TemporalUtils {
             annotationStart = text.indexOf('[', annotationEnd + 1);
         }
         return null;
+    }
+
+    public static long floorMod(long value, long modulus) {
+        long result = value % modulus;
+        if (result < 0L) {
+            result += modulus;
+        }
+        return result;
     }
 
     /**
@@ -147,8 +183,55 @@ public final class TemporalUtils {
         return stringValue.value();
     }
 
+    public static JSObject getTemporalPrototype(JSContext context, String typeName) {
+        JSValue temporal = context.getGlobalObject().get(PropertyKey.fromString("Temporal"));
+        if (temporal instanceof JSObject temporalObject) {
+            JSValue constructor = temporalObject.get(PropertyKey.fromString(typeName));
+            if (constructor instanceof JSObject constructorObject) {
+                JSValue prototype = constructorObject.get(PropertyKey.PROTOTYPE);
+                if (prototype instanceof JSObject prototypeObject) {
+                    return prototypeObject;
+                }
+            }
+        }
+        return null;
+    }
+
+    public static boolean isDateTimeWithinTemporalRange(LocalDateTime dateTime) {
+        return !dateTime.isBefore(MINIMUM_TEMPORAL_DATE_TIME) && !dateTime.isAfter(MAXIMUM_TEMPORAL_DATE_TIME);
+    }
+
+    public static boolean isDateWithinTemporalRange(LocalDate date) {
+        return !date.isBefore(MINIMUM_TEMPORAL_DATE) && !date.isAfter(MAXIMUM_TEMPORAL_DATE);
+    }
+
+    public static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
+        if (timeZoneId == null || timeZoneId.isEmpty()) {
+            return false;
+        }
+        char signCharacter = timeZoneId.charAt(0);
+        return signCharacter == '+' || signCharacter == '-' || signCharacter == '\u2212';
+    }
+
+    public static boolean isValidEpochNanoseconds(BigInteger epochNanoseconds) {
+        return epochNanoseconds.compareTo(NS_MIN_INSTANT) >= 0
+                && epochNanoseconds.compareTo(NS_MAX_INSTANT) <= 0;
+    }
+
     public static int islamicDaysBeforeYear(int islamicYear) {
         return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
+    }
+
+    public static int islamicDaysInMonth(int islamicYear, int islamicMonth) {
+        if (islamicMonth < 1 || islamicMonth > 12) {
+            return 0;
+        }
+        if (islamicMonth == 12) {
+            long yearLength = islamicDaysBeforeYear(islamicYear + 1)
+                    - islamicDaysBeforeYear(islamicYear);
+            return (int) (yearLength - 325L);
+        }
+        return islamicMonth % 2 == 1 ? 30 : 29;
     }
 
     /**
@@ -179,11 +262,94 @@ public final class TemporalUtils {
         }
     }
 
+    public static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {
+        BigInteger startSeconds = BigInteger.valueOf(startDateTime.toEpochSecond(ZoneOffset.UTC));
+        BigInteger endSeconds = BigInteger.valueOf(endDateTime.toEpochSecond(ZoneOffset.UTC));
+        BigInteger secondDifference = endSeconds.subtract(startSeconds).multiply(TemporalConstants.BI_SECOND_NANOSECONDS);
+        long nanosecondDifference = endDateTime.getNano() - startDateTime.getNano();
+        return secondDifference.add(BigInteger.valueOf(nanosecondDifference));
+    }
+
+    public static int parseOffsetSecondsFromTimeZoneId(String timeZoneId) {
+        String normalizedTimeZoneId = timeZoneId.replace('\u2212', '-');
+        int sign = normalizedTimeZoneId.charAt(0) == '-' ? -1 : 1;
+        int hours;
+        int minutes;
+        if (normalizedTimeZoneId.length() == 6 && normalizedTimeZoneId.charAt(3) == ':') {
+            hours = Integer.parseInt(normalizedTimeZoneId.substring(1, 3));
+            minutes = Integer.parseInt(normalizedTimeZoneId.substring(4, 6));
+        } else if (normalizedTimeZoneId.length() == 5) {
+            hours = Integer.parseInt(normalizedTimeZoneId.substring(1, 3));
+            minutes = Integer.parseInt(normalizedTimeZoneId.substring(3, 5));
+        } else {
+            throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
+        }
+        return sign * (hours * 3600 + minutes * 60);
+    }
+
+    public static JSObject resolveTemporalPrototype(JSContext context, String typeName) {
+        JSValue constructorNewTarget = context.getConstructorNewTarget();
+        if (constructorNewTarget instanceof JSObject constructorObject) {
+            JSValue constructorPrototype = constructorObject.get(PropertyKey.PROTOTYPE);
+            if (context.hasPendingException()) {
+                return null;
+            }
+            if (constructorPrototype instanceof JSObject) {
+                JSObject resolvedPrototype = context.getPrototypeFromConstructor(constructorObject, JSObject.NAME);
+                if (context.hasPendingException()) {
+                    return null;
+                }
+                return resolvedPrototype;
+            }
+        }
+        return getTemporalPrototype(context, typeName);
+    }
+
+    public static int roundOffsetSecondsToMinute(int offsetSeconds) {
+        int sign = offsetSeconds < 0 ? -1 : 1;
+        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
+        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
+        int remainingSeconds = absoluteOffsetSeconds % 60;
+        if (remainingSeconds >= 30) {
+            absoluteOffsetMinutes++;
+        }
+        return sign * absoluteOffsetMinutes * 60;
+    }
+
     public static int toArithmeticPersianYear(int persianYear) {
         if (persianYear <= 0) {
             return persianYear - 1;
         }
         return persianYear;
+    }
+
+    public static BigInteger toBigIntegerFromIntegralDouble(double value) {
+        long bits = Double.doubleToRawLongBits(value);
+        boolean negative = (bits & (1L << 63)) != 0;
+        int exponentBits = (int) ((bits >>> 52) & 0x7FFL);
+        long mantissaBits = bits & ((1L << 52) - 1);
+
+        long significand;
+        int shift;
+        if (exponentBits == 0) {
+            significand = mantissaBits;
+            shift = -1074;
+        } else {
+            significand = (1L << 52) | mantissaBits;
+            shift = exponentBits - 1075;
+        }
+
+        BigInteger integerValue = BigInteger.valueOf(significand);
+        if (shift > 0) {
+            integerValue = integerValue.shiftLeft(shift);
+        } else if (shift < 0) {
+            integerValue = integerValue.shiftRight(-shift);
+        }
+
+        if (negative) {
+            return integerValue.negate();
+        }
+        return integerValue;
     }
 
     /**
@@ -221,6 +387,21 @@ public final class TemporalUtils {
             return Long.MIN_VALUE;
         }
         return (long) numericValue;
+    }
+
+    public static JSObject toOptionalOptionsObject(
+            JSContext context,
+            JSValue optionsValue,
+            String invalidTypeMessage) {
+        if (optionsValue instanceof JSUndefined || optionsValue == null) {
+            return null;
+        }
+        if (optionsValue instanceof JSObject optionsObject) {
+            return optionsObject;
+        } else {
+            context.throwTypeError(invalidTypeMessage);
+            return null;
+        }
     }
 
 }

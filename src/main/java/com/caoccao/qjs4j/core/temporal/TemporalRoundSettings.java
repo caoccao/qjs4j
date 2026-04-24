@@ -24,7 +24,8 @@ import com.caoccao.qjs4j.core.*;
  * The {@link #parse} factory method consolidates the duplicated round-option parsing
  * logic from PlainTime, PlainDateTime, and ZonedDateTime prototypes.
  */
-public record TemporalRoundSettings(String smallestUnit, long roundingIncrement, TemporalRoundingMode roundingMode) {
+public record TemporalRoundSettings(TemporalUnit smallestUnit, long roundingIncrement,
+                                    TemporalRoundingMode roundingMode) {
 
     private static String getRequiredStringOption(
             JSContext context, JSObject optionsObject, String optionName, String missingMessage) {
@@ -68,21 +69,6 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
         return integerIncrement;
     }
 
-    private static String getStringOption(JSContext context, JSObject optionsObject, String optionName, String defaultValue) {
-        JSValue optionValue = optionsObject.get(PropertyKey.fromString(optionName));
-        if (context.hasPendingException()) {
-            return null;
-        }
-        if (optionValue instanceof JSUndefined || optionValue == null) {
-            return defaultValue;
-        }
-        JSString optionText = JSTypeConversions.toString(context, optionValue);
-        if (context.hasPendingException() || optionText == null) {
-            return null;
-        }
-        return optionText.value();
-    }
-
     /**
      * Parses round options from a JS value (either a unit string or an options object).
      *
@@ -108,7 +94,7 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             if (context.hasPendingException()) {
                 return null;
             }
-            String roundingModeText = getStringOption(context, optionsObject, "roundingMode", "halfExpand");
+            String roundingModeText = TemporalUtils.getStringOption(context, optionsObject, "roundingMode", "halfExpand");
             if (context.hasPendingException() || roundingModeText == null) {
                 return null;
             }
@@ -128,23 +114,22 @@ public record TemporalRoundSettings(String smallestUnit, long roundingIncrement,
             return null;
         }
 
-        TemporalUnit parsedUnit = TemporalUnit.fromString(smallestUnitText).orElse(null);
-        if (parsedUnit == null
-                || parsedUnit.ordinal() < allowedMin.ordinal()
-                || parsedUnit.ordinal() > allowedMax.ordinal()) {
+        TemporalUnit smallestUnit = TemporalUnit.fromString(smallestUnitText).orElse(null);
+        if (smallestUnit == null
+                || smallestUnit.rank() < allowedMin.rank()
+                || smallestUnit.rank() > allowedMax.rank()) {
             context.throwRangeError("Temporal error: Invalid unit for rounding: " + smallestUnitText);
             return null;
         }
-        String smallestUnit = parsedUnit.jsName();
 
         // Validate rounding increment: DAY requires increment=1, time units have per-unit maximum
-        if (parsedUnit == TemporalUnit.DAY) {
+        if (smallestUnit == TemporalUnit.DAY) {
             if (roundingIncrement != 1L) {
                 context.throwRangeError("Temporal error: Invalid roundingIncrement option.");
                 return null;
             }
-        } else if (parsedUnit.isTimeUnit()) {
-            long maximumIncrement = switch (parsedUnit) {
+        } else if (smallestUnit.isTimeUnit()) {
+            long maximumIncrement = switch (smallestUnit) {
                 case HOUR -> 24L;
                 case MINUTE, SECOND -> 60L;
                 case MILLISECOND, MICROSECOND, NANOSECOND -> 1_000L;

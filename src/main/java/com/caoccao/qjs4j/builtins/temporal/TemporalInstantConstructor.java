@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.core.temporal.IsoDateTimeOffset;
 import com.caoccao.qjs4j.core.temporal.TemporalConstants;
 import com.caoccao.qjs4j.core.temporal.TemporalTimeZone;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 
 import java.math.BigInteger;
@@ -28,9 +29,6 @@ import java.math.BigInteger;
  * Implementation of Temporal.Instant constructor and static methods.
  */
 public final class TemporalInstantConstructor {
-
-    static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
-    static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
     private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
 
     private TemporalInstantConstructor() {
@@ -74,28 +72,15 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = bigInt.value();
-        if (!isValidEpochNanoseconds(epochNs)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "Instant");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "Instant");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createInstant(context, epochNs, resolvedPrototype);
-    }
-
-    public static JSTemporalInstant createInstant(JSContext context, BigInteger epochNs) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Instant");
-        return createInstant(context, epochNs, prototype);
-    }
-
-    static JSTemporalInstant createInstant(JSContext context, BigInteger epochNs, JSObject prototype) {
-        JSTemporalInstant instant = new JSTemporalInstant(context, epochNs);
-        if (prototype != null) {
-            instant.setPrototype(prototype);
-        }
-        return instant;
+        return JSTemporalInstant.create(context, epochNs, resolvedPrototype);
     }
 
     /**
@@ -120,11 +105,11 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = BigInteger.valueOf((long) epochMilliseconds).multiply(NS_PER_MS);
-        if (!isValidEpochNanoseconds(epochNs)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return createInstant(context, epochNs);
+        return JSTemporalInstant.create(context, epochNs);
     }
 
     /**
@@ -142,28 +127,24 @@ public final class TemporalInstantConstructor {
             return JSUndefined.INSTANCE;
         }
         BigInteger epochNs = bigInt.value();
-        if (!isValidEpochNanoseconds(epochNs)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return createInstant(context, epochNs);
-    }
-
-    static boolean isValidEpochNanoseconds(BigInteger epochNs) {
-        return epochNs.compareTo(NS_MIN_INSTANT) >= 0 && epochNs.compareTo(NS_MAX_INSTANT) <= 0;
+        return JSTemporalInstant.create(context, epochNs);
     }
 
     public static JSValue toTemporalInstant(JSContext context, JSValue item) {
         if (item instanceof JSTemporalInstant instant) {
-            return createInstant(context, instant.getEpochNanoseconds());
+            return JSTemporalInstant.create(context, instant.getEpochNanoseconds());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
-            return createInstant(context, zonedDateTime.getEpochNanoseconds());
+            return JSTemporalInstant.create(context, zonedDateTime.getEpochNanoseconds());
         }
 
         JSValue primitiveItem = item;
         if (item instanceof JSObject objectItem) {
-            JSObject instantPrototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Instant");
+            JSObject instantPrototype = TemporalUtils.getTemporalPrototype(context, "Instant");
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
@@ -189,11 +170,11 @@ public final class TemporalInstantConstructor {
                 parsed.date(),
                 parsed.time(),
                 parsed.offset().totalNanoseconds());
-        if (!isValidEpochNanoseconds(epochNs)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNs)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return JSUndefined.INSTANCE;
         }
-        return createInstant(context, epochNs);
+        return JSTemporalInstant.create(context, epochNs);
     }
 
     public static JSTemporalInstant toTemporalInstantObject(JSContext context, JSValue item) {

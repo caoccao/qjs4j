@@ -31,8 +31,131 @@ public record TemporalDuration(
         long milliseconds, long microseconds, long nanoseconds) {
     public static final TemporalDuration ZERO = new TemporalDuration(
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    private static final long FLOAT64_SAFE_INTEGER_MAX = 9_007_199_254_740_991L;
     private static final BigInteger NS_MAX_INSTANT = new BigInteger("8640000000000000000000");
     private static final BigInteger NS_MIN_INSTANT = new BigInteger("-8640000000000000000000");
+
+    public static TemporalDuration createBalance(BigInteger totalNanoseconds, TemporalUnit largestUnit) {
+        boolean negative = totalNanoseconds.signum() < 0;
+        if (negative) {
+            totalNanoseconds = totalNanoseconds.negate();
+        }
+
+        long days = 0L;
+        long hours = 0L;
+        long minutes = 0L;
+        long seconds = 0L;
+        long milliseconds = 0L;
+        long microseconds = 0L;
+        long nanoseconds = 0L;
+
+        switch (largestUnit) {
+            case DAY -> {
+                BigInteger[] dayDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_DAY_NANOSECONDS);
+                days = dayDivision[0].longValue();
+                BigInteger remainingNanoseconds = dayDivision[1];
+                BigInteger[] hourDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_HOUR_NANOSECONDS);
+                hours = hourDivision[0].longValue();
+                remainingNanoseconds = hourDivision[1];
+                BigInteger[] minuteDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
+                minutes = minuteDivision[0].longValue();
+                remainingNanoseconds = minuteDivision[1];
+                BigInteger[] secondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
+                seconds = secondDivision[0].longValue();
+                remainingNanoseconds = secondDivision[1];
+                BigInteger[] millisecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+                milliseconds = millisecondDivision[0].longValue();
+                remainingNanoseconds = millisecondDivision[1];
+                BigInteger[] microsecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            case HOUR -> {
+                BigInteger[] hourDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_HOUR_NANOSECONDS);
+                hours = hourDivision[0].longValue();
+                BigInteger remainingNanoseconds = hourDivision[1];
+                BigInteger[] minuteDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
+                minutes = minuteDivision[0].longValue();
+                remainingNanoseconds = minuteDivision[1];
+                BigInteger[] secondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
+                seconds = secondDivision[0].longValue();
+                remainingNanoseconds = secondDivision[1];
+                BigInteger[] millisecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+                milliseconds = millisecondDivision[0].longValue();
+                remainingNanoseconds = millisecondDivision[1];
+                BigInteger[] microsecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            case MINUTE -> {
+                BigInteger[] minuteDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_MINUTE_NANOSECONDS);
+                minutes = minuteDivision[0].longValue();
+                BigInteger remainingNanoseconds = minuteDivision[1];
+                BigInteger[] secondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
+                seconds = secondDivision[0].longValue();
+                remainingNanoseconds = secondDivision[1];
+                BigInteger[] millisecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+                milliseconds = millisecondDivision[0].longValue();
+                remainingNanoseconds = millisecondDivision[1];
+                BigInteger[] microsecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            case SECOND -> {
+                BigInteger[] secondDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
+                seconds = secondDivision[0].longValue();
+                BigInteger remainingNanoseconds = secondDivision[1];
+                BigInteger[] millisecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+                milliseconds = millisecondDivision[0].longValue();
+                remainingNanoseconds = millisecondDivision[1];
+                BigInteger[] microsecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            case MILLISECOND -> {
+                BigInteger[] millisecondDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_MILLISECOND_NANOSECONDS);
+                milliseconds = millisecondDivision[0].longValue();
+                BigInteger remainingNanoseconds = millisecondDivision[1];
+                BigInteger[] microsecondDivision = remainingNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            case MICROSECOND -> {
+                BigInteger[] microsecondDivision = totalNanoseconds.divideAndRemainder(TemporalConstants.BI_MICROSECOND_NANOSECONDS);
+                microseconds = microsecondDivision[0].longValue();
+                nanoseconds = microsecondDivision[1].longValue();
+            }
+            default -> {
+                nanoseconds = totalNanoseconds.longValue();
+            }
+        }
+
+        if (negative) {
+            days = -days;
+            hours = -hours;
+            minutes = -minutes;
+            seconds = -seconds;
+            milliseconds = -milliseconds;
+            microseconds = -microseconds;
+            nanoseconds = -nanoseconds;
+        }
+
+        return new TemporalDuration(0, 0, 0, days, hours, minutes, seconds,
+                milliseconds, microseconds, nanoseconds);
+    }
+
+    public static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
+        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
+        return totalNanoseconds.abs().compareTo(TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
+    }
+
+    private static boolean isFloat64RepresentableLong(long value) {
+        if (value >= -FLOAT64_SAFE_INTEGER_MAX && value <= FLOAT64_SAFE_INTEGER_MAX) {
+            return true;
+        } else {
+            return (long) ((double) value) == value;
+        }
+    }
 
     public static TemporalDuration parseDurationString(JSContext context, String input) {
         if (input == null || input.isEmpty()) {
@@ -144,6 +267,89 @@ public record TemporalDuration(
         }
     }
 
+    public String formatWithPrecision(TemporalDurationToStringOptions options) {
+        if (options.precisionAuto()) {
+            return toString();
+        }
+
+        boolean negative = sign() < 0;
+        BigInteger yearsValue = BigInteger.valueOf(years).abs();
+        BigInteger monthsValue = BigInteger.valueOf(months).abs();
+        BigInteger weeksValue = BigInteger.valueOf(weeks).abs();
+        BigInteger daysValue = BigInteger.valueOf(days).abs();
+        BigInteger hoursValue = BigInteger.valueOf(hours).abs();
+        BigInteger minutesValue = BigInteger.valueOf(minutes).abs();
+        BigInteger secondsValue = BigInteger.valueOf(seconds).abs();
+        BigInteger millisecondsValue = BigInteger.valueOf(milliseconds).abs();
+        BigInteger microsecondsValue = BigInteger.valueOf(microseconds).abs();
+        BigInteger nanosecondsValue = BigInteger.valueOf(nanoseconds).abs();
+
+        BigInteger totalSubsecondNanoseconds = millisecondsValue.multiply(TemporalConstants.BI_MILLISECOND_NANOSECONDS)
+                .add(microsecondsValue.multiply(TemporalConstants.BI_MICROSECOND_NANOSECONDS))
+                .add(nanosecondsValue);
+        BigInteger[] secondCarryAndRemainder = totalSubsecondNanoseconds.divideAndRemainder(TemporalConstants.BI_SECOND_NANOSECONDS);
+        BigInteger secondsWithCarry = secondsValue.add(secondCarryAndRemainder[0]);
+        BigInteger subsecondNanosecondsRemainder = secondCarryAndRemainder[1];
+
+        StringBuilder stringBuilder = new StringBuilder();
+        if (negative) {
+            stringBuilder.append('-');
+        }
+        stringBuilder.append('P');
+        if (yearsValue.signum() != 0) {
+            stringBuilder.append(yearsValue).append('Y');
+        }
+        if (monthsValue.signum() != 0) {
+            stringBuilder.append(monthsValue).append('M');
+        }
+        if (weeksValue.signum() != 0) {
+            stringBuilder.append(weeksValue).append('W');
+        }
+        if (daysValue.signum() != 0) {
+            stringBuilder.append(daysValue).append('D');
+        }
+
+        stringBuilder.append('T');
+        if (hoursValue.signum() != 0) {
+            stringBuilder.append(hoursValue).append('H');
+        }
+        if (minutesValue.signum() != 0) {
+            stringBuilder.append(minutesValue).append('M');
+        }
+        stringBuilder.append(secondsWithCarry);
+        if (options.fractionalSecondDigits() > 0) {
+            String fractionalPart = String.format(
+                    Locale.ROOT,
+                    "%09d",
+                    subsecondNanosecondsRemainder.intValue());
+            stringBuilder.append('.').append(fractionalPart, 0, options.fractionalSecondDigits());
+        }
+        stringBuilder.append('S');
+        return stringBuilder.toString();
+    }
+
+    public boolean hasAnyDateUnits() {
+        return years != 0
+                || months != 0
+                || weeks != 0
+                || days != 0;
+    }
+
+    public boolean hasCalendarUnits() {
+        return years != 0
+                || months != 0
+                || weeks != 0;
+    }
+
+    public boolean hasTimeUnits() {
+        return hours != 0
+                || minutes != 0
+                || seconds != 0
+                || milliseconds != 0
+                || microseconds != 0
+                || nanoseconds != 0;
+    }
+
     public boolean isBlank() {
         return years == 0 && months == 0 && weeks == 0 && days == 0 &&
                 hours == 0 && minutes == 0 && seconds == 0 &&
@@ -161,11 +367,84 @@ public record TemporalDuration(
         return !hasPositive || !hasNegative;
     }
 
+    public TemporalUnit largestDayTimeUnit() {
+        if (days != 0L) {
+            return TemporalUnit.DAY;
+        } else if (hours != 0L) {
+            return TemporalUnit.HOUR;
+        } else if (minutes != 0L) {
+            return TemporalUnit.MINUTE;
+        } else if (seconds != 0L) {
+            return TemporalUnit.SECOND;
+        } else if (milliseconds != 0L) {
+            return TemporalUnit.MILLISECOND;
+        } else if (microseconds != 0L) {
+            return TemporalUnit.MICROSECOND;
+        } else if (nanoseconds != 0L) {
+            return TemporalUnit.NANOSECOND;
+        } else {
+            return TemporalUnit.SECOND;
+        }
+    }
+
+    public TemporalUnit largestUnitOfDuration() {
+        if (years != 0L) {
+            return TemporalUnit.YEAR;
+        } else if (months != 0L) {
+            return TemporalUnit.MONTH;
+        } else if (weeks != 0L) {
+            return TemporalUnit.WEEK;
+        } else if (days != 0L) {
+            return TemporalUnit.DAY;
+        } else if (hours != 0L) {
+            return TemporalUnit.HOUR;
+        } else if (minutes != 0L) {
+            return TemporalUnit.MINUTE;
+        } else if (seconds != 0L) {
+            return TemporalUnit.SECOND;
+        } else if (milliseconds != 0L) {
+            return TemporalUnit.MILLISECOND;
+        } else if (microseconds != 0L) {
+            return TemporalUnit.MICROSECOND;
+        } else {
+            return TemporalUnit.NANOSECOND;
+        }
+    }
+
     public TemporalDuration negated() {
         return new TemporalDuration(
                 -years, -months, -weeks, -days,
                 -hours, -minutes, -seconds,
                 -milliseconds, -microseconds, -nanoseconds);
+    }
+
+    public TemporalDuration normalizeFloat64RepresentableFields() {
+        boolean allFieldsAlreadyRepresentable =
+                isFloat64RepresentableLong(years)
+                        && isFloat64RepresentableLong(months)
+                        && isFloat64RepresentableLong(weeks)
+                        && isFloat64RepresentableLong(days)
+                        && isFloat64RepresentableLong(hours)
+                        && isFloat64RepresentableLong(minutes)
+                        && isFloat64RepresentableLong(seconds)
+                        && isFloat64RepresentableLong(milliseconds)
+                        && isFloat64RepresentableLong(microseconds)
+                        && isFloat64RepresentableLong(nanoseconds);
+        if (allFieldsAlreadyRepresentable) {
+            return this;
+        }
+
+        return new TemporalDuration(
+                (long) ((double) years),
+                (long) ((double) months),
+                (long) ((double) weeks),
+                (long) ((double) days),
+                (long) ((double) hours),
+                (long) ((double) minutes),
+                (long) ((double) seconds),
+                (long) ((double) milliseconds),
+                (long) ((double) microseconds),
+                (long) ((double) nanoseconds));
     }
 
     public int sign() {

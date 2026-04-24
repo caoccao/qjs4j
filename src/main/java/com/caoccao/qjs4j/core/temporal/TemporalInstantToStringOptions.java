@@ -19,7 +19,7 @@ package com.caoccao.qjs4j.core.temporal;
 public record TemporalInstantToStringOptions(
         TemporalFractionalSecondDigitsOption fractionalSecondDigitsOption,
         TemporalRoundingMode roundingMode,
-        String smallestUnit,
+        TemporalUnit smallestUnit,
         String timeZoneId) {
     public static final TemporalInstantToStringOptions DEFAULT =
             new TemporalInstantToStringOptions(

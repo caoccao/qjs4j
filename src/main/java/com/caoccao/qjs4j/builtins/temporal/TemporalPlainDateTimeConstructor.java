@@ -131,24 +131,11 @@ public final class TemporalPlainDateTimeConstructor {
         }
 
         IsoDateTime isoDateTime = isoDate.atTime(isoTime);
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainDateTime");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainDateTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, isoDateTime, calendarId, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainDateTime");
-        return createPlainDateTime(context, isoDateTime, calendarId, prototype);
-    }
-
-    static JSTemporalPlainDateTime createPlainDateTime(JSContext context, IsoDateTime isoDateTime, TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalPlainDateTime plainDateTime = new JSTemporalPlainDateTime(context, isoDateTime, calendarId);
-        if (prototype != null) {
-            plainDateTime.setPrototype(prototype);
-        }
-        return plainDateTime;
+        return JSTemporalPlainDateTime.create(context, isoDateTime, calendarId, resolvedPrototype);
     }
 
     static JSValue dateTimeFromFields(JSContext context, JSObject fields, JSValue options) {
@@ -334,7 +321,7 @@ public final class TemporalPlainDateTimeConstructor {
             }
         }
         Integer monthFromProperty = hasMonth ? month : null;
-        IsoDate resultDate = TemporalCalendarMath.calendarDateToIsoDate(
+        IsoDate resultDate = IsoDate.calendarDateToIsoDate(
                 context,
                 calendarId,
                 year,
@@ -361,7 +348,7 @@ public final class TemporalPlainDateTimeConstructor {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, resultDate.atTime(resultTime), calendarId);
+        return JSTemporalPlainDateTime.create(context, resultDate.atTime(resultTime), calendarId);
     }
 
     static JSValue dateTimeFromString(JSContext context, String input) {
@@ -373,7 +360,7 @@ public final class TemporalPlainDateTimeConstructor {
             context.throwRangeError("Temporal error: Invalid ISO date.");
             return JSUndefined.INSTANCE;
         }
-        return createPlainDateTime(context, parsed.date().atTime(parsed.time()), parsed.calendar());
+        return JSTemporalPlainDateTime.create(context, parsed.date().atTime(parsed.time()), parsed.calendar());
     }
 
     /**
@@ -407,14 +394,14 @@ public final class TemporalPlainDateTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDateTime(context, plainDateTime.getIsoDateTime(), plainDateTime.getCalendarId());
+            return JSTemporalPlainDateTime.create(context, plainDateTime.getIsoDateTime(), plainDateTime.getCalendarId());
         }
         if (item instanceof JSTemporalPlainDate plainDate) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainDateTime(
+            return JSTemporalPlainDateTime.create(
                     context,
                     plainDate.getIsoDate().atMidnight(),
                     plainDate.getCalendarId());
@@ -427,7 +414,7 @@ public final class TemporalPlainDateTimeConstructor {
             IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
                     zonedDateTime.getEpochNanoseconds(),
                     zonedDateTime.getTimeZoneId());
-            return createPlainDateTime(context, localDateTime, zonedDateTime.getCalendarId());
+            return JSTemporalPlainDateTime.create(context, localDateTime, zonedDateTime.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
             if (isTemporalPlainDateTimePrototype(context, itemObj)) {

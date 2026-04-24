@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.core.temporal.IsoTime;
+import com.caoccao.qjs4j.core.temporal.TemporalUtils;
 
 /**
  * JSObject subclass representing a Temporal.PlainTime value.
@@ -28,6 +29,19 @@ public final class JSTemporalPlainTime extends JSObject {
     public JSTemporalPlainTime(JSContext context, IsoTime isoTime) {
         super(context);
         this.isoTime = isoTime;
+    }
+
+    public static JSTemporalPlainTime create(JSContext context, IsoTime isoTime) {
+        JSObject prototype = TemporalUtils.getTemporalPrototype(context, "PlainTime");
+        return create(context, isoTime, prototype);
+    }
+
+    public static JSTemporalPlainTime create(JSContext context, IsoTime isoTime, JSObject prototype) {
+        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
+        if (prototype != null) {
+            plainTime.setPrototype(prototype);
+        }
+        return plainTime;
     }
 
     public IsoTime getIsoTime() {

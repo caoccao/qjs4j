@@ -101,24 +101,11 @@ public final class TemporalPlainTimeConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainTime");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainTime");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainTime(context, isoTime, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainTime");
-        return createPlainTime(context, isoTime, prototype);
-    }
-
-    static JSTemporalPlainTime createPlainTime(JSContext context, IsoTime isoTime, JSObject prototype) {
-        JSTemporalPlainTime plainTime = new JSTemporalPlainTime(context, isoTime);
-        if (prototype != null) {
-            plainTime.setPrototype(prototype);
-        }
-        return plainTime;
+        return JSTemporalPlainTime.create(context, isoTime, resolvedPrototype);
     }
 
     /**
@@ -130,10 +117,6 @@ public final class TemporalPlainTimeConstructor {
         return toTemporalTime(context, item, options);
     }
 
-    private static boolean isUndefinedOrNull(JSValue value) {
-        return value instanceof JSUndefined || value == null;
-    }
-
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options) {
         boolean hasTimeField = false;
 
@@ -141,7 +124,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(hourValue);
+        hasTimeField |= !(hourValue instanceof JSUndefined) && hourValue != null;
         int hour = toIntegerFieldOrDefault(context, hourValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -151,7 +134,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(microsecondValue);
+        hasTimeField |= !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
         int microsecond = toIntegerFieldOrDefault(context, microsecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -161,7 +144,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(millisecondValue);
+        hasTimeField |= !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
         int millisecond = toIntegerFieldOrDefault(context, millisecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -171,7 +154,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(minuteValue);
+        hasTimeField |= !(minuteValue instanceof JSUndefined) && minuteValue != null;
         int minute = toIntegerFieldOrDefault(context, minuteValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -181,7 +164,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(nanosecondValue);
+        hasTimeField |= !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
         int nanosecond = toIntegerFieldOrDefault(context, nanosecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -191,7 +174,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(secondValue);
+        hasTimeField |= !(secondValue instanceof JSUndefined) && secondValue != null;
         int second = toIntegerFieldOrDefault(context, secondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -212,10 +195,10 @@ public final class TemporalPlainTimeConstructor {
                 context.throwRangeError("Temporal error: Invalid time");
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, isoTime);
+            return JSTemporalPlainTime.create(context, isoTime);
         } else {
             IsoTime constrained = IsoTime.createNormalized(hour, minute, second, millisecond, microsecond, nanosecond);
-            return createPlainTime(context, constrained);
+            return JSTemporalPlainTime.create(context, constrained);
         }
     }
 
@@ -224,11 +207,11 @@ public final class TemporalPlainTimeConstructor {
         if (time == null) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainTime(context, time);
+        return JSTemporalPlainTime.create(context, time);
     }
 
     private static int toIntegerFieldOrDefault(JSContext context, JSValue value, int defaultValue) {
-        if (isUndefinedOrNull(value)) {
+        if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
         return TemporalUtils.toIntegerThrowOnInfinity(context, value);
@@ -243,21 +226,21 @@ public final class TemporalPlainTimeConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, plainTime.getIsoTime());
+            return JSTemporalPlainTime.create(context, plainTime.getIsoTime());
         }
         if (item instanceof JSTemporalPlainDateTime plainDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(context, plainDateTime.getIsoDateTime().time());
+            return JSTemporalPlainTime.create(context, plainDateTime.getIsoDateTime().time());
         }
         if (item instanceof JSTemporalZonedDateTime zonedDateTime) {
             TemporalUtils.getOverflowOption(context, options);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainTime(
+            return JSTemporalPlainTime.create(
                     context,
                     IsoDateTime.createFromEpochNsAndTimeZoneId(
                             zonedDateTime.getEpochNanoseconds(),

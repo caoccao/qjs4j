@@ -6891,6 +6891,7 @@ public final class JSIntlObject {
             String dayOption) {
     }
 
-    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis, TemporalCalendarId calendarId) {
+    private record DateTimeFormattable(DateTimeFormattableKind kind, double epochMillis,
+                                       TemporalCalendarId calendarId) {
     }
 }

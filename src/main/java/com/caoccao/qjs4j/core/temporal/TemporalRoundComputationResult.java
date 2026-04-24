@@ -18,5 +18,5 @@ package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalRoundComputationResult(
         TemporalDuration durationRecord,
-        TemporalDurationFieldOverrides durationFieldOverrides) {
+        TemporalDurationDouble durationFieldOverrides) {
 }

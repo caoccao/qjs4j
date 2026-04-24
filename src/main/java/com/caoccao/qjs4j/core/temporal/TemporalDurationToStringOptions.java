@@ -17,11 +17,11 @@
 package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalDurationToStringOptions(
-        String smallestUnit,
+        TemporalUnit smallestUnit,
         TemporalRoundingMode roundingMode,
         long roundingIncrementNanoseconds,
         boolean precisionAuto,
         int fractionalSecondDigits) {
     public static final TemporalDurationToStringOptions DEFAULT =
-            new TemporalDurationToStringOptions("nanosecond", TemporalRoundingMode.TRUNC, 1L, true, -1);
+            new TemporalDurationToStringOptions(TemporalUnit.NANOSECOND, TemporalRoundingMode.TRUNC, 1L, true, -1);
 }

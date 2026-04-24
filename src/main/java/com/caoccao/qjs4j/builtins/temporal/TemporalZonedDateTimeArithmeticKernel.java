@@ -44,18 +44,16 @@ final class TemporalZonedDateTimeArithmeticKernel {
             TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
             IsoDate addedDate;
             if (calendarId == TemporalCalendarId.ISO8601) {
-                addedDate = addIsoDateWithOverflow(
+                addedDate = localDateTime.date().addIsoDateWithOverflow(
                         context,
-                        localDateTime.date(),
                         durationRecord.years(),
                         durationRecord.months(),
                         durationRecord.weeks(),
                         durationRecord.days(),
                         overflow);
             } else {
-                addedDate = TemporalCalendarMath.addCalendarDate(
+                addedDate = localDateTime.date().addCalendarDate(
                         context,
-                        localDateTime.date(),
                         calendarId,
                         durationRecord.years(),
                         durationRecord.months(),
@@ -78,74 +76,17 @@ final class TemporalZonedDateTimeArithmeticKernel {
 
         BigInteger timeNanoseconds = durationRecord.timeNanoseconds();
         BigInteger resultEpochNanoseconds = intermediateEpochNanoseconds.add(timeNanoseconds);
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(resultEpochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(resultEpochNanoseconds)) {
             context.throwRangeError("Temporal error: Nanoseconds out of range.");
             return null;
         }
         return resultEpochNanoseconds;
     }
 
-    private static IsoDate addIsoDateWithOverflow(
-            JSContext context,
-            IsoDate date,
-            long years,
-            long months,
-            long weeks,
-            long days,
-            String overflow) {
-        long monthIndex;
-        long balancedYear;
-        try {
-            monthIndex = Math.addExact(date.month() - 1L, months);
-            long balancedYearDelta = Math.floorDiv(monthIndex, 12L);
-            balancedYear = Math.addExact(date.year(), years);
-            balancedYear = Math.addExact(balancedYear, balancedYearDelta);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        if (balancedYear < Integer.MIN_VALUE || balancedYear > Integer.MAX_VALUE) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        int balancedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        int balancedYearInt = (int) balancedYear;
-        int maximumDay = IsoDate.daysInMonth(balancedYearInt, balancedMonth);
-        int balancedDay = date.day();
-        if ("reject".equals(overflow)) {
-            if (balancedDay > maximumDay) {
-                context.throwRangeError("Temporal error: Invalid ISO date.");
-                return null;
-            }
-        } else {
-            balancedDay = Math.min(balancedDay, maximumDay);
-        }
-
-        IsoDate intermediateDate = new IsoDate(balancedYearInt, balancedMonth, balancedDay);
-        long resultEpochDay;
-        try {
-            long daysFromWeeks = Math.multiplyExact(weeks, 7L);
-            long totalDays = Math.addExact(days, daysFromWeeks);
-            resultEpochDay = Math.addExact(intermediateDate.toEpochDay(), totalDays);
-        } catch (ArithmeticException arithmeticException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-
-        try {
-            return IsoDate.createFromEpochDay(resultEpochDay);
-        } catch (DateTimeException dateTimeException) {
-            context.throwRangeError("Temporal error: Invalid ISO date.");
-            return null;
-        }
-    }
-
     static TemporalDuration differenceEpochNanoseconds(
             BigInteger startEpochNanoseconds,
             BigInteger endEpochNanoseconds,
-            String largestUnit,
+            TemporalUnit largestUnit,
             long smallestUnitNanoseconds,
             long roundingIncrement,
             TemporalRoundingMode roundingMode) {
@@ -155,6 +96,6 @@ final class TemporalZonedDateTimeArithmeticKernel {
         BigInteger roundedNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
                 differenceNanoseconds,
                 incrementNanoseconds);
-        return TemporalDurationPrototype.balanceTimeDuration(roundedNanoseconds, largestUnit);
+        return TemporalDuration.createBalance(roundedNanoseconds, largestUnit);
     }
 }

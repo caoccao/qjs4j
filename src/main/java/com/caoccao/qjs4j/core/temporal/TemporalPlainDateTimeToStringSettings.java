@@ -18,7 +18,7 @@ package com.caoccao.qjs4j.core.temporal;
 
 public record TemporalPlainDateTimeToStringSettings(
         String calendarNameOption,
-        String smallestUnit,
+        TemporalUnit smallestUnit,
         TemporalRoundingMode roundingMode,
         boolean autoFractionalSecondDigits,
         int fractionalSecondDigits,

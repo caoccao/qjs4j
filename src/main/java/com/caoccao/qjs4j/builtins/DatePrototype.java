@@ -16,7 +16,6 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.builtins.temporal.TemporalInstantConstructor;
 import com.caoccao.qjs4j.core.*;
 
 import java.math.BigInteger;
@@ -645,7 +644,7 @@ public final class DatePrototype {
 
         long epochMilliseconds = (long) timeValue;
         BigInteger epochNanoseconds = BigInteger.valueOf(epochMilliseconds).multiply(NANOSECONDS_PER_MILLISECOND);
-        return TemporalInstantConstructor.createInstant(context, epochNanoseconds);
+        return JSTemporalInstant.create(context, epochNanoseconds);
     }
 
     public static JSValue toTimeString(JSContext context, JSValue thisArg, JSValue[] args) {

@@ -29,13 +29,6 @@ import java.util.Optional;
  * Implementation of Temporal.Duration constructor and static methods.
  */
 public final class TemporalDurationConstructor {
-    static final String UNIT_DAY = "day";
-    static final String UNIT_HOUR = "hour";
-    static final String UNIT_MICROSECOND = "microsecond";
-    static final String UNIT_MILLISECOND = "millisecond";
-    static final String UNIT_MINUTE = "minute";
-    static final String UNIT_NANOSECOND = "nanosecond";
-    static final String UNIT_SECOND = "second";
     private static final long CALENDAR_UNIT_MAX = TemporalConstants.CALENDAR_UNIT_MAX;
     private static final BigInteger DAY_NANOSECONDS = TemporalConstants.BI_DAY_NANOSECONDS;
     private static final BigInteger MAX_ABSOLUTE_TIME_NANOSECONDS = TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS;
@@ -126,8 +119,8 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        boolean firstHasCalendarUnits = hasCalendarUnits(firstRecord);
-        boolean secondHasCalendarUnits = hasCalendarUnits(secondRecord);
+        boolean firstHasCalendarUnits = firstRecord.hasCalendarUnits();
+        boolean secondHasCalendarUnits = secondRecord.hasCalendarUnits();
         if ((firstHasCalendarUnits || secondHasCalendarUnits) && relativeToReference == null) {
             if (firstRecord.equals(secondRecord)) {
                 return JSNumber.of(0);
@@ -252,24 +245,11 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "Duration");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "Duration");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createDuration(context, record, resolvedPrototype);
-    }
-
-    public static JSTemporalDuration createDuration(JSContext context, TemporalDuration record) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "Duration");
-        return createDuration(context, record, prototype);
-    }
-
-    static JSTemporalDuration createDuration(JSContext context, TemporalDuration record, JSObject prototype) {
-        JSTemporalDuration duration = new JSTemporalDuration(context, record);
-        if (prototype != null) {
-            duration.setPrototype(prototype);
-        }
-        return duration;
+        return JSTemporalDuration.create(context, record, resolvedPrototype);
     }
 
     static JSValue durationFromFields(JSContext context, JSObject fields) {
@@ -420,7 +400,7 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createDuration(context, record);
+        return JSTemporalDuration.create(context, record);
     }
 
     static JSValue durationFromString(JSContext context, String input) {
@@ -437,7 +417,7 @@ public final class TemporalDurationConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createDuration(context, record);
+        return JSTemporalDuration.create(context, record);
     }
 
     private static String extractOffsetText(String text) {
@@ -491,12 +471,8 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Optional.of(BigInteger.ZERO);
         }
-        BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
+        BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return Optional.of(numericValue);
-    }
-
-    private static boolean hasCalendarUnits(TemporalDuration durationRecord) {
-        return durationRecord.years() != 0 || durationRecord.months() != 0 || durationRecord.weeks() != 0;
     }
 
     private static boolean hasOffsetDesignator(String text) {
@@ -551,33 +527,6 @@ public final class TemporalDurationConstructor {
         return true;
     }
 
-    static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
-        BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
-        return totalNanoseconds.abs().compareTo(MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;
-    }
-
-    static String largerTemporalUnit(String leftUnit, String rightUnit) {
-        if (TemporalUnit.rank(leftUnit) <= TemporalUnit.rank(rightUnit)) {
-            return leftUnit;
-        } else {
-            return rightUnit;
-        }
-    }
-
-    static TemporalDuration normalizeFloat64RepresentableFields(TemporalDuration durationRecord) {
-        return new TemporalDuration(
-                toFloat64RepresentableLong(durationRecord.years()),
-                toFloat64RepresentableLong(durationRecord.months()),
-                toFloat64RepresentableLong(durationRecord.weeks()),
-                toFloat64RepresentableLong(durationRecord.days()),
-                toFloat64RepresentableLong(durationRecord.hours()),
-                toFloat64RepresentableLong(durationRecord.minutes()),
-                toFloat64RepresentableLong(durationRecord.seconds()),
-                toFloat64RepresentableLong(durationRecord.milliseconds()),
-                toFloat64RepresentableLong(durationRecord.microseconds()),
-                toFloat64RepresentableLong(durationRecord.nanoseconds()));
-    }
-
     private static boolean offsetMatchesTimeZoneOffsetForString(
             String offsetText,
             int parsedOffsetSeconds,
@@ -585,7 +534,7 @@ public final class TemporalDurationConstructor {
         if (TemporalTimeZone.offsetTextIncludesSecondsOrFraction(offsetText)) {
             return parsedOffsetSeconds == zoneOffsetSeconds;
         }
-        int roundedZoneOffsetSeconds = roundOffsetSecondsToMinute(zoneOffsetSeconds);
+        int roundedZoneOffsetSeconds = TemporalUtils.roundOffsetSecondsToMinute(zoneOffsetSeconds);
         return parsedOffsetSeconds == roundedZoneOffsetSeconds;
     }
 
@@ -602,7 +551,7 @@ public final class TemporalDurationConstructor {
             context.throwRangeError("Temporal error: Expected finite integer.");
             return Long.MIN_VALUE;
         }
-        BigInteger numericValue = toBigIntegerFromIntegralDouble(numericValueAsDouble);
+        BigInteger numericValue = TemporalUtils.toBigIntegerFromIntegralDouble(numericValueAsDouble);
         return toLongDurationField(context, numericValue);
     }
 
@@ -904,7 +853,7 @@ public final class TemporalDurationConstructor {
                 referenceOffsetSeconds = TemporalTimeZone.getOffsetSecondsFor(epochNanoseconds, normalizedTimeZoneId);
             }
         }
-        if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
             context.throwRangeError("Temporal error: Duration field out of range.");
             return null;
         }
@@ -1039,7 +988,7 @@ public final class TemporalDurationConstructor {
                     }
                 }
             }
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(epochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return null;
             }
@@ -1122,50 +1071,6 @@ public final class TemporalDurationConstructor {
         return null;
     }
 
-    private static int roundOffsetSecondsToMinute(int offsetSeconds) {
-        int sign = offsetSeconds < 0 ? -1 : 1;
-        int absoluteOffsetSeconds = Math.abs(offsetSeconds);
-        int absoluteOffsetMinutes = absoluteOffsetSeconds / 60;
-        int remainingSeconds = absoluteOffsetSeconds % 60;
-        if (remainingSeconds >= 30) {
-            absoluteOffsetMinutes++;
-        }
-        return sign * absoluteOffsetMinutes * 60;
-    }
-
-    private static BigInteger toBigIntegerFromIntegralDouble(double value) {
-        long bits = Double.doubleToRawLongBits(value);
-        boolean negative = (bits & (1L << 63)) != 0;
-        int exponentBits = (int) ((bits >>> 52) & 0x7FFL);
-        long mantissaBits = bits & ((1L << 52) - 1);
-
-        long significand;
-        int shift;
-        if (exponentBits == 0) {
-            significand = mantissaBits;
-            shift = -1074;
-        } else {
-            significand = (1L << 52) | mantissaBits;
-            shift = exponentBits - 1075;
-        }
-
-        BigInteger integerValue = BigInteger.valueOf(significand);
-        if (shift > 0) {
-            integerValue = integerValue.shiftLeft(shift);
-        } else if (shift < 0) {
-            integerValue = integerValue.shiftRight(-shift);
-        }
-
-        if (negative) {
-            return integerValue.negate();
-        }
-        return integerValue;
-    }
-
-    private static long toFloat64RepresentableLong(long value) {
-        return (long) ((double) value);
-    }
-
     private static long toLongDurationField(JSContext context, BigInteger value) {
         if (value.bitLength() > 63) {
             context.throwRangeError("Temporal error: Duration field out of range.");
@@ -1206,7 +1111,7 @@ public final class TemporalDurationConstructor {
      */
     public static JSValue toTemporalDuration(JSContext context, JSValue item) {
         if (item instanceof JSTemporalDuration duration) {
-            return createDuration(context, duration.getDuration());
+            return JSTemporalDuration.create(context, duration.getDuration());
         }
         if (item instanceof JSString itemStr) {
             return durationFromString(context, itemStr.value());
@@ -1258,7 +1163,7 @@ public final class TemporalDurationConstructor {
                         || durationRecord.days() != 0;
         if (hasDateUnits && relativeToReference.epochNanoseconds() != null && relativeToReference.timeZoneId() != null) {
             BigInteger targetEpochNanoseconds = relativeToReference.epochNanoseconds().add(totalNanoseconds);
-            if (!TemporalInstantConstructor.isValidEpochNanoseconds(targetEpochNanoseconds)) {
+            if (!TemporalUtils.isValidEpochNanoseconds(targetEpochNanoseconds)) {
                 context.throwRangeError("Temporal error: Duration field out of range.");
                 return BigInteger.ZERO;
             }

@@ -87,11 +87,4 @@ public enum TemporalUnsignedRoundingMode {
             }
         };
     }
-
-    /**
-     * Returns the JS-canonical name (e.g. "half-infinity").
-     */
-    public String jsName() {
-        return jsName;
-    }
 }

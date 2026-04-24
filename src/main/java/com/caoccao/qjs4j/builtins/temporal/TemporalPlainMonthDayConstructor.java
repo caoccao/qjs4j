@@ -68,24 +68,11 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        JSObject resolvedPrototype = TemporalPlainDateConstructor.resolveTemporalPrototype(context, "PlainMonthDay");
+        JSObject resolvedPrototype = TemporalUtils.resolveTemporalPrototype(context, "PlainMonthDay");
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        return createPlainMonthDay(context, isoDate, calendarId, resolvedPrototype);
-    }
-
-    public static JSTemporalPlainMonthDay createPlainMonthDay(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId) {
-        JSObject prototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainMonthDay");
-        return createPlainMonthDay(context, isoDate, calendarId, prototype);
-    }
-
-    static JSTemporalPlainMonthDay createPlainMonthDay(JSContext context, IsoDate isoDate, TemporalCalendarId calendarId, JSObject prototype) {
-        JSTemporalPlainMonthDay plainMonthDay = new JSTemporalPlainMonthDay(context, isoDate, calendarId);
-        if (prototype != null) {
-            plainMonthDay.setPrototype(prototype);
-        }
-        return plainMonthDay;
+        return JSTemporalPlainMonthDay.create(context, isoDate, calendarId, resolvedPrototype);
     }
 
     static JSTemporalPlainMonthDay createPlainMonthDayFromCalendarMonthDay(
@@ -98,7 +85,7 @@ public final class TemporalPlainMonthDayConstructor {
         if (context.hasPendingException() || referenceIsoDate == null) {
             return null;
         }
-        return createPlainMonthDay(context, referenceIsoDate, calendarId);
+        return JSTemporalPlainMonthDay.create(context, referenceIsoDate, calendarId);
     }
 
     private static String formatMonthCode(IsoMonth parsedMonthCode) {
@@ -328,7 +315,7 @@ public final class TemporalPlainMonthDayConstructor {
             if (parsedMonthCode != null) {
                 monthCodeFromProperty = formatMonthCode(parsedMonthCode);
             }
-            IsoDate resolvedIsoDate = TemporalCalendarMath.calendarDateToIsoDate(
+            IsoDate resolvedIsoDate = IsoDate.calendarDateToIsoDate(
                     context,
                     calendarId,
                     resolutionYear,
@@ -372,7 +359,7 @@ public final class TemporalPlainMonthDayConstructor {
         IsoDate parsedDate = IsoDate.parseDateString(context, input);
         if (parsedDate != null && !context.hasPendingException()) {
             if (calendar == TemporalCalendarId.ISO8601) {
-                return createPlainMonthDay(
+                return JSTemporalPlainMonthDay.create(
                         context,
                         new IsoDate(DEFAULT_REFERENCE_ISO_YEAR, parsedDate.month(), parsedDate.day()),
                         calendar);
@@ -401,7 +388,7 @@ public final class TemporalPlainMonthDayConstructor {
             return JSUndefined.INSTANCE;
         }
 
-        return createPlainMonthDay(context, parsedMonthDay, calendar);
+        return JSTemporalPlainMonthDay.create(context, parsedMonthDay, calendar);
     }
 
     private static IsoMonth parseMonthCodeSyntaxForMonthDayFrom(JSContext context, String monthCode) {
@@ -495,10 +482,10 @@ public final class TemporalPlainMonthDayConstructor {
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            return createPlainMonthDay(context, plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
+            return JSTemporalPlainMonthDay.create(context, plainMonthDay.getIsoDate(), plainMonthDay.getCalendarId());
         }
         if (item instanceof JSObject itemObj) {
-            JSObject plainMonthDayPrototype = TemporalPlainDateConstructor.getTemporalPrototype(context, "PlainMonthDay");
+            JSObject plainMonthDayPrototype = TemporalUtils.getTemporalPrototype(context, "PlainMonthDay");
             if (itemObj == plainMonthDayPrototype) {
                 context.throwTypeError("Temporal error: MonthDay argument must be object or string.");
                 return JSUndefined.INSTANCE;
