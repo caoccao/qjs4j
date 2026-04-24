@@ -16,16 +16,12 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-public record TemporalDateDurationFields(long years, long months, long weeks, long days) {
-    public static final TemporalDateDurationFields ZERO = new TemporalDateDurationFields(0, 0, 0, 0);
-
-    public int sign() {
-        if (years > 0 || months > 0 || weeks > 0 || days > 0) {
-            return 1;
-        } else if (years < 0 || months < 0 || weeks < 0 || days < 0) {
-            return -1;
-        } else {
-            return 0;
-        }
+public record TemporalYearMonth(long year, int month) {
+    public static TemporalYearMonth createBalanced(long year, long month) {
+        long monthIndex = month - 1L;
+        long yearDelta = Math.floorDiv(monthIndex, 12L);
+        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
+        long normalizedYear = year + yearDelta;
+        return new TemporalYearMonth(normalizedYear, normalizedMonth);
     }
 }

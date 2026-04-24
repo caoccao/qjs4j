@@ -110,6 +110,12 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return resultIsoDate;
     }
 
+    public static IsoDate createConstrained(long year, int month, int dayOfMonth) {
+        int constrainedYear = (int) year;
+        int constrainedDay = Math.min(dayOfMonth, daysInMonth(constrainedYear, month));
+        return new IsoDate(constrainedYear, month, constrainedDay);
+    }
+
     public static IsoDate createFromEpochDay(long epochDay) {
         // Algorithm from https://howardhinnant.github.io/date_algorithms.html
         long shiftedEpochDay = epochDay + 719468;
@@ -968,6 +974,30 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return new IsoDateTime(this, isoTime);
     }
 
+    public IsoDate calendarDateAddConstrain(
+            JSContext context,
+            TemporalCalendarId calendarId,
+            TemporalDurationDateWeek dateDuration) {
+        if (calendarId == TemporalCalendarId.ISO8601) {
+            return addDurationToIsoDate(
+                    context,
+                    dateDuration.years(),
+                    dateDuration.months(),
+                    dateDuration.weeks(),
+                    dateDuration.days(),
+                    "constrain");
+        } else {
+            return addCalendarDate(
+                    context,
+                    calendarId,
+                    dateDuration.years(),
+                    dateDuration.months(),
+                    dateDuration.weeks(),
+                    dateDuration.days(),
+                    "constrain");
+        }
+    }
+
     @Override
     public int compareTo(IsoDate otherIsoDate) {
         if (year != otherIsoDate.year) {
@@ -1033,6 +1063,19 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             dayCount += monthSlot.daysInMonth();
         }
         return dayCount;
+    }
+
+    public boolean isSurpassedBy(int sign, long otherYear, long otherMonth, long otherDayOfMonth) {
+        if (otherYear != year) {
+            return sign * (otherYear - year) > 0;
+        }
+        if (otherMonth != month) {
+            return sign * (otherMonth - month) > 0;
+        }
+        if (otherDayOfMonth != day) {
+            return sign * (otherDayOfMonth - day) > 0;
+        }
+        return false;
     }
 
     public boolean isValid() {
