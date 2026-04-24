@@ -696,9 +696,13 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalCalendarMath.inLeapYear(plainDate.getIsoDate(), plainDate.getCalendarId())
-                ? JSBoolean.TRUE
-                : JSBoolean.FALSE;
+        IsoCalendarDate calendarDateFields = plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
+        boolean leapYear = plainDate.getCalendarId().isCalendarLeapYear(calendarDateFields.year());
+        if (leapYear) {
+            return JSBoolean.TRUE;
+        } else {
+            return JSBoolean.FALSE;
+        }
     }
 
     private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
@@ -771,7 +775,7 @@ public final class TemporalPlainDatePrototype {
         long totalMonths = 0L;
         IsoDate cursorDate = firstDate;
         for (long yearIndex = 0L; yearIndex < absoluteYearDelta; yearIndex++) {
-            int monthsInYear = TemporalCalendarMath.monthsInYear(cursorDate, calendarId);
+            int monthsInYear = TemporalUtils.monthsInYear(cursorDate, calendarId);
             try {
                 totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
             } catch (ArithmeticException arithmeticException) {
@@ -792,7 +796,7 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
+        return JSNumber.of(TemporalUtils.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
     }
 
     private static TemporalNudgeResult nudgeToCalendarUnit(

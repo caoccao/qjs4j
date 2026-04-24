@@ -19,9 +19,11 @@ package com.caoccao.qjs4j.core.temporal;
 import com.caoccao.qjs4j.core.*;
 
 import java.math.BigInteger;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.time.chrono.HijrahChronology;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -205,6 +207,30 @@ public final class TemporalUtils {
         return null;
     }
 
+    public static long hebrewElapsedDays(long hebrewYear) {
+        long monthsElapsed = Math.floorDiv(235L * hebrewYear - 234L, 19L);
+        long partsElapsed = 204L + 793L * floorMod(monthsElapsed, 1080L);
+        long hoursElapsed = 5L
+                + 12L * monthsElapsed
+                + 793L * Math.floorDiv(monthsElapsed, 1080L)
+                + Math.floorDiv(partsElapsed, 1080L);
+        long conjunctionParts = 1080L * floorMod(hoursElapsed, 24L) + floorMod(partsElapsed, 1080L);
+        long dayNumber = 1L + 29L * monthsElapsed + Math.floorDiv(hoursElapsed, 24L);
+
+        boolean shouldPostpone = conjunctionParts >= 19_440L
+                || (!isHebrewLeapYear(hebrewYear) && floorMod(dayNumber, 7L) == 2L && conjunctionParts >= 9_924L)
+                || (isHebrewLeapYear(hebrewYear - 1L) && floorMod(dayNumber, 7L) == 1L && conjunctionParts >= 16_789L);
+        if (shouldPostpone) {
+            dayNumber++;
+        }
+
+        long weekDay = floorMod(dayNumber, 7L);
+        if (weekDay == 0L || weekDay == 3L || weekDay == 5L) {
+            dayNumber++;
+        }
+        return dayNumber;
+    }
+
     public static boolean isDateTimeWithinTemporalRange(LocalDateTime dateTime) {
         return !dateTime.isBefore(MINIMUM_TEMPORAL_DATE_TIME) && !dateTime.isAfter(MAXIMUM_TEMPORAL_DATE_TIME);
     }
@@ -213,12 +239,39 @@ public final class TemporalUtils {
         return !date.isBefore(MINIMUM_TEMPORAL_DATE) && !date.isAfter(MAXIMUM_TEMPORAL_DATE);
     }
 
+    public static boolean isHebrewLeapYear(long hebrewYear) {
+        return floorMod(7L * hebrewYear + 1L, 19L) < 7L;
+    }
+
+    public static long isHebrewYearLength(long hebrewYear) {
+        return hebrewElapsedDays(hebrewYear + 1L) - hebrewElapsedDays(hebrewYear);
+    }
+
+    public static boolean isLeapYear(int year) {
+        if (year % 4 != 0) {
+            return false;
+        }
+        if (year % 100 != 0) {
+            return true;
+        }
+        return year % 400 == 0;
+    }
+
     public static boolean isOffsetTimeZoneIdentifier(String timeZoneId) {
         if (timeZoneId == null || timeZoneId.isEmpty()) {
             return false;
         }
         char signCharacter = timeZoneId.charAt(0);
         return signCharacter == '+' || signCharacter == '-' || signCharacter == '\u2212';
+    }
+
+    static boolean isUnsupportedUmalquraYear(int islamicYear) {
+        try {
+            HijrahChronology.INSTANCE.date(islamicYear, 1, 1);
+            return false;
+        } catch (DateTimeException dateTimeException) {
+            return true;
+        }
     }
 
     public static boolean isValidEpochNanoseconds(BigInteger epochNanoseconds) {
@@ -268,6 +321,11 @@ public final class TemporalUtils {
                 }
                 return dateTimeString + "[u-ca=" + calendarId.identifier() + "]";
         }
+    }
+
+    public static int monthsInYear(IsoDate isoDate, TemporalCalendarId calendarId) {
+        IsoCalendarDate calendarDateFields = isoDate.toIsoCalendarDate(calendarId);
+        return TemporalMonths.get(calendarId, calendarDateFields.year()).size();
     }
 
     public static BigInteger nanosecondsBetween(LocalDateTime startDateTime, LocalDateTime endDateTime) {

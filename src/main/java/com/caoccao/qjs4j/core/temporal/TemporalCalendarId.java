@@ -304,12 +304,8 @@ public enum TemporalCalendarId {
         if (monthCode == null) {
             return false;
         }
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthCode().equals(monthCode)) {
-                return true;
-            }
-        }
-        return false;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthCode(monthCode) != null;
     }
 
     public String constrainMonthCode(int calendarYear, String monthCode) {
@@ -320,7 +316,7 @@ public enum TemporalCalendarId {
         if (calendarYearHasMonthCode(calendarYear, monthCode)) {
             return monthCode;
         }
-        String fallbackMonthCode = TemporalCalendarMath.resolveFallbackMonthCodeForMissingLeapMonth(this, monthCode);
+        String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(monthCode);
         if (fallbackMonthCode != null) {
             return fallbackMonthCode;
         }
@@ -345,21 +341,13 @@ public enum TemporalCalendarId {
     }
 
     IsoCalendarMonth findMonthSlotByCode(int calendarYear, String monthCode) {
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthCode().equals(monthCode)) {
-                return monthSlot;
-            }
-        }
-        return null;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthCode(monthCode);
     }
 
     IsoCalendarMonth findMonthSlotByNumber(int calendarYear, int monthNumber) {
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthNumber() == monthNumber) {
-                return monthSlot;
-            }
-        }
-        return null;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthNumber(monthNumber);
     }
 
     IsoDate findReferenceIsoDateAtOrBelow(String monthCode, int maximumDayOfMonth) {
@@ -565,13 +553,13 @@ public enum TemporalCalendarId {
 
     public boolean isCalendarLeapYear(int calendarYear) {
         return switch (this) {
-            case ISO8601, GREGORY, JAPANESE -> TemporalCalendarMath.isLeapYear(calendarYear);
-            case BUDDHIST -> TemporalCalendarMath.isLeapYear(calendarYear - 543);
-            case ROC -> TemporalCalendarMath.isLeapYear(calendarYear + 1911);
+            case ISO8601, GREGORY, JAPANESE -> TemporalUtils.isLeapYear(calendarYear);
+            case BUDDHIST -> TemporalUtils.isLeapYear(calendarYear - 543);
+            case ROC -> TemporalUtils.isLeapYear(calendarYear + 1911);
             case COPTIC, ETHIOPIC -> TemporalUtils.alexandrianLeapYear(calendarYear);
             case ETHIOAA -> TemporalUtils.alexandrianLeapYear(calendarYear - 5500);
-            case HEBREW -> TemporalCalendarMath.isHebrewLeapYear(calendarYear);
-            case INDIAN -> TemporalCalendarMath.isLeapYear(calendarYear + 78);
+            case HEBREW -> TemporalUtils.isHebrewLeapYear(calendarYear);
+            case INDIAN -> TemporalUtils.isLeapYear(calendarYear + 78);
             case ISLAMIC_CIVIL -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_TBLA -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_UMALQURA -> TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469.contains(calendarYear)
@@ -598,6 +586,20 @@ public enum TemporalCalendarId {
             return 0;
         }
         return (yearInfo & 0x10000) != 0 ? 30 : 29;
+    }
+
+    String resolveFallbackMonthCodeForMissingLeapMonth(String leapMonthCode) {
+        IsoMonth monthCodeData = IsoMonth.parseByMonthCode(leapMonthCode);
+        if (monthCodeData == null || !monthCodeData.leapMonth()) {
+            return null;
+        }
+        if (this == HEBREW && "M05L".equals(leapMonthCode)) {
+            return "M06";
+        }
+        if (this == CHINESE || this == DANGI) {
+            return IsoMonth.toMonthCode(monthCodeData.month());
+        }
+        return null;
     }
 
     public TemporalEra toTemporalEra(String eraIdentifier) {

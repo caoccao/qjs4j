@@ -81,7 +81,7 @@ public final class TemporalPlainMonthDayConstructor {
             String monthCode,
             int dayOfMonth,
             String overflow) {
-        IsoDate referenceIsoDate = TemporalCalendarMath.resolveReferenceIsoDateForMonthDay(
+        IsoDate referenceIsoDate = IsoDate.resolveReferenceIsoDateForMonthDay(
                 context,
                 calendarId,
                 monthCode,
