@@ -24,12 +24,74 @@ import java.time.chrono.HijrahChronology;
 import java.time.chrono.HijrahDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Temporal calendar math for non-ISO calendars used by Temporal.PlainDate.
  */
 public final class TemporalCalendarMath {
+    private static final int MAX_MONTH_SLOT_CACHE_SIZE = 1_024;
+    private static final ConcurrentHashMap<Long, List<IsoCalendarMonth>> MONTH_SLOT_CACHE =
+            new ConcurrentHashMap<>();
+    private static final Queue<Long> MONTH_SLOT_CACHE_EVICTION_QUEUE = new ConcurrentLinkedQueue<>();
+
     private TemporalCalendarMath() {
+    }
+
+    private static List<IsoCalendarMonth> computeMonthSlots(TemporalCalendarId calendarId, int calendarYear) {
+        if (calendarId == TemporalCalendarId.HEBREW) {
+            return getHebrewMonthSlots(calendarYear);
+        }
+        if (calendarId == TemporalCalendarId.CHINESE || calendarId == TemporalCalendarId.DANGI) {
+            return getLunisolarMonthSlots(calendarId, calendarYear);
+        }
+        if (calendarId == TemporalCalendarId.COPTIC
+                || calendarId == TemporalCalendarId.ETHIOPIC
+                || calendarId == TemporalCalendarId.ETHIOAA) {
+            int underlyingYear = calendarId == TemporalCalendarId.ETHIOAA ? calendarYear - 5500 : calendarYear;
+            List<IsoCalendarMonth> monthSlots = new ArrayList<>();
+            for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
+                monthSlots.add(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
+            }
+            monthSlots.add(new IsoCalendarMonth(
+                    13,
+                    false,
+                    "M13",
+                    TemporalUtils.alexandrianLeapYear(underlyingYear) ? 6 : 5));
+            return monthSlots;
+        }
+        if (calendarId == TemporalCalendarId.INDIAN) {
+            return getIndianMonthSlots(calendarYear);
+        }
+        if (calendarId == TemporalCalendarId.PERSIAN) {
+            return getPersianMonthSlots(calendarYear);
+        }
+        if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL) {
+            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+        }
+        if (calendarId == TemporalCalendarId.ISLAMIC_TBLA) {
+            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
+        }
+        if (calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
+            return getUmalquraMonthSlots(calendarYear);
+        }
+        int isoYear = calendarYear;
+        if (calendarId == TemporalCalendarId.BUDDHIST) {
+            isoYear = calendarYear - 543;
+        } else if (calendarId == TemporalCalendarId.ROC) {
+            isoYear = calendarYear + 1911;
+        }
+        List<IsoCalendarMonth> monthSlots = new ArrayList<>();
+        for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
+            monthSlots.add(new IsoCalendarMonth(
+                    monthNumber,
+                    false,
+                    IsoMonth.toMonthCode(monthNumber),
+                    IsoDate.daysInMonth(isoYear, monthNumber)));
+        }
+        return monthSlots;
     }
 
     private static List<IsoCalendarMonth> getHebrewMonthSlots(int calendarYear) {
@@ -109,57 +171,23 @@ public final class TemporalCalendarMath {
     }
 
     static List<IsoCalendarMonth> getMonthSlots(TemporalCalendarId calendarId, int calendarYear) {
-        if (calendarId == TemporalCalendarId.HEBREW) {
-            return getHebrewMonthSlots(calendarYear);
+        long calendarYearCacheKey = TemporalUtils.getCalendarYearCacheKey(calendarId, calendarYear);
+        List<IsoCalendarMonth> cachedMonthSlots = MONTH_SLOT_CACHE.get(calendarYearCacheKey);
+        if (cachedMonthSlots != null) {
+            return cachedMonthSlots;
         }
-        if (calendarId == TemporalCalendarId.CHINESE || calendarId == TemporalCalendarId.DANGI) {
-            return getLunisolarMonthSlots(calendarId, calendarYear);
+        List<IsoCalendarMonth> computedMonthSlots = List.copyOf(computeMonthSlots(calendarId, calendarYear));
+        TemporalUtils.putBoundedMapEntry(
+                MONTH_SLOT_CACHE,
+                MONTH_SLOT_CACHE_EVICTION_QUEUE,
+                calendarYearCacheKey,
+                computedMonthSlots,
+                MAX_MONTH_SLOT_CACHE_SIZE);
+        List<IsoCalendarMonth> resolvedMonthSlots = MONTH_SLOT_CACHE.get(calendarYearCacheKey);
+        if (resolvedMonthSlots != null) {
+            return resolvedMonthSlots;
         }
-        if (calendarId == TemporalCalendarId.COPTIC
-                || calendarId == TemporalCalendarId.ETHIOPIC
-                || calendarId == TemporalCalendarId.ETHIOAA) {
-            int underlyingYear = calendarId == TemporalCalendarId.ETHIOAA ? calendarYear - 5500 : calendarYear;
-            List<IsoCalendarMonth> monthSlots = new ArrayList<>();
-            for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-                monthSlots.add(new IsoCalendarMonth(monthNumber, false, IsoMonth.toMonthCode(monthNumber), 30));
-            }
-            monthSlots.add(new IsoCalendarMonth(
-                    13,
-                    false,
-                    "M13",
-                    TemporalUtils.alexandrianLeapYear(underlyingYear) ? 6 : 5));
-            return monthSlots;
-        }
-        if (calendarId == TemporalCalendarId.INDIAN) {
-            return getIndianMonthSlots(calendarYear);
-        }
-        if (calendarId == TemporalCalendarId.PERSIAN) {
-            return getPersianMonthSlots(calendarYear);
-        }
-        if (calendarId == TemporalCalendarId.ISLAMIC_CIVIL) {
-            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
-        }
-        if (calendarId == TemporalCalendarId.ISLAMIC_TBLA) {
-            return getIslamicMonthSlots(calendarYear, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET);
-        }
-        if (calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
-            return getUmalquraMonthSlots(calendarYear);
-        }
-        int isoYear = calendarYear;
-        if (calendarId == TemporalCalendarId.BUDDHIST) {
-            isoYear = calendarYear - 543;
-        } else if (calendarId == TemporalCalendarId.ROC) {
-            isoYear = calendarYear + 1911;
-        }
-        List<IsoCalendarMonth> monthSlots = new ArrayList<>();
-        for (int monthNumber = 1; monthNumber <= 12; monthNumber++) {
-            monthSlots.add(new IsoCalendarMonth(
-                    monthNumber,
-                    false,
-                    IsoMonth.toMonthCode(monthNumber),
-                    IsoDate.daysInMonth(isoYear, monthNumber)));
-        }
-        return monthSlots;
+        return computedMonthSlots;
     }
 
     private static List<IsoCalendarMonth> getPersianMonthSlots(int calendarYear) {
@@ -461,13 +489,11 @@ public final class TemporalCalendarMath {
         }
 
         int constrainedSearchDay = Math.min(searchDay, 31);
-        for (int candidateDay = constrainedSearchDay; candidateDay >= 1; candidateDay--) {
-            IsoDate candidateReferenceIsoDate = calendarId.findReferenceIsoDateExact(
-                    normalizedMonthCode,
-                    candidateDay);
-            if (candidateReferenceIsoDate != null) {
-                return candidateReferenceIsoDate;
-            }
+        IsoDate constrainedReferenceIsoDate = calendarId.findReferenceIsoDateAtOrBelow(
+                normalizedMonthCode,
+                constrainedSearchDay);
+        if (constrainedReferenceIsoDate != null) {
+            return constrainedReferenceIsoDate;
         }
         context.throwRangeError("Temporal error: Invalid ISO date.");
         return null;

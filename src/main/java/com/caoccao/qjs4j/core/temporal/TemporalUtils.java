@@ -22,6 +22,9 @@ import java.math.BigInteger;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.Queue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Shared utilities for Temporal types.
@@ -118,6 +121,11 @@ public final class TemporalUtils {
             return null;
         }
         return calendarNameOption;
+    }
+
+    public static long getCalendarYearCacheKey(TemporalCalendarId calendarId, int calendarYear) {
+        long normalizedYear = (long) calendarYear - Integer.MIN_VALUE;
+        return ((long) calendarId.ordinal() << 32) | (normalizedYear & 0xFFFF_FFFFL);
     }
 
     /**
@@ -285,6 +293,43 @@ public final class TemporalUtils {
             throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
         }
         return sign * (hours * 3600 + minutes * 60);
+    }
+
+    public static <Key, Value> void putBoundedMapEntry(
+            ConcurrentHashMap<Key, Value> cache,
+            Queue<Key> evictionQueue,
+            Key key,
+            Value value,
+            int maximumSize) {
+        Value previousValue = cache.put(key, value);
+        if (previousValue == null) {
+            evictionQueue.offer(key);
+        }
+        while (cache.size() > maximumSize) {
+            Key oldestKey = evictionQueue.poll();
+            if (oldestKey == null) {
+                break;
+            }
+            cache.remove(oldestKey);
+        }
+    }
+
+    public static <Value> void putBoundedSetEntry(
+            Set<Value> cache,
+            Queue<Value> evictionQueue,
+            Value value,
+            int maximumSize) {
+        boolean inserted = cache.add(value);
+        if (inserted) {
+            evictionQueue.offer(value);
+        }
+        while (cache.size() > maximumSize) {
+            Value oldestValue = evictionQueue.poll();
+            if (oldestValue == null) {
+                break;
+            }
+            cache.remove(oldestValue);
+        }
     }
 
     public static JSObject resolveTemporalPrototype(JSContext context, String typeName) {

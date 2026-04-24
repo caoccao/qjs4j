@@ -224,6 +224,41 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
         return monthSlots;
     }
 
+    private static long hebrewAbsoluteDay(int hebrewYear, String monthCode, int dayOfMonth) {
+        List<IsoCalendarMonth> monthSlots = getHebrewMonthSlots(hebrewYear);
+        int slotIndex = -1;
+        for (int monthIndex = 0; monthIndex < monthSlots.size(); monthIndex++) {
+            if (monthSlots.get(monthIndex).monthCode().equals(monthCode)) {
+                slotIndex = monthIndex;
+                break;
+            }
+        }
+        if (slotIndex < 0) {
+            return Long.MIN_VALUE;
+        }
+        int monthLength = monthSlots.get(slotIndex).daysInMonth();
+        if (dayOfMonth < 1 || dayOfMonth > monthLength) {
+            return Long.MIN_VALUE;
+        }
+        long daysBeforeMonth = 0L;
+        for (int monthIndex = 0; monthIndex < slotIndex; monthIndex++) {
+            daysBeforeMonth += monthSlots.get(monthIndex).daysInMonth();
+        }
+        return TemporalCalendarMath.hebrewElapsedDays(hebrewYear) + daysBeforeMonth + dayOfMonth - 1L;
+    }
+
+    static IsoDate hebrewToIsoDate(int hebrewYear, String monthCode, int dayOfMonth) {
+        long hebrewAbsoluteDay = hebrewAbsoluteDay(hebrewYear, monthCode, dayOfMonth);
+        if (hebrewAbsoluteDay == Long.MIN_VALUE) {
+            return null;
+        }
+        long epochDay = hebrewAbsoluteDay + TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
+        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
+            return null;
+        }
+        return IsoDate.createFromEpochDay(epochDay);
+    }
+
     static IsoDate indianToIsoDate(int indianYear, String monthCode, int dayOfMonth) {
         IsoMonth monthCodeData = IsoMonth.parseByMonthCode(monthCode);
         if (monthCodeData == null || monthCodeData.leapMonth()) {
@@ -255,41 +290,6 @@ public record IsoDate(int year, int month, int day) implements Comparable<IsoDat
             return null;
         }
         return IsoDate.createFromEpochDay(resultEpochDay);
-    }
-
-    static IsoDate hebrewToIsoDate(int hebrewYear, String monthCode, int dayOfMonth) {
-        long hebrewAbsoluteDay = hebrewAbsoluteDay(hebrewYear, monthCode, dayOfMonth);
-        if (hebrewAbsoluteDay == Long.MIN_VALUE) {
-            return null;
-        }
-        long epochDay = hebrewAbsoluteDay + TemporalConstants.HEBREW_EPOCH_DAY_OFFSET;
-        if (epochDay < TemporalConstants.MIN_SUPPORTED_EPOCH_DAY || epochDay > TemporalConstants.MAX_SUPPORTED_EPOCH_DAY) {
-            return null;
-        }
-        return IsoDate.createFromEpochDay(epochDay);
-    }
-
-    private static long hebrewAbsoluteDay(int hebrewYear, String monthCode, int dayOfMonth) {
-        List<IsoCalendarMonth> monthSlots = getHebrewMonthSlots(hebrewYear);
-        int slotIndex = -1;
-        for (int monthIndex = 0; monthIndex < monthSlots.size(); monthIndex++) {
-            if (monthSlots.get(monthIndex).monthCode().equals(monthCode)) {
-                slotIndex = monthIndex;
-                break;
-            }
-        }
-        if (slotIndex < 0) {
-            return Long.MIN_VALUE;
-        }
-        int monthLength = monthSlots.get(slotIndex).daysInMonth();
-        if (dayOfMonth < 1 || dayOfMonth > monthLength) {
-            return Long.MIN_VALUE;
-        }
-        long daysBeforeMonth = 0L;
-        for (int monthIndex = 0; monthIndex < slotIndex; monthIndex++) {
-            daysBeforeMonth += monthSlots.get(monthIndex).daysInMonth();
-        }
-        return TemporalCalendarMath.hebrewElapsedDays(hebrewYear) + daysBeforeMonth + dayOfMonth - 1L;
     }
 
     static IsoDate islamicToIsoDate(int islamicYear, String monthCode, int dayOfMonth, long epochDayOffset) {
