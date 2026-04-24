@@ -145,10 +145,6 @@ final class IsoParsingState {
         return input.charAt(position);
     }
 
-    private boolean hasTwoDigits(int index) {
-        return hasTwoDigits(input, index);
-    }
-
     private boolean hasTwoDigits(String value, int index) {
         return index + 2 <= value.length()
                 && isAsciiDigit(value.charAt(index))
@@ -191,7 +187,7 @@ final class IsoParsingState {
         if (!hasTwoDigits(value, index)) {
             return false;
         }
-        int hours = parseTwoDigitNumber(value, index);
+        int hours = (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
         if (hours > 23) {
             return false;
         }
@@ -215,7 +211,7 @@ final class IsoParsingState {
                 || !isAsciiDigit(value.charAt(index + 1))) {
             return false;
         }
-        int minutes = parseTwoDigitNumber(value, index);
+        int minutes = (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
         if (minutes > 59) {
             return false;
         }
@@ -709,7 +705,7 @@ final class IsoParsingState {
 
         if (extendedFormat) {
             position++;
-            if (!hasTwoDigits(position)) {
+            if (!hasTwoDigits(input, position)) {
                 context.throwRangeError("Temporal error: Invalid time");
                 return null;
             }
@@ -786,10 +782,6 @@ final class IsoParsingState {
             value = value * 10L + digit;
         }
         return value;
-    }
-
-    private int parseTwoDigitNumber(String value, int index) {
-        return (value.charAt(index) - '0') * 10 + (value.charAt(index + 1) - '0');
     }
 
     int parseTwoDigits(JSContext context, String fieldName) {

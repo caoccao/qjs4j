@@ -267,18 +267,6 @@ public enum TemporalCalendarId {
         };
     }
 
-    private static int islamicDaysInMonth(int islamicYear, int islamicMonth, long epochDayOffset) {
-        if (islamicMonth < 1 || islamicMonth > 12) {
-            return 0;
-        }
-        if (islamicMonth == 12) {
-            long yearLength = TemporalUtils.islamicDaysBeforeYear(islamicYear + 1)
-                    - TemporalUtils.islamicDaysBeforeYear(islamicYear);
-            return (int) (yearLength - 325L);
-        }
-        return islamicMonth % 2 == 1 ? 30 : 29;
-    }
-
     private static <Key, Value> void putBoundedMapEntry(
             ConcurrentHashMap<Key, Value> cache,
             Key key,
@@ -310,10 +298,7 @@ public enum TemporalCalendarId {
         try {
             return HijrahChronology.INSTANCE.date(islamicYear, islamicMonth, 1).lengthOfMonth();
         } catch (DateTimeException dateTimeException) {
-            return islamicDaysInMonth(
-                    islamicYear,
-                    islamicMonth,
-                    TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET);
+            return TemporalUtils.islamicDaysInMonth(islamicYear, islamicMonth);
         }
     }
 
@@ -562,10 +547,8 @@ public enum TemporalCalendarId {
             case ETHIOAA -> TemporalUtils.alexandrianLeapYear(calendarYear - 5500);
             case HEBREW -> TemporalCalendarMath.isHebrewLeapYear(calendarYear);
             case INDIAN -> TemporalCalendarMath.isLeapYear(calendarYear + 78);
-            case ISLAMIC_CIVIL ->
-                    islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_CIVIL_EPOCH_DAY_OFFSET) == 30;
-            case ISLAMIC_TBLA ->
-                    islamicDaysInMonth(calendarYear, 12, TemporalConstants.ISLAMIC_TBLA_EPOCH_DAY_OFFSET) == 30;
+            case ISLAMIC_CIVIL -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
+            case ISLAMIC_TBLA -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_UMALQURA -> TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469.contains(calendarYear)
                     || (calendarYear < 1390 || calendarYear > 1469)
                     && umalquraDaysInMonth(calendarYear, 12) == 30;

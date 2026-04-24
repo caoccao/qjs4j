@@ -222,6 +222,18 @@ public final class TemporalUtils {
         return (int) (354L * (islamicYear - 1L) + Math.floorDiv(11L * islamicYear + 3L, 30L));
     }
 
+    public static int islamicDaysInMonth(int islamicYear, int islamicMonth) {
+        if (islamicMonth < 1 || islamicMonth > 12) {
+            return 0;
+        }
+        if (islamicMonth == 12) {
+            long yearLength = islamicDaysBeforeYear(islamicYear + 1)
+                    - islamicDaysBeforeYear(islamicYear);
+            return (int) (yearLength - 325L);
+        }
+        return islamicMonth % 2 == 1 ? 30 : 29;
+    }
+
     /**
      * Returns true if firstDate surpasses secondDate in the direction indicated by sign.
      * Positive sign means firstDate is later; negative sign means firstDate is earlier.

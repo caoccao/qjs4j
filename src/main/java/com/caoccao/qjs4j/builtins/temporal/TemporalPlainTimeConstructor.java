@@ -117,10 +117,6 @@ public final class TemporalPlainTimeConstructor {
         return toTemporalTime(context, item, options);
     }
 
-    private static boolean isUndefinedOrNull(JSValue value) {
-        return value instanceof JSUndefined || value == null;
-    }
-
     static JSValue timeFromFields(JSContext context, JSObject fields, JSValue options) {
         boolean hasTimeField = false;
 
@@ -128,7 +124,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(hourValue);
+        hasTimeField |= !(hourValue instanceof JSUndefined) && hourValue != null;
         int hour = toIntegerFieldOrDefault(context, hourValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -138,7 +134,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(microsecondValue);
+        hasTimeField |= !(microsecondValue instanceof JSUndefined) && microsecondValue != null;
         int microsecond = toIntegerFieldOrDefault(context, microsecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -148,7 +144,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(millisecondValue);
+        hasTimeField |= !(millisecondValue instanceof JSUndefined) && millisecondValue != null;
         int millisecond = toIntegerFieldOrDefault(context, millisecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -158,7 +154,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(minuteValue);
+        hasTimeField |= !(minuteValue instanceof JSUndefined) && minuteValue != null;
         int minute = toIntegerFieldOrDefault(context, minuteValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -168,7 +164,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(nanosecondValue);
+        hasTimeField |= !(nanosecondValue instanceof JSUndefined) && nanosecondValue != null;
         int nanosecond = toIntegerFieldOrDefault(context, nanosecondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -178,7 +174,7 @@ public final class TemporalPlainTimeConstructor {
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
-        hasTimeField |= !isUndefinedOrNull(secondValue);
+        hasTimeField |= !(secondValue instanceof JSUndefined) && secondValue != null;
         int second = toIntegerFieldOrDefault(context, secondValue, 0);
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
@@ -215,7 +211,7 @@ public final class TemporalPlainTimeConstructor {
     }
 
     private static int toIntegerFieldOrDefault(JSContext context, JSValue value, int defaultValue) {
-        if (isUndefinedOrNull(value)) {
+        if (value instanceof JSUndefined || value == null) {
             return defaultValue;
         }
         return TemporalUtils.toIntegerThrowOnInfinity(context, value);

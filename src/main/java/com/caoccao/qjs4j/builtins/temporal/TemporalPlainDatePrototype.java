@@ -39,7 +39,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue add(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "add");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "add");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -423,21 +423,11 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "calendarId");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "calendarId");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
         return new JSString(plainDate.getCalendarId().identifier());
-    }
-
-    private static boolean calendarSupportsEraFields(TemporalCalendarId calendarId) {
-        return calendarId != TemporalCalendarId.ISO8601
-                && calendarId != TemporalCalendarId.CHINESE
-                && calendarId != TemporalCalendarId.DANGI;
-    }
-
-    private static JSTemporalPlainDate checkReceiver(JSContext context, JSValue thisArg, String methodName) {
-        return TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, methodName);
     }
 
     private static int compareCalendarDateFields(
@@ -483,7 +473,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "day");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "day");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -492,7 +482,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue dayOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "dayOfWeek");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "dayOfWeek");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -500,7 +490,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue dayOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "dayOfYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "dayOfYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -508,7 +498,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue daysInMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "daysInMonth");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "daysInMonth");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -516,7 +506,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue daysInWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "daysInWeek");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "daysInWeek");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -524,7 +514,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue daysInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "daysInYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "daysInYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -663,7 +653,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "equals");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "equals");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -678,7 +668,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue era(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "era");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "era");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -690,7 +680,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue eraYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "eraYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "eraYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -702,17 +692,13 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue inLeapYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "inLeapYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "inLeapYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
         return TemporalCalendarMath.inLeapYear(plainDate.getIsoDate(), plainDate.getCalendarId())
                 ? JSBoolean.TRUE
                 : JSBoolean.FALSE;
-    }
-
-    private static boolean isCalendarUnit(TemporalUnit unit) {
-        return unit == TemporalUnit.YEAR || unit == TemporalUnit.MONTH || unit == TemporalUnit.WEEK;
     }
 
     private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
@@ -730,7 +716,7 @@ public final class TemporalPlainDatePrototype {
 
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "month");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "month");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -739,7 +725,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue monthCode(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "monthCode");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "monthCode");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -802,7 +788,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "monthsInYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "monthsInYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -935,7 +921,9 @@ public final class TemporalPlainDatePrototype {
             TemporalDifferenceSettings settings) {
         int sign = duration.sign() < 0 ? -1 : 1;
         TemporalNudgeResult nudgeResult;
-        if (isCalendarUnit(settings.smallestUnit())) {
+        if (settings.smallestUnit() == TemporalUnit.YEAR
+                || settings.smallestUnit() == TemporalUnit.MONTH
+                || settings.smallestUnit() == TemporalUnit.WEEK) {
             nudgeResult = nudgeToCalendarUnit(
                     context,
                     sign,
@@ -975,7 +963,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "since");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "since");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -983,7 +971,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue subtract(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "subtract");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "subtract");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -999,7 +987,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toJSON");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toJSON");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1007,7 +995,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toLocaleString(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toLocaleString");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toLocaleString");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1034,7 +1022,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toPlainDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toPlainDateTime");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toPlainDateTime");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1058,7 +1046,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toPlainMonthDay(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toPlainMonthDay");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toPlainMonthDay");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1077,7 +1065,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toPlainYearMonth(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toPlainYearMonth");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toPlainYearMonth");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1095,7 +1083,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toStringMethod(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toString");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toString");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1117,7 +1105,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue toZonedDateTime(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "toZonedDateTime");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "toZonedDateTime");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1182,7 +1170,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue until(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "until");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "until");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1195,7 +1183,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue weekOfYear(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "weekOfYear");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "weekOfYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1206,7 +1194,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue with(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "with");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "with");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1242,7 +1230,9 @@ public final class TemporalPlainDatePrototype {
         }
 
         TemporalCalendarId calendarId = plainDate.getCalendarId();
-        boolean calendarSupportsEraFields = calendarSupportsEraFields(calendarId);
+        boolean calendarSupportsEraFields = calendarId != TemporalCalendarId.ISO8601
+                && calendarId != TemporalCalendarId.CHINESE
+                && calendarId != TemporalCalendarId.DANGI;
 
         JSValue dayFieldValue = fields.get(PropertyKey.fromString("day"));
         if (context.hasPendingException()) {
@@ -1448,7 +1438,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue withCalendar(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "withCalendar");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "withCalendar");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1464,7 +1454,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue year(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "year");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "year");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
@@ -1473,7 +1463,7 @@ public final class TemporalPlainDatePrototype {
     }
 
     public static JSValue yearOfWeek(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSTemporalPlainDate plainDate = checkReceiver(context, thisArg, "yearOfWeek");
+        JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "yearOfWeek");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }

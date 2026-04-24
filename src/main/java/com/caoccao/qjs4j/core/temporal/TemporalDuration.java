@@ -153,7 +153,7 @@ public record TemporalDuration(
         if (value >= -FLOAT64_SAFE_INTEGER_MAX && value <= FLOAT64_SAFE_INTEGER_MAX) {
             return true;
         } else {
-            return toFloat64RepresentableLong(value) == value;
+            return (long) ((double) value) == value;
         }
     }
 
@@ -164,10 +164,6 @@ public record TemporalDuration(
         }
         IsoParsingState parsingState = new IsoParsingState(input);
         return parsingState.parseDuration(context);
-    }
-
-    private static long toFloat64RepresentableLong(long value) {
-        return (long) ((double) value);
     }
 
     public TemporalDuration abs() {
@@ -439,16 +435,16 @@ public record TemporalDuration(
         }
 
         return new TemporalDuration(
-                toFloat64RepresentableLong(years),
-                toFloat64RepresentableLong(months),
-                toFloat64RepresentableLong(weeks),
-                toFloat64RepresentableLong(days),
-                toFloat64RepresentableLong(hours),
-                toFloat64RepresentableLong(minutes),
-                toFloat64RepresentableLong(seconds),
-                toFloat64RepresentableLong(milliseconds),
-                toFloat64RepresentableLong(microseconds),
-                toFloat64RepresentableLong(nanoseconds));
+                (long) ((double) years),
+                (long) ((double) months),
+                (long) ((double) weeks),
+                (long) ((double) days),
+                (long) ((double) hours),
+                (long) ((double) minutes),
+                (long) ((double) seconds),
+                (long) ((double) milliseconds),
+                (long) ((double) microseconds),
+                (long) ((double) nanoseconds));
     }
 
     public int sign() {
