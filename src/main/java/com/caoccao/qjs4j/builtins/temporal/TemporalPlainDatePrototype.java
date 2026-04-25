@@ -124,352 +124,12 @@ public final class TemporalPlainDatePrototype {
         return JSTemporalPlainDate.create(context, resultIsoDate, calendarId);
     }
 
-    static IsoDate addToIsoDate(IsoDate date, int years, int months, int weeks, int days) {
-        long monthIndex = (long) date.month() - 1L + months;
-        long yearDelta = Math.floorDiv(monthIndex, 12L);
-        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        int normalizedYear = (int) (date.year() + years + yearDelta);
-        int maxDay = IsoDate.daysInMonth(normalizedYear, normalizedMonth);
-        int normalizedDay = Math.min(date.day(), maxDay);
-        IsoDate intermediate = new IsoDate(normalizedYear, normalizedMonth, normalizedDay);
-        long totalDays = (long) weeks * 7L + days;
-        return intermediate.addDays((int) totalDays);
-    }
-
-    private static TemporalDateDurationFields adjustDateDurationRecord(
-            TemporalDateDurationFields dateDuration,
-            long newDays,
-            Long newWeeks,
-            Long newMonths) {
-        long adjustedMonths = newMonths == null ? dateDuration.months() : newMonths;
-        long adjustedWeeks = newWeeks == null ? dateDuration.weeks() : newWeeks;
-        return new TemporalDateDurationFields(
-                dateDuration.years(),
-                adjustedMonths,
-                adjustedWeeks,
-                newDays);
-    }
-
-
-    private static TemporalYearMonthBalance balanceIsoYearMonth(long year, long month) {
-        long monthIndex = month - 1;
-        long yearDelta = Math.floorDiv(monthIndex, 12L);
-        int normalizedMonth = (int) (Math.floorMod(monthIndex, 12L) + 1L);
-        long normalizedYear = year + yearDelta;
-        return new TemporalYearMonthBalance(normalizedYear, normalizedMonth);
-    }
-
-    private static TemporalDateDurationFields bubbleRelativeDuration(
-            JSContext context,
-            int sign,
-            TemporalDateDurationFields duration,
-            long nudgedEpochDay,
-            IsoDate originDate,
-            TemporalCalendarId calendarId,
-            TemporalUnit largestUnit,
-            TemporalUnit smallestUnit) {
-        if (smallestUnit == largestUnit) {
-            return duration;
-        }
-        int largestUnitIndex = largestUnit.rank();
-        int smallestUnitIndex = smallestUnit.rank();
-        for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
-            TemporalUnit unit = temporalUnitByRank(unitIndex);
-            if (unit == TemporalUnit.WEEK && largestUnit != TemporalUnit.WEEK) {
-                continue;
-            }
-
-            TemporalDateDurationFields endDuration;
-            if (unit == TemporalUnit.YEAR) {
-                endDuration = new TemporalDateDurationFields(duration.years() + sign, 0, 0, 0);
-            } else if (unit == TemporalUnit.MONTH) {
-                endDuration = adjustDateDurationRecord(duration, 0, 0L, duration.months() + sign);
-            } else {
-                endDuration = adjustDateDurationRecord(duration, 0, duration.weeks() + sign, null);
-            }
-
-            IsoDate endDate = calendarDateAddConstrain(context, originDate, calendarId, endDuration);
-            if (context.hasPendingException() || endDate == null) {
-                return null;
-            }
-            boolean didExpandToEnd = Long.compare(nudgedEpochDay, endDate.toEpochDay()) != -sign;
-            if (didExpandToEnd) {
-                duration = endDuration;
-            } else {
-                break;
-            }
-        }
-        return duration;
-    }
-
-    private static IsoDate calendarDateAddConstrain(
-            JSContext context,
-            IsoDate baseDate,
-            TemporalCalendarId calendarId,
-            TemporalDateDurationFields dateDuration) {
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            TemporalDuration durationRecord = new TemporalDuration(
-                    dateDuration.years(),
-                    dateDuration.months(),
-                    dateDuration.weeks(),
-                    dateDuration.days(),
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0);
-            return addDurationToDate(context, baseDate, durationRecord, "constrain");
-        }
-        return baseDate.addCalendarDate(
-                context,
-                calendarId,
-                dateDuration.years(),
-                dateDuration.months(),
-                dateDuration.weeks(),
-                dateDuration.days(),
-                "constrain");
-    }
-
-    private static TemporalDateDurationFields calendarDateUntil(
-            JSContext context,
-            IsoDate firstDate,
-            IsoDate secondDate,
-            TemporalCalendarId calendarId,
-            TemporalUnit largestUnit) {
-        if (calendarId == TemporalCalendarId.ISO8601) {
-            return calendarDateUntilIso(firstDate, secondDate, largestUnit);
-        }
-        int sign = -Integer.signum(firstDate.compareTo(secondDate));
-        if (sign == 0) {
-            return TemporalDateDurationFields.ZERO;
-        }
-
-        long years = 0;
-        long months = 0;
-        if (largestUnit == TemporalUnit.YEAR || largestUnit == TemporalUnit.MONTH) {
-            IsoCalendarDate firstCalendarDateFields = firstDate.toIsoCalendarDate(calendarId);
-            IsoCalendarDate secondCalendarDateFields = secondDate.toIsoCalendarDate(calendarId);
-            long candidateYears = (long) secondCalendarDateFields.year() - firstCalendarDateFields.year();
-            if (candidateYears != 0L) {
-                candidateYears -= sign;
-            }
-            while (true) {
-                TemporalDateDurationFields candidateYearDuration = new TemporalDateDurationFields(candidateYears, 0, 0, 0);
-                IsoDate candidateYearDate = calendarDateAddConstrain(context, firstDate, calendarId, candidateYearDuration);
-                if (context.hasPendingException() || candidateYearDate == null) {
-                    return null;
-                }
-                if (TemporalUtils.isoDateSurpasses(sign, candidateYearDate, secondDate)) {
-                    break;
-                }
-                if (doesConceptualYearDateSurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateYears,
-                        secondCalendarDateFields)) {
-                    break;
-                }
-                if (doesConstrainedCalendarDaySurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateYearDate,
-                        secondCalendarDateFields,
-                        calendarId)) {
-                    break;
-                }
-                years = candidateYears;
-                candidateYears += sign;
-            }
-
-            long candidateMonths = sign;
-            while (true) {
-                TemporalDateDurationFields candidateMonthDuration = new TemporalDateDurationFields(years, candidateMonths, 0, 0);
-                IsoDate candidateMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, candidateMonthDuration);
-                if (context.hasPendingException() || candidateMonthDate == null) {
-                    return null;
-                }
-                if (TemporalUtils.isoDateSurpasses(sign, candidateMonthDate, secondDate)) {
-                    break;
-                }
-                if (doesConstrainedCalendarDaySurpassSecondDate(
-                        sign,
-                        firstCalendarDateFields,
-                        candidateMonthDate,
-                        secondCalendarDateFields,
-                        calendarId)) {
-                    break;
-                }
-                months = candidateMonths;
-                candidateMonths += sign;
-            }
-
-            if (largestUnit == TemporalUnit.MONTH) {
-                long monthsFromYears = monthsForYearDelta(context, firstDate, calendarId, years);
-                if (context.hasPendingException()) {
-                    return null;
-                }
-                long totalMonths;
-                try {
-                    totalMonths = Math.addExact(months, monthsFromYears);
-                } catch (ArithmeticException arithmeticException) {
-                    context.throwRangeError("Temporal error: Duration field out of range.");
-                    return null;
-                }
-                while (true) {
-                    TemporalDateDurationFields totalMonthDuration = new TemporalDateDurationFields(0, totalMonths, 0, 0);
-                    IsoDate totalMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, totalMonthDuration);
-                    if (context.hasPendingException() || totalMonthDate == null) {
-                        return null;
-                    }
-                    if (TemporalUtils.isoDateSurpasses(sign, totalMonthDate, secondDate)) {
-                        totalMonths -= sign;
-                        continue;
-                    }
-                    if (doesConstrainedCalendarDaySurpassSecondDate(
-                            sign,
-                            firstCalendarDateFields,
-                            totalMonthDate,
-                            secondCalendarDateFields,
-                            calendarId)) {
-                        totalMonths -= sign;
-                        continue;
-                    }
-
-                    long nextTotalMonths;
-                    try {
-                        nextTotalMonths = Math.addExact(totalMonths, sign);
-                    } catch (ArithmeticException arithmeticException) {
-                        break;
-                    }
-                    TemporalDateDurationFields nextTotalMonthDuration = new TemporalDateDurationFields(0, nextTotalMonths, 0, 0);
-                    IsoDate nextTotalMonthDate = calendarDateAddConstrain(context, firstDate, calendarId, nextTotalMonthDuration);
-                    if (context.hasPendingException() || nextTotalMonthDate == null) {
-                        return null;
-                    }
-                    if (TemporalUtils.isoDateSurpasses(sign, nextTotalMonthDate, secondDate)) {
-                        break;
-                    }
-                    if (doesConstrainedCalendarDaySurpassSecondDate(
-                            sign,
-                            firstCalendarDateFields,
-                            nextTotalMonthDate,
-                            secondCalendarDateFields,
-                            calendarId)) {
-                        break;
-                    }
-                    totalMonths = nextTotalMonths;
-                }
-                months = totalMonths;
-                years = 0;
-            }
-        }
-
-        TemporalDateDurationFields intermediateDuration = new TemporalDateDurationFields(years, months, 0, 0);
-        IsoDate constrainedDate = calendarDateAddConstrain(context, firstDate, calendarId, intermediateDuration);
-        if (context.hasPendingException() || constrainedDate == null) {
-            return null;
-        }
-        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
-        long weeks = 0;
-        if (largestUnit == TemporalUnit.WEEK) {
-            weeks = dayDifference / 7;
-            dayDifference = dayDifference % 7;
-        }
-        return new TemporalDateDurationFields(years, months, weeks, dayDifference);
-    }
-
-    private static TemporalDateDurationFields calendarDateUntilIso(IsoDate firstDate, IsoDate secondDate, TemporalUnit largestUnit) {
-        int sign = -Integer.signum(firstDate.compareTo(secondDate));
-        if (sign == 0) {
-            return TemporalDateDurationFields.ZERO;
-        }
-
-        long years = 0;
-        long months = 0;
-        if (largestUnit == TemporalUnit.YEAR || largestUnit == TemporalUnit.MONTH) {
-            long candidateYears = (long) secondDate.year() - firstDate.year();
-            if (candidateYears != 0) {
-                candidateYears -= sign;
-            }
-            while (!isoDateSurpasses(sign, firstDate.year() + candidateYears, firstDate.month(), firstDate.day(), secondDate)) {
-                years = candidateYears;
-                candidateYears += sign;
-            }
-
-            long candidateMonths = sign;
-            TemporalYearMonthBalance intermediateYearMonth = balanceIsoYearMonth(firstDate.year() + years, firstDate.month() + candidateMonths);
-            while (!isoDateSurpasses(sign, intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day(), secondDate)) {
-                months = candidateMonths;
-                candidateMonths += sign;
-                intermediateYearMonth = balanceIsoYearMonth(intermediateYearMonth.year(), intermediateYearMonth.month() + sign);
-            }
-
-            if (largestUnit == TemporalUnit.MONTH) {
-                months += years * 12;
-                years = 0;
-            }
-        }
-
-        TemporalYearMonthBalance intermediateYearMonth = balanceIsoYearMonth(firstDate.year() + years, firstDate.month() + months);
-        IsoDate constrainedDate = constrainIsoDate(intermediateYearMonth.year(), intermediateYearMonth.month(), firstDate.day());
-        long dayDifference = secondDate.toEpochDay() - constrainedDate.toEpochDay();
-        long weeks = 0;
-        if (largestUnit == TemporalUnit.WEEK) {
-            weeks = dayDifference / 7;
-            dayDifference = dayDifference % 7;
-        }
-        return new TemporalDateDurationFields(years, months, weeks, dayDifference);
-    }
-
     public static JSValue calendarId(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "calendarId");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
         return new JSString(plainDate.getCalendarId().identifier());
-    }
-
-    private static int compareCalendarDateFields(
-            long firstYear,
-            String firstMonthCode,
-            int firstDay,
-            int secondYear,
-            String secondMonthCode,
-            int secondDay) {
-        int yearComparison = Long.compare(firstYear, secondYear);
-        if (yearComparison != 0) {
-            return yearComparison;
-        }
-        int monthComparison = compareMonthCodes(firstMonthCode, secondMonthCode);
-        if (monthComparison != 0) {
-            return monthComparison;
-        }
-        return Integer.compare(firstDay, secondDay);
-    }
-
-    private static int compareMonthCodes(String firstMonthCode, String secondMonthCode) {
-        IsoMonth firstMonthCodeParts = IsoMonth.parseByMonthCode(firstMonthCode);
-        IsoMonth secondMonthCodeParts = IsoMonth.parseByMonthCode(secondMonthCode);
-        if (firstMonthCodeParts == null || secondMonthCodeParts == null) {
-            return firstMonthCode.compareTo(secondMonthCode);
-        }
-        int monthNumberComparison = Integer.compare(
-                firstMonthCodeParts.month(),
-                secondMonthCodeParts.month());
-        if (monthNumberComparison != 0) {
-            return monthNumberComparison;
-        }
-        if (firstMonthCodeParts.leapMonth() == secondMonthCodeParts.leapMonth()) {
-            return 0;
-        }
-        return firstMonthCodeParts.leapMonth() ? 1 : -1;
-    }
-
-    private static IsoDate constrainIsoDate(long year, int month, int dayOfMonth) {
-        int constrainedYear = (int) year;
-        int constrainedDay = Math.min(dayOfMonth, IsoDate.daysInMonth(constrainedYear, month));
-        return new IsoDate(constrainedYear, month, constrainedDay);
     }
 
     public static JSValue day(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -527,7 +187,7 @@ public final class TemporalPlainDatePrototype {
             IsoDate secondDate,
             TemporalCalendarId calendarId,
             TemporalUnit largestUnit) {
-        TemporalDateDurationFields dateDifference = calendarDateUntil(
+        TemporalDurationDateWeek dateDifference = TemporalDurationDateWeek.calendarDateUntil(
                 context,
                 firstDate,
                 secondDate,
@@ -580,7 +240,7 @@ public final class TemporalPlainDatePrototype {
             return JSTemporalDuration.create(context, TemporalDuration.ZERO);
         }
 
-        TemporalDateDurationFields dateDifference = calendarDateUntil(
+        TemporalDurationDateWeek dateDifference = TemporalDurationDateWeek.calendarDateUntil(
                 context,
                 thisDate,
                 otherDate,
@@ -615,41 +275,6 @@ public final class TemporalPlainDatePrototype {
             resultDuration = resultDuration.negated();
         }
         return JSTemporalDuration.create(context, resultDuration);
-    }
-
-    private static boolean doesConceptualYearDateSurpassSecondDate(
-            int sign,
-            IsoCalendarDate firstCalendarDateFields,
-            long candidateYears,
-            IsoCalendarDate secondCalendarDateFields) {
-        long candidateYear = firstCalendarDateFields.year() + candidateYears;
-        int comparison = compareCalendarDateFields(
-                candidateYear,
-                firstCalendarDateFields.monthCode(),
-                firstCalendarDateFields.day(),
-                secondCalendarDateFields.year(),
-                secondCalendarDateFields.monthCode(),
-                secondCalendarDateFields.day());
-        return sign * comparison > 0;
-    }
-
-    private static boolean doesConstrainedCalendarDaySurpassSecondDate(
-            int sign,
-            IsoCalendarDate firstCalendarDateFields,
-            IsoDate constrainedCandidateDate,
-            IsoCalendarDate secondCalendarDateFields,
-            TemporalCalendarId calendarId) {
-        IsoCalendarDate candidateCalendarDateFields = constrainedCandidateDate.toIsoCalendarDate(calendarId);
-        if (candidateCalendarDateFields.day() == firstCalendarDateFields.day()) {
-            return false;
-        }
-        if (candidateCalendarDateFields.year() != secondCalendarDateFields.year()) {
-            return false;
-        }
-        if (!candidateCalendarDateFields.monthCode().equals(secondCalendarDateFields.monthCode())) {
-            return false;
-        }
-        return sign * Integer.compare(firstCalendarDateFields.day(), secondCalendarDateFields.day()) > 0;
     }
 
     public static JSValue equals(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -696,24 +321,14 @@ public final class TemporalPlainDatePrototype {
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return TemporalCalendarMath.inLeapYear(plainDate.getIsoDate(), plainDate.getCalendarId())
-                ? JSBoolean.TRUE
-                : JSBoolean.FALSE;
+        IsoCalendarDate calendarDateFields = plainDate.getIsoDate().toIsoCalendarDate(plainDate.getCalendarId());
+        boolean leapYear = plainDate.getCalendarId().isCalendarLeapYear(calendarDateFields.year());
+        if (leapYear) {
+            return JSBoolean.TRUE;
+        } else {
+            return JSBoolean.FALSE;
+        }
     }
-
-    private static boolean isoDateSurpasses(int sign, long year, long month, long dayOfMonth, IsoDate isoDate) {
-        if (year != isoDate.year()) {
-            return sign * (year - isoDate.year()) > 0;
-        }
-        if (month != isoDate.month()) {
-            return sign * (month - isoDate.month()) > 0;
-        }
-        if (dayOfMonth != isoDate.day()) {
-            return sign * (dayOfMonth - isoDate.day()) > 0;
-        }
-        return false;
-    }
-
 
     public static JSValue month(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "month");
@@ -732,73 +347,18 @@ public final class TemporalPlainDatePrototype {
         return new JSString(plainDate.toIsoCalendarDate().monthCode());
     }
 
-    private static long monthsForYearDelta(
-            JSContext context,
-            IsoDate firstDate,
-            TemporalCalendarId calendarId,
-            long yearDelta) {
-        if (yearDelta == 0L) {
-            return 0L;
-        }
-        if (calendarId == TemporalCalendarId.COPTIC || calendarId == TemporalCalendarId.ETHIOPIC || calendarId == TemporalCalendarId.ETHIOAA) {
-            try {
-                return Math.multiplyExact(yearDelta, 13L);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-        }
-        if (calendarId == TemporalCalendarId.ISO8601
-                || calendarId == TemporalCalendarId.GREGORY
-                || calendarId == TemporalCalendarId.JAPANESE
-                || calendarId == TemporalCalendarId.BUDDHIST
-                || calendarId == TemporalCalendarId.ROC
-                || calendarId == TemporalCalendarId.INDIAN
-                || calendarId == TemporalCalendarId.PERSIAN
-                || calendarId == TemporalCalendarId.ISLAMIC_CIVIL
-                || calendarId == TemporalCalendarId.ISLAMIC_TBLA
-                || calendarId == TemporalCalendarId.ISLAMIC_UMALQURA) {
-            try {
-                return Math.multiplyExact(yearDelta, 12L);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-        }
-
-        int yearSign = yearDelta > 0L ? 1 : -1;
-        long absoluteYearDelta = Math.abs(yearDelta);
-        long totalMonths = 0L;
-        IsoDate cursorDate = firstDate;
-        for (long yearIndex = 0L; yearIndex < absoluteYearDelta; yearIndex++) {
-            int monthsInYear = TemporalCalendarMath.monthsInYear(cursorDate, calendarId);
-            try {
-                totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
-            } catch (ArithmeticException arithmeticException) {
-                context.throwRangeError("Temporal error: Duration field out of range.");
-                return 0L;
-            }
-            TemporalDateDurationFields oneYearDuration = new TemporalDateDurationFields(yearSign, 0, 0, 0);
-            cursorDate = calendarDateAddConstrain(context, cursorDate, calendarId, oneYearDuration);
-            if (context.hasPendingException() || cursorDate == null) {
-                return 0L;
-            }
-        }
-        return totalMonths;
-    }
-
     public static JSValue monthsInYear(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTemporalPlainDate plainDate = TemporalUtils.checkReceiver(context, thisArg, JSTemporalPlainDate.class, TYPE_NAME, "monthsInYear");
         if (plainDate == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
+        return JSNumber.of(TemporalUtils.monthsInYear(plainDate.getIsoDate(), plainDate.getCalendarId()));
     }
 
-    private static TemporalNudgeResult nudgeToCalendarUnit(
+    private static TemporalDurationDateWeek nudgeToCalendarUnit(
             JSContext context,
             int sign,
-            TemporalDateDurationFields duration,
+            TemporalDurationDateWeek duration,
             long destinationEpochDay,
             IsoDate originDate,
             TemporalCalendarId calendarId,
@@ -807,29 +367,29 @@ public final class TemporalPlainDatePrototype {
         long increment = settings.roundingIncrement();
         long roundingStartValue;
         long roundingEndValue;
-        TemporalDateDurationFields startDuration;
-        TemporalDateDurationFields endDuration;
+        TemporalDurationDateWeek startDuration;
+        TemporalDurationDateWeek endDuration;
         if (smallestUnit == TemporalUnit.YEAR) {
             long roundedYears = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.years(), increment);
             roundingStartValue = roundedYears;
             roundingEndValue = roundedYears + increment * sign;
-            startDuration = new TemporalDateDurationFields(roundedYears, 0, 0, 0);
-            endDuration = new TemporalDateDurationFields(roundingEndValue, 0, 0, 0);
+            startDuration = new TemporalDurationDateWeek(roundedYears, 0, 0, 0);
+            endDuration = new TemporalDurationDateWeek(roundingEndValue, 0, 0, 0);
         } else if (smallestUnit == TemporalUnit.MONTH) {
             long roundedMonths = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.months(), increment);
             roundingStartValue = roundedMonths;
             roundingEndValue = roundedMonths + increment * sign;
-            startDuration = adjustDateDurationRecord(duration, 0, 0L, roundedMonths);
-            endDuration = adjustDateDurationRecord(duration, 0, 0L, roundingEndValue);
+            startDuration = duration.adjust(0, 0L, roundedMonths);
+            endDuration = duration.adjust(0, 0L, roundingEndValue);
         } else if (smallestUnit == TemporalUnit.WEEK) {
-            TemporalDateDurationFields yearsAndMonthsDuration = adjustDateDurationRecord(duration, 0, 0L, null);
-            IsoDate weeksStart = calendarDateAddConstrain(context, originDate, calendarId, yearsAndMonthsDuration);
+            TemporalDurationDateWeek yearsAndMonthsDuration = duration.adjust(0, 0L, null);
+            IsoDate weeksStart = originDate.calendarDateAddConstrain(context, calendarId, yearsAndMonthsDuration);
             if (context.hasPendingException() || weeksStart == null) {
                 return null;
             }
             long weeksEndEpochDay = weeksStart.toEpochDay() + duration.days();
             IsoDate weeksEnd = IsoDate.createFromEpochDay(weeksEndEpochDay);
-            TemporalDateDurationFields weekDifference = calendarDateUntil(
+            TemporalDurationDateWeek weekDifference = TemporalDurationDateWeek.calendarDateUntil(
                     context,
                     weeksStart,
                     weeksEnd,
@@ -843,21 +403,21 @@ public final class TemporalPlainDatePrototype {
                     increment);
             roundingStartValue = roundedWeeks;
             roundingEndValue = roundedWeeks + increment * sign;
-            startDuration = adjustDateDurationRecord(duration, 0, roundedWeeks, null);
-            endDuration = adjustDateDurationRecord(duration, 0, roundingEndValue, null);
+            startDuration = duration.adjust(0, roundedWeeks, null);
+            endDuration = duration.adjust(0, roundingEndValue, null);
         } else {
             long roundedDays = TemporalRoundingMode.TRUNC.roundNumberToIncrement(duration.days(), increment);
             roundingStartValue = roundedDays;
             roundingEndValue = roundedDays + increment * sign;
-            startDuration = adjustDateDurationRecord(duration, roundedDays, null, null);
-            endDuration = adjustDateDurationRecord(duration, roundingEndValue, null, null);
+            startDuration = duration.adjust(roundedDays, null, null);
+            endDuration = duration.adjust(roundingEndValue, null, null);
         }
 
-        IsoDate startDate = calendarDateAddConstrain(context, originDate, calendarId, startDuration);
+        IsoDate startDate = originDate.calendarDateAddConstrain(context, calendarId, startDuration);
         if (context.hasPendingException() || startDate == null) {
             return null;
         }
-        IsoDate endDate = calendarDateAddConstrain(context, originDate, calendarId, endDuration);
+        IsoDate endDate = originDate.calendarDateAddConstrain(context, calendarId, endDuration);
         if (context.hasPendingException() || endDate == null) {
             return null;
         }
@@ -890,14 +450,34 @@ public final class TemporalPlainDatePrototype {
         }
 
         boolean didExpandCalendarUnit = roundedUnit == Math.abs(roundingEndValue);
-        TemporalDateDurationFields roundedDuration = didExpandCalendarUnit ? endDuration : startDuration;
-        long nudgedEpochDay = didExpandCalendarUnit ? endEpochDay : startEpochDay;
-        return new TemporalNudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
+        TemporalDurationDateWeek roundedDuration = didExpandCalendarUnit ? endDuration : startDuration;
+        if (didExpandCalendarUnit && smallestUnit != TemporalUnit.WEEK) {
+            TemporalUnit bubbleSmallestUnit;
+            if (smallestUnit.isLargerThan(TemporalUnit.DAY)) {
+                bubbleSmallestUnit = smallestUnit;
+            } else {
+                bubbleSmallestUnit = TemporalUnit.DAY;
+            }
+            long nudgedEpochDay = endEpochDay;
+            return roundedDuration.bubbleRelativeDuration(
+                    context,
+                    sign,
+                    nudgedEpochDay,
+                    originDate,
+                    calendarId,
+                    settings.largestUnit(),
+                    bubbleSmallestUnit);
+        }
+        return roundedDuration;
     }
 
-    private static TemporalNudgeResult nudgeToDayUnit(
-            TemporalDateDurationFields duration,
+    private static TemporalDurationDateWeek nudgeToDayUnit(
+            JSContext context,
+            int sign,
+            TemporalDurationDateWeek duration,
             long destinationEpochDay,
+            IsoDate originDate,
+            TemporalCalendarId calendarId,
             TemporalDifferenceSettings settings) {
         long originalDays = duration.days();
         long roundedDays = settings.roundingMode().roundNumberToIncrement(
@@ -907,24 +487,33 @@ public final class TemporalPlainDatePrototype {
         int durationSign = Long.compare(originalDays, 0);
         int deltaSign = Long.compare(dayDelta, 0);
         boolean didExpandCalendarUnit = deltaSign == durationSign;
-        TemporalDateDurationFields roundedDuration = adjustDateDurationRecord(duration, roundedDays, null, null);
-        long nudgedEpochDay = destinationEpochDay + dayDelta;
-        return new TemporalNudgeResult(roundedDuration, nudgedEpochDay, didExpandCalendarUnit);
+        TemporalDurationDateWeek roundedDuration = duration.adjust(roundedDays, null, null);
+        if (didExpandCalendarUnit) {
+            long nudgedEpochDay = destinationEpochDay + dayDelta;
+            return roundedDuration.bubbleRelativeDuration(
+                    context,
+                    sign,
+                    nudgedEpochDay,
+                    originDate,
+                    calendarId,
+                    settings.largestUnit(),
+                    TemporalUnit.DAY);
+        }
+        return roundedDuration;
     }
 
-    private static TemporalDateDurationFields roundRelativeDurationDate(
+    private static TemporalDurationDateWeek roundRelativeDurationDate(
             JSContext context,
-            TemporalDateDurationFields duration,
+            TemporalDurationDateWeek duration,
             long destinationEpochDay,
             IsoDate originDate,
             TemporalCalendarId calendarId,
             TemporalDifferenceSettings settings) {
         int sign = duration.sign() < 0 ? -1 : 1;
-        TemporalNudgeResult nudgeResult;
         if (settings.smallestUnit() == TemporalUnit.YEAR
                 || settings.smallestUnit() == TemporalUnit.MONTH
                 || settings.smallestUnit() == TemporalUnit.WEEK) {
-            nudgeResult = nudgeToCalendarUnit(
+            return nudgeToCalendarUnit(
                     context,
                     sign,
                     duration,
@@ -933,33 +522,15 @@ public final class TemporalPlainDatePrototype {
                     calendarId,
                     settings);
         } else {
-            nudgeResult = nudgeToDayUnit(duration, destinationEpochDay, settings);
-        }
-        if (context.hasPendingException() || nudgeResult == null) {
-            return null;
-        }
-        TemporalDateDurationFields roundedDuration = nudgeResult.duration();
-        if (nudgeResult.didExpandCalendarUnit() && settings.smallestUnit() != TemporalUnit.WEEK) {
-            TemporalUnit bubbleSmallestUnit;
-            if (settings.smallestUnit().isLargerThan(TemporalUnit.DAY)) {
-                bubbleSmallestUnit = settings.smallestUnit();
-            } else {
-                bubbleSmallestUnit = TemporalUnit.DAY;
-            }
-            roundedDuration = bubbleRelativeDuration(
+            return nudgeToDayUnit(
                     context,
                     sign,
-                    roundedDuration,
-                    nudgeResult.nudgedEpochDay(),
+                    duration,
+                    destinationEpochDay,
                     originDate,
                     calendarId,
-                    settings.largestUnit(),
-                    bubbleSmallestUnit);
-            if (context.hasPendingException() || roundedDuration == null) {
-                return null;
-            }
+                    settings);
         }
-        return roundedDuration;
     }
 
     public static JSValue since(JSContext context, JSValue thisArg, JSValue[] args) {
@@ -976,14 +547,6 @@ public final class TemporalPlainDatePrototype {
             return JSUndefined.INSTANCE;
         }
         return addOrSubtract(context, plainDate, args, -1);
-    }
-
-    private static TemporalUnit temporalUnitByRank(int unitRank) {
-        TemporalUnit[] units = TemporalUnit.values();
-        if (unitRank >= 0 && unitRank < units.length) {
-            return units[unitRank];
-        }
-        return TemporalUnit.NANOSECOND;
     }
 
     public static JSValue toJSON(JSContext context, JSValue thisArg, JSValue[] args) {

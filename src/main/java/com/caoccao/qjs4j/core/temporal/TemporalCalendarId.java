@@ -20,10 +20,12 @@ import com.caoccao.qjs4j.core.*;
 
 import java.time.DateTimeException;
 import java.time.chrono.HijrahChronology;
-import java.util.Iterator;
 import java.util.Locale;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.LongAdder;
 
 public enum TemporalCalendarId {
     BUDDHIST("buddhist", true),
@@ -88,12 +90,26 @@ public enum TemporalCalendarId {
     };
     private static final int DEFAULT_REFERENCE_ISO_YEAR = 1972;
     private static final int MAX_REFERENCE_ISO_DATE_CACHE_SIZE = 4_096;
+    private static final int MAX_REFERENCE_ISO_DATE_YEAR_CACHE_SIZE = 1_024;
     private static final int MAX_REFERENCE_ISO_YEAR = 2050;
     private static final int MIN_REFERENCE_ISO_YEAR = 1900;
+    private static final LongAdder REFERENCE_ISO_DATE_CACHE_HIT_COUNT = new LongAdder();
+    private static final LongAdder REFERENCE_ISO_DATE_CACHE_MISS_COUNT = new LongAdder();
     private static final ConcurrentHashMap<TemporalReferenceIsoDateLookupKey, IsoDate> REFERENCE_ISO_DATE_HIT_CACHE =
             new ConcurrentHashMap<>();
+    private static final Queue<TemporalReferenceIsoDateLookupKey> REFERENCE_ISO_DATE_HIT_CACHE_EVICTION_QUEUE =
+            new ConcurrentLinkedQueue<>();
     private static final Set<TemporalReferenceIsoDateLookupKey> REFERENCE_ISO_DATE_MISS_CACHE =
             ConcurrentHashMap.newKeySet();
+    private static final Queue<TemporalReferenceIsoDateLookupKey> REFERENCE_ISO_DATE_MISS_CACHE_EVICTION_QUEUE =
+            new ConcurrentLinkedQueue<>();
+    private static final LongAdder REFERENCE_ISO_DATE_MISS_CACHE_HIT_COUNT = new LongAdder();
+    private static final ConcurrentHashMap<Long, TemporalReferenceIsoDateYearIndex> REFERENCE_ISO_DATE_YEAR_CACHE =
+            new ConcurrentHashMap<>();
+    private static final Queue<Long> REFERENCE_ISO_DATE_YEAR_CACHE_EVICTION_QUEUE =
+            new ConcurrentLinkedQueue<>();
+    private static final LongAdder REFERENCE_ISO_DATE_YEAR_CACHE_HIT_COUNT = new LongAdder();
+    private static final LongAdder REFERENCE_ISO_DATE_YEAR_CACHE_MISS_COUNT = new LongAdder();
     private static final int YEAR_MONTH_BOUNDARY_SEARCH_RADIUS_DAYS = 400;
 
     private final boolean era;
@@ -267,31 +283,13 @@ public enum TemporalCalendarId {
         };
     }
 
-    private static <Key, Value> void putBoundedMapEntry(
-            ConcurrentHashMap<Key, Value> cache,
-            Key key,
-            Value value,
-            int maximumSize) {
-        if (cache.size() >= maximumSize) {
-            Iterator<Key> cacheIterator = cache.keySet().iterator();
-            if (cacheIterator.hasNext()) {
-                cache.remove(cacheIterator.next());
-            }
-        }
-        cache.put(key, value);
-    }
-
-    private static <Value> void putBoundedSetEntry(
-            Set<Value> cache,
-            Value value,
-            int maximumSize) {
-        if (cache.size() >= maximumSize) {
-            Iterator<Value> cacheIterator = cache.iterator();
-            if (cacheIterator.hasNext()) {
-                cache.remove(cacheIterator.next());
-            }
-        }
-        cache.add(value);
+    static TemporalReferenceIsoDateCacheStats getReferenceIsoDateCacheStats() {
+        return new TemporalReferenceIsoDateCacheStats(
+                REFERENCE_ISO_DATE_CACHE_HIT_COUNT.sum(),
+                REFERENCE_ISO_DATE_CACHE_MISS_COUNT.sum(),
+                REFERENCE_ISO_DATE_MISS_CACHE_HIT_COUNT.sum(),
+                REFERENCE_ISO_DATE_YEAR_CACHE_HIT_COUNT.sum(),
+                REFERENCE_ISO_DATE_YEAR_CACHE_MISS_COUNT.sum());
     }
 
     private static int umalquraDaysInMonth(int islamicYear, int islamicMonth) {
@@ -306,12 +304,8 @@ public enum TemporalCalendarId {
         if (monthCode == null) {
             return false;
         }
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthCode().equals(monthCode)) {
-                return true;
-            }
-        }
-        return false;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthCode(monthCode) != null;
     }
 
     public String constrainMonthCode(int calendarYear, String monthCode) {
@@ -322,7 +316,7 @@ public enum TemporalCalendarId {
         if (calendarYearHasMonthCode(calendarYear, monthCode)) {
             return monthCode;
         }
-        String fallbackMonthCode = TemporalCalendarMath.resolveFallbackMonthCodeForMissingLeapMonth(this, monthCode);
+        String fallbackMonthCode = resolveFallbackMonthCodeForMissingLeapMonth(monthCode);
         if (fallbackMonthCode != null) {
             return fallbackMonthCode;
         }
@@ -347,18 +341,26 @@ public enum TemporalCalendarId {
     }
 
     IsoCalendarMonth findMonthSlotByCode(int calendarYear, String monthCode) {
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthCode().equals(monthCode)) {
-                return monthSlot;
-            }
-        }
-        return null;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthCode(monthCode);
     }
 
     IsoCalendarMonth findMonthSlotByNumber(int calendarYear, int monthNumber) {
-        for (IsoCalendarMonth monthSlot : TemporalCalendarMath.getMonthSlots(this, calendarYear)) {
-            if (monthSlot.monthNumber() == monthNumber) {
-                return monthSlot;
+        TemporalMonths monthSlots = TemporalMonths.get(this, calendarYear);
+        return monthSlots.getByMonthNumber(monthNumber);
+    }
+
+    IsoDate findReferenceIsoDateAtOrBelow(String monthCode, int maximumDayOfMonth) {
+        if (maximumDayOfMonth < 1) {
+            return null;
+        }
+        int constrainedMaximumDay = Math.min(maximumDayOfMonth, 31);
+        for (int candidateDayOfMonth = constrainedMaximumDay; candidateDayOfMonth >= 1; candidateDayOfMonth--) {
+            IsoDate candidateReferenceIsoDate = findReferenceIsoDateExact(
+                    monthCode,
+                    candidateDayOfMonth);
+            if (candidateReferenceIsoDate != null) {
+                return candidateReferenceIsoDate;
             }
         }
         return null;
@@ -374,22 +376,27 @@ public enum TemporalCalendarId {
                 dayOfMonth);
         IsoDate cachedReferenceIsoDate = REFERENCE_ISO_DATE_HIT_CACHE.get(referenceIsoDateLookupKey);
         if (cachedReferenceIsoDate != null) {
+            REFERENCE_ISO_DATE_CACHE_HIT_COUNT.increment();
             return cachedReferenceIsoDate;
         }
         if (REFERENCE_ISO_DATE_MISS_CACHE.contains(referenceIsoDateLookupKey)) {
+            REFERENCE_ISO_DATE_MISS_CACHE_HIT_COUNT.increment();
             return null;
         }
 
         IsoDate resolvedReferenceIsoDate = findReferenceIsoDateExactUncached(monthCode, dayOfMonth);
         if (resolvedReferenceIsoDate == null) {
-            putBoundedSetEntry(
+            REFERENCE_ISO_DATE_CACHE_MISS_COUNT.increment();
+            TemporalUtils.putBoundedSetEntry(
                     REFERENCE_ISO_DATE_MISS_CACHE,
+                    REFERENCE_ISO_DATE_MISS_CACHE_EVICTION_QUEUE,
                     referenceIsoDateLookupKey,
                     MAX_REFERENCE_ISO_DATE_CACHE_SIZE);
             return null;
         } else {
-            putBoundedMapEntry(
+            TemporalUtils.putBoundedMapEntry(
                     REFERENCE_ISO_DATE_HIT_CACHE,
+                    REFERENCE_ISO_DATE_HIT_CACHE_EVICTION_QUEUE,
                     referenceIsoDateLookupKey,
                     resolvedReferenceIsoDate,
                     MAX_REFERENCE_ISO_DATE_CACHE_SIZE);
@@ -423,19 +430,25 @@ public enum TemporalCalendarId {
             int isoYear,
             String monthCode,
             int dayOfMonth) {
-        IsoDate latestMatchedReferenceIsoDate = null;
-        for (int isoMonth = 1; isoMonth <= 12; isoMonth++) {
-            int daysInIsoMonth = IsoDate.daysInMonth(isoYear, isoMonth);
-            for (int isoDay = 1; isoDay <= daysInIsoMonth; isoDay++) {
-                IsoDate candidateIsoDate = new IsoDate(isoYear, isoMonth, isoDay);
-                IsoCalendarDate calendarDateFields = candidateIsoDate.toIsoCalendarDate(this);
-                if (dayOfMonth == calendarDateFields.day()
-                        && monthCode.equals(calendarDateFields.monthCode())) {
-                    latestMatchedReferenceIsoDate = candidateIsoDate;
-                }
+        long calendarYearCacheKey = TemporalUtils.getCalendarYearCacheKey(this, isoYear);
+        TemporalReferenceIsoDateYearIndex yearIndex = REFERENCE_ISO_DATE_YEAR_CACHE.get(calendarYearCacheKey);
+        if (yearIndex == null) {
+            REFERENCE_ISO_DATE_YEAR_CACHE_MISS_COUNT.increment();
+            TemporalReferenceIsoDateYearIndex createdYearIndex = TemporalReferenceIsoDateYearIndex.create(this, isoYear);
+            TemporalUtils.putBoundedMapEntry(
+                    REFERENCE_ISO_DATE_YEAR_CACHE,
+                    REFERENCE_ISO_DATE_YEAR_CACHE_EVICTION_QUEUE,
+                    calendarYearCacheKey,
+                    createdYearIndex,
+                    MAX_REFERENCE_ISO_DATE_YEAR_CACHE_SIZE);
+            yearIndex = REFERENCE_ISO_DATE_YEAR_CACHE.get(calendarYearCacheKey);
+            if (yearIndex == null) {
+                yearIndex = createdYearIndex;
             }
+        } else {
+            REFERENCE_ISO_DATE_YEAR_CACHE_HIT_COUNT.increment();
         }
-        return latestMatchedReferenceIsoDate;
+        return yearIndex.findExact(monthCode, dayOfMonth);
     }
 
     public int getEraYearFromEra(TemporalEra era, int eraYear) {
@@ -540,13 +553,13 @@ public enum TemporalCalendarId {
 
     public boolean isCalendarLeapYear(int calendarYear) {
         return switch (this) {
-            case ISO8601, GREGORY, JAPANESE -> TemporalCalendarMath.isLeapYear(calendarYear);
-            case BUDDHIST -> TemporalCalendarMath.isLeapYear(calendarYear - 543);
-            case ROC -> TemporalCalendarMath.isLeapYear(calendarYear + 1911);
+            case ISO8601, GREGORY, JAPANESE -> TemporalUtils.isLeapYear(calendarYear);
+            case BUDDHIST -> TemporalUtils.isLeapYear(calendarYear - 543);
+            case ROC -> TemporalUtils.isLeapYear(calendarYear + 1911);
             case COPTIC, ETHIOPIC -> TemporalUtils.alexandrianLeapYear(calendarYear);
             case ETHIOAA -> TemporalUtils.alexandrianLeapYear(calendarYear - 5500);
-            case HEBREW -> TemporalCalendarMath.isHebrewLeapYear(calendarYear);
-            case INDIAN -> TemporalCalendarMath.isLeapYear(calendarYear + 78);
+            case HEBREW -> TemporalUtils.isHebrewLeapYear(calendarYear);
+            case INDIAN -> TemporalUtils.isLeapYear(calendarYear + 78);
             case ISLAMIC_CIVIL -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_TBLA -> TemporalUtils.islamicDaysInMonth(calendarYear, 12) == 30;
             case ISLAMIC_UMALQURA -> TemporalConstants.UMALQURA_KNOWN_LEAP_YEARS_1390_TO_1469.contains(calendarYear)
@@ -573,6 +586,20 @@ public enum TemporalCalendarId {
             return 0;
         }
         return (yearInfo & 0x10000) != 0 ? 30 : 29;
+    }
+
+    String resolveFallbackMonthCodeForMissingLeapMonth(String leapMonthCode) {
+        IsoMonth monthCodeData = IsoMonth.parseByMonthCode(leapMonthCode);
+        if (monthCodeData == null || !monthCodeData.leapMonth()) {
+            return null;
+        }
+        if (this == HEBREW && "M05L".equals(leapMonthCode)) {
+            return "M06";
+        }
+        if (this == CHINESE || this == DANGI) {
+            return IsoMonth.toMonthCode(monthCodeData.month());
+        }
+        return null;
     }
 
     public TemporalEra toTemporalEra(String eraIdentifier) {
@@ -621,5 +648,13 @@ public enum TemporalCalendarId {
             case PERSIAN -> "ap".equals(normalizedEraIdentifier) ? TemporalEra.AP : null;
             default -> null;
         };
+    }
+
+    record TemporalReferenceIsoDateCacheStats(
+            long hitCount,
+            long missCount,
+            long missCacheHitCount,
+            long yearCacheHitCount,
+            long yearCacheMissCount) {
     }
 }

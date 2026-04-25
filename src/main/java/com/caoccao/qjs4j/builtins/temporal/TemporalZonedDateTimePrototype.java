@@ -220,11 +220,52 @@ public final class TemporalZonedDateTimePrototype {
             return JSUndefined.INSTANCE;
         }
 
-        BigInteger epochNanoseconds = TemporalZonedDateTimeArithmeticKernel.addDurationToZonedDateTime(
-                context,
-                zonedDateTime,
-                durationRecord,
-                overflow);
+        BigInteger intermediateEpochNanoseconds = zonedDateTime.getEpochNanoseconds();
+        if (durationRecord.years() != 0
+                || durationRecord.months() != 0
+                || durationRecord.weeks() != 0
+                || durationRecord.days() != 0) {
+            IsoDateTime localDateTime = IsoDateTime.createFromEpochNsAndTimeZoneId(
+                    zonedDateTime.getEpochNanoseconds(),
+                    zonedDateTime.getTimeZoneId());
+            TemporalCalendarId calendarId = zonedDateTime.getCalendarId();
+            IsoDate addedDate;
+            if (calendarId == TemporalCalendarId.ISO8601) {
+                addedDate = localDateTime.date().addIsoDateWithOverflow(
+                        context,
+                        durationRecord.years(),
+                        durationRecord.months(),
+                        durationRecord.weeks(),
+                        durationRecord.days(),
+                        overflow);
+            } else {
+                addedDate = localDateTime.date().addCalendarDate(
+                        context,
+                        calendarId,
+                        durationRecord.years(),
+                        durationRecord.months(),
+                        durationRecord.weeks(),
+                        durationRecord.days(),
+                        overflow);
+            }
+            if (context.hasPendingException() || addedDate == null) {
+                return JSUndefined.INSTANCE;
+            }
+
+            IsoDateTime addedDateTime = addedDate.atTime(localDateTime.time());
+            try {
+                intermediateEpochNanoseconds = addedDateTime.toEpochNs(zonedDateTime.getTimeZoneId());
+            } catch (DateTimeException dateTimeException) {
+                context.throwRangeError("Temporal error: Invalid ISO date.");
+                return JSUndefined.INSTANCE;
+            }
+        }
+
+        BigInteger epochNanoseconds = intermediateEpochNanoseconds.add(durationRecord.timeNanoseconds());
+        if (!TemporalUtils.isValidEpochNanoseconds(epochNanoseconds)) {
+            context.throwRangeError("Temporal error: Nanoseconds out of range.");
+            return JSUndefined.INSTANCE;
+        }
         if (context.hasPendingException() || epochNanoseconds == null) {
             return JSUndefined.INSTANCE;
         }
@@ -383,7 +424,7 @@ public final class TemporalZonedDateTimePrototype {
             TemporalDifferenceSettings settings) {
         boolean requiresDateUnits = settings.largestUnit().isDateUnit() || settings.smallestUnit().isDateUnit();
         if (!requiresDateUnits) {
-            return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
+            return TemporalDuration.differenceEpochNanoseconds(
                     startZonedDateTime.getEpochNanoseconds(),
                     endZonedDateTime.getEpochNanoseconds(),
                     settings.largestUnit(),
@@ -430,7 +471,7 @@ public final class TemporalZonedDateTimePrototype {
                 } else {
                     timeLargestUnit = settings.smallestUnit();
                 }
-                return TemporalZonedDateTimeArithmeticKernel.differenceEpochNanoseconds(
+                return TemporalDuration.differenceEpochNanoseconds(
                         startZonedDateTime.getEpochNanoseconds(),
                         endZonedDateTime.getEpochNanoseconds(),
                         timeLargestUnit,

@@ -92,6 +92,16 @@ public class TemporalPlainMonthDayTest extends BaseJavetTest {
     }
 
     @Test
+    public void testFromWithEraYearWithoutYear() {
+        assertStringWithJavet("Temporal.PlainMonthDay.from({ calendar: 'gregory', era: 'ce', eraYear: 2024, monthCode: 'M02', day: 29 }).toString()");
+    }
+
+    @Test
+    public void testFromWithInconsistentYearAndEraYear() {
+        assertBooleanWithJavet("(() => { try { Temporal.PlainMonthDay.from({ calendar: 'gregory', year: 2024, era: 'ce', eraYear: 2023, monthCode: 'M02', day: 29 }); return false; } catch (e) { return e instanceof RangeError; } })()");
+    }
+
+    @Test
     public void testMonthCode() {
         assertStringWithJavet("new Temporal.PlainMonthDay(3, 15).monthCode");
     }

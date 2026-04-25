@@ -144,6 +144,22 @@ public record TemporalDuration(
                 milliseconds, microseconds, nanoseconds);
     }
 
+    public static TemporalDuration differenceEpochNanoseconds(
+            BigInteger startEpochNanoseconds,
+            BigInteger endEpochNanoseconds,
+            TemporalUnit largestUnit,
+            long smallestUnitNanoseconds,
+            long roundingIncrement,
+            TemporalRoundingMode roundingMode) {
+        BigInteger differenceNanoseconds = endEpochNanoseconds.subtract(startEpochNanoseconds);
+        BigInteger incrementNanoseconds = BigInteger.valueOf(smallestUnitNanoseconds)
+                .multiply(BigInteger.valueOf(roundingIncrement));
+        BigInteger roundedNanoseconds = roundingMode.roundBigIntegerToIncrementSigned(
+                differenceNanoseconds,
+                incrementNanoseconds);
+        return createBalance(roundedNanoseconds, largestUnit);
+    }
+
     public static boolean isDurationRecordTimeRangeValid(TemporalDuration durationRecord) {
         BigInteger totalNanoseconds = durationRecord.dayTimeNanoseconds();
         return totalNanoseconds.abs().compareTo(TemporalConstants.MAX_ABSOLUTE_TIME_NANOSECONDS) <= 0;

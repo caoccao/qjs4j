@@ -578,10 +578,13 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        if (TemporalCalendarMath.inLeapYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId())) {
+        IsoCalendarDate calendarDateFields = plainYearMonth.getIsoDate().toIsoCalendarDate(plainYearMonth.getCalendarId());
+        boolean leapYear = plainYearMonth.getCalendarId().isCalendarLeapYear(calendarDateFields.year());
+        if (leapYear) {
             return JSBoolean.TRUE;
+        } else {
+            return JSBoolean.FALSE;
         }
-        return JSBoolean.FALSE;
     }
 
     private static boolean isDifferenceDateWithinSupportedRange(IsoDate differenceDate) {
@@ -651,7 +654,7 @@ public final class TemporalPlainYearMonthPrototype {
         long totalMonths = 0L;
         IsoDate cursorDate = firstDate;
         for (long yearIndex = 0L; yearIndex < absoluteYearDelta; yearIndex++) {
-            int monthsInYear = TemporalCalendarMath.monthsInYear(cursorDate, calendarId);
+            int monthsInYear = TemporalUtils.monthsInYear(cursorDate, calendarId);
             try {
                 totalMonths = Math.addExact(totalMonths, (long) yearSign * monthsInYear);
             } catch (ArithmeticException arithmeticException) {
@@ -671,7 +674,7 @@ public final class TemporalPlainYearMonthPrototype {
         if (plainYearMonth == null) {
             return JSUndefined.INSTANCE;
         }
-        return JSNumber.of(TemporalCalendarMath.monthsInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
+        return JSNumber.of(TemporalUtils.monthsInYear(plainYearMonth.getIsoDate(), plainYearMonth.getCalendarId()));
     }
 
     private static IsoMonth parseMonthCodeForWith(JSContext context, String monthCode) {
