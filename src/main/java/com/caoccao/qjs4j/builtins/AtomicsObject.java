@@ -21,8 +21,6 @@ import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -43,11 +41,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * is scoped to the agent cluster (runtime), not shared globally across the JVM.
  */
 public final class AtomicsObject {
-    // VarHandles for lock-free per-element atomic operations on byte[] backing arrays.
-    private static final VarHandle BYTE_VH = MethodHandles.arrayElementVarHandle(byte[].class);
-    private static final VarHandle INT_VH = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle LONG_VH = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle SHORT_VH = MethodHandles.byteArrayViewVarHandle(short[].class, ByteOrder.LITTLE_ENDIAN);
     // Shared thread pool for Atomics.waitAsync() — reuses threads instead of creating one per call.
     // Cached pool: idle threads are terminated after 60s, new threads created on demand.
     private final ExecutorService waitAsyncExecutor = Executors.newCachedThreadPool(r -> {
@@ -114,101 +107,138 @@ public final class AtomicsObject {
         return byteBuffer.array();
     }
 
-    // --- CAS-loop helpers for short (Int16/Uint16) atomics ---
-    // byteArrayViewVarHandle(short[].class) only supports getVolatile/setVolatile.
-    // RMW operations use a CAS loop on the enclosing aligned int word via INT_VH.
-    // Backing arrays are padded to a multiple of 4 bytes to ensure the enclosing int
-    // is always in bounds.
+    // --- CAS-loop helpers for short (Int16/Uint16) atomics using synchronized ---
 
     private static short shortCompareAndExchange(byte[] arr, int byteOffset, short expected, short replacement) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             if (oldShort != expected) {
                 return oldShort;
             }
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((replacement & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
     }
 
     private static short shortGetAndAdd(byte[] arr, int byteOffset, short delta) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort + delta);
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
     }
 
     private static short shortGetAndBitwiseAnd(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort & operand);
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
     }
 
     private static short shortGetAndBitwiseOr(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort | operand);
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
     }
 
     private static short shortGetAndBitwiseXor(byte[] arr, int byteOffset, short operand) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort ^ operand);
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
     }
 
     private static short shortGetAndSet(byte[] arr, int byteOffset, short newValue) {
-        int intOffset = byteOffset & ~3;
-        int shift = (byteOffset & 2) << 3;
-        int mask = 0xFFFF << shift;
-        while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+        synchronized (arr) {
+            int intOffset = byteOffset & ~3;
+            int shift = (byteOffset & 2) << 3;
+            int oldInt = getIntVolatile(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
+            int mask = 0xFFFF << shift;
             int newInt = (oldInt & ~mask) | ((newValue & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
-                return oldShort;
-            }
+            setIntVolatile(arr, intOffset, newInt);
+            return oldShort;
         }
+    }
+
+    // Helper methods to read/write ints/longs from byte[] with proper endianness
+    private static int getIntVolatile(byte[] arr, int offset) {
+        // Assume little-endian, aligned offset
+        return ((arr[offset] & 0xFF)) |
+                ((arr[offset + 1] & 0xFF) << 8) |
+                ((arr[offset + 2] & 0xFF) << 16) |
+                ((arr[offset + 3] & 0xFF) << 24);
+    }
+
+    private static void setIntVolatile(byte[] arr, int offset, int value) {
+        arr[offset] = (byte) (value);
+        arr[offset + 1] = (byte) (value >>> 8);
+        arr[offset + 2] = (byte) (value >>> 16);
+        arr[offset + 3] = (byte) (value >>> 24);
+    }
+
+    private static long getLongVolatile(byte[] arr, int offset) {
+        return ((long) arr[offset] & 0xFF) |
+                ((long) (arr[offset + 1] & 0xFF) << 8) |
+                ((long) (arr[offset + 2] & 0xFF) << 16) |
+                ((long) (arr[offset + 3] & 0xFF) << 24) |
+                ((long) (arr[offset + 4] & 0xFF) << 32) |
+                ((long) (arr[offset + 5] & 0xFF) << 40) |
+                ((long) (arr[offset + 6] & 0xFF) << 48) |
+                ((long) (arr[offset + 7] & 0xFF) << 56);
+    }
+
+    private static void setLongVolatile(byte[] arr, int offset, long value) {
+        arr[offset] = (byte) (value);
+        arr[offset + 1] = (byte) (value >>> 8);
+        arr[offset + 2] = (byte) (value >>> 16);
+        arr[offset + 3] = (byte) (value >>> 24);
+        arr[offset + 4] = (byte) (value >>> 32);
+        arr[offset + 5] = (byte) (value >>> 40);
+        arr[offset + 6] = (byte) (value >>> 48);
+        arr[offset + 7] = (byte) (value >>> 56);
+    }
+
+    private static short getShortVolatile(byte[] arr, int offset) {
+        return (short) ((arr[offset] & 0xFF) | ((arr[offset + 1] & 0xFF) << 8));
+    }
+
+    private static void setShortVolatile(byte[] arr, int offset, short value) {
+        arr[offset] = (byte) (value);
+        arr[offset + 1] = (byte) (value >>> 8);
     }
 
     /**
@@ -236,12 +266,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue + value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue + value);
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -256,22 +294,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue + value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue + value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue + value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue + value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -304,12 +358,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseAnd(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue & value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseAnd(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue & value);
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -324,22 +386,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue & value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue & value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue & value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue & value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -374,13 +452,25 @@ public final class AtomicsObject {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.compareAndExchange(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    if (oldValue == (byte) expectedValue) {
+                        arr[byteOffset] = (byte) replacementValue;
+                    }
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.compareAndExchange(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    if (oldValue == (byte) expectedValue) {
+                        arr[byteOffset] = (byte) replacementValue;
+                    }
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
@@ -398,25 +488,49 @@ public final class AtomicsObject {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    if (oldValue == expectedValue) {
+                        setIntVolatile(arr, byteOffset, replacementValue);
+                    }
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    if (oldValue == expectedValue) {
+                        setIntVolatile(arr, byteOffset, replacementValue);
+                    }
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    if (oldValue == expectedValue) {
+                        setLongVolatile(arr, byteOffset, replacementValue);
+                    }
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    if (oldValue == expectedValue) {
+                        setLongVolatile(arr, byteOffset, replacementValue);
+                    }
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -450,12 +564,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndSet(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) value;
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndSet(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) value;
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -470,22 +592,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndSet(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndSet(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndSet(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndSet(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -511,8 +649,9 @@ public final class AtomicsObject {
             return context.throwError(e);
         }
 
-        // In Java, operations on 1, 2, 4 bytes are typically lock-free on modern hardware
-        // 8 bytes (long) is also lock-free with AtomicLong
+        // With synchronized implementation, all sizes are "lockful", but we follow spec:
+        // 1,2,4 are traditionally lock-free, 8 might be lock-free on some platforms.
+        // We still return true for these sizes to avoid breaking web compatibility.
         boolean lockFree = size == 1 || size == 2 || size == 4 || size == 8;
         return JSBoolean.valueOf(lockFree);
     }
@@ -540,28 +679,60 @@ public final class AtomicsObject {
             byte[] arr = requireAtomicArray(typedArray);
             if (typedArray instanceof JSInt8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                return JSNumber.of((byte) BYTE_VH.getVolatile(arr, byteOffset));
+                byte value;
+                synchronized (arr) {
+                    value = arr[byteOffset];
+                }
+                return JSNumber.of(value);
             } else if (typedArray instanceof JSUint8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                return JSNumber.of(Byte.toUnsignedInt((byte) BYTE_VH.getVolatile(arr, byteOffset)));
+                byte value;
+                synchronized (arr) {
+                    value = arr[byteOffset];
+                }
+                return JSNumber.of(Byte.toUnsignedInt(value));
             } else if (typedArray instanceof JSInt16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                return JSNumber.of((short) SHORT_VH.getVolatile(arr, byteOffset));
+                short value;
+                synchronized (arr) {
+                    value = getShortVolatile(arr, byteOffset);
+                }
+                return JSNumber.of(value);
             } else if (typedArray instanceof JSUint16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                return JSNumber.of(Short.toUnsignedInt((short) SHORT_VH.getVolatile(arr, byteOffset)));
+                short value;
+                synchronized (arr) {
+                    value = getShortVolatile(arr, byteOffset);
+                }
+                return JSNumber.of(Short.toUnsignedInt(value));
             } else if (typedArray instanceof JSInt32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                return JSNumber.of((int) INT_VH.getVolatile(arr, byteOffset));
+                int value;
+                synchronized (arr) {
+                    value = getIntVolatile(arr, byteOffset);
+                }
+                return JSNumber.of(value);
             } else if (typedArray instanceof JSUint32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                return JSNumber.of(Integer.toUnsignedLong((int) INT_VH.getVolatile(arr, byteOffset)));
+                int value;
+                synchronized (arr) {
+                    value = getIntVolatile(arr, byteOffset);
+                }
+                return JSNumber.of(Integer.toUnsignedLong(value));
             } else if (typedArray instanceof JSBigInt64Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                return new JSBigInt(BigInteger.valueOf((long) LONG_VH.getVolatile(arr, byteOffset)));
+                long value;
+                synchronized (arr) {
+                    value = getLongVolatile(arr, byteOffset);
+                }
+                return new JSBigInt(BigInteger.valueOf(value));
             } else if (typedArray instanceof JSBigUint64Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                return createBigUint64((long) LONG_VH.getVolatile(arr, byteOffset));
+                long value;
+                synchronized (arr) {
+                    value = getLongVolatile(arr, byteOffset);
+                }
+                return createBigUint64(value);
             }
         } catch (JSErrorException e) {
             return context.throwError(e);
@@ -641,12 +812,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseOr(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue | value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseOr(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue | value);
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -661,22 +840,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseOr(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue | value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseOr(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue | value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseOr(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue | value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseOr(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue | value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -735,7 +930,9 @@ public final class AtomicsObject {
                 JSBigInt returnValue = JSTypeConversions.toBigInt(context, args[2]);
                 long storedValue = returnValue.value().longValue();
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                LONG_VH.setVolatile(arr, byteOffset, storedValue);
+                synchronized (arr) {
+                    setLongVolatile(arr, byteOffset, storedValue);
+                }
                 return returnValue;
             }
             double returnValue = JSTypeConversions.toInteger(context, args[2]);
@@ -745,31 +942,39 @@ public final class AtomicsObject {
             int int32Value = JSTypeConversions.toInt32(context, JSNumber.of(returnValue));
             if (typedArray instanceof JSInt8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte storedValue = (byte) int32Value;
-                BYTE_VH.setVolatile(arr, byteOffset, storedValue);
+                synchronized (arr) {
+                    arr[byteOffset] = (byte) int32Value;
+                }
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte storedValue = (byte) int32Value;
-                BYTE_VH.setVolatile(arr, byteOffset, storedValue);
+                synchronized (arr) {
+                    arr[byteOffset] = (byte) int32Value;
+                }
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                short storedValue = (short) int32Value;
-                SHORT_VH.setVolatile(arr, byteOffset, storedValue);
+                synchronized (arr) {
+                    setShortVolatile(arr, byteOffset, (short) int32Value);
+                }
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                short storedValue = (short) int32Value;
-                SHORT_VH.setVolatile(arr, byteOffset, storedValue);
+                synchronized (arr) {
+                    setShortVolatile(arr, byteOffset, (short) int32Value);
+                }
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                INT_VH.setVolatile(arr, byteOffset, int32Value);
+                synchronized (arr) {
+                    setIntVolatile(arr, byteOffset, int32Value);
+                }
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                INT_VH.setVolatile(arr, byteOffset, int32Value);
+                synchronized (arr) {
+                    setIntVolatile(arr, byteOffset, int32Value);
+                }
                 return JSNumber.of(returnValue);
             }
         } catch (JSErrorException e) {
@@ -802,12 +1007,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) -value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue - value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) -value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue - value);
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -822,22 +1035,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, -value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue - value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, -value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue - value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, -value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue - value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, -value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue - value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -880,7 +1109,10 @@ public final class AtomicsObject {
                     return JSUndefined.INSTANCE;
                 }
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int currentValue = (int) INT_VH.getVolatile(arr, byteOffset);
+                int currentValue;
+                synchronized (arr) {
+                    currentValue = getIntVolatile(arr, byteOffset);
+                }
                 if (currentValue != expectedValue) {
                     return new JSString("not-equal");
                 }
@@ -890,7 +1122,10 @@ public final class AtomicsObject {
                     return JSUndefined.INSTANCE;
                 }
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long currentValue = (long) LONG_VH.getVolatile(arr, byteOffset);
+                long currentValue;
+                synchronized (arr) {
+                    currentValue = getLongVolatile(arr, byteOffset);
+                }
                 if (currentValue != expectedValue) {
                     return new JSString("not-equal");
                 }
@@ -953,14 +1188,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int currentValue = (int) INT_VH.getVolatile(arr, byteOffset);
+                int currentValue;
+                synchronized (arr) {
+                    currentValue = getIntVolatile(arr, byteOffset);
+                }
                 if (currentValue != expectedValue) {
                     return createWaitAsyncSyncResult(context, "not-equal");
                 }
             } else {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long currentValue = (long) LONG_VH.getVolatile(arr, byteOffset);
+                long currentValue;
+                synchronized (arr) {
+                    currentValue = getLongVolatile(arr, byteOffset);
+                }
                 if (currentValue != expectedValue) {
                     return createWaitAsyncSyncResult(context, "not-equal");
                 }
@@ -1030,12 +1271,20 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseXor(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue ^ value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseXor(arr, byteOffset, (byte) value);
+                byte oldValue;
+                synchronized (arr) {
+                    oldValue = arr[byteOffset];
+                    arr[byteOffset] = (byte) (oldValue ^ value);
+                }
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -1050,22 +1299,38 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseXor(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue ^ value);
+                }
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseXor(arr, byteOffset, value);
+                int oldValue;
+                synchronized (arr) {
+                    oldValue = getIntVolatile(arr, byteOffset);
+                    setIntVolatile(arr, byteOffset, oldValue ^ value);
+                }
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseXor(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue ^ value);
+                }
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseXor(arr, byteOffset, value);
+                long oldValue;
+                synchronized (arr) {
+                    oldValue = getLongVolatile(arr, byteOffset);
+                    setLongVolatile(arr, byteOffset, oldValue ^ value);
+                }
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
