@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.Program;
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
@@ -1960,7 +1961,7 @@ public final class JSContext implements AutoCloseable {
             evalError = throwError("SyntaxError", e.getMessage());
             return null;
         } catch (JSCompilerException e) {
-            evalError = throwError("SyntaxError", e.getMessage());
+            evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
             return null;
         } catch (JSVirtualMachineException e) {
             if (e.getJsError() != null) {
@@ -3610,7 +3611,8 @@ public final class JSContext implements AutoCloseable {
                     throw new JSException(throwSyntaxError(syntaxError.getMessage()));
                 } catch (JSCompilerException compilerError) {
                     dynamicImportModuleCache.remove(moduleCacheKey);
-                    throw new JSException(throwSyntaxError(compilerError.getMessage()));
+                    throw new JSException(throwSyntaxError(
+                            compilerError.getMessage(), compilerError.getSourceLocation()));
                 }
             } catch (IOException ioException) {
                 dynamicImportModuleCache.remove(moduleCacheKey);
@@ -3847,7 +3849,8 @@ public final class JSContext implements AutoCloseable {
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw new JSException(error);
         } catch (JSCompilerException compilerException) {
-            JSValue error = throwSyntaxError(compilerException.getMessage());
+            JSValue error = throwSyntaxError(
+                    compilerException.getMessage(), compilerException.getSourceLocation());
             moduleRecord.setEvaluationError(error);
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw new JSException(error);
@@ -5404,16 +5407,28 @@ public final class JSContext implements AutoCloseable {
      * @return The error value
      */
     public JSError throwError(String errorType, String message) {
+        return throwError(errorType, message, null);
+    }
+
+    /**
+     * Throw a JavaScript error of a specific type at a source location.
+     *
+     * @param errorType      Error constructor name (Error, TypeError, RangeError, etc.)
+     * @param message        Error message
+     * @param sourceLocation Source location, or {@code null} when unavailable
+     * @return The error value
+     */
+    public JSError throwError(String errorType, String message, SourceLocation sourceLocation) {
         // Create error object using the proper error class
         JSError jsError = switch (errorType) {
-            case JSAggregateError.NAME -> new JSAggregateError(this, message);
-            case JSEvalError.NAME -> new JSEvalError(this, message);
-            case JSRangeError.NAME -> new JSRangeError(this, message);
-            case JSReferenceError.NAME -> new JSReferenceError(this, message);
-            case JSSyntaxError.NAME -> new JSSyntaxError(this, message);
-            case JSTypeError.NAME -> new JSTypeError(this, message);
-            case JSURIError.NAME -> new JSURIError(this, message);
-            default -> new JSError(this, message);
+            case JSAggregateError.NAME -> new JSAggregateError(this, message, sourceLocation);
+            case JSEvalError.NAME -> new JSEvalError(this, message, sourceLocation);
+            case JSRangeError.NAME -> new JSRangeError(this, message, sourceLocation);
+            case JSReferenceError.NAME -> new JSReferenceError(this, message, sourceLocation);
+            case JSSyntaxError.NAME -> new JSSyntaxError(this, message, sourceLocation);
+            case JSTypeError.NAME -> new JSTypeError(this, message, sourceLocation);
+            case JSURIError.NAME -> new JSURIError(this, message, sourceLocation);
+            default -> new JSError(this, message, sourceLocation);
         };
         return throwError(jsError);
     }
@@ -5474,6 +5489,10 @@ public final class JSContext implements AutoCloseable {
         return throwError(JSSyntaxError.NAME, message);
     }
 
+    public JSError throwSyntaxError(String message, SourceLocation sourceLocation) {
+        return throwError(JSSyntaxError.NAME, message, sourceLocation);
+    }
+
     /**
      * Throw a TypeError.
      *
@@ -5482,6 +5501,10 @@ public final class JSContext implements AutoCloseable {
      */
     public JSError throwTypeError(String message) {
         return throwError(JSTypeError.NAME, message);
+    }
+
+    public JSError throwTypeError(String message, SourceLocation sourceLocation) {
+        return throwError(JSTypeError.NAME, message, sourceLocation);
     }
 
     /**

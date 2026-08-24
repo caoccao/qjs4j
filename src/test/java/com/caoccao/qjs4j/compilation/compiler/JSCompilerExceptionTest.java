@@ -16,11 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.compiler;
 
-import com.caoccao.qjs4j.compilation.ast.BreakStatement;
-import com.caoccao.qjs4j.compilation.ast.ExpressionStatement;
-import com.caoccao.qjs4j.compilation.ast.Literal;
-import com.caoccao.qjs4j.compilation.ast.Program;
-import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.compilation.ast.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
 import org.junit.jupiter.api.Test;
 
@@ -77,6 +73,43 @@ class JSCompilerExceptionTest {
     }
 
     @Test
+    void testCompileNestedScriptExceptionCarriesSourceLocation() {
+        String source = "function build() {\n"
+                + "  return {\n"
+                + "    __proto__: null,\n"
+                + "    __proto__: {}\n"
+                + "  };\n"
+                + "}";
+
+        JSCompilerException exception = catchThrowableOfType(
+                JSCompilerException.class,
+                () -> new Compiler(source, "nested.js").compile(false));
+
+        assertThat(exception.getMessage()).isEqualTo(
+                "Duplicate __proto__ fields are not allowed in object literals");
+        assertThat(exception.getAst()).isInstanceOf(ObjectExpressionProperty.class);
+        assertThat(exception.getAst().getLocation()).isEqualTo(new SourceLocation(4, 5, 55, 55));
+    }
+
+    @Test
+    void testCompileScriptExceptionCarriesSourceLocation() {
+        String source = "const value = {\n"
+                + "  first: 1,\n"
+                + "  __proto__: null,\n"
+                + "  __proto__: {}\n"
+                + "};";
+
+        JSCompilerException exception = catchThrowableOfType(
+                JSCompilerException.class,
+                () -> new Compiler(source, "script.js").compile(false));
+
+        assertThat(exception.getMessage()).isEqualTo(
+                "Duplicate __proto__ fields are not allowed in object literals");
+        assertThat(exception.getAst()).isInstanceOf(ObjectExpressionProperty.class);
+        assertThat(exception.getAst().getLocation()).isEqualTo(new SourceLocation(4, 3, 49, 49));
+    }
+
+    @Test
     void testConstructorsAndReadonlyAst() throws NoSuchFieldException {
         Throwable cause = new IllegalStateException("cause");
         Literal ast = new Literal(1, new SourceLocation(2, 4, 10, 16));
@@ -89,12 +122,14 @@ class JSCompilerExceptionTest {
         assertThat(messageException.getMessage()).isEqualTo("message");
         assertThat(messageException.getCause()).isNull();
         assertThat(messageException.getAst()).isNull();
+        assertThat(messageException.getSourceLocation()).isNull();
         assertThat(messageException.fillInStackTrace()).isSameAs(messageException);
 
         assertThat(causeException.getCause()).isSameAs(cause);
         assertThat(causeException.getAst()).isNull();
         assertThat(astException.getCause()).isNull();
         assertThat(astException.getAst()).isSameAs(ast);
+        assertThat(astException.getSourceLocation()).isSameAs(ast.getLocation());
         assertThat(completeException.getCause()).isSameAs(cause);
         assertThat(completeException.getAst()).isSameAs(ast);
 

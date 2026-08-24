@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSCompilerException;
@@ -168,7 +169,7 @@ public final class ShadowRealmPrototype {
             compilerCheck.setPredeclareProgramLexicalsAsLocals(true);
             compilerCheck.compile(false);
         } catch (JSCompilerException e) {
-            return callerContext.throwSyntaxError(e.getMessage());
+            return callerContext.throwSyntaxError(e.getMessage(), e.getSourceLocation());
         } catch (JSErrorException e) {
             return callerContext.throwSyntaxError(e.getMessage());
         }
@@ -273,7 +274,8 @@ public final class ShadowRealmPrototype {
             promise.resolve(callerContext, wrappedExportValue);
             return promise;
         } catch (JSCompilerException e) {
-            rejectWithCallerTypeError(callerContext, promise, "ShadowRealm import parse failed");
+            rejectWithCallerTypeError(
+                    callerContext, promise, "ShadowRealm import parse failed", e.getSourceLocation());
             return promise;
         } catch (JSException e) {
             rejectWithCallerTypeError(callerContext, promise, "ShadowRealm import failed");
@@ -288,7 +290,12 @@ public final class ShadowRealmPrototype {
     }
 
     private static void rejectWithCallerTypeError(JSContext callerContext, JSPromise promise, String message) {
-        JSValue errorValue = callerContext.throwTypeError(message);
+        rejectWithCallerTypeError(callerContext, promise, message, null);
+    }
+
+    private static void rejectWithCallerTypeError(
+            JSContext callerContext, JSPromise promise, String message, SourceLocation sourceLocation) {
+        JSValue errorValue = callerContext.throwTypeError(message, sourceLocation);
         callerContext.clearPendingException();
         promise.reject(errorValue);
     }

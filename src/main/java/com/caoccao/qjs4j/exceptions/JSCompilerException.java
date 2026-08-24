@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.exceptions;
 
 import com.caoccao.qjs4j.compilation.ast.ASTNode;
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
 /**
  * Exception thrown when compilation fails.
@@ -53,5 +54,14 @@ public class JSCompilerException extends RuntimeException {
      */
     public ASTNode getAst() {
         return ast;
+    }
+
+    /**
+     * Gets the source location of the associated AST node.
+     *
+     * @return the source location, or {@code null} when no AST node is associated
+     */
+    public SourceLocation getSourceLocation() {
+        return ast == null ? null : ast.getLocation();
     }
 }

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 /**
  * Represents a JavaScript TypeError object.
  */
@@ -28,6 +30,10 @@ public final class JSTypeError extends JSError {
      */
     public JSTypeError(JSContext context, String message) {
         super(context, message);
+    }
+
+    public JSTypeError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

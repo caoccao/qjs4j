@@ -36,15 +36,6 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
         return null;
     }
 
-    private void verifyAtOrBelowMatchesManual(TemporalCalendarId calendarId, String monthCode) {
-        int[] maximumDays = {31, 30, 29, 28, 15, 1};
-        for (int maximumDay : maximumDays) {
-            IsoDate indexedLookupIsoDate = calendarId.findReferenceIsoDateAtOrBelow(monthCode, maximumDay);
-            IsoDate manualLookupIsoDate = findReferenceIsoDateAtOrBelowManual(calendarId, monthCode, maximumDay);
-            assertEquals(manualLookupIsoDate, indexedLookupIsoDate);
-        }
-    }
-
     @Test
     public void testFindReferenceIsoDateAtOrBelowForChineseAndDangi() {
         verifyAtOrBelowMatchesManual(TemporalCalendarId.CHINESE, "M01");
@@ -68,6 +59,15 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateExact("M03", 0));
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateExact("M03", 32));
         assertNull(TemporalCalendarId.CHINESE.findReferenceIsoDateAtOrBelow("M03", 0));
+    }
+
+    private void verifyAtOrBelowMatchesManual(TemporalCalendarId calendarId, String monthCode) {
+        int[] maximumDays = {31, 30, 29, 28, 15, 1};
+        for (int maximumDay : maximumDays) {
+            IsoDate indexedLookupIsoDate = calendarId.findReferenceIsoDateAtOrBelow(monthCode, maximumDay);
+            IsoDate manualLookupIsoDate = findReferenceIsoDateAtOrBelowManual(calendarId, monthCode, maximumDay);
+            assertEquals(manualLookupIsoDate, indexedLookupIsoDate);
+        }
     }
 }
 
