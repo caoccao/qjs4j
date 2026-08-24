@@ -44,7 +44,9 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
                 }
             }
             if (target == null) {
-                throw new JSCompilerException("Undefined label '" + labelName + "'");
+                throw new JSCompilerException(
+                        "Undefined label '" + labelName + "'",
+                        breakStmt);
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.breakTargetScopeDepth);
@@ -53,7 +55,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
             target.breakPositions.add(jumpPos);
         } else {
             if (compilerContext.loopManager.isEmpty()) {
-                throw new JSCompilerException("Break statement outside of loop");
+                throw new JSCompilerException("Break statement outside of loop", breakStmt);
             }
             LoopContext loopContext = null;
             for (LoopContext loopCtx : compilerContext.loopManager) {
@@ -63,7 +65,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
                 }
             }
             if (loopContext == null) {
-                throw new JSCompilerException("Break statement outside of loop");
+                throw new JSCompilerException("Break statement outside of loop", breakStmt);
             }
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
             emitActiveFinallyGosubs();

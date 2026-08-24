@@ -37,7 +37,9 @@ final class ForInStatementCompiler extends AstNodeCompiler<ForInStatement> {
         if (!isExpressionBased) {
             varDecl = (VariableDeclaration) forInStmt.getLeft();
             if (varDecl.getDeclarations().size() != 1) {
-                throw new JSCompilerException("for-in loop must have exactly one variable");
+                throw new JSCompilerException(
+                        "for-in loop must have exactly one variable",
+                        varDecl);
             }
             declarationPattern = varDecl.getDeclarations().get(0).getId();
             isVar = varDecl.getKind() == VariableKind.VAR;

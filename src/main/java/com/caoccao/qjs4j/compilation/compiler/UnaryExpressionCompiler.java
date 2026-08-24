@@ -267,7 +267,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                         String fieldName = privateId.getName();
                         JSSymbol symbol = compilerContext.privateSymbols.get(fieldName);
                         if (symbol == null) {
-                            throw new JSCompilerException("Private field not found: #" + fieldName);
+                            throw new JSCompilerException(
+                                    "Private field not found: #" + fieldName,
+                                    privateId);
                         }
 
                         compilerContext.expressionCompiler.compile(memberExpr.getObject());
@@ -293,7 +295,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                             compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD); // old_val
                         }
                     } else {
-                        throw new JSCompilerException("Invalid member expression property for increment/decrement");
+                        throw new JSCompilerException(
+                                "Invalid member expression property for increment/decrement",
+                                memberExpr);
                     }
                 }
             } else if (operand instanceof CallExpression) {
@@ -303,7 +307,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.THROW_ERROR, "invalid increment/decrement operand");
                 compilerContext.emitter.emitU8(5); // JS_THROW_ERROR_INVALID_LVALUE
             } else {
-                throw new JSCompilerException("Invalid operand for increment/decrement operator");
+                throw new JSCompilerException(
+                        "Invalid operand for increment/decrement operator",
+                        operand);
             }
             return;
         }
@@ -358,7 +364,9 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                 compilerContext.emitter.emitOpcode(Opcode.DROP);
                 yield Opcode.UNDEFINED;
             }
-            default -> throw new JSCompilerException("Unknown unary operator: " + unaryExpr.getOperator());
+            default -> throw new JSCompilerException(
+                    "Unknown unary operator: " + unaryExpr.getOperator(),
+                    unaryExpr);
         };
 
         compilerContext.emitter.emitOpcode(op);
@@ -400,9 +408,13 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     Opcode.PUSH_CONST,
                     new JSString(propertyIdentifier.getName()));
         } else if (deleteTargetMemberExpression.getProperty() instanceof PrivateIdentifier privateIdentifier) {
-            throw new JSCompilerException("Unexpected private field '#" + privateIdentifier.getName() + "'");
+            throw new JSCompilerException(
+                    "Unexpected private field '#" + privateIdentifier.getName() + "'",
+                    privateIdentifier);
         } else {
-            throw new JSCompilerException("Invalid delete target");
+            throw new JSCompilerException(
+                    "Invalid delete target",
+                    deleteTargetMemberExpression);
         }
         compilerContext.emitter.emitOpcode(Opcode.DELETE);
         int jumpToEnd = compilerContext.emitter.emitJump(Opcode.GOTO);
@@ -448,12 +460,14 @@ final class UnaryExpressionCompiler extends AstNodeCompiler<UnaryExpression> {
                     ? compilerContext.privateSymbols.get(fieldName)
                     : null;
             if (symbol == null) {
-                throw new JSCompilerException("Unexpected private field '#" + fieldName + "'");
+                throw new JSCompilerException(
+                        "Unexpected private field '#" + fieldName + "'",
+                        privateIdentifier);
             }
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
             return;
         }
-        throw new JSCompilerException("Invalid member property");
+        throw new JSCompilerException("Invalid member property", memberExpression);
     }
 }

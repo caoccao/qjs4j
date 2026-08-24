@@ -88,7 +88,9 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
                         ? compilerContext.privateSymbols.get(fieldName)
                         : null;
                 if (privateSymbol == null) {
-                    throw new JSCompilerException("undefined private field '#" + fieldName + "'");
+                    throw new JSCompilerException(
+                            "undefined private field '#" + fieldName + "'",
+                            privateIdentifier);
                 }
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, privateSymbol);
                 compilerContext.emitter.emitOpcode(Opcode.PUT_PRIVATE_FIELD);

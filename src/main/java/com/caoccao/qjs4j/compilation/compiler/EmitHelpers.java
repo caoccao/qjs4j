@@ -230,14 +230,17 @@ final class EmitHelpers {
     void emitDefaultParameterInit(
             BytecodeCompiler functionCompiler,
             FunctionParams functionParams,
-            List<Integer> parameterSlotIndexes) {
+            List<Integer> parameterSlotIndexes,
+            ASTNode ast) {
         List<Pattern> params = functionParams.params();
         List<Expression> defaults = functionParams.defaults();
         if (defaults == null || defaults.isEmpty()) {
             return;
         }
         if (parameterSlotIndexes == null || parameterSlotIndexes.size() < defaults.size()) {
-            throw new JSCompilerException("Parameter slot indexes are not aligned with default parameters");
+            throw new JSCompilerException(
+                    "Parameter slot indexes are not aligned with default parameters",
+                    ast);
         }
 
         boolean hasNonSimpleParameters = functionParams.hasNonSimpleParameters();
@@ -413,11 +416,13 @@ final class EmitHelpers {
             } else if (value instanceof String str) {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
             } else {
-                throw new JSCompilerException("Unsupported field key literal type: " + value.getClass());
+                throw new JSCompilerException(
+                        "Unsupported field key literal type: " + value.getClass(),
+                        key);
             }
             return;
         }
-        throw new JSCompilerException("Invalid non-computed field key");
+        throw new JSCompilerException("Invalid non-computed field key", key);
     }
 
     void emitScopeUsingDisposal(CompilerScope scope) {
@@ -497,8 +502,10 @@ final class EmitHelpers {
             compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(propId.getName()));
-        } else if (memberExpr.getProperty() instanceof PrivateIdentifier) {
-            throw new JSCompilerException("super private fields are not supported");
+        } else if (memberExpr.getProperty() instanceof PrivateIdentifier privateIdentifier) {
+            throw new JSCompilerException(
+                    "super private fields are not supported",
+                    privateIdentifier);
         } else {
             compilerContext.expressionCompiler.compile(memberExpr.getProperty());
         }
@@ -519,12 +526,14 @@ final class EmitHelpers {
         }
     }
 
-    int ensureUsingStackLocal(boolean asyncUsingDeclaration) {
+    int ensureUsingStackLocal(boolean asyncUsingDeclaration, ASTNode ast) {
         CompilerScope scope = compilerContext.scopeManager.currentScope();
         Integer existingLocalIndex = scope.getUsingStackLocalIndex();
         if (existingLocalIndex != null) {
             if (asyncUsingDeclaration && !scope.isUsingStackAsync()) {
-                throw new JSCompilerException("Cannot mix await using with sync using stack in the same scope");
+                throw new JSCompilerException(
+                        "Cannot mix await using with sync using stack in the same scope",
+                        ast);
             }
             return existingLocalIndex;
         }

@@ -44,7 +44,9 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 }
             }
             if (target == null) {
-                throw new JSCompilerException("Undefined label '" + labelName + "'");
+                throw new JSCompilerException(
+                        "Undefined label '" + labelName + "'",
+                        contStmt);
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(target.continueTargetScopeDepth);
@@ -60,7 +62,7 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 }
             }
             if (loopContext == null) {
-                throw new JSCompilerException("Continue statement outside of loop");
+                throw new JSCompilerException("Continue statement outside of loop", contStmt);
             }
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
             emitActiveFinallyGosubs();

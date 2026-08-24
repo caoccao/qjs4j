@@ -118,7 +118,8 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
             compilerContext.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
                     arrowExpr.getFunctionParams(),
-                    parameterSlotIndexes);
+                    parameterSlotIndexes,
+                    arrowExpr);
         }
 
         // Handle rest parameter if present

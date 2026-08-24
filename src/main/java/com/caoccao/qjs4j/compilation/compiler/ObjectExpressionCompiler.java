@@ -37,7 +37,9 @@ final class ObjectExpressionCompiler extends AstNodeCompiler<ObjectExpression> {
             if (property.isProtoDataProperty()) {
                 protoDataPropertyCount++;
                 if (protoDataPropertyCount > 1) {
-                    throw new JSCompilerException("Duplicate __proto__ fields are not allowed in object literals");
+                    throw new JSCompilerException(
+                            "Duplicate __proto__ fields are not allowed in object literals",
+                            property);
                 }
             }
         }

@@ -63,7 +63,9 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
             }
             if (isUsingDeclaration) {
                 if (declarator.getInit() == null) {
-                    throw new JSCompilerException(varDecl.getKind() + " declaration requires an initializer");
+                    throw new JSCompilerException(
+                            varDecl.getKind() + " declaration requires an initializer",
+                            declarator);
                 }
 
                 if (declarator.getId() instanceof Identifier targetId
@@ -77,7 +79,9 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
                     compilerContext.emitter.emitOpcodeAtom(Opcode.SET_NAME, targetId.getName());
                 }
                 compilerContext.inferredClassName = null;
-                int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(isAwaitUsingDeclaration);
+                int usingStackLocalIndex = compilerContext.emitHelpers.ensureUsingStackLocal(
+                        isAwaitUsingDeclaration,
+                        declarator);
                 compilerContext.emitHelpers.emitMethodCallWithSingleArgOnLocalObject(usingStackLocalIndex, "use");
                 compilerContext.patternCompiler.compile(declarator.getId());
                 continue;
@@ -96,7 +100,9 @@ final class VariableDeclarationCompiler extends AstNodeCompiler<VariableDeclarat
                     continue;
                 }
                 if (!(declarator.getId() instanceof Identifier)) {
-                    throw new JSCompilerException("Missing initializer in destructuring declaration");
+                    throw new JSCompilerException(
+                            "Missing initializer in destructuring declaration",
+                            declarator);
                 }
                 continue;
             }

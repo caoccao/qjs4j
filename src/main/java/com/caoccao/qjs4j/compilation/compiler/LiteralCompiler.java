@@ -82,7 +82,9 @@ final class LiteralCompiler extends AstNodeCompiler<Literal> {
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, new JSString(str));
         } else {
             // Other types as constants
-            throw new JSCompilerException("Unsupported literal type: " + value.getClass());
+            throw new JSCompilerException(
+                    "Unsupported literal type: " + value.getClass(),
+                    literal);
         }
     }
 }

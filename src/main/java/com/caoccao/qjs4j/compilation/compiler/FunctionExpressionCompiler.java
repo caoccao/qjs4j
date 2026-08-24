@@ -123,7 +123,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             compilerContext.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
                     functionExpression.getFunctionParams(),
-                    parameterSlotIndexes);
+                    parameterSlotIndexes,
+                    functionExpression);
         }
 
         // Handle rest parameter if present

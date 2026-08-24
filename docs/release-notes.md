@@ -1,5 +1,11 @@
 # Release Notes
 
+## 0.2.0
+
+### Compiler Diagnostics
+
+- `JSCompilerException` now carries the readonly offending AST node via `getAst()` when available. Callers can retrieve its line, column, start offset, and end offset from `exception.getAst().getLocation()`.
+
 ## 0.1.1
 
 Initial release of qjs4j — a native Java implementation of QuickJS (JDK 17+, zero runtime dependencies).
