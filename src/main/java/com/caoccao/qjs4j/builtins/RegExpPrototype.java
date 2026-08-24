@@ -116,7 +116,7 @@ public final class RegExpPrototype {
         if (!(thisArg instanceof JSRegExp regexp)) {
             return context.throwTypeError("RegExp.prototype.compile called on non-RegExp");
         }
-        JSValue realmRegExpConstructor = context.getGlobalObject().get(JSRegExp.NAME);
+        JSValue realmRegExpConstructor = context.getCachedRegExpConstructor();
         JSValue receiverConstructor = regexp.get(PropertyKey.CONSTRUCTOR);
         if (realmRegExpConstructor != receiverConstructor) {
             return context.throwTypeError("RegExp.prototype.compile called on incompatible receiver");
@@ -548,7 +548,7 @@ public final class RegExpPrototype {
     }
 
     private static JSValue getRegExpSpeciesConstructor(JSContext context, JSObject regexpObject) {
-        JSValue defaultConstructor = context.getGlobalObject().get(PropertyKey.fromString(JSRegExp.NAME));
+        JSValue defaultConstructor = context.getCachedRegExpConstructor();
         if (!(defaultConstructor instanceof JSFunction)) {
             return context.throwTypeError("RegExp constructor is not available");
         }
@@ -658,15 +658,7 @@ public final class RegExpPrototype {
     }
 
     private static boolean isRegExpPrototypeObject(JSContext context, JSValue value) {
-        if (!(value instanceof JSObject)) {
-            return false;
-        }
-        JSValue regExpConstructorValue = context.getGlobalObject().get(JSRegExp.NAME);
-        if (!(regExpConstructorValue instanceof JSObject regExpConstructorObject)) {
-            return false;
-        }
-        JSValue regExpPrototypeValue = regExpConstructorObject.get(PropertyKey.PROTOTYPE);
-        return value == regExpPrototypeValue;
+        return value instanceof JSObject && value == context.getCachedRegExpPrototype();
     }
 
     private static boolean isSameValuePositiveZero(JSValue value) {

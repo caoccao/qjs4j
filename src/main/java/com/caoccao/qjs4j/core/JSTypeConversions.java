@@ -52,6 +52,19 @@ public final class JSTypeConversions {
             return true;
         }
 
+        // ES2024 7.2.13: null and undefined only compare equal to each other
+        // (and, in web-compatible hosts, to an IsHTMLDDA object). In particular,
+        // an ordinary object must not be coerced when compared with a nullish value.
+        if (x.isNullOrUndefined() || y.isNullOrUndefined()) {
+            if (x instanceof JSObject xObject && xObject.isHTMLDDA()) {
+                return y.isNullOrUndefined();
+            }
+            if (y instanceof JSObject yObject && yObject.isHTMLDDA()) {
+                return x.isNullOrUndefined();
+            }
+            return false;
+        }
+
         // Number comparison
         if (x.isNumber() && y.isString()) {
             return abstractEquals(context, x, toNumber(context, y));
@@ -105,11 +118,7 @@ public final class JSTypeConversions {
             return abstractEquals(context, x, py);
         }
 
-        // Annex B: IsHTMLDDA object is equivalent to null/undefined for == and !=.
-        if (x instanceof JSObject xObj && xObj.isHTMLDDA() && y.isNullOrUndefined()) {
-            return true;
-        }
-        return y instanceof JSObject yObj && yObj.isHTMLDDA() && x.isNullOrUndefined();
+        return false;
     }
 
     private static int compareBigIntAndNumber(BigInteger bigInt, double number) {

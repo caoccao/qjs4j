@@ -107,6 +107,8 @@ public final class JSContext implements AutoCloseable {
     // Cached Object.prototype for fast internal object creation
     private JSObject cachedObjectPrototype;
     private JSObject cachedPromisePrototype;
+    private JSObject cachedRegExpConstructor;
+    private JSObject cachedRegExpPrototype;
     // Temporarily holds new.target during native constructor calls
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
@@ -1163,7 +1165,11 @@ public final class JSContext implements AutoCloseable {
      */
     public JSRegExp createJSRegExp(String pattern, String flags) {
         JSRegExp jsRegExp = new JSRegExp(this, pattern, flags);
-        transferPrototype(jsRegExp, JSRegExp.NAME);
+        if (cachedRegExpPrototype != null) {
+            jsRegExp.setPrototype(cachedRegExpPrototype);
+        } else {
+            transferPrototype(jsRegExp, JSRegExp.NAME);
+        }
         return jsRegExp;
     }
 
@@ -2790,6 +2796,14 @@ public final class JSContext implements AutoCloseable {
         return asyncGeneratorPrototype;
     }
 
+    public JSObject getCachedRegExpConstructor() {
+        return cachedRegExpConstructor;
+    }
+
+    public JSObject getCachedRegExpPrototype() {
+        return cachedRegExpPrototype;
+    }
+
     /**
      * Get the full call stack.
      */
@@ -3050,7 +3064,7 @@ public final class JSContext implements AutoCloseable {
         return iteratorPrototypes.get(tag);
     }
 
-    public java.util.Collection<JSObject> getIteratorPrototypes() {
+    public Collection<JSObject> getIteratorPrototypes() {
         return iteratorPrototypes.values();
     }
 
@@ -3297,6 +3311,14 @@ public final class JSContext implements AutoCloseable {
             JSValue proto = promiseCtorObject.get(PropertyKey.PROTOTYPE);
             if (proto instanceof JSObject protoObj) {
                 this.cachedPromisePrototype = protoObj;
+            }
+        }
+        JSValue regExpCtor = jsGlobalObject.getGlobalObject().get(JSRegExp.NAME);
+        if (regExpCtor instanceof JSObject regExpCtorObject) {
+            this.cachedRegExpConstructor = regExpCtorObject;
+            JSValue proto = regExpCtorObject.get(PropertyKey.PROTOTYPE);
+            if (proto instanceof JSObject protoObj) {
+                this.cachedRegExpPrototype = protoObj;
             }
         }
     }

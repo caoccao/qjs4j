@@ -6,6 +6,10 @@
 
 - `JSCompilerException` now carries the readonly offending AST node via `getAst()` when available, and `JSSyntaxErrorException` carries a readonly source location. Lexer, parser, and compiler locations are preserved on the internal JavaScript error value, so every `JSException` wrapper exposes the readonly line, column, start offset, and end offset via `getSourceLocation()` without exposing the AST, including across `JSContext.eval()`, nested evaluation, function construction, ShadowRealm evaluation, and module paths.
 
+### Runtime Correctness
+
+- Fixed the Octane v7 failures from [issue #7](https://github.com/caoccao/qjs4j/issues/7): abstract equality no longer coerces ordinary objects when comparing them with `null` or `undefined`, and RegExp literals and species operations keep using the realm intrinsics when the global `RegExp` binding is replaced.
+
 ## 0.1.1
 
 Initial release of qjs4j — a native Java implementation of QuickJS (JDK 17+, zero runtime dependencies).

@@ -5283,8 +5283,9 @@ public final class OpcodeHandler {
         JSValue template = executionContext.bytecode.getConstants()[constIndex];
         if (template instanceof JSRegExp templateRegExp) {
             // Create a new JSRegExp from the template's pattern and flags
-            JSRegExp newRegExp = new JSRegExp(executionContext.virtualMachine.context, templateRegExp.getPattern(), templateRegExp.getFlags());
-            executionContext.virtualMachine.initializeConstantValueIfNeeded(newRegExp);
+            JSRegExp newRegExp = executionContext.virtualMachine.context.createJSRegExp(
+                    templateRegExp.getPattern(),
+                    templateRegExp.getFlags());
             executionContext.push(newRegExp);
         } else {
             throw new JSVirtualMachineException("REGEXP constant is not a JSRegExp");
