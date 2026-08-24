@@ -31,7 +31,8 @@ final class WithStatementCompiler extends AstNodeCompiler<WithStatement> {
     @Override
     void compile(WithStatement withStmt) {
         if (compilerContext.strictMode) {
-            throw new JSSyntaxErrorException("Strict mode code may not include a with statement");
+            throw new JSSyntaxErrorException(
+                    "Strict mode code may not include a with statement", withStmt.getLocation());
         }
 
         if (compilerContext.evalReturnLocalIndex >= 0) {

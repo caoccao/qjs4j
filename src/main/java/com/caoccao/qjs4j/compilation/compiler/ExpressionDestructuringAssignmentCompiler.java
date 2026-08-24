@@ -46,7 +46,8 @@ final class ExpressionDestructuringAssignmentCompiler extends AstNodeCompiler<Ex
         } else if (target instanceof ObjectExpression nestedObj) {
             compilerContext.objectExpressionDestructuringAssignmentCompiler.compile(nestedObj);
         } else {
-            throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            throw new JSSyntaxErrorException(
+                    "Invalid destructuring assignment target", target.getLocation());
         }
     }
 

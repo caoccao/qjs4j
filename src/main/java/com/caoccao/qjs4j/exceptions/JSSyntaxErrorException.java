@@ -16,12 +16,25 @@
 
 package com.caoccao.qjs4j.exceptions;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 public class JSSyntaxErrorException extends JSErrorException {
     public JSSyntaxErrorException(String message) {
         super(message);
     }
 
+    public JSSyntaxErrorException(String message, SourceLocation sourceLocation) {
+        super(message, sourceLocation);
+    }
+
     public JSErrorType getErrorType() {
         return JSErrorType.SyntaxError;
+    }
+
+    public JSSyntaxErrorException withSourceLocation(SourceLocation sourceLocation) {
+        if (getSourceLocation() != null || sourceLocation == null) {
+            return this;
+        }
+        return new JSSyntaxErrorException(getMessage(), sourceLocation);
     }
 }

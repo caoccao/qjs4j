@@ -174,7 +174,7 @@ public final class FunctionConstructor {
         } catch (JSCompilerException e) {
             return context.throwSyntaxError(e.getMessage(), e.getSourceLocation());
         } catch (JSSyntaxErrorException e) {
-            return context.throwSyntaxError(e.getMessage());
+            return context.throwSyntaxError(e.getMessage(), e.getSourceLocation());
         } catch (JSException e) {
             return e.getErrorValue();
         } catch (Exception e) {

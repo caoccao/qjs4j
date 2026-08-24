@@ -193,7 +193,9 @@ public final class Compiler {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 VariableKind kind = variableDeclaration.getKind();
                 if (kind == VariableKind.USING || kind == VariableKind.AWAIT_USING) {
-                    throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
+                    throw new JSSyntaxErrorException(
+                            "using declarations are not allowed at the top level of scripts",
+                            variableDeclaration.getLocation());
                 }
             }
         }

@@ -171,7 +171,7 @@ public final class ShadowRealmPrototype {
         } catch (JSCompilerException e) {
             return callerContext.throwSyntaxError(e.getMessage(), e.getSourceLocation());
         } catch (JSErrorException e) {
-            return callerContext.throwSyntaxError(e.getMessage());
+            return callerContext.throwSyntaxError(e.getMessage(), e.getSourceLocation());
         }
 
         JSContext shadowContext = shadowRealm.getShadowContext();

@@ -38,7 +38,8 @@ final class IfStatementCompiler extends AstNodeCompiler<IfStatement> {
             if (ifStmt.getConsequent() instanceof FunctionDeclaration
                     || ifStmt.getAlternate() instanceof FunctionDeclaration) {
                 throw new JSSyntaxErrorException(
-                        "In strict mode code, functions can only be declared at top level or inside a block.");
+                        "In strict mode code, functions can only be declared at top level or inside a block.",
+                        ifStmt.getLocation());
             }
         }
 

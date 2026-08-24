@@ -37,7 +37,8 @@ final class MemberExpressionDestructuringAssignmentCompiler extends AstNodeCompi
     void compile(MemberExpression memberExpr) {
         // Stack: [value]
         if (memberExpr.isOptional()) {
-            throw new JSSyntaxErrorException("Invalid destructuring assignment target");
+            throw new JSSyntaxErrorException(
+                    "Invalid destructuring assignment target", memberExpr.getLocation());
         }
         if (memberExpr.getObject().isSuperIdentifier()) {
             // Stack starts with [value]

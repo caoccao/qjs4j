@@ -1488,111 +1488,111 @@ public final class JSContext implements AutoCloseable {
         JSDynamicImportModule selfModuleRecord = null;
         JSDynamicImportModule.Status selfModulePreviousStatus = null;
         boolean removeSelfModuleRecordAfterEval = false;
-        boolean skipEvaluatedDynamicImportModule = false;
-        boolean shouldTrackDynamicImportModule = isModule
-                && !isDirectEval
-                && filename != null
-                && !filename.isEmpty()
-                && !filename.startsWith("<")
-                && (code.contains("import(") || code.contains("import.defer(")
-                || hasModuleExportSyntax(code)
-                || hasModuleStaticImportSyntax(code)
-                || hasModuleTopLevelAwaitSyntax(code));
-        if (shouldTrackDynamicImportModule) {
-            String resolvedModuleSpecifier;
-            try {
-                resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
-            } catch (JSException jsException) {
-                resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
-            }
-            JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
-            boolean executingTransformedModuleSource = existingRecord != null
-                    && !Objects.equals(existingRecord.rawSource(), code)
-                    && Objects.equals(existingRecord.transformedSource(), code);
-            if (!executingTransformedModuleSource) {
-                dynamicImportEvalModuleRecord = existingRecord;
-                if (dynamicImportEvalModuleRecord == null) {
-                    dynamicImportEvalModuleRecord =
-                            new JSDynamicImportModule(resolvedModuleSpecifier, createModuleNamespaceObject());
-                    dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-                    dynamicImportEvalModuleRecord.setRawSource(code);
-                    // Validate the original source for early errors (duplicate exports,
-                    // unresolvable bindings, etc.) before doing IIFE transformation.
-                    new Compiler(code, filename).setContext(this).parse(true);
-                    parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
-                    dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
-                } else if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
-                    skipEvaluatedDynamicImportModule = true;
-                }
-            }
-        }
-        boolean evaluatingRawDynamicImportModule =
-                dynamicImportEvalModuleRecord != null
-                        && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
-        boolean shouldEvaluateRawModuleThroughTransformedSource =
-                evaluatingRawDynamicImportModule
-                        && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                        && !dynamicImportEvalModuleRecord.hasTLA()
-                        && hasModuleStaticImportSyntax(code)
-                        && code.contains("import(");
-        boolean shouldEvaluateRawTopLevelAwaitModule =
-                evaluatingRawDynamicImportModule
-                        && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                        && dynamicImportEvalModuleRecord.hasTLA()
-                        && !hasModuleStaticImportSyntax(code);
-
-        Compiler compiler = new Compiler(code, filename).setContext(this);
-        // Per QuickJS, eval code has is_eval=true which prevents top-level return.
-        // Only syntactic direct eval should inherit caller frame semantics.
-        StackFrame directEvalCallerFrame = isDirectEval && useDirectEvalCallerFrame
-                ? virtualMachine.getCurrentFrame()
-                : null;
-        boolean allowNewTargetInEval = false;
-        boolean allowSuperPropertyInEval = false;
-        boolean allowSuperCallInEval = false;
-        Map<String, JSSymbol> evalPrivateSymbols = Map.of();
-        boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
-        if (isDirectEval) {
-            compiler.setEval(true);
-            if (directEvalCallerFrame != null
-                    && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
-                allowNewTargetInEval = callerBytecodeFunction.isNewTargetAllowed();
-                // Arrow functions inherit super binding from their enclosing method.
-                // Following QuickJS: eval inherits super_allowed from the calling function
-                // regardless of whether it is an arrow function or not.
-                allowSuperPropertyInEval = callerBytecodeFunction.getHomeObject() != null;
-                evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
-                // Per QuickJS: direct eval inherits super_call_allowed from the calling function.
-                // This is true for derived constructors, arrows inside derived constructors,
-                // and nested eval that already has super call allowed.
-                if (callerBytecodeFunction.isDerivedConstructor()) {
-                    allowSuperCallInEval = true;
-                } else if (callerBytecodeFunction.isArrow() && directEvalCallerFrame.getDerivedThisRef() != null) {
-                    allowSuperCallInEval = true;
-                } else if (callerBytecodeFunction.isEvalSuperCallAllowed()) {
-                    allowSuperCallInEval = true;
-                }
-            }
-            // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
-            // Per spec 16.1.7, eval in class field initializer applies "outside constructor" rules,
-            // so super() is a SyntaxError there.
-            if (isClassFieldEval) {
-                compiler.setClassFieldEval(true);
-                allowSuperCallInEval = false;
-            }
-            compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval, allowSuperCallInEval);
-            compiler.setEvalPrivateSymbols(evalPrivateSymbols);
-            // Direct eval creates a fresh lexical environment whose bindings do not leak.
-            compiler.setPredeclareProgramLexicalsAsLocals(true);
-            if (directEvalCallerFrame != null && (strictMode || inheritedStrictModeForDirectEval)) {
-                compiler.setInheritedStrictMode(true);
-            }
-        }
-        if (predeclareProgramLexicalsAsLocals) {
-            compiler.setPredeclareProgramLexicalsAsLocals(true);
-        }
         JSValue evalError = null;
         try {
+            boolean skipEvaluatedDynamicImportModule = false;
+            boolean shouldTrackDynamicImportModule = isModule
+                    && !isDirectEval
+                    && filename != null
+                    && !filename.isEmpty()
+                    && !filename.startsWith("<")
+                    && (code.contains("import(") || code.contains("import.defer(")
+                    || hasModuleExportSyntax(code)
+                    || hasModuleStaticImportSyntax(code)
+                    || hasModuleTopLevelAwaitSyntax(code));
+            if (shouldTrackDynamicImportModule) {
+                String resolvedModuleSpecifier;
+                try {
+                    resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
+                } catch (JSException jsException) {
+                    resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
+                }
+                JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
+                boolean executingTransformedModuleSource = existingRecord != null
+                        && !Objects.equals(existingRecord.rawSource(), code)
+                        && Objects.equals(existingRecord.transformedSource(), code);
+                if (!executingTransformedModuleSource) {
+                    dynamicImportEvalModuleRecord = existingRecord;
+                    if (dynamicImportEvalModuleRecord == null) {
+                        dynamicImportEvalModuleRecord =
+                                new JSDynamicImportModule(resolvedModuleSpecifier, createModuleNamespaceObject());
+                        dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
+                        dynamicImportEvalModuleRecord.setRawSource(code);
+                        // Validate the original source for early errors (duplicate exports,
+                        // unresolvable bindings, etc.) before doing IIFE transformation.
+                        new Compiler(code, filename).setContext(this).parse(true);
+                        parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
+                        dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
+                    } else if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
+                        skipEvaluatedDynamicImportModule = true;
+                    }
+                }
+            }
+            boolean evaluatingRawDynamicImportModule =
+                    dynamicImportEvalModuleRecord != null
+                            && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
+            boolean shouldEvaluateRawModuleThroughTransformedSource =
+                    evaluatingRawDynamicImportModule
+                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
+                            && !dynamicImportEvalModuleRecord.hasTLA()
+                            && hasModuleStaticImportSyntax(code)
+                            && code.contains("import(");
+            boolean shouldEvaluateRawTopLevelAwaitModule =
+                    evaluatingRawDynamicImportModule
+                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
+                            && dynamicImportEvalModuleRecord.hasTLA()
+                            && !hasModuleStaticImportSyntax(code);
+
+            Compiler compiler = new Compiler(code, filename).setContext(this);
+            // Per QuickJS, eval code has is_eval=true which prevents top-level return.
+            // Only syntactic direct eval should inherit caller frame semantics.
+            StackFrame directEvalCallerFrame = isDirectEval && useDirectEvalCallerFrame
+                    ? virtualMachine.getCurrentFrame()
+                    : null;
+            boolean allowNewTargetInEval = false;
+            boolean allowSuperPropertyInEval = false;
+            boolean allowSuperCallInEval = false;
+            Map<String, JSSymbol> evalPrivateSymbols = Map.of();
+            boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
+            if (isDirectEval) {
+                compiler.setEval(true);
+                if (directEvalCallerFrame != null
+                        && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
+                    allowNewTargetInEval = callerBytecodeFunction.isNewTargetAllowed();
+                    // Arrow functions inherit super binding from their enclosing method.
+                    // Following QuickJS: eval inherits super_allowed from the calling function
+                    // regardless of whether it is an arrow function or not.
+                    allowSuperPropertyInEval = callerBytecodeFunction.getHomeObject() != null;
+                    evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
+                    // Per QuickJS: direct eval inherits super_call_allowed from the calling function.
+                    // This is true for derived constructors, arrows inside derived constructors,
+                    // and nested eval that already has super call allowed.
+                    if (callerBytecodeFunction.isDerivedConstructor()) {
+                        allowSuperCallInEval = true;
+                    } else if (callerBytecodeFunction.isArrow() && directEvalCallerFrame.getDerivedThisRef() != null) {
+                        allowSuperCallInEval = true;
+                    } else if (callerBytecodeFunction.isEvalSuperCallAllowed()) {
+                        allowSuperCallInEval = true;
+                    }
+                }
+                // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
+                // Per spec 16.1.7, eval in class field initializer applies "outside constructor" rules,
+                // so super() is a SyntaxError there.
+                if (isClassFieldEval) {
+                    compiler.setClassFieldEval(true);
+                    allowSuperCallInEval = false;
+                }
+                compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval, allowSuperCallInEval);
+                compiler.setEvalPrivateSymbols(evalPrivateSymbols);
+                // Direct eval creates a fresh lexical environment whose bindings do not leak.
+                compiler.setPredeclareProgramLexicalsAsLocals(true);
+                if (directEvalCallerFrame != null && (strictMode || inheritedStrictModeForDirectEval)) {
+                    compiler.setInheritedStrictMode(true);
+                }
+            }
+            if (predeclareProgramLexicalsAsLocals) {
+                compiler.setPredeclareProgramLexicalsAsLocals(true);
+            }
             if (skipEvaluatedDynamicImportModule) {
                 processMicrotasks();
                 return JSUndefined.INSTANCE;
@@ -1958,7 +1958,7 @@ public final class JSContext implements AutoCloseable {
             evalError = e.getErrorValue();
             return null;
         } catch (JSSyntaxErrorException e) {
-            evalError = throwError("SyntaxError", e.getMessage());
+            evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
             return null;
         } catch (JSCompilerException e) {
             evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
@@ -3608,7 +3608,8 @@ public final class JSContext implements AutoCloseable {
                     new Compiler(sourceCode, resolvedSpecifier).setContext(this).parse(true);
                 } catch (JSSyntaxErrorException syntaxError) {
                     dynamicImportModuleCache.remove(moduleCacheKey);
-                    throw new JSException(throwSyntaxError(syntaxError.getMessage()));
+                    throw new JSException(throwSyntaxError(
+                            syntaxError.getMessage(), syntaxError.getSourceLocation()));
                 } catch (JSCompilerException compilerError) {
                     dynamicImportModuleCache.remove(moduleCacheKey);
                     throw new JSException(throwSyntaxError(
@@ -3844,7 +3845,8 @@ public final class JSContext implements AutoCloseable {
         } catch (IOException ioException) {
             throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
         } catch (JSSyntaxErrorException syntaxErrorException) {
-            JSValue error = throwSyntaxError(syntaxErrorException.getMessage());
+            JSValue error = throwSyntaxError(
+                    syntaxErrorException.getMessage(), syntaxErrorException.getSourceLocation());
             moduleRecord.setEvaluationError(error);
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
             throw new JSException(error);
@@ -5446,7 +5448,10 @@ public final class JSContext implements AutoCloseable {
         if (jsErrorException == null) {
             return throwError("Unknown error");
         }
-        return throwError(jsErrorException.getErrorType().name(), jsErrorException.getMessage());
+        return throwError(
+                jsErrorException.getErrorType().name(),
+                jsErrorException.getMessage(),
+                jsErrorException.getSourceLocation());
     }
 
     /**

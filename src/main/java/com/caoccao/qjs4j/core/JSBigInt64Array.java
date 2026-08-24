@@ -135,7 +135,7 @@ public final class JSBigInt64Array extends JSTypedArray {
             context.throwTypeError(e.getMessage());
             return;
         } catch (JSSyntaxErrorException e) {
-            context.throwSyntaxError(e.getMessage());
+            context.throwSyntaxError(e.getMessage(), e.getSourceLocation());
             return;
         }
         if (!buffer.isDetached() && index >= 0 && index < getLength()) {

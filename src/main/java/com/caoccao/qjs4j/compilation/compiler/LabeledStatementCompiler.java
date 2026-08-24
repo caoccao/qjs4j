@@ -42,7 +42,8 @@ final class LabeledStatementCompiler extends AstNodeCompiler<LabeledStatement> {
         // (they must be at top level or inside a block). Per ES2024 B.3.3 Note.
         if (compilerContext.strictMode && body instanceof FunctionDeclaration) {
             throw new JSSyntaxErrorException(
-                    "In strict mode code, functions can only be declared at top level or inside a block.");
+                    "In strict mode code, functions can only be declared at top level or inside a block.",
+                    body.getLocation());
         }
 
         // Check if the body is a loop statement — if so, the label applies to the loop
