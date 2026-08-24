@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 import java.util.Objects;
 
 /**
@@ -26,14 +28,23 @@ public sealed class JSError extends JSObject permits
         JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
     public static final String NAME = "Error";
     protected final JSContext context;
+    private final SourceLocation sourceLocation;
     private String vmMessage;
 
     /**
      * Create an Error with a message.
      */
     public JSError(JSContext context, String message) {
+        this(context, message, null);
+    }
+
+    /**
+     * Create an Error with a message and source location.
+     */
+    public JSError(JSContext context, String message, SourceLocation sourceLocation) {
         super(context);
         this.context = context;
+        this.sourceLocation = sourceLocation;
         if (message != null && !message.isEmpty()) {
             defineProperty(PropertyKey.MESSAGE,
                     PropertyDescriptor.dataDescriptor(new JSString(message), PropertyDescriptor.DataState.ConfigurableWritable));
@@ -196,6 +207,15 @@ public sealed class JSError extends JSObject permits
             return new JSString(getErrorName());
         }
         return JSTypeConversions.toString(context, nameValue);
+    }
+
+    /**
+     * Get the source location associated with this error.
+     *
+     * @return the source location, or {@code null} when it is unavailable
+     */
+    public SourceLocation getSourceLocation() {
+        return sourceLocation;
     }
 
     public String getVmMessage() {

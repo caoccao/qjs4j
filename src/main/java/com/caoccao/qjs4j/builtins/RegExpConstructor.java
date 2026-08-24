@@ -117,7 +117,7 @@ public final class RegExpConstructor {
                         return context.getPendingException();
                     }
                     // Step 3b-iii: If SameValue(newTarget, patternConstructor), return pattern
-                    JSValue regexpConstructor = context.getGlobalObject().get(JSRegExp.NAME);
+                    JSValue regexpConstructor = context.getCachedRegExpConstructor();
                     if (patternConstructor == regexpConstructor) {
                         return patternArg;
                     }

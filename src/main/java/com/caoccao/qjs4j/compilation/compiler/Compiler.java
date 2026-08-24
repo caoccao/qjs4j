@@ -75,8 +75,9 @@ public final class Compiler {
      * @throws JSCompilerException if compilation fails
      */
     public CompileResult compile(boolean isModule) {
+        Program ast = null;
         try {
-            Program ast = parse(isModule);
+            ast = parse(isModule);
             validateTopLevelUsingDeclarations(ast, isModule);
             BytecodeCompiler compiler = new BytecodeCompiler();
             compiler.setContext(context);
@@ -111,7 +112,7 @@ public final class Compiler {
         } catch (JSCompilerException | JSErrorException e) {
             throw e;
         } catch (Exception e) {
-            throw new JSCompilerException("Unexpected compilation error: " + e.getMessage(), e);
+            throw new JSCompilerException("Unexpected compilation error: " + e.getMessage(), e, ast);
         }
     }
 
@@ -192,7 +193,9 @@ public final class Compiler {
             if (statement instanceof VariableDeclaration variableDeclaration) {
                 VariableKind kind = variableDeclaration.getKind();
                 if (kind == VariableKind.USING || kind == VariableKind.AWAIT_USING) {
-                    throw new JSSyntaxErrorException("using declarations are not allowed at the top level of scripts");
+                    throw new JSSyntaxErrorException(
+                            "using declarations are not allowed at the top level of scripts",
+                            variableDeclaration.getLocation());
                 }
             }
         }

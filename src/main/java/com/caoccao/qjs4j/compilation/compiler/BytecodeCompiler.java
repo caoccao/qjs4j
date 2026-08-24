@@ -58,7 +58,9 @@ public final class BytecodeCompiler {
         if (ast instanceof Program program) {
             compilerContext.programCompiler.compile(program);
         } else {
-            throw new JSCompilerException("Expected Program node");
+            throw new JSCompilerException(
+                    "Expected Program node",
+                    ast);
         }
 
         int localCount;

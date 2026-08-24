@@ -16,17 +16,16 @@
 
 package com.caoccao.qjs4j.exceptions;
 
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.PropertyKey;
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+import com.caoccao.qjs4j.core.*;
 
 /**
  * Exception thrown when JavaScript code throws an error.
- * Wraps the JavaScript error value for access from Java.
+ * Wraps the JavaScript error value and its source location for access from Java.
  */
 public class JSException extends RuntimeException {
     private final JSValue errorValue;
+    private final SourceLocation sourceLocation;
 
     public JSException(String name, String message) {
         this(name, message, null);
@@ -35,6 +34,7 @@ public class JSException extends RuntimeException {
     public JSException(String name, String message, Throwable cause) {
         super(name + ": " + message, cause);
         errorValue = new JSString(name + ": " + message);
+        sourceLocation = null;
     }
 
     public JSException(JSValue errorValue) {
@@ -44,6 +44,7 @@ public class JSException extends RuntimeException {
     public JSException(JSValue errorValue, Throwable cause) {
         super(formatErrorMessage(errorValue), cause);
         this.errorValue = errorValue;
+        sourceLocation = errorValue instanceof JSError jsError ? jsError.getSourceLocation() : null;
     }
 
     /**
@@ -76,5 +77,14 @@ public class JSException extends RuntimeException {
      */
     public JSValue getErrorValue() {
         return errorValue;
+    }
+
+    /**
+     * Get the source location associated with this exception.
+     *
+     * @return the source location, or {@code null} when it is unavailable
+     */
+    public SourceLocation getSourceLocation() {
+        return sourceLocation;
     }
 }

@@ -113,7 +113,9 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
             case SUB -> Opcode.SUB;
             case URSHIFT -> Opcode.SHR;
             // LOGICAL_AND, LOGICAL_OR, NULLISH_COALESCING handled above with short-circuit evaluation
-            default -> throw new JSCompilerException("Unknown binary operator: " + binExpr.getOperator());
+            default -> throw new JSCompilerException(
+                    "Unknown binary operator: " + binExpr.getOperator(),
+                    binExpr);
         };
 
         compilerContext.emitter.emitOpcode(op);
@@ -124,7 +126,9 @@ final class BinaryExpressionCompiler extends AstNodeCompiler<BinaryExpression> {
 
         JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(privateIdentifier.getName()) : null;
         if (symbol == null) {
-            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
+            throw new JSCompilerException(
+                    "undefined private field '#" + privateIdentifier.getName() + "'",
+                    privateIdentifier);
         }
 
         compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);

@@ -43,6 +43,7 @@ This document provides a comprehensive list of all JavaScript features implement
 - **Logical**: &&, ||, !, ??
 - **Bitwise**: &, |, ^, ~, <<, >>, >>>
 - **Comparison**: ==, !=, ===, !==, <, >, <=, >=
+- **Abstract equality semantics**: Nullish comparisons do not coerce ordinary objects
 - **Assignment**: =, +=, -=, *=, /=, %=, etc.
 - **Logical assignment**: &&=, ||=, ??= (ES2021)
 - **Unary**: typeof, delete, void, +, -, ++, --
@@ -214,6 +215,7 @@ This document provides a comprehensive list of all JavaScript features implement
 
 ### RegExp
 - **Construction**: /pattern/flags, new RegExp(pattern, flags)
+- **Realm intrinsics**: Literals and species operations retain `%RegExp%` semantics when the global `RegExp` binding is replaced
 - **Methods**: exec, test
 - **String integration**: match, matchAll, search, replace, split
 - **Flags**: g (global), i (ignoreCase), m (multiline), s (dotAll), u (unicode), y (sticky), d (hasIndices), v (unicodeSets)

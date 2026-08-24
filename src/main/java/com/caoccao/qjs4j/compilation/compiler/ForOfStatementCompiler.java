@@ -44,7 +44,9 @@ final class ForOfStatementCompiler extends AstNodeCompiler<ForOfStatement> {
         } else {
             varDecl = (VariableDeclaration) forOfStmt.getLeft();
             if (varDecl.getDeclarations().size() != 1) {
-                throw new JSCompilerException("for-of loop must have exactly one variable");
+                throw new JSCompilerException(
+                        "for-of loop must have exactly one variable",
+                        varDecl);
             }
             pattern = varDecl.getDeclarations().get(0).getId();
             isVar = varDecl.getKind() == VariableKind.VAR;

@@ -90,7 +90,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                         privateInstanceMethods.add(method);
                     }
                     if (method.getKey() instanceof PrivateIdentifier privateId) {
-                        registerPrivateName(privateNameKinds, privateId.getName(), method.getKind());
+                        registerPrivateName(privateNameKinds, privateId.getName(), method.getKind(), privateId);
                     }
                 } else {
                     methods.add(method);
@@ -103,7 +103,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                 }
 
                 if (field.isPrivate() && field.getKey() instanceof PrivateIdentifier privateId) {
-                    registerPrivateName(privateNameKinds, privateId.getName(), "field");
+                    registerPrivateName(privateNameKinds, privateId.getName(), "field", privateId);
                 }
 
                 if (field.isAutoAccessor() && !field.isPrivate()) {
@@ -111,7 +111,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                             autoAccessorBackingNames.size() + 1,
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
-                    registerPrivateName(privateNameKinds, backingName, "field");
+                    registerPrivateName(privateNameKinds, backingName, "field", field);
                     methods.add(field.toAutoAccessorMethod(JSKeyword.GET, backingName));
                     methods.add(field.toAutoAccessorMethod(JSKeyword.SET, backingName));
                 }
@@ -364,7 +364,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             Map<String, JSSymbol> privateSymbols) {
         JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
         if (computedFieldSymbol == null) {
-            throw new JSCompilerException("Computed field key symbol not found");
+            throw new JSCompilerException("Computed field key symbol not found", field);
         }
 
         compilerContext.pushState();
@@ -408,7 +408,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
 
             if (isPrivate) {
                 if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
-                    throw new JSCompilerException("Invalid private field key");
+                    throw new JSCompilerException("Invalid private field key", field);
                 }
                 String fieldName = privateId.getName();
 
@@ -434,7 +434,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             } else if (field.isAutoAccessor()) {
                 JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
                 if (backingSymbol == null) {
-                    throw new JSCompilerException("Auto-accessor backing symbol not found");
+                    throw new JSCompilerException("Auto-accessor backing symbol not found", field);
                 }
 
                 if (field.getValue() != null) {
@@ -453,7 +453,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                 if (field.isComputed()) {
                     JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
                     if (computedFieldSymbol == null) {
-                        throw new JSCompilerException("Computed field key not found");
+                        throw new JSCompilerException("Computed field key not found", field);
                     }
                     compilerContext.emitter.emitOpcode(Opcode.SPECIAL_OBJECT);
                     compilerContext.emitter.emitU8(2);
@@ -546,7 +546,8 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             compilerContext.emitHelpers.emitDefaultParameterInit(
                     methodCompiler,
                     functionExpression.getFunctionParams(),
-                    parameterSlotIndexes);
+                    parameterSlotIndexes,
+                    functionExpression);
         }
 
         // Handle rest parameter if present
@@ -665,7 +666,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
                     List.of(),
                     false
             );
-            privateMethodEntries.add(new PrivateMethodEntry(methodName, methodFunc, method.getKind()));
+            privateMethodEntries.add(new PrivateMethodEntry(methodName, methodFunc, method.getKind(), method));
         }
         return privateMethodEntries;
     }
@@ -676,7 +677,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         for (PrivateMethodEntry entry : privateMethodEntries) {
             JSSymbol symbol = privateSymbols.get(entry.name());
             if (symbol == null) {
-                throw new JSCompilerException("Private method symbol not found: #" + entry.name());
+                throw new JSCompilerException("Private method symbol not found: #" + entry.name(), entry.ast());
             }
             if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
                 // Private getter/setter: use DEFINE_METHOD_COMPUTED with accessor flags
@@ -799,12 +800,14 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
 
         if (field.isPrivate()) {
             if (!(field.getKey() instanceof PrivateIdentifier privateId)) {
-                throw new JSCompilerException("Invalid static private field key");
+                throw new JSCompilerException("Invalid static private field key", field);
             }
 
             JSSymbol symbol = privateSymbols.get(privateId.getName());
             if (symbol == null) {
-                throw new JSCompilerException("Static private field symbol not found: #" + privateId.getName());
+                throw new JSCompilerException(
+                        "Static private field symbol not found: #" + privateId.getName(),
+                        privateId);
             }
 
             if (field.getValue() != null) {
@@ -824,7 +827,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         } else if (field.isAutoAccessor()) {
             JSSymbol backingSymbol = autoAccessorBackingSymbols.get(field);
             if (backingSymbol == null) {
-                throw new JSCompilerException("Auto-accessor static backing symbol not found");
+                throw new JSCompilerException("Auto-accessor static backing symbol not found", field);
             }
 
             if (field.getValue() != null) {
@@ -843,7 +846,7 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             if (field.isComputed()) {
                 JSSymbol computedFieldSymbol = computedFieldSymbols.get(field);
                 if (computedFieldSymbol == null) {
-                    throw new JSCompilerException("Computed static field key not found");
+                    throw new JSCompilerException("Computed static field key not found", field);
                 }
                 // Load precomputed key from constructor hidden storage:
                 // this this hiddenSymbol -> this key
@@ -977,7 +980,9 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         for (PrivateMethodEntry entry : privateStaticMethodEntries) {
             JSSymbol symbol = privateSymbols.get(entry.name());
             if (symbol == null) {
-                throw new JSCompilerException("Private static method symbol not found: #" + entry.name());
+                throw new JSCompilerException(
+                        "Private static method symbol not found: #" + entry.name(),
+                        entry.ast());
             }
 
             if (JSKeyword.GET.equals(entry.kind()) || JSKeyword.SET.equals(entry.kind())) {
@@ -1005,7 +1010,11 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
         }
     }
 
-    void registerPrivateName(Map<String, String> privateNameKinds, String privateName, String kind) {
+    void registerPrivateName(
+            Map<String, String> privateNameKinds,
+            String privateName,
+            String kind,
+            ASTNode ast) {
         String existingKind = privateNameKinds.get(privateName);
         if (existingKind == null) {
             privateNameKinds.put(privateName, kind);
@@ -1018,9 +1027,9 @@ final class ClassDeclarationCompiler extends AstNodeCompiler<ClassDeclaration> {
             privateNameKinds.put(privateName, "accessor");
             return;
         }
-        throw new JSCompilerException("private class field is already defined");
+        throw new JSCompilerException("private class field is already defined", ast);
     }
 
-    record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind) {
+    record PrivateMethodEntry(String name, JSBytecodeFunction function, String kind, MethodDefinition ast) {
     }
 }

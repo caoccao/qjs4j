@@ -36,7 +36,9 @@ final class ExpressionCompiler extends AstNodeCompiler<Expression> {
         } else if (expr instanceof Identifier identifier) {
             compilerContext.identifierCompiler.compile(identifier);
         } else if (expr instanceof PrivateIdentifier privateIdentifier) {
-            throw new JSCompilerException("undefined private field '#" + privateIdentifier.getName() + "'");
+            throw new JSCompilerException(
+                    "undefined private field '#" + privateIdentifier.getName() + "'",
+                    privateIdentifier);
         } else if (expr instanceof BinaryExpression binExpr) {
             compilerContext.binaryExpressionCompiler.compile(binExpr);
         } else if (expr instanceof UnaryExpression unaryExpr) {

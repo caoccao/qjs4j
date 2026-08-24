@@ -178,6 +178,19 @@ public final class Parser {
      * Parse the entire program.
      */
     public Program parse() {
+        try {
+            return parseProgram();
+        } catch (JSSyntaxErrorException e) {
+            throw e.withSourceLocation(parserContext.getLocation());
+        }
+    }
+
+    // Package-private: used by LiteralParser for nested template expression parsing
+    Expression parseExpression() {
+        return delegates.expressions.parseExpression();
+    }
+
+    private Program parseProgram() {
         List<Statement> body = new ArrayList<>();
         SourceLocation location = parserContext.getLocation();
 
@@ -203,11 +216,6 @@ public final class Parser {
 
         return new Program(body, parserContext.moduleMode,
                 strict || parserContext.moduleMode || parserContext.inheritedStrictMode, location);
-    }
-
-    // Package-private: used by LiteralParser for nested template expression parsing
-    Expression parseExpression() {
-        return delegates.expressions.parseExpression();
     }
 
     public void setClassFieldEval(boolean classFieldEval) {

@@ -95,7 +95,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
             compilerContext.emitHelpers.emitDefaultParameterInit(
                     functionCompiler,
                     funcDecl.getFunctionParams(),
-                    parameterSlotIndexes);
+                    parameterSlotIndexes,
+                    funcDecl);
         }
 
         // Handle rest parameter if present

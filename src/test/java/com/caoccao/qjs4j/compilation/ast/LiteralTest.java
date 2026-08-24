@@ -275,6 +275,18 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
+    public void testRegExpLiteralUsesIntrinsicPrototype() {
+        assertBooleanWithJavet("""
+                var intrinsicRegExp = RegExp;
+                RegExp = { prototype: { exec: 1 } };
+                var regexp = /x/;
+                typeof regexp.exec === 'function'
+                    && Object.getPrototypeOf(regexp) === intrinsicRegExp.prototype
+                    && 'axb'.split(regexp).join('') === 'ab';
+                """);
+    }
+
+    @Test
     public void testStrictModeOctalLiterals() {
         assertErrorWithJavet(
                 "'use strict'; 010",

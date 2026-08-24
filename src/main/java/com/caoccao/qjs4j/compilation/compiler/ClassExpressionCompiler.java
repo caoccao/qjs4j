@@ -78,7 +78,11 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                         privateInstanceMethods.add(method);
                     }
                     if (method.getKey() instanceof PrivateIdentifier privateId) {
-                        compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds, privateId.getName(), method.getKind());
+                        compilerContext.classDeclarationCompiler.registerPrivateName(
+                                privateNameKinds,
+                                privateId.getName(),
+                                method.getKind(),
+                                privateId);
                     }
                 } else {
                     methods.add(method);
@@ -91,7 +95,11 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                 }
 
                 if (field.isPrivate() && field.getKey() instanceof PrivateIdentifier privateId) {
-                    compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds, privateId.getName(), "field");
+                    compilerContext.classDeclarationCompiler.registerPrivateName(
+                            privateNameKinds,
+                            privateId.getName(),
+                            "field",
+                            privateId);
                 }
 
                 if (field.isAutoAccessor() && !field.isPrivate()) {
@@ -99,7 +107,11 @@ final class ClassExpressionCompiler extends AstNodeCompiler<ClassExpression> {
                             autoAccessorBackingNames.size() + 1,
                             privateNameKinds.keySet());
                     autoAccessorBackingNames.put(field, backingName);
-                    compilerContext.classDeclarationCompiler.registerPrivateName(privateNameKinds, backingName, "field");
+                    compilerContext.classDeclarationCompiler.registerPrivateName(
+                            privateNameKinds,
+                            backingName,
+                            "field",
+                            field);
                     methods.add(field.toAutoAccessorMethod(JSKeyword.GET, backingName));
                     methods.add(field.toAutoAccessorMethod(JSKeyword.SET, backingName));
                 }

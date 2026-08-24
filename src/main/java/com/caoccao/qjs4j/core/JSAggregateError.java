@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 /**
  * Represents a JavaScript AggregateError object.
  * AggregateError represents an error when multiple errors need to be wrapped in a single error.
@@ -29,6 +31,10 @@ public final class JSAggregateError extends JSError {
      */
     public JSAggregateError(JSContext context, String message) {
         super(context, message);
+    }
+
+    public JSAggregateError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

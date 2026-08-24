@@ -115,7 +115,7 @@ final class MemberExpressionCompiler extends AstNodeCompiler<MemberExpression> {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                 compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
             } else {
-                throw new JSSyntaxErrorException("Unexpected private field");
+                throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
             }
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.getName());

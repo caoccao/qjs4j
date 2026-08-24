@@ -16,20 +16,52 @@
 
 package com.caoccao.qjs4j.exceptions;
 
+import com.caoccao.qjs4j.compilation.ast.ASTNode;
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 /**
  * Exception thrown when compilation fails.
  */
 public class JSCompilerException extends RuntimeException {
+    private final ASTNode ast;
+
     public JSCompilerException(String message) {
-        super(message);
+        this(message, null, null);
     }
 
     public JSCompilerException(String message, Throwable cause) {
+        this(message, cause, null);
+    }
+
+    public JSCompilerException(String message, ASTNode ast) {
+        this(message, null, ast);
+    }
+
+    public JSCompilerException(String message, Throwable cause, ASTNode ast) {
         super(message, cause);
+        this.ast = ast;
     }
 
     @Override
     public synchronized Throwable fillInStackTrace() {
         return this;
+    }
+
+    /**
+     * Gets the AST node associated with this compilation failure.
+     *
+     * @return the AST node, or {@code null} when the failure is not tied to an AST node
+     */
+    public ASTNode getAst() {
+        return ast;
+    }
+
+    /**
+     * Gets the source location of the associated AST node.
+     *
+     * @return the source location, or {@code null} when no AST node is associated
+     */
+    public SourceLocation getSourceLocation() {
+        return ast == null ? null : ast.getLocation();
     }
 }

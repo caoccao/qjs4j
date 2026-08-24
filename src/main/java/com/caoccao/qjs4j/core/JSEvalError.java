@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 /**
  * Represents a JavaScript EvalError object.
  */
@@ -28,6 +30,10 @@ public final class JSEvalError extends JSError {
      */
     public JSEvalError(JSContext context, String message) {
         super(context, message);
+    }
+
+    public JSEvalError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 /**
  * Represents a JavaScript SuppressedError object.
  * SuppressedError is used when an error is suppressed in favor of another error,
@@ -30,6 +32,10 @@ public final class JSSuppressedError extends JSError {
      */
     public JSSuppressedError(JSContext context, String message) {
         super(context, message);
+    }
+
+    public JSSuppressedError(JSContext context, String message, SourceLocation sourceLocation) {
+        super(context, message, sourceLocation);
     }
 
     public static JSValue create(JSContext context, JSValue... args) {

@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.compilation.lexer;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.core.JSKeyword;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import com.caoccao.qjs4j.unicode.UnicodeData;
@@ -224,7 +225,7 @@ public final class Lexer {
             lookahead = null;
             return token;
         }
-        return scanToken();
+        return scanTokenWithLocation();
     }
 
     private char parseLegacyOctalEscape(char firstDigit) {
@@ -298,12 +299,10 @@ public final class Lexer {
      */
     public Token peekToken() {
         if (lookahead == null) {
-            lookahead = scanToken();
+            lookahead = scanTokenWithLocation();
         }
         return lookahead;
     }
-
-    // Character utilities
 
     /**
      * Re-scan a DIV or DIV_ASSIGN token as a regex literal.
@@ -323,6 +322,8 @@ public final class Lexer {
         lastTokenType = regexToken.type();
         return regexToken;
     }
+
+    // Character utilities
 
     /**
      * Reset the lexer to the beginning of the source.
@@ -1099,6 +1100,14 @@ public final class Lexer {
         Token token = scanOperatorOrPunctuation(c, startPos, startLine, startColumn);
         lastTokenType = token.type();
         return token;
+    }
+
+    private Token scanTokenWithLocation() {
+        try {
+            return scanToken();
+        } catch (JSSyntaxErrorException e) {
+            throw e.withSourceLocation(new SourceLocation(line, column, position));
+        }
     }
 
     public void setModuleMode(boolean moduleMode) {

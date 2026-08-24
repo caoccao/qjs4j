@@ -16,9 +16,18 @@
 
 package com.caoccao.qjs4j.exceptions;
 
+import com.caoccao.qjs4j.compilation.ast.SourceLocation;
+
 public class JSErrorException extends RuntimeException {
+    private final SourceLocation sourceLocation;
+
     public JSErrorException(String message) {
+        this(message, null);
+    }
+
+    public JSErrorException(String message, SourceLocation sourceLocation) {
         super(message);
+        this.sourceLocation = sourceLocation;
     }
 
     @Override
@@ -32,5 +41,9 @@ public class JSErrorException extends RuntimeException {
 
     public JSErrorType getErrorType() {
         return JSErrorType.Error;
+    }
+
+    public SourceLocation getSourceLocation() {
+        return sourceLocation;
     }
 }

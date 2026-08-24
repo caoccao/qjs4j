@@ -114,7 +114,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                 case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                 case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                default -> throw new JSCompilerException(
+                        "Unknown assignment operator: " + operator,
+                        assignExpr);
             }
         } else {
             if (left instanceof MemberExpression memberExpr) {
@@ -230,7 +232,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                     case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                     case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                    default -> throw new JSCompilerException(
+                            "Unknown assignment operator: " + operator,
+                            assignExpr);
                 }
             }
             return;
@@ -261,7 +265,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                     case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                     case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                    default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                    default -> throw new JSCompilerException(
+                            "Unknown assignment operator: " + operator,
+                            assignExpr);
                 }
             }
 
@@ -307,7 +313,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 case AND_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.AND);
                 case OR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.OR);
                 case XOR_ASSIGN -> compilerContext.emitter.emitOpcode(Opcode.XOR);
-                default -> throw new JSCompilerException("Unknown assignment operator: " + operator);
+                default -> throw new JSCompilerException(
+                        "Unknown assignment operator: " + operator,
+                        assignExpr);
             }
         }
 
@@ -335,7 +343,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                 depthLvalue = 1;
             }
         } else {
-            throw new JSCompilerException("Invalid left-hand side in logical assignment");
+            throw new JSCompilerException(
+                    "Invalid left-hand side in logical assignment",
+                    assignExpr);
         }
 
         if (left instanceof Identifier id) {
@@ -385,7 +395,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
                     String fieldName = privateIdentifier.getName();
                     JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
                     if (symbol == null) {
-                        throw new JSCompilerException("undefined private field '#" + fieldName + "'");
+                        throw new JSCompilerException(
+                                "undefined private field '#" + fieldName + "'",
+                                privateIdentifier);
                     }
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.DUP2);
@@ -424,7 +436,9 @@ final class AssignmentExpressionCompiler extends AstNodeCompiler<AssignmentExpre
             }
             case 3 -> {
             }
-            default -> throw new JSCompilerException("Invalid depth for logical assignment");
+            default -> throw new JSCompilerException(
+                    "Invalid depth for logical assignment",
+                    assignExpr);
         }
         if (privateMemberAssignment) {
             compilerContext.emitter.emitOpcode(Opcode.SWAP);

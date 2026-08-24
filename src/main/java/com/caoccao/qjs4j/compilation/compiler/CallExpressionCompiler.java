@@ -123,7 +123,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
                 } else {
-                    throw new JSSyntaxErrorException("Unexpected private field");
+                    throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
                 }
             } else if (memberExpr.getProperty() instanceof Identifier propId) {
                 compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD2, propId.getName());
@@ -196,7 +196,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
                     compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                     compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
                 } else {
-                    throw new JSSyntaxErrorException("Unexpected private field");
+                    throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
                 }
             }
         } else {
@@ -356,7 +356,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
             String fieldName = privateId.getName();
             JSSymbol symbol = compilerContext.privateSymbols != null ? compilerContext.privateSymbols.get(fieldName) : null;
             if (symbol == null) {
-                throw new JSSyntaxErrorException("Unexpected private field");
+                throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
             }
             compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
             compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
@@ -384,7 +384,7 @@ final class CallExpressionCompiler extends AstNodeCompiler<CallExpression> {
                 compilerContext.emitter.emitOpcodeConstant(Opcode.PUSH_CONST, symbol);
                 compilerContext.emitter.emitOpcode(Opcode.GET_PRIVATE_FIELD);
             } else {
-                throw new JSSyntaxErrorException("Unexpected private field");
+                throw new JSSyntaxErrorException("Unexpected private field", privateId.getLocation());
             }
         } else if (memberExpr.getProperty() instanceof Identifier propId) {
             compilerContext.emitter.emitOpcodeAtom(Opcode.GET_FIELD, propId.getName());
