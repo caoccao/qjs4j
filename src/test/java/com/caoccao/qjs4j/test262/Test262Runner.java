@@ -199,6 +199,15 @@ public class Test262Runner {
         int cpuCount = Runtime.getRuntime().availableProcessors();
         boolean isMacOs = System.getProperty("os.name", "").toLowerCase().contains("mac");
         int threadCount = Math.max(1, isMacOs ? cpuCount * 3 / 4 : cpuCount / 2);
+        // The configuration's ceiling, applied before the explicit overrides below so either can
+        // still ask for more. The full suite caps at Test262Config.DEFAULT_MAX_THREAD_COUNT because
+        // each thread holds a runtime and a context and some tests build strings and backtrack
+        // stacks in the tens of megabytes; the short subsets set UNLIMITED_THREAD_COUNT and run as
+        // wide as the machine allows.
+        int maxThreadCount = config.getMaxThreadCount();
+        if (maxThreadCount != Test262Config.UNLIMITED_THREAD_COUNT) {
+            threadCount = Math.min(threadCount, maxThreadCount);
+        }
         String configuredThreadCount = System.getProperty("qjs4j.test262.threads", "").trim();
         if (!configuredThreadCount.isEmpty()) {
             threadCount = Math.max(1, Integer.parseInt(configuredThreadCount));
@@ -209,6 +218,7 @@ public class Test262Runner {
         if (singleTestPathFragment != null && !singleTestPathFragment.isBlank()) {
             threadCount = 1;
         }
+        threadCount = Math.max(1, threadCount);
         long prewarmElapsedMilliseconds = executor.prewarm();
         System.out.println("Prewarmed runtime/context in " + prewarmElapsedMilliseconds + " ms");
         System.out.println("Starting test execution with " + threadCount + " threads...\n");

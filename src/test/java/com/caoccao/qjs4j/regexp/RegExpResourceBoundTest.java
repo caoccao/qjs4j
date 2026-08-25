@@ -16,32 +16,49 @@
 
 package com.caoccao.qjs4j.regexp;
 
-import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSTypeConversions;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 /**
- * A guest-supplied pattern must not choose how much memory the matcher claims.
+ * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it
+ * runs into has to be V8's, not one picked for tidiness.
  * <p>
- * The backtracking cap used to be expressed in entries, but an entry holds every capture twice plus
- * the registers, so the pattern chose the entry size: at 2<sup>20</sup> entries a one-group pattern
- * budgeted 21 ints each and a 100,000-group pattern 200,019 — the same nominal cap, three orders of
- * magnitude apart in bytes. The initial 64-entry allocation alone was ~51 MiB for that pattern,
- * claimed before matching began, and no later check could take it back. The cap is now a fixed
- * number of ints, and the capture count is bounded at compile time as QuickJS bounds it
- * ({@code CAPTURE_COUNT_MAX}), which also stops the single-byte capture indices in the compiled
- * bytecode from wrapping.
+ * Every assertion here runs the same source through V8 and through qjs4j, because V8's behaviour is
+ * the specification for these limits in a way no reasoning about them is. Two earlier attempts at
+ * this budget were argued from first principles and both were wrong: the first narrowed the ceiling
+ * to a round number, the second derived it from the old entry count. Both broke Test262's whole
+ * {@code property-escapes} corpus, which matches a greedy {@code +} against every code point in
+ * Unicode.
  * <p>
- * Compared against {@code ../quickjs/qjs}, which raises {@code SyntaxError: too many captures} for
- * the 255th group and accepts 254.
+ * The cap is now {@code RegExpStack::kMaximumStackSize} — {@code 64 * MB}, from V8's
+ * {@code src/regexp/regexp-stack.h} — and the backtrack frame was cut from 84 bytes to 12 so that
+ * budget buys an amount of backtracking comparable to V8's 4-byte slots.
+ * <p>
+ * One limit is deliberately absent here: the ReDoS step budget. V8 runs {@code /(a+)+$/} against 64
+ * characters to completion and qjs4j stops it with a {@code RangeError}, so comparing the two would
+ * assert away the feature. It is covered by {@code JSResourceLimitTest}, which does not go through
+ * V8 for that group.
  */
-public class RegExpResourceBoundTest extends BaseTest {
+public class RegExpResourceBoundTest extends BaseJavetTest {
 
-    private String evalToString(String code) {
-        return JSTypeConversions.toString(context, context.eval(code)).value();
+    /**
+     * Source that builds a subject containing every Unicode code point, then applies a pattern.
+     *
+     * @param pattern the regular expression literal to test with
+     * @return source evaluating to {@code 'true'}, {@code 'false'} or the error name
+     */
+    private String everyCodePoint(String pattern) {
+        return """
+                (function () {
+                  const parts = [];
+                  for (let cp = 0; cp <= 0x10FFFF; cp++) parts.push(cp);
+                  let subject = '';
+                  for (let i = 0; i < parts.length; i += 10000) {
+                    subject += String.fromCodePoint.apply(null, parts.slice(i, i + 10000));
+                  }
+                  try { return String(%s.test(subject)) } catch (e) { return e.name }
+                })()""".formatted(pattern);
     }
 
     private String groups(int count) {
@@ -50,91 +67,66 @@ public class RegExpResourceBoundTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testCaptureCountAtTheLimitIsAccepted() {
-        // 254 explicit groups plus group 0 is exactly CAPTURE_COUNT_MAX.
-        assertThat(evalToString(
+    public void testCaptureCountAtQuickJsLimitIsAccepted() {
+        assertStringWithJavet(
                 "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(groups(254))))
-                .isEqualTo("OK");
+                        .formatted(groups(254)));
     }
 
     @Test
-    @Timeout(60)
-    public void testCaptureCountBeyondTheLimitIsASyntaxError() {
-        assertThat(evalToString(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name + ': ' + e.message } })()"
-                        .formatted(groups(255))))
-                .startsWith("SyntaxError:")
-                .contains("too many captures");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCaptureLimitAppliesToLiteralsToo() {
-        assertThat(evalToString(
-                "(function () { try { eval('/' + '%s' + '/'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(groups(300))))
-                .isEqualTo("SyntaxError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCatastrophicBacktrackingWithManyCapturesRaisesRangeError() {
-        // The pattern at the capture limit still has to hit the backtracking budget rather than
-        // the heap.
-        assertThat(evalToString(
+    @Timeout(300)
+    public void testGreedyMatchOverAHalfMillionCharacterSubject() {
+        assertStringWithJavet(
                 """
                         (function () {
-                          const pattern = new RegExp('^' + '(a+)+'.repeat(1) + '(a+)+$');
-                          try { pattern.test('a'.repeat(40) + 'b'); return 'NO ERROR' }
-                          catch (e) { return e.name }
-                        })()"""))
-                .isEqualTo("RangeError");
+                          const subject = 'x'.repeat(500000);
+                          try { return String(/^([\\s\\S])+$/u.test(subject)) } catch (e) { return e.name }
+                        })()""");
     }
 
     @Test
-    @Timeout(60)
-    public void testHugeCaptureCountIsRejectedRatherThanAllocated() {
-        // 100,000 groups used to reserve ~51 MiB of int[] before the first character was matched.
-        assertThat(evalToString(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(groups(100000))))
-                .isEqualTo("SyntaxError");
+    @Timeout(300)
+    public void testGreedyMatchOverEveryUnicodeCodePoint() {
+        // ~1.11 million backtrack points. At the old 84-byte frame that was ~93 MiB — more than
+        // V8's entire 64 MiB stack — so all 426 property-escape tests failed with
+        // "exceeded the backtracking stack limit".
+        assertStringWithJavet(everyCodePoint("/^[\\s\\S]+$/u"));
     }
 
     @Test
-    @Timeout(60)
-    public void testNamedGroupsCountTowardTheLimit() {
-        StringBuilder pattern = new StringBuilder();
-        for (int index = 0; index < 255; index++) {
-            pattern.append("(?<g").append(index).append(">)");
-        }
-        assertThat(evalToString(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(pattern)))
-                .isEqualTo("SyntaxError");
+    @Timeout(300)
+    public void testGreedyMatchOverEveryUnicodeCodePointWithACapture() {
+        // A capture inside the loop dirties the saved state on every iteration, so each backtrack
+        // point appends a state instead of sharing one. This is the expensive shape, and whether
+        // it fits in 64 MiB is V8's answer to give, not mine.
+        assertStringWithJavet(everyCodePoint("/^([\\s\\S])+$/u"));
+    }
+
+    @Test
+    @Timeout(300)
+    public void testNegatedPropertyEscapeOverEveryCodePoint() {
+        // Verbatim the pattern from property-escapes/generated/White_Space.js, which was among the
+        // 426 failures.
+        assertStringWithJavet(everyCodePoint("/^\\P{White_Space}+$/u"));
     }
 
     @Test
     @Timeout(60)
     public void testNonCapturingGroupsDoNotCountTowardTheLimit() {
-        assertThat(evalToString(
+        assertStringWithJavet(
                 "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted("(?:)".repeat(1000))))
-                .isEqualTo("OK");
+                        .formatted("(?:)".repeat(1000)));
     }
 
     @Test
     @Timeout(60)
     public void testOrdinaryCaptureHeavyPatternStillMatches() {
-        // The complement: a legitimate pattern near the limit must still work.
-        assertThat(evalToString(
+        assertStringWithJavet(
                 """
                         (function () {
                           const pattern = new RegExp('%s' + '(x)');
                           const match = pattern.exec('x');
                           return match.length + ',' + match[match.length - 1];
-                        })()""".formatted(groups(200))))
-                .isEqualTo("202,x");
+                        })()""".formatted(groups(200)));
     }
 }

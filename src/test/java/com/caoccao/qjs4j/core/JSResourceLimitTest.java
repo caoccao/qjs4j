@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import org.junit.jupiter.api.Test;
@@ -33,15 +33,30 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code /(a+)+$/} against 40 characters hung the calling thread, {@code 'a'.repeat(1e9)} raised
  * {@code OutOfMemoryError} instead of {@code RangeError}, and {@code while (true) {}} could only be
  * stopped by killing the process.
+ * <p>
+ * Everything a limit does <em>not</em> change is asserted against V8, so the guards cannot quietly
+ * alter ordinary behaviour, and so is every oversized input both engines reject. Three groups are
+ * deliberately not compared, each because the divergence is the feature:
+ * <ul>
+ * <li>The ReDoS step budget. V8 runs {@code /(a+)+$/} against 64 characters to completion; qjs4j
+ * stops it. Bounding it is the whole point.</li>
+ * <li>The exact string-length boundary. V8's {@code String::kMaxLength} is
+ * {@code (1 << 29) - 24}; qjs4j's is {@code (1 << 27) - 1}, four times lower, because a Java
+ * {@code String} is two bytes per character unconditionally — V8's ceiling would put a single
+ * string over a gigabyte of heap. Both engines reject anything past their own ceiling, which is
+ * what the shared assertions below check.</li>
+ * <li>The host interrupt and execution deadline, which are Java API with no JavaScript surface.</li>
+ * </ul>
  */
-public class JSResourceLimitTest extends BaseTest {
+public class JSResourceLimitTest extends BaseJavetTest {
 
     private String evalToString(String code) {
         return JSTypeConversions.toString(context, context.eval(code)).value();
     }
 
     // -----------------------------------------------------------------------------------
-    // C-6a: regular expression backtracking budget
+    // C-6a: regular expression backtracking budget.
+    // Not compared with V8: V8 completes these matches, and stopping them is the feature.
     // -----------------------------------------------------------------------------------
 
     @Test
@@ -175,30 +190,27 @@ public class JSResourceLimitTest extends BaseTest {
 
     @Test
     public void testOrdinaryRegularExpressionsAreUnaffected() {
-        assertThat(evalToString("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]")).isEqualTo("Smith");
-        assertThat(evalToString("'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')"))
-                .isEqualTo("25/08/2026");
-        assertThat(evalToString("String('aaa'.repeat(2000).match(/a+/)[0].length)")).isEqualTo("6000");
-        assertThat(evalToString("String('x'.repeat(100000).split(/(?=x)/).length)")).isEqualTo("100000");
+        assertStringWithJavet("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]");
+        assertStringWithJavet("'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')");
+        assertStringWithJavet("String('aaa'.repeat(2000).match(/a+/)[0].length)");
+        assertStringWithJavet("String('x'.repeat(100000).split(/(?=x)/).length)");
     }
 
     @Test
     public void testOrdinaryStringOperationsAreUnaffected() {
-        assertThat(evalToString("'abc'.repeat(3)")).isEqualTo("abcabcabc");
-        assertThat(evalToString("'x'.padStart(5, '-')")).isEqualTo("----x");
-        assertThat(evalToString("'x'.padEnd(5, '-')")).isEqualTo("x----");
-        assertThat(evalToString("'a'.concat('b', 'c')")).isEqualTo("abc");
-        assertThat(evalToString("[1, 2, 3].join('-')")).isEqualTo("1-2-3");
-        assertThat(evalToString("'a' + 'b' + 1")).isEqualTo("ab1");
+        assertStringWithJavet("'abc'.repeat(3)");
+        assertStringWithJavet("'x'.padStart(5, '-')");
+        assertStringWithJavet("'x'.padEnd(5, '-')");
+        assertStringWithJavet("'a'.concat('b', 'c')");
+        assertStringWithJavet("[1, 2, 3].join('-')");
+        assertStringWithJavet("'a' + 'b' + 1");
     }
 
     @Test
     @Timeout(60)
     public void testPadBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
+        assertStringWithJavet("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -206,22 +218,27 @@ public class JSResourceLimitTest extends BaseTest {
     public void testRepeatAtTheExactLengthBoundary() {
         // The boundary the division has to get right: exactly MAX_LENGTH is allowed, one more is
         // not. MAX_LENGTH is 2^27 - 1, which is odd, so a two-character string cannot reach it.
+        //
+        // Not compared with V8: V8's String::kMaxLength is (1 << 29) - 24, four times higher, so V8
+        // accepts both of these. A Java String is two bytes per character unconditionally, where
+        // V8 uses one for Latin-1, so matching V8's ceiling would put a single string past a
+        // gigabyte of heap. The tests above assert the behaviour both engines do share: anything
+        // past either ceiling is a RangeError.
         assertThat(evalToString("'ab'.repeat(67108863).length")).isEqualTo("134217726");
         assertThat(evalToString("try { 'ab'.repeat(67108864); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
                 .isEqualTo("CAUGHT RangeError");
     }
 
     // -----------------------------------------------------------------------------------
-    // C-6c: host interrupt and execution deadline
+    // C-6c: host interrupt and execution deadline.
+    // Not compared with V8: Java API with no JavaScript surface.
     // -----------------------------------------------------------------------------------
 
     @Test
     @Timeout(60)
     public void testRepeatBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
+        assertStringWithJavet("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -231,14 +248,12 @@ public class JSResourceLimitTest extends BaseTest {
         // 2 * that wrapped to -2, the guard passed, and `new StringBuilder(-2)` threw
         // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
         // multiplication is now a division, so nothing overflows before the check.
-        assertThat(evalToString("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
+        assertStringWithJavet("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet(
+                "try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet(
+                "try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test
@@ -246,17 +261,14 @@ public class JSResourceLimitTest extends BaseTest {
     public void testRepeatEdgeCountsAreUnaffectedByTheOverflowGuard() {
         // The guard divides by s.length(), so the empty-string and zero-count shortcuts have to
         // come first — dividing by zero would turn a legal call into an engine failure.
-        assertThat(evalToString("JSON.stringify(''.repeat(1e20))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify(''.repeat(0))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify('abc'.repeat(0))")).isEqualTo("\"\"");
-        assertThat(evalToString("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("JSON.stringify('x'.repeat(NaN))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify('x'.repeat())")).isEqualTo("\"\"");
-        assertThat(evalToString("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
+        assertStringWithJavet("JSON.stringify(''.repeat(1e20))");
+        assertStringWithJavet("JSON.stringify(''.repeat(0))");
+        assertStringWithJavet("JSON.stringify('abc'.repeat(0))");
+        assertStringWithJavet("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
+        assertStringWithJavet("JSON.stringify('x'.repeat(NaN))");
+        assertStringWithJavet("JSON.stringify('x'.repeat())");
+        assertStringWithJavet("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }");
     }
 
     @Test

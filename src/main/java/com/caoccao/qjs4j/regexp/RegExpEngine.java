@@ -29,35 +29,23 @@ import java.util.Arrays;
  */
 public final class RegExpEngine {
     /**
-     * Hard cap on the flat backtrack stack, in entries.
+     * Hard cap on the backtracking stack, in bytes — V8's
+     * {@code RegExpStack::kMaximumStackSize}, {@code 64 * MB} in {@code src/regexp/regexp-stack.h}.
      * <p>
-     * Bounds how far a pathological pattern can backtrack; the growth loop used to double without
-     * limit until the host ran out of heap.
+     * A cap in <em>entries</em> is not a memory bound and does not correspond to anything V8 has:
+     * V8 bounds the bytes and lets the entry count fall out of the frame size. Counting entries
+     * instead made the budget mean different things for different patterns — at 2<sup>20</sup>
+     * entries a one-group pattern reserved 21 ints each and a 100,000-group pattern 200,019 — and
+     * it silently set the real ceiling far below V8's for ordinary patterns.
+     *
+     * @see #MAX_BACKTRACK_INTS
      */
-    private static final int MAX_BACKTRACK_ENTRIES = 1 << 20;
+    private static final int MAX_BACKTRACK_BYTES = 64 * 1024 * 1024;
     /**
-     * Entry size for a pattern with no explicit groups: {@code pc}, {@code pos}, group 0's two
-     * capture slots, the registers, and {@code stateOffset}.
+     * {@link #MAX_BACKTRACK_BYTES} expressed in {@code int} slots, which is what the two stacks are
+     * measured in. The entry stack and the saved-state store share this one budget.
      */
-    private static final int MIN_BACKTRACK_ENTRY_SIZE = 2 + 2 + ExecutionContext.MAX_REGISTERS + 1;
-    /**
-     * Hard cap on the flat backtrack stack, in {@code int} slots — 84 MiB of {@code int[]}.
-     * <p>
-     * A budget in entries alone is not a memory bound. An entry holds every capture twice plus the
-     * registers, so the pattern chooses the entry size: at 2<sup>20</sup> entries a one-group
-     * pattern reserved 21 ints each and a 100,000-group pattern 200,019 — the same nominal budget,
-     * three orders of magnitude apart in bytes, and the initial 64-entry allocation alone was
-     * ~51 MiB for that pattern before the match began.
-     * <p>
-     * The two caps apply together, and the byte figure is derived rather than picked: it is exactly
-     * what the entry cap already costs at the smallest possible entry. So the ceiling is "no
-     * pattern may claim more memory than a group-less pattern could already claim", which bounds
-     * the worst case without narrowing the budget any real pattern had. Test262's
-     * {@code property-escapes} tests match a 140,000-character subject and genuinely need most of
-     * the entry budget; a byte cap chosen for tidiness rather than derived from the existing one
-     * broke eighteen of them.
-     */
-    private static final long MAX_BACKTRACK_INTS = (long) MAX_BACKTRACK_ENTRIES * MIN_BACKTRACK_ENTRY_SIZE;
+    private static final int MAX_BACKTRACK_INTS = MAX_BACKTRACK_BYTES / Integer.BYTES;
     private final long backtrackLimit;
     private final RegExpBytecode bytecode;
 
@@ -110,6 +98,7 @@ public final class RegExpEngine {
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
                 isUnicode,
+                bytecode.registerCount(),
                 backtrackLimit
         );
 
@@ -146,7 +135,7 @@ public final class RegExpEngine {
     private boolean execute(ExecutionContext executionContext) {
         byte[] bc = executionContext.bytecode;
         int pc = 0;
-        executionContext.backtrackTop = 0;
+        executionContext.resetBacktrack();
 
         while (true) {
             if (pc >= bc.length) {
@@ -568,6 +557,9 @@ public final class RegExpEngine {
                 outerContext.multiline,
                 outerContext.dotAll,
                 outerContext.unicode,
+                // Lookaround bodies are compiled in the same CompileContext as the pattern, so they
+                // draw on the same register counter and the outer count bounds them.
+                outerContext.registerCount,
                 outerContext.remainingBacktrackBudget()
         );
         tempContext.pos = startPos;
@@ -608,8 +600,28 @@ public final class RegExpEngine {
      * Execution context for a single match attempt.
      */
     private static class ExecutionContext {
-        static final int MAX_REGISTERS = 16;
-        private static final int INITIAL_BACKTRACK_CAPACITY = 64;
+        static final int MAX_REGISTERS = RegExpBytecode.ExecutionLimits.MAX_REGISTERS;
+        /**
+         * Ints per entry on the backtrack stack: {@code pc}, {@code pos}, {@code stateOffset}.
+         * <p>
+         * The captures and registers used to live inline in every entry, so one backtrack point
+         * cost {@code 3 + 2 * captureCount + 16} ints — 84 bytes for a group-less pattern, against
+         * the 4 bytes of a V8 slot. Test262's {@code property-escapes} tests match a greedy
+         * {@code +} against every code point in Unicode, ~1.11 million backtrack points, which at
+         * 84 bytes each is ~93 MiB: above V8's whole 64 MiB budget, for a pattern V8 matches
+         * comfortably. Saved state now lives in {@link #stateData} and is written only when it
+         * actually changes, so an entry is 12 bytes and the budget buys a comparable amount of
+         * backtracking to V8's.
+         * <p>
+         * The state itself was also always sized for 16 registers. Almost no pattern allocates any
+         * — only the zero-advance check does — so the compiler now reports the real count and a
+         * state is {@code 2 * captureCount + registerCount} ints. Together the two changes are what
+         * let {@code /^([\s\S])+$/u}, which dirties state on every iteration and so cannot share
+         * a saved copy, match the same subject V8 matches.
+         */
+        private static final int BACKTRACK_ENTRY_SIZE = 3;
+        private static final int INITIAL_BACKTRACK_ENTRIES = 64;
+        private static final int INITIAL_SAVED_STATES = 4;
         final byte[] bytecode;
         final int captureCount;
         final int[] codePoints;
@@ -618,34 +630,39 @@ public final class RegExpEngine {
         final boolean ignoreCase;
         final String input;
         final boolean multiline;
+        /**
+         * Registers this pattern allocated, from the compiler. Sized to what the pattern uses
+         * rather than to {@link #MAX_REGISTERS}: the saved state is copied on every backtrack point
+         * where state changed, and 16 registers is 64 bytes per point that almost no pattern needs.
+         */
+        final int registerCount;
         final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
-        // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers..., stateOffset]
-        // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
-        // saved state — consecutive pushes with no state modifications share the same saved copy.
-        private final int backtrackEntrySize;
         /**
          * Budget of backtracking steps for this match attempt; 0 means unbounded.
          */
         private final long backtrackLimit;
         /**
-         * Entries this pattern may push, derived from {@link #MAX_BACKTRACK_INTS} and the entry
-         * size so that the byte ceiling is the same for every pattern.
+         * Ints per saved state: {@code captureCount * 2 + registerCount}.
          */
-        private final int maxBacktrackEntries;
-        // Both caps apply: the entry ceiling bounds backtracking depth, MAX_BACKTRACK_INTS bounds
-        // the bytes that depth costs once a capture-heavy pattern inflates the entry.
-        private final int stateSize; // captureCount*2 + MAX_REGISTERS
+        private final int stateSize;
         int backtrackTop;
         int[] captureEnds;
         int[] captureStarts;
         int pos;  // Current position in code points
+        // The backtrack stack proper: BACKTRACK_ENTRY_SIZE ints per entry, [pc, pos, stateOffset].
         private int[] backtrackData;
         /**
          * Backtracking steps consumed so far.
          */
         private long backtrackSteps;
+        private int lastStateOffset;
+        // Saved captures and registers, appended only when they have actually changed since the
+        // last save. Consecutive entries with unmodified state share one copy by pointing at the
+        // same offset, which is what keeps a greedy loop's backtrack points at 12 bytes each.
+        private int[] stateData;
         private boolean stateDirty;  // true if captures/registers modified since last state save
+        private int stateTop;
 
         ExecutionContext(
                 String input,
@@ -656,8 +673,10 @@ public final class RegExpEngine {
                 boolean multiline,
                 boolean dotAll,
                 boolean unicode,
+                int registerCount,
                 long backtrackLimit) {
             this.backtrackLimit = backtrackLimit;
+            this.registerCount = Math.max(0, Math.min(registerCount, MAX_REGISTERS));
             this.input = input;
             this.bytecode = bytecode;
             this.codePoints = unicode ? input.codePoints().toArray() : input.chars().toArray();
@@ -669,21 +688,15 @@ public final class RegExpEngine {
             this.unicode = unicode;
             this.captureStarts = new int[captureCount];
             this.captureEnds = new int[captureCount];
-            this.registers = new int[MAX_REGISTERS];
+            this.registers = new int[this.registerCount];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
-            // long throughout: captureCount is bounded by the compiler's CAPTURE_COUNT_MAX, but the
-            // arithmetic must not depend on that bound holding to stay free of silent overflow.
-            this.stateSize = captureCount + captureCount + MAX_REGISTERS;
-            this.backtrackEntrySize = 2 + stateSize + 1; // pc, pos, state..., stateOffset
-            this.maxBacktrackEntries = (int) Math.max(
-                    1L,
-                    Math.min(MAX_BACKTRACK_ENTRIES, MAX_BACKTRACK_INTS / backtrackEntrySize));
-            // The first allocation obeys the same ceiling as the growth loop. Sizing it to a fixed
-            // 64 entries meant a pattern with enough captures claimed tens of MiB before the match
-            // began, which no later cap could take back.
-            int initialEntries = Math.min(INITIAL_BACKTRACK_CAPACITY, maxBacktrackEntries);
-            this.backtrackData = new int[backtrackEntrySize * initialEntries];
+            this.stateSize = captureCount + captureCount + this.registerCount;
+            // Both allocations are small and fixed. The old code sized the first allocation at 64
+            // full-width entries, which for a capture-heavy pattern was tens of MiB claimed before
+            // the match began — memory no later cap could take back.
+            this.backtrackData = new int[BACKTRACK_ENTRY_SIZE * INITIAL_BACKTRACK_ENTRIES];
+            this.stateData = new int[stateSize * INITIAL_SAVED_STATES];
             this.stateDirty = true;
         }
 
@@ -770,6 +783,31 @@ public final class RegExpEngine {
             }
 
             return new MatchResult(true, startIndex, endIndex, captures, indices);
+        }
+
+        /**
+         * Double an int stack, refusing to let the two stacks together exceed
+         * {@link #MAX_BACKTRACK_INTS}.
+         * <p>
+         * The two share one budget because they are two halves of the same structure; bounding them
+         * separately would let the pair reach twice V8's ceiling.
+         *
+         * @param array       the stack to grow
+         * @param required    the length it must reach
+         * @param otherLength the length of the other stack, which shares the budget
+         * @return the grown array
+         * @throws JSRangeErrorException when the budget cannot accommodate {@code required}
+         */
+        private int[] growWithinBudget(int[] array, int required, int otherLength) {
+            // Computed in long: required and otherLength are both ints, but their sum is not
+            // guaranteed to be, and a wrapped sum would silently pass the check.
+            long budget = MAX_BACKTRACK_INTS - (long) otherLength;
+            if ((long) required > budget) {
+                throw new JSRangeErrorException(
+                        "regular expression execution exceeded the backtracking stack limit");
+            }
+            long grown = Math.max((long) array.length * 2, required);
+            return Arrays.copyOf(array, (int) Math.min(budget, grown));
         }
 
         boolean hasBacktrack() {
@@ -1093,45 +1131,46 @@ public final class RegExpEngine {
                 throw new JSRangeErrorException(
                         "regular expression execution exceeded the backtracking limit");
             }
-            backtrackTop -= backtrackEntrySize;
+            backtrackTop -= BACKTRACK_ENTRY_SIZE;
             int base = backtrackTop;
             pos = backtrackData[base + 1];
-            int stateOffset = backtrackData[base + backtrackEntrySize - 1];
-            System.arraycopy(backtrackData, stateOffset + 2, captureStarts, 0, captureCount);
-            System.arraycopy(backtrackData, stateOffset + 2 + captureCount, captureEnds, 0, captureCount);
-            System.arraycopy(backtrackData, stateOffset + 2 + captureCount + captureCount, registers, 0, MAX_REGISTERS);
+            int stateOffset = backtrackData[base + 2];
+            System.arraycopy(stateData, stateOffset, captureStarts, 0, captureCount);
+            System.arraycopy(stateData, stateOffset + captureCount, captureEnds, 0, captureCount);
+            System.arraycopy(stateData, stateOffset + captureCount + captureCount, registers, 0, registerCount);
+            // Reclaim every state saved after this entry's. Offsets are non-decreasing along the
+            // entry stack — an entry either appends a state or reuses the previous entry's — so
+            // anything above this offset belongs to entries that have already been popped. Without
+            // this, a push/pop cycle that dirties state each time would grow stateData for the
+            // whole match; with it, the store is bounded by the stack depth, as it was when state
+            // lived inline in the entry.
+            stateTop = stateOffset + stateSize;
+            lastStateOffset = stateOffset;
             stateDirty = true;
             return backtrackData[base];
         }
 
         void pushBacktrack(int pc) {
-            if (backtrackTop + backtrackEntrySize > backtrackData.length) {
-                // maxLength is at most MAX_BACKTRACK_INTS by construction, so the int cast below is
-                // safe; the products are computed in long regardless.
-                long maxLength = (long) backtrackEntrySize * maxBacktrackEntries;
-                if (backtrackData.length >= maxLength) {
-                    throw new JSRangeErrorException(
-                            "regular expression execution exceeded the backtracking stack limit");
+            if (stateDirty || stateTop == 0) {
+                if (stateTop + stateSize > stateData.length) {
+                    stateData = growWithinBudget(stateData, stateTop + stateSize, backtrackData.length);
                 }
-                int newLength = (int) Math.min(maxLength, (long) backtrackData.length * 2);
-                backtrackData = Arrays.copyOf(backtrackData, newLength);
+                lastStateOffset = stateTop;
+                System.arraycopy(captureStarts, 0, stateData, stateTop, captureCount);
+                System.arraycopy(captureEnds, 0, stateData, stateTop + captureCount, captureCount);
+                System.arraycopy(registers, 0, stateData, stateTop + captureCount + captureCount, registerCount);
+                stateTop += stateSize;
+                stateDirty = false;
+            }
+            if (backtrackTop + BACKTRACK_ENTRY_SIZE > backtrackData.length) {
+                backtrackData = growWithinBudget(
+                        backtrackData, backtrackTop + BACKTRACK_ENTRY_SIZE, stateData.length);
             }
             int base = backtrackTop;
             backtrackData[base] = pc;
             backtrackData[base + 1] = pos;
-            int stateOffset;
-            if (stateDirty || backtrackTop == 0) {
-                stateOffset = base;
-                System.arraycopy(captureStarts, 0, backtrackData, base + 2, captureCount);
-                System.arraycopy(captureEnds, 0, backtrackData, base + 2 + captureCount, captureCount);
-                System.arraycopy(registers, 0, backtrackData, base + 2 + captureCount + captureCount, MAX_REGISTERS);
-                stateDirty = false;
-            } else {
-                int prevBase = backtrackTop - backtrackEntrySize;
-                stateOffset = backtrackData[prevBase + backtrackEntrySize - 1];
-            }
-            backtrackData[base + backtrackEntrySize - 1] = stateOffset;
-            backtrackTop += backtrackEntrySize;
+            backtrackData[base + 2] = lastStateOffset;
+            backtrackTop += BACKTRACK_ENTRY_SIZE;
         }
 
         private int readU16(byte[] bc, int offset) {
@@ -1170,6 +1209,20 @@ public final class RegExpEngine {
             if (captureCount > 0) {
                 captureStarts[0] = startPos;
             }
+            stateDirty = true;
+        }
+
+        /**
+         * Discard both stacks before a match attempt.
+         * <p>
+         * The saved-state store has to be reset alongside the entry stack: leaving {@code stateTop}
+         * where the previous attempt left it would make the next attempt append states above stale
+         * data and count them against the budget.
+         */
+        void resetBacktrack() {
+            backtrackTop = 0;
+            stateTop = 0;
+            lastStateOffset = 0;
             stateDirty = true;
         }
 

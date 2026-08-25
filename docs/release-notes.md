@@ -32,7 +32,8 @@
 - Catastrophic RegExp backtracking raises `RangeError` instead of hanging. Tunable via `JSRuntimeOptions.setRegExpBacktrackLimit(long)`.
 - Oversized strings raise `RangeError` instead of `OutOfMemoryError`.
 - `JSRuntime.requestInterrupt()` stops a runaway script from another thread.
-- The RegExp backtracking stack has a memory ceiling, not just a step count, so a capture-heavy pattern cannot claim the heap.
+- The RegExp backtracking stack has a memory ceiling of 64 MiB, matching V8, rather than a count of entries whose size the pattern chose.
+- RegExp backtracking uses a fraction of the memory it did, so patterns over very large subjects — matching every code point in Unicode, for instance — no longer exhaust the budget.
 - A pattern may declare at most 254 capture groups, matching QuickJS. Beyond that is a `SyntaxError`.
 
 ### Embedder API

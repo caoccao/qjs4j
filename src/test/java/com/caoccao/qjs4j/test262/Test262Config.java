@@ -26,11 +26,25 @@ import java.util.stream.Stream;
  * Configuration for test262 test execution.
  */
 public class Test262Config {
+    /**
+     * Default ceiling on worker threads.
+     * <p>
+     * The full suite holds a runtime and a context per thread and includes tests that build strings
+     * and backtrack stacks in the tens of megabytes, so running it as wide as the machine allows
+     * puts the JVM under memory pressure rather than making it faster. Subsets that are short or
+     * light override this with {@link #UNLIMITED_THREAD_COUNT}.
+     */
+    public static final int DEFAULT_MAX_THREAD_COUNT = 4;
+    /**
+     * Sentinel for "no ceiling": the runner picks a thread count from the CPU core count.
+     */
+    public static final int UNLIMITED_THREAD_COUNT = 0;
     private final Set<Pattern> excludePatterns;
     private final Set<Pattern> includePatterns;
     private final Set<String> unsupportedFeatures;
     private long asyncTimeoutMs;
     private int maxTests;
+    private int maxThreadCount;
 
     private Test262Config() {
         excludePatterns = new HashSet<>();
@@ -43,6 +57,8 @@ public class Test262Config {
         config.includePatterns.clear();
         config.addIncludePatterns(Pattern.compile(".*/test/language/.*\\.js$"));
         config.maxTests = 200;
+        // Unlimited: this subset is short enough that the whole machine is the right amount of it.
+        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
         return config;
     }
 
@@ -69,6 +85,9 @@ public class Test262Config {
                 Pattern.compile(".*/test/staging/sm/Date/.*\\.js$"),
                 Pattern.compile(".*/test/built-ins/RegExp/.*\\.js$"));
         // config.maxTests = 400 * 100;
+        // Unlimited: the quick subset is the one that gates CI, so it runs as wide as the machine
+        // allows.
+        config.maxThreadCount = UNLIMITED_THREAD_COUNT;
         return config;
     }
 
@@ -89,6 +108,8 @@ public class Test262Config {
 
         // No limit on number of tests
         config.maxTests = Integer.MAX_VALUE;
+
+        config.maxThreadCount = DEFAULT_MAX_THREAD_COUNT;
 
         return config;
     }
@@ -111,6 +132,15 @@ public class Test262Config {
 
     public int getMaxTests() {
         return maxTests;
+    }
+
+    /**
+     * The ceiling on worker threads for this configuration.
+     *
+     * @return the maximum thread count, or {@link #UNLIMITED_THREAD_COUNT} for no ceiling
+     */
+    public int getMaxThreadCount() {
+        return maxThreadCount;
     }
 
     public Set<String> getUnsupportedFeatures() {
@@ -147,6 +177,16 @@ public class Test262Config {
 
     public void setMaxTests(int maxTests) {
         this.maxTests = maxTests;
+    }
+
+    /**
+     * Set the ceiling on worker threads.
+     *
+     * @param maxThreadCount the maximum, or {@link #UNLIMITED_THREAD_COUNT} for no ceiling;
+     *                       negative values are treated as no ceiling
+     */
+    public void setMaxThreadCount(int maxThreadCount) {
+        this.maxThreadCount = Math.max(UNLIMITED_THREAD_COUNT, maxThreadCount);
     }
 
     public boolean shouldSkipTest(Test262TestCase test) {

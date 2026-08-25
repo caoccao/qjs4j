@@ -151,6 +151,11 @@ public final class RegExpCompiler {
                     buffer.toByteArray(),
                     flagBits,
                     captureCount,
+                    // Registers this pattern actually allocated. The matcher saves them on every
+                    // backtrack point where state changed, so reporting the real count instead of
+                    // the maximum is the difference between 12 and 76 bytes of saved state per
+                    // point for a typical pattern.
+                    Math.min(context.nextAdvanceCheckRegister, RegExpBytecode.ExecutionLimits.MAX_REGISTERS),
                     compiledGroupNames
             );
         } catch (Exception e) {
