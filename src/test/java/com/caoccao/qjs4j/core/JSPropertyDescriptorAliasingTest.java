@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * rewrite a property's attributes. It also made the result aliased for shape-backed properties but
  * fresh for dense array elements, so a caller could not tell which it had.
  */
-public class JSPropertyDescriptorAliasingTest extends BaseTest {
+public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
 
     @Test
     public void testAccessorDescriptorIsCopiedWithItsFunctions() {
@@ -145,23 +145,32 @@ public class JSPropertyDescriptorAliasingTest extends BaseTest {
     @Test
     public void testNonConfigurableLargeIndexBlocksLengthTruncation() {
         // Truncating length scans shape keys through the same descriptor path.
-        assertThat(context.eval(
+        //
+        // The assignment is caught rather than left to propagate: the Javet harness runs every
+        // source twice, once with 'use strict' prepended, and in strict mode both engines throw a
+        // TypeError here with different wording — V8 blames the delete it could not perform,
+        // qjs4j the length assignment. That message gap is real but is not what this test is
+        // about, so it is reported separately rather than asserted away here.
+        assertStringWithJavet(
                 """
-                        const a = [];
-                        Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
-                        a.length = 0;
-                        String(a.length)""").toString())
-                .isEqualTo("2147483649");
+                        (function () {
+                          const a = [];
+                          Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
+                          try { a.length = 0 } catch (e) { return e.name + ',' + String(a.length) }
+                          return String(a.length);
+                        })()""");
     }
 
     @Test
     public void testObjectGetOwnPropertyDescriptorStillReportsTrueAttributes() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        const o = {};
-                        Object.defineProperty(o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
-                        JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'))""").toString())
-                .isEqualTo("{\"value\":1,\"writable\":false,\"enumerable\":true,\"configurable\":false}");
+                        (function () {
+                          const o = {};
+                          Object.defineProperty(
+                              o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
+                          return JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'));
+                        })()""");
     }
 
     @Test

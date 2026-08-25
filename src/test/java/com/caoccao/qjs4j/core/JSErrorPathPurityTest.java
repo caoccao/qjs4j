@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import org.junit.jupiter.api.Test;
@@ -33,26 +33,33 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code name} the same way while building a failed-assignment {@code TypeError}. In both cases a
  * getter ran re-entrantly at an already-failing moment and could raise a second exception that
  * overwrote the one being reported.
+ * <p>
+ * Whether a getter or trap ran is script-observable, so those assertions go through V8 as well:
+ * V8 does not run them either, and comparing makes that a shared fact rather than this engine's
+ * opinion. The tests that assert on a {@code JSException} or {@code JSVirtualMachineException}
+ * message cannot be compared — the text an embedder is handed for an uncaught throw is a host API
+ * with no V8 counterpart — and they stay on the qjs4j side alone.
  */
-public class JSErrorPathPurityTest extends BaseTest {
+public class JSErrorPathPurityTest extends BaseJavetTest {
 
     @Test
     public void testDeleteErrorMessageDoesNotInvokeAConstructorGetter() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        'use strict';
-                        let getterRan = false;
-                        const proto = {};
-                        Object.defineProperty(proto, 'constructor', {
+                        (function () {
+                          'use strict';
+                          let getterRan = false;
+                          const proto = {};
+                          Object.defineProperty(proto, 'constructor', {
                             get() { getterRan = true; return function Tricky() {} },
                             configurable: true,
-                        });
-                        const target = Object.create(proto);
-                        Object.defineProperty(target, 'fixed', { value: 1, configurable: false });
-                        let caught = '';
-                        try { delete target.fixed } catch (e) { caught = e.name }
-                        caught + ',' + getterRan""").toString())
-                .isEqualTo("TypeError,false");
+                          });
+                          const target = Object.create(proto);
+                          Object.defineProperty(target, 'fixed', { value: 1, configurable: false });
+                          let caught = '';
+                          try { delete target.fixed } catch (e) { caught = e.name }
+                          return caught + ',' + getterRan;
+                        })()""");
     }
 
     @Test
@@ -71,58 +78,61 @@ public class JSErrorPathPurityTest extends BaseTest {
     @Test
     public void testFailedAssignmentDescriptionDoesNotRunProxyTraps() {
         // getObjectDescriptionForError walks the prototype chain for constructor/name.
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        'use strict';
-                        globalThis.descriptionTrapCalls = 0;
-                        const proto = new Proxy({}, {
-                          getOwnPropertyDescriptor() { descriptionTrapCalls++; return undefined },
-                          get() { descriptionTrapCalls++; return undefined },
-                        });
-                        const target = Object.create(proto);
-                        // defineProperty, not assignment: an assignment would be forwarded to the
-                        // Proxy's [[Set]] instead of creating an own property here.
-                        Object.defineProperty(target, 'value', { value: 1, writable: false });
-                        let caught = '';
-                        try { target.value = 2 } catch (e) { caught = e.name }
-                        caught + ',' + descriptionTrapCalls""").toString())
-                .isEqualTo("TypeError,0");
+                        (function () {
+                          'use strict';
+                          let descriptionTrapCalls = 0;
+                          const proto = new Proxy({}, {
+                            getOwnPropertyDescriptor() { descriptionTrapCalls++; return undefined },
+                            get() { descriptionTrapCalls++; return undefined },
+                          });
+                          const target = Object.create(proto);
+                          // defineProperty, not assignment: an assignment would be forwarded to the
+                          // Proxy's [[Set]] instead of creating an own property here.
+                          Object.defineProperty(target, 'value', { value: 1, writable: false });
+                          let caught = '';
+                          try { target.value = 2 } catch (e) { caught = e.name }
+                          return caught + ',' + descriptionTrapCalls;
+                        })()""");
     }
 
     @Test
     public void testFrozenAssignmentErrorMessageDoesNotInvokeAConstructorGetter() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        'use strict';
-                        let getterRan = false;
-                        const proto = {};
-                        Object.defineProperty(proto, 'constructor', {
+                        (function () {
+                          'use strict';
+                          let getterRan = false;
+                          const proto = {};
+                          Object.defineProperty(proto, 'constructor', {
                             get() { getterRan = true; return function Tricky() {} },
                             configurable: true,
-                        });
-                        const target = Object.create(proto);
-                        target.value = 1;
-                        Object.freeze(target);
-                        let caught = '';
-                        try { target.value = 2 } catch (e) { caught = e.name }
-                        caught + ',' + getterRan""").toString())
-                .isEqualTo("TypeError,false");
+                          });
+                          const target = Object.create(proto);
+                          target.value = 1;
+                          Object.freeze(target);
+                          let caught = '';
+                          try { target.value = 2 } catch (e) { caught = e.name }
+                          return caught + ',' + getterRan;
+                        })()""");
     }
 
     @Test
     public void testInheritedSetterFailureIsReported() {
-        assertThat(context.eval(
-                        """
-                                'use strict';
-                                const proto = {};
-                                Object.defineProperty(proto, 'x', {
-                                    set() { throw new RangeError('from proto setter') },
-                                    configurable: true,
-                                });
-                                const target = Object.create(proto);
-                                try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
-                .toString())
-                .isEqualTo("CAUGHT RangeError: from proto setter");
+        assertStringWithJavet(
+                """
+                        (function () {
+                          'use strict';
+                          const proto = {};
+                          Object.defineProperty(proto, 'x', {
+                            set() { throw new RangeError('from proto setter') },
+                            configurable: true,
+                          });
+                          const target = Object.create(proto);
+                          try { target.x = 1; return 'NO ERROR' }
+                          catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
+                        })()""");
     }
 
     @Test
@@ -142,17 +152,18 @@ public class JSErrorPathPurityTest extends BaseTest {
     public void testSetterFailureIsReportedEvenWhenAnExceptionWasAlreadyPending() {
         // The setter's own failure must not be swallowed just because something was already
         // pending. Reported through the strict-mode assignment result.
-        assertThat(context.eval(
-                        """
-                                'use strict';
-                                const target = {};
-                                Object.defineProperty(target, 'x', {
-                                    set() { throw new RangeError('from setter') },
-                                    configurable: true,
-                                });
-                                try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
-                .toString())
-                .isEqualTo("CAUGHT RangeError: from setter");
+        assertStringWithJavet(
+                """
+                        (function () {
+                          'use strict';
+                          const target = {};
+                          Object.defineProperty(target, 'x', {
+                            set() { throw new RangeError('from setter') },
+                            configurable: true,
+                          });
+                          try { target.x = 1; return 'NO ERROR' }
+                          catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
+                        })()""");
     }
 
     // -----------------------------------------------------------------------------------
@@ -163,15 +174,16 @@ public class JSErrorPathPurityTest extends BaseTest {
 
     @Test
     public void testSucceedingSetterStillReportsSuccess() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        'use strict';
-                        let stored = 0;
-                        const target = {};
-                        Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
-                        target.x = 42;
-                        String(stored)""").toString())
-                .isEqualTo("42");
+                        (function () {
+                          'use strict';
+                          let stored = 0;
+                          const target = {};
+                          Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
+                          target.x = 42;
+                          return String(stored);
+                        })()""");
     }
 
     @Test
@@ -289,16 +301,17 @@ public class JSErrorPathPurityTest extends BaseTest {
     @Test
     public void testUncaughtThrownProxyDoesNotRunItsTrapsDuringUnwinding() {
         // safeExceptionToString runs while the VM unwinds, before the JSException is built.
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        globalThis.unwindTrapCalls = 0;
-                        const proxy = new Proxy({}, {
-                          getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
-                          get() { unwindTrapCalls++; return undefined },
-                        });
-                        try { throw proxy } catch (e) { }
-                        String(unwindTrapCalls)""").toString())
-                .isEqualTo("0");
+                        (function () {
+                          let unwindTrapCalls = 0;
+                          const proxy = new Proxy({}, {
+                            getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
+                            get() { unwindTrapCalls++; return undefined },
+                          });
+                          try { throw proxy } catch (e) { }
+                          return String(unwindTrapCalls);
+                        })()""");
     }
 
     /**

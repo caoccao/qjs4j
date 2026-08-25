@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import org.junit.jupiter.api.Test;
@@ -34,11 +34,7 @@ import static org.assertj.core.api.Assertions.*;
  * script and only embedders calling the Java methods saw them. The Javadoc separately declared
  * {@code IllegalStateException} and {@code IllegalArgumentException}, neither of which is thrown.
  */
-public class JSArrayBufferDirectApiTest extends BaseTest {
-
-    private String evalToString(String code) {
-        return JSTypeConversions.toString(context, context.eval(code)).value();
-    }
+public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
     private JSArrayBuffer fixedBuffer(int byteLength) {
         return context.createJSArrayBuffer(byteLength);
@@ -83,26 +79,29 @@ public class JSArrayBufferDirectApiTest extends BaseTest {
 
     @Test
     public void testScriptVisibleResizeErrorsAreUnchanged() {
-        assertThat(evalToString(
+        assertStringWithJavet(
                 """
-                        const b = new ArrayBuffer(8);
-                        try { b.resize(4); 'NO ERROR' } catch (e) { e.name }"""))
-                .isEqualTo("TypeError");
-        assertThat(evalToString(
+                        (function () {
+                          const b = new ArrayBuffer(8);
+                          try { b.resize(4); return 'NO ERROR' } catch (e) { return e.name }
+                        })()""");
+        assertStringWithJavet(
                 """
-                        const r = new ArrayBuffer(8, { maxByteLength: 16 });
-                        try { r.resize(32); 'NO ERROR' } catch (e) { e.name }"""))
-                .isEqualTo("RangeError");
+                        (function () {
+                          const r = new ArrayBuffer(8, { maxByteLength: 16 });
+                          try { r.resize(32); return 'NO ERROR' } catch (e) { return e.name }
+                        })()""");
     }
 
     @Test
     public void testScriptVisibleTransferErrorsAreUnchanged() {
-        assertThat(evalToString(
+        assertStringWithJavet(
                 """
-                        const b = new ArrayBuffer(8);
-                        b.transfer();
-                        try { b.transfer(); 'NO ERROR' } catch (e) { e.name }"""))
-                .isEqualTo("TypeError");
+                        (function () {
+                          const b = new ArrayBuffer(8);
+                          b.transfer();
+                          try { b.transfer(); return 'NO ERROR' } catch (e) { return e.name }
+                        })()""");
     }
 
     @Test

@@ -16,7 +16,7 @@
 
 package com.caoccao.qjs4j.vm;
 
-import com.caoccao.qjs4j.BaseTest;
+import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * a bytecode function with no locals adopted the shared array directly, so the next borrow — by
  * anything that frame went on to call — would rewrite this frame's arguments in place.
  */
-public class StackFrameArgumentOwnershipTest extends BaseTest {
+public class StackFrameArgumentOwnershipTest extends BaseJavetTest {
 
     private JSBytecodeFunction compile(String source) {
         return (JSBytecodeFunction) context.eval(source);
@@ -38,30 +38,32 @@ public class StackFrameArgumentOwnershipTest extends BaseTest {
 
     @Test
     public void testArgumentsSurviveANestedCallFromJavaScript() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        function inner(a, b, c) { return a + b + c }
-                        function outer() {
+                        (function () {
+                          function inner(a, b, c) { return a + b + c }
+                          function outer() {
                             const before = arguments[0];
                             const middle = inner(9, 9, 9);
                             return before + '/' + middle + '/' + arguments[0];
-                        }
-                        outer(1, 2, 3)""").toString())
-                .isEqualTo("1/27/1");
+                          }
+                          return outer(1, 2, 3);
+                        })()""");
     }
 
     @Test
     public void testArgumentsSurviveANestedCallInAFunctionWithNoDeclaredLocals() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        function noLocals() { return arguments.length }
-                        function outer() {
+                        (function () {
+                          function noLocals() { return arguments.length }
+                          function outer() {
                             const before = arguments[0];
                             noLocals(7, 7, 7, 7);
                             return before + '/' + arguments[0];
-                        }
-                        outer(1, 2, 3)""").toString())
-                .isEqualTo("1/1");
+                          }
+                          return outer(1, 2, 3);
+                        })()""");
     }
 
     @Test
@@ -96,18 +98,19 @@ public class StackFrameArgumentOwnershipTest extends BaseTest {
 
     @Test
     public void testTailCallDoesNotCorruptArguments() {
-        assertThat(context.eval(
+        assertStringWithJavet(
                 """
-                        'use strict';
-                        function target(a, b) { return a * 10 + b }
-                        function viaTail(x, y) { return target(x, y) }
-                        function outer() {
+                        (function () {
+                          'use strict';
+                          function target(a, b) { return a * 10 + b }
+                          function viaTail(x, y) { return target(x, y) }
+                          function outer() {
                             const before = arguments[0];
                             const result = viaTail(3, 4);
                             return before + '/' + result + '/' + arguments[0];
-                        }
-                        outer(5, 6)""").toString())
-                .isEqualTo("5/34/5");
+                          }
+                          return outer(5, 6);
+                        })()""");
     }
 
     @Test
