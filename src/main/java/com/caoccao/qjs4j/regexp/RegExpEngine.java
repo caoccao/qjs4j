@@ -814,6 +814,30 @@ public final class RegExpEngine {
             return backtrackTop > 0;
         }
 
+        /**
+         * Test a code point against sorted, disjoint inclusive ranges encoded in bytecode.
+         */
+        private boolean isInSortedRanges(byte[] bc, int offset, int numRanges, int ch) {
+            int low = 0;
+            int high = numRanges - 1;
+            while (low <= high) {
+                int middle = (low + high) >>> 1;
+                int rangeOffset = offset + middle * 8;
+                int start = readU32(bc, rangeOffset);
+                if (ch < start) {
+                    high = middle - 1;
+                    continue;
+                }
+                int end = readU32(bc, rangeOffset + 4);
+                if (ch > end) {
+                    low = middle + 1;
+                    continue;
+                }
+                return true;
+            }
+            return false;
+        }
+
         private boolean isWordChar(int ch, boolean ignoreCase) {
             // Word characters: [a-zA-Z0-9_]
             if (ch < 256) {
@@ -995,26 +1019,27 @@ public final class RegExpEngine {
             int numRanges = readU16(bc, offset);
             offset += 2;
 
+            if (!ignoreCase) {
+                if (isInSortedRanges(bc, offset, numRanges, ch)) {
+                    return false;
+                }
+                pos++;
+                return true;
+            }
+
             // Check if character is NOT in any of the ranges
+            int canonCh = canonicalize(ch);
             for (int i = 0; i < numRanges; i++) {
                 int start = readU32(bc, offset);
                 int end = readU32(bc, offset + 4);
                 offset += 8;
 
-                if (ignoreCase) {
-                    int canonCh = canonicalize(ch);
-                    int canonStart = canonicalize(start);
-                    int canonEnd = canonicalize(end);
-                    if ((canonCh >= canonStart && canonCh <= canonEnd)
-                            || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
-                        // Character is in range, so inverted match fails
-                        return false;
-                    }
-                } else {
-                    if (ch >= start && ch <= end) {
-                        // Character is in range, so inverted match fails
-                        return false;
-                    }
+                int canonStart = canonicalize(start);
+                int canonEnd = canonicalize(end);
+                if ((canonCh >= canonStart && canonCh <= canonEnd)
+                        || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
+                    // Character is in range, so inverted match fails
+                    return false;
                 }
             }
             // Character is not in any range, so inverted match succeeds
@@ -1051,26 +1076,27 @@ public final class RegExpEngine {
             int numRanges = readU16(bc, offset);
             offset += 2;
 
+            if (!ignoreCase) {
+                if (isInSortedRanges(bc, offset, numRanges, ch)) {
+                    pos++;
+                    return true;
+                }
+                return false;
+            }
+
             // Check if character is in any of the ranges
+            int canonCh = canonicalize(ch);
             for (int i = 0; i < numRanges; i++) {
                 int start = readU32(bc, offset);
                 int end = readU32(bc, offset + 4);
                 offset += 8;
 
-                if (ignoreCase) {
-                    int canonCh = canonicalize(ch);
-                    int canonStart = canonicalize(start);
-                    int canonEnd = canonicalize(end);
-                    if ((canonCh >= canonStart && canonCh <= canonEnd)
-                            || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
-                        pos++;
-                        return true;
-                    }
-                } else {
-                    if (ch >= start && ch <= end) {
-                        pos++;
-                        return true;
-                    }
+                int canonStart = canonicalize(start);
+                int canonEnd = canonicalize(end);
+                if ((canonCh >= canonStart && canonCh <= canonEnd)
+                        || (unicode && start == end && codePointEqualsIgnoreCaseUnicode(ch, start))) {
+                    pos++;
+                    return true;
                 }
             }
             return false;
