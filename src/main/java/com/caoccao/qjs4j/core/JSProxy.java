@@ -502,7 +502,7 @@ public final class JSProxy extends JSObject {
      * Private field operations must bypass proxy traps and operate on the proxy object itself.
      */
     public PropertyDescriptor getOwnPrivatePropertyDescriptorDirect(PropertyKey key) {
-        return super.getOwnPropertyDescriptor(key);
+        return super.getOwnPropertyDescriptorRaw(key);
     }
 
     /**
@@ -510,7 +510,7 @@ public final class JSProxy extends JSObject {
      * ES2020 9.5.5 [[GetOwnProperty]]
      */
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         JSContext executionContext = resolveExecutionContext(null);
         if (revoked) {
             executionContext.throwTypeError("Cannot perform 'getOwnPropertyDescriptor' on a proxy that has been revoked");
@@ -621,18 +621,23 @@ public final class JSProxy extends JSObject {
     /**
      * Override getOwnPropertyKeys to intercept Object.keys(), etc.
      * This follows QuickJS js_proxy_getOwnPropertyNames implementation.
+     * <p>
+     * A failing trap reports the error through the context's pending exception and returns an
+     * empty list. Returning {@code null} instead would make every one of the ~35 callers of
+     * {@link JSObject#getOwnPropertyKeys()} throw a {@link NullPointerException}, which the VM then
+     * reports as an opaque internal error rather than as the trap's own {@code TypeError}.
      */
     @Override
     public List<PropertyKey> getOwnPropertyKeys() {
         JSContext executionContext = resolveExecutionContext(null);
         if (revoked) {
             executionContext.throwTypeError("Cannot perform 'getOwnPropertyKeys' on a proxy that has been revoked");
-            return null;
+            return new ArrayList<>();
         }
 
         JSFunction ownKeysTrapFunc = getTrapFunction("ownKeys", executionContext);
         if (executionContext.hasPendingException()) {
-            return null;
+            return new ArrayList<>();
         }
         if (ownKeysTrapFunc != null) {
             JSValue result = ownKeysTrapFunc.call(executionContext, handler, new JSValue[]{target});
@@ -641,18 +646,18 @@ public final class JSProxy extends JSObject {
             if (!(result instanceof JSObject resultObj)) {
                 executionContext.throwTypeError(
                         "ownKeys trap result must be an object");
-                return null;
+                return new ArrayList<>();
             }
 
             // Get the length property
             JSValue lengthValue = resultObj.get(PropertyKey.LENGTH);
             long lengthLong = JSTypeConversions.toLength(executionContext, lengthValue);
             if (executionContext.hasPendingException()) {
-                return null;
+                return new ArrayList<>();
             }
             if (lengthLong > Integer.MAX_VALUE) {
                 executionContext.throwTypeError("ownKeys trap result is too large");
-                return null;
+                return new ArrayList<>();
             }
             int length = (int) lengthLong;
             List<PropertyKey> keys = new ArrayList<>(length);
@@ -667,7 +672,7 @@ public final class JSProxy extends JSObject {
                 } else {
                     executionContext.throwTypeError(
                             "ownKeys trap result must contain only strings or symbols");
-                    return null;
+                    return new ArrayList<>();
                 }
             }
 
@@ -677,7 +682,7 @@ public final class JSProxy extends JSObject {
                 if (!propertyKeySet.add(key)) {
                     executionContext.throwTypeError(
                             "'ownKeys' on proxy: trap returned duplicate entries");
-                    return null;
+                    return new ArrayList<>();
                 }
             }
 
@@ -706,7 +711,7 @@ public final class JSProxy extends JSObject {
                 if (!uncheckedResultKeys.remove(nonconfigurableKey)) {
                     executionContext.throwTypeError(
                             "'ownKeys' on proxy: trap result did not include '" + nonconfigurableKey.toPropertyString() + "'");
-                    return null;
+                    return new ArrayList<>();
                 }
             }
 
@@ -717,7 +722,7 @@ public final class JSProxy extends JSObject {
                     if (!uncheckedResultKeys.remove(configurableKey)) {
                         executionContext.throwTypeError(
                                 "'ownKeys' on proxy: trap result did not include '" + configurableKey.toPropertyString() + "'");
-                        return null;
+                        return new ArrayList<>();
                     }
                 }
 
@@ -726,7 +731,7 @@ public final class JSProxy extends JSObject {
                     PropertyKey extraKey = uncheckedResultKeys.iterator().next();
                     executionContext.throwTypeError(
                             "'ownKeys' on proxy: trap returned extra key '" + extraKey.toPropertyString() + "'");
-                    return null;
+                    return new ArrayList<>();
                 }
             }
 
@@ -865,7 +870,7 @@ public final class JSProxy extends JSObject {
      * Override has to intercept 'in' operator.
      */
     @Override
-    public boolean has(PropertyKey key) {
+    protected boolean has(PropertyKey key, int depth) {
         JSContext executionContext = resolveExecutionContext(null);
         if (revoked) {
             executionContext.throwTypeError("Cannot perform 'has' on a proxy that has been revoked");
@@ -908,7 +913,7 @@ public final class JSProxy extends JSObject {
      * Private field operations must bypass proxy traps and operate on the proxy object itself.
      */
     public boolean hasOwnPrivatePropertyDirect(PropertyKey key) {
-        return super.getOwnPropertyDescriptor(key) != null;
+        return super.getOwnPropertyDescriptorRaw(key) != null;
     }
 
     @Override

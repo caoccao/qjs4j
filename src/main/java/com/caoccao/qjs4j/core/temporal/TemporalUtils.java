@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core.temporal;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.math.BigInteger;
 import java.time.DateTimeException;
@@ -348,7 +349,7 @@ public final class TemporalUtils {
             hours = Integer.parseInt(normalizedTimeZoneId.substring(1, 3));
             minutes = Integer.parseInt(normalizedTimeZoneId.substring(3, 5));
         } else {
-            throw new IllegalArgumentException("Invalid offset time zone identifier: " + timeZoneId);
+            throw new JSRangeErrorException("Invalid offset time zone identifier: " + timeZoneId);
         }
         return sign * (hours * 3600 + minutes * 60);
     }

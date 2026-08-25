@@ -2136,7 +2136,7 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+        protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
             if (pristine) {
                 if (PropertyKey.VALUE.equals(key)) {
                     return PropertyDescriptor.defaultData(valueValue);
@@ -2146,7 +2146,7 @@ public final class IteratorPrototype {
                 }
                 return null;
             }
-            return super.getOwnPropertyDescriptor(key);
+            return super.getOwnPropertyDescriptorRaw(key);
         }
 
         @Override

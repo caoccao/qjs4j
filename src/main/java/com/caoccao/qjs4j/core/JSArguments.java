@@ -252,8 +252,8 @@ public final class JSArguments extends JSObject {
     }
 
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
+        PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
         int index = key.toIndex();
         if (descriptor != null && isMappedIndex(index, key)) {
             descriptor.setValue(getMappedValue(index));
@@ -266,7 +266,7 @@ public final class JSArguments extends JSObject {
         if (index < 0 || !mappedIndices.contains(index)) {
             return false;
         }
-        return super.getOwnPropertyDescriptor(key) != null;
+        return super.getOwnPropertyDescriptorRaw(key) != null;
     }
 
     /**

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+
 import java.lang.ref.WeakReference;
 
 /**
@@ -43,7 +45,7 @@ public final class JSWeakRef extends JSObject {
     public JSWeakRef(JSContext context, JSValue target) {
         super(context);
         if (target == null) {
-            throw new IllegalArgumentException("WeakRef target cannot be null");
+            throw new JSTypeErrorException("WeakRef target cannot be null");
         }
         this.targetRef = new WeakReference<>(target);
     }

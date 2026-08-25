@@ -485,4 +485,17 @@ public class RegExpEngineTest extends BaseJavetTest {
                 .isInstanceOf(RegExpCompiler.RegExpSyntaxException.class)
                 .hasMessageContaining("unknown unicode property name");
     }
+
+    @Test
+    public void testUnorderedCharacterClassRanges() {
+        // Source order is deliberately unrelated to code point order. The compiler normalizes
+        // non-case-folded ranges so the executor can safely use binary search.
+        assertBooleanWithJavet("""
+                const positive = /^[zb-dax]+$/;
+                const negative = /^[^zb-dax]+$/;
+                positive.test('zabcdx')
+                    && !positive.test('e')
+                    && negative.test('efwy')
+                    && !negative.test('efay')""");
+    }
 }

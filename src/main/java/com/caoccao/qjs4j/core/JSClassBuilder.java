@@ -35,6 +35,11 @@ package com.caoccao.qjs4j.core;
  *     })
  *     .build();
  * </pre>
+ * <p>
+ * Builder-order violations ("Must call build() before ...") raise {@link IllegalStateException}
+ * rather than a JavaScript error type. That is deliberate: they are embedder API misuse, not a
+ * condition a script can reach or should be able to catch. Every error a script <em>can</em> reach
+ * is raised as a {@code JSErrorException} subclass so it participates in the engine's error model.
  */
 public final class JSClassBuilder {
     private final JSClass classObject;

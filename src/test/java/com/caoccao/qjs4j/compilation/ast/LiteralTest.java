@@ -268,13 +268,6 @@ public class LiteralTest extends BaseJavetTest {
     }
 
     @Test
-    public void testRegexBackslashLineTerminator() {
-        assertErrorWithJavet(
-                "eval('/' + String.fromCharCode(92, 10) + '/')",
-                "eval('/' + String.fromCharCode(92, 13) + '/')");
-    }
-
-    @Test
     public void testRegExpLiteralUsesIntrinsicPrototype() {
         assertBooleanWithJavet("""
                 var intrinsicRegExp = RegExp;
@@ -284,6 +277,13 @@ public class LiteralTest extends BaseJavetTest {
                     && Object.getPrototypeOf(regexp) === intrinsicRegExp.prototype
                     && 'axb'.split(regexp).join('') === 'ab';
                 """);
+    }
+
+    @Test
+    public void testRegexBackslashLineTerminator() {
+        assertErrorWithJavet(
+                "eval('/' + String.fromCharCode(92, 10) + '/')",
+                "eval('/' + String.fromCharCode(92, 13) + '/')");
     }
 
     @Test

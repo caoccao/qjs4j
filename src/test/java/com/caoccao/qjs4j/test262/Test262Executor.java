@@ -204,10 +204,12 @@ public class Test262Executor {
 
         } catch (JSException e) {
             return handleException(e, test);
+        } catch (JSTerminationException e) {
+            // The runner is the host that set the deadline, so it is entitled to observe it. The
+            // engine no longer lets a script or any internal catch block intercept termination,
+            // which is why this needs its own clause: JSTerminationException is an Error.
+            return TestResult.timeout(test);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
-                return TestResult.timeout(test);
-            }
             return handleException(e, test);
         } finally {
             context.getVirtualMachine().setExecutionDeadline(0);
@@ -234,10 +236,12 @@ public class Test262Executor {
 
         } catch (JSException e) {
             return handleException(e, test);
+        } catch (JSTerminationException e) {
+            // The runner is the host that set the deadline, so it is entitled to observe it. The
+            // engine no longer lets a script or any internal catch block intercept termination,
+            // which is why this needs its own clause: JSTerminationException is an Error.
+            return TestResult.timeout(test);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
-                return TestResult.timeout(test);
-            }
             return handleException(e, test);
         } finally {
             context.getVirtualMachine().setExecutionDeadline(0);
@@ -264,10 +268,12 @@ public class Test262Executor {
 
         } catch (JSException e) {
             return handleException(e, test);
+        } catch (JSTerminationException e) {
+            // The runner is the host that set the deadline, so it is entitled to observe it. The
+            // engine no longer lets a script or any internal catch block intercept termination,
+            // which is why this needs its own clause: JSTerminationException is an Error.
+            return TestResult.timeout(test);
         } catch (Exception e) {
-            if (e.getMessage() != null && e.getMessage().contains("execution timeout")) {
-                return TestResult.timeout(test);
-            }
             return handleException(e, test);
         } finally {
             // Clear the deadline after execution

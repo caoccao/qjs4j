@@ -233,7 +233,7 @@ public final class JSTypeConversions {
     }
 
     /**
-     * Less Than Comparison (x < y).
+     * Less Than Comparison ({@code x < y}).
      * ES2020 7.2.13
      */
     public static boolean lessThan(JSContext context, JSValue x, JSValue y) {

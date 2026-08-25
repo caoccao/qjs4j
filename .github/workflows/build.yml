@@ -15,10 +15,42 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        # The build declares a Java 17 toolchain, so Gradle always compiles against 17. The tests
+        # run on the matrix JDK via -PtestJavaVersion, so this matrix is genuine runtime coverage
+        # of the engine on both LTS releases, not just proof that Gradle can be launched by them.
+        java: [ '17', '21' ]
     runs-on: ${{ matrix.os }}
 
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up JDK ${{ matrix.java }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ matrix.java }}
+        distribution: 'temurin'
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '9.4.1'
+
+    - name: Build with Gradle
+      run: gradle build -PtestJavaVersion=${{ matrix.java }}
+
+    - name: Upload JAR
+      if: matrix.os == 'ubuntu-latest' && matrix.java == '17'
+      uses: actions/upload-artifact@v4
+      with:
+        name: qjs4j-jar
+        path: build/libs/*.jar
+
+  coverage:
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -32,14 +64,57 @@ jobs:
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.14.3'
+        gradle-version: '9.4.1'
 
-    - name: Build with Gradle
-      run: gradle build
+    # Verification, not just a report: an uploaded artifact is observational and cannot fail a
+    # build, so coverage could regress indefinitely without anything noticing.
+    - name: Measure and verify coverage
+      run: gradle jacocoTestReport jacocoTestCoverageVerification
 
-    - name: Upload JAR
-      if: matrix.os == 'ubuntu-latest'
+    - name: Upload coverage report
       uses: actions/upload-artifact@v4
       with:
-        name: qjs4j-jar
-        path: build/libs/*.jar
+        name: jacoco-report
+        path: build/reports/jacoco/test/
+
+  test262:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout qjs4j
+      uses: actions/checkout@v4
+      with:
+        path: qjs4j
+
+    # The Gradle tasks resolve the suite at ../test262 relative to the project directory.
+    - name: Checkout test262
+      uses: actions/checkout@v4
+      with:
+        repository: tc39/test262
+        path: test262
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: '9.4.1'
+
+    # pipefail, or the step reports tee's exit status and stays green while Gradle fails: a
+    # conformance gate that cannot fail is not a gate.
+    - name: Run Test262 (quick subset)
+      working-directory: qjs4j
+      shell: bash
+      run: |
+        set -o pipefail
+        gradle test262Quick | tee ../test262-quick.log
+
+    - name: Upload Test262 report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test262-quick-log
+        path: test262-quick.log

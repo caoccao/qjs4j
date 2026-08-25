@@ -184,7 +184,7 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
-     * Attempt to cast this value to JSDataView.
+     * Attempt to cast this value to JSFloat64Array.
      *
      * @return Optional containing the JSFloat64Array if this value is a Float64Array, empty otherwise
      */
@@ -193,7 +193,7 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
-     * Attempt to cast this value to JSFunction.     *
+     * Attempt to cast this value to JSFunction.
      *
      * @return Optional containing the JSFunction if this value is a function, empty otherwise
      */
@@ -689,9 +689,6 @@ public sealed interface JSValue extends JSStackValue permits
     }
 
     /**
-     * Check if this value is a function.
-     * <p>
-     * /**
      * Check if this value is a generator.
      *
      * @return true if this value is a generator, false otherwise

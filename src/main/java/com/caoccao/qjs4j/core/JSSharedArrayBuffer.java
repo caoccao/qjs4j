@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -66,10 +67,10 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
     private JSSharedArrayBuffer(JSContext context, int byteLength, int maxByteLength, boolean growable) {
         super(context);
         if (byteLength < 0) {
-            throw new IllegalArgumentException("Invalid array buffer length");
+            throw new JSRangeErrorException("Invalid array buffer length");
         }
         if (maxByteLength < byteLength) {
-            throw new IllegalArgumentException("Invalid array buffer max length");
+            throw new JSRangeErrorException("Invalid array buffer max length");
         }
         // Use heap buffer so backing byte[] is accessible for VarHandle atomics
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
@@ -207,10 +208,10 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      */
     public void grow(int newByteLength) {
         if (!growable) {
-            throw new IllegalStateException("array buffer is not growable");
+            throw new JSTypeErrorException("array buffer is not growable");
         }
         if (newByteLength < byteLength || newByteLength > maxByteLength) {
-            throw new IllegalArgumentException("invalid array buffer length");
+            throw new JSRangeErrorException("invalid array buffer length");
         }
         this.byteLength = newByteLength;
     }

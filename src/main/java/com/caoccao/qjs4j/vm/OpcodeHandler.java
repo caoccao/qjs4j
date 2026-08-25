@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigInteger;
@@ -128,10 +129,51 @@ public final class OpcodeHandler {
     }
 
     private static JSError createCannotReadPropertiesTypeError(JSContext context, JSValue value) {
+        return createCannotReadPropertiesTypeError(context, value, null);
+    }
+
+    /**
+     * Build the TypeError for reading a property of {@code null} or {@code undefined}.
+     * <p>
+     * The property being read is named when it is known, matching V8's
+     * {@code "Cannot read properties of null (reading 'foo')"}. The computed-index path used to
+     * omit it even though the key was in hand, so {@code null.foo} and {@code null['foo']} reported
+     * the same failure differently.
+     *
+     * @param context  the context to raise the error in
+     * @param value    the null or undefined base value
+     * @param keyValue the property key being read, or {@code null} when it is unavailable
+     * @return the error object
+     */
+    private static JSError createCannotReadPropertiesTypeError(
+            JSContext context, JSValue value, JSValue keyValue) {
         String objectType = value instanceof JSNull ? "null" : "undefined";
-        JSError jsError = context.throwTypeError("Cannot read properties of " + objectType);
+        String keyDescription = describePropertyKeyForError(keyValue);
+        String message = keyDescription == null
+                ? "Cannot read properties of " + objectType
+                : "Cannot read properties of " + objectType + " (reading '" + keyDescription + "')";
+        JSError jsError = context.throwTypeError(message);
         jsError.setVmMessage("value has no property");
         return jsError;
+    }
+
+    /**
+     * Render a property key for an error message, without running any script.
+     *
+     * @param keyValue the key
+     * @return the key's text, or {@code null} when it cannot be rendered without coercion
+     */
+    private static String describePropertyKeyForError(JSValue keyValue) {
+        if (keyValue instanceof JSString stringKey) {
+            return stringKey.value();
+        }
+        if (keyValue instanceof JSNumber numberKey) {
+            return JSTypeConversions.toString(null, numberKey).value();
+        }
+        if (keyValue instanceof JSSymbol symbolKey) {
+            return symbolKey.toJavaObject();
+        }
+        return null;
     }
 
     private static StackFrame findDynamicVarBindingFrame(ExecutionContext executionContext, String variableName) {
@@ -2462,7 +2504,8 @@ public final class OpcodeHandler {
             case GET_ARG1 -> 1;
             case GET_ARG2 -> 2;
             case GET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get arg opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short get arg opcode " + op);
         };
         executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
         executionContext.pc += op.getSize();
@@ -2516,7 +2559,8 @@ public final class OpcodeHandler {
             }
         } else {
             executionContext.virtualMachine.pendingException =
-                    createCannotReadPropertiesTypeError(executionContext.virtualMachine.context, objectValue);
+                    createCannotReadPropertiesTypeError(
+                            executionContext.virtualMachine.context, objectValue, indexValue);
             executionContext.virtualMachine.context.clearPendingException();
             stack[sp - 1] = JSUndefined.INSTANCE;
         }
@@ -2569,7 +2613,8 @@ public final class OpcodeHandler {
             }
         } else {
             executionContext.virtualMachine.pendingException =
-                    createCannotReadPropertiesTypeError(executionContext.virtualMachine.context, arrayObjectValue);
+                    createCannotReadPropertiesTypeError(
+                            executionContext.virtualMachine.context, arrayObjectValue, indexValue);
             executionContext.virtualMachine.context.clearPendingException();
             stack[sp++] = JSUndefined.INSTANCE;
         }
@@ -2587,7 +2632,8 @@ public final class OpcodeHandler {
         if (!(indexValue instanceof JSNumber || indexValue instanceof JSString || indexValue instanceof JSSymbol)) {
             if (arrayObjectValue.isNullOrUndefined()) {
                 executionContext.virtualMachine.pendingException =
-                        createCannotReadPropertiesTypeError(executionContext.virtualMachine.context, arrayObjectValue);
+                        createCannotReadPropertiesTypeError(
+                                executionContext.virtualMachine.context, arrayObjectValue, indexValue);
                 executionContext.virtualMachine.context.clearPendingException();
                 executionContext.sp = sp;
                 executionContext.pc = pc + op.getSize();
@@ -2608,7 +2654,8 @@ public final class OpcodeHandler {
         JSObject targetObject = executionContext.virtualMachine.toObject(arrayObjectValue);
         if (targetObject == null) {
             executionContext.virtualMachine.pendingException =
-                    createCannotReadPropertiesTypeError(executionContext.virtualMachine.context, arrayObjectValue);
+                    createCannotReadPropertiesTypeError(
+                            executionContext.virtualMachine.context, arrayObjectValue, indexValue);
             executionContext.virtualMachine.context.clearPendingException();
             executionContext.sp = sp;
             executionContext.pc = pc + op.getSize();
@@ -2653,7 +2700,7 @@ public final class OpcodeHandler {
             }
         } else {
             String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("cannot read property '" + fieldName + "' of " + typeName);
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("Cannot read properties of " + typeName + " (reading '" + fieldName + "')");
             executionContext.virtualMachine.resetPropertyAccessTracking();
             executionContext.push(JSUndefined.INSTANCE);
         }
@@ -2686,7 +2733,7 @@ public final class OpcodeHandler {
             }
         } else {
             String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("cannot read property '" + fieldName + "' of " + typeName);
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("Cannot read properties of " + typeName + " (reading '" + fieldName + "')");
             executionContext.virtualMachine.resetPropertyAccessTracking();
             executionContext.push(JSUndefined.INSTANCE);
         }
@@ -2708,7 +2755,7 @@ public final class OpcodeHandler {
             }
         } else {
             String typeName = objectValue instanceof JSNull ? "null" : "undefined";
-            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("cannot read property 'length' of " + typeName);
+            executionContext.virtualMachine.pendingException = executionContext.virtualMachine.context.throwTypeError("Cannot read properties of " + typeName + " (reading 'length')");
             executionContext.push(JSUndefined.INSTANCE);
         }
         executionContext.pc = pc + op.getSize();
@@ -2778,7 +2825,8 @@ public final class OpcodeHandler {
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue localValue = executionContext.frame.getLocals()[localIndex];
         if (executionContext.virtualMachine.isUninitialized(localValue)) {
-            executionContext.virtualMachine.throwVariableUninitializedReferenceError();
+            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
+                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
         }
         JSStackValue[] stack = executionContext.virtualMachine.valueStack.stack;
         int sp = executionContext.sp;
@@ -3184,7 +3232,8 @@ public final class OpcodeHandler {
             case GET_VAR_REF1 -> 1;
             case GET_VAR_REF2 -> 2;
             case GET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short get var ref opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short get var ref opcode " + op);
         };
         executionContext.push(readVarRefValue(executionContext, varRefIndex));
         executionContext.pc += op.getSize();
@@ -3956,7 +4005,20 @@ public final class OpcodeHandler {
     }
 
     static void handleInvalid(Opcode op, ExecutionContext executionContext) {
-        throw new JSVirtualMachineException("Invalid opcode at PC " + executionContext.pc);
+        // A byte that decodes to no instruction means miscompiled or corrupted bytecode. That is an
+        // engine defect, so it must not be routed to the script's catch handlers as if it were a
+        // guest error. Report the surrounding bytes: 0x00 doubles as the extended-opcode prefix, so
+        // a trailing 0x00 and a truncated two-byte instruction look identical without them.
+        int pc = executionContext.pc;
+        byte[] instructions = executionContext.instructions;
+        StringBuilder message = new StringBuilder("Internal engine error: invalid opcode at pc=")
+                .append(pc)
+                .append(" (bytes:");
+        for (int offset = pc; offset < Math.min(instructions.length, pc + 4); offset++) {
+            message.append(String.format(" %02x", instructions[offset] & 0xFF));
+        }
+        message.append(", length=").append(instructions.length).append(')');
+        throw new JSTerminationException(message.toString());
     }
 
     static void handleIsNull(Opcode op, ExecutionContext executionContext) {
@@ -4714,7 +4776,8 @@ public final class OpcodeHandler {
             case PUT_ARG1 -> 1;
             case PUT_ARG2 -> 2;
             case PUT_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put arg opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short put arg opcode " + op);
         };
         JSValue argumentValue = executionContext.pop();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
@@ -4865,7 +4928,8 @@ public final class OpcodeHandler {
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue[] localValues = executionContext.frame.getLocals();
         if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
-            executionContext.virtualMachine.throwVariableUninitializedReferenceError();
+            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
+                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
         }
         localValues[localIndex] = executionContext.pop();
         executionContext.pc = pc + op.getSize();
@@ -5266,7 +5330,8 @@ public final class OpcodeHandler {
             case PUT_VAR_REF1 -> 1;
             case PUT_VAR_REF2 -> 2;
             case PUT_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short put var ref opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short put var ref opcode " + op);
         };
         JSValue value = executionContext.pop();
         writeVarRefValue(executionContext, varRefIndex, value);
@@ -5426,7 +5491,8 @@ public final class OpcodeHandler {
             case SET_ARG1 -> 1;
             case SET_ARG2 -> 2;
             case SET_ARG3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set arg opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short set arg opcode " + op);
         };
         executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
         executionContext.pc += op.getSize();
@@ -5483,7 +5549,8 @@ public final class OpcodeHandler {
         int localIndex = executionContext.bytecode.readU16(pc + 1);
         JSValue[] localValues = executionContext.frame.getLocals();
         if (executionContext.virtualMachine.isUninitialized(localValues[localIndex])) {
-            executionContext.virtualMachine.throwVariableUninitializedReferenceError();
+            executionContext.virtualMachine.throwVariableUninitializedReferenceError(
+                    VirtualMachine.localVariableName(executionContext.frame, localIndex));
         }
         localValues[localIndex] = executionContext.peek(0);
         executionContext.pc = pc + op.getSize();
@@ -5541,7 +5608,8 @@ public final class OpcodeHandler {
             case SET_VAR_REF1 -> 1;
             case SET_VAR_REF2 -> 2;
             case SET_VAR_REF3 -> 3;
-            default -> throw new IllegalStateException("Unexpected short set var ref opcode: " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short set var ref opcode " + op);
         };
         executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
         executionContext.pc += op.getSize();
