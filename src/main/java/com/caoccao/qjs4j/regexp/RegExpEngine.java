@@ -321,27 +321,31 @@ public final class RegExpEngine {
                 }
 
                 case RANGE -> {
-                    int len = readU16(bc, pc + 1);
-                    if (!executionContext.matchRange(bc, pc + 3, len, false)) {
+                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                    // 16-bit one, and the matcher then resumes decoding inside the range data.
+                    int len = readU32(bc, pc + 1);
+                    if (!executionContext.matchRange(bc, pc + 5, len, false)) {
                         if (executionContext.hasBacktrack()) {
                             pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
                     }
-                    pc += 3 + len;
+                    pc += 5 + len;
                 }
 
                 case RANGE_I -> {
-                    int len = readU16(bc, pc + 1);
-                    if (!executionContext.matchRange(bc, pc + 3, len, true)) {
+                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                    // 16-bit one, and the matcher then resumes decoding inside the range data.
+                    int len = readU32(bc, pc + 1);
+                    if (!executionContext.matchRange(bc, pc + 5, len, true)) {
                         if (executionContext.hasBacktrack()) {
                             pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
                     }
-                    pc += 3 + len;
+                    pc += 5 + len;
                 }
 
                 case SPACE -> {
@@ -367,27 +371,31 @@ public final class RegExpEngine {
                 }
 
                 case NOT_RANGE -> {
-                    int len = readU16(bc, pc + 1);
-                    if (!executionContext.matchNotRange(bc, pc + 3, len, false)) {
+                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                    // 16-bit one, and the matcher then resumes decoding inside the range data.
+                    int len = readU32(bc, pc + 1);
+                    if (!executionContext.matchNotRange(bc, pc + 5, len, false)) {
                         if (executionContext.hasBacktrack()) {
                             pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
                     }
-                    pc += 3 + len;
+                    pc += 5 + len;
                 }
 
                 case NOT_RANGE_I -> {
-                    int len = readU16(bc, pc + 1);
-                    if (!executionContext.matchNotRange(bc, pc + 3, len, true)) {
+                    // 32-bit payload length: a class with more than 8,191 ranges overflows a
+                    // 16-bit one, and the matcher then resumes decoding inside the range data.
+                    int len = readU32(bc, pc + 1);
+                    if (!executionContext.matchNotRange(bc, pc + 5, len, true)) {
                         if (executionContext.hasBacktrack()) {
                             pc = executionContext.popBacktrack();
                             continue;
                         }
                         return false;
                     }
-                    pc += 3 + len;
+                    pc += 5 + len;
                 }
 
                 case BACK_REFERENCE -> {
@@ -1016,8 +1024,8 @@ public final class RegExpEngine {
             int ch = codePoints[pos];
 
             // Read number of ranges
-            int numRanges = readU16(bc, offset);
-            offset += 2;
+            int numRanges = readU32(bc, offset);
+            offset += 4;
 
             if (!ignoreCase) {
                 if (isInSortedRanges(bc, offset, numRanges, ch)) {
@@ -1073,8 +1081,8 @@ public final class RegExpEngine {
             int ch = codePoints[pos];
 
             // Read number of ranges
-            int numRanges = readU16(bc, offset);
-            offset += 2;
+            int numRanges = readU32(bc, offset);
+            offset += 4;
 
             if (!ignoreCase) {
                 if (isInSortedRanges(bc, offset, numRanges, ch)) {

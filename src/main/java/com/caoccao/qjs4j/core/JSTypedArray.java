@@ -426,10 +426,10 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * Following QuickJS delete_property() for typed arrays.
      */
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
         if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.delete(key);
+            return super.delete(key, throwOnFailure);
         }
         if (canonicalNumericIndex < 0) {
             return true;
@@ -438,8 +438,9 @@ public sealed abstract class JSTypedArray extends JSObject permits
         if (index >= 0) {
             // In-bounds element: not deletable
             if (index < getLength() && !buffer.isDetached()) {
-                if (context.isStrictMode()) {
-                    context.throwTypeError("Cannot delete property '" + index + "'");
+                if (throwOnFailure) {
+                    context.throwTypeError("Cannot delete property '" + index + "' of "
+                            + getObjectDescriptionForError(true));
                 }
                 return false;
             }

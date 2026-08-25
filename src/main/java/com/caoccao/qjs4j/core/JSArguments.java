@@ -212,8 +212,8 @@ public final class JSArguments extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
-        boolean deleted = super.delete(key);
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
+        boolean deleted = super.delete(key, throwOnFailure);
         if (deleted) {
             int index = key.toIndex();
             if (index >= 0) {

@@ -40,6 +40,7 @@ public class Test262Runner {
     private final Integer requestedThreadCount;
     private final String singleTestPathFragment;
     private final Path test262Root;
+    private boolean allowEmptySelection;
 
     public Test262Runner(Path test262Root, Test262Config config) {
         this(test262Root, config, null, null);
@@ -65,7 +66,32 @@ public class Test262Runner {
     }
 
     public static void main(String[] args) {
+        int exitCode = 1;
         try {
+            exitCode = runMain(args);
+        } catch (Exception e) {
+            System.err.println("Error running test262: " + e.getMessage());
+            e.printStackTrace();
+        }
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
+    }
+
+    /**
+     * Parse the command line, run the suite and decide the process status.
+     * <p>
+     * Anything that means "the suite did not demonstrate conformance" is a nonzero status: a
+     * failing test, a timeout, a missing test root, a filter that selected nothing, or an
+     * interrupted run. Previously only a thrown Java exception was a failure, so a run in which
+     * every test failed — or in which no test ran at all — still reported {@code BUILD SUCCESSFUL}.
+     *
+     * @param args the command line
+     * @return the process exit status
+     * @throws IOException if test discovery fails
+     */
+    static int runMain(String[] args) throws IOException {
+        {
             Path test262Root = Paths.get("../test262");
             String mode = "";
             String singleTestPathFragment = null;
@@ -106,12 +132,7 @@ public class Test262Runner {
             };
 
             Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment, requestedThreadCount);
-            runner.run();
-
-        } catch (Exception e) {
-            System.err.println("Error running test262: " + e.getMessage());
-            e.printStackTrace();
-            System.exit(1);
+            return runner.run().exitCode();
         }
     }
 
@@ -158,7 +179,13 @@ public class Test262Runner {
         return null;
     }
 
-    public void run() throws IOException {
+    /**
+     * Discover, expand and execute the selected tests.
+     *
+     * @return a structured outcome; {@link RunOutcome#exitCode()} is what {@code main} exits with
+     * @throws IOException if test discovery fails
+     */
+    public RunOutcome run() throws IOException {
         System.out.println("Test262 Runner for qjs4j");
         System.out.println("Test262 root: " + test262Root.toAbsolutePath().normalize());
         System.out.println();
@@ -168,7 +195,7 @@ public class Test262Runner {
         if (!Files.exists(testsDir)) {
             System.err.println("Error: Test262 test directory not found at " + testsDir);
             System.err.println("Please ensure test262 is cloned at " + test262Root.toAbsolutePath().normalize());
-            return;
+            return RunOutcome.discoveryFailed("Test262 test directory not found at " + testsDir);
         }
 
         List<Path> testFiles;
@@ -187,7 +214,9 @@ public class Test262Runner {
         System.out.println("Discovered " + testFiles.size() + " test files");
         if (testFiles.isEmpty()) {
             System.out.println("No test file matched the current filter.");
-            return;
+            return allowEmptySelection
+                    ? RunOutcome.of(reporter, false)
+                    : RunOutcome.discoveryFailed("No test file matched the current filter.");
         }
 
         // Apply max tests limit
@@ -226,6 +255,8 @@ public class Test262Runner {
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(
                 threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
         AtomicInteger testCount = new AtomicInteger(0);
+        // One work item per file. Parsing decides how many interpretations the file has, so the
+        // expansion happens on the worker after parse() rather than here.
         List<Test262TestCase> testCases = new ArrayList<>(testFiles.size());
         for (int i = 0; i < testFiles.size(); i++) {
             Test262TestCase testCase = new Test262TestCase(testFiles.get(i));
@@ -237,27 +268,31 @@ public class Test262Runner {
         for (int i = 0; i < testCases.size(); i++) {
             final int fileIndex = i;
             Future<?> future = executorService.submit(() -> {
-                Test262TestCase testCase = testCases.get(fileIndex);
+                Test262TestCase parsedFile = testCases.get(fileIndex);
                 try {
-                    parser.parse(testCase);
+                    parser.parse(parsedFile);
 
                     // Apply filters
-                    if (config.shouldSkipTest(testCase)) {
-                        reporter.recordSkipped(testCase, "Feature not supported or excluded");
+                    if (config.shouldSkipTest(parsedFile)) {
+                        reporter.recordSkipped(parsedFile, "Feature not supported or excluded");
                         return;
                     }
 
-                    // Execute test
-                    TestResult result = executor.execute(testCase);
-                    reporter.recordResult(result);
+                    // Test262 defines how many interpretations a file has; an ordinary file has
+                    // two. Running only the first one is why strict-mode-only regressions could
+                    // be reported as passing.
+                    for (Test262TestCase variant : parsedFile.expandVariants()) {
+                        TestResult result = executor.execute(variant);
+                        reporter.recordResult(result);
 
-                    // Print progress every 100 tests
-                    int count = testCount.incrementAndGet();
-                    if (count % 100 == 0) {
-                        reporter.printProgress();
+                        // Print progress every 100 executions
+                        int count = testCount.incrementAndGet();
+                        if (count % 100 == 0) {
+                            reporter.printProgress();
+                        }
                     }
                 } catch (Throwable t) {
-                    reporter.recordResult(TestResult.fail(testCase,
+                    reporter.recordResult(TestResult.fail(parsedFile,
                             "Unexpected runner error: " + t.getClass().getSimpleName()
                                     + (t.getMessage() != null ? " - " + t.getMessage() : "")));
                 }
@@ -268,12 +303,15 @@ public class Test262Runner {
         // All tasks have been submitted at this point; disallow new submissions.
         executorService.shutdown();
 
+        boolean interrupted = false;
+
         // Ensure any failure swallowed by submit() Future is surfaced and counted.
         for (int i = 0; i < testCases.size(); i++) {
             try {
                 futures.get(i).get();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                interrupted = true;
                 break;
             } catch (ExecutionException e) {
                 Test262TestCase testCase = testCases.get(i);
@@ -291,9 +329,76 @@ public class Test262Runner {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            interrupted = true;
             System.err.println("Test execution interrupted");
         }
 
         reporter.printSummary();
+        return RunOutcome.of(reporter, interrupted);
+    }
+
+    /**
+     * Allow a selection that matches no test file to be a successful run.
+     * <p>
+     * Off by default: a filter that silently selects nothing is the same false green as a run whose
+     * tests all failed. Tooling that deliberately runs an empty selection opts in.
+     *
+     * @param allowEmptySelection true to treat an empty selection as success
+     * @return this
+     */
+    public Test262Runner setAllowEmptySelection(boolean allowEmptySelection) {
+        this.allowEmptySelection = allowEmptySelection;
+        return this;
+    }
+
+    /**
+     * The outcome of a run, and the process status that follows from it.
+     *
+     * @param failed         the number of failing tests
+     * @param timedOut       the number of timed-out tests
+     * @param passed         the number of passing tests
+     * @param skipped        the number of skipped tests
+     * @param interrupted    whether the run was interrupted before it finished
+     * @param discoveryError the reason discovery produced nothing usable, or {@code null}
+     */
+    public record RunOutcome(
+            int failed,
+            int timedOut,
+            int passed,
+            int skipped,
+            boolean interrupted,
+            String discoveryError) {
+
+        static RunOutcome discoveryFailed(String reason) {
+            return new RunOutcome(0, 0, 0, 0, false, reason);
+        }
+
+        static RunOutcome of(Test262Reporter reporter, boolean interrupted) {
+            return new RunOutcome(
+                    reporter.getFailed(),
+                    reporter.getTimeout(),
+                    reporter.getPassed(),
+                    reporter.getSkipped(),
+                    interrupted,
+                    null);
+        }
+
+        /**
+         * The process status this outcome implies.
+         *
+         * @return 0 only when every executed test passed and the run completed
+         */
+        public int exitCode() {
+            return isSuccessful() ? 0 : 1;
+        }
+
+        /**
+         * Whether the run demonstrated conformance over its selection.
+         *
+         * @return true when discovery succeeded, the run completed, and nothing failed or timed out
+         */
+        public boolean isSuccessful() {
+            return discoveryError == null && !interrupted && failed == 0 && timedOut == 0;
+        }
     }
 }

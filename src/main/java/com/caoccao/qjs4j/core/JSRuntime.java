@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.utils.AtomTable;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Represents a JavaScript runtime environment.
@@ -63,10 +64,15 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  */
 public final class JSRuntime implements AutoCloseable {
     private final AtomTable atoms;
+    /**
+     * Terminal: once set, the runtime refuses every operation that would create or accept new work.
+     */
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final List<JSContext> contexts;
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
+    private final JSMemoryAccounting memoryAccounting;
     private final JSRuntimeOptions options;
     /**
      * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm
@@ -98,6 +104,7 @@ public final class JSRuntime implements AutoCloseable {
         this.globalSymbolRegistry = new HashMap<>();
         this.globalSymbolReverseRegistry = new HashMap<>();
         this.options = options;
+        this.memoryAccounting = new JSMemoryAccounting(options.getMaxMemoryUsage());
     }
 
     /**
@@ -107,22 +114,55 @@ public final class JSRuntime implements AutoCloseable {
         this.interruptRequested = false;
     }
 
+    /**
+     * Close the runtime. Terminal and idempotent.
+     * <p>
+     * Closing used to be advisory: there was no closed state, so after {@code close()} an embedder
+     * could still create a context and evaluate in it, still enqueue jobs and still drain them, and
+     * the global symbol registries kept whatever they held. Shutdown is now an ownership boundary —
+     * {@link #createContext()}, {@link #enqueueJob(Job)} and
+     * {@link #getOrCreateGlobalSymbol(String)} refuse afterwards, and everything the runtime owns
+     * is released.
+     * <p>
+     * Asynchronous producers are stopped before the queues are cleared, so nothing can be deposited
+     * into a runtime that has already let go of it: {@code Atomics.waitAsync} operations this
+     * runtime started are cancelled, which also releases the promises and contexts an unbounded
+     * wait would otherwise have pinned for the life of the process. Waits belonging to other
+     * runtimes in the same agent cluster are untouched.
+     */
     @Override
     public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        // Stop asynchronous producers before clearing anything they could still write to.
+        if (options != null && options.getAtomicsObject() != null) {
+            options.getAtomicsObject().cancelAsyncWaits(this);
+        }
         jobQueue.clear();
         for (JSContext context : getContextSnapshot()) {
             if (context != null) {
                 context.close();
             }
         }
+        contexts.clear();
         atoms.clear();
+        synchronized (globalSymbolRegistry) {
+            globalSymbolRegistry.clear();
+            globalSymbolReverseRegistry.clear();
+        }
+        currentExecutingContext = null;
         gc();
     }
 
     /**
      * Create a new execution context.
+     *
+     * @return the new context
+     * @throws IllegalStateException when the runtime is closed
      */
     public JSContext createContext() {
+        requireOpen();
         JSContext context = new JSContext(this);
         contexts.add(context);
         return context;
@@ -145,8 +185,10 @@ public final class JSRuntime implements AutoCloseable {
      * {@link JSContext#processMicrotasks()} on the context that owns them.
      *
      * @param job the job to enqueue; {@code null} is ignored
+     * @throws IllegalStateException when the runtime is closed
      */
     public void enqueueJob(Job job) {
+        requireOpen();
         if (job != null) {
             jobQueue.offer(job);
         }
@@ -208,6 +250,19 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
+     * Accounting for the binary data blocks guest code sizes directly.
+     * <p>
+     * This is what makes {@link JSRuntimeOptions#setMaxMemoryUsage(long)} an enforced limit rather
+     * than a stored number. See {@link JSMemoryAccounting} for exactly what it does and does not
+     * bound.
+     *
+     * @return this runtime's accounting, never {@code null}
+     */
+    public JSMemoryAccounting getMemoryAccounting() {
+        return memoryAccounting;
+    }
+
+    /**
      * Get runtime options.
      */
     public JSRuntimeOptions getOptions() {
@@ -218,6 +273,7 @@ public final class JSRuntime implements AutoCloseable {
      * Get or create a runtime-global symbol by key.
      */
     public JSSymbol getOrCreateGlobalSymbol(String key) {
+        requireOpen();
         synchronized (globalSymbolRegistry) {
             JSSymbol existing = globalSymbolRegistry.get(key);
             if (existing != null) {
@@ -244,6 +300,15 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
+     * Whether {@link #close()} has run.
+     *
+     * @return true when the runtime is closed
+     */
+    public boolean isClosed() {
+        return closed.get();
+    }
+
+    /**
      * Ask any evaluation running on this runtime to stop.
      * <p>
      * Safe to call from another thread. The interpreter polls this every
@@ -254,6 +319,12 @@ public final class JSRuntime implements AutoCloseable {
      */
     public void requestInterrupt() {
         this.interruptRequested = true;
+    }
+
+    private void requireOpen() {
+        if (closed.get()) {
+            throw new IllegalStateException("JSRuntime is closed");
+        }
     }
 
     /**
@@ -271,6 +342,7 @@ public final class JSRuntime implements AutoCloseable {
      * @return the number of host jobs executed
      */
     public int runJobs() {
+        requireOpen();
         int count = 0;
         while (!jobQueue.isEmpty()) {
             Job job = jobQueue.poll();

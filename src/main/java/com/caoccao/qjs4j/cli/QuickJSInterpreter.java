@@ -91,7 +91,11 @@ public final class QuickJSInterpreter {
      */
     static int run(String[] args) {
         if (args.length == 0) {
-            new REPL().run();
+            // try-with-resources: the interactive mode used to leak its runtime, whose queues and
+            // registries then stayed live until the process ended.
+            try (REPL repl = new REPL()) {
+                repl.run();
+            }
             return 0;
         }
 

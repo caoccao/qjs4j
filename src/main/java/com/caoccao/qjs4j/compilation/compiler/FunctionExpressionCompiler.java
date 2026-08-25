@@ -93,6 +93,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
+        boolean declaredSelfNameBinding = false;
         if (functionExpression.getId() != null) {
             boolean conflictsWithParameter = false;
             Set<String> allParamNames = new HashSet<>();
@@ -104,7 +105,16 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 List<String> restBoundNames = functionExpression.getRestParameter().getArgument().getBoundNames();
                 conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
             }
-            if (!conflictsWithParameter) {
+            // ES2024 15.2.5: the BindingIdentifier of a named function expression is bound in an
+            // environment that wraps the function's variable environment. A `var`, lexical, class
+            // or function declaration of the same name in the body therefore creates a different
+            // binding that shadows it, and that binding starts as undefined — it does not inherit
+            // the function object. Sharing one local slot for both made `function n() { var n; }`
+            // observe the function instead.
+            boolean shadowedByBodyDeclaration = functionContext.compilerAnalysis.bodyDeclaresBinding(
+                    functionExpression.getBody().getBody(), functionExpression.getId().getName());
+            if (!conflictsWithParameter && !shadowedByBodyDeclaration) {
+                declaredSelfNameBinding = true;
                 functionContext.scopeManager.currentScope().declareLocal(functionExpression.getId().getName());
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
@@ -216,7 +226,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         }
 
         Integer functionExpressionSelfLocalIndex = null;
-        if (functionExpression.getId() != null) {
+        if (declaredSelfNameBinding) {
             functionExpressionSelfLocalIndex = functionContext.scopeManager.currentScope().getLocal(functionExpression.getId().getName());
         }
         int localCount = functionContext.scopeManager.currentScope().getLocalCount();

@@ -59,12 +59,12 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         if (isSymbolLikeNamespaceKey(key)) {
             return true;
         }
         try {
-            return ensureEvaluated().delete(key);
+            return ensureEvaluated().delete(key, throwOnFailure);
         } catch (JSException jsException) {
             setEvaluationPendingException(context, jsException);
             return false;

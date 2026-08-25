@@ -2,11 +2,26 @@
 
 [![Build and Test](https://github.com/caoccao/qjs4j/workflows/Build/badge.svg)](https://github.com/caoccao/qjs4j/actions) [![Maven Central](https://img.shields.io/maven-central/v/com.caoccao.qjs4j/qjs4j)](https://central.sonatype.com/artifact/com.caoccao.qjs4j/qjs4j) [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-qjs4j is a native Java implementation of QuickJS - a complete reimplementation of the QuickJS JavaScript engine in pure Java (JDK 17+, zero external dependencies).
+qjs4j is a native Java implementation of QuickJS - a complete reimplementation of the QuickJS
+JavaScript engine in pure Java, with zero external dependencies.
+
+**Verified on JDK 17, 21 and 25**; the artifact is compiled for JDK 17. The CI matrix runs the
+engine on 17 and 21 across Linux, macOS and Windows — 25 is verified by running the suite with
+`-PtestJavaVersion=25`, and adding it to the matrix is recommended, because JDK 25 withdrew the
+atomic access modes from byte-array view `VarHandle`s that `Atomics` depends on and a matrix
+stopping at 21 did not notice.
 
 ## Project Status
 
-qjs4j implements ES2024 features with full QuickJS specification compliance. See [detailed feature list](docs/migration/FEATURES.md) for comprehensive implementation status.
+qjs4j targets ES2024. Conformance is measured, not claimed: the Test262 quick partition runs
+**97,325 interpretations** (every file that is not `noStrict`, `module` or `raw` is executed twice,
+once sloppy and once strict, as `INTERPRETING.md` requires) and the long-running partition a further
+**4,282**, and the runner exits nonzero on any failure. Reproduce with
+`./gradlew test262Quick test262LongRunning` against a `../test262` checkout.
+
+The suite is not the whole specification, and the [known limitations](#known-limitations) below list
+what is understood not to work. See the [detailed feature list](docs/migration/FEATURES.md) for
+per-feature status.
 
 ### Features Beyond QuickJS
 
@@ -15,15 +30,27 @@ qjs4j includes features not present in the original QuickJS:
 - **Float16Array**: IEEE 754 half-precision (16-bit) floating point typed array support
 - **ES2024 Features**: Promise.withResolvers, Object.groupBy, Map.groupBy
 - **ShadowRealm (runtime-gated)**: Proposal feature support for test262 compatibility, enabled via `JSRuntimeOptions.setShadowRealmEnabled(true)`
-- **Enhanced Module System**: Complete ES6 module implementation with dynamic import()
+- **Module System**: ES6 modules with dynamic `import()` — see the limitation below
 - **Microtask Queue**: Full ES2020-compliant microtask infrastructure
+- **Internationalization (Intl)**: `Collator`, `DateTimeFormat`, `DisplayNames`, `DurationFormat`,
+  `ListFormat`, `Locale`, `NumberFormat`, `PluralRules`, `RelativeTimeFormat`, `Segmenter`
+- **Temporal (runtime-gated)**: enabled via `JSRuntimeOptions.setTemporalEnabled(true)`
+- **Top-level await**: `await` at module scope
 
-### Not Yet Implemented
+### Known limitations
 
-The following QuickJS features are planned but not yet implemented:
-
-- **Internationalization (Intl)**: i18n support for dates, numbers, and strings
-- **Top-level await**: Module-level await expressions
+- **Module source is transformed textually, not parsed.** Module linking runs over a scanner rather
+  than the compiler's own AST, so module syntax that depends on real grammar can be mis-classified.
+  The cases known to be wrong are pinned as `testKnownLimitation*` in
+  `JSModuleSourceTransformTest`, which is the authoritative list. Routing modules through the
+  lexer/parser/compiler is a dedicated milestone.
+- **Resource limits bound data blocks, not the heap.**
+  `JSRuntimeOptions.setMaxMemoryUsage(long)` counts every byte allocated for an `ArrayBuffer` or
+  `SharedArrayBuffer` and refuses an allocation past the ceiling with a catchable `RangeError`.
+  Objects, arrays, strings and bytecode are ordinary Java allocations bounded by `-Xmx`.
+  `setMaxStackSize(long)` bounds the interpreter's call depth, not the JVM's own stack.
+- **`WeakMap`/`WeakSet` are ephemeron-correct but not enumerable**, as the specification requires;
+  a collection that dies while its keys live leaves entries to be pruned lazily.
 
 See [ASYNC_AWAIT_ENHANCEMENTS.md](docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md) for async/await implementation details.
 
@@ -34,6 +61,9 @@ See [ASYNC_AWAIT_ENHANCEMENTS.md](docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md) fo
 - **[Async/Await](docs/migration/ASYNC_AWAIT_ENHANCEMENTS.md)**: Async/await and iteration implementation
 
 ## Installation
+
+The snippets below use **0.1.1**, the latest release on Maven Central. The version in
+`build.gradle.kts` is the *next* version under development and is not published until it is tagged.
 
 ### Gradle (Kotlin DSL)
 
@@ -99,8 +129,10 @@ be one the wrapper's Gradle release understands: Gradle 9.4.1 accepts JDK 17 thr
 JDK the build aborts with a bare version number — upgrade the wrapper, or set `JAVA_HOME` to a
 supported release.
 
-Test JVM: `./gradlew test -PtestJavaVersion=21` runs the suite on JDK 21 instead of 17. CI uses this
-to exercise both LTS releases.
+Test JVM: `./gradlew test -PtestJavaVersion=21` runs the suite on JDK 21 instead of 17, and
+`-PtestJavaVersion=25` on JDK 25. Running the engine — not just launching Gradle — on each release
+matters, because their behaviour differs: JDK 25 withdrew the atomic access modes from byte-array
+view `VarHandle`s, which `Atomics` depends on.
 
 ## Architecture
 
@@ -116,7 +148,8 @@ Key technical features:
 - Proper SameValueZero equality for Map/Set
 - Complete iterator and async iterator protocols
 - Full prototype-based inheritance
-- Weak references using Java WeakHashMap
+- Ephemeron-correct `WeakMap`/`WeakSet`: entries live on the key, so a value cannot keep its own
+  key alive
 
 ## License
 

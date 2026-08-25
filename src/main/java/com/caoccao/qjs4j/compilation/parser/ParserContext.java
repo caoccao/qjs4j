@@ -129,6 +129,26 @@ final class ParserContext {
         this.nextToken = lexer.nextToken();
     }
 
+    /**
+     * Whether an expression is an {@code IdentifierReference}.
+     * <p>
+     * {@code this}, {@code new.target} and {@code import.meta} are parsed into {@link Identifier}
+     * nodes because they resolve like one, but grammatically they are a {@code PrimaryExpression}
+     * and a {@code MetaProperty}, not an {@code IdentifierReference}. Rules that are stated over
+     * {@code IdentifierReference} — the strict-mode {@code delete} early error, the
+     * {@code for}-{@code in}/{@code of} assignment target — must not catch them.
+     *
+     * @param expression the expression to classify
+     * @return true when the expression is a real identifier reference
+     */
+    static boolean isIdentifierReference(Expression expression) {
+        if (!(expression instanceof Identifier identifier)) {
+            return false;
+        }
+        String name = identifier.getName();
+        return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+    }
+
     void advance() {
         previousTokenLine = currentToken.line();
         previousTokenEndOffset = currentToken.offset() + currentToken.value().length();
@@ -341,9 +361,8 @@ final class ParserContext {
     }
 
     boolean isValidForInOfTarget(Expression expr) {
-        if (expr instanceof Identifier identifier) {
-            String name = identifier.getName();
-            return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+        if (expr instanceof Identifier) {
+            return isIdentifierReference(expr);
         }
         if (expr instanceof MemberExpression) {
             return true;

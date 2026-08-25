@@ -19,6 +19,9 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
+import com.caoccao.qjs4j.compilation.lexer.Lexer;
+import com.caoccao.qjs4j.compilation.lexer.Token;
+import com.caoccao.qjs4j.compilation.lexer.TokenType;
 import com.caoccao.qjs4j.exceptions.*;
 import com.caoccao.qjs4j.unicode.UnicodeData;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
@@ -97,7 +100,6 @@ public final class JSContext implements AutoCloseable {
     private final List<Throwable> microtaskFailures = new ArrayList<>();
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
-    private final Map<String, JSModule> moduleCache;
     private final String[] regExpLegacyCaptures;
     private final JSRuntime runtime;
     private final UnicodePropertyResolver unicodePropertyResolver;
@@ -171,10 +173,14 @@ public final class JSContext implements AutoCloseable {
         this.finalizationRegistries = new ArrayList<>();
         this.iteratorPrototypes = new HashMap<>();
         this.jsGlobalObject = new JSGlobalObject(this);
-        this.maxStackDepth = DEFAULT_MAX_STACK_DEPTH;
+        // Derived from the runtime's configured stack budget rather than hard-coded, so
+        // JSRuntimeOptions.setMaxStackSize is a limit the engine actually applies. The default
+        // budget divided by the per-frame cost reproduces the previous depth exactly.
+        this.maxStackDepth = runtime != null && runtime.getOptions() != null
+                ? runtime.getOptions().getMaxStackDepth()
+                : DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
         this.dynamicImportModuleCache = new HashMap<>();
-        this.moduleCache = new HashMap<>();
         this.pendingException = null;
         this.runtime = runtime;
         this.unicodePropertyResolver = new UnicodePropertyResolver();
@@ -198,6 +204,85 @@ public final class JSContext implements AutoCloseable {
 
         this.currentThis = jsGlobalObject.getGlobalObject();
         initializeGlobalObject();
+    }
+
+    /**
+     * The index of the last token of a module declaration whose extent is identifiable without
+     * parsing.
+     * <p>
+     * That is every {@code import} form, and the {@code export} forms that end at a module
+     * specifier or at the closing brace of an export clause. {@code export default …} and
+     * {@code export <declaration>} are not included: their extent is a declaration body, which is
+     * the parser's job, and the transformer's existing multi-line lookahead already handles them.
+     *
+     * @param tokens the token list
+     * @param start  the index of the {@code import} or {@code export} token
+     * @return the index of the declaration's last token, or -1 when it is not identifiable
+     */
+    private static int findModuleDeclarationEnd(List<Token> tokens, int start) {
+        boolean isExport = tokens.get(start).type() == TokenType.EXPORT;
+        int depth = 0;
+        int clauseEnd = -1;
+        for (int index = start + 1; index < tokens.size(); index++) {
+            Token token = tokens.get(index);
+            switch (token.type()) {
+                case LBRACE, LPAREN, LBRACKET -> depth++;
+                case RBRACE, RPAREN, RBRACKET -> {
+                    depth = Math.max(0, depth - 1);
+                    if (depth == 0 && token.type() == TokenType.RBRACE && clauseEnd < 0) {
+                        // The closing brace of an import/export clause: `{ a, b }`.
+                        clauseEnd = index;
+                    }
+                }
+                default -> {
+                }
+            }
+            if (depth != 0) {
+                continue;
+            }
+            if (token.type() == TokenType.STRING && isModuleSpecifierPosition(tokens, start, index)) {
+                // The module specifier. Anything after it is a with-clause or a semicolon.
+                return skipModuleDeclarationTail(tokens, index);
+            }
+            if (isExport && clauseEnd == index) {
+                // `export { a, b };` with no `from`: the clause closes the declaration unless a
+                // `from` follows, which the STRING branch above then picks up.
+                if (index + 1 < tokens.size() && tokens.get(index + 1).type() == TokenType.FROM) {
+                    continue;
+                }
+                return skipModuleDeclarationTail(tokens, index);
+            }
+            if (token.type() == TokenType.SEMICOLON) {
+                return index;
+            }
+            if (isExport && clauseEnd < 0 && index == start + 1
+                    && token.type() != TokenType.MUL && token.type() != TokenType.LBRACE) {
+                // `export default …` or `export <declaration>`: not identifiable here.
+                return -1;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * Whether a string token is the module specifier of a declaration rather than a module export
+     * name.
+     * <p>
+     * A specifier follows {@code from}, or the {@code import} keyword itself in
+     * {@code import 'spec'}. Treating any top-level string as the specifier broke
+     * {@code export * as "All" from './m.js'}, whose export name is also a top-level string
+     * (ES2022 arbitrary module namespace names).
+     *
+     * @param tokens the token list
+     * @param start  the index of the {@code import} or {@code export} token
+     * @param index  the index of the string token
+     * @return true when the string is the module specifier
+     */
+    private static boolean isModuleSpecifierPosition(List<Token> tokens, int start, int index) {
+        if (index == start + 1) {
+            return tokens.get(start).type() == TokenType.IMPORT;
+        }
+        return tokens.get(index - 1).type() == TokenType.FROM;
     }
 
     /**
@@ -240,6 +325,58 @@ public final class JSContext implements AutoCloseable {
             value = (value << 4) | digit;
         }
         return value;
+    }
+
+    /**
+     * Consume an optional {@code with}/{@code assert} attributes clause and an optional semicolon.
+     *
+     * @param tokens the token list
+     * @param index  the index of the last token consumed so far
+     * @return the index of the declaration's last token
+     */
+    private static int skipModuleDeclarationTail(List<Token> tokens, int index) {
+        int end = index;
+        int next = end + 1;
+        if (next < tokens.size()
+                && ("with".equals(tokens.get(next).value()) || "assert".equals(tokens.get(next).value()))
+                && next + 1 < tokens.size()
+                && tokens.get(next + 1).type() == TokenType.LBRACE) {
+            int depth = 0;
+            for (int scan = next + 1; scan < tokens.size(); scan++) {
+                if (tokens.get(scan).type() == TokenType.LBRACE) {
+                    depth++;
+                } else if (tokens.get(scan).type() == TokenType.RBRACE) {
+                    depth--;
+                    if (depth == 0) {
+                        end = scan;
+                        break;
+                    }
+                }
+            }
+            next = end + 1;
+        }
+        if (next < tokens.size() && tokens.get(next).type() == TokenType.SEMICOLON) {
+            end = next;
+        }
+        return end;
+    }
+
+    /**
+     * Tokenise module source into a list.
+     *
+     * @param sourceCode the source
+     * @return the tokens, without the terminating {@code EOF}
+     */
+    private static List<Token> tokenizeModuleSource(String sourceCode) {
+        Lexer lexer = new Lexer(sourceCode);
+        List<Token> tokens = new ArrayList<>();
+        while (true) {
+            Token token = lexer.nextToken();
+            if (token == null || token.type() == TokenType.EOF) {
+                return tokens;
+            }
+            tokens.add(token);
+        }
     }
 
     private void appendDynamicImportDefaultExportNameFixup(
@@ -612,7 +749,6 @@ public final class JSContext implements AutoCloseable {
     private void clearModuleCache() {
         dynamicImportModuleCache.clear();
         importMetaCache.clear();
-        moduleCache.clear();
     }
 
     /**
@@ -1633,6 +1769,13 @@ public final class JSContext implements AutoCloseable {
         requireOpen();
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
+        }
+        if (isModule && !isDirectEval) {
+            // Put every top-level import/export declaration on its own lines before anything
+            // downstream classifies module source by line. Only line breaks are inserted, decided
+            // by the lexer, so nothing else about the source changes — see
+            // normalizeModuleDeclarationLines.
+            code = normalizeModuleDeclarationLines(code);
         }
 
         // Check for recursion limit
@@ -3276,13 +3419,6 @@ public final class JSContext implements AutoCloseable {
         return microtaskQueue;
     }
 
-    /**
-     * Get a cached module.
-     */
-    public JSModule getModule(String specifier) {
-        return moduleCache.get(specifier);
-    }
-
     public JSValue getNativeConstructorNewTarget() {
         return nativeConstructorNewTarget;
     }
@@ -3433,11 +3569,17 @@ public final class JSContext implements AutoCloseable {
     }
 
     private boolean hasModuleExportSyntax(String code) {
-        return MODULE_EXPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find();
+        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
+        return scan == null
+                ? MODULE_EXPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
+                : scan.hasExportDeclaration();
     }
 
     private boolean hasModuleStaticImportSyntax(String code) {
-        return MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find();
+        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
+        return scan == null
+                ? MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
+                : scan.hasImportDeclaration();
     }
 
     private boolean hasModuleTopLevelAwaitSyntax(String code) {
@@ -3794,7 +3936,7 @@ public final class JSContext implements AutoCloseable {
                 // Handle type: 'text' import attribute
                 if ("text".equals(importType)) {
                     String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                    moduleRecord.setRawSource(sourceCode);
+                    moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
                     defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
                     moduleRecord.explicitExportNames().add("default");
                     moduleRecord.exportOrigins().put("default", resolvedSpecifier);
@@ -3818,7 +3960,7 @@ public final class JSContext implements AutoCloseable {
                     return moduleRecord.namespace();
                 }
                 String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource(sourceCode);
+                moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
                 if (resolvedSpecifier.endsWith(".json")) {
                     if (!"json".equals(importType)) {
                         throw new JSException(throwTypeError("Import attribute type must be 'json'"));
@@ -3984,7 +4126,7 @@ public final class JSContext implements AutoCloseable {
             // Handle type: 'text' import attribute
             if ("text".equals(importType)) {
                 String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource(sourceCode);
+                moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
                 defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
                 moduleRecord.explicitExportNames().add("default");
                 moduleRecord.exportOrigins().put("default", resolvedSpecifier);
@@ -4008,7 +4150,7 @@ public final class JSContext implements AutoCloseable {
                 return moduleRecord;
             }
             String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-            moduleRecord.setRawSource(sourceCode);
+            moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
             if (resolvedSpecifier.endsWith(".json")) {
                 if (!"json".equals(importType)) {
                     throw new JSException(throwTypeError("Import attribute type must be 'json'"));
@@ -4096,31 +4238,6 @@ public final class JSContext implements AutoCloseable {
             dynamicImportModuleCache.remove(moduleCacheKey);
             throw new JSException(throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
         }
-    }
-
-    /**
-     * Load and cache a JavaScript module.
-     *
-     * @param specifier Module specifier (file path or URL)
-     * @return The loaded module
-     * @throws JSModule.ModuleLinkingException    if module cannot be loaded or linked
-     * @throws JSModule.ModuleEvaluationException if module evaluation fails
-     */
-    public JSModule loadModule(String specifier) throws JSModule.ModuleLinkingException, JSModule.ModuleEvaluationException {
-        // Check cache first
-        JSModule cached = moduleCache.get(specifier);
-        return cached;
-
-        // In full implementation:
-        // 1. Resolve the module specifier to absolute path
-        // 2. Load the module source code
-        // 3. Parse and compile as module
-        // 4. Link imported/exported bindings
-        // 5. Execute module code (if not already executed)
-        // 6. Cache and return the module
-
-        // For now, return null to indicate module not found
-        // A full implementation would load from filesystem or URL
     }
 
     private String maskModuleComments(String sourceCode) {
@@ -4288,6 +4405,71 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    /**
+     * The zero-based indices of the lines that begin a top-level module declaration.
+     * <p>
+     * The line loop in {@link #parseDynamicImportModuleSource(JSDynamicImportModule)} used to
+     * decide this by string-matching {@code import }/{@code export } at the start of a masked line,
+     * and {@link #maskModuleComments(String)} blanks comments but leaves string and template
+     * contents verbatim — so a multi-line template containing a line that reads
+     * {@code export const fake = 1;} produced an export. Membership in this set is decided by the
+     * lexer instead, so text that merely looks like a declaration is not one.
+     *
+     * @param sourceCode module source that has already been normalised
+     * @return the line indices, or {@code null} when the source cannot be tokenised
+     */
+    private Set<Integer> moduleDeclarationLineIndices(String sourceCode) {
+        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
+        if (scan == null) {
+            return null;
+        }
+        Set<Integer> lineIndices = new HashSet<>();
+        int lineIndex = 0;
+        int offset = 0;
+        for (int declarationOffset : scan.declarationOffsets()) {
+            while (offset < declarationOffset && offset < sourceCode.length()) {
+                if (sourceCode.charAt(offset) == '\n') {
+                    lineIndex++;
+                }
+                offset++;
+            }
+            lineIndices.add(lineIndex);
+        }
+        return lineIndices;
+    }
+
+    /**
+     * Rewrite module source so that every top-level {@code import} and {@code export} declaration
+     * occupies whole lines.
+     * <p>
+     * The transformer that follows is line-oriented, and this is what makes that sound for the
+     * shapes it could not see before: {@code const t = 1; export const v = 15;} and
+     * {@code import { v } from './dep.mjs'; use(v);} are both valid modules whose declarations were
+     * invisible or unhoisted purely because of where the line breaks fell. Only line breaks are
+     * inserted — no token is moved, rewritten or dropped — so the only observable difference is that
+     * source positions after a break shift by a line.
+     *
+     * @param sourceCode the module source
+     * @return the source with declarations on their own lines
+     */
+    private String normalizeModuleDeclarationLines(String sourceCode) {
+        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
+        if (scan == null || scan.lineBreakOffsets().isEmpty()) {
+            return sourceCode;
+        }
+        StringBuilder normalized = new StringBuilder(sourceCode.length() + scan.lineBreakOffsets().size());
+        int copiedUpTo = 0;
+        for (int breakOffset : scan.lineBreakOffsets()) {
+            if (breakOffset <= copiedUpTo || breakOffset > sourceCode.length()) {
+                continue;
+            }
+            normalized.append(sourceCode, copiedUpTo, breakOffset).append('\n');
+            copiedUpTo = breakOffset;
+        }
+        normalized.append(sourceCode, copiedUpTo, sourceCode.length());
+        return normalized.toString();
+    }
+
     private String normalizeModuleSpecifier(String specifier) {
         if (specifier == null || specifier.isEmpty()) {
             return "";
@@ -4366,8 +4548,14 @@ public final class JSContext implements AutoCloseable {
      * @param moduleRecord the module whose raw source is to be transformed
      */
     private void parseDynamicImportModuleSource(JSDynamicImportModule moduleRecord) {
-        String sourceCode = moduleRecord.rawSource();
+        // Put every top-level declaration on its own lines before the line-oriented scan below
+        // runs, so which text it classifies is decided by the lexer rather than by where the
+        // author happened to break lines.
+        String sourceCode = normalizeModuleDeclarationLines(moduleRecord.rawSource());
         String scanSourceCode = maskModuleComments(sourceCode);
+        // Which lines really begin a declaration, decided by the lexer rather than by how a line
+        // reads. Null when the source did not tokenise, in which case the string match stands.
+        Set<Integer> moduleDeclarationLines = moduleDeclarationLineIndices(sourceCode);
         StringBuilder importPreambleBuilder = new StringBuilder();
         StringBuilder transformedSourceBuilder = new StringBuilder(sourceCode.length() + 128);
         List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedFunctionExportBindings = new ArrayList<>();
@@ -4388,7 +4576,9 @@ public final class JSContext implements AutoCloseable {
             String parseLine = scanLine.endsWith("\r") ? scanLine.substring(0, scanLine.length() - 1) : scanLine;
             String trimmedLine = parseLine.stripLeading();
             // Extract import lines to be placed before the IIFE wrapper
-            if (isStaticImportLine(trimmedLine)) {
+            boolean isDeclarationLine = moduleDeclarationLines == null
+                    || moduleDeclarationLines.contains(lineIndex);
+            if (isDeclarationLine && isStaticImportLine(trimmedLine)) {
                 StringBuilder importStatementBuilder = new StringBuilder(normalizedLine);
                 StringBuilder importStatementScanBuilder = new StringBuilder(parseLine);
                 while (!isCompleteStaticImportStatement(importStatementScanBuilder.toString())
@@ -4411,8 +4601,9 @@ public final class JSContext implements AutoCloseable {
                 collectImportBindings(importStatementForScan, importedBindingNames, importedBindings);
                 continue;
             }
-            if (!trimmedLine.startsWith("export ") && !trimmedLine.startsWith("export{")
-                    && !trimmedLine.startsWith("export*") && !trimmedLine.equals("export")) {
+            if (!isDeclarationLine
+                    || (!trimmedLine.startsWith("export ") && !trimmedLine.startsWith("export{")
+                    && !trimmedLine.startsWith("export*") && !trimmedLine.equals("export"))) {
                 transformedSourceBuilder.append(normalizedLine).append('\n');
                 continue;
             }
@@ -5139,10 +5330,6 @@ public final class JSContext implements AutoCloseable {
         iteratorPrototypes.put(tag, prototype);
     }
 
-    public void registerModule(String specifier, JSModule module) {
-        moduleCache.put(specifier, module);
-    }
-
     private void registerPendingDependent(JSDynamicImportModule moduleRecord) {
         String scanSource = maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
@@ -5523,6 +5710,90 @@ public final class JSContext implements AutoCloseable {
         for (String absentKey : evalOverlaySnapshot.absentKeys()) {
             globalObject.delete(PropertyKey.fromString(absentKey));
         }
+    }
+
+    /**
+     * Find the top-level {@code import} and {@code export} declarations in module source, by
+     * tokenising it.
+     * <p>
+     * The transformer downstream is line-oriented: it classifies a line by string-matching
+     * {@code import }/{@code export } at its start. That is only sound if a declaration really does
+     * start a line, and the engine's own lexer is the only thing that knows whether a given
+     * {@code export} is a declaration or three letters inside a template, and whether a {@code /}
+     * opens a regular expression or divides. Both questions used to be answered by
+     * {@link #maskModuleComments(String)}, a hand-written character scanner with no notion of
+     * regular expressions at all — so {@code /"/; export const v = 20;} desynchronised its quote
+     * state for the rest of the line, and {@code const t = 1; export const v = 15;} was not
+     * recognised as an export at all because the keyword was not first on its line.
+     * <p>
+     * This does not make module handling a parser: the declaration's <em>contents</em> are still
+     * read textually afterwards. What it fixes is which text that is.
+     *
+     * @param sourceCode the module source
+     * @return the scan, or {@code null} when the source cannot be tokenised, in which case callers
+     * fall back to the regular expressions
+     */
+    private ModuleDeclarationScan scanTopLevelModuleDeclarations(String sourceCode) {
+        if (sourceCode == null || sourceCode.isEmpty()) {
+            return new ModuleDeclarationScan(false, false, List.of(), List.of());
+        }
+        if (!sourceCode.contains("import") && !sourceCode.contains("export")) {
+            return new ModuleDeclarationScan(false, false, List.of(), List.of());
+        }
+        List<Token> tokens;
+        try {
+            tokens = tokenizeModuleSource(sourceCode);
+        } catch (RuntimeException e) {
+            // Source that does not tokenise is not this method's problem to report: the compiler
+            // will reject it with a proper SyntaxError. Fall back so nothing changes for it.
+            clearPendingException();
+            return null;
+        }
+
+        boolean hasImportDeclaration = false;
+        boolean hasExportDeclaration = false;
+        TreeSet<Integer> lineBreakOffsets = new TreeSet<>();
+        List<Integer> declarationOffsets = new ArrayList<>();
+        int depth = 0;
+        for (int index = 0; index < tokens.size(); index++) {
+            Token token = tokens.get(index);
+            switch (token.type()) {
+                case LBRACE, LPAREN, LBRACKET -> depth++;
+                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
+                default -> {
+                }
+            }
+            if (depth != 0) {
+                continue;
+            }
+            boolean isImportDeclaration = token.type() == TokenType.IMPORT
+                    && index + 1 < tokens.size()
+                    && tokens.get(index + 1).type() != TokenType.LPAREN
+                    && tokens.get(index + 1).type() != TokenType.DOT;
+            boolean isExportDeclaration = token.type() == TokenType.EXPORT;
+            if (!isImportDeclaration && !isExportDeclaration) {
+                continue;
+            }
+            hasImportDeclaration |= isImportDeclaration;
+            hasExportDeclaration |= isExportDeclaration;
+            declarationOffsets.add(token.offset());
+
+            // A declaration that shares its line with earlier code needs a break in front of it.
+            if (index > 0 && tokens.get(index - 1).line() == token.line()) {
+                lineBreakOffsets.add(token.offset());
+            }
+            // And one behind it, when its end is identifiable and code follows on the same line.
+            int endIndex = findModuleDeclarationEnd(tokens, index);
+            if (endIndex >= 0 && endIndex + 1 < tokens.size()
+                    && tokens.get(endIndex + 1).line() == tokens.get(endIndex).line()) {
+                lineBreakOffsets.add(tokens.get(endIndex + 1).offset());
+            }
+        }
+        return new ModuleDeclarationScan(
+                hasImportDeclaration,
+                hasExportDeclaration,
+                List.copyOf(lineBreakOffsets),
+                List.copyOf(declarationOffsets));
     }
 
     public void scheduleClassFieldEvalCall() {
@@ -6192,6 +6463,21 @@ public final class JSContext implements AutoCloseable {
     }
 
     private record ImportBinding(String sourceSpecifier, String importedName, boolean deferredImport) {
+    }
+
+    /**
+     * What a token scan found out about a source's top-level module declarations.
+     *
+     * @param hasImportDeclaration whether a static {@code import} declaration is present
+     * @param hasExportDeclaration whether an {@code export} declaration is present
+     * @param lineBreakOffsets     offsets at which a line break must be inserted so that every
+     *                             declaration occupies whole lines, ascending and distinct
+     */
+    private record ModuleDeclarationScan(
+            boolean hasImportDeclaration,
+            boolean hasExportDeclaration,
+            List<Integer> lineBreakOffsets,
+            List<Integer> declarationOffsets) {
     }
 
 

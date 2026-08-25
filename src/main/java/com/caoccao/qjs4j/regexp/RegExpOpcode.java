@@ -57,13 +57,13 @@ public enum RegExpOpcode {
     BACK_REFERENCE_I(33, 2),                // match back reference (case insensitive)
     BACKWARD_BACK_REFERENCE(34, 2),         // backward back reference
     BACKWARD_BACK_REFERENCE_I(35, 2),       // backward back reference (case insensitive)
-    RANGE(36, 3),                           // character range (variable length)
-    RANGE_I(37, 3),                         // character range (case insensitive)
+    RANGE(36, 5),                           // character range (variable length)
+    RANGE_I(37, 5),                         // character range (case insensitive)
     RANGE32(38, 3),                         // 32-bit character range (variable length)
     RANGE32_I(39, 3),                       // 32-bit character range (case insensitive)
     LOOKAHEAD(40, 5),                       // positive lookahead
-    NOT_RANGE(64, 3),                       // inverted character range (variable length)
-    NOT_RANGE_I(65, 3),                     // inverted character range (case insensitive)
+    NOT_RANGE(64, 5),                       // inverted character range (variable length)
+    NOT_RANGE_I(65, 5),                     // inverted character range (case insensitive)
     NEGATIVE_LOOKAHEAD(41, 5),              // negative lookahead
     SET_CHAR_POS(42, 2),                    // store character position to register
     CHECK_ADVANCE(43, 2),                   // check that register != character position

@@ -24,8 +24,24 @@ import java.util.Objects;
  * Runtime configuration options.
  */
 public class JSRuntimeOptions {
-    public static final long DEFAULT_MAX_MEMORY_USAGE = 64 * 1024 * 1024; // 64 MB default
-    public static final long DEFAULT_MAX_STACK_SIZE = 256 * 1024; // 256 KB default
+    /**
+     * The stack budget a single activation is charged.
+     * <p>
+     * A Java interpreter cannot measure its own stack the way QuickJS measures the C stack, so the
+     * budget is spent in units of one nominal frame. The constant is what turns
+     * {@link #setMaxStackSize(long)} into a call-depth limit; it is not a measurement of the JVM
+     * frames an activation actually occupies.
+     */
+    public static final long BYTES_PER_STACK_FRAME = 256;
+    /**
+     * Default ceiling on {@code ArrayBuffer}/{@code SharedArrayBuffer} data blocks: 64 MiB.
+     */
+    public static final long DEFAULT_MAX_MEMORY_USAGE = 64 * 1024 * 1024;
+    /**
+     * Default interpreter stack budget: 256 KiB, which at
+     * {@link #BYTES_PER_STACK_FRAME} is 1,024 nested activations.
+     */
+    public static final long DEFAULT_MAX_STACK_SIZE = 256 * 1024;
     /**
      * Default budget of regular expression backtracking steps for a single match attempt.
      * <p>
@@ -57,10 +73,36 @@ public class JSRuntimeOptions {
         return atomicsObject;
     }
 
+    /**
+     * The ceiling on {@code ArrayBuffer} and {@code SharedArrayBuffer} data blocks.
+     *
+     * @return the limit in bytes, or 0 for no limit
+     * @see #setMaxMemoryUsage(long)
+     */
     public long getMaxMemoryUsage() {
         return maxMemoryUsage;
     }
 
+    /**
+     * The call depth {@link #getMaxStackSize()} buys, as
+     * {@code maxStackSize / }{@link #BYTES_PER_STACK_FRAME}, clamped to at least one activation.
+     *
+     * @return the maximum number of nested activations
+     */
+    public int getMaxStackDepth() {
+        long depth = maxStackSize / BYTES_PER_STACK_FRAME;
+        if (depth < 1) {
+            return 1;
+        }
+        return depth > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) depth;
+    }
+
+    /**
+     * The interpreter stack budget.
+     *
+     * @return the budget in bytes
+     * @see #setMaxStackSize(long)
+     */
     public long getMaxStackSize() {
         return maxStackSize;
     }
@@ -87,13 +129,40 @@ public class JSRuntimeOptions {
         return this;
     }
 
+    /**
+     * Set the ceiling on {@code ArrayBuffer} and {@code SharedArrayBuffer} data blocks.
+     * <p>
+     * <strong>This bounds data blocks, not the heap.</strong> Every byte allocated for an
+     * {@code ArrayBuffer} or {@code SharedArrayBuffer} — and so for every typed array and
+     * {@code DataView} over one — is counted; exceeding the ceiling raises a catchable
+     * {@code RangeError} in guest code. Objects, arrays, strings and bytecode are ordinary Java
+     * allocations bounded by {@code -Xmx}. See {@link JSMemoryAccounting} for the full contract,
+     * and read the ceiling back through {@link JSRuntime#getMemoryAccounting()}.
+     * <p>
+     * The limit is fixed when a {@link JSRuntime} is constructed; changing it on an options object
+     * afterwards has no effect on runtimes already created from it.
+     *
+     * @param maxMemoryUsage the limit in bytes; 0 or negative for no limit
+     * @return this
+     */
     public JSRuntimeOptions setMaxMemoryUsage(long maxMemoryUsage) {
-        this.maxMemoryUsage = maxMemoryUsage;
+        this.maxMemoryUsage = Math.max(0L, maxMemoryUsage);
         return this;
     }
 
+    /**
+     * Set the interpreter stack budget.
+     * <p>
+     * The budget is spent in units of {@link #BYTES_PER_STACK_FRAME} per activation, so it fixes
+     * the maximum call depth: exceeding it raises {@code RangeError: Maximum call stack size
+     * exceeded}, which guest code can catch. It does not bound the JVM's own stack — deeply
+     * recursive engine-internal work is bounded by {@code -Xss}.
+     *
+     * @param maxStackSize the budget in bytes; values below one frame are treated as one frame
+     * @return this
+     */
     public JSRuntimeOptions setMaxStackSize(long maxStackSize) {
-        this.maxStackSize = maxStackSize;
+        this.maxStackSize = Math.max(0L, maxStackSize);
         return this;
     }
 

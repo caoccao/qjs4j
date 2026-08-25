@@ -249,7 +249,10 @@ public final class JSONObject {
                     }
                     try {
                         if (newElement instanceof JSUndefined) {
-                            obj.delete(PropertyKey.fromString(Long.toString(i)));
+                            // [[Delete]], not the delete operator: InternalizeJSONProperty ignores
+                            // a false result, and must not throw because the calling script
+                            // happens to be strict.
+                            obj.delete(PropertyKey.fromString(Long.toString(i)), false);
                         } else {
                             // Use CreateDataProperty (defineProperty), not [[Set]]
                             obj.defineProperty(PropertyKey.fromString(Long.toString(i)),
@@ -285,7 +288,7 @@ public final class JSONObject {
                     }
                     try {
                         if (newElement instanceof JSUndefined) {
-                            obj.delete(PropertyKey.fromString(prop));
+                            obj.delete(PropertyKey.fromString(prop), false);
                         } else {
                             // Use CreateDataProperty, not [[Set]]
                             obj.defineProperty(PropertyKey.fromString(prop),

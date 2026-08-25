@@ -115,15 +115,15 @@ public final class JSImportNamespaceObject extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         JSContext context = this.context;
         if (isExportProperty(key)) {
-            if (context.isStrictMode()) {
+            if (throwOnFailure) {
                 context.throwTypeError("Cannot delete property '" + key.toPropertyString() + "' of [object Module]");
             }
             return false;
         }
-        return super.delete(key);
+        return super.delete(key, throwOnFailure);
     }
 
     public void finalizeNamespace() {
@@ -240,7 +240,11 @@ public final class JSImportNamespaceObject extends JSObject {
         if (exportName == null || exportName.isEmpty()) {
             return;
         }
-        super.delete(PropertyKey.fromString(exportName));
+        // An engine-internal fixup — a name found to be ambiguous during linking is withdrawn
+        // from the namespace. It must bypass this class's own [[Delete]], which refuses export
+        // properties, so the two-argument form is used to keep the super call non-virtual, and it
+        // never throws because no script asked for it.
+        super.delete(PropertyKey.fromString(exportName), false);
         exportNames.remove(exportName);
     }
 

@@ -64,6 +64,17 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         this(context, byteLength, maxByteLength, true);
     }
 
+    /**
+     * Allocate a shared data block.
+     * <p>
+     * A growable {@code SharedArrayBuffer} allocates {@code maxByteLength} up front, unlike
+     * {@link JSArrayBuffer}, and deliberately so: the backing {@code byte[]} is handed to other
+     * agents — {@code Atomics} reaches it through {@code getBuffer().array()} — so it cannot be
+     * replaced on growth without those agents silently continuing to read a stale block. V8
+     * reserves address space and commits lazily; the JVM has no equivalent. The size is charged to
+     * the runtime's memory accounting instead, so declaring a large {@code maxByteLength} is
+     * refused by the configured limit rather than by the heap running out.
+     */
     private JSSharedArrayBuffer(JSContext context, int byteLength, int maxByteLength, boolean growable) {
         super(context);
         if (byteLength < 0) {
@@ -74,7 +85,15 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         }
         // Use heap buffer so backing byte[] is accessible for VarHandle atomics
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
-        this.buffer = ByteBuffer.allocate((maxByteLength + 3) & ~3);
+        int capacity = JSArrayBuffer.paddedCapacity(maxByteLength);
+        JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
+        if (!accounting.reserve(capacity)) {
+            throw new JSRangeErrorException(
+                    "Shared array buffer allocation failed: the runtime memory limit of "
+                            + accounting.getLimit() + " bytes would be exceeded");
+        }
+        accounting.registerReservation(this, capacity);
+        this.buffer = ByteBuffer.allocate(capacity);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.byteLength = byteLength;
         this.maxByteLength = maxByteLength;

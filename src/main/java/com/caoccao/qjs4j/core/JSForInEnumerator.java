@@ -16,10 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Enumerator for for-in loops.
@@ -37,7 +34,9 @@ public class JSForInEnumerator {
 
         // Collect all enumerable property keys
         if (rootObject != null) {
-            collectKeys(rootObject, new HashSet<>(), new HashSet<>());
+            // Identity-keyed on purpose: this guards against revisiting the same object, which is
+            // a question about references, not about property values.
+            collectKeys(rootObject, Collections.newSetFromMap(new IdentityHashMap<>()), new HashSet<>());
         }
     }
 

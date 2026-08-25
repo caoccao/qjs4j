@@ -80,7 +80,7 @@ public class Test262Reporter {
             sortedFailures.sort(Comparator.comparingInt(r -> r.getTestCase().getIndex()));
             System.out.println("\nFailed Tests:");
             for (TestResult failure : sortedFailures) {
-                System.out.printf("  ❌ %s%n", failure.getTestCase().getPath());
+                System.out.printf("  ❌ %s%n", failure.getTestCase());
                 if (failure.getMessage() != null) {
                     System.out.printf("     %s%n", failure.getMessage());
                 }
@@ -90,7 +90,7 @@ public class Test262Reporter {
         if (!timeouts.isEmpty()) {
             System.out.println("\nTimeout Tests:");
             for (TestResult timeout : timeouts) {
-                System.out.printf("  ⏱️  %s%n", timeout.getTestCase().getPath());
+                System.out.printf("  ⏱️  %s%n", timeout.getTestCase());
             }
         }
 
@@ -124,7 +124,7 @@ public class Test262Reporter {
                 System.out.println("Top " + topCount + " Slowest Tests:");
                 for (int i = 0; i < topCount; i++) {
                     Test262TestCase testCase = sortedByTime.get(i).getTestCase();
-                    System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase.getPath(), testCase.getTimeElapsed());
+                    System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase, testCase.getTimeElapsed());
                 }
             }
         }

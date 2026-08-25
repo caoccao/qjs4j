@@ -17,7 +17,9 @@
 package com.caoccao.qjs4j.exceptions;
 
 import com.caoccao.qjs4j.core.JSError;
+import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.PropertyKey;
 
 /**
  * VM exception for runtime errors.
@@ -36,8 +38,19 @@ public class JSVirtualMachineException extends RuntimeException {
         this.jsValue = null;
     }
 
+    /**
+     * Wrap a thrown {@link JSError}.
+     * <p>
+     * The headline is read from physical storage. {@code JSError.getMessage()} is an ordinary
+     * {@code get(PropertyKey.MESSAGE)}, so building this exception from it ran a guest accessor
+     * while an error was already in flight — the same defect the diagnostic path in
+     * {@link JSException} was hardened against, on the other of the two routes an uncaught error
+     * takes out of the interpreter.
+     *
+     * @param jsError the thrown error
+     */
     public JSVirtualMachineException(JSError jsError) {
-        super(jsError.getMessage().value());
+        super(diagnosticMessage(jsError));
         this.jsError = jsError;
         this.jsValue = jsError;
     }
@@ -58,6 +71,18 @@ public class JSVirtualMachineException extends RuntimeException {
         super(message, cause);
         this.jsError = null;
         this.jsValue = null;
+    }
+
+    /**
+     * Read an error's {@code message} without invoking an accessor or a Proxy trap.
+     *
+     * @param jsError the error
+     * @return the message, or the empty string when it is absent or is not a string
+     */
+    private static String diagnosticMessage(JSError jsError) {
+        return jsError.findDataPropertyForDiagnostics(PropertyKey.MESSAGE) instanceof JSString message
+                ? message.value()
+                : "";
     }
 
     @Override

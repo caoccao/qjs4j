@@ -364,15 +364,15 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         long index = key.toArrayIndex();
         if (index < 0) {
-            return super.delete(key);
+            return super.delete(key, throwOnFailure);
         }
 
         if (sealed || frozen) {
             PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
-            return super.delete(stringKey);
+            return super.delete(stringKey, throwOnFailure);
         }
 
         if (index <= Integer.MAX_VALUE) {
@@ -386,7 +386,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        return super.delete(key);
+        return super.delete(key, throwOnFailure);
     }
 
     /**
@@ -763,7 +763,9 @@ public final class JSArray extends JSObject {
         } else if (lastIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             sparseProperties.remove((int) lastIndex);
         } else {
-            super.delete(PropertyKey.fromString(Long.toString(lastIndex)));
+            // Two-argument form so the call stays non-virtual: the one-argument delete now
+            // routes back through the overridable [[Delete]], which would re-enter this class.
+            super.delete(PropertyKey.fromString(Long.toString(lastIndex)), context.isStrictMode());
         }
 
         setLength(lastIndex);
@@ -927,7 +929,7 @@ public final class JSArray extends JSObject {
             for (PropertyKey key : shape.getPropertyKeys()) {
                 long index = key.toArrayIndex();
                 if (index >= newLength && index >= 0) {
-                    super.delete(key);
+                    super.delete(key, context.isStrictMode());
                 }
             }
         }

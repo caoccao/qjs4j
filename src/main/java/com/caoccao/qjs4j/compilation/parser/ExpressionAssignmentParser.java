@@ -825,7 +825,7 @@ final class ExpressionAssignmentParser {
     void validateForInOfAssignmentTarget(Expression expression, int assignmentBoundaryOffset) {
         if (expression instanceof CallExpression) {
             if (parserContext.strictMode) {
-                throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
             }
             return;
         }

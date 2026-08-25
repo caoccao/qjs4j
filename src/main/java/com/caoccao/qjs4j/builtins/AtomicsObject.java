@@ -20,14 +20,13 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.VarHandle;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -42,12 +41,18 @@ import java.util.concurrent.locks.ReentrantLock;
  * Each JSRuntime owns an AtomicsObject instance so that wait/notify coordination
  * is scoped to the agent cluster (runtime), not shared globally across the JVM.
  */
-public final class AtomicsObject {
-    // VarHandles for lock-free per-element atomic operations on byte[] backing arrays.
-    private static final VarHandle BYTE_VH = MethodHandles.arrayElementVarHandle(byte[].class);
-    private static final VarHandle INT_VH = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle LONG_VH = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle SHORT_VH = MethodHandles.byteArrayViewVarHandle(short[].class, ByteOrder.LITTLE_ENDIAN);
+public final class AtomicsObject implements AutoCloseable {
+    /**
+     * In-flight {@code Atomics.waitAsync} operations, grouped by the runtime that started them, so
+     * closing a runtime can end its own waits and no others. The map holds runtimes weakly: a
+     * shared {@code AtomicsObject} outlives any one member of its agent cluster.
+     */
+    private final Map<JSRuntime, Set<AsyncWaitRegistration>> asyncWaits =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    // Atomic access to the backing byte[] goes through ByteArrayAtomics, which keeps the lock-free
+    // VarHandle path where the JDK offers it and falls back to a striped lock where it does not.
+    // Calling byteArrayViewVarHandle directly from here is what broke every 16-, 32- and 64-bit
+    // Atomics operation on JDK 25, where those view handles no longer support any atomic mode.
     // Shared thread pool for Atomics.waitAsync() — reuses threads instead of creating one per call.
     // Cached pool: idle threads are terminated after 60s, new threads created on demand.
     private final ExecutorService waitAsyncExecutor = Executors.newCachedThreadPool(r -> {
@@ -55,8 +60,18 @@ public final class AtomicsObject {
         t.setDaemon(true);
         return t;
     });
-    // Wait lists indexed by SharedArrayBuffer + index, scoped per runtime (agent cluster)
-    private final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
+    /**
+     * Wait lists, keyed by the identity of the data block and then by the byte offset within it.
+     * <p>
+     * The key used to be the string {@code System.identityHashCode(bytes) + ":" + offset}. Identity
+     * hash codes are not unique, so two live and unrelated {@code SharedArrayBuffer}s could share a
+     * wait list and {@code Atomics.notify} on one would wake — and count — waiters on the other.
+     * The outer map compares the {@code byte[]} itself, which is identity because arrays do not
+     * override {@code equals}; it holds the array weakly so a collected buffer takes its wait lists
+     * with it.
+     */
+    private final Map<byte[], Map<Integer, WaitList>> waitLists =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private static JSValue createBigUint64(long value) {
         BigInteger unsigned = value >= 0
@@ -100,10 +115,15 @@ public final class AtomicsObject {
         return Math.max(timeoutNumber, 0.0);
     }
 
-    private static String getWaitKey(JSTypedArray typedArray, int index) {
-        byte[] sharedBytes = requireAtomicArray(typedArray);
-        int absoluteByteOffset = typedArray.getByteOffset() + (index * typedArray.getBytesPerElement());
-        return System.identityHashCode(sharedBytes) + ":" + absoluteByteOffset;
+    /**
+     * The byte offset of an element within its data block.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the absolute byte offset
+     */
+    private static int getWaitOffset(JSTypedArray typedArray, int index) {
+        return typedArray.getByteOffset() + (index * typedArray.getBytesPerElement());
     }
 
     private static byte[] requireAtomicArray(JSTypedArray typedArray) {
@@ -114,24 +134,18 @@ public final class AtomicsObject {
         return byteBuffer.array();
     }
 
-    // --- CAS-loop helpers for short (Int16/Uint16) atomics ---
-    // byteArrayViewVarHandle(short[].class) only supports getVolatile/setVolatile.
-    // RMW operations use a CAS loop on the enclosing aligned int word via INT_VH.
-    // Backing arrays are padded to a multiple of 4 bytes to ensure the enclosing int
-    // is always in bounds.
-
     private static short shortCompareAndExchange(byte[] arr, int byteOffset, short expected, short replacement) {
         int intOffset = byteOffset & ~3;
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             if (oldShort != expected) {
                 return oldShort;
             }
             int newInt = (oldInt & ~mask) | ((replacement & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
@@ -142,11 +156,11 @@ public final class AtomicsObject {
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort + delta);
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
@@ -157,11 +171,11 @@ public final class AtomicsObject {
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort & operand);
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
@@ -172,11 +186,11 @@ public final class AtomicsObject {
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort | operand);
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
@@ -187,11 +201,11 @@ public final class AtomicsObject {
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             short newShort = (short) (oldShort ^ operand);
             int newInt = (oldInt & ~mask) | ((newShort & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
@@ -202,14 +216,20 @@ public final class AtomicsObject {
         int shift = (byteOffset & 2) << 3;
         int mask = 0xFFFF << shift;
         while (true) {
-            int oldInt = (int) INT_VH.getVolatile(arr, intOffset);
+            int oldInt = ByteArrayAtomics.getVolatileInt(arr, intOffset);
             short oldShort = (short) ((oldInt >>> shift) & 0xFFFF);
             int newInt = (oldInt & ~mask) | ((newValue & 0xFFFF) << shift);
-            if ((int) INT_VH.compareAndExchange(arr, intOffset, oldInt, newInt) == oldInt) {
+            if (ByteArrayAtomics.compareAndExchangeInt(arr, intOffset, oldInt, newInt) == oldInt) {
                 return oldShort;
             }
         }
     }
+
+    // --- CAS-loop helpers for short (Int16/Uint16) atomics ---
+    // byteArrayViewVarHandle(short[].class) only supports getVolatile/setVolatile.
+    // RMW operations use a CAS loop on the enclosing aligned int word.
+    // Backing arrays are padded to a multiple of 4 bytes to ensure the enclosing int
+    // is always in bounds.
 
     /**
      * Atomics.add(typedArray, index, value)
@@ -236,12 +256,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -256,22 +276,22 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -304,12 +324,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseAnd(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseAndByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseAnd(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseAndByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -324,28 +344,80 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseAndInt(arr, byteOffset, value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseAndInt(arr, byteOffset, value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseAndLong(arr, byteOffset, value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseAnd(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseAndLong(arr, byteOffset, value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
             return context.throwError(e);
         }
         return context.throwTypeError("Atomics.and invalid typed array");
+    }
+
+    /**
+     * End every {@code Atomics.waitAsync} a runtime started, without touching any other runtime's.
+     * <p>
+     * Called from {@link JSRuntime#close()}. A cancelled wait settles as {@code "timed-out"} if its
+     * promise is still worth settling, and is dropped otherwise, so an infinite wait no longer
+     * pins a daemon thread, a promise and a closed context for the life of the process.
+     *
+     * @param runtime the closing runtime
+     * @return how many waits were cancelled
+     */
+    public int cancelAsyncWaits(JSRuntime runtime) {
+        Set<AsyncWaitRegistration> registrations = asyncWaits.remove(runtime);
+        if (registrations == null) {
+            return 0;
+        }
+        List<AsyncWaitRegistration> snapshot;
+        synchronized (registrations) {
+            snapshot = new ArrayList<>(registrations);
+        }
+        for (AsyncWaitRegistration registration : snapshot) {
+            registration.cancel();
+        }
+        return snapshot.size();
+    }
+
+    /**
+     * Release this object's own resources: cancel every wait it is holding and stop its executor.
+     * <p>
+     * Deliberately <em>not</em> called by {@link JSRuntime#close()}, which cancels only its own
+     * waits: an {@code AtomicsObject} can be shared by a whole agent cluster through
+     * {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)}, so the first runtime to close is
+     * not entitled to shut it down. An embedder that owns one exclusively calls this.
+     */
+    @Override
+    public void close() {
+        List<Set<AsyncWaitRegistration>> allRegistrations;
+        synchronized (asyncWaits) {
+            allRegistrations = new ArrayList<>(asyncWaits.values());
+            asyncWaits.clear();
+        }
+        for (Set<AsyncWaitRegistration> registrations : allRegistrations) {
+            List<AsyncWaitRegistration> snapshot;
+            synchronized (registrations) {
+                snapshot = new ArrayList<>(registrations);
+            }
+            for (AsyncWaitRegistration registration : snapshot) {
+                registration.cancel();
+            }
+        }
+        waitAsyncExecutor.shutdownNow();
     }
 
     /**
@@ -374,13 +446,13 @@ public final class AtomicsObject {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.compareAndExchange(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
+                byte oldValue = ByteArrayAtomics.compareAndExchangeByte(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.compareAndExchange(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
+                byte oldValue = ByteArrayAtomics.compareAndExchangeByte(arr, byteOffset, (byte) expectedValue, (byte) replacementValue);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
@@ -398,25 +470,25 @@ public final class AtomicsObject {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                int oldValue = ByteArrayAtomics.compareAndExchangeInt(arr, byteOffset, expectedValue, replacementValue);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int replacementValue = JSTypeConversions.toInt32(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                int oldValue = ByteArrayAtomics.compareAndExchangeInt(arr, byteOffset, expectedValue, replacementValue);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                long oldValue = ByteArrayAtomics.compareAndExchangeLong(arr, byteOffset, expectedValue, replacementValue);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 long replacementValue = JSTypeConversions.toBigInt64(context, args[3]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.compareAndExchange(arr, byteOffset, expectedValue, replacementValue);
+                long oldValue = ByteArrayAtomics.compareAndExchangeLong(arr, byteOffset, expectedValue, replacementValue);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -450,12 +522,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndSet(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndSetByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndSet(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndSetByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -470,28 +542,56 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndSet(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndSetInt(arr, byteOffset, value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndSet(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndSetInt(arr, byteOffset, value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndSet(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndSetLong(arr, byteOffset, value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndSet(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndSetLong(arr, byteOffset, value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
             return context.throwError(e);
         }
         return context.throwTypeError("Atomics.exchange invalid typed array");
+    }
+
+    /**
+     * The wait list for one location, or {@code null} when nobody has ever waited there.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the wait list, or {@code null}
+     */
+    private WaitList findWaitList(JSTypedArray typedArray, int index) {
+        Map<Integer, WaitList> byOffset = waitLists.get(requireAtomicArray(typedArray));
+        return byOffset == null ? null : byOffset.get(getWaitOffset(typedArray, index));
+    }
+
+    /**
+     * How many {@code Atomics.waitAsync} operations a runtime still has in flight.
+     *
+     * @param runtime the runtime
+     * @return the count
+     */
+    public int getPendingAsyncWaitCount(JSRuntime runtime) {
+        Set<AsyncWaitRegistration> registrations = asyncWaits.get(runtime);
+        if (registrations == null) {
+            return 0;
+        }
+        synchronized (registrations) {
+            return registrations.size();
+        }
     }
 
     /**
@@ -540,28 +640,28 @@ public final class AtomicsObject {
             byte[] arr = requireAtomicArray(typedArray);
             if (typedArray instanceof JSInt8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                return JSNumber.of((byte) BYTE_VH.getVolatile(arr, byteOffset));
+                return JSNumber.of(ByteArrayAtomics.getVolatileByte(arr, byteOffset));
             } else if (typedArray instanceof JSUint8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
-                return JSNumber.of(Byte.toUnsignedInt((byte) BYTE_VH.getVolatile(arr, byteOffset)));
+                return JSNumber.of(Byte.toUnsignedInt(ByteArrayAtomics.getVolatileByte(arr, byteOffset)));
             } else if (typedArray instanceof JSInt16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                return JSNumber.of((short) SHORT_VH.getVolatile(arr, byteOffset));
+                return JSNumber.of(ByteArrayAtomics.getVolatileShort(arr, byteOffset));
             } else if (typedArray instanceof JSUint16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
-                return JSNumber.of(Short.toUnsignedInt((short) SHORT_VH.getVolatile(arr, byteOffset)));
+                return JSNumber.of(Short.toUnsignedInt(ByteArrayAtomics.getVolatileShort(arr, byteOffset)));
             } else if (typedArray instanceof JSInt32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                return JSNumber.of((int) INT_VH.getVolatile(arr, byteOffset));
+                return JSNumber.of(ByteArrayAtomics.getVolatileInt(arr, byteOffset));
             } else if (typedArray instanceof JSUint32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                return JSNumber.of(Integer.toUnsignedLong((int) INT_VH.getVolatile(arr, byteOffset)));
+                return JSNumber.of(Integer.toUnsignedLong(ByteArrayAtomics.getVolatileInt(arr, byteOffset)));
             } else if (typedArray instanceof JSBigInt64Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                return new JSBigInt(BigInteger.valueOf((long) LONG_VH.getVolatile(arr, byteOffset)));
+                return new JSBigInt(BigInteger.valueOf(ByteArrayAtomics.getVolatileLong(arr, byteOffset)));
             } else if (typedArray instanceof JSBigUint64Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                return createBigUint64((long) LONG_VH.getVolatile(arr, byteOffset));
+                return createBigUint64(ByteArrayAtomics.getVolatileLong(arr, byteOffset));
             }
         } catch (JSErrorException e) {
             return context.throwError(e);
@@ -604,8 +704,7 @@ public final class AtomicsObject {
                     ? Integer.MAX_VALUE
                     : (int) Math.min(clampedCount, Integer.MAX_VALUE);
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.get(waitKey);
+            WaitList waitList = findWaitList(typedArray, index);
             if (waitList == null) {
                 return JSNumber.of(0);
             }
@@ -641,12 +740,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseOr(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseOrByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseOr(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseOrByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -661,22 +760,22 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseOr(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseOrInt(arr, byteOffset, value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseOr(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseOrInt(arr, byteOffset, value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseOr(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseOrLong(arr, byteOffset, value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseOr(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseOrLong(arr, byteOffset, value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -711,6 +810,23 @@ public final class AtomicsObject {
     }
 
     /**
+     * Drop a wait list once its last waiter has gone.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @param waitList   the wait list to drop
+     */
+    private void releaseWaitList(JSTypedArray typedArray, int index, WaitList waitList) {
+        if (!waitList.isEmpty()) {
+            return;
+        }
+        Map<Integer, WaitList> byOffset = waitLists.get(requireAtomicArray(typedArray));
+        if (byOffset != null) {
+            byOffset.remove(getWaitOffset(typedArray, index), waitList);
+        }
+    }
+
+    /**
      * Atomics.store(typedArray, index, value)
      * ES2017 24.4.11
      * Atomically stores value at index and returns the value.
@@ -735,7 +851,7 @@ public final class AtomicsObject {
                 JSBigInt returnValue = JSTypeConversions.toBigInt(context, args[2]);
                 long storedValue = returnValue.value().longValue();
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                LONG_VH.setVolatile(arr, byteOffset, storedValue);
+                ByteArrayAtomics.setVolatileLong(arr, byteOffset, storedValue);
                 return returnValue;
             }
             double returnValue = JSTypeConversions.toInteger(context, args[2]);
@@ -746,30 +862,30 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
                 byte storedValue = (byte) int32Value;
-                BYTE_VH.setVolatile(arr, byteOffset, storedValue);
+                ByteArrayAtomics.setVolatileByte(arr, byteOffset, storedValue);
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int byteOffset = typedArray.getByteOffset() + index;
                 byte storedValue = (byte) int32Value;
-                BYTE_VH.setVolatile(arr, byteOffset, storedValue);
+                ByteArrayAtomics.setVolatileByte(arr, byteOffset, storedValue);
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
                 short storedValue = (short) int32Value;
-                SHORT_VH.setVolatile(arr, byteOffset, storedValue);
+                ByteArrayAtomics.setVolatileShort(arr, byteOffset, storedValue);
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint16Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Short.BYTES);
                 short storedValue = (short) int32Value;
-                SHORT_VH.setVolatile(arr, byteOffset, storedValue);
+                ByteArrayAtomics.setVolatileShort(arr, byteOffset, storedValue);
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSInt32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                INT_VH.setVolatile(arr, byteOffset, int32Value);
+                ByteArrayAtomics.setVolatileInt(arr, byteOffset, int32Value);
                 return JSNumber.of(returnValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                INT_VH.setVolatile(arr, byteOffset, int32Value);
+                ByteArrayAtomics.setVolatileInt(arr, byteOffset, int32Value);
                 return JSNumber.of(returnValue);
             }
         } catch (JSErrorException e) {
@@ -802,12 +918,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) -value);
+                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) -value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndAdd(arr, byteOffset, (byte) -value);
+                byte oldValue = ByteArrayAtomics.getAndAddByte(arr, byteOffset, (byte) -value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -822,22 +938,22 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, -value);
+                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, -value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndAdd(arr, byteOffset, -value);
+                int oldValue = ByteArrayAtomics.getAndAddInt(arr, byteOffset, -value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, -value);
+                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, -value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndAdd(arr, byteOffset, -value);
+                long oldValue = ByteArrayAtomics.getAndAddLong(arr, byteOffset, -value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -880,7 +996,7 @@ public final class AtomicsObject {
                     return JSUndefined.INSTANCE;
                 }
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int currentValue = (int) INT_VH.getVolatile(arr, byteOffset);
+                int currentValue = ByteArrayAtomics.getVolatileInt(arr, byteOffset);
                 if (currentValue != expectedValue) {
                     return new JSString("not-equal");
                 }
@@ -890,7 +1006,7 @@ public final class AtomicsObject {
                     return JSUndefined.INSTANCE;
                 }
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long currentValue = (long) LONG_VH.getVolatile(arr, byteOffset);
+                long currentValue = ByteArrayAtomics.getVolatileLong(arr, byteOffset);
                 if (currentValue != expectedValue) {
                     return new JSString("not-equal");
                 }
@@ -907,12 +1023,17 @@ public final class AtomicsObject {
                 return new JSString("timed-out");
             }
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
+            WaitList waitList = waitListFor(typedArray, index);
             long timeout = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            String result = waitList.await(timeout);
+            WaitList.Waiter waiter = waitList.register();
+            String result;
+            try {
+                result = waitList.await(waiter, timeout);
+            } finally {
+                releaseWaitList(typedArray, index, waitList);
+            }
             return new JSString(result);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -953,14 +1074,14 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt32Array) {
                 int expectedValue = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int currentValue = (int) INT_VH.getVolatile(arr, byteOffset);
+                int currentValue = ByteArrayAtomics.getVolatileInt(arr, byteOffset);
                 if (currentValue != expectedValue) {
                     return createWaitAsyncSyncResult(context, "not-equal");
                 }
             } else {
                 long expectedValue = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long currentValue = (long) LONG_VH.getVolatile(arr, byteOffset);
+                long currentValue = ByteArrayAtomics.getVolatileLong(arr, byteOffset);
                 if (currentValue != expectedValue) {
                     return createWaitAsyncSyncResult(context, "not-equal");
                 }
@@ -975,8 +1096,7 @@ public final class AtomicsObject {
                 return createWaitAsyncSyncResult(context, "timed-out");
             }
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
+            WaitList waitList = waitListFor(typedArray, index);
             JSPromise promise = context.createJSPromise();
             JSObject result = context.createJSObject();
             result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
@@ -984,25 +1104,53 @@ public final class AtomicsObject {
             long timeoutMillis = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            waitList.registerWaiter();
+            WaitList.Waiter waiter = waitList.register();
+            JSRuntime owningRuntime = context.getRuntime();
+            AsyncWaitRegistration registration = new AsyncWaitRegistration(waitList, waiter);
+            Set<AsyncWaitRegistration> registrations = asyncWaits.computeIfAbsent(
+                    owningRuntime, key -> Collections.synchronizedSet(new LinkedHashSet<>()));
+            registrations.add(registration);
             try {
                 waitAsyncExecutor.execute(() -> {
+                    String waitResult;
                     try {
-                        String waitResult = waitList.awaitRegisteredWaiter(timeoutMillis);
-                        promise.fulfill(new JSString(waitResult));
+                        waitResult = waitList.await(waiter, timeoutMillis);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        promise.fulfill(new JSString("timed-out"));
+                        waitResult = "timed-out";
+                    } finally {
+                        registrations.remove(registration);
+                        releaseWaitList(typedArray, index, waitList);
+                    }
+                    // A wait cancelled because its runtime closed must not touch that runtime's
+                    // promise: the context it belongs to is gone.
+                    if (!registration.isCancelled()) {
+                        promise.fulfill(new JSString(waitResult));
                     }
                 });
             } catch (RejectedExecutionException e) {
-                waitList.cancelRegisteredWaiter();
+                registrations.remove(registration);
+                waitList.cancel(waiter);
+                releaseWaitList(typedArray, index, waitList);
                 promise.fulfill(new JSString("timed-out"));
             }
             return result;
         } catch (JSErrorException e) {
             return context.throwError(e);
         }
+    }
+
+    /**
+     * The wait list for one location, creating it if needed.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the wait list
+     */
+    private WaitList waitListFor(JSTypedArray typedArray, int index) {
+        byte[] block = requireAtomicArray(typedArray);
+        Map<Integer, WaitList> byOffset = waitLists.computeIfAbsent(block, key -> new ConcurrentHashMap<>());
+        return byOffset.computeIfAbsent(getWaitOffset(typedArray, index), key -> new WaitList());
     }
 
     /**
@@ -1030,12 +1178,12 @@ public final class AtomicsObject {
             if (typedArray instanceof JSInt8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseXor(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseXorByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint8Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + index;
-                byte oldValue = (byte) BYTE_VH.getAndBitwiseXor(arr, byteOffset, (byte) value);
+                byte oldValue = ByteArrayAtomics.getAndBitwiseXorByte(arr, byteOffset, (byte) value);
                 return JSNumber.of(Byte.toUnsignedInt(oldValue));
             } else if (typedArray instanceof JSInt16Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
@@ -1050,22 +1198,22 @@ public final class AtomicsObject {
             } else if (typedArray instanceof JSInt32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseXor(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseXorInt(arr, byteOffset, value);
                 return JSNumber.of(oldValue);
             } else if (typedArray instanceof JSUint32Array) {
                 int value = JSTypeConversions.toInt32(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Integer.BYTES);
-                int oldValue = (int) INT_VH.getAndBitwiseXor(arr, byteOffset, value);
+                int oldValue = ByteArrayAtomics.getAndBitwiseXorInt(arr, byteOffset, value);
                 return JSNumber.of(Integer.toUnsignedLong(oldValue));
             } else if (typedArray instanceof JSBigInt64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseXor(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseXorLong(arr, byteOffset, value);
                 return new JSBigInt(BigInteger.valueOf(oldValue));
             } else if (typedArray instanceof JSBigUint64Array) {
                 long value = JSTypeConversions.toBigInt64(context, args[2]);
                 int byteOffset = typedArray.getByteOffset() + (index * Long.BYTES);
-                long oldValue = (long) LONG_VH.getAndBitwiseXor(arr, byteOffset, value);
+                long oldValue = ByteArrayAtomics.getAndBitwiseXorLong(arr, byteOffset, value);
                 return createBigUint64(oldValue);
             }
         } catch (JSErrorException e) {
@@ -1075,103 +1223,169 @@ public final class AtomicsObject {
     }
 
     /**
-     * WaitList manages threads waiting on specific SharedArrayBuffer locations.
-     * This is used by Atomics.wait() and Atomics.notify().
+     * An {@code Atomics.waitAsync} in flight, owned by the runtime whose script started it.
+     * <p>
+     * Registration is what lets {@link #cancelAsyncWaits(JSRuntime)} end an unbounded wait when its
+     * runtime closes. Without it, {@code Atomics.waitAsync(i, 0, 0)} with no timeout held a daemon
+     * thread, a promise and that promise's context for the life of the JVM, and closing the runtime
+     * changed nothing.
      */
-    private static class WaitList {
+    private static final class AsyncWaitRegistration {
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final WaitList waitList;
+        private final WaitList.Waiter waiter;
+
+        private AsyncWaitRegistration(WaitList waitList, WaitList.Waiter waiter) {
+            this.waitList = waitList;
+            this.waiter = waiter;
+        }
+
+        private void cancel() {
+            if (cancelled.compareAndSet(false, true)) {
+                waitList.cancel(waiter);
+            }
+        }
+
+        private boolean isCancelled() {
+            return cancelled.get();
+        }
+    }
+
+    /**
+     * The agents waiting on one {@code SharedArrayBuffer} location.
+     * <p>
+     * Each wait is its own queued node with its own {@link Condition}, so {@code Atomics.notify}
+     * wakes exactly the waiters it selected. The previous design counted notifications in a shared
+     * {@code pendingSignals} field, which made a notification a token any waiter could spend: after
+     * {@code notifyWaiters} signalled an existing waiter and released the lock, a waiter that
+     * arrived in between could take the lock first, see the token, consume it and return
+     * {@code "ok"} — leaving the agent the notification was actually meant for still blocked.
+     */
+    private static final class WaitList {
         private final Lock lock = new ReentrantLock();
-        private final Condition condition = lock.newCondition();
-        private int pendingSignals = 0;
-        private int waitingCount = 0;
+        private final List<Waiter> waiters = new ArrayList<>();
 
-        public String await(long timeoutMs) throws InterruptedException {
-            return await(timeoutMs, null);
-        }
-
-        public String await(long timeoutMs, CountDownLatch registrationLatch) throws InterruptedException {
+        /**
+         * Block on a node until it is notified, cancelled, or the timeout expires.
+         *
+         * @param waiter    the node from {@link #register()}
+         * @param timeoutMs the timeout, or a negative value to wait forever
+         * @return {@code "ok"} or {@code "timed-out"}
+         * @throws InterruptedException if the waiting thread is interrupted
+         */
+        String await(Waiter waiter, long timeoutMs) throws InterruptedException {
             lock.lock();
-            try {
-                waitingCount++;
-                if (registrationLatch != null) {
-                    registrationLatch.countDown();
-                }
-                return awaitRegisteredWaiterInternal(timeoutMs);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        public String awaitRegisteredWaiter(long timeoutMs) throws InterruptedException {
-            lock.lock();
-            try {
-                return awaitRegisteredWaiterInternal(timeoutMs);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private String awaitRegisteredWaiterInternal(long timeoutMs) throws InterruptedException {
             try {
                 if (timeoutMs < 0) {
-                    while (pendingSignals == 0) {
-                        condition.await();
+                    while (waiter.state == Waiter.State.WAITING) {
+                        waiter.condition.await();
                     }
-                    pendingSignals--;
-                    return "ok";
-                }
-
-                long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
-                while (pendingSignals == 0) {
-                    if (remainingNanos <= 0) {
-                        return "timed-out";
+                } else {
+                    long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+                    while (waiter.state == Waiter.State.WAITING) {
+                        if (remainingNanos <= 0) {
+                            break;
+                        }
+                        remainingNanos = waiter.condition.awaitNanos(remainingNanos);
                     }
-                    remainingNanos = condition.awaitNanos(remainingNanos);
                 }
-                pendingSignals--;
-                return "ok";
+                return waiter.state == Waiter.State.NOTIFIED ? "ok" : "timed-out";
             } finally {
-                waitingCount--;
-                if (pendingSignals > waitingCount) {
-                    pendingSignals = waitingCount;
-                }
+                waiters.remove(waiter);
+                lock.unlock();
             }
         }
 
-        public void cancelRegisteredWaiter() {
+        /**
+         * Wake a node without notifying it, so its wait ends as a timeout. Used when the owning
+         * runtime closes.
+         *
+         * @param waiter the node to cancel
+         */
+        void cancel(Waiter waiter) {
             lock.lock();
             try {
-                if (waitingCount > 0) {
-                    waitingCount--;
-                    if (pendingSignals > waitingCount) {
-                        pendingSignals = waitingCount;
-                    }
+                if (waiter.state == Waiter.State.WAITING) {
+                    waiter.state = Waiter.State.CANCELLED;
+                    waiter.condition.signal();
                 }
+                waiters.remove(waiter);
             } finally {
                 lock.unlock();
             }
         }
 
-        public int notifyWaiters(int count) {
+        /**
+         * Whether nobody is waiting here any more, so the entry can be dropped.
+         *
+         * @return true when the queue is empty
+         */
+        boolean isEmpty() {
             lock.lock();
             try {
-                int availableToSignal = Math.max(waitingCount - pendingSignals, 0);
-                int toNotify = Math.min(Math.max(count, 0), availableToSignal);
-                pendingSignals += toNotify;
-                for (int i = 0; i < toNotify; i++) {
-                    condition.signal();
-                }
-                return toNotify;
+                return waiters.isEmpty();
             } finally {
                 lock.unlock();
             }
         }
 
-        public void registerWaiter() {
+        /**
+         * Wake the given number of waiters, oldest first.
+         *
+         * @param count how many to wake
+         * @return how many were woken
+         */
+        int notifyWaiters(int count) {
             lock.lock();
             try {
-                waitingCount++;
+                int notified = 0;
+                for (Waiter waiter : waiters) {
+                    if (notified >= count) {
+                        break;
+                    }
+                    if (waiter.state == Waiter.State.WAITING) {
+                        waiter.state = Waiter.State.NOTIFIED;
+                        waiter.condition.signal();
+                        notified++;
+                    }
+                }
+                return notified;
             } finally {
                 lock.unlock();
+            }
+        }
+
+        /**
+         * Join the queue.
+         *
+         * @return the caller's node
+         */
+        Waiter register() {
+            lock.lock();
+            try {
+                Waiter waiter = new Waiter(lock.newCondition());
+                waiters.add(waiter);
+                return waiter;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        /**
+         * One agent's place in the queue.
+         */
+        private static final class Waiter {
+            private final Condition condition;
+            private State state = State.WAITING;
+
+            private Waiter(Condition condition) {
+                this.condition = condition;
+            }
+
+            private enum State {
+                WAITING,
+                NOTIFIED,
+                CANCELLED
             }
         }
     }

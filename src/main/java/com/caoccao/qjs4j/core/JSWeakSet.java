@@ -18,27 +18,22 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.WeakHashMap;
-
 /**
  * Represents a JavaScript WeakSet object.
  * Values must be objects and are weakly referenced.
  * WeakSets are not enumerable.
+ * <p>
+ * Membership lives on the member, in its {@link JSWeakEntryTable}, and names this set by identity —
+ * see {@link JSWeakMap} and {@link JSWeakEntryTable}.
  */
 public final class JSWeakSet extends JSObject {
     public static final String NAME = "WeakSet";
-    private final Set<JSObject> objectData;
-    private final Set<JSSymbol> symbolData;
 
     /**
      * Create an empty WeakSet.
      */
     public JSWeakSet(JSContext context) {
         super(context);
-        this.objectData = Collections.newSetFromMap(new WeakHashMap<>());
-        this.symbolData = Collections.newSetFromMap(new WeakHashMap<>());
     }
 
     private static void closeIterator(JSContext context, JSValue iterator) {
@@ -130,6 +125,23 @@ public final class JSWeakSet extends JSObject {
         return weakSetObj;
     }
 
+    /**
+     * The entry table on a member, or {@code null} when it holds none and none is wanted.
+     *
+     * @param value  the member
+     * @param create true to create the table
+     * @return the table, or {@code null}
+     */
+    private static JSWeakEntryTable entriesOf(JSValue value, boolean create) {
+        if (value instanceof JSObject valueObject) {
+            return valueObject.weakEntries(create);
+        }
+        if (value instanceof JSSymbol symbolValue) {
+            return symbolValue.weakEntries(create);
+        }
+        return null;
+    }
+
     private static void initializePrototypeFromNewTarget(JSContext context, JSWeakSet weakSetObject) {
         JSValue newTarget = context.getNativeConstructorNewTarget();
         if (!(newTarget instanceof JSObject newTargetObject)) {
@@ -172,38 +184,26 @@ public final class JSWeakSet extends JSObject {
      * Value must be an object.
      */
     public void weakSetAdd(JSValue value) {
-        if (value instanceof JSObject valueObject) {
-            objectData.add(valueObject);
-        } else if (value instanceof JSSymbol symbolValue) {
-            symbolData.add(symbolValue);
-        } else {
+        JSWeakEntryTable entries = entriesOf(value, true);
+        if (entries == null) {
             throw new JSTypeErrorException("Invalid WeakSet value type");
         }
+        entries.put(this, JSWeakEntryTable.PRESENT);
     }
 
     /**
      * Delete a value from the WeakSet.
      */
     public boolean weakSetDelete(JSValue value) {
-        if (value instanceof JSObject valueObject) {
-            return objectData.remove(valueObject);
-        }
-        if (value instanceof JSSymbol symbolValue) {
-            return symbolData.remove(symbolValue);
-        }
-        return false;
+        JSWeakEntryTable entries = entriesOf(value, false);
+        return entries != null && entries.remove(this);
     }
 
     /**
      * Check if the WeakSet has a value.
      */
     public boolean weakSetHas(JSValue value) {
-        if (value instanceof JSObject valueObject) {
-            return objectData.contains(valueObject);
-        }
-        if (value instanceof JSSymbol symbolValue) {
-            return symbolData.contains(symbolValue);
-        }
-        return false;
+        JSWeakEntryTable entries = entriesOf(value, false);
+        return entries != null && entries.has(this);
     }
 }

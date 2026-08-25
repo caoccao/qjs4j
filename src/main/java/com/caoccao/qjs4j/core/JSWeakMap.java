@@ -18,25 +18,25 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
-import java.util.WeakHashMap;
-
 /**
  * Represents a JavaScript WeakMap object.
  * Keys must be objects and are weakly referenced.
  * WeakMaps are not enumerable.
+ * <p>
+ * The map holds no reference to its keys or its values: an entry lives on the key, in that key's
+ * {@link JSWeakEntryTable}, and names this map by identity. That is what makes the collection an
+ * ephemeron — a value reachable only through its entry cannot keep its own key alive — and what
+ * makes lookup use {@code ==} rather than {@code equals}. See {@link JSWeakEntryTable} for why
+ * both properties needed the storage inverted.
  */
 public final class JSWeakMap extends JSObject {
     public static final String NAME = "WeakMap";
-    private final WeakHashMap<JSObject, JSValue> objectData;
-    private final WeakHashMap<JSSymbol, JSValue> symbolData;
 
     /**
      * Create an empty WeakMap.
      */
     public JSWeakMap(JSContext context) {
         super(context);
-        this.objectData = new WeakHashMap<>();
-        this.symbolData = new WeakHashMap<>();
     }
 
     private static void closeIterator(JSContext context, JSValue iterator) {
@@ -143,6 +143,23 @@ public final class JSWeakMap extends JSObject {
         return weakMapObj;
     }
 
+    /**
+     * The entry table on a key, or {@code null} when the key holds none and none is wanted.
+     *
+     * @param key    the key
+     * @param create true to create the table
+     * @return the table, or {@code null}
+     */
+    private static JSWeakEntryTable entriesOf(JSValue key, boolean create) {
+        if (key instanceof JSObject keyObject) {
+            return keyObject.weakEntries(create);
+        }
+        if (key instanceof JSSymbol symbolKey) {
+            return symbolKey.weakEntries(create);
+        }
+        return null;
+    }
+
     private static void initializePrototypeFromNewTarget(JSContext context, JSWeakMap weakMapObject) {
         JSValue newTarget = context.getNativeConstructorNewTarget();
         if (!(newTarget instanceof JSObject newTargetObject)) {
@@ -184,27 +201,16 @@ public final class JSWeakMap extends JSObject {
      * Delete a key from the WeakMap.
      */
     public boolean weakMapDelete(JSValue key) {
-        if (key instanceof JSObject keyObject) {
-            return objectData.remove(keyObject) != null;
-        }
-        if (key instanceof JSSymbol symbolKey) {
-            return symbolData.remove(symbolKey) != null;
-        }
-        return false;
+        JSWeakEntryTable entries = entriesOf(key, false);
+        return entries != null && entries.remove(this);
     }
 
     /**
      * Get a value from the WeakMap by key.
      */
     public JSValue weakMapGet(JSValue key) {
-        JSValue value;
-        if (key instanceof JSObject keyObject) {
-            value = objectData.get(keyObject);
-        } else if (key instanceof JSSymbol symbolKey) {
-            value = symbolData.get(symbolKey);
-        } else {
-            value = null;
-        }
+        JSWeakEntryTable entries = entriesOf(key, false);
+        JSValue value = entries == null ? null : entries.get(this);
         return value != null ? value : JSUndefined.INSTANCE;
     }
 
@@ -212,13 +218,8 @@ public final class JSWeakMap extends JSObject {
      * Check if the WeakMap has a key.
      */
     public boolean weakMapHas(JSValue key) {
-        if (key instanceof JSObject keyObject) {
-            return objectData.containsKey(keyObject);
-        }
-        if (key instanceof JSSymbol symbolKey) {
-            return symbolData.containsKey(symbolKey);
-        }
-        return false;
+        JSWeakEntryTable entries = entriesOf(key, false);
+        return entries != null && entries.has(this);
     }
 
     /**
@@ -226,12 +227,12 @@ public final class JSWeakMap extends JSObject {
      * Key must be an object.
      */
     public void weakMapSet(JSValue key, JSValue value) {
-        if (key instanceof JSObject keyObject) {
-            objectData.put(keyObject, value);
-        } else if (key instanceof JSSymbol symbolKey) {
-            symbolData.put(symbolKey, value);
-        } else {
+        JSWeakEntryTable entries = entriesOf(key, true);
+        if (entries == null) {
             throw new JSTypeErrorException("Invalid WeakMap key type");
         }
+        // A WeakMap value of undefined must still register the key as present, so the entry table
+        // stores JSUndefined.INSTANCE rather than null and `has` tests for an entry, not a value.
+        entries.put(this, value == null ? JSUndefined.INSTANCE : value);
     }
 }

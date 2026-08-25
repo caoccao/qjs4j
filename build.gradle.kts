@@ -229,7 +229,10 @@ tasks.register<JavaExec>("test262Language") {
 // Coverage measurement. There was none, so nothing said which of the ~450 main source files the
 // suite exercised at all.
 jacoco {
-    toolVersion = "0.8.12"
+    // 0.8.12 cannot read class-file major version 69, so a test run launched on JDK 25 died while
+    // instrumenting the JDK's own classes — which is how the review's JDK 25 matrix cell failed
+    // before it reached a single assertion.
+    toolVersion = "0.8.14"
 }
 
 tasks.named<JacocoReport>("jacocoTestReport") {
@@ -245,9 +248,52 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 // ~450 files of ported engine written long before any suite existed — a 100% whole-tree rule would
 // be a fiction that had to be disabled to commit anything. Raise the floors as coverage rises;
 // never lower them to make a build pass.
-// Measured on this tree: 57.88% line, 43.99% branch.
-val minimumLineCoverage = "0.57".toBigDecimal()
-val minimumBranchCoverage = "0.43".toBigDecimal()
+// Measured on this tree: 59.21% line, 45.11% branch.
+val minimumLineCoverage = "0.59".toBigDecimal()
+val minimumBranchCoverage = "0.45".toBigDecimal()
+
+// A single whole-tree rule is not a gate on any particular subsystem: a change can leave an entire
+// critical package untested while unrelated covered code holds the aggregate above the floor. The
+// per-package and per-class floors below are what make a regression in one area fail on its own,
+// and each sits just under what that area measures today.
+//
+// Format: package path to (line floor, branch floor).
+val packageCoverageFloors = mapOf(
+    "com/caoccao/qjs4j/exceptions" to ("0.95" to "0.93"),
+    "com/caoccao/qjs4j/compilation/lexer" to ("0.79" to "0.66"),
+    "com/caoccao/qjs4j/cli" to ("0.75" to "0.80"),
+    "com/caoccao/qjs4j/compilation/compiler" to ("0.68" to "0.62"),
+    "com/caoccao/qjs4j/regexp" to ("0.67" to "0.53"),
+    "com/caoccao/qjs4j/compilation/parser" to ("0.67" to "0.56"),
+    "com/caoccao/qjs4j/vm" to ("0.65" to "0.50"),
+    "com/caoccao/qjs4j/unicode" to ("0.64" to "0.53"),
+    // Calibrated to the *lowest* figure across supported JDKs, not to the toolchain's: on JDK 25
+    // the lock-free half of ByteArrayAtomics is unreachable by construction, and on 17 and 21 the
+    // locked half is only reached through its package-private entry points. Neither run covers
+    // both; the union across the matrix does.
+    "com/caoccao/qjs4j/utils" to ("0.60" to "0.41"),
+    "com/caoccao/qjs4j/core" to ("0.58" to "0.42"),
+    "com/caoccao/qjs4j/builtins" to ("0.56" to "0.48"),
+)
+
+// The classes an embedder's safety actually rests on: lifecycle, resource limits, the diagnostic
+// path, the weak collections, the concurrency primitives and the CLI entry points. Each must stay
+// individually covered, so none can quietly become dead-but-shipped code again.
+val criticalClassLineFloors = mapOf(
+    "com/caoccao/qjs4j/core/JSRuntime" to "0.95",
+    "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.90",
+    "com/caoccao/qjs4j/core/JSWeakEntryTable" to "0.85",
+    "com/caoccao/qjs4j/exceptions/JSException" to "0.95",
+    "com/caoccao/qjs4j/exceptions/JSVirtualMachineException" to "0.80",
+    "com/caoccao/qjs4j/cli/REPL" to "0.80",
+    "com/caoccao/qjs4j/cli/QuickJSInterpreter" to "0.85",
+    "com/caoccao/qjs4j/core/JSWeakSet" to "0.75",
+    "com/caoccao/qjs4j/core/JSObject" to "0.75",
+    "com/caoccao/qjs4j/core/JSWeakMap" to "0.70",
+    "com/caoccao/qjs4j/core/JSArrayBuffer" to "0.70",
+    "com/caoccao/qjs4j/utils/ByteArrayAtomics" to "0.65",
+    "com/caoccao/qjs4j/utils/DynamicBuffer" to "0.70",
+)
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
@@ -262,6 +308,33 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
                 counter = "BRANCH"
                 value = "COVEREDRATIO"
                 minimum = minimumBranchCoverage
+            }
+        }
+        packageCoverageFloors.forEach { (packageName, floors) ->
+            rule {
+                element = "PACKAGE"
+                includes = listOf(packageName.replace('/', '.'))
+                limit {
+                    counter = "LINE"
+                    value = "COVEREDRATIO"
+                    minimum = floors.first.toBigDecimal()
+                }
+                limit {
+                    counter = "BRANCH"
+                    value = "COVEREDRATIO"
+                    minimum = floors.second.toBigDecimal()
+                }
+            }
+        }
+        criticalClassLineFloors.forEach { (className, floor) ->
+            rule {
+                element = "CLASS"
+                includes = listOf(className.replace('/', '.'))
+                limit {
+                    counter = "LINE"
+                    value = "COVEREDRATIO"
+                    minimum = floor.toBigDecimal()
+                }
             }
         }
     }
@@ -349,6 +422,9 @@ publishing {
                     developerConnection.set(Config.Pom.Scm.DEVELOPER_CONNECTION)
                     // The release tag, not a dependency's version. This used to publish
                     // Javet's version as qjs4j's SCM tag, breaking source-provenance tooling.
+                    // The release workflow is triggered by a `v<version>` tag and refuses to
+                    // publish when the tag and this version disagree, so the value below now
+                    // resolves to a tag that exists.
                     tag.set("v${Config.VERSION}")
                     url.set(Config.URL)
                 }

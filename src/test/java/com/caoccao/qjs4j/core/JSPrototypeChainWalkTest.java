@@ -25,16 +25,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Every prototype chain walk must be bounded and must keep proxy traps in play.
+ * Every prototype chain walk must terminate and must keep proxy traps in play.
  * <p>
- * {@code getWithReceiver} was bounded at 10,000 links, but the walk is recursive — so a proxy in
- * the chain still gets its traps — and the Java stack cannot hold 10,000 of those frames: a deep
- * chain died with a {@code StackOverflowError} before the guard fired. {@code has} had no bound at
- * all, so the same prototype graph was safe to read from and unsafe for {@code in}.
+ * The walk was recursive — so a proxy in the chain still gets its traps — and bounded by a depth
+ * threshold, first 10,000 links and then 1,000. Neither number was right: 10,000 recursive frames
+ * exhausted the Java stack before the guard fired, and 1,000 turned a valid program into a
+ * {@code RangeError}, because {@code for (let i = 0; i < 1001; i++) o = Object.create(o)} is
+ * legal and reading through it must work.
  * <p>
- * The script-observable walks are asserted against V8. The cyclic and very deep chains are not: they
- * are built with the raw {@code setPrototype} embedder API, which has no JavaScript equivalent —
- * no script can construct a prototype cycle — and the bound they hit is a Java stack limit.
+ * The walk is now a loop over ordinary links, so its length is bounded by memory rather than by a
+ * threshold, and only an exotic prototype — a Proxy, a module namespace, a typed array — costs a
+ * Java frame. Termination on a corrupt graph comes from Floyd's cycle detection rather than from a
+ * count.
+ * <p>
+ * The script-observable walks are asserted against V8. The cyclic chains are not: they are built
+ * with the raw {@code setPrototype} embedder API, which has no JavaScript equivalent — no script
+ * can construct a prototype cycle.
  */
 public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
@@ -58,7 +64,7 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
         assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing")))
                 .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("Maximum prototype chain depth exceeded");
+                .hasMessageContaining("Cyclic prototype chain");
     }
 
     @Test
@@ -73,21 +79,28 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
 
         assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing")))
                 .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("Maximum prototype chain depth exceeded");
+                .hasMessageContaining("Cyclic prototype chain");
     }
 
     @Test
     @Timeout(60)
-    public void testDeepPrototypeChainRaisesRangeErrorRatherThanStackOverflow() {
-        JSObject deep = buildChain(5000);
+    public void testDeepPrototypeChainResolvesWithoutAThresholdError() {
+        // 5,000 links is far past the old 1,000-link cutoff and far past what the Java stack would
+        // hold if the walk still recursed per link.
+        JSObject base = context.createJSObject();
+        base.set(PropertyKey.fromString("found"), new JSString("value"));
+        JSObject deep = base;
+        for (int index = 0; index < 5000; index++) {
+            JSObject child = context.createJSObject();
+            child.setPrototype(deep);
+            deep = child;
+        }
         PropertyKey missing = PropertyKey.fromString("missing");
-        assertThatThrownBy(() -> deep.get(missing))
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("Maximum prototype chain depth exceeded");
-        assertThatThrownBy(() -> deep.has(missing))
-                .as("`in` must be bounded exactly like a property read")
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("Maximum prototype chain depth exceeded");
+        PropertyKey found = PropertyKey.fromString("found");
+        assertThat(deep.get(found)).isEqualTo(new JSString("value"));
+        assertThat(deep.has(found)).isTrue();
+        assertThat(deep.get(missing)).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(deep.has(missing)).as("`in` must behave exactly like a property read").isFalse();
     }
 
     @Test

@@ -18,11 +18,17 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
-import java.util.Objects;
-
 /**
  * Represents a JavaScript Error object.
  * Base class for all JavaScript error types.
+ * <p>
+ * <strong>Identity, not value.</strong> This class deliberately does not override {@code equals} or
+ * {@code hashCode}. It used to, over its own guest-visible {@code name} and {@code message}
+ * properties, which broke three things at once: two distinct errors with the same message collapsed
+ * into one entry in any Java collection holding {@link JSObject}s, an error's hash changed when a
+ * script assigned to {@code message}, and computing that hash invoked whatever accessor the script
+ * had installed. ECMAScript objects compare by identity; every {@code JSObject} subclass must leave
+ * {@code equals} and {@code hashCode} alone.
  */
 public sealed class JSError extends JSObject permits
         JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
@@ -173,16 +179,6 @@ public sealed class JSError extends JSObject permits
         return JSBoolean.valueOf(arg instanceof JSError);
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        JSError jsError = (JSError) o;
-        return Objects.equals(getName(), jsError.getName()) &&
-                Objects.equals(getMessage(), jsError.getMessage());
-    }
-
     public String getErrorName() {
         return NAME;
     }
@@ -220,11 +216,6 @@ public sealed class JSError extends JSObject permits
 
     public String getVmMessage() {
         return vmMessage;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(getName(), getMessage());
     }
 
     public void setVmMessage(String vmMessage) {

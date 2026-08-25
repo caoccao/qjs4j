@@ -3360,11 +3360,16 @@ public final class JSGlobalObject {
                         }
                     }
                 }
+                // EvalDeclarationInstantiation step 5 is conditioned on the strictness of the
+                // *eval code*, not of the caller. A direct eval in a strict function is strict by
+                // inheritance and is already excluded by !evalCodeStrict; an indirect eval is
+                // never strict by inheritance, so testing the caller's strictness here silently
+                // dropped the global-lexical collision check for `(0,eval)('var x')` written
+                // inside a strict script.
                 if (hasSameRealmCallerFrame
                         && !evalCodeStrict
                         && parsedEvalDeclarations
-                        && evalVarDeclarations != null
-                        && (callerBytecodeFunction == null || !callerBytecodeFunction.isStrict())) {
+                        && evalVarDeclarations != null) {
                     if (callerBytecodeFunction != null
                             && callerFrame != null
                             && callerFrame.getCaller() != null) {
@@ -3387,8 +3392,12 @@ public final class JSGlobalObject {
                                 && !callerBytecodeFunction.hasArgumentsParameterBinding()) {
                             continue;
                         }
+                        // An indirect eval's variable environment is the global environment
+                        // wherever the call appears, so the global-lexical collision check applies
+                        // even when the calling frame is a function. Only a direct eval has to be
+                        // at top level for that to be true.
                         if (callerFrame != null
-                                && callerFrame.getCaller() == null
+                                && (!isDirectEvalCall || callerFrame.getCaller() == null)
                                 && callerContext.hasGlobalLexDeclaration(declarationName)) {
                             throw new JSException(
                                     realmContext.throwError("SyntaxError",

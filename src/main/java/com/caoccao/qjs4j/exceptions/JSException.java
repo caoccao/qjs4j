@@ -59,16 +59,15 @@ public class JSException extends RuntimeException {
      * @return a description built without running any script
      */
     private static String formatErrorMessage(JSValue error) {
-        if (error instanceof JSError jsError) {
-            // Fast path. A JSError already holds its name and message, so there is no reason to go
-            // through descriptor lookups — and this runs on every thrown engine error.
-            String name = jsError.getErrorName();
-            JSString message = jsError.getMessage();
-            String messageText = message == null ? "" : message.value();
-            return messageText.isEmpty() ? name : name + ": " + messageText;
-        }
         if (error instanceof JSObject errorObj) {
-            String name = ownDataPropertyAsString(errorObj, PropertyKey.NAME, "Error");
+            // A JSError takes the same physical-storage path as any other thrown object; only its
+            // default name differs, and getErrorName() is a per-class constant that runs nothing.
+            // The old fast path called JSError.getMessage(), which is an ordinary
+            // get(PropertyKey.MESSAGE) — so a guest could replace `message` with an accessor and
+            // have it run while the engine was already unwinding an exception, which is exactly
+            // what the rest of this method exists to prevent.
+            String defaultName = error instanceof JSError jsError ? jsError.getErrorName() : "Error";
+            String name = ownDataPropertyAsString(errorObj, PropertyKey.NAME, defaultName);
             String message = ownDataPropertyAsString(errorObj, PropertyKey.MESSAGE, "");
 
             if (message.isEmpty()) {
