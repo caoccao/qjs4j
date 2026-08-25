@@ -34,6 +34,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * transformer actually supports, so the eventual move to a compiler-based module pipeline has a
  * behavioural safety net, and cover the hardening that keeps a mis-scanned name from being spliced
  * into generated source.
+ * <p>
+ * The {@code testKnownLimitation*} tests document behaviour that is wrong per the ECMAScript
+ * specification but not fixable at this layer, because the transformer classifies lines by
+ * string-matching rather than by parsing. They exist so the compiler-based module pipeline that
+ * replaces this code has an explicit checklist of what it must start getting right.
  */
 public class JSModuleSourceTransformTest extends BaseTest {
     @TempDir
@@ -229,15 +234,6 @@ public class JSModuleSourceTransformTest extends BaseTest {
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("v is not defined");
     }
-
-    // ---------------------------------------------------------------------------------------
-    // Known limitations of the line-based transformer.
-    //
-    // These tests document behaviour that is wrong per the ECMAScript specification but is not
-    // fixable at this layer: the transformer classifies lines by string-matching rather than by
-    // parsing. They exist so that the compiler-based module pipeline that replaces this code has
-    // an explicit checklist of what it must start getting right.
-    // ---------------------------------------------------------------------------------------
 
     @Test
     public void testNamespaceImportExposesExportedNames() throws IOException {

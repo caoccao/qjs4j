@@ -43,8 +43,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * <li>The exact string-length boundary. V8's {@code String::kMaxLength} is
  * {@code (1 << 29) - 24}; qjs4j's is {@code (1 << 27) - 1}, four times lower, because a Java
  * {@code String} is two bytes per character unconditionally — V8's ceiling would put a single
- * string over a gigabyte of heap. Both engines reject anything past their own ceiling, which is
- * what the shared assertions below check.</li>
+ * string over a gigabyte of heap. Both engines reject anything past their own ceiling, and that
+ * shared behaviour is what the compared assertions check.</li>
  * <li>The host interrupt and execution deadline, which are Java API with no JavaScript surface.</li>
  * </ul>
  */
@@ -53,11 +53,6 @@ public class JSResourceLimitTest extends BaseJavetTest {
     private String evalToString(String code) {
         return JSTypeConversions.toString(context, context.eval(code)).value();
     }
-
-    // -----------------------------------------------------------------------------------
-    // C-6a: regular expression backtracking budget.
-    // Not compared with V8: V8 completes these matches, and stopping them is the feature.
-    // -----------------------------------------------------------------------------------
 
     @Test
     @Timeout(60)
@@ -114,10 +109,6 @@ public class JSResourceLimitTest extends BaseJavetTest {
                         } catch (e) { 'CAUGHT ' + e.name }"""))
                 .isEqualTo("CAUGHT RangeError");
     }
-
-    // -----------------------------------------------------------------------------------
-    // C-6b: maximum string length
-    // -----------------------------------------------------------------------------------
 
     @Test
     @Timeout(60)
@@ -222,17 +213,12 @@ public class JSResourceLimitTest extends BaseJavetTest {
         // Not compared with V8: V8's String::kMaxLength is (1 << 29) - 24, four times higher, so V8
         // accepts both of these. A Java String is two bytes per character unconditionally, where
         // V8 uses one for Latin-1, so matching V8's ceiling would put a single string past a
-        // gigabyte of heap. The tests above assert the behaviour both engines do share: anything
-        // past either ceiling is a RangeError.
+        // gigabyte of heap. What both engines do share — anything past either ceiling is a
+        // RangeError — is asserted by the repeat and pad tests that do go through V8.
         assertThat(evalToString("'ab'.repeat(67108863).length")).isEqualTo("134217726");
         assertThat(evalToString("try { 'ab'.repeat(67108864); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
                 .isEqualTo("CAUGHT RangeError");
     }
-
-    // -----------------------------------------------------------------------------------
-    // C-6c: host interrupt and execution deadline.
-    // Not compared with V8: Java API with no JavaScript surface.
-    // -----------------------------------------------------------------------------------
 
     @Test
     @Timeout(60)

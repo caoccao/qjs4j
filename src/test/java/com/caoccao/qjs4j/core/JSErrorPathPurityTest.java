@@ -34,6 +34,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * getter ran re-entrantly at an already-failing moment and could raise a second exception that
  * overwrote the one being reported.
  * <p>
+ * A first round of fixes covered accessors on ordinary objects but left the descriptor reads
+ * virtual, and on a {@link JSProxy} the override <em>is</em> the {@code getOwnPropertyDescriptor}
+ * trap — so reporting one thrown Proxy still re-entered guest code four times. Both kinds of
+ * re-entry are covered here.
+ * <p>
  * Whether a getter or trap ran is script-observable, so those assertions go through V8 as well:
  * V8 does not run them either, and comparing makes that a shared fact rather than this engine's
  * opinion. The tests that assert on a {@code JSException} or {@code JSVirtualMachineException}
@@ -137,7 +142,8 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
 
     @Test
     public void testOrdinaryErrorMessageIsStillReported() {
-        // The other complement: an ordinary Error must still report name and message in full.
+        // A purity fix can pass trivially by reporting nothing, so this pins the other side:
+        // an ordinary Error must still report its name and message in full.
         try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
             assertThatThrownBy(() -> isolated.eval("throw new TypeError('plain failure')"))
                     .isInstanceOf(JSException.class)
@@ -165,12 +171,6 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
                           catch (e) { return 'CAUGHT ' + e.name + ': ' + e.message }
                         })()""");
     }
-
-    // -----------------------------------------------------------------------------------
-    // Proxy traps. The purity tests above cover accessors on ordinary objects only; the
-    // descriptor reads were still virtual, and on a JSProxy the override *is* the
-    // getOwnPropertyDescriptor trap. Reporting one thrown Proxy re-entered guest code four times.
-    // -----------------------------------------------------------------------------------
 
     @Test
     public void testSucceedingSetterStillReportsSuccess() {
@@ -248,7 +248,8 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
 
     @Test
     public void testThrownProxyStillProducesAUsableMessage() {
-        // The complement: refusing to run traps must not produce an empty or misleading report.
+        // The same guard for a Proxy: refusing to run its traps must not leave the report
+        // empty or misleading.
         try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
             assertThatThrownBy(() -> isolated.eval("throw new Proxy({}, {})"))
                     .isInstanceOf(JSException.class)

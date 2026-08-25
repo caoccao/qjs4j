@@ -146,17 +146,15 @@ public class JSPropertyDescriptorAliasingTest extends BaseJavetTest {
     public void testNonConfigurableLargeIndexBlocksLengthTruncation() {
         // Truncating length scans shape keys through the same descriptor path.
         //
-        // The assignment is caught rather than left to propagate: the Javet harness runs every
-        // source twice, once with 'use strict' prepended, and in strict mode both engines throw a
-        // TypeError here with different wording — V8 blames the delete it could not perform,
-        // qjs4j the length assignment. That message gap is real but is not what this test is
-        // about, so it is reported separately rather than asserted away here.
+        // The assignment is caught rather than left to propagate because the Javet harness runs
+        // every source twice, once with 'use strict' prepended, and the strict variant throws. Both
+        // the message and the resulting length are compared with V8.
         assertStringWithJavet(
                 """
                         (function () {
                           const a = [];
                           Object.defineProperty(a, '2147483648', { value: 1, configurable: false });
-                          try { a.length = 0 } catch (e) { return e.name + ',' + String(a.length) }
+                          try { a.length = 0 } catch (e) { return e.message + ',' + String(a.length) }
                           return String(a.length);
                         })()""");
     }

@@ -48,6 +48,10 @@ public final class JSArray extends JSObject {
     private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
     private long length;
+    /**
+     * Index of the non-configurable element that stopped the most recent length truncation, or -1.
+     */
+    private long lengthTruncationBlockedIndex = -1;
 
     /**
      * Create an empty array.
@@ -187,6 +191,21 @@ public final class JSArray extends JSObject {
         return (long) modulo;
     }
 
+    /**
+     * Take the index that last blocked a length truncation, clearing it.
+     * <p>
+     * Set by {@link #defineProperty(PropertyKey, PropertyDescriptor)} and read by whichever caller
+     * is going to throw, so that a non-throwing caller such as {@code Reflect.defineProperty} is
+     * unaffected.
+     *
+     * @return the blocking index, or -1 when the last length truncation was not blocked
+     */
+    private long consumeLengthTruncationBlockedIndex() {
+        long blockedIndex = lengthTruncationBlockedIndex;
+        lengthTruncationBlockedIndex = -1;
+        return blockedIndex;
+    }
+
     @Override
     public boolean defineProperty(PropertyKey key, PropertyDescriptor descriptor) {
         // Per ES spec ArraySetLength (10.4.2.4) / QuickJS set_array_length:
@@ -241,15 +260,25 @@ public final class JSArray extends JSObject {
             // Non-configurable elements stop deletion (QuickJS set_array_length).
             // Scan shape properties to find the highest non-configurable index >= newLen.
             long actualNewLength = newLength;
+            long blockingIndex = -1;
             for (PropertyKey shapeKey : shape.getPropertyKeys()) {
                 long idx = shapeKey.toArrayIndex();
                 if (idx >= newLength && idx < oldLength) {
                     PropertyDescriptor elemDesc = super.getOwnPropertyDescriptorRaw(shapeKey);
                     if (elemDesc != null && !elemDesc.isConfigurable()) {
+                        if (idx + 1 > actualNewLength) {
+                            blockingIndex = idx;
+                        }
                         actualNewLength = Math.max(actualNewLength, idx + 1);
                     }
                 }
             }
+            // Remember which element stopped the truncation. A throwing caller reports that, the
+            // way V8 does — the delete is the operation that actually failed, so "Cannot delete
+            // property 'N' of [object Array]" says what went wrong where a message about the
+            // length assignment does not. Recorded rather than thrown here because
+            // Reflect.defineProperty must return false without an exception.
+            lengthTruncationBlockedIndex = blockingIndex;
 
             // Truncate to the actual achievable length
             setLength(actualNewLength);
@@ -864,7 +893,8 @@ public final class JSArray extends JSObject {
             // Route through ArraySetLength so internal `length` and element truncation
             // stay in sync with the observable length data property.
             boolean result = setWithResult(key, value, this);
-            if (!result && !this.context.hasPendingException() && this.context.isStrictMode()) {
+            if (!result && !this.context.hasPendingException() && this.context.isStrictMode()
+                    && throwBlockedLengthTruncation() == null) {
                 this.context.throwTypeError(
                         "Cannot assign to read only property 'length' of object '[object Array]'");
             }
@@ -994,6 +1024,26 @@ public final class JSArray extends JSObject {
             }
             sparseProperties = newSparse.isEmpty() ? null : newSparse;
         }
+    }
+
+    /**
+     * Raise the {@code TypeError} for a length truncation a non-configurable element blocked.
+     * <p>
+     * V8 names the element rather than the length assignment, because the delete is the operation
+     * that actually failed. Both throwing callers — a strict-mode {@code length} assignment and
+     * {@code Object.defineProperty} — report it through here so the message stays in one place;
+     * a non-throwing caller such as {@code Reflect.defineProperty} never calls it and still just
+     * sees {@code false}.
+     *
+     * @return the error value, or {@code null} when the last truncation was not blocked
+     */
+    public JSValue throwBlockedLengthTruncation() {
+        long blockedIndex = consumeLengthTruncationBlockedIndex();
+        if (blockedIndex < 0) {
+            return null;
+        }
+        return context.throwTypeError(
+                "Cannot delete property '" + blockedIndex + "' of " + getObjectDescriptionForError(true));
     }
 
     /**

@@ -33,6 +33,10 @@ import static org.assertj.core.api.Assertions.*;
  * condition. The JavaScript built-ins precheck every case, so the wrong types were invisible from
  * script and only embedders calling the Java methods saw them. The Javadoc separately declared
  * {@code IllegalStateException} and {@code IllegalArgumentException}, neither of which is thrown.
+ * <p>
+ * The {@code testScriptVisible*} tests are the counterweight: because the built-ins precheck every
+ * case, correcting the direct API's types must not move what JavaScript observes, so those go
+ * through V8.
  */
 public class JSArrayBufferDirectApiTest extends BaseJavetTest {
 
@@ -178,11 +182,6 @@ public class JSArrayBufferDirectApiTest extends BaseJavetTest {
                 .isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("non-negative");
     }
-
-    // -----------------------------------------------------------------------------------
-    // Script-visible behaviour must be unchanged: the built-ins precheck every case above,
-    // so correcting the direct API's types must not alter what JavaScript observes.
-    // -----------------------------------------------------------------------------------
 
     @Test
     public void testTransferToZeroLengthCopiesNothing() {

@@ -677,11 +677,10 @@ public sealed abstract class JSTypedArray extends JSObject permits
     public abstract boolean isAtomicsReadableAndWriteable();
 
     /**
-     * Integer-Indexed exotic object [[OwnPropertyKeys]].
-     * Following QuickJS JS_GetOwnPropertyNamesInternal for fast arrays (lines 8334-8354).
-     * Returns integer indices first (in ascending order), then string keys, then symbol keys.
+     * Whether {@code Atomics} may write to this element type.
+     *
+     * @return true when this typed array is a valid Atomics write target
      */
-
     public abstract boolean isAtomicsWriteable();
 
     /**

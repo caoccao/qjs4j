@@ -576,20 +576,61 @@ public non-sealed class JSObject implements JSValue {
         return getWithReceiver(key, receiver, 0);
     }
 
+    /**
+     * The tag this object would carry in {@code Object.prototype.toString}, without running script.
+     * <p>
+     * Mirrors ES2024 20.1.3.6 steps 4-16, except that {@code Symbol.toStringTag} is read as a data
+     * property rather than through {@code Get}.
+     *
+     * @return the builtin tag, or the {@code Symbol.toStringTag} override when it is a string
+     */
+    private String getBuiltinTagForDiagnostics() {
+        JSValue tag = findDataPropertyForDiagnostics(PropertyKey.SYMBOL_TO_STRING_TAG);
+        if (tag instanceof JSString tagString && !tagString.value().isEmpty()) {
+            return tagString.value();
+        }
+        if (arrayObject || this instanceof JSArray) {
+            return JSArray.NAME;
+        }
+        if (this instanceof JSArguments) {
+            return "Arguments";
+        }
+        if (this instanceof JSError) {
+            return JSError.NAME;
+        }
+        if (this instanceof JSBooleanObject) {
+            return JSBooleanObject.NAME;
+        }
+        if (this instanceof JSNumberObject) {
+            return JSNumberObject.NAME;
+        }
+        if (this instanceof JSStringObject) {
+            return JSStringObject.NAME;
+        }
+        if (this instanceof JSDate) {
+            return JSDate.NAME;
+        }
+        if (this instanceof JSRegExp) {
+            return JSRegExp.NAME;
+        }
+        return JSObject.NAME;
+    }
+
+    /**
+     * Get the constructor type internal slot.
+     * <p>
+     * For internal use only — not accessible from JavaScript.
+     *
+     * @return the constructor type, or {@code null} when this object is not a constructor
+     */
     public JSConstructorType getConstructorType() {
         return constructorType;
     }
 
     /**
-     * Get a V8-style object description for error messages.
-     * Returns format that matches V8 error messages.
+     * Get the context that owns this object.
      *
-     * @param forDelete if true, returns format for delete errors, otherwise for assignment errors
-     */
-
-    /**
-     * Get the constructor type internal slot.
-     * This is for internal use only - not accessible from JavaScript.
+     * @return the owning context
      */
     public JSContext getContext() {
         return context;
@@ -601,33 +642,44 @@ public non-sealed class JSObject implements JSValue {
      * Own data properties only. This runs while an error is already being constructed, so a
      * {@code constructor} or {@code name} getter must not execute re-entrantly at an
      * already-failing moment — it could itself throw and overwrite the exception being reported.
+     * <p>
+     * Package-private so {@link JSArray} can name the receiver the same way when it reports a
+     * blocked length truncation.
      *
      * @param forDelete true for a delete error, which uses a different message shape
      * @return a description built without running any script
      */
-    private String getObjectDescriptionForError(boolean forDelete) {
+    String getObjectDescriptionForError(boolean forDelete) {
         // For functions, use format: "function 'functionString'"
         if (this instanceof JSFunction func) {
             return "function '" + func + "'";
         }
 
-        // For objects, format depends on error type:
-        // Delete errors: "#<ConstructorName>"
-        // Assignment errors: "object '#<ConstructorName>'"
+        // The error type chooses the wrapping, the object chooses what goes inside it:
+        // delete errors read `<description>`, assignment errors `object '<description>'`.
         String prefix = forDelete ? "" : "object '";
         String suffix = forDelete ? "" : "'";
 
-        // Get constructor name if available, without invoking accessors.
-        JSValue constructor = findDataPropertyForDiagnostics(PropertyKey.CONSTRUCTOR);
-        if (constructor instanceof JSObject constructorFunc && constructor instanceof JSFunction) {
-            JSValue name = constructorFunc.findDataPropertyForDiagnostics(PropertyKey.NAME);
-            if (name instanceof JSString nameStr && !nameStr.value().isEmpty()) {
-                return prefix + "#<" + nameStr.value() + ">" + suffix;
+        // V8 Object::NoSideEffectsToMaybeString takes the "#<Ctor>" branch only while the object's
+        // toString is still Object.prototype.toString. Anything carrying its own — an Array, a
+        // Date, a RegExp — falls through to NoSideEffectsToString and the "[object Tag]" shape.
+        // Reproducing that test is what makes `delete array[i]` report "[object Array]" rather
+        // than "#<Array>", while a class instance still reports "#<Widget>".
+        if (usesOrdinaryObjectToString()) {
+            // Get constructor name if available, without invoking accessors.
+            JSValue constructor = findDataPropertyForDiagnostics(PropertyKey.CONSTRUCTOR);
+            if (constructor instanceof JSObject constructorFunc && constructor instanceof JSFunction) {
+                JSValue name = constructorFunc.findDataPropertyForDiagnostics(PropertyKey.NAME);
+                if (name instanceof JSString nameStr && !nameStr.value().isEmpty()) {
+                    return prefix + "#<" + nameStr.value() + ">" + suffix;
+                }
             }
+
+            // Default to Object
+            return prefix + "#<Object>" + suffix;
         }
 
-        // Default to Object
-        return prefix + "#<Object>" + suffix;
+        return prefix + "[object " + getBuiltinTagForDiagnostics() + "]" + suffix;
     }
 
     private List<PropertyKey> getOrderedOwnKeys(boolean enumerableOnly) {
@@ -1342,14 +1394,14 @@ public non-sealed class JSObject implements JSValue {
         set(PropertyKey.fromIndex(index), value);
     }
 
-    // Prototype chain
-
     /**
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
         setInternal(key, value, this, true);
     }
+
+    // Prototype chain
 
     /**
      * Set the constructor type internal slot.
@@ -1359,14 +1411,14 @@ public non-sealed class JSObject implements JSValue {
         constructorType = type;
     }
 
-    // Object integrity levels (ES5)
-
     /**
      * Set the [IsHTMLDDA] internal slot.
      */
     public void setHTMLDDA(boolean htmlDDA) {
         this.htmlDDA = htmlDDA;
     }
+
+    // Object integrity levels (ES5)
 
     /**
      * Mark this object as an immutable prototype exotic object.
@@ -1434,7 +1486,9 @@ public non-sealed class JSObject implements JSValue {
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
                     JSFunction setter = protoDescriptor.getSetter();
                     if (setter != null) {
-                        // Exception identity, not just presence — see the own-property setter path.
+                        // Exception identity, not just presence: testing only the flag reported
+                        // success whenever an exception was already pending on entry, which
+                        // swallowed the setter's own failure.
                         JSValue exceptionBefore = context.getPendingException();
                         setter.call(context, receiver, new JSValue[]{value});
                         JSValue exceptionAfter = context.getPendingException();
@@ -1598,7 +1652,9 @@ public non-sealed class JSObject implements JSValue {
                 if (descriptor != null && descriptor.isAccessorDescriptor()) {
                     JSFunction setter = descriptor.getSetter();
                     if (setter != null) {
-                        // Exception identity, not just presence — see the own-property setter path.
+                        // Exception identity, not just presence: testing only the flag reported
+                        // success whenever an exception was already pending on entry, which
+                        // swallowed the setter's own failure.
                         JSValue exceptionBefore = context == null ? null : context.getPendingException();
                         setter.call(context, primitiveReceiver, new JSValue[]{value});
                         JSValue exceptionAfter = context == null ? null : context.getPendingException();
@@ -1669,8 +1725,6 @@ public non-sealed class JSObject implements JSValue {
         return false;
     }
 
-    // JSValue implementation
-
     @Override
     public Object toJavaObject() {
         Map<String, Object> objMap = new LinkedHashMap<>();
@@ -1684,6 +1738,8 @@ public non-sealed class JSObject implements JSValue {
         return objMap;
     }
 
+    // JSValue implementation
+
     @Override
     public String toString() {
         return "[object Object]";
@@ -1692,6 +1748,28 @@ public non-sealed class JSObject implements JSValue {
     @Override
     public JSValueType type() {
         return JSValueType.OBJECT;
+    }
+
+    /**
+     * Whether this object's {@code toString} is still the realm's {@code Object.prototype.toString}.
+     * <p>
+     * Read as a data property along the prototype chain, so no accessor or Proxy trap runs: this is
+     * called while an error is already being constructed.
+     *
+     * @return true when nothing on the chain replaced {@code Object.prototype.toString}
+     */
+    private boolean usesOrdinaryObjectToString() {
+        JSObject objectPrototype = context.getObjectPrototype();
+        if (objectPrototype == null) {
+            // Before the realm's intrinsics exist there is nothing to compare against, and the
+            // constructor-name shape is the better default for an ordinary object.
+            return true;
+        }
+        JSValue ordinaryToString = objectPrototype.getOwnDataPropertyForDiagnostics(PropertyKey.TO_STRING);
+        if (ordinaryToString == null) {
+            return true;
+        }
+        return findDataPropertyForDiagnostics(PropertyKey.TO_STRING) == ordinaryToString;
     }
 
     public enum SetPrototypeResult {
