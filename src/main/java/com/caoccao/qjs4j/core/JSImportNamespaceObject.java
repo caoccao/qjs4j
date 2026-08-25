@@ -145,7 +145,7 @@ public final class JSImportNamespaceObject extends JSObject {
     }
 
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         if (hasDefinedExportProperty(key)) {
             JSValue value = get(key);
             if (context.hasPendingException()) {
@@ -158,7 +158,7 @@ public final class JSImportNamespaceObject extends JSObject {
             descriptor.setConfigurable(false);
             return descriptor;
         }
-        return super.getOwnPropertyDescriptor(key);
+        return super.getOwnPropertyDescriptorRaw(key);
     }
 
     @Override

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.util.*;
 
 /**
@@ -31,9 +33,17 @@ import java.util.*;
 public final class JSArray extends JSObject {
     public static final int INITIAL_CAPACITY = 8;
     public static final String NAME = "Array";
+    /**
+     * Upper bound on dense element storage. Beyond this an array falls back to sparse storage.
+     */
+    public static final int MAX_DENSE_SIZE = 10000;
+    /**
+     * Bound on the prototype chain walk performed before an indexed write to a hole.
+     * A real Array prototype chain is two links; the bound only stops a cyclic chain.
+     */
+    private static final int MAX_PROTOTYPE_SET_DEPTH = 1000;
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
-    private static final int MAX_DENSE_SIZE = 10000;
     private static final double UINT32_MAX_DOUBLE = 4_294_967_295d;
     private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
@@ -54,12 +64,21 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Create an array with a specific initial length.
+     * Create an array with a specific initial length and a dense-storage capacity hint.
+     * <p>
+     * The hint is clamped into {@code [INITIAL_CAPACITY, MAX_DENSE_SIZE]}. Clamping it down to
+     * {@code INITIAL_CAPACITY} with {@code Math.min} made every capacity hint in the engine a
+     * no-op, and let a negative hint — produced by narrowing a length above {@code 2^31} to
+     * {@code int} — reach {@code new JSValue[capacity]} as a {@link NegativeArraySizeException}.
+     *
+     * @param context  the owning context
+     * @param length   the array length
+     * @param capacity the dense-storage capacity hint
      */
     public JSArray(JSContext context, long length, int capacity) {
         super(context);
         this.length = length;
-        capacity = Math.min(capacity, INITIAL_CAPACITY);
+        capacity = Math.max(INITIAL_CAPACITY, Math.min(capacity, MAX_DENSE_SIZE));
         this.denseArray = new JSValue[capacity];
         // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
         this.arrayObject = true;
@@ -202,7 +221,7 @@ public final class JSArray extends JSObject {
             for (PropertyKey shapeKey : shape.getPropertyKeys()) {
                 long idx = shapeKey.toArrayIndex();
                 if (idx >= newLength && idx < oldLength) {
-                    PropertyDescriptor elemDesc = super.getOwnPropertyDescriptor(shapeKey);
+                    PropertyDescriptor elemDesc = super.getOwnPropertyDescriptorRaw(shapeKey);
                     if (elemDesc != null && !elemDesc.isConfigurable()) {
                         actualNewLength = Math.max(actualNewLength, idx + 1);
                     }
@@ -385,7 +404,7 @@ public final class JSArray extends JSObject {
         long index = key.toArrayIndex();
         if (index >= 0) {
             // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
-            PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
+            PropertyDescriptor desc = super.getOwnPropertyDescriptorRaw(key);
             if (desc != null && desc.hasGetter()) {
                 return super.get(key);
             }
@@ -419,8 +438,8 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
+        PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
         if (descriptor != null) {
             return descriptor;
         }
@@ -442,8 +461,9 @@ public final class JSArray extends JSObject {
                 }
             }
         } else {
-            PropertyDescriptor largeIndexDescriptor = super.getOwnPropertyDescriptor(PropertyKey.fromString(Long.toString(index)));
-            return largeIndexDescriptor;
+            // getOwnPropertyDescriptorRaw, not getOwnPropertyDescriptor: the public method
+            // dispatches back to this override, so `super.` on it recurses forever.
+            return super.getOwnPropertyDescriptorRaw(PropertyKey.fromString(Long.toString(index)));
         }
 
         return null;
@@ -514,7 +534,7 @@ public final class JSArray extends JSObject {
             long index = key.toArrayIndex();
             if (index >= 0) {
                 if (!seenNumericIndices.contains(index)) {
-                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                     if (descriptor != null && (!enumerableOnly || descriptor.isEnumerable())) {
                         if (seenNumericIndices.add(index)) {
                             if (index <= Integer.MAX_VALUE) {
@@ -533,7 +553,7 @@ public final class JSArray extends JSObject {
                         symbolKeys.add(key);
                     }
                 } else {
-                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                     if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
                         symbolKeys.add(key);
                     }
@@ -545,7 +565,7 @@ public final class JSArray extends JSObject {
                     stringKeys.add(key);
                 }
             } else {
-                PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                 if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
                     stringKeys.add(key);
                 }
@@ -626,13 +646,16 @@ public final class JSArray extends JSObject {
     }
 
     private boolean hasPrototypeSetInterference(PropertyKey key) {
+        // Runs on every element write to a hole, which includes every write that grows an array.
+        // It used to allocate a HashSet<JSObject> per call purely as a cycle guard, and to take a
+        // defensive copy of each descriptor it only null-checked. A depth bound and the raw
+        // descriptor accessor give the same protection with no allocation at all.
         JSObject prototypeObject = getPrototype();
-        Set<JSObject> visitedObjects = new HashSet<>();
-        while (prototypeObject != null && visitedObjects.add(prototypeObject)) {
+        for (int depth = 0; prototypeObject != null && depth < MAX_PROTOTYPE_SET_DEPTH; depth++) {
             if (prototypeObject instanceof JSTypedArray || prototypeObject instanceof JSProxy) {
                 return true;
             }
-            if (prototypeObject.getOwnPropertyDescriptor(key) != null) {
+            if (prototypeObject.getOwnPropertyDescriptorRaw(key) != null) {
                 return true;
             }
             prototypeObject = prototypeObject.getPrototype();
@@ -793,10 +816,6 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Override set by PropertyKey with context to handle array indices.
-     */
-
-    /**
      * Override set by PropertyKey to handle array indices.
      */
     @Override
@@ -829,7 +848,10 @@ public final class JSArray extends JSObject {
      */
     public void setLength(long newLength) {
         if (newLength < 0 || newLength > MAX_ARRAY_LENGTH) {
-            throw new IllegalArgumentException("Invalid array length: " + newLength);
+            // A public engine API must raise an error the engine's own machinery understands, not
+            // a raw java.lang exception that is neither catchable from JavaScript nor typed for
+            // embedders.
+            throw new JSRangeErrorException("Invalid array length: " + newLength);
         }
 
         if (newLength < length) {
@@ -949,10 +971,21 @@ public final class JSArray extends JSObject {
 
     /**
      * Convert array to a Java array.
+     * <p>
+     * A JavaScript array length is a {@code uint32} and can exceed {@code Integer.MAX_VALUE}, which
+     * no Java array can hold. Narrowing the length to {@code int} produced a negative size and a
+     * {@link NegativeArraySizeException}; the range is checked explicitly instead.
+     *
+     * @return the array elements
+     * @throws JSRangeErrorException when the length exceeds {@code Integer.MAX_VALUE}
      */
     public JSValue[] toArray() {
+        if (length > Integer.MAX_VALUE) {
+            throw new JSRangeErrorException(
+                    "Array length " + length + " exceeds the maximum Java array size");
+        }
         JSValue[] result = new JSValue[(int) length];
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < result.length; i++) {
             result[i] = get(i);
         }
         return result;

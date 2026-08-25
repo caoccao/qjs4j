@@ -344,9 +344,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     Statement parseBreakStatement() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.BREAK);
-        // Check for optional label (identifier on same line, no ASI)
+        // Check for optional label (identifier on same line, no ASI).
+        // A label reference accepts exactly the tokens a label definition accepts, which includes
+        // the contextual keywords: `of: { break of }` is legal and used to be a SyntaxError here
+        // because only TokenType.IDENTIFIER was matched.
         Identifier label = null;
-        if (parserContext.match(TokenType.IDENTIFIER) && !parserContext.hasNewlineBefore()) {
+        if (isLabelIdentifierToken(parserContext.currentToken.type()) && !parserContext.hasNewlineBefore()) {
             label = parserContext.parseIdentifier();
         }
         parserContext.consumeSemicolon();
@@ -356,9 +359,12 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     Statement parseContinueStatement() {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.CONTINUE);
-        // Check for optional label (identifier on same line, no ASI)
+        // Check for optional label (identifier on same line, no ASI).
+        // A label reference accepts exactly the tokens a label definition accepts, which includes
+        // the contextual keywords: `of: { break of }` is legal and used to be a SyntaxError here
+        // because only TokenType.IDENTIFIER was matched.
         Identifier label = null;
-        if (parserContext.match(TokenType.IDENTIFIER) && !parserContext.hasNewlineBefore()) {
+        if (isLabelIdentifierToken(parserContext.currentToken.type()) && !parserContext.hasNewlineBefore()) {
             label = parserContext.parseIdentifier();
         }
         parserContext.consumeSemicolon();

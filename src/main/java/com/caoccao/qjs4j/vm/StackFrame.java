@@ -93,9 +93,17 @@ public final class StackFrame {
                     this.locals[selfLocalIndex] = function;
                 }
             }
+        } else if (function instanceof JSBytecodeFunction) {
+            // A bytecode function with no locals still receives the VM's shared reusable buffer
+            // (internalHandleCall borrows it whenever the callee is a JSBytecodeFunction). Aliasing
+            // it here would let the next borrow — by anything this frame calls — silently rewrite
+            // this frame's arguments. Take an owned copy; argCount is 0 or a handful of slots.
+            this.arguments = argCount == 0 ? JSValue.NO_ARGS : new JSValue[argCount];
+            System.arraycopy(args, 0, this.arguments, 0, argCount);
+            this.locals = this.arguments;
         } else {
-            // For native functions or functions with no locals.
-            // args is always an owned array for native functions (allocated in CALL handler).
+            // Native functions are always passed an array allocated for the call, never the
+            // shared buffer, so it can be adopted directly.
             this.arguments = args;
             this.locals = args;
         }

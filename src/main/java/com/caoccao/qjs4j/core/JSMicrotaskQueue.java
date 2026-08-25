@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayDeque;
 
@@ -29,9 +30,16 @@ import java.util.ArrayDeque;
  * right time.
  * <p>
  * The queue is synchronized because some host integrations (for example, Atomics.waitAsync)
- * can enqueue microtasks from helper threads.
+ * can enqueue microtasks from helper threads. <strong>Enqueueing is the only cross-thread
+ * operation that is safe</strong>: {@link #processMicrotasks()} runs the microtasks, which touch
+ * unsynchronised engine state, so it must run on the context's own thread. See {@link JSRuntime}
+ * for the full threading contract.
  */
 public final class JSMicrotaskQueue {
+    /**
+     * How many microtasks to run between interrupt checks.
+     */
+    private static final int INTERRUPT_CHECK_INTERVAL = 1024;
     private final JSContext context;
     private final ArrayDeque<Microtask> queue;
     private final Object queueLock;
@@ -85,7 +93,15 @@ public final class JSMicrotaskQueue {
      * Process all pending microtasks.
      * This should be called at the end of each task in the event loop.
      * <p>
-     * Microtasks can enqueue more microtasks, so this runs until the queue is empty.
+     * Microtasks can enqueue more microtasks, so this runs until the queue is empty. A microtask
+     * that keeps re-enqueueing itself would otherwise loop forever, so the host interrupt and the
+     * execution deadline are polled every {@link #INTERRUPT_CHECK_INTERVAL} microtasks; both raise
+     * an uncatchable exception that ends the drain.
+     * <p>
+     * A nested call returns immediately and drains nothing. That is deliberate rather than a
+     * partial drain: the outer loop still owns the queue and continues past whatever the nested
+     * call would have run, so the queue is fully drained by the time the outer call returns. Use
+     * {@link #isProcessing()} to tell the two situations apart.
      */
     public void processMicrotasks() {
         synchronized (queueLock) {
@@ -96,6 +112,7 @@ public final class JSMicrotaskQueue {
         }
         try {
             Microtask microtask;
+            int processedCount = 0;
             while (true) {
                 synchronized (queueLock) {
                     microtask = queue.poll();
@@ -103,15 +120,13 @@ public final class JSMicrotaskQueue {
                         break;
                     }
                 }
+                if (++processedCount % INTERRUPT_CHECK_INTERVAL == 0) {
+                    context.getVirtualMachine().checkExecutionInterrupt();
+                }
                 try {
                     microtask.execute();
-                } catch (Exception e) {
-                    // Trigger unhandled rejection handler if set
-                    IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
-                    if (callback != null && e instanceof JSException jsException) {
-                        JSValue reason = jsException.getErrorValue();
-                        callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, null, reason);
-                    }
+                } catch (RuntimeException | StackOverflowError e) {
+                    handleMicrotaskFailure(e);
                 }
             }
         } finally {
@@ -119,6 +134,40 @@ public final class JSMicrotaskQueue {
                 executing = false;
             }
         }
+    }
+
+    /**
+     * Whether a drain is already in progress on this queue.
+     *
+     * @return true when {@link #processMicrotasks()} is running
+     */
+    public boolean isProcessing() {
+        synchronized (queueLock) {
+            return executing;
+        }
+    }
+
+    /**
+     * Report a failure that escaped a microtask.
+     * <p>
+     * A rejected promise with no handler goes to the promise reject callback as before. Everything
+     * is additionally recorded on the context: previously, with no callback installed, every
+     * exception from a microtask disappeared without trace — a throwing {@code .then()} handler, a
+     * {@code JSVirtualMachineException}, or a {@link NullPointerException} from an engine defect.
+     *
+     * @param failure the exception that escaped the microtask
+     */
+    private void handleMicrotaskFailure(Throwable failure) {
+        if (failure instanceof JSVirtualMachineException vmException && vmException.isUncatchable()) {
+            // Host-initiated termination. Do not record it as a failure and do not keep draining.
+            throw vmException;
+        }
+        IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
+        if (callback != null && failure instanceof JSException jsException) {
+            JSValue reason = jsException.getErrorValue();
+            callback.callback(PromiseRejectEvent.PromiseRejectWithNoHandler, null, reason);
+        }
+        context.recordMicrotaskFailure(failure);
     }
 
     /**

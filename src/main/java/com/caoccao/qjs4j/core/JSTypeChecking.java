@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.builtins.NumberPrototype;
 
 /**
@@ -337,7 +338,7 @@ public final class JSTypeChecking {
      */
     public static JSValue requireNotNullish(JSValue value, String message) {
         if (isNullish(value)) {
-            throw new IllegalArgumentException(message != null ? message : "Value cannot be null or undefined");
+            throw new JSTypeErrorException(message != null ? message : "Value cannot be null or undefined");
         }
         return value;
     }
@@ -371,7 +372,7 @@ public final class JSTypeChecking {
         if (!expectedType.isInstance(value)) {
             String msg = message != null ? message :
                     "Expected " + expectedType.getSimpleName() + " but got " + getTypeName(value);
-            throw new IllegalArgumentException(msg);
+            throw new JSTypeErrorException(msg);
         }
         return expectedType.cast(value);
     }

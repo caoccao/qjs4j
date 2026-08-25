@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.core.*;
 
 public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
@@ -47,7 +48,7 @@ public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
 
     public static TemporalFractionalSecondDigitsOption ofDigits(int digits) {
         if (digits < 0 || digits >= DIGIT_OPTIONS.length) {
-            throw new IllegalArgumentException("Fractional second digits must be in range [0, 9].");
+            throw new JSRangeErrorException("Fractional second digits must be in range [0, 9].");
         }
         return DIGIT_OPTIONS[digits];
     }

@@ -37,10 +37,19 @@ import java.util.Map;
 public final class JSShape {
     private static final PropertyDescriptor[] EMPTY_DESCRIPTORS = new PropertyDescriptor[0];
     private static final PropertyKey[] EMPTY_KEYS = new PropertyKey[0];
+    /**
+     * Property count above which a shape maintains a {@code HashMap} index instead of scanning its
+     * key array linearly. Below it, a linear scan over a handful of keys beats hashing, and the
+     * map's own footprint would dominate: most objects in a real program never reach this many
+     * properties.
+     */
     private static final int INDEX_THRESHOLD = 6;
     private static final int INITIAL_CAPACITY = 4;
     private int deletedPropCount;
     private PropertyDescriptor[] descriptors;
+    // Single-entry lookup memo. Deliberately unsynchronised: a JSContext is confined to one thread
+    // (see JSRuntime's threading contract), and concurrent readers of the same object would observe
+    // a torn key/offset/version triple. Do not "fix" this with volatile — fix the caller.
     private Object lastLookupIndexKey;
     private int lastLookupOffset;
     private int lastLookupShapeVersion;

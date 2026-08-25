@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
@@ -97,9 +98,9 @@ public final class SharedArrayBufferPrototype {
         try {
             buffer.grow(newByteLength);
             return JSUndefined.INSTANCE;
-        } catch (IllegalStateException e) {
+        } catch (JSTypeErrorException e) {
             return context.throwTypeError(e.getMessage());
-        } catch (IllegalArgumentException e) {
+        } catch (JSRangeErrorException e) {
             return context.throwRangeError(e.getMessage());
         }
     }

@@ -29,7 +29,7 @@ import java.util.Map;
  * Compiles AST into bytecode.
  * <p>
  * This is the public facade that delegates to specialized compiler classes:
- * {@link ExpressionCompiler}, {@link StatementCompiler}, {@link FunctionCompiler},
+ * {@link ExpressionCompiler}, {@link StatementCompiler}, {@link FunctionDeclarationCompiler},
  * {@link ClassDeclarationCompiler}, {@link PatternCompiler}, {@link EmitHelpers}, and {@link CompilerAnalysis}.
  * All shared mutable state and delegate references are held in {@link CompilerContext}.
  */

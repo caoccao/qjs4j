@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -261,7 +262,7 @@ public final class JSIntlPluralRules extends JSObject {
 
     public String selectRange(double start, double end) {
         if (Double.isNaN(start) || Double.isNaN(end)) {
-            throw new IllegalArgumentException("NaN is not allowed");
+            throw new JSRangeErrorException("NaN is not allowed");
         }
         return select(end);
     }

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.nio.ByteBuffer;
@@ -55,10 +57,10 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     public JSArrayBuffer(JSContext context, int byteLength, int maxByteLength) {
         super(context);
         if (byteLength < 0) {
-            throw new IllegalArgumentException("ArrayBuffer byteLength must be non-negative");
+            throw new JSRangeErrorException("ArrayBuffer byteLength must be non-negative");
         }
         if (maxByteLength != -1 && maxByteLength < byteLength) {
-            throw new IllegalArgumentException("ArrayBuffer maxByteLength must be >= byteLength");
+            throw new JSRangeErrorException("ArrayBuffer maxByteLength must be >= byteLength");
         }
         int rawSize = maxByteLength != -1 ? maxByteLength : byteLength;
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
@@ -278,13 +280,13 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public void resize(int newByteLength) {
         if (detached) {
-            throw new IllegalStateException("Cannot resize a detached ArrayBuffer");
+            throw new JSRangeErrorException("Cannot resize a detached ArrayBuffer");
         }
         if (!resizable) {
-            throw new IllegalStateException("Cannot resize a non-resizable ArrayBuffer");
+            throw new JSRangeErrorException("Cannot resize a non-resizable ArrayBuffer");
         }
         if (newByteLength < 0 || newByteLength > maxByteLength) {
-            throw new IllegalArgumentException("New byte length must be between 0 and " + maxByteLength);
+            throw new JSRangeErrorException("New byte length must be between 0 and " + maxByteLength);
         }
 
         int oldByteLength = buffer.limit();
@@ -313,7 +315,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public JSArrayBuffer slice(JSContext context, int begin, int end) {
         if (detached) {
-            throw new IllegalStateException("Cannot slice a detached ArrayBuffer");
+            throw new JSTypeErrorException("Cannot slice a detached ArrayBuffer");
         }
 
         int byteLength = getByteLength();
@@ -365,14 +367,14 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public JSArrayBuffer transfer(JSContext context, int newByteLength) {
         if (detached) {
-            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+            throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
         }
 
         int currentLength = getByteLength();
         int targetLength = (newByteLength == -1) ? currentLength : newByteLength;
 
         if (targetLength < 0) {
-            throw new IllegalArgumentException("New byte length must be non-negative");
+            throw new JSTypeErrorException("New byte length must be non-negative");
         }
 
         // Create new buffer with proper prototype, preserving resizability
@@ -406,14 +408,14 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public JSArrayBuffer transferToFixedLength(JSContext context, int newByteLength) {
         if (detached) {
-            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+            throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
         }
 
         int currentLength = getByteLength();
         int targetLength = (newByteLength == -1) ? currentLength : newByteLength;
 
         if (targetLength < 0) {
-            throw new IllegalArgumentException("New byte length must be non-negative");
+            throw new JSTypeErrorException("New byte length must be non-negative");
         }
 
         // Create new fixed-length buffer with proper prototype
@@ -446,7 +448,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public JSArrayBuffer transferToImmutable(JSContext context) {
         if (detached) {
-            throw new IllegalStateException("Cannot transfer a detached ArrayBuffer");
+            throw new JSTypeErrorException("Cannot transfer a detached ArrayBuffer");
         }
 
         int currentLength = getByteLength();

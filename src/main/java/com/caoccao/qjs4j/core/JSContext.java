@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
+import com.caoccao.qjs4j.unicode.UnicodeData;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
@@ -49,6 +50,11 @@ import java.util.regex.Pattern;
  */
 public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
+    /**
+     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
+     * repeatedly failing microtask cannot itself become a leak.
+     */
+    private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
     private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
@@ -127,6 +133,10 @@ public final class JSContext implements AutoCloseable {
     private int pendingDirectEvalCalls;
     // Exception state
     private JSValue pendingException;
+    private boolean closed;
+    // Failures that escaped a microtask, oldest first
+    private final List<Throwable> microtaskFailures = new ArrayList<>();
+    private IJSMicrotaskFailureCallback microtaskFailureCallback;
     // Promise rejection callback
     private IJSPromiseRejectCallback promiseRejectCallback;
     private String regExpLegacyInput;
@@ -211,7 +221,8 @@ public final class JSContext implements AutoCloseable {
 
     private void appendDynamicImportDefaultExportNameFixup(
             StringBuilder transformedSourceBuilder,
-            String localName) {
+            String rawLocalName) {
+        String localName = requireGeneratedIdentifier(rawLocalName, "default export binding '" + rawLocalName + "'");
         transformedSourceBuilder.append("if (typeof ")
                 .append(localName)
                 .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
@@ -239,11 +250,16 @@ public final class JSContext implements AutoCloseable {
                 .append(";\n");
         for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
             String escapedName = escapeJavaScriptString(localExportBinding.exportedName());
+            // The exported name lands in string position, so escaping is enough. The local name
+            // lands in identifier position, where only a real identifier is safe.
+            String localName = requireGeneratedIdentifier(
+                    localExportBinding.localName(),
+                    "local binding of export '" + localExportBinding.exportedName() + "'");
             // Exports are always live bindings, including re-exported imports.
             transformedSourceBuilder.append("Object.defineProperty(__qjs4jModuleExports, \"")
                     .append(escapedName)
                     .append("\", { enumerable: true, configurable: false, get() { return ")
-                    .append(localExportBinding.localName())
+                    .append(localName)
                     .append("; } });\n");
         }
     }
@@ -582,13 +598,65 @@ public final class JSContext implements AutoCloseable {
      */
     @Override
     public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         // Clear all caches
         clearModuleCache();
         clearCallStack();
         clearPendingException();
         clearErrorStackTrace();
+        // State that close() used to leave behind: pending promise reactions were abandoned with
+        // no callback, and the realm's binding tables, iterator prototypes, finalization
+        // registries, eval overlays and import.meta cache all stayed reachable through the
+        // context object.
+        microtaskQueue.clear();
+        globalLexicalBindings.clear();
+        iteratorPrototypes.clear();
+        finalizationRegistries.clear();
+        evalOverlayFrames.clear();
+        importMetaCache.clear();
+        microtaskFailures.clear();
+        virtualMachine.reset();
         // Remove from runtime
         runtime.destroyContext(this);
+    }
+
+    /**
+     * Get the names currently bound in the realm's global lexical scope.
+     * <p>
+     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()}
+     * actually releases realm state.
+     *
+     * @return a snapshot of the global lexical binding names
+     */
+    public Set<String> getGlobalLexicalBindingNames() {
+        return new HashSet<>(globalLexicalBindings.keySet());
+    }
+
+    /**
+     * Whether {@link #close()} has been called on this context.
+     *
+     * @return true when the context is closed
+     */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /**
+     * Fail fast when an operation is attempted on a closed context.
+     * <p>
+     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()}
+     * silently worked and masked lifecycle bugs in embedder code. This is one of the few places a
+     * raw Java exception is right: it is embedder API misuse, not a JavaScript error.
+     *
+     * @throws IllegalStateException when this context is closed
+     */
+    private void requireOpen() {
+        if (closed) {
+            throw new IllegalStateException("JSContext is closed");
+        }
     }
 
     private Map<String, JSSymbol> collectEvalPrivateSymbols(JSBytecodeFunction callerFunction) {
@@ -779,7 +847,10 @@ public final class JSContext implements AutoCloseable {
      * @return A new JSArray instance with prototype set
      */
     public JSArray createJSArray(long length) {
-        return createJSArray(length, (int) length);
+        // A JavaScript array length is a uint32, so narrowing it to int for the capacity hint can
+        // produce a negative value (4294967295L narrows to -1) and a NegativeArraySizeException.
+        // Clamp instead: the hint is only a dense-storage sizing suggestion.
+        return createJSArray(length, (int) Math.min(length, JSArray.MAX_DENSE_SIZE));
     }
 
     /**
@@ -1425,13 +1496,91 @@ public final class JSContext implements AutoCloseable {
         this.strictMode = true;
     }
 
+    /**
+     * Escape a value for interpolation into a double-quoted JavaScript string literal in generated
+     * module source.
+     * <p>
+     * Escaping only {@code \} and {@code "} is not enough: a line terminator, a control character
+     * or U+2028/U+2029 inside the value terminates the literal and turns the remainder of the value
+     * into source text.
+     *
+     * @param text the raw value
+     * @return the value with every character that is unsafe inside a string literal escaped
+     */
     private String escapeJavaScriptString(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
-        return text
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"");
+        StringBuilder escaped = new StringBuilder(text.length() + 8);
+        for (int characterIndex = 0; characterIndex < text.length(); characterIndex++) {
+            char character = text.charAt(characterIndex);
+            switch (character) {
+                case '\\' -> escaped.append("\\\\");
+                case '"' -> escaped.append("\\\"");
+                case '\'' -> escaped.append("\\'");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    // Control characters, U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are
+                    // all line terminators or otherwise unsafe inside a JavaScript string literal.
+                    if (character < 0x20 || character == 0x2028 || character == 0x2029) {
+                        escaped.append(String.format("\\u%04x", (int) character));
+                    } else {
+                        escaped.append(character);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
+    }
+
+    /**
+     * Validate a name that is about to be interpolated into generated module source in identifier
+     * position.
+     * <p>
+     * The module transformer builds JavaScript source text and evaluates it. Names extracted from
+     * the module source by the ad-hoc scanner reach identifier position unescaped, so a value that
+     * is not an identifier would splice arbitrary source into the generated program. Anything that
+     * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
+     *
+     * @param name        the candidate identifier
+     * @param description what the name denotes, used in the error message
+     * @return the name unchanged when it is a valid identifier
+     * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
+     */
+    private String requireGeneratedIdentifier(String name, String description) {
+        if (!isValidIdentifierName(name)) {
+            throw new JSException(throwSyntaxError(
+                    "Unsupported module syntax: " + description + " is not a valid identifier"));
+        }
+        return name;
+    }
+
+    /**
+     * Whether the given text is a well-formed ECMAScript IdentifierName.
+     *
+     * @param name the candidate identifier
+     * @return true when every code point is a legal identifier character
+     */
+    private static boolean isValidIdentifierName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        int firstCodePoint = name.codePointAt(0);
+        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
+            return false;
+        }
+        for (int offset = Character.charCount(firstCodePoint); offset < name.length(); ) {
+            int codePoint = name.codePointAt(offset);
+            if (!UnicodeData.isIdentifierPart(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
     }
 
     /**
@@ -1447,6 +1596,7 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
+        requireOpen();
         return evalOrThrow(eval(code, "<eval>", false, false, false, false, false, false));
     }
 
@@ -1459,6 +1609,7 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
+        requireOpen();
         return evalOrThrow(eval(code, filename, isModule, false, false, false, false, false));
     }
 
@@ -1511,6 +1662,12 @@ public final class JSContext implements AutoCloseable {
                 try {
                     resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
                 } catch (JSException jsException) {
+                    // A filename that does not resolve to a module on disk is normal here — the
+                    // source was handed to eval() directly. Clear the pending exception the
+                    // matching throwTypeError left on the context: catching the Java exception
+                    // alone leaves the context in an exception state, and the next activation
+                    // reports that stale error as its own failure.
+                    clearPendingException();
                     resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
                 }
                 JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
@@ -1970,6 +2127,12 @@ public final class JSContext implements AutoCloseable {
             evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
             return null;
         } catch (JSVirtualMachineException e) {
+            if (e.isUncatchable()) {
+                // Host-initiated termination (execution deadline, requestInterrupt). Reporting it
+                // as a JavaScript Error value would make it indistinguishable from a script's own
+                // failure, so it propagates to the embedder unchanged.
+                throw e;
+            }
             if (e.getJsError() != null) {
                 evalError = e.getJsError();
             } else if (e.getJsValue() != null) {
@@ -2898,7 +3061,10 @@ public final class JSContext implements AutoCloseable {
                     dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers.
+                // Skip unresolvable specifiers. Discarding the Java exception is not enough: the
+                // matching throwTypeError also left a pending exception on the context, and a
+                // later activation would otherwise pick up that stale error.
+                clearPendingException();
             }
         }
         return dependencyPromises;
@@ -3106,6 +3272,75 @@ public final class JSContext implements AutoCloseable {
         return promiseRejectCallback;
     }
 
+    /**
+     * Get the callback that observes failures escaping a microtask.
+     *
+     * @return the callback, or {@code null} when none is installed
+     */
+    public IJSMicrotaskFailureCallback getMicrotaskFailureCallback() {
+        return microtaskFailureCallback;
+    }
+
+    /**
+     * Install a callback that observes failures escaping a microtask.
+     *
+     * @param callback the callback, or {@code null} to remove the current one
+     */
+    public void setMicrotaskFailureCallback(IJSMicrotaskFailureCallback callback) {
+        this.microtaskFailureCallback = callback;
+    }
+
+    /**
+     * Get the failures that escaped a microtask, oldest first.
+     * <p>
+     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is
+     * full the oldest entries are dropped.
+     *
+     * @return a snapshot of the recorded failures
+     */
+    public List<Throwable> getMicrotaskFailures() {
+        return new ArrayList<>(microtaskFailures);
+    }
+
+    /**
+     * Discard the recorded microtask failures.
+     */
+    public void clearMicrotaskFailures() {
+        microtaskFailures.clear();
+    }
+
+    /**
+     * Record a failure that escaped a microtask.
+     * <p>
+     * Draining the microtask queue has no caller to propagate to, so without this a throwing
+     * {@code .then()} handler — or an engine defect surfacing as a {@link NullPointerException} —
+     * disappeared with no trace at all. Failures are always recorded; an installed
+     * {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect with no
+     * callback installed is logged so it cannot pass unnoticed.
+     *
+     * @param failure the exception that escaped the microtask
+     */
+    public void recordMicrotaskFailure(Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        while (microtaskFailures.size() >= MAX_RECORDED_MICROTASK_FAILURES) {
+            microtaskFailures.remove(0);
+        }
+        microtaskFailures.add(failure);
+        IJSMicrotaskFailureCallback callback = microtaskFailureCallback;
+        if (callback != null) {
+            callback.onMicrotaskFailure(failure);
+            return;
+        }
+        if (!(failure instanceof JSException)) {
+            // A JSException is a script-level error and is reported through the promise reject
+            // callback. Anything else is an engine defect and must never be silent.
+            System.getLogger(JSContext.class.getName()).log(
+                    System.Logger.Level.WARNING, "Unhandled failure in microtask", failure);
+        }
+    }
+
     public JSObject getPrototypeFromConstructor(JSObject constructor, String intrinsicDefaultPrototypeName) {
         JSValue prototype = constructor.get(PropertyKey.PROTOTYPE);
         if (hasPendingException()) {
@@ -3219,7 +3454,9 @@ public final class JSContext implements AutoCloseable {
                     return true;
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
         return false;
@@ -3349,7 +3586,9 @@ public final class JSContext implements AutoCloseable {
             sourceBuilder.append("\"")
                     .append(escapeJavaScriptString(hoistedBinding.localName()))
                     .append("\": ")
-                    .append(hoistedBinding.localName());
+                    .append(requireGeneratedIdentifier(
+                            hoistedBinding.localName(),
+                            "hoisted function export '" + hoistedBinding.localName() + "'"));
         }
         sourceBuilder.append("};\n})();");
 
@@ -3453,8 +3692,10 @@ public final class JSContext implements AutoCloseable {
             }
             return resolvedImportPathString.equalsIgnoreCase(modulePathString);
         } catch (JSException ignored) {
+            clearPendingException();
             return false;
         } catch (Exception ignored) {
+            clearPendingException();
             return false;
         }
     }
@@ -4124,6 +4365,39 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    /**
+     * Rewrite ES module source into plain script source that the compiler can evaluate.
+     * <p>
+     * <strong>This is a line-based textual transformer, not a parser.</strong> It splits the source
+     * on {@code \n}, classifies each line by string-matching {@code import }/{@code export }, and
+     * splices generated JavaScript into the result. It cannot see the language's real grammar, so
+     * the module syntax it accepts is a restricted subset of ECMAScript:
+     * <ul>
+     * <li>{@code export} must be the first token on its line (leading whitespace is fine). An
+     * {@code export} that follows another statement on the same line is not recognised, and the
+     * binding is silently absent from the module namespace.</li>
+     * <li>A static {@code import ... from '...'} declaration must be alone on its line. An import
+     * followed by another statement on the same line is not hoisted.</li>
+     * <li>{@code maskModuleComments} masks strings, templates and comments, but not regular
+     * expression literals. A regexp literal containing a quote — {@code /"/} — desynchronises its
+     * quote state for the rest of the line.</li>
+     * <li>Export names must be identifiers. String export names
+     * ({@code export { x as "a-b" }}, ES2022) are rejected with a SyntaxError.</li>
+     * <li>The generated bindings {@code __qjs4jDefaultExport$<n>} and {@code __qjs4jModuleExports}
+     * are declared in the module's own scope and are observable from module code.</li>
+     * </ul>
+     * Every value that reaches identifier position in the generated source is validated by
+     * {@link #requireGeneratedIdentifier(String, String)}, and every value that reaches string
+     * position is escaped by {@link #escapeJavaScriptString(String)}, so a name the scanner
+     * mis-extracts produces a diagnosable SyntaxError rather than spliced source text.
+     * <p>
+     * The structural limits above are not fixable at this layer. Routing modules through the
+     * existing lexer, parser and compiler — real {@code ImportDeclaration}/{@code Export*}
+     * AST nodes and module-environment bindings emitted by {@code BytecodeCompiler} — is the
+     * actual fix, and is a dedicated milestone rather than a patch.
+     *
+     * @param moduleRecord the module whose raw source is to be transformed
+     */
     private void parseDynamicImportModuleSource(JSDynamicImportModule moduleRecord) {
         String sourceCode = moduleRecord.rawSource();
         String scanSourceCode = maskModuleComments(sourceCode);
@@ -4286,7 +4560,9 @@ public final class JSContext implements AutoCloseable {
                                 remainingCode = "";
                             }
                             transformedSourceBuilder.append("let ")
-                                    .append(declarationName)
+                                    .append(requireGeneratedIdentifier(
+                                            declarationName,
+                                            "default export declaration name '" + declarationName + "'"))
                                     .append(" = ")
                                     .append(declarationPart)
                                     .append(";\n");
@@ -4693,7 +4969,9 @@ public final class JSContext implements AutoCloseable {
                             new HashSet<>(importResolutionStack), importAttributes);
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
     }
@@ -4703,6 +4981,7 @@ public final class JSContext implements AutoCloseable {
      * This should be called at the end of each task in the event loop.
      */
     public void processMicrotasks() {
+        requireOpen();
         microtaskQueue.processMicrotasks();
         pollFinalizationRegistries();
     }
@@ -4899,7 +5178,9 @@ public final class JSContext implements AutoCloseable {
                     asyncDepCount++;
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
         moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);

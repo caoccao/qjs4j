@@ -20,8 +20,8 @@ import com.caoccao.qjs4j.core.JSValue;
 import com.caoccao.qjs4j.vm.Bytecode;
 import com.caoccao.qjs4j.vm.Opcode;
 
-import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,16 +31,31 @@ import java.util.Map;
  * Handles encoding of opcodes, operands, and manages constant/atom pools.
  */
 public final class BytecodeEmitter {
+    private static final int INITIAL_CODE_CAPACITY = 256;
+    private final Map<String, Integer> atomIndexCache;
     private final List<String> atomPool;
-    private final ByteArrayOutputStream code;
     private final Map<JSValue, Integer> constantIndexCache;
     private final List<JSValue> constantPool;
+    /**
+     * Growable code buffer, written and patched in place.
+     * <p>
+     * This used to be a {@link java.io.ByteArrayOutputStream}, which offers no way to overwrite an
+     * already-written byte: every {@link #patchJump(int, int)} and {@link #markCatchAsFinally(int)}
+     * had to copy the whole buffer out, edit it, reset the stream and copy it back. Compiling a
+     * function with <em>J</em> jumps over <em>N</em> bytes of code cost O(J&middot;N) in raw array
+     * copying, and every {@code if}, loop, {@code &&}, {@code ||}, {@code ?:}, {@code try} and
+     * {@code switch} emits at least one patch.
+     */
+    private byte[] code;
+    private int codeSize;
 
     public BytecodeEmitter() {
-        this.code = new ByteArrayOutputStream();
+        this.code = new byte[INITIAL_CODE_CAPACITY];
+        this.codeSize = 0;
         this.constantPool = new ArrayList<>();
         this.constantIndexCache = new HashMap<>();
         this.atomPool = new ArrayList<>();
+        this.atomIndexCache = new HashMap<>();
     }
 
     /**
@@ -54,7 +69,7 @@ public final class BytecodeEmitter {
      * Build the final Bytecode object with local variable name information.
      */
     public Bytecode build(int localCount, String[] localVarNames) {
-        byte[] instructions = code.toByteArray();
+        byte[] instructions = Arrays.copyOf(code, codeSize);
         JSValue[] constants = constantPool.toArray(JSValue.NO_ARGS);
         String[] atoms = atomPool.toArray(new String[0]);
 
@@ -65,7 +80,7 @@ public final class BytecodeEmitter {
      * Get the current bytecode offset.
      */
     public int currentOffset() {
-        return code.size();
+        return codeSize;
     }
 
     /**
@@ -73,10 +88,16 @@ public final class BytecodeEmitter {
      * Returns the atom index.
      */
     public int emitAtom(String str) {
-        int index = atomPool.indexOf(str);
-        if (index == -1) {
+        // Cached the same way emitConstant is. A linear atomPool.indexOf(str) per emitted atom
+        // cost O(A^2) for A distinct atoms in a function.
+        Integer cached = atomIndexCache.get(str);
+        int index;
+        if (cached != null) {
+            index = cached;
+        } else {
             index = atomPool.size();
             atomPool.add(str);
+            atomIndexCache.put(str, index);
         }
         emitU32(index);
         return index;
@@ -123,14 +144,14 @@ public final class BytecodeEmitter {
     public void emitOpcode(Opcode op) {
         int opcode = op.getCode();
         if (opcode <= 0xFF) {
-            code.write(opcode);
+            write(opcode);
         } else {
             // Extended opcode encoding:
             // - prefix 0x00 (INVALID opcode slot)
             // - second byte stores opcode - 256
             // The VM decoder maps this pair back to the original Opcode enum entry.
-            code.write(0);
-            code.write(opcode - 0x100);
+            write(0);
+            write(opcode - 0x100);
         }
     }
 
@@ -182,25 +203,25 @@ public final class BytecodeEmitter {
      * Emit an unsigned 16-bit value (big-endian).
      */
     public void emitU16(int value) {
-        code.write((value >> 8) & 0xFF);
-        code.write(value & 0xFF);
+        write(value >> 8);
+        write(value);
     }
 
     /**
      * Emit an unsigned 32-bit value (big-endian).
      */
     public void emitU32(int value) {
-        code.write((value >> 24) & 0xFF);
-        code.write((value >> 16) & 0xFF);
-        code.write((value >> 8) & 0xFF);
-        code.write(value & 0xFF);
+        write(value >> 24);
+        write(value >> 16);
+        write(value >> 8);
+        write(value);
     }
 
     /**
      * Emit an unsigned 8-bit value.
      */
     public void emitU8(int value) {
-        code.write(value & 0xFF);
+        write(value);
     }
 
     /**
@@ -214,14 +235,14 @@ public final class BytecodeEmitter {
      * Get the current bytecode as array.
      */
     public byte[] getCode() {
-        return code.toByteArray();
+        return Arrays.copyOf(code, codeSize);
     }
 
     /**
      * Get code size in bytes.
      */
     public int getCodeSize() {
-        return code.size();
+        return codeSize;
     }
 
     /**
@@ -238,26 +259,30 @@ public final class BytecodeEmitter {
      * return unwinding.
      */
     public void markCatchAsFinally(int offset) {
-        byte[] bytes = code.toByteArray();
-        bytes[offset] |= (byte) 0x80;
-        code.reset();
-        code.write(bytes, 0, bytes.length);
+        code[offset] |= (byte) 0x80;
     }
 
     /**
      * Patch a previously emitted jump instruction with the target offset.
      */
     public void patchJump(int offset, int target) {
-        byte[] bytes = code.toByteArray();
         int jumpDistance = target - (offset + 4);
 
-        bytes[offset] = (byte) ((jumpDistance >> 24) & 0xFF);
-        bytes[offset + 1] = (byte) ((jumpDistance >> 16) & 0xFF);
-        bytes[offset + 2] = (byte) ((jumpDistance >> 8) & 0xFF);
-        bytes[offset + 3] = (byte) (jumpDistance & 0xFF);
+        code[offset] = (byte) (jumpDistance >> 24);
+        code[offset + 1] = (byte) (jumpDistance >> 16);
+        code[offset + 2] = (byte) (jumpDistance >> 8);
+        code[offset + 3] = (byte) jumpDistance;
+    }
 
-        // Reset stream with patched bytes
-        code.reset();
-        code.write(bytes, 0, bytes.length);
+    /**
+     * Append one byte, growing the buffer when needed.
+     *
+     * @param value the value whose low 8 bits are appended
+     */
+    private void write(int value) {
+        if (codeSize == code.length) {
+            code = Arrays.copyOf(code, code.length * 2);
+        }
+        code[codeSize++] = (byte) value;
     }
 }

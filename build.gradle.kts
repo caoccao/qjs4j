@@ -86,6 +86,7 @@ object Config {
 plugins {
     java
     id("application")
+    jacoco
     `maven-publish`
     signing
     id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
@@ -99,8 +100,13 @@ repositories {
 }
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    // A toolchain, not sourceCompatibility/targetCompatibility. Those only set javac flags —
+    // Gradle still ran on whatever JDK was on PATH, and on a current JDK the build aborted with a
+    // bare version number and no actionable message. With a toolchain Gradle selects (or
+    // provisions) a JDK 17 regardless of the launching JDK.
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(Config.Versions.JAVA_VERSION.toInt()))
+    }
     withJavadocJar()
     withSourcesJar()
 }
@@ -205,6 +211,20 @@ tasks.register<JavaExec>("test262Language") {
     jvmArgs = listOf("-Xmx2g")
 }
 
+// Coverage measurement. There was none, so nothing said which of the ~450 main source files the
+// suite exercised at all.
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
 tasks.register("sourceJar") {
     group = "build"
     description = "Alias task for sourcesJar."
@@ -214,15 +234,31 @@ tasks.register("sourceJar") {
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.compilerArgs.add("-Xlint:deprecation")
+        // -Xlint:all rather than deprecation alone: the disabled categories surface the unchecked
+        // casts, fall-throughs and this-escapes that hid real defects. `serial` is off because no
+        // class here is meant to be Java-serialized, and `processing` because no annotation
+        // processors are configured.
+        options.compilerArgs.addAll(
+            listOf("-Xlint:all", "-Xlint:-serial", "-Xlint:-processing")
+        )
     }
     withType<Javadoc> {
         options.encoding = "UTF-8"
-        isFailOnError = false
-        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+        // Now that the tree is clean under the categories below, a new Javadoc defect fails the
+        // build instead of scrolling past.
+        isFailOnError = true
+        // Xdoclint:none suppressed the diagnostics that would have caught a Javadoc block naming
+        // the wrong type, a stray asterisk mid-sentence, and one comment swallowed into another.
+        // syntax+reference are the categories that find those; the noisier `missing` stays off.
+        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:syntax,reference", "-quiet")
     }
     withType<Test> {
         systemProperty("file.encoding", "UTF-8")
+        // Gradle's default test heap is 512 MB, which is below what the engine's own resource
+        // limits need to be reachable: a string-length or array-join limit only fires after the
+        // builder has grown past it, so a smaller heap runs out first and the JVM dies instead of
+        // the test observing a RangeError. Matches the heap the test262 tasks already use.
+        maxHeapSize = "2g"
         val cpuCount = Runtime.getRuntime().availableProcessors()
         maxParallelForks = maxOf(
             1,
@@ -260,7 +296,9 @@ publishing {
                 scm {
                     connection.set(Config.Pom.Scm.CONNECTION)
                     developerConnection.set(Config.Pom.Scm.DEVELOPER_CONNECTION)
-                    tag.set(Config.Versions.JAVET)
+                    // The release tag, not a dependency's version. This used to publish
+                    // Javet's version as qjs4j's SCM tag, breaking source-provenance tooling.
+                    tag.set("v${Config.VERSION}")
                     url.set(Config.URL)
                 }
                 properties.set(

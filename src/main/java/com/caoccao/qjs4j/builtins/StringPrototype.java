@@ -521,7 +521,11 @@ public final class StringPrototype {
         StringBuilder result = new StringBuilder(str.value());
 
         for (JSValue arg : args) {
-            result.append(JSTypeConversions.toString(context, arg).value());
+            String appended = JSTypeConversions.toString(context, arg).value();
+            if ((long) result.length() + appended.length() > JSString.MAX_LENGTH) {
+                return context.throwRangeError("Invalid string length");
+            }
+            result.append(appended);
         }
 
         return new JSString(result.toString());
@@ -1215,6 +1219,9 @@ public final class StringPrototype {
         if (fillStr.isEmpty()) {
             return str;
         }
+        if (maxLength > JSString.MAX_LENGTH) {
+            return context.throwRangeError("Invalid string length");
+        }
 
         StringBuilder result = new StringBuilder(s);
 
@@ -1245,6 +1252,10 @@ public final class StringPrototype {
                 : " ";
         if (fillStr.isEmpty()) {
             return str;
+        }
+
+        if (maxLength > JSString.MAX_LENGTH) {
+            return context.throwRangeError("Invalid string length");
         }
 
         int fillLen = (int) (maxLength - s.length());
@@ -1310,7 +1321,15 @@ public final class StringPrototype {
             return new JSString("");
         }
 
-        StringBuilder result = new StringBuilder((int) Math.min(s.length() * count, Integer.MAX_VALUE));
+        // Check the resulting length before allocating. Pre-sizing the builder to
+        // min(s.length() * count, Integer.MAX_VALUE) attempted a 2 GiB char[] up front and failed
+        // with OutOfMemoryError instead of the RangeError the specification calls for.
+        long resultLength = s.length() * count;
+        if (resultLength > JSString.MAX_LENGTH) {
+            return context.throwRangeError("Invalid string length");
+        }
+
+        StringBuilder result = new StringBuilder((int) resultLength);
         for (long i = 0; i < count; i++) {
             result.append(s);
         }

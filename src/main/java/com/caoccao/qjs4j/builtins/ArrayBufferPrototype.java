@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.builtins;
 
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
@@ -145,7 +146,7 @@ public final class ArrayBufferPrototype {
         try {
             buffer.resize((int) newByteLength);
             return JSUndefined.INSTANCE;
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (JSErrorException e) {
             return context.throwRangeError(e.getMessage());
         }
     }
@@ -324,7 +325,7 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transfer(context, (int) newByteLength);
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (JSErrorException e) {
             return context.throwTypeError(e.getMessage());
         }
     }
@@ -369,7 +370,7 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transferToFixedLength(context, (int) newByteLength);
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (JSErrorException e) {
             return context.throwTypeError(e.getMessage());
         }
     }
@@ -385,7 +386,7 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transferToImmutable(context);
-        } catch (IllegalStateException | IllegalArgumentException e) {
+        } catch (JSErrorException e) {
             return context.throwTypeError(e.getMessage());
         }
     }

@@ -6,9 +6,50 @@
 
 - `JSCompilerException` now carries the readonly offending AST node via `getAst()` when available, and `JSSyntaxErrorException` carries a readonly source location. Lexer, parser, and compiler locations are preserved on the internal JavaScript error value, so every `JSException` wrapper exposes the readonly line, column, start offset, and end offset via `getSourceLocation()` without exposing the AST, including across `JSContext.eval()`, nested evaluation, function construction, ShadowRealm evaluation, and module paths.
 
+### Error Handling
+
+- Errors raised by the engine — temporal dead zone, `ArrayBuffer`/`TypedArray`/`DataView` range errors, revoked-proxy and private-field type errors — are now catchable by the script's own `try`/`catch`.
+- Engine-internal failures report a diagnosable message instead of `VM error: null`.
+- Error messages match V8: `Cannot access 'x' before initialization`, `Cannot read properties of null (reading 'foo')`.
+- Building an error message no longer runs user getters or proxy traps.
+- Exceptions thrown from a microtask are recorded instead of silently discarded.
+
 ### Runtime Correctness
 
 - Fixed the Octane v7 failures from [issue #7](https://github.com/caoccao/qjs4j/issues/7): abstract equality no longer coerces ordinary objects when comparing them with `null` or `undefined`, and RegExp literals and species operations keep using the realm intrinsics when the global `RegExp` binding is replaced.
+- Object spread and rest create data properties, so a setter inherited from `Object.prototype` no longer intercepts `{...src}`.
+- `Object.getOwnPropertyNames()` works on a Proxy wrapping a frozen or sealed array.
+- `getOwnPropertyDescriptor()` returns a copy, so callers can no longer mutate an object's stored attributes.
+- `break` and `continue` accept contextual-keyword labels such as `of`, `as` and `from`.
+- Cyclic and very deep prototype chains raise `RangeError` instead of exhausting the stack.
+
+### Resource Limits
+
+- Catastrophic RegExp backtracking raises `RangeError` instead of hanging. Tunable via `JSRuntimeOptions.setRegExpBacktrackLimit(long)`.
+- Oversized strings raise `RangeError` instead of `OutOfMemoryError`.
+- `JSRuntime.requestInterrupt()` stops a runaway script from another thread.
+
+### Embedder API
+
+- `JSObject.set(int, JSValue)` honours frozen, sealed and non-extensible objects at every index.
+- Array creation, `toArray()` and `setLength()` raise `JSRangeErrorException` instead of Java runtime exceptions.
+- `JSContext.close()` releases all context state and is idempotent; using a closed context fails fast.
+- `JSRuntime` documents its threading contract: one context per thread.
+
+### Performance
+
+- Compiling large functions is no longer quadratic — an 8,000-branch function compiles 5x faster.
+- Array, RegExp and tagged-template literals are no longer retained for the lifetime of the VM.
+
+### CLI
+
+- `QuickJSInterpreter` gains `--module`, `--eval` and `--help`, exposes `scriptArgs`, and reports uncaught errors with a stack trace and a non-zero exit code.
+
+### Build and Tooling
+
+- A Gradle toolchain pins compilation and tests to JDK 17.
+- Compiler and Javadoc lint enabled; JaCoCo coverage reporting added.
+- CI runs Test262 and builds on JDK 17 and 21.
 
 ## 0.1.1
 

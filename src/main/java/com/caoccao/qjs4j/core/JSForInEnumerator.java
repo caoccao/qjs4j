@@ -54,7 +54,9 @@ public class JSForInEnumerator {
             if (key.isSymbol()) {
                 continue;
             }
-            PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+            // Raw: enumeration only reads isEnumerable(), and the descriptor never escapes, so
+            // the defensive copy would be pure overhead on every key of every for-in.
+            PropertyDescriptor descriptor = obj.getOwnPropertyDescriptorRaw(key);
             String propertyName = key.toPropertyString();
             if (!seenPropertyNames.add(propertyName)) {
                 continue;
@@ -74,7 +76,7 @@ public class JSForInEnumerator {
     private boolean isCurrentlyEnumerable(JSObject obj, PropertyKey key) {
         JSObject currentObject = obj;
         while (currentObject != null) {
-            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptor(key);
+            PropertyDescriptor descriptor = currentObject.getOwnPropertyDescriptorRaw(key);
             if (descriptor != null) {
                 return descriptor.isEnumerable();
             }

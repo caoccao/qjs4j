@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import java.util.Locale;
 import java.util.Map;
 
@@ -194,14 +195,14 @@ public final class JSIntlRelativeTimeFormat extends JSObject {
             case "months", "month" -> "month";
             case "quarters", "quarter" -> "quarter";
             case "years", "year" -> "year";
-            default -> throw new IllegalArgumentException("Invalid unit: " + unit);
+            default -> throw new JSRangeErrorException("Invalid unit: " + unit);
         };
     }
 
     public String format(double value, String unit) {
         String normalizedUnit = normalizeUnit(unit);
         if (Double.isNaN(value) || Double.isInfinite(value)) {
-            throw new IllegalArgumentException("Invalid value");
+            throw new JSRangeErrorException("Invalid value");
         }
 
         boolean isPast = value < 0 || isNegativeZero(value);

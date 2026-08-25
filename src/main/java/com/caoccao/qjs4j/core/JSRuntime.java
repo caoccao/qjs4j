@@ -41,6 +41,25 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * - Global objects
  * - Module caches
  * - Stack traces
+ * <h2>Threading</h2>
+ * <strong>A {@link JSContext} is confined to one thread.</strong> {@code JSContext},
+ * {@code JSObject}, {@code JSArray}, {@code VirtualMachine}, {@code JSShape} and {@code AtomTable}
+ * have no synchronisation at all, and {@code JSShape} in particular carries a mutable single-entry
+ * lookup memo that concurrent readers would tear. Evaluating on two threads against one context —
+ * or against two contexts that share values — is undefined behaviour.
+ * <p>
+ * Only three things on a {@code JSRuntime} are safe to touch from another thread:
+ * <ul>
+ * <li>{@link #requestInterrupt()} and {@link #clearInterrupt()}, which is the supported way to stop
+ * a running evaluation;</li>
+ * <li>the global symbol registry ({@link #getOrCreateGlobalSymbol(String)},
+ * {@link #getGlobalSymbolKey(JSSymbol)}), which is synchronised;</li>
+ * <li>enqueueing work — {@link #enqueueJob(Job)} and {@code JSContext.enqueueMicrotask}, which some
+ * host integrations (for example {@code Atomics.waitAsync}) call from helper threads. Enqueueing is
+ * safe; <em>draining</em> the queue must happen on the owning thread.</li>
+ * </ul>
+ * The collections here are concurrent so those three paths are sound. That is the whole extent of
+ * the guarantee: it does not make the engine thread-safe.
  */
 public final class JSRuntime implements AutoCloseable {
     private final AtomTable atoms;
@@ -49,7 +68,15 @@ public final class JSRuntime implements AutoCloseable {
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
     private final JSRuntimeOptions options;
-    private JSContext currentExecutingContext;
+    /**
+     * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm
+     * proxy paths. Declared volatile so a reader never observes a stale context.
+     */
+    private volatile JSContext currentExecutingContext;
+    /**
+     * Set from any thread by {@link #requestInterrupt()} and polled by the interpreter loop.
+     */
+    private volatile boolean interruptRequested;
 
     /**
      * Create a new runtime with default options.
@@ -102,8 +129,13 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Enqueue a job to be executed later.
-     * Used for promise reactions and queueMicrotask().
+     * Enqueue a host job to run on the next {@link #runJobs()} drain.
+     * <p>
+     * This is the embedder's entry point for scheduling work alongside the engine's own promise
+     * reactions. Promise reactions and {@code queueMicrotask} go to the owning context's microtask
+     * queue, which {@link #runJobs()} also drains.
+     *
+     * @param job the job to enqueue; {@code null} is ignored
      */
     public void enqueueJob(Job job) {
         if (job != null) {
@@ -112,7 +144,17 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Trigger JVM garbage collection and then poll finalization registries.
+     * Poll every context's finalization registries.
+     * <p>
+     * This does <strong>not</strong> ask the JVM to collect, despite the name — it drains
+     * {@code FinalizationRegistry} callbacks for objects the JVM has <em>already</em> collected,
+     * which is all an engine can usefully do. Deciding when to collect belongs to the embedder:
+     * call {@link System#gc()} yourself if you want that, then call this to drain the callbacks it
+     * makes eligible.
+     * <p>
+     * The Javadoc here used to say it triggered a collection, which it never did. Making it
+     * actually call {@code System.gc()} is not the fix: {@link #close()} calls this method, so an
+     * embedder that creates a runtime per unit of work would pay a full JVM collection every time.
      */
     public void gc() {
         List<JSContext> contextSnapshot = getContextSnapshot();
@@ -180,17 +222,31 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Check if there are pending jobs.
+     * Check whether any host job is pending on this runtime.
+     * <p>
+     * This covers the host queue only. Promise reactions and {@code queueMicrotask} live on the
+     * owning {@link JSContext}'s microtask queue — ask
+     * {@code context.getMicrotaskQueue().hasPendingMicrotasks()} for those.
+     *
+     * @return true when a host job enqueued with {@link #enqueueJob(Job)} is waiting
      */
     public boolean hasPendingJobs() {
         return !jobQueue.isEmpty();
     }
 
     /**
-     * Run all pending jobs (microtasks).
-     * This processes promise reactions and other microtasks.
+     * Run all pending host jobs on this runtime.
+     * <p>
+     * <strong>This drains the host queue only.</strong> It deliberately does <em>not</em> touch any
+     * context's microtask queue, for two reasons: a microtask queue belongs to one
+     * {@link JSContext} and must be drained on that context's own thread (see the threading
+     * contract on this class), and draining it here would be unbounded — a microtask that
+     * re-enqueues itself would spin forever with no deadline to stop it.
+     * <p>
+     * To settle promises, call {@link JSContext#processMicrotasks()} on the context that owns them.
+     * {@link JSContext#eval} already does so before returning.
      *
-     * @return Number of jobs executed
+     * @return the number of host jobs executed
      */
     public int runJobs() {
         int count = 0;
@@ -205,19 +261,43 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
-     * Check if execution should be interrupted.
-     * Called periodically during bytecode execution.
+     * Record the context whose bytecode is currently executing.
+     * Used by cross-realm proxy paths to find the active realm.
+     *
+     * @param context the executing context, or {@code null} when execution has finished
      */
     public void setCurrentExecutingContext(JSContext context) {
         this.currentExecutingContext = context;
     }
 
+    /**
+     * Ask any evaluation running on this runtime to stop.
+     * <p>
+     * Safe to call from another thread. The interpreter polls this every
+     * {@code INTERRUPT_CHECK_INTERVAL} opcodes and terminates with an exception that JavaScript
+     * {@code try}/{@code catch} cannot intercept, so a script cannot keep itself alive by
+     * swallowing the signal. The flag stays set until {@link #clearInterrupt()} is called, so a
+     * later evaluation on this runtime would also stop immediately.
+     */
+    public void requestInterrupt() {
+        this.interruptRequested = true;
+    }
+
+    /**
+     * Clear a pending interrupt request so evaluation can resume.
+     */
+    public void clearInterrupt() {
+        this.interruptRequested = false;
+    }
+
+    /**
+     * Check if execution should be interrupted.
+     * Called periodically during bytecode execution.
+     *
+     * @return true when a host thread has called {@link #requestInterrupt()}
+     */
     public boolean shouldInterrupt() {
-        // In full implementation, this would check:
-        // - Timeout limits
-        // - Memory limits
-        // - User-requested interrupts
-        return false;
+        return interruptRequested;
     }
 
     /**

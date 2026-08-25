@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.core.temporal.TemporalDuration;
 
 import java.math.BigDecimal;
@@ -121,6 +122,9 @@ public final class JSIntlDurationFormat extends JSObject {
      * @param baseUnit       "seconds", "milliseconds", or "microseconds"
      * @return the combined fractional value as BigDecimal
      */
+    // The switch below accumulates sub-second components and falls through deliberately: an
+    // exponent of 9 must add milliseconds and microseconds too.
+    @SuppressWarnings("fallthrough")
     public static BigDecimal computeFractionalValue(Map<String, Double> durationValues, String baseUnit) {
         double seconds = durationValues.getOrDefault("seconds", 0.0);
         double milliseconds = durationValues.getOrDefault("milliseconds", 0.0);
@@ -132,7 +136,7 @@ public final class JSIntlDurationFormat extends JSObject {
             case "seconds" -> exponent = 9;
             case "milliseconds" -> exponent = 6;
             case "microseconds" -> exponent = 3;
-            default -> throw new IllegalArgumentException("Invalid base unit: " + baseUnit);
+            default -> throw new JSRangeErrorException("Invalid base unit: " + baseUnit);
         }
 
         // Check if no sub-units are present

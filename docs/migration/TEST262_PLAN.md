@@ -1,5 +1,9 @@
 # Test262 Runner Implementation Plan
 
+> This is the runner's **design document**, not a conformance report. Recorded results live in
+> [TEST262_STATUS.md](TEST262_STATUS.md), and CI publishes a fresh run of the quick subset on every
+> push (see `.github/workflows/build.yml`).
+
 ## Overview
 
 This document outlines the plan to implement a Test262 conformance test runner for qjs4j. Test262 is the official ECMAScript conformance test suite maintained by TC39. Implementing a runner will allow us to validate qjs4j's ECMAScript compliance and track implementation progress.

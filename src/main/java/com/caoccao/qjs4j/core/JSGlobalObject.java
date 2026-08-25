@@ -2929,7 +2929,7 @@ public final class JSGlobalObject {
         /**
          * encodeURI(uri)
          * Encode a URI by escaping certain characters.
-         * Does not encode: A-Z a-z 0-9 ; , / ? : @ & = + $ - _ . ! ~ * ' ( ) #
+         * Does not encode: {@code A-Z a-z 0-9 ; , / ? : @ & = + $ - _ . ! ~ * ' ( ) #}
          *
          * @see <a href="https://tc39.es/ecma262/#sec-encodeuri-uri">ECMAScript encodeURI</a>
          */
@@ -2942,7 +2942,7 @@ public final class JSGlobalObject {
         /**
          * encodeURIComponent(uriComponent)
          * Encode a URI component by escaping certain characters.
-         * More aggressive than encodeURI - also encodes: ; , / ? : @ & = + $ #
+         * More aggressive than encodeURI - also encodes: {@code ; , / ? : @ & = + $ #}
          *
          * @see <a href="https://tc39.es/ecma262/#sec-encodeuricomponent-uricomponent">ECMAScript encodeURIComponent</a>
          */
@@ -3011,7 +3011,7 @@ public final class JSGlobalObject {
          * escape(string)
          * Deprecated function that encodes a string for use in a URL.
          * Encodes all characters except: A-Z a-z 0-9 @ * _ + - . /
-         * Uses %XX for characters < 256 and %uXXXX for characters >= 256.
+         * Uses %XX for characters {@code < 256} and %uXXXX for characters {@code >= 256}.
          *
          * @see <a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/escape">MDN escape</a>
          */

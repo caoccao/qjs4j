@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.util.Collections;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -175,7 +176,7 @@ public final class JSWeakSet extends JSObject {
         } else if (value instanceof JSSymbol symbolValue) {
             symbolData.add(symbolValue);
         } else {
-            throw new IllegalArgumentException("Invalid WeakSet value type");
+            throw new JSTypeErrorException("Invalid WeakSet value type");
         }
     }
 

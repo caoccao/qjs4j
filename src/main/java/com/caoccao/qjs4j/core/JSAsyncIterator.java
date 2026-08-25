@@ -26,7 +26,7 @@ import java.util.Iterator;
  * Based on ES2018 async iteration protocol.
  * <p>
  * Async iterators return promises that resolve to iterator results:
- * - next() returns Promise<{value, done}>
+ * - next() returns {@code Promise<{value, done}>}
  * - Used by for-await-of loops
  * - Identified by Symbol.asyncIterator
  */

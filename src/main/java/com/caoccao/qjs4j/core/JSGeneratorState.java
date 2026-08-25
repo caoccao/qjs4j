@@ -40,8 +40,10 @@ public final class JSGeneratorState {
     private final List<ResumeRecord> resumeRecords;
     private final JSValue thisArg;
     private boolean awaitSuspended;
-    // Execution state that needs to be preserved across yields
-    // TODO: Add full state preservation (PC, stack, locals) for proper resumption
+    // Execution state preserved across yields. Full preservation (program counter, operand stack,
+    // locals) is implemented — see saveSuspendedExecutionState / getSuspendedProgramCounter, which
+    // VirtualMachine.createExecutionContext restores from. The stale TODO that used to sit here
+    // sent readers looking for work that was already done.
     private boolean isCompleted;
     private YieldResult lastYieldResult;
     private ResumeKind pendingResumeKind;

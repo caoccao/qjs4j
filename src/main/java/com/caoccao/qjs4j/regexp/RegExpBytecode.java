@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.Arrays;
 
 /**
@@ -55,16 +56,16 @@ public record RegExpBytecode(byte[] instructions, int flags, int captureCount, S
                     case 'y' -> FLAG_STICKY;
                     case 'd' -> FLAG_INDICES;
                     case 'v' -> FLAG_UNICODE_SETS;
-                    default -> throw new IllegalArgumentException("Invalid regular expression flags");
+                    default -> throw new JSSyntaxErrorException("Invalid regular expression flags");
                 };
                 if ((flags & flagBit) != 0) {
-                    throw new IllegalArgumentException("Invalid regular expression flags");
+                    throw new JSSyntaxErrorException("Invalid regular expression flags");
                 }
                 flags |= flagBit;
             }
         }
         if ((flags & FLAG_UNICODE) != 0 && (flags & FLAG_UNICODE_SETS) != 0) {
-            throw new IllegalArgumentException("Invalid regular expression flags");
+            throw new JSSyntaxErrorException("Invalid regular expression flags");
         }
         return flags;
     }

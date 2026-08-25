@@ -127,6 +127,16 @@ public final class PropertyKey {
 
     /**
      * Create a property key from an interned string (atom).
+     * <p>
+     * The atom index is metadata only: {@link #equals(Object)} and {@link #hashCode()} derive from
+     * the canonical property string, never from the index. Deriving the hash from the index would
+     * break the {@code equals}/{@code hashCode} contract, because an interned key and a plain one
+     * naming the same property are equal. Nothing in the engine interns keys yet; this is the entry
+     * point for when it does.
+     *
+     * @param str       the property name
+     * @param atomIndex the atom table index
+     * @return an interned property key
      */
     public static PropertyKey fromAtom(String str, int atomIndex) {
         return new PropertyKey(str, atomIndex);
@@ -214,6 +224,19 @@ public final class PropertyKey {
         return value instanceof JSSymbol s ? s : null;
     }
 
+    /**
+     * Two keys are equal when they name the same JavaScript property.
+     * <p>
+     * A canonical array index has two internal encodings — {@link #fromIndex(int)} stores an
+     * {@link Integer} while {@link #fromString(String)} stores a {@link String} — yet
+     * {@code fromIndex(0)} and {@code fromString("0")} name the same property. Comparing the raw
+     * {@code value} objects would report them unequal (and hash them differently), which silently
+     * breaks every {@code HashSet<PropertyKey>} and {@code HashMap<PropertyKey, ?>} in the engine.
+     * The canonical property string is therefore the identity for string and index keys.
+     * <p>
+     * Symbols are compared by identity, and never equal a string key, because a symbol's property
+     * string ({@code "Symbol(x)"}) is not a property name.
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -222,14 +245,13 @@ public final class PropertyKey {
         if (!(obj instanceof PropertyKey other)) {
             return false;
         }
-
-        // Fast path: if both have atom indices, compare them
-        if (atomIndex >= 0 && other.atomIndex >= 0) {
-            return atomIndex == other.atomIndex;
+        if (value instanceof JSSymbol || other.value instanceof JSSymbol) {
+            return value == other.value;
         }
-
-        // Compare values
-        return Objects.equals(value, other.value);
+        if (value instanceof Integer && other.value instanceof Integer) {
+            return value.equals(other.value);
+        }
+        return toPropertyString().equals(other.toPropertyString());
     }
 
     public int getAtomIndex() {
@@ -240,13 +262,19 @@ public final class PropertyKey {
         return value;
     }
 
+    /**
+     * Hashes the canonical property string so index and string encodings of the same property
+     * agree. Deriving the hash from {@code atomIndex} would break the {@code equals}/{@code
+     * hashCode} contract, because an interned and a non-interned key can be equal.
+     */
     @Override
     public int hashCode() {
-        // Use atom index for faster hashing if available
-        if (atomIndex >= 0) {
-            return atomIndex;
+        if (value instanceof JSSymbol) {
+            return Objects.hashCode(value);
         }
-        return Objects.hashCode(value);
+        // String.hashCode is cached by the JVM, and index keys precompute their property string,
+        // so this stays a field read plus a cached hash on the hot paths.
+        return toPropertyString().hashCode();
     }
 
     /**

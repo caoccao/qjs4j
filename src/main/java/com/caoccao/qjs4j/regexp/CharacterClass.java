@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -150,7 +151,7 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      */
     public static CharacterClass range(int start, int end) {
         if (start > end) {
-            throw new IllegalArgumentException("Invalid range: " + start + "-" + end);
+            throw new JSSyntaxErrorException("Invalid range: " + start + "-" + end);
         }
         return new CharacterClass(false, new int[]{start, end});
     }
@@ -167,12 +168,11 @@ public record CharacterClass(boolean inverted, int[] ranges) {
      */
     public static CharacterClass union(CharacterClass... classes) {
         List<Integer> rangeList = new ArrayList<>();
-        boolean anyInverted = false;
 
         for (CharacterClass cc : classes) {
             if (cc.inverted) {
-                anyInverted = true;
-                // Union with inverted classes is complex, not implemented yet
+                // Union with inverted classes is complex, not implemented yet. The `anyInverted`
+                // flag that used to be set here was never read: the throw made it unreachable.
                 throw new UnsupportedOperationException("Union with inverted classes not yet supported");
             }
             for (int r : cc.ranges) {

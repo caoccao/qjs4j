@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import com.caoccao.qjs4j.vm.StackFrame;
 
@@ -36,9 +37,20 @@ public non-sealed class JSObject implements JSValue {
     public static final String NAME = "Object";
     private static final JSShape EMPTY_SHAPE = new JSShape();
     private static final int INITIAL_PROPERTY_VALUE_CAPACITY = 4;
-    private static final int MAX_PROTOTYPE_DEPTH = 10000;
+    /**
+     * Maximum number of prototype links a chain walk will follow.
+     * <p>
+     * The walks are recursive so that a {@link JSProxy} anywhere in the chain still gets its traps
+     * invoked, which means this bound is only meaningful if the Java stack can hold that many
+     * frames. It cannot hold 10,000: measured against this engine, a plain property read overflows
+     * at ~8,000 frames on the default stack and at ~2,000 on a 512 KB stack, so the old value was
+     * never the binding limit and a deep chain died with a {@code StackOverflowError} instead.
+     * 1,000 is comfortably reachable on a 512 KB stack and is far beyond any real prototype chain.
+     */
+    private static final int MAX_PROTOTYPE_DEPTH = 1000;
     protected final JSContext context;
     protected boolean arrayObject; // Equivalent to QuickJS class_id == JS_CLASS_ARRAY
+    protected boolean constantPrototypeInitialized; // Internal slot: realm prototype already transferred
     protected JSConstructorType constructorType; // Internal slot for [[Constructor]] type (not accessible from JS)
     protected boolean extensible = true;
     protected boolean frozen = false;
@@ -124,7 +136,10 @@ public non-sealed class JSObject implements JSValue {
         // Deleted properties have null descriptors (shape key set to null).
         int propCount = shape.getPropertyCount();
         int kept = propCount - shape.getDeletedPropCount();
-        JSValue[] newValues = new JSValue[kept];
+        // Leave headroom. Sizing exactly to `kept` meant the next definePropertyInternal
+        // immediately triggered ensurePropertyValueCapacity and reallocated again, which is the
+        // common delete-then-add pattern.
+        JSValue[] newValues = new JSValue[Math.max(kept * 2, INITIAL_PROPERTY_VALUE_CAPACITY)];
         int j = 0;
         for (int i = 0; i < propCount; i++) {
             if (shape.getDescriptorAt(i) != null) {
@@ -150,8 +165,9 @@ public non-sealed class JSObject implements JSValue {
             return false;
         }
 
-        // ValidateAndApplyPropertyDescriptor: check current property constraints
-        PropertyDescriptor current = getOwnPropertyDescriptor(key);
+        // ValidateAndApplyPropertyDescriptor: check current property constraints.
+        // Raw: `current` is only read for validation below and never escapes this method.
+        PropertyDescriptor current = getOwnPropertyDescriptorRaw(key);
         if (current != null && !current.isConfigurable()) {
             // Step 4a: Cannot make non-configurable property configurable
             if (descriptor.hasConfigurable() && descriptor.isConfigurable()) {
@@ -550,6 +566,16 @@ public non-sealed class JSObject implements JSValue {
      *
      * @param forDelete if true, returns format for delete errors, otherwise for assignment errors
      */
+    /**
+     * Build the object description used in a failed-assignment or failed-delete TypeError message.
+     * <p>
+     * Own data properties only. This runs while an error is already being constructed, so a
+     * {@code constructor} or {@code name} getter must not execute re-entrantly at an
+     * already-failing moment — it could itself throw and overwrite the exception being reported.
+     *
+     * @param forDelete true for a delete error, which uses a different message shape
+     * @return a description built without running any script
+     */
     private String getObjectDescriptionForError(boolean forDelete) {
         // For functions, use format: "function 'functionString'"
         if (this instanceof JSFunction func) {
@@ -562,10 +588,10 @@ public non-sealed class JSObject implements JSValue {
         String prefix = forDelete ? "" : "object '";
         String suffix = forDelete ? "" : "'";
 
-        // Get constructor name if available
-        JSValue constructor = get("constructor");
-        if (constructor instanceof JSFunction constructorFunc) {
-            JSValue name = constructorFunc.get(PropertyKey.NAME);
+        // Get constructor name if available, without invoking accessors.
+        JSValue constructor = findOwnDataPropertyInChain(PropertyKey.CONSTRUCTOR);
+        if (constructor instanceof JSObject constructorFunc && constructor instanceof JSFunction) {
+            JSValue name = constructorFunc.findOwnDataPropertyInChain(PropertyKey.NAME);
             if (name instanceof JSString nameStr && !nameStr.value().isEmpty()) {
                 return prefix + "#<" + nameStr.value() + ">" + suffix;
             }
@@ -573,6 +599,27 @@ public non-sealed class JSObject implements JSValue {
 
         // Default to Object
         return prefix + "#<Object>" + suffix;
+    }
+
+    /**
+     * Look up a property along the prototype chain, reading own data descriptors only.
+     * <p>
+     * Neither getters nor proxy traps are consulted: this exists for paths that must not run script
+     * — building an error message while an exception is already in flight.
+     *
+     * @param key the property key
+     * @return the value, or {@code null} when it is absent or is an accessor
+     */
+    private JSValue findOwnDataPropertyInChain(PropertyKey key) {
+        JSObject current = this;
+        for (int depth = 0; current != null && depth < MAX_PROTOTYPE_DEPTH; depth++) {
+            PropertyDescriptor descriptor = current.getOwnPropertyDescriptorRaw(key);
+            if (descriptor != null) {
+                return descriptor.isDataDescriptor() ? descriptor.getValue() : null;
+            }
+            current = current.prototype;
+        }
+        return null;
     }
 
     private List<PropertyKey> getOrderedOwnKeys(boolean enumerableOnly) {
@@ -660,8 +707,52 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * Get the property descriptor for a property.
+     * <p>
+     * The returned descriptor is a defensive copy. {@link PropertyDescriptor} is mutable
+     * ({@code setValue}, {@code setWritable}, {@code mergeFrom}, ...), so handing out the object's
+     * own instance let any caller silently rewrite a property's attributes — and made the result
+     * aliased for shape-backed properties but fresh for dense array elements, so callers could not
+     * tell which they had.
+     * <p>
+     * Engine internals that only read the flags on a hot path use
+     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} instead. That is the method exotic objects
+     * override; this one is the safe public view over it.
+     *
+     * @param key the property key
+     * @return a copy of the descriptor, or {@code null} when the property does not exist
      */
     public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+        PropertyDescriptor descriptor = getOwnPropertyDescriptorRaw(key);
+        return descriptor == null ? null : new PropertyDescriptor().copyFrom(descriptor);
+    }
+
+    /**
+     * Whether an own property exists and is enumerable.
+     * <p>
+     * Enumeration paths — {@code Object.keys}/{@code values}/{@code entries},
+     * {@code Object.assign}, {@code for}-{@code in} — need exactly this one bit per key.
+     * Asking for the descriptor to read it means a defensive copy per key, which is pure overhead
+     * for a caller that lets the descriptor go out of scope immediately.
+     *
+     * @param key the property key
+     * @return true when the property exists and is enumerable
+     */
+    public boolean isOwnPropertyEnumerable(PropertyKey key) {
+        PropertyDescriptor descriptor = getOwnPropertyDescriptorRaw(key);
+        return descriptor != null && descriptor.isEnumerable();
+    }
+
+    /**
+     * Get the object's own property descriptor instance, without copying.
+     * <p>
+     * For internal use only. The returned descriptor may be the object's live instance; mutating it
+     * changes the property. Exotic objects override this method rather than
+     * {@link #getOwnPropertyDescriptor(PropertyKey)}.
+     *
+     * @param key the property key
+     * @return the descriptor, or {@code null} when the property does not exist
+     */
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         int offset = getOwnPropertyOffset(key);
         if (offset >= 0) {
             PropertyDescriptor desc = shape.getDescriptorAt(offset);
@@ -862,8 +953,12 @@ public non-sealed class JSObject implements JSValue {
             }
         }
 
-        // Look in prototype chain with depth-based cycle detection
-        if (prototype != null && depth < MAX_PROTOTYPE_DEPTH) {
+        // Look in the prototype chain, bounded so a cyclic or pathologically deep chain reports a
+        // diagnosable error rather than exhausting the Java stack or silently answering undefined.
+        if (prototype != null) {
+            if (depth >= MAX_PROTOTYPE_DEPTH) {
+                throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
+            }
             return prototype.getWithReceiver(key, receiver, depth + 1);
         }
 
@@ -891,13 +986,35 @@ public non-sealed class JSObject implements JSValue {
      * Check if object has a property by key (including prototype chain).
      */
     public boolean has(PropertyKey key) {
+        return has(key, 0);
+    }
+
+    /**
+     * Check if object has a property by key, tracking prototype chain depth.
+     * <p>
+     * This walk had no bound at all, while {@code getWithReceiver} was bounded: the same prototype
+     * graph was therefore safe to read from and unsafe for {@code in}, and a cyclic chain — which
+     * the raw {@link #setPrototype(JSObject)} embedder API can create — recursed until the Java
+     * stack was exhausted.
+     * <p>
+     * Subclasses that intercept {@code in} override this method rather than {@link
+     * #has(PropertyKey)}, so the depth is carried across proxy and namespace hops.
+     *
+     * @param key   the property key
+     * @param depth how many prototype links have already been followed
+     * @return true when this object or its prototype chain has the property
+     */
+    protected boolean has(PropertyKey key, int depth) {
         if (hasOwnProperty(key)) {
             return true;
         }
-        if (prototype != null) {
-            return prototype.has(key);
+        if (prototype == null) {
+            return false;
         }
-        return false;
+        if (depth >= MAX_PROTOTYPE_DEPTH) {
+            throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
+        }
+        return prototype.has(key, depth + 1);
     }
 
     /**
@@ -956,6 +1073,35 @@ public non-sealed class JSObject implements JSValue {
      */
     public boolean isFrozen() {
         return frozen;
+    }
+
+    /**
+     * Whether the VM has already transferred the realm prototype onto this bytecode constant
+     * object. For internal use only - not accessible from JavaScript.
+     * <p>
+     * The VM used to track this in a per-VM {@code Set<JSObject>} that was never pruned, so every
+     * array literal, regexp literal and tagged-template object ever evaluated stayed reachable —
+     * along with everything it transitively referenced — for the lifetime of the VM. Keeping the
+     * bit on the object itself removes the side table, and the entry dies with the object.
+     *
+     * @return true when the prototype has already been transferred
+     */
+    public boolean isConstantPrototypeInitialized() {
+        return constantPrototypeInitialized;
+    }
+
+    /**
+     * Record that the realm prototype has been transferred onto this constant object.
+     * For internal use only - not accessible from JavaScript.
+     *
+     * @return true when this call performed the transition, false when it was already set
+     */
+    public boolean markConstantPrototypeInitialized() {
+        if (constantPrototypeInitialized) {
+            return false;
+        }
+        constantPrototypeInitialized = true;
+        return true;
     }
 
     /**
@@ -1046,17 +1192,21 @@ public non-sealed class JSObject implements JSValue {
 
     /**
      * Set a property value by integer index.
+     * <p>
+     * This goes through the ordinary {@code [[Set]]} path. An earlier fast path wrote indices
+     * {@code >= 100} straight into sparse backing storage, checking nothing — not
+     * {@code extensible}, not frozen or sealed, not an existing descriptor's {@code writable}, not
+     * an accessor's setter, not the prototype chain. A frozen object could therefore be given a new
+     * property and would then report {@code Object.isFrozen(o) === false} from JavaScript.
+     * <p>
+     * {@link JSArray#set(int, JSValue)} overrides this with a dense-storage fast path that does
+     * perform those checks, so indexed writes to arrays are unaffected.
+     *
+     * @param index the array index
+     * @param value the value to set
      */
     public void set(int index, JSValue value) {
-        // Use sparse storage for large indices
-        if (index >= 100 || (sparseProperties != null && sparseProperties.containsKey(index))) {
-            if (sparseProperties == null) {
-                sparseProperties = new HashMap<>();
-            }
-            sparseProperties.put(index, value);
-        } else {
-            set(PropertyKey.fromIndex(index), value);
-        }
+        set(PropertyKey.fromIndex(index), value);
     }
 
     /**
@@ -1104,9 +1254,13 @@ public non-sealed class JSObject implements JSValue {
             if (descriptor != null && descriptor.isAccessorDescriptor()) {
                 JSFunction setter = descriptor.getSetter();
                 if (setter != null) {
-                    boolean hadPendingException = context.hasPendingException();
+                    // Compare exception identity, not just presence. Testing only the flag
+                    // reported success whenever an exception was already pending on entry —
+                    // including when the setter itself threw, losing the setter's own failure.
+                    JSValue exceptionBefore = context.getPendingException();
                     setter.call(context, receiver, new JSValue[]{value});
-                    return hadPendingException || !context.hasPendingException();
+                    JSValue exceptionAfter = context.getPendingException();
+                    return exceptionAfter == null || exceptionAfter == exceptionBefore;
                 }
                 return failSet(key, throwOnFailure);
             }
@@ -1147,9 +1301,11 @@ public non-sealed class JSObject implements JSValue {
                 if (protoDescriptor != null && protoDescriptor.isAccessorDescriptor()) {
                     JSFunction setter = protoDescriptor.getSetter();
                     if (setter != null) {
-                        boolean hadPendingException = context.hasPendingException();
+                        // Exception identity, not just presence — see the own-property setter path.
+                        JSValue exceptionBefore = context.getPendingException();
                         setter.call(context, receiver, new JSValue[]{value});
-                        return hadPendingException || !context.hasPendingException();
+                        JSValue exceptionAfter = context.getPendingException();
+                        return exceptionAfter == null || exceptionAfter == exceptionBefore;
                     }
                     return failSet(key, throwOnFailure);
                 }
@@ -1175,9 +1331,12 @@ public non-sealed class JSObject implements JSValue {
         // the receiver is a Proxy object.
 
         // Step 2c: Let existingDescriptor be ? Receiver.[[GetOwnPropertyDescriptor]](P).
-        boolean hadPendingException = context.hasPendingException();
+        // Exception identity, not just presence: a pre-existing pending exception must not mask a
+        // new one raised by the receiver's [[GetOwnPropertyDescriptor]] trap.
+        JSValue exceptionBeforeLookup = context.getPendingException();
         PropertyDescriptor existingDescriptor = receiver.getOwnPropertyDescriptor(key);
-        if (!hadPendingException && context.hasPendingException()) {
+        JSValue exceptionAfterLookup = context.getPendingException();
+        if (exceptionAfterLookup != null && exceptionAfterLookup != exceptionBeforeLookup) {
             return false;
         }
 
@@ -1280,7 +1439,9 @@ public non-sealed class JSObject implements JSValue {
         // ES2024 10.1.2 OrdinarySetPrototypeOf step 8
         if (proto != null) {
             JSObject p = proto;
-            while (p != null) {
+            // Bounded: the raw setPrototype(JSObject) embedder API can install a cycle that this
+            // walk would otherwise follow forever.
+            for (int depth = 0; p != null && depth <= MAX_PROTOTYPE_DEPTH; depth++) {
                 if (p == this) {
                     return SetPrototypeResult.CIRCULAR;
                 }
@@ -1316,9 +1477,11 @@ public non-sealed class JSObject implements JSValue {
                 if (descriptor != null && descriptor.isAccessorDescriptor()) {
                     JSFunction setter = descriptor.getSetter();
                     if (setter != null) {
-                        boolean hadPendingException = context != null && context.hasPendingException();
+                        // Exception identity, not just presence — see the own-property setter path.
+                        JSValue exceptionBefore = context == null ? null : context.getPendingException();
                         setter.call(context, primitiveReceiver, new JSValue[]{value});
-                        return hadPendingException || (context != null && !context.hasPendingException());
+                        JSValue exceptionAfter = context == null ? null : context.getPendingException();
+                        return exceptionAfter == null || exceptionAfter == exceptionBefore;
                     }
                     // Accessor without setter
                     return false;

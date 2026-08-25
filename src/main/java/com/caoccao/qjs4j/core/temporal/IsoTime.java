@@ -156,7 +156,7 @@ public record IsoTime(int hour, int minute, int second, int millisecond, int mic
 
     /**
      * Formats the fractional seconds part (ms, us, ns) to the given number of digits.
-     * Returns empty string if digits <= 0.
+     * Returns empty string if {@code digits <= 0}.
      */
     public String formatFractionalPart(int digits) {
         if (digits <= 0) {

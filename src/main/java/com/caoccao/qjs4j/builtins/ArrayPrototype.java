@@ -1148,6 +1148,9 @@ public final class ArrayPrototype {
                 if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
                     result.append(JSTypeConversions.toString(context, element).value());
                 }
+                if (result.length() > JSString.MAX_LENGTH) {
+                    return context.throwRangeError("Invalid string length");
+                }
             }
         } else if (thisArg instanceof JSObject jsObject) {
             // Following QuickJS js_array_join: read length first, then coerce separator
@@ -1161,6 +1164,9 @@ public final class ArrayPrototype {
                 JSValue element = jsObject.get(PropertyKey.fromString(Long.toString(i)));
                 if (!(element instanceof JSNull) && !(element instanceof JSUndefined)) {
                     result.append(JSTypeConversions.toString(context, element).value());
+                }
+                if (result.length() > JSString.MAX_LENGTH) {
+                    return context.throwRangeError("Invalid string length");
                 }
             }
         }

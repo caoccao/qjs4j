@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.util.WeakHashMap;
 
 /**
@@ -229,7 +230,7 @@ public final class JSWeakMap extends JSObject {
         } else if (key instanceof JSSymbol symbolKey) {
             symbolData.put(symbolKey, value);
         } else {
-            throw new IllegalArgumentException("Invalid WeakMap key type");
+            throw new JSTypeErrorException("Invalid WeakMap key type");
         }
     }
 }

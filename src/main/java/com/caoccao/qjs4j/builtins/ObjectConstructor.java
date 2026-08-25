@@ -64,14 +64,8 @@ public final class ObjectConstructor {
             // Step 4b.ii: Let keys be from.[[OwnPropertyKeys]]()
             List<PropertyKey> keys = sourceObj.getOwnPropertyKeys();
             for (PropertyKey key : keys) {
-                // Step 4c.i: Let desc be from.[[GetOwnProperty]](nextKey)
-                PropertyDescriptor desc = sourceObj.getOwnPropertyDescriptor(key);
-                if (desc == null) {
-                    continue;
-                }
-
-                // Step 4c.iii: If desc is not undefined and desc.[[Enumerable]] is true
-                if (!desc.isEnumerable()) {
+                // Step 4c.i / 4c.iii: enumerable own property? Only that bit is needed.
+                if (!sourceObj.isOwnPropertyEnumerable(key)) {
                     continue;
                 }
 
@@ -362,13 +356,13 @@ public final class ObjectConstructor {
             if (key.isSymbol()) {
                 continue;
             }
-            // Step 3a: Let desc be ? obj.[[GetOwnProperty]](key)
-            PropertyDescriptor desc = obj.getOwnPropertyDescriptor(key);
+            // Step 3a/3b: enumerable own property? Only that bit is needed, so ask for it
+            // directly rather than taking a descriptor copy per key.
+            boolean enumerable = obj.isOwnPropertyEnumerable(key);
             if (context.hasPendingException()) {
                 return JSUndefined.INSTANCE;
             }
-            // Step 3b: If desc is not undefined and desc.[[Enumerable]] is true
-            if (desc != null && desc.isEnumerable()) {
+            if (enumerable) {
                 JSValue value = obj.get(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
@@ -1070,11 +1064,12 @@ public final class ObjectConstructor {
         for (PropertyKey key : propertyKeys) {
             // Include both string and index keys (not symbols)
             if (!key.isSymbol()) {
-                PropertyDescriptor descriptor = obj.getOwnPropertyDescriptor(key);
+                // Only the enumerable bit is needed, so no descriptor copy per key.
+                boolean enumerable = obj.isOwnPropertyEnumerable(key);
                 if (context.hasPendingException()) {
                     return JSUndefined.INSTANCE;
                 }
-                if (descriptor != null && descriptor.isEnumerable()) {
+                if (enumerable) {
                     keyList.add(new JSString(key.toPropertyString()));
                 }
             }

@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.regexp;
 
+import com.caoccao.qjs4j.core.JSRuntimeOptions;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.unicode.CharacterProperties;
 
 import java.util.Arrays;
@@ -26,10 +28,30 @@ import java.util.Arrays;
  * Based on QuickJS libregexp.c execution engine.
  */
 public final class RegExpEngine {
+    /**
+     * Hard cap on the flat backtrack stack, in entries.
+     * <p>
+     * Bounds the memory a pathological pattern can claim; the growth loop used to double without
+     * limit until the host ran out of heap.
+     */
+    private static final int MAX_BACKTRACK_ENTRIES = 1 << 20;
+    private final long backtrackLimit;
     private final RegExpBytecode bytecode;
 
     public RegExpEngine(RegExpBytecode bytecode) {
+        this(bytecode, JSRuntimeOptions.DEFAULT_REGEXP_BACKTRACK_LIMIT);
+    }
+
+    /**
+     * Create an engine with an explicit backtracking budget.
+     *
+     * @param bytecode       the compiled pattern
+     * @param backtrackLimit the maximum number of backtracking steps for one match attempt;
+     *                       0 or negative means unbounded
+     */
+    public RegExpEngine(RegExpBytecode bytecode, long backtrackLimit) {
         this.bytecode = bytecode;
+        this.backtrackLimit = Math.max(0L, backtrackLimit);
     }
 
     private byte[] createAssertionBytecode(byte[] bytecode, int startPc, int len) {
@@ -64,7 +86,8 @@ public final class RegExpEngine {
                 bytecode.isIgnoreCase(),
                 bytecode.isMultiline(),
                 bytecode.isDotAll(),
-                isUnicode
+                isUnicode,
+                backtrackLimit
         );
 
         // Try matching at each position
@@ -510,6 +533,9 @@ public final class RegExpEngine {
             String input,
             byte[] bytecode,
             int startPos) {
+        // A lookaround runs on its own context. It inherits the outer context's *remaining* budget
+        // and charges what it spends back, so a lookaround inside a loop cannot reset the budget
+        // on every iteration and reintroduce unbounded backtracking.
         ExecutionContext tempContext = new ExecutionContext(
                 input,
                 bytecode,
@@ -518,12 +544,17 @@ public final class RegExpEngine {
                 outerContext.ignoreCase,
                 outerContext.multiline,
                 outerContext.dotAll,
-                outerContext.unicode
+                outerContext.unicode,
+                outerContext.remainingBacktrackBudget()
         );
         tempContext.pos = startPos;
         System.arraycopy(outerContext.captureStarts, 0, tempContext.captureStarts, 0, outerContext.captureCount);
         System.arraycopy(outerContext.captureEnds, 0, tempContext.captureEnds, 0, outerContext.captureCount);
-        return execute(tempContext) ? tempContext : null;
+        try {
+            return execute(tempContext) ? tempContext : null;
+        } finally {
+            outerContext.backtrackSteps += tempContext.backtrackSteps;
+        }
     }
 
     /**
@@ -566,6 +597,14 @@ public final class RegExpEngine {
         final boolean multiline;
         final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
+        /**
+         * Budget of backtracking steps for this match attempt; 0 means unbounded.
+         */
+        private final long backtrackLimit;
+        /**
+         * Backtracking steps consumed so far.
+         */
+        private long backtrackSteps;
         // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers..., stateOffset]
         // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
         // saved state — consecutive pushes with no state modifications share the same saved copy.
@@ -586,7 +625,9 @@ public final class RegExpEngine {
                 boolean ignoreCase,
                 boolean multiline,
                 boolean dotAll,
-                boolean unicode) {
+                boolean unicode,
+                long backtrackLimit) {
+            this.backtrackLimit = backtrackLimit;
             this.input = input;
             this.bytecode = bytecode;
             this.codePoints = unicode ? input.codePoints().toArray() : input.chars().toArray();
@@ -1005,7 +1046,32 @@ public final class RegExpEngine {
             return true;
         }
 
+        /**
+         * Budget available to a nested match (a lookaround).
+         *
+         * @return the unspent part of this context's budget, or 0 when unbounded
+         * @throws JSRangeErrorException when this context has already exhausted its budget
+         */
+        long remainingBacktrackBudget() {
+            if (backtrackLimit <= 0) {
+                return 0;
+            }
+            long remaining = backtrackLimit - backtrackSteps;
+            if (remaining <= 0) {
+                throw new JSRangeErrorException(
+                        "regular expression execution exceeded the backtracking limit");
+            }
+            return remaining;
+        }
+
         int popBacktrack() {
+            // The matcher is a backtracking engine, so a pattern like /(a+)+$/ takes time
+            // exponential in the input length. Counting pops bounds that: the stack depth stays
+            // small during exponential blow-up, so a depth limit alone would not catch it.
+            if (backtrackLimit > 0 && ++backtrackSteps > backtrackLimit) {
+                throw new JSRangeErrorException(
+                        "regular expression execution exceeded the backtracking limit");
+            }
             backtrackTop -= backtrackEntrySize;
             int base = backtrackTop;
             pos = backtrackData[base + 1];
@@ -1019,7 +1085,13 @@ public final class RegExpEngine {
 
         void pushBacktrack(int pc) {
             if (backtrackTop + backtrackEntrySize > backtrackData.length) {
-                backtrackData = Arrays.copyOf(backtrackData, backtrackData.length * 2);
+                long maxLength = (long) backtrackEntrySize * MAX_BACKTRACK_ENTRIES;
+                if (backtrackData.length >= maxLength) {
+                    throw new JSRangeErrorException(
+                            "regular expression execution exceeded the backtracking stack limit");
+                }
+                int newLength = (int) Math.min(maxLength, (long) backtrackData.length * 2);
+                backtrackData = Arrays.copyOf(backtrackData, newLength);
             }
             int base = backtrackTop;
             backtrackData[base] = pc;

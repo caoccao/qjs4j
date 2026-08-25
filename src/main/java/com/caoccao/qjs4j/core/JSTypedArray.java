@@ -71,7 +71,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
     protected JSTypedArray(JSContext context, IJSArrayBuffer buffer, int byteOffset, int length, int bytesPerElement) {
         super(context);
         if (buffer == null) {
-            throw new IllegalArgumentException("Cannot create TypedArray on null buffer");
+            throw new JSTypeErrorException("Cannot create TypedArray on null buffer");
         }
         if (buffer.isDetached()) {
             throw new JSTypeErrorException("ArrayBuffer is detached");
@@ -369,7 +369,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     protected void checkIndex(int index) {
         if (buffer.isDetached()) {
-            throw new IllegalStateException("TypedArray buffer is detached");
+            throw new JSTypeErrorException("TypedArray buffer is detached");
         }
         if (index < 0 || index >= getLength()) {
             throw new JSRangeErrorException("TypedArray index out of range: " + index);
@@ -491,7 +491,7 @@ public sealed abstract class JSTypedArray extends JSObject permits
      */
     protected ByteBuffer getByteBuffer() {
         if (buffer.isDetached()) {
-            throw new IllegalStateException("TypedArray buffer is detached");
+            throw new JSTypeErrorException("TypedArray buffer is detached");
         }
         ByteBuffer backingBuffer = buffer.getBuffer();
         ByteBuffer buf = backingBuffer.duplicate();
@@ -581,10 +581,10 @@ public sealed abstract class JSTypedArray extends JSObject permits
      * For non-numeric keys: delegates to ordinary getOwnPropertyDescriptor.
      */
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
         if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.getOwnPropertyDescriptor(key);
+            return super.getOwnPropertyDescriptorRaw(key);
         }
         if (canonicalNumericIndex < 0) {
             return null;
@@ -646,10 +646,10 @@ public sealed abstract class JSTypedArray extends JSObject permits
     }
 
     @Override
-    public boolean has(PropertyKey key) {
+    protected boolean has(PropertyKey key, int depth) {
         int canonicalNumericIndex = resolveCanonicalNumericIndex(key);
         if (canonicalNumericIndex == CANONICAL_NUMERIC_INDEX_NOT_CANONICAL) {
-            return super.has(key);
+            return super.has(key, depth);
         }
         if (canonicalNumericIndex < 0) {
             return false;

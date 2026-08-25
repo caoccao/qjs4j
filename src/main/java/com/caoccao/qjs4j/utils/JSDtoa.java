@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.utils;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 /**
  * QuickJS-compatible dtoa (double-to-ASCII) implementation.
  * Based on QuickJS dtoa.c by Fabrice Bellard.
@@ -461,7 +462,7 @@ public final class JSDtoa {
      */
     public static String toString(double d, int radix) {
         if (radix < 2 || radix > MAX_RADIX) {
-            throw new IllegalArgumentException("radix must be between 2 and 36");
+            throw new JSRangeErrorException("radix must be between 2 and 36");
         }
 
         // Handle special values
