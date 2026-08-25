@@ -132,8 +132,10 @@ public final class JSRuntime implements AutoCloseable {
      * Enqueue a host job to run on the next {@link #runJobs()} drain.
      * <p>
      * This is the embedder's entry point for scheduling work alongside the engine's own promise
-     * reactions. Promise reactions and {@code queueMicrotask} go to the owning context's microtask
-     * queue, which {@link #runJobs()} also drains.
+     * reactions. It is <em>not</em> where those reactions live: promise reactions and
+     * {@code queueMicrotask} go to the owning context's microtask queue, which {@link #runJobs()}
+     * deliberately does <strong>not</strong> drain. Settling promises requires
+     * {@link JSContext#processMicrotasks()} on the context that owns them.
      *
      * @param job the job to enqueue; {@code null} is ignored
      */

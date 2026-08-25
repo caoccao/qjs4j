@@ -11,8 +11,9 @@
 - Errors raised by the engine — temporal dead zone, `ArrayBuffer`/`TypedArray`/`DataView` range errors, revoked-proxy and private-field type errors — are now catchable by the script's own `try`/`catch`.
 - Engine-internal failures report a diagnosable message instead of `VM error: null`.
 - Error messages match V8: `Cannot access 'x' before initialization`, `Cannot read properties of null (reading 'foo')`.
-- Building an error message no longer runs user getters or proxy traps.
+- Building an error message no longer runs user getters or proxy traps — including for a thrown `Proxy`, and including the stack the CLI prints.
 - Exceptions thrown from a microtask are recorded instead of silently discarded.
+- Host termination — an execution deadline or `JSRuntime.requestInterrupt()` — now escapes promise executors, `.then()` handlers, async functions, async generators and disposal, as `JSTerminationException`. Previously it could be demoted to a rejected promise and execution continued.
 
 ### Runtime Correctness
 
@@ -22,18 +23,26 @@
 - `getOwnPropertyDescriptor()` returns a copy, so callers can no longer mutate an object's stored attributes.
 - `break` and `continue` accept contextual-keyword labels such as `of`, `as` and `from`.
 - Cyclic and very deep prototype chains raise `RangeError` instead of exhausting the stack.
+- `Object.setPrototypeOf()` rejects a cycle at any chain depth, not only within the first 1,000 links.
+- An indexed array write runs an inherited setter at any prototype depth.
+- `'xx'.repeat(1e20)` raises a catchable `RangeError` instead of failing inside the engine.
 
 ### Resource Limits
 
 - Catastrophic RegExp backtracking raises `RangeError` instead of hanging. Tunable via `JSRuntimeOptions.setRegExpBacktrackLimit(long)`.
 - Oversized strings raise `RangeError` instead of `OutOfMemoryError`.
 - `JSRuntime.requestInterrupt()` stops a runaway script from another thread.
+- The RegExp backtracking stack has a memory ceiling, not just a step count, so a capture-heavy pattern cannot claim the heap.
+- A pattern may declare at most 254 capture groups, matching QuickJS. Beyond that is a `SyntaxError`.
 
 ### Embedder API
 
 - `JSObject.set(int, JSValue)` honours frozen, sealed and non-extensible objects at every index.
 - Array creation, `toArray()` and `setLength()` raise `JSRangeErrorException` instead of Java runtime exceptions.
-- `JSContext.close()` releases all context state and is idempotent; using a closed context fails fast.
+- `JSContext.close()` releases the realm — including the global object, declaration tables and host callbacks — and is idempotent; every `eval()` overload on a closed context fails fast, before running anything.
+- `createJSArray()` rejects a length outside `[0, 2^32 - 1]` instead of building an array that reports it.
+- `JSArrayBuffer.resize()`/`transfer()` raise `TypeError` for a detached or non-resizable buffer and `RangeError` for an invalid length, and their `@throws` declarations now match.
+- Exotic `JSObject` subclasses override `getOwnPropertyDescriptorRaw` and `has(key, depth)`; the public views over them are `final`, so an out-of-date override is a compile error rather than a silent behaviour change.
 - `JSRuntime` documents its threading contract: one context per thread.
 
 ### Performance
@@ -47,9 +56,9 @@
 
 ### Build and Tooling
 
-- A Gradle toolchain pins compilation and tests to JDK 17.
-- Compiler and Javadoc lint enabled; JaCoCo coverage reporting added.
-- CI runs Test262 and builds on JDK 17 and 21.
+- A Gradle toolchain pins compilation to JDK 17. The wrapper is Gradle 9.4.1, so the build can be launched from any JDK up to 25.
+- Compiler lint is enforced with `-Werror`; Javadoc lint enabled; JaCoCo now verifies coverage rather than only reporting it.
+- CI runs Test262 with a failure-preserving pipeline, and runs the test suite on JDK 17 and 21 rather than compiling for 17 in both.
 
 ## 0.1.1
 

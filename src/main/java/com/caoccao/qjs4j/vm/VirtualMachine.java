@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.vm;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigInteger;
@@ -456,13 +457,6 @@ public final class VirtualMachine {
     }
 
     /**
-     * Check whether the host wants this evaluation to stop.
-     * <p>
-     * Both the deadline and {@link JSRuntime#shouldInterrupt()} raise an
-     * {@linkplain JSVirtualMachineException#uncatchable(String) uncatchable} exception so a script
-     * cannot keep itself alive by wrapping its own loop in {@code try}/{@code catch}.
-     */
-    /**
      * Release the VM's retained execution state.
      * <p>
      * Called from {@link JSContext#close()}. The value stack alone is up to 65,536 slots, and every
@@ -487,12 +481,21 @@ public final class VirtualMachine {
         singleArgBuffer[0] = null;
     }
 
+    /**
+     * Check whether the host wants this evaluation to stop.
+     * <p>
+     * Both the deadline and {@link JSRuntime#shouldInterrupt()} raise a
+     * {@link JSTerminationException} so a script cannot keep itself alive by wrapping its own loop
+     * in {@code try}/{@code catch}.
+     *
+     * @throws JSTerminationException when the deadline has passed or the host asked to interrupt
+     */
     public void checkExecutionInterrupt() {
         if (executionDeadline != 0 && System.nanoTime() >= executionDeadlineNanos) {
-            throw JSVirtualMachineException.uncatchable("execution timeout");
+            throw new JSTerminationException("execution timeout");
         }
         if (context.getRuntime().shouldInterrupt()) {
-            throw JSVirtualMachineException.uncatchable("execution interrupted");
+            throw new JSTerminationException("execution interrupted");
         }
     }
 
@@ -509,9 +512,6 @@ public final class VirtualMachine {
      */
     private boolean captureHandlerException(RuntimeException e) {
         if (e instanceof JSVirtualMachineException vmException) {
-            if (vmException.isUncatchable()) {
-                return false;
-            }
             captureVMException(vmException);
             return true;
         }
@@ -1783,19 +1783,20 @@ public final class VirtualMachine {
     }
 
     /**
-     * Read an own data property as a string without invoking any accessor.
+     * Read an own data property as a string without invoking any accessor or Proxy trap.
+     * <p>
+     * {@code getOwnPropertyDescriptor} is virtual, and {@link JSProxy} overrides it with the
+     * {@code getOwnPropertyDescriptor} trap, so this read used to re-enter guest code for a thrown
+     * Proxy — during exception unwinding, which is exactly what this path exists to avoid.
+     * {@code getOwnDataPropertyForDiagnostics} is {@code final} and reads physical storage only.
      *
      * @param object the object to read from
      * @param key    the property key
-     * @return the property rendered as a string, or {@code null} when it is absent or is an
-     * accessor
+     * @return the property rendered as a string, or {@code null} when it is absent, is an accessor,
+     * or belongs to a Proxy
      */
     private static String ownDataPropertyAsString(JSObject object, PropertyKey key) {
-        PropertyDescriptor descriptor = object.getOwnPropertyDescriptor(key);
-        if (descriptor == null || !descriptor.isDataDescriptor()) {
-            return null;
-        }
-        JSValue value = descriptor.getValue();
+        JSValue value = object.getOwnDataPropertyForDiagnostics(key);
         if (value instanceof JSString stringValue) {
             return stringValue.value();
         }

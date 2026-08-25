@@ -1324,12 +1324,17 @@ public final class StringPrototype {
         // Check the resulting length before allocating. Pre-sizing the builder to
         // min(s.length() * count, Integer.MAX_VALUE) attempted a 2 GiB char[] up front and failed
         // with OutOfMemoryError instead of the RangeError the specification calls for.
-        long resultLength = s.length() * count;
-        if (resultLength > JSString.MAX_LENGTH) {
+        //
+        // Divide rather than multiply. `s.length() * count` is a long multiplication, and for a
+        // count above Long.MAX_VALUE the (long) cast of the double saturates, so 'xx'.repeat(1e20)
+        // wrapped to -2: the length guard passed and `new StringBuilder(-2)` raised
+        // NegativeArraySizeException, escaping the script's own catch as an internal engine error.
+        if (count > JSString.MAX_LENGTH / s.length()) {
             return context.throwRangeError("Invalid string length");
         }
+        int resultLength = (int) (count * s.length());
 
-        StringBuilder result = new StringBuilder((int) resultLength);
+        StringBuilder result = new StringBuilder(resultLength);
         for (long i = 0; i < count; i++) {
             result.append(s);
         }

@@ -18,7 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.BaseTest;
 import com.caoccao.qjs4j.exceptions.JSException;
-import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -145,6 +145,51 @@ public class JSResourceLimitTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testRepeatCountBeyondLongRangeRaisesRangeError() {
+        // The length guard used to multiply first: (long) 1e20 saturates at Long.MAX_VALUE, so
+        // 2 * that wrapped to -2, the guard passed, and `new StringBuilder(-2)` threw
+        // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
+        // multiplication is now a division, so nothing overflows before the check.
+        assertThat(evalToString("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRepeatEdgeCountsAreUnaffectedByTheOverflowGuard() {
+        // The guard divides by s.length(), so the empty-string and zero-count shortcuts have to
+        // come first — dividing by zero would turn a legal call into an engine failure.
+        assertThat(evalToString("JSON.stringify(''.repeat(1e20))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify(''.repeat(0))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify('abc'.repeat(0))")).isEqualTo("\"\"");
+        assertThat(evalToString("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("JSON.stringify('x'.repeat(NaN))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify('x'.repeat())")).isEqualTo("\"\"");
+        assertThat(evalToString("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRepeatAtTheExactLengthBoundary() {
+        // The boundary the division has to get right: exactly MAX_LENGTH is allowed, one more is
+        // not. MAX_LENGTH is 2^27 - 1, which is odd, so a two-character string cannot reach it.
+        assertThat(evalToString("'ab'.repeat(67108863).length")).isEqualTo("134217726");
+        assertThat(evalToString("try { 'ab'.repeat(67108864); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
     public void testStringAdditionBeyondMaximumLengthRaisesRangeError() {
         assertThat(evalToString(
                 """
@@ -177,7 +222,7 @@ public class JSResourceLimitTest extends BaseTest {
             deadlineContext.getVirtualMachine().setExecutionDeadline(System.currentTimeMillis() + 200);
             // The script wraps its own loop in try/catch. The deadline must not be interceptable.
             assertThatThrownBy(() -> deadlineContext.eval("try { while (true) {} } catch (e) { 'SWALLOWED' }"))
-                    .isInstanceOf(JSVirtualMachineException.class)
+                    .isInstanceOf(JSTerminationException.class)
                     .hasMessage("execution timeout");
         }
     }
@@ -197,7 +242,7 @@ public class JSResourceLimitTest extends BaseTest {
             interrupter.start();
             try {
                 assertThatThrownBy(() -> interruptedContext.eval("try { while (true) {} } catch (e) { 'SWALLOWED' }"))
-                        .isInstanceOf(JSVirtualMachineException.class)
+                        .isInstanceOf(JSTerminationException.class)
                         .hasMessage("execution interrupted");
             } finally {
                 interrupter.join();
@@ -213,7 +258,7 @@ public class JSResourceLimitTest extends BaseTest {
             runtime.requestInterrupt();
             assertThat(runtime.shouldInterrupt()).isTrue();
             assertThatThrownBy(() -> resumableContext.eval(sum))
-                    .isInstanceOf(JSVirtualMachineException.class);
+                    .isInstanceOf(JSTerminationException.class);
             runtime.clearInterrupt();
             assertThat(runtime.shouldInterrupt()).isFalse();
             assertThat(resumableContext.eval(sum)).isEqualTo(JSNumber.of(19999900000L));

@@ -31,10 +31,33 @@ public final class RegExpEngine {
     /**
      * Hard cap on the flat backtrack stack, in entries.
      * <p>
-     * Bounds the memory a pathological pattern can claim; the growth loop used to double without
+     * Bounds how far a pathological pattern can backtrack; the growth loop used to double without
      * limit until the host ran out of heap.
      */
     private static final int MAX_BACKTRACK_ENTRIES = 1 << 20;
+    /**
+     * Entry size for a pattern with no explicit groups: {@code pc}, {@code pos}, group 0's two
+     * capture slots, the registers, and {@code stateOffset}.
+     */
+    private static final int MIN_BACKTRACK_ENTRY_SIZE = 2 + 2 + ExecutionContext.MAX_REGISTERS + 1;
+    /**
+     * Hard cap on the flat backtrack stack, in {@code int} slots — 84 MiB of {@code int[]}.
+     * <p>
+     * A budget in entries alone is not a memory bound. An entry holds every capture twice plus the
+     * registers, so the pattern chooses the entry size: at 2<sup>20</sup> entries a one-group
+     * pattern reserved 21 ints each and a 100,000-group pattern 200,019 — the same nominal budget,
+     * three orders of magnitude apart in bytes, and the initial 64-entry allocation alone was
+     * ~51 MiB for that pattern before the match began.
+     * <p>
+     * The two caps apply together, and the byte figure is derived rather than picked: it is exactly
+     * what the entry cap already costs at the smallest possible entry. So the ceiling is "no
+     * pattern may claim more memory than a group-less pattern could already claim", which bounds
+     * the worst case without narrowing the budget any real pattern had. Test262's
+     * {@code property-escapes} tests match a 140,000-character subject and genuinely need most of
+     * the entry budget; a byte cap chosen for tidiness rather than derived from the existing one
+     * broke eighteen of them.
+     */
+    private static final long MAX_BACKTRACK_INTS = (long) MAX_BACKTRACK_ENTRIES * MIN_BACKTRACK_ENTRY_SIZE;
     private final long backtrackLimit;
     private final RegExpBytecode bytecode;
 
@@ -609,6 +632,13 @@ public final class RegExpEngine {
         // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
         // saved state — consecutive pushes with no state modifications share the same saved copy.
         private final int backtrackEntrySize;
+        /**
+         * Entries this pattern may push, derived from {@link #MAX_BACKTRACK_INTS} and the entry
+         * size so that the byte ceiling is the same for every pattern.
+         */
+        private final int maxBacktrackEntries;
+        // Both caps apply: the entry ceiling bounds backtracking depth, MAX_BACKTRACK_INTS bounds
+        // the bytes that depth costs once a capture-heavy pattern inflates the entry.
         private final int stateSize; // captureCount*2 + MAX_REGISTERS
         int backtrackTop;
         int[] captureEnds;
@@ -642,9 +672,18 @@ public final class RegExpEngine {
             this.registers = new int[MAX_REGISTERS];
             Arrays.fill(captureStarts, -1);
             Arrays.fill(captureEnds, -1);
+            // long throughout: captureCount is bounded by the compiler's CAPTURE_COUNT_MAX, but the
+            // arithmetic must not depend on that bound holding to stay free of silent overflow.
             this.stateSize = captureCount + captureCount + MAX_REGISTERS;
             this.backtrackEntrySize = 2 + stateSize + 1; // pc, pos, state..., stateOffset
-            this.backtrackData = new int[backtrackEntrySize * INITIAL_BACKTRACK_CAPACITY];
+            this.maxBacktrackEntries = (int) Math.max(
+                    1L,
+                    Math.min(MAX_BACKTRACK_ENTRIES, MAX_BACKTRACK_INTS / backtrackEntrySize));
+            // The first allocation obeys the same ceiling as the growth loop. Sizing it to a fixed
+            // 64 entries meant a pattern with enough captures claimed tens of MiB before the match
+            // began, which no later cap could take back.
+            int initialEntries = Math.min(INITIAL_BACKTRACK_CAPACITY, maxBacktrackEntries);
+            this.backtrackData = new int[backtrackEntrySize * initialEntries];
             this.stateDirty = true;
         }
 
@@ -1085,7 +1124,9 @@ public final class RegExpEngine {
 
         void pushBacktrack(int pc) {
             if (backtrackTop + backtrackEntrySize > backtrackData.length) {
-                long maxLength = (long) backtrackEntrySize * MAX_BACKTRACK_ENTRIES;
+                // maxLength is at most MAX_BACKTRACK_INTS by construction, so the int cast below is
+                // safe; the products are computed in long regardless.
+                long maxLength = (long) backtrackEntrySize * maxBacktrackEntries;
                 if (backtrackData.length >= maxLength) {
                     throw new JSRangeErrorException(
                             "regular expression execution exceeded the backtracking stack limit");

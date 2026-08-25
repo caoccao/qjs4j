@@ -430,10 +430,10 @@ public class JSGlobalObjectTest extends BaseJavetTest {
                       return false;
                     }
                   };
-                
+
                   const functionPrototypeArguments = Object.getOwnPropertyDescriptor(Function.prototype, 'arguments');
                   const functionPrototypeCaller = Object.getOwnPropertyDescriptor(Function.prototype, 'caller');
-                
+
                   const nonConstructors = [
                     parseInt,
                     parseFloat,
@@ -456,7 +456,7 @@ public class JSGlobalObjectTest extends BaseJavetTest {
                     functionPrototypeCaller.get,
                     functionPrototypeCaller.set
                   ];
-                
+
                   return nonConstructors.every((fn) => !isConstructor(fn));
                 })();
                 """);

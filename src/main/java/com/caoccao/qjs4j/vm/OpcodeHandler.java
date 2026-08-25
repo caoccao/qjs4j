@@ -21,6 +21,7 @@ import com.caoccao.qjs4j.builtins.SymbolConstructor;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.math.BigInteger;
@@ -64,10 +65,6 @@ public final class OpcodeHandler {
     }
 
     private static void captureVmExceptionAsPending(ExecutionContext executionContext, JSVirtualMachineException e) {
-        if (e.isUncatchable()) {
-            // Host-initiated termination must never become a script-visible exception.
-            throw e;
-        }
         JSValue errorValue = e.getJsValue() != null ? e.getJsValue() : e.getJsError();
         if (errorValue != null) {
             executionContext.virtualMachine.pendingException = errorValue;
@@ -4019,7 +4016,7 @@ public final class OpcodeHandler {
             message.append(String.format(" %02x", instructions[offset] & 0xFF));
         }
         message.append(", length=").append(instructions.length).append(')');
-        throw JSVirtualMachineException.uncatchable(message.toString());
+        throw new JSTerminationException(message.toString());
     }
 
     static void handleIsNull(Opcode op, ExecutionContext executionContext) {

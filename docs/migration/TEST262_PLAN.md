@@ -1,8 +1,9 @@
 # Test262 Runner Implementation Plan
 
-> This is the runner's **design document**, not a conformance report. Recorded results live in
-> [TEST262_STATUS.md](TEST262_STATUS.md), and CI publishes a fresh run of the quick subset on every
-> push (see `.github/workflows/build.yml`).
+> This is the runner's **design document**, not a conformance report. Results are not recorded in
+> this repository — run `./gradlew test262` or `./gradlew test262Quick` for the current numbers. CI
+> publishes a fresh run of the quick subset on every push and uploads it as the `test262-quick-log`
+> artifact (see `.github/workflows/build.yml`).
 
 ## Overview
 

@@ -163,4 +163,39 @@ public class JSEmbedderApiSafetyTest extends BaseTest {
         array.set(1, JSNumber.of(2));
         assertThat(array.toArray()).containsExactly(JSNumber.of(1), JSNumber.of(2));
     }
+
+    @Test
+    public void testCreateArrayWithInvalidLengthRaisesRangeError() {
+        // Clamping only the capacity hint stopped the NegativeArraySizeException but left the
+        // invalid length in place: createJSArray(-1) produced an array reporting length -1 and
+        // createJSArray(2^32) one reporting 4294967296, neither of which is an array length.
+        assertThatThrownBy(() -> context.createJSArray(-1))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+        assertThatThrownBy(() -> context.createJSArray(4294967296L))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+        assertThatThrownBy(() -> context.createJSArray(Long.MAX_VALUE))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+        assertThatThrownBy(() -> context.createJSArray(Long.MIN_VALUE))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+    }
+
+    @Test
+    public void testCreateArrayWithInvalidLengthAndCapacityRaisesRangeError() {
+        assertThatThrownBy(() -> context.createJSArray(-1, 16))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+        assertThatThrownBy(() -> new JSArray(context, 4294967296L, 16))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Invalid array length");
+    }
+
+    @Test
+    public void testCreateArrayAtTheLengthBoundaryIsStillAccepted() {
+        assertThat(context.createJSArray(0).getLength()).isZero();
+        assertThat(context.createJSArray(4294967295L).getLength()).isEqualTo(4294967295L);
+    }
 }

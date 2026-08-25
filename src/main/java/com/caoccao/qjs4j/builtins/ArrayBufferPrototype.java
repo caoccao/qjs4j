@@ -147,7 +147,10 @@ public final class ArrayBufferPrototype {
             buffer.resize((int) newByteLength);
             return JSUndefined.INSTANCE;
         } catch (JSErrorException e) {
-            return context.throwRangeError(e.getMessage());
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -326,7 +329,10 @@ public final class ArrayBufferPrototype {
         try {
             return buffer.transfer(context, (int) newByteLength);
         } catch (JSErrorException e) {
-            return context.throwTypeError(e.getMessage());
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -371,7 +377,10 @@ public final class ArrayBufferPrototype {
         try {
             return buffer.transferToFixedLength(context, (int) newByteLength);
         } catch (JSErrorException e) {
-            return context.throwTypeError(e.getMessage());
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -387,7 +396,10 @@ public final class ArrayBufferPrototype {
         try {
             return buffer.transferToImmutable(context);
         } catch (JSErrorException e) {
-            return context.throwTypeError(e.getMessage());
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 }

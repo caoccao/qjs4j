@@ -86,6 +86,22 @@ try (JSContext context = new JSContext(new JSRuntime())) {
 }
 ```
 
+## Building from source
+
+```bash
+./gradlew build
+```
+
+The Gradle toolchain compiles and tests against JDK 17 wherever the build is launched from, so a
+JDK 17 installation must be discoverable (Gradle will provision one if it is not). Gradle's Kotlin
+DSL compiles the build script before any toolchain is selected, so the *launching* JDK also has to
+be one the wrapper's Gradle release understands: Gradle 9.4.1 accepts JDK 17 through 25. On a newer
+JDK the build aborts with a bare version number — upgrade the wrapper, or set `JAVA_HOME` to a
+supported release.
+
+Test JVM: `./gradlew test -PtestJavaVersion=21` runs the suite on JDK 21 instead of 17. CI uses this
+to exercise both LTS releases.
+
 ## Architecture
 
 qjs4j is organized into modular packages:

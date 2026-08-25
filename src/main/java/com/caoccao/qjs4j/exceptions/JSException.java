@@ -81,33 +81,24 @@ public class JSException extends RuntimeException {
     }
 
     /**
-     * Read an own data property as a string, without invoking any accessor.
+     * Read a data property as a string, without invoking any accessor or Proxy trap.
+     * <p>
+     * {@code getOwnPropertyDescriptor} is virtual, and on a {@link com.caoccao.qjs4j.core.JSProxy}
+     * the override <em>is</em> the {@code getOwnPropertyDescriptor} trap — so reading {@code name}
+     * and {@code message} that way still re-entered guest code for a thrown Proxy, four times per
+     * reported exception. {@code findDataPropertyForDiagnostics} is {@code final} and resolves to
+     * physical storage, which is the only read in the engine that provably runs nothing.
      *
      * @param errorObj     the object to read from
      * @param key          the property key
-     * @param defaultValue the value to use when the property is absent, is an accessor, or is not
-     *                     a string
+     * @param defaultValue the value to use when the property is absent, is an accessor, is not a
+     *                     string, or belongs to a Proxy
      * @return the property value or the default
      */
     private static String ownDataPropertyAsString(JSObject errorObj, PropertyKey key, String defaultValue) {
-        PropertyDescriptor descriptor = errorObj.getOwnPropertyDescriptor(key);
-        if (descriptor != null && descriptor.isDataDescriptor()
-                && descriptor.getValue() instanceof JSString stringValue) {
-            return stringValue.value();
-        }
-        // Error objects keep name on their prototype, so fall back to the prototype chain, still
-        // reading own data properties only.
-        JSObject prototype = errorObj.getPrototype();
-        for (int depth = 0; prototype != null && depth < 100; depth++) {
-            PropertyDescriptor inherited = prototype.getOwnPropertyDescriptor(key);
-            if (inherited != null) {
-                return inherited.isDataDescriptor() && inherited.getValue() instanceof JSString inheritedValue
-                        ? inheritedValue.value()
-                        : defaultValue;
-            }
-            prototype = prototype.getPrototype();
-        }
-        return defaultValue;
+        return errorObj.findDataPropertyForDiagnostics(key) instanceof JSString stringValue
+                ? stringValue.value()
+                : defaultValue;
     }
 
     @Override

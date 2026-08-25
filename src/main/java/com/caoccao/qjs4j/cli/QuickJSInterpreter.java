@@ -140,6 +140,12 @@ public final class QuickJSInterpreter {
 
     /**
      * Render a JavaScript error for the terminal, including its stack when it has one.
+     * <p>
+     * The stack is read out of physical storage, never through {@code Get(error, "stack")}. An
+     * ordinary property read runs a {@code stack} getter or a Proxy trap on the thrown value, which
+     * means the failing script chooses what the interpreter prints while reporting its own crash:
+     * it can spoof the trace, do unbounded work, or throw a second error out of the reporting path.
+     * A thrown Proxy and an accessor {@code stack} both fall back to the headline.
      *
      * @param exception the uncaught exception
      * @return the text to print
@@ -148,7 +154,7 @@ public final class QuickJSInterpreter {
         String headline = exception.getMessage();
         JSValue errorValue = exception.getErrorValue();
         if (errorValue instanceof com.caoccao.qjs4j.core.JSObject errorObject) {
-            JSValue stack = errorObject.get(PropertyKey.STACK);
+            JSValue stack = errorObject.getOwnDataPropertyForDiagnostics(PropertyKey.STACK);
             if (stack instanceof JSString stackString && !stackString.value().isBlank()) {
                 return headline + System.lineSeparator() + stackString.value().stripTrailing();
             }

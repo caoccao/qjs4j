@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSTerminationException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 
 import java.util.ArrayList;
@@ -136,6 +137,9 @@ public final class JSDisposableStack extends JSObject {
             JSValue pending = context.getPendingException();
             context.clearPendingException();
             return pending != null ? pending : error;
+        } catch (JSTerminationException t) {
+            // Host-initiated termination outranks the disposal error it interrupted.
+            throw t;
         } catch (Throwable t) {
             JSValue error = context.throwError("Error during disposal: " + t.getMessage());
             JSValue pending = context.getPendingException();

@@ -593,8 +593,20 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Close this context and release resources.
-     * Called when the context is no longer needed.
+     * Close this context and release its realm.
+     * <p>
+     * The post-close contract is that this context owns nothing: every collection it holds is
+     * empty, every cached intrinsic and host callback is dropped, and the global object is stripped
+     * of its properties and its prototype. An embedder that keeps a reference to the context, to
+     * the global object, or to a value it read out of the realm therefore retains that one object
+     * and not the realm graph behind it.
+     * <p>
+     * Clearing a selection of collections is not enough for that claim. The global object alone
+     * reaches every intrinsic, every constructor and everything a script attached to
+     * {@code globalThis}, so leaving it populated left the entire realm reachable through a closed
+     * context — as did the declaration tables, the cached prototypes and the host callbacks.
+     * <p>
+     * Idempotent: a second call does nothing.
      */
     @Override
     public void close() {
@@ -618,7 +630,39 @@ public final class JSContext implements AutoCloseable {
         evalOverlayFrames.clear();
         importMetaCache.clear();
         microtaskFailures.clear();
+        dynamicImportModuleCache.clear();
+        globalConstDeclarations.clear();
+        globalLexDeclarations.clear();
+        globalVarDeclarations.clear();
+        activeGlobalFunctionBindingInitializations = null;
+        // Host callbacks: an embedder's listener can reach arbitrary application state.
+        microtaskFailureCallback = null;
+        promiseRejectCallback = null;
+        // Cached intrinsics. Each one is a live handle on the realm.
+        asyncFunctionConstructor = null;
+        asyncGeneratorFunctionPrototype = null;
+        asyncGeneratorPrototype = null;
+        cachedDatePrototype = null;
+        cachedObjectPrototype = null;
+        cachedPromisePrototype = null;
+        cachedRegExpConstructor = null;
+        cachedRegExpPrototype = null;
+        generatorFunctionPrototype = null;
+        throwTypeErrorIntrinsic = null;
+        // Transient execution values.
+        constructorNewTarget = null;
+        nativeConstructorNewTarget = null;
+        currentThis = null;
+        // RegExp legacy static state holds the last subject string, which can be arbitrarily large.
+        Arrays.fill(regExpLegacyCaptures, "");
+        regExpLegacyInput = null;
+        regExpLegacyLastMatch = null;
+        regExpLegacyLastParen = null;
+        regExpLegacyLeftContext = null;
+        regExpLegacyRightContext = null;
         virtualMachine.reset();
+        // Last: everything above may still need the realm while it runs.
+        jsGlobalObject.getGlobalObject().releaseProperties();
         // Remove from runtime
         runtime.destroyContext(this);
     }
@@ -843,23 +887,28 @@ public final class JSContext implements AutoCloseable {
      * Create a new JSArray with specified length and proper prototype chain.
      * Sets the array's prototype to Array.prototype from the global object.
      *
-     * @param length Initial length of the array
+     * @param length Initial length of the array; must be in {@code [0, 2^32 - 1]}
      * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
+     *                                                            ECMAScript array length
      */
     public JSArray createJSArray(long length) {
         // A JavaScript array length is a uint32, so narrowing it to int for the capacity hint can
         // produce a negative value (4294967295L narrows to -1) and a NegativeArraySizeException.
-        // Clamp instead: the hint is only a dense-storage sizing suggestion.
-        return createJSArray(length, (int) Math.min(length, JSArray.MAX_DENSE_SIZE));
+        // Clamp instead: the hint is only a dense-storage sizing suggestion. The length itself is
+        // validated by the JSArray constructor, which rejects anything outside [0, 2^32 - 1].
+        return createJSArray(length, (int) Math.min(Math.max(length, 0), JSArray.MAX_DENSE_SIZE));
     }
 
     /**
      * Create a new JSArray with specified length, capacity, and proper prototype chain.
      * Sets the array's prototype to Array.prototype from the global object.
      *
-     * @param length   Initial length of the array
+     * @param length   Initial length of the array; must be in {@code [0, 2^32 - 1]}
      * @param capacity Initial capacity of the array
      * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
+     *                                                            ECMAScript array length
      */
     public JSArray createJSArray(long length, int capacity) {
         JSArray jsArray = new JSArray(this, length, capacity);
@@ -1596,7 +1645,6 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
-        requireOpen();
         return evalOrThrow(eval(code, "<eval>", false, false, false, false, false, false));
     }
 
@@ -1609,7 +1657,6 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
-        requireOpen();
         return evalOrThrow(eval(code, filename, isModule, false, false, false, false, false));
     }
 
@@ -1631,6 +1678,11 @@ public final class JSContext implements AutoCloseable {
                          boolean skipGlobalDeclarationTracking,
                          boolean inheritedStrictModeForDirectEval,
                          boolean useDirectEvalCallerFrame) {
+        // The single gateway every public eval overload funnels through, so the lifecycle check
+        // belongs here. Duplicating it in selected overloads left eval(code, filename, isModule,
+        // isDirectEval) unguarded: a closed context ran the source, mutated the realm, and only
+        // then failed inside the automatic microtask drain — after the side effects had landed.
+        requireOpen();
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
@@ -2127,12 +2179,6 @@ public final class JSContext implements AutoCloseable {
             evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
             return null;
         } catch (JSVirtualMachineException e) {
-            if (e.isUncatchable()) {
-                // Host-initiated termination (execution deadline, requestInterrupt). Reporting it
-                // as a JavaScript Error value would make it indistinguishable from a script's own
-                // failure, so it propagates to the embedder unchanged.
-                throw e;
-            }
             if (e.getJsError() != null) {
                 evalError = e.getJsError();
             } else if (e.getJsValue() != null) {

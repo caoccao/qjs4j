@@ -96,7 +96,7 @@ public final class JSMicrotaskQueue {
      * Microtasks can enqueue more microtasks, so this runs until the queue is empty. A microtask
      * that keeps re-enqueueing itself would otherwise loop forever, so the host interrupt and the
      * execution deadline are polled every {@link #INTERRUPT_CHECK_INTERVAL} microtasks; both raise
-     * an uncatchable exception that ends the drain.
+     * a {@link com.caoccao.qjs4j.exceptions.JSTerminationException} that ends the drain.
      * <p>
      * A nested call returns immediately and drains nothing. That is deliberate rather than a
      * partial drain: the outer loop still owns the queue and continues past whatever the nested
@@ -154,14 +154,14 @@ public final class JSMicrotaskQueue {
      * is additionally recorded on the context: previously, with no callback installed, every
      * exception from a microtask disappeared without trace — a throwing {@code .then()} handler, a
      * {@code JSVirtualMachineException}, or a {@link NullPointerException} from an engine defect.
+     * <p>
+     * A {@link com.caoccao.qjs4j.exceptions.JSTerminationException} never reaches here: it is an
+     * {@link Error}, and the drain catches only {@link RuntimeException} and
+     * {@link StackOverflowError}, so termination ends the drain and propagates to the embedder.
      *
      * @param failure the exception that escaped the microtask
      */
     private void handleMicrotaskFailure(Throwable failure) {
-        if (failure instanceof JSVirtualMachineException vmException && vmException.isUncatchable()) {
-            // Host-initiated termination. Do not record it as a failure and do not keep draining.
-            throw vmException;
-        }
         IJSPromiseRejectCallback callback = context.getPromiseRejectCallback();
         if (callback != null && failure instanceof JSException jsException) {
             JSValue reason = jsException.getErrorValue();

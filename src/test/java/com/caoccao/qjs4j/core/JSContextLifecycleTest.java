@@ -73,6 +73,87 @@ public class JSContextLifecycleTest {
     }
 
     @Test
+    public void testEveryEvalOverloadFailsFastAfterClose() {
+        // The four-argument overload was the one without a guard: the check lived in two of the
+        // three public overloads instead of in the single private gateway they all funnel through.
+        JSRuntime runtime = new JSRuntime();
+        JSContext context = runtime.createContext();
+        context.close();
+
+        assertThatThrownBy(() -> context.eval("1 + 1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("JSContext is closed");
+        assertThatThrownBy(() -> context.eval("1 + 1", "closed.js", false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("JSContext is closed");
+        assertThatThrownBy(() -> context.eval("1 + 1", "closed.js", false, false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("JSContext is closed");
+        runtime.close();
+    }
+
+    @Test
+    public void testEvalAfterCloseHasNoSideEffects() {
+        // Failing eventually is not failing fast. The unguarded overload ran the source, mutated
+        // the realm, and only then failed inside the automatic microtask drain — reported as a
+        // JSException, by which point the global had already been written.
+        JSRuntime runtime = new JSRuntime();
+        JSContext context = runtime.createContext();
+        JSObject global = context.getGlobalObject();
+        context.close();
+
+        assertThatThrownBy(() -> context.eval("globalThis.afterClose = 42", "closed.js", false, false))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(global.get(PropertyKey.fromString("afterClose")))
+                .as("a closed realm must not have been mutated")
+                .isEqualTo(JSUndefined.INSTANCE);
+        runtime.close();
+    }
+
+    @Test
+    public void testCloseReleasesTheGlobalObject() {
+        // The global object reaches every intrinsic and everything a script attached to
+        // globalThis, so leaving it populated left the whole realm reachable through a closed
+        // context — whatever else close() cleared.
+        JSRuntime runtime = new JSRuntime();
+        JSContext context = runtime.createContext();
+        context.eval("globalThis.payload = { retained: new Array(1000) }");
+        JSObject global = context.getGlobalObject();
+        assertThat(global.get(PropertyKey.fromString("payload"))).isNotEqualTo(JSUndefined.INSTANCE);
+
+        context.close();
+
+        assertThat(global.getOwnPropertyKeys())
+                .as("close() must strip the global object")
+                .isEmpty();
+        assertThat(global.get(PropertyKey.fromString("payload"))).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(global.get(PropertyKey.fromString("Array"))).isEqualTo(JSUndefined.INSTANCE);
+        assertThat(global.getPrototype()).isNull();
+        runtime.close();
+    }
+
+    @Test
+    public void testCloseReleasesDeclarationTablesAndCallbacks() {
+        JSRuntime runtime = new JSRuntime();
+        JSContext context = runtime.createContext();
+        context.setPromiseRejectCallback((event, promise, reason) -> {
+        });
+        context.setMicrotaskFailureCallback(failure -> {
+        });
+        context.eval("var declared = 1; let bound = 2; const fixed = 3;");
+
+        context.close();
+
+        assertThat(context.getGlobalLexicalBindingNames()).isEmpty();
+        assertThat(context.getPromiseRejectCallback())
+                .as("a host callback can reach arbitrary application state")
+                .isNull();
+        assertThat(context.getMicrotaskFailureCallback()).isNull();
+        assertThat(context.getMicrotaskFailures()).isEmpty();
+        runtime.close();
+    }
+
+    @Test
     public void testCloseDiscardsPendingMicrotasks() {
         JSRuntime runtime = new JSRuntime();
         JSContext context = runtime.createContext();

@@ -1748,7 +1748,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
         // Access target's apply in the trap and check type
         assertIntegerWithJavet("""
                 var target = function(a, b) { return a + b; };
-                
+
                 // Check prototype before proxy
                 var protoBefore = Object.getPrototypeOf(target);
                 if (!protoBefore) {
@@ -1761,10 +1761,10 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 if (typeof target.apply !== 'function') {
                     throw new Error('target.apply is not function before proxy, it is: ' + typeof target.apply);
                 }
-                
+
                 var handler = {
                   apply: function(t, thisArg, args) {
-                    // Check prototype of t inside trap  
+                    // Check prototype of t inside trap
                     var protoInTrap = Object.getPrototypeOf(t);
                     if (!protoInTrap) {
                       throw new Error('t has null prototype inside trap, t is ' + typeof t);
@@ -1772,7 +1772,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
                     if (protoInTrap !== Function.prototype) {
                       throw new Error('t prototype inside trap is not Function.prototype! It is: ' + Object.prototype.toString.call(protoInTrap) + ', t === target: ' + (t === target));
                     }
-                
+
                     // Access t.apply
                     var applyType = typeof t.apply;
                     if (applyType !== 'function') {
@@ -1798,7 +1798,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
         // Access target through closure instead of parameter
         assertIntegerWithJavet("""
                 var target = function(a, b) { return a + b; };
-                
+
                 var handler = {
                   apply: function(t, thisArg, args) {
                     // Access target (closure) instead of t (parameter)

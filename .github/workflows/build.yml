@@ -18,9 +18,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        # The build declares a Java 17 toolchain, so Gradle compiles and tests against 17
-        # regardless of the launching JDK. Running the launcher on a newer LTS as well catches
-        # regressions that would otherwise only surface for users on a current JDK.
+        # The build declares a Java 17 toolchain, so Gradle always compiles against 17. The tests
+        # run on the matrix JDK via -PtestJavaVersion, so this matrix is genuine runtime coverage
+        # of the engine on both LTS releases, not just proof that Gradle can be launched by them.
         java: [ '17', '21' ]
     runs-on: ${{ matrix.os }}
 
@@ -37,10 +37,10 @@ jobs:
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.14.3'
+        gradle-version: '9.4.1'
 
     - name: Build with Gradle
-      run: gradle build
+      run: gradle build -PtestJavaVersion=${{ matrix.java }}
 
     - name: Upload JAR
       if: matrix.os == 'ubuntu-latest' && matrix.java == '17'
@@ -64,10 +64,12 @@ jobs:
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.14.3'
+        gradle-version: '9.4.1'
 
-    - name: Measure coverage
-      run: gradle jacocoTestReport
+    # Verification, not just a report: an uploaded artifact is observational and cannot fail a
+    # build, so coverage could regress indefinitely without anything noticing.
+    - name: Measure and verify coverage
+      run: gradle jacocoTestReport jacocoTestCoverageVerification
 
     - name: Upload coverage report
       uses: actions/upload-artifact@v4
@@ -99,11 +101,16 @@ jobs:
     - name: Set up Gradle
       uses: gradle/actions/setup-gradle@v3
       with:
-        gradle-version: '8.14.3'
+        gradle-version: '9.4.1'
 
+    # pipefail, or the step reports tee's exit status and stays green while Gradle fails: a
+    # conformance gate that cannot fail is not a gate.
     - name: Run Test262 (quick subset)
       working-directory: qjs4j
-      run: gradle test262Quick | tee ../test262-quick.log
+      shell: bash
+      run: |
+        set -o pipefail
+        gradle test262Quick | tee ../test262-quick.log
 
     - name: Upload Test262 report
       if: always()

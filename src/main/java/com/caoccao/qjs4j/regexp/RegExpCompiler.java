@@ -47,6 +47,17 @@ public final class RegExpCompiler {
             0x3000, 0x3000,  // IDEOGRAPHIC SPACE
             0xFEFF, 0xFEFF,  // ZERO WIDTH NO-BREAK SPACE (BOM)
     };
+    /**
+     * Maximum number of capture groups in one pattern, counting group 0 — QuickJS
+     * {@code CAPTURE_COUNT_MAX}, so 254 explicit groups.
+     * <p>
+     * Two reasons, beyond matching QuickJS: the compiled bytecode encodes capture indices as a
+     * single byte ({@code appendU8(captureCount - 1)}), so a 256th group silently wrapped and
+     * produced bytecode that reset the wrong capture range; and the matcher's backtrack entry grows
+     * by two ints per capture, so an unbounded capture count let a guest-supplied pattern set the
+     * size of every backtrack frame.
+     */
+    private static final int CAPTURE_COUNT_MAX = 255;
     private static final long MAX_QUANTIFIER_BOUND = Integer.MAX_VALUE;
     private static final int MAX_UNICODE_CODE_POINT = 0x10FFFF;
     private static final int MAX_UNROLLED_QUANTIFIER_REPETITIONS = 4096;
@@ -865,6 +876,9 @@ public final class RegExpCompiler {
 
         int groupIndex = -1;
         if (isCapturing) {
+            if (captureCount >= CAPTURE_COUNT_MAX) {
+                throw new RegExpSyntaxException("too many captures");
+            }
             groupIndex = captureCount++;
             ensureGroupNameSize(groupIndex + 1);
             if (captureName != null) {

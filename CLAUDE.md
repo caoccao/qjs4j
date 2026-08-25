@@ -210,8 +210,8 @@ When porting QuickJS C code to Java:
 - `docs/migration/FEATURES.md` — Complete feature matrix
 - `docs/migration/MIGRATION_STATUS.md` — Overall migration progress
 - `docs/migration/OPCODE_IMPLEMENTATION_STATUS.md` — Bytecode instruction coverage
-- `docs/migration/TEST262_PLAN.md` — Test262 runner design (a plan, not results)
-- `docs/migration/TEST262_STATUS.md` — recorded ECMAScript conformance results
+- `docs/migration/TEST262_PLAN.md` — Test262 runner design (a plan, not results). Conformance
+  results are not checked in; run `./gradlew test262` or see the CI `test262-quick-log` artifact.
 
 ## Main Entry Point
 

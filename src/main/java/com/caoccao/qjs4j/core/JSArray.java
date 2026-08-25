@@ -72,11 +72,18 @@ public final class JSArray extends JSObject {
      * {@code int} — reach {@code new JSValue[capacity]} as a {@link NegativeArraySizeException}.
      *
      * @param context  the owning context
-     * @param length   the array length
+     * @param length   the array length; must be a valid ECMAScript array length
      * @param capacity the dense-storage capacity hint
+     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
      */
     public JSArray(JSContext context, long length, int capacity) {
         super(context);
+        // Validate the semantic length, not only the capacity hint. Clamping the hint stopped the
+        // NegativeArraySizeException a negative length used to cause, but it hid the invalid state
+        // rather than rejecting it: createJSArray(-1) produced an array reporting length -1, and
+        // createJSArray(2^32) one reporting 4294967296. Neither is an ECMAScript array length, and
+        // every later operation on such an array is undefined behaviour.
+        requireValidLength(length);
         this.length = length;
         capacity = Math.max(INITIAL_CAPACITY, Math.min(capacity, MAX_DENSE_SIZE));
         this.denseArray = new JSValue[capacity];
@@ -645,13 +652,38 @@ public final class JSArray extends JSObject {
         return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
     }
 
+    /**
+     * Reject a length that no ECMAScript array can have.
+     * <p>
+     * A public engine API must raise an error the engine's own machinery understands, not a raw
+     * {@code java.lang} exception that is neither catchable from JavaScript nor typed for
+     * embedders.
+     *
+     * @param length the candidate length
+     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
+     */
+    private static void requireValidLength(long length) {
+        if (length < 0 || length > MAX_ARRAY_LENGTH) {
+            throw new JSRangeErrorException("Invalid array length: " + length);
+        }
+    }
+
     private boolean hasPrototypeSetInterference(PropertyKey key) {
         // Runs on every element write to a hole, which includes every write that grows an array.
         // It used to allocate a HashSet<JSObject> per call purely as a cycle guard, and to take a
         // defensive copy of each descriptor it only null-checked. A depth bound and the raw
         // descriptor accessor give the same protection with no allocation at all.
+        //
+        // The two answers are not symmetric. False means "nothing on the chain can observe this
+        // write", which licenses the dense fast path and skips ordinary [[Set]]; true only costs a
+        // slower, fully specification-compliant write. So running out of depth must answer true.
+        // Answering false there meant a setter 1,001 links up was never called and an own element
+        // was created instead — `array[0] = 1` silently diverging from [[Set]] by prototype depth.
         JSObject prototypeObject = getPrototype();
-        for (int depth = 0; prototypeObject != null && depth < MAX_PROTOTYPE_SET_DEPTH; depth++) {
+        for (int depth = 0; prototypeObject != null; depth++) {
+            if (depth >= MAX_PROTOTYPE_SET_DEPTH) {
+                return true;
+            }
             if (prototypeObject instanceof JSTypedArray || prototypeObject instanceof JSProxy) {
                 return true;
             }
@@ -847,12 +879,7 @@ public final class JSArray extends JSObject {
      * When length is reduced, elements beyond the new length are deleted.
      */
     public void setLength(long newLength) {
-        if (newLength < 0 || newLength > MAX_ARRAY_LENGTH) {
-            // A public engine API must raise an error the engine's own machinery understands, not
-            // a raw java.lang exception that is neither catchable from JavaScript nor typed for
-            // embedders.
-            throw new JSRangeErrorException("Invalid array length: " + newLength);
-        }
+        requireValidLength(newLength);
 
         if (newLength < length) {
             // Truncate array - delete elements beyond new length

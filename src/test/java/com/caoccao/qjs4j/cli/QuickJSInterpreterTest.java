@@ -147,4 +147,61 @@ public class QuickJSInterpreterTest {
                 .as("the filename must reach eval so stack traces can name the source")
                 .contains("named.js");
     }
+
+    @Test
+    public void testStackGetterOnAThrownObjectIsNotInvoked() {
+        // Reporting the crash used to perform Get(error, "stack"), so the failing script chose
+        // what the interpreter printed about its own failure: it could spoof the trace, work
+        // indefinitely, or throw a second error out of the reporting path.
+        assertThat(QuickJSInterpreter.run(new String[]{"-e",
+                """
+                        throw Object.defineProperty({ message: 'real failure' }, 'stack', {
+                          get() { console.log('STACK GETTER RAN'); return 'spoofed stack' },
+                        });"""}))
+                .isEqualTo(1);
+        assertThat(out()).doesNotContain("STACK GETTER RAN");
+        assertThat(err()).doesNotContain("spoofed stack");
+        assertThat(err()).contains("real failure");
+    }
+
+    @Test
+    public void testThrownProxyDoesNotRunItsTrapsDuringReporting() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e",
+                """
+                        throw new Proxy({}, {
+                          get() { console.log('GET TRAP RAN'); return 'trapped' },
+                          getOwnPropertyDescriptor() { console.log('DESCRIPTOR TRAP RAN'); return undefined },
+                        });"""}))
+                .isEqualTo(1);
+        assertThat(out()).doesNotContain("GET TRAP RAN").doesNotContain("DESCRIPTOR TRAP RAN");
+    }
+
+    @Test
+    public void testNonStringStackFallsBackToTheHeadline() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'no stack here', stack: 42 }"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("no stack here").doesNotContain("42");
+    }
+
+    @Test
+    public void testBlankStackFallsBackToTheHeadline() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'blank stack', stack: '   ' }"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("blank stack");
+    }
+
+    @Test
+    public void testThrownPrimitiveIsReported() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw 'a bare string'"})).isEqualTo(1);
+        assertThat(err()).contains("a bare string");
+    }
+
+    @Test
+    public void testOrdinaryErrorStillPrintsItsStack() {
+        // The complement: an ordinary Error keeps stack as a data property, so the trace is still
+        // reported in full.
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "function boom() { throw new Error('deep') }\nboom();"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("Error: deep").contains("    at ");
+    }
 }
