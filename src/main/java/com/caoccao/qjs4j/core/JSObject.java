@@ -494,6 +494,34 @@ public non-sealed class JSObject implements JSValue {
         return false;
     }
 
+    /**
+     * Read a data property along the prototype chain for diagnostics, guaranteeing that no script
+     * runs.
+     * <p>
+     * Error objects keep {@code name} on their prototype, so a diagnostic reader has to walk. The
+     * walk stops at a {@link JSProxy} — its properties are only reachable by running a trap — and
+     * is bounded so a cyclic chain installed through the raw {@link #setPrototype(JSObject)} API
+     * cannot hang exception reporting.
+     *
+     * @param key the property key
+     * @return the value, or {@code null} when it is absent, is an accessor, or the walk met a Proxy
+     * @see #getOwnDataPropertyForDiagnostics(PropertyKey)
+     */
+    public final JSValue findDataPropertyForDiagnostics(PropertyKey key) {
+        JSObject current = this;
+        for (int depth = 0; current != null && depth < MAX_PROTOTYPE_DEPTH; depth++) {
+            if (current instanceof JSProxy) {
+                return null;
+            }
+            PropertyDescriptor descriptor = current.readOwnPropertyFromStorage(key);
+            if (descriptor != null) {
+                return descriptor.isDataDescriptor() ? descriptor.getValue() : null;
+            }
+            current = current.prototype;
+        }
+        return null;
+    }
+
     private StackFrame findInnermostFrameForFunction(JSContext propertyAccessContext, JSFunction currentFunction) {
         StackFrame currentFrame = propertyAccessContext.getVirtualMachine().getCurrentFrame();
         while (currentFrame != null) {
@@ -553,6 +581,13 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Get a V8-style object description for error messages.
+     * Returns format that matches V8 error messages.
+     *
+     * @param forDelete if true, returns format for delete errors, otherwise for assignment errors
+     */
+
+    /**
      * Get the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
      */
@@ -560,12 +595,6 @@ public non-sealed class JSObject implements JSValue {
         return context;
     }
 
-    /**
-     * Get a V8-style object description for error messages.
-     * Returns format that matches V8 error messages.
-     *
-     * @param forDelete if true, returns format for delete errors, otherwise for assignment errors
-     */
     /**
      * Build the object description used in a failed-assignment or failed-delete TypeError message.
      * <p>
@@ -685,6 +714,33 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Read an own data property for diagnostics, guaranteeing that no script runs.
+     * <p>
+     * Every other property accessor in the engine is virtual, so "does this read run user code?"
+     * depends on the object's concrete class: {@link #getOwnPropertyDescriptor(PropertyKey)} and
+     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} are both overridden by {@link JSProxy},
+     * where the override <em>is</em> the {@code getOwnPropertyDescriptor} trap. Formatting a
+     * message for a thrown Proxy therefore re-entered guest code, at the one moment — an exception
+     * already in flight — when that code can displace the error being reported, spoof the output,
+     * or throw again.
+     * <p>
+     * This method resolves to physical storage and nothing else. A {@link JSProxy} answers
+     * {@code null} rather than consulting its handler; accessors answer {@code null} rather than
+     * running their getter.
+     *
+     * @param key the property key
+     * @return the stored value, or {@code null} when the property is absent, is an accessor, or
+     * this object is a Proxy
+     */
+    public final JSValue getOwnDataPropertyForDiagnostics(PropertyKey key) {
+        if (this instanceof JSProxy) {
+            return null;
+        }
+        PropertyDescriptor descriptor = readOwnPropertyFromStorage(key);
+        return descriptor != null && descriptor.isDataDescriptor() ? descriptor.getValue() : null;
+    }
+
+    /**
      * Get the property descriptor for a property.
      * <p>
      * The returned descriptor is a defensive copy. {@link PropertyDescriptor} is mutable
@@ -714,25 +770,6 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Whether an own property exists and is enumerable.
-     * <p>
-     * Enumeration paths — {@code Object.keys}/{@code values}/{@code entries},
-     * {@code Object.assign}, {@code for}-{@code in} — need exactly this one bit per key.
-     * Asking for the descriptor to read it means a defensive copy per key, which is pure overhead
-     * for a caller that lets the descriptor go out of scope immediately.
-     * <p>
-     * Final for the same reason as {@link #getOwnPropertyDescriptor(PropertyKey)}: exotic objects
-     * customise {@link #getOwnPropertyDescriptorRaw(PropertyKey)}, and this is a view over it.
-     *
-     * @param key the property key
-     * @return true when the property exists and is enumerable
-     */
-    public final boolean isOwnPropertyEnumerable(PropertyKey key) {
-        PropertyDescriptor descriptor = getOwnPropertyDescriptorRaw(key);
-        return descriptor != null && descriptor.isEnumerable();
-    }
-
-    /**
      * Get the object's own property descriptor instance, without copying.
      * <p>
      * For internal use only. The returned descriptor may be the object's live instance; mutating it
@@ -744,115 +781,6 @@ public non-sealed class JSObject implements JSValue {
      */
     protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         return readOwnPropertyFromStorage(key);
-    }
-
-    /**
-     * Read an own property out of this object's physical storage, with no virtual dispatch.
-     * <p>
-     * Private on purpose: a {@code private} call cannot be overridden, so it is the only property
-     * read in the engine that provably runs no script.
-     *
-     * @param key the property key
-     * @return the stored descriptor, or {@code null} when the key is not in physical storage
-     */
-    private PropertyDescriptor readOwnPropertyFromStorage(PropertyKey key) {
-        int offset = getOwnPropertyOffset(key);
-        if (offset >= 0) {
-            PropertyDescriptor desc = shape.getDescriptorAt(offset);
-            // Sync descriptor value with current propertyValues for data properties.
-            // propertyValues[offset] is the source of truth for current values,
-            // while the descriptor may hold a stale value from initialization.
-            if (desc != null && desc.isDataDescriptor()) {
-                if (offset < propertyValues.length && propertyValues[offset] != null) {
-                    JSValue currentValue = propertyValues[offset];
-                    if (desc.getValue() != currentValue) {
-                        desc.setValue(currentValue);
-                    }
-                }
-            }
-            return desc;
-        }
-
-        long arrayIndex = key.toArrayIndex();
-        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
-            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
-            if (sparseValue != null) {
-                return PropertyDescriptor.defaultData(sparseValue);
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Drop every own property and the prototype link, ignoring configurability and extensibility.
-     * <p>
-     * Not a JavaScript operation and not reachable from script: this exists so
-     * {@link JSContext#close()} can release the realm's global object, whose bindings are mostly
-     * non-configurable and so cannot be removed through {@code delete}. An embedder that still
-     * holds the global object of a closed context holds an empty object rather than the whole
-     * realm graph.
-     */
-    void releaseProperties() {
-        shape = new JSShape();
-        propertyValues = JSValue.NO_ARGS;
-        sparseProperties = null;
-        prototype = null;
-    }
-
-    /**
-     * Read an own data property for diagnostics, guaranteeing that no script runs.
-     * <p>
-     * Every other property accessor in the engine is virtual, so "does this read run user code?"
-     * depends on the object's concrete class: {@link #getOwnPropertyDescriptor(PropertyKey)} and
-     * {@link #getOwnPropertyDescriptorRaw(PropertyKey)} are both overridden by {@link JSProxy},
-     * where the override <em>is</em> the {@code getOwnPropertyDescriptor} trap. Formatting a
-     * message for a thrown Proxy therefore re-entered guest code, at the one moment — an exception
-     * already in flight — when that code can displace the error being reported, spoof the output,
-     * or throw again.
-     * <p>
-     * This method resolves to physical storage and nothing else. A {@link JSProxy} answers
-     * {@code null} rather than consulting its handler; accessors answer {@code null} rather than
-     * running their getter.
-     *
-     * @param key the property key
-     * @return the stored value, or {@code null} when the property is absent, is an accessor, or
-     * this object is a Proxy
-     */
-    public final JSValue getOwnDataPropertyForDiagnostics(PropertyKey key) {
-        if (this instanceof JSProxy) {
-            return null;
-        }
-        PropertyDescriptor descriptor = readOwnPropertyFromStorage(key);
-        return descriptor != null && descriptor.isDataDescriptor() ? descriptor.getValue() : null;
-    }
-
-    /**
-     * Read a data property along the prototype chain for diagnostics, guaranteeing that no script
-     * runs.
-     * <p>
-     * Error objects keep {@code name} on their prototype, so a diagnostic reader has to walk. The
-     * walk stops at a {@link JSProxy} — its properties are only reachable by running a trap — and
-     * is bounded so a cyclic chain installed through the raw {@link #setPrototype(JSObject)} API
-     * cannot hang exception reporting.
-     *
-     * @param key the property key
-     * @return the value, or {@code null} when it is absent, is an accessor, or the walk met a Proxy
-     * @see #getOwnDataPropertyForDiagnostics(PropertyKey)
-     */
-    public final JSValue findDataPropertyForDiagnostics(PropertyKey key) {
-        JSObject current = this;
-        for (int depth = 0; current != null && depth < MAX_PROTOTYPE_DEPTH; depth++) {
-            if (current instanceof JSProxy) {
-                return null;
-            }
-            PropertyDescriptor descriptor = current.readOwnPropertyFromStorage(key);
-            if (descriptor != null) {
-                return descriptor.isDataDescriptor() ? descriptor.getValue() : null;
-            }
-            current = current.prototype;
-        }
-        return null;
     }
 
     /**
@@ -1148,17 +1076,6 @@ public non-sealed class JSObject implements JSValue {
         return arrayObject;
     }
 
-    public boolean isExtensible() {
-        return extensible;
-    }
-
-    /**
-     * Check if this object is frozen.
-     */
-    public boolean isFrozen() {
-        return frozen;
-    }
-
     /**
      * Whether the VM has already transferred the realm prototype onto this bytecode constant
      * object. For internal use only - not accessible from JavaScript.
@@ -1174,18 +1091,15 @@ public non-sealed class JSObject implements JSValue {
         return constantPrototypeInitialized;
     }
 
+    public boolean isExtensible() {
+        return extensible;
+    }
+
     /**
-     * Record that the realm prototype has been transferred onto this constant object.
-     * For internal use only - not accessible from JavaScript.
-     *
-     * @return true when this call performed the transition, false when it was already set
+     * Check if this object is frozen.
      */
-    public boolean markConstantPrototypeInitialized() {
-        if (constantPrototypeInitialized) {
-            return false;
-        }
-        constantPrototypeInitialized = true;
-        return true;
+    public boolean isFrozen() {
+        return frozen;
     }
 
     /**
@@ -1193,6 +1107,54 @@ public non-sealed class JSObject implements JSValue {
      */
     public boolean isHTMLDDA() {
         return htmlDDA;
+    }
+
+    /**
+     * Whether this object appears anywhere in the proposed prototype's own chain.
+     * <p>
+     * The walk is complete: a depth cutoff here is not a resource guard but a false negative, and
+     * a false negative installs a real cycle. Stopping after 1,000 links let
+     * {@code Object.setPrototypeOf(a, chainOf1002LinksEndingAtA)} succeed, leaving {@code a} in a
+     * circular prototype graph that every later property read had to defend against.
+     * <p>
+     * Termination without a cutoff comes from Floyd cycle detection instead. That is needed because
+     * the raw {@link #setPrototype(JSObject)} embedder API can install a cycle that does not contain
+     * {@code this}; the specification's walk would follow it forever. Meeting such a cycle proves
+     * {@code this} is not in the chain, so the answer is false.
+     *
+     * @param proto the proposed prototype; {@code null} is never circular
+     * @return true when installing {@code proto} would make this object its own ancestor
+     */
+    private boolean isInPrototypeChainOf(JSObject proto) {
+        JSObject slow = proto;
+        JSObject fast = proto;
+        while (fast != null) {
+            if (fast == this) {
+                return true;
+            }
+            // Step 8.c: if p is not an ordinary object, set done to true. A Proxy's prototype is
+            // reached through its getPrototypeOf trap, which the specification does not run here.
+            if (fast instanceof JSProxy) {
+                return false;
+            }
+            fast = fast.getPrototype();
+            if (fast == null) {
+                return false;
+            }
+            if (fast == this) {
+                return true;
+            }
+            if (fast instanceof JSProxy) {
+                return false;
+            }
+            fast = fast.getPrototype();
+            slow = slow.getPrototype();
+            if (fast == slow) {
+                // A pre-existing cycle that does not pass through this object.
+                return false;
+            }
+        }
+        return false;
     }
 
     private boolean isLegacyFunctionPropertyAccessible(JSFunction currentFunction) {
@@ -1204,6 +1166,25 @@ public non-sealed class JSObject implements JSValue {
                     && !bytecodeFunction.isGenerator();
         }
         return false;
+    }
+
+    /**
+     * Whether an own property exists and is enumerable.
+     * <p>
+     * Enumeration paths — {@code Object.keys}/{@code values}/{@code entries},
+     * {@code Object.assign}, {@code for}-{@code in} — need exactly this one bit per key.
+     * Asking for the descriptor to read it means a defensive copy per key, which is pure overhead
+     * for a caller that lets the descriptor go out of scope immediately.
+     * <p>
+     * Final for the same reason as {@link #getOwnPropertyDescriptor(PropertyKey)}: exotic objects
+     * customise {@link #getOwnPropertyDescriptorRaw(PropertyKey)}, and this is a view over it.
+     *
+     * @param key the property key
+     * @return true when the property exists and is enumerable
+     */
+    public final boolean isOwnPropertyEnumerable(PropertyKey key) {
+        PropertyDescriptor descriptor = getOwnPropertyDescriptorRaw(key);
+        return descriptor != null && descriptor.isEnumerable();
     }
 
     private boolean isPrivateSymbolKey(PropertyKey key) {
@@ -1227,6 +1208,20 @@ public non-sealed class JSObject implements JSValue {
 
     public boolean isSuperConstructorCalled() {
         return superConstructorCalled;
+    }
+
+    /**
+     * Record that the realm prototype has been transferred onto this constant object.
+     * For internal use only - not accessible from JavaScript.
+     *
+     * @return true when this call performed the transition, false when it was already set
+     */
+    public boolean markConstantPrototypeInitialized() {
+        if (constantPrototypeInitialized) {
+            return false;
+        }
+        constantPrototypeInitialized = true;
+        return true;
     }
 
     public void markSuperConstructorCalled() {
@@ -1255,6 +1250,60 @@ public non-sealed class JSObject implements JSValue {
     public boolean preventExtensionsWithResult() {
         preventExtensions();
         return true;
+    }
+
+    /**
+     * Read an own property out of this object's physical storage, with no virtual dispatch.
+     * <p>
+     * Private on purpose: a {@code private} call cannot be overridden, so it is the only property
+     * read in the engine that provably runs no script.
+     *
+     * @param key the property key
+     * @return the stored descriptor, or {@code null} when the key is not in physical storage
+     */
+    private PropertyDescriptor readOwnPropertyFromStorage(PropertyKey key) {
+        int offset = getOwnPropertyOffset(key);
+        if (offset >= 0) {
+            PropertyDescriptor desc = shape.getDescriptorAt(offset);
+            // Sync descriptor value with current propertyValues for data properties.
+            // propertyValues[offset] is the source of truth for current values,
+            // while the descriptor may hold a stale value from initialization.
+            if (desc != null && desc.isDataDescriptor()) {
+                if (offset < propertyValues.length && propertyValues[offset] != null) {
+                    JSValue currentValue = propertyValues[offset];
+                    if (desc.getValue() != currentValue) {
+                        desc.setValue(currentValue);
+                    }
+                }
+            }
+            return desc;
+        }
+
+        long arrayIndex = key.toArrayIndex();
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
+            if (sparseValue != null) {
+                return PropertyDescriptor.defaultData(sparseValue);
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Drop every own property and the prototype link, ignoring configurability and extensibility.
+     * <p>
+     * Not a JavaScript operation and not reachable from script: this exists so
+     * {@link JSContext#close()} can release the realm's global object, whose bindings are mostly
+     * non-configurable and so cannot be removed through {@code delete}. An embedder that still
+     * holds the global object of a closed context holds an empty object rather than the whole
+     * realm graph.
+     */
+    void releaseProperties() {
+        shape = new JSShape();
+        propertyValues = JSValue.NO_ARGS;
+        sparseProperties = null;
+        prototype = null;
     }
 
     /**
@@ -1293,14 +1342,14 @@ public non-sealed class JSObject implements JSValue {
         set(PropertyKey.fromIndex(index), value);
     }
 
+    // Prototype chain
+
     /**
      * Set a property value by property key.
      */
     public void set(PropertyKey key, JSValue value) {
         setInternal(key, value, this, true);
     }
-
-    // Prototype chain
 
     /**
      * Set the constructor type internal slot.
@@ -1310,14 +1359,14 @@ public non-sealed class JSObject implements JSValue {
         constructorType = type;
     }
 
+    // Object integrity levels (ES5)
+
     /**
      * Set the [IsHTMLDDA] internal slot.
      */
     public void setHTMLDDA(boolean htmlDDA) {
         this.htmlDDA = htmlDDA;
     }
-
-    // Object integrity levels (ES5)
 
     /**
      * Mark this object as an immutable prototype exotic object.
@@ -1527,54 +1576,6 @@ public non-sealed class JSObject implements JSValue {
 
         this.prototype = proto;
         return SetPrototypeResult.SUCCESS;
-    }
-
-    /**
-     * Whether this object appears anywhere in the proposed prototype's own chain.
-     * <p>
-     * The walk is complete: a depth cutoff here is not a resource guard but a false negative, and
-     * a false negative installs a real cycle. Stopping after 1,000 links let
-     * {@code Object.setPrototypeOf(a, chainOf1002LinksEndingAtA)} succeed, leaving {@code a} in a
-     * circular prototype graph that every later property read had to defend against.
-     * <p>
-     * Termination without a cutoff comes from Floyd cycle detection instead. That is needed because
-     * the raw {@link #setPrototype(JSObject)} embedder API can install a cycle that does not contain
-     * {@code this}; the specification's walk would follow it forever. Meeting such a cycle proves
-     * {@code this} is not in the chain, so the answer is false.
-     *
-     * @param proto the proposed prototype; {@code null} is never circular
-     * @return true when installing {@code proto} would make this object its own ancestor
-     */
-    private boolean isInPrototypeChainOf(JSObject proto) {
-        JSObject slow = proto;
-        JSObject fast = proto;
-        while (fast != null) {
-            if (fast == this) {
-                return true;
-            }
-            // Step 8.c: if p is not an ordinary object, set done to true. A Proxy's prototype is
-            // reached through its getPrototypeOf trap, which the specification does not run here.
-            if (fast instanceof JSProxy) {
-                return false;
-            }
-            fast = fast.getPrototype();
-            if (fast == null) {
-                return false;
-            }
-            if (fast == this) {
-                return true;
-            }
-            if (fast instanceof JSProxy) {
-                return false;
-            }
-            fast = fast.getPrototype();
-            slow = slow.getPrototype();
-            if (fast == slow) {
-                // A pre-existing cycle that does not pass through this object.
-                return false;
-            }
-        }
-        return false;
     }
 
     private boolean setWithPrimitiveReceiver(PropertyKey key, JSValue value, JSValue primitiveReceiver) {

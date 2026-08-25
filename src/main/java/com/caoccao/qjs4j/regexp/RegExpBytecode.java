@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.regexp;
 
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
+
 import java.util.Arrays;
 
 /**

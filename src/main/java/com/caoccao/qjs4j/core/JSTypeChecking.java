@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.builtins.NumberPrototype;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 /**
  * Type checking utilities for JavaScript values.

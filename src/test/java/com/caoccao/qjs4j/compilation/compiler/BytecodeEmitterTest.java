@@ -125,16 +125,6 @@ public class BytecodeEmitterTest extends BaseTest {
     }
 
     @Test
-    @Timeout(60)
-    public void testVeryLargeFunctionCompilesInBoundedTime() {
-        // 8000 branches is roughly 1.2 MB of source with ~32000 jump patches. With the quadratic
-        // emitter this moved gigabytes through Arrays.copyOf; the bound here is generous enough
-        // not to be timing-sensitive while still failing if quadratic behaviour returns.
-        context.eval(buildLargeFunctionSource(8000));
-        assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
-    }
-
-    @Test
     public void testMarkCatchAsFinallySetsOnlyTheTopBit() {
         BytecodeEmitter emitter = new BytecodeEmitter();
         emitter.emitU32(0x01020304);
@@ -143,6 +133,22 @@ public class BytecodeEmitterTest extends BaseTest {
         assertThat(emitter.getCode()).containsExactly(
                 (byte) 0x01, (byte) 0x02, (byte) 0x03, (byte) 0x04,
                 (byte) 0x8A, (byte) 0x0B, (byte) 0x0C, (byte) 0x0D);
+    }
+
+    @Test
+    public void testPatchJumpWithNegativeDistance() {
+        BytecodeEmitter emitter = new BytecodeEmitter();
+        int loopStart = emitter.currentOffset();
+        emitter.emitU8(0x01);
+        int jumpPosition = emitter.emitJump(Opcode.GOTO);
+        emitter.patchJump(jumpPosition, loopStart);
+
+        byte[] code = emitter.getCode();
+        int patched = ((code[jumpPosition] & 0xFF) << 24)
+                | ((code[jumpPosition + 1] & 0xFF) << 16)
+                | ((code[jumpPosition + 2] & 0xFF) << 8)
+                | (code[jumpPosition + 3] & 0xFF);
+        assertThat(patched).isEqualTo(loopStart - (jumpPosition + 4)).isNegative();
     }
 
     @Test
@@ -169,18 +175,12 @@ public class BytecodeEmitterTest extends BaseTest {
     }
 
     @Test
-    public void testPatchJumpWithNegativeDistance() {
-        BytecodeEmitter emitter = new BytecodeEmitter();
-        int loopStart = emitter.currentOffset();
-        emitter.emitU8(0x01);
-        int jumpPosition = emitter.emitJump(Opcode.GOTO);
-        emitter.patchJump(jumpPosition, loopStart);
-
-        byte[] code = emitter.getCode();
-        int patched = ((code[jumpPosition] & 0xFF) << 24)
-                | ((code[jumpPosition + 1] & 0xFF) << 16)
-                | ((code[jumpPosition + 2] & 0xFF) << 8)
-                | (code[jumpPosition + 3] & 0xFF);
-        assertThat(patched).isEqualTo(loopStart - (jumpPosition + 4)).isNegative();
+    @Timeout(60)
+    public void testVeryLargeFunctionCompilesInBoundedTime() {
+        // 8000 branches is roughly 1.2 MB of source with ~32000 jump patches. With the quadratic
+        // emitter this moved gigabytes through Arrays.copyOf; the bound here is generous enough
+        // not to be timing-sensitive while still failing if quadratic behaviour returns.
+        context.eval(buildLargeFunctionSource(8000));
+        assertThat(context.eval("big(1)")).isEqualTo(JSNumber.of(8000));
     }
 }

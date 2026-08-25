@@ -50,6 +50,26 @@ public final class CallStack {
     }
 
     /**
+     * Cast a slot to a JSValue, reporting an internal marker as a diagnosable engine error.
+     * <p>
+     * A bare cast turns a {@link JSCatchOffset} left in the slot by miscompiled bytecode into a
+     * {@link ClassCastException} with no context.
+     *
+     * @param stackValue the raw slot contents
+     * @param operation  the operation being performed, used in the error message
+     * @return the slot contents as a JSValue
+     */
+    private JSValue asJSValue(JSStackValue stackValue, String operation) {
+        if (stackValue instanceof JSValue value) {
+            return value;
+        }
+        throw new JSVirtualMachineException(
+                "Internal engine error: " + operation + " found "
+                        + (stackValue == null ? "an empty slot" : stackValue.getClass().getSimpleName())
+                        + " where a value was expected, at stackTop=" + stackTop);
+    }
+
+    /**
      * Drop count values from the stack (QuickJS: sp -= count).
      * <p>
      * The count is bounds-checked: an unchecked {@code stackTop -= count} could silently drive the
@@ -111,26 +131,6 @@ public final class CallStack {
             throw new JSVirtualMachineException("Stack underflow in pop: stackTop=" + stackTop);
         }
         return asJSValue(stack[--stackTop], "pop");
-    }
-
-    /**
-     * Cast a slot to a JSValue, reporting an internal marker as a diagnosable engine error.
-     * <p>
-     * A bare cast turns a {@link JSCatchOffset} left in the slot by miscompiled bytecode into a
-     * {@link ClassCastException} with no context.
-     *
-     * @param stackValue the raw slot contents
-     * @param operation  the operation being performed, used in the error message
-     * @return the slot contents as a JSValue
-     */
-    private JSValue asJSValue(JSStackValue stackValue, String operation) {
-        if (stackValue instanceof JSValue value) {
-            return value;
-        }
-        throw new JSVirtualMachineException(
-                "Internal engine error: " + operation + " found "
-                        + (stackValue == null ? "an empty slot" : stackValue.getClass().getSimpleName())
-                        + " where a value was expected, at stackTop=" + stackTop);
     }
 
     /**

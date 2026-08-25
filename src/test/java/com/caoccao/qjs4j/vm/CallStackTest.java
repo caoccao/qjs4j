@@ -22,9 +22,7 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSVirtualMachineException;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * {@link CallStack} bounds and diagnostics.
@@ -51,6 +49,17 @@ public class CallStackTest {
     }
 
     @Test
+    public void testDropOfZeroAndOfTheWholeStackAreAccepted() {
+        CallStack stack = new CallStack();
+        stack.push(JSNumber.of(1));
+        stack.push(JSNumber.of(2));
+        assertThatCode(() -> stack.drop(0)).doesNotThrowAnyException();
+        assertThat(stack.getStackTop()).isEqualTo(2);
+        assertThatCode(() -> stack.drop(2)).doesNotThrowAnyException();
+        assertThat(stack.getStackTop()).isZero();
+    }
+
+    @Test
     public void testDropRejectsCountBeyondTheStackDepth() {
         CallStack stack = new CallStack();
         stack.push(JSNumber.of(1));
@@ -61,17 +70,6 @@ public class CallStackTest {
                 .isInstanceOf(JSVirtualMachineException.class)
                 .hasMessageContaining("Stack underflow in drop");
         assertThat(stack.getStackTop()).as("a rejected drop must not move the stack top").isEqualTo(1);
-    }
-
-    @Test
-    public void testDropOfZeroAndOfTheWholeStackAreAccepted() {
-        CallStack stack = new CallStack();
-        stack.push(JSNumber.of(1));
-        stack.push(JSNumber.of(2));
-        assertThatCode(() -> stack.drop(0)).doesNotThrowAnyException();
-        assertThat(stack.getStackTop()).isEqualTo(2);
-        assertThatCode(() -> stack.drop(2)).doesNotThrowAnyException();
-        assertThat(stack.getStackTop()).isZero();
     }
 
     @Test

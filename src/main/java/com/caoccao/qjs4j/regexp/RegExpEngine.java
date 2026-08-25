@@ -620,18 +620,14 @@ public final class RegExpEngine {
         final boolean multiline;
         final int[] registers;  // Registers for loop counters and position tracking (QuickJS capture[2*captureCount+...])
         final boolean unicode;
-        /**
-         * Budget of backtracking steps for this match attempt; 0 means unbounded.
-         */
-        private final long backtrackLimit;
-        /**
-         * Backtracking steps consumed so far.
-         */
-        private long backtrackSteps;
         // Flat backtrack stack: each entry is [pc, pos, captureStarts..., captureEnds..., registers..., stateOffset]
         // stored contiguously in a single int[]. stateOffset points to the entry that holds the actual
         // saved state — consecutive pushes with no state modifications share the same saved copy.
         private final int backtrackEntrySize;
+        /**
+         * Budget of backtracking steps for this match attempt; 0 means unbounded.
+         */
+        private final long backtrackLimit;
         /**
          * Entries this pattern may push, derived from {@link #MAX_BACKTRACK_INTS} and the entry
          * size so that the byte ceiling is the same for every pattern.
@@ -645,6 +641,10 @@ public final class RegExpEngine {
         int[] captureStarts;
         int pos;  // Current position in code points
         private int[] backtrackData;
+        /**
+         * Backtracking steps consumed so far.
+         */
+        private long backtrackSteps;
         private boolean stateDirty;  // true if captures/registers modified since last state save
 
         ExecutionContext(
@@ -1085,24 +1085,6 @@ public final class RegExpEngine {
             return true;
         }
 
-        /**
-         * Budget available to a nested match (a lookaround).
-         *
-         * @return the unspent part of this context's budget, or 0 when unbounded
-         * @throws JSRangeErrorException when this context has already exhausted its budget
-         */
-        long remainingBacktrackBudget() {
-            if (backtrackLimit <= 0) {
-                return 0;
-            }
-            long remaining = backtrackLimit - backtrackSteps;
-            if (remaining <= 0) {
-                throw new JSRangeErrorException(
-                        "regular expression execution exceeded the backtracking limit");
-            }
-            return remaining;
-        }
-
         int popBacktrack() {
             // The matcher is a backtracking engine, so a pattern like /(a+)+$/ takes time
             // exponential in the input length. Counting pops bounds that: the stack depth stays
@@ -1161,6 +1143,24 @@ public final class RegExpEngine {
                     ((bc[offset + 1] & 0xFF) << 8) |
                     ((bc[offset + 2] & 0xFF) << 16) |
                     ((bc[offset + 3] & 0xFF) << 24);
+        }
+
+        /**
+         * Budget available to a nested match (a lookaround).
+         *
+         * @return the unspent part of this context's budget, or 0 when unbounded
+         * @throws JSRangeErrorException when this context has already exhausted its budget
+         */
+        long remainingBacktrackBudget() {
+            if (backtrackLimit <= 0) {
+                return 0;
+            }
+            long remaining = backtrackLimit - backtrackSteps;
+            if (remaining <= 0) {
+                throw new JSRangeErrorException(
+                        "regular expression execution exceeded the backtracking limit");
+            }
+            return remaining;
         }
 
         void reset(int startPos) {

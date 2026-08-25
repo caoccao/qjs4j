@@ -70,16 +70,6 @@ public class RegExpResourceBoundTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testHugeCaptureCountIsRejectedRatherThanAllocated() {
-        // 100,000 groups used to reserve ~51 MiB of int[] before the first character was matched.
-        assertThat(evalToString(
-                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
-                        .formatted(groups(100000))))
-                .isEqualTo("SyntaxError");
-    }
-
-    @Test
-    @Timeout(60)
     public void testCaptureLimitAppliesToLiteralsToo() {
         assertThat(evalToString(
                 "(function () { try { eval('/' + '%s' + '/'); return 'OK' } catch (e) { return e.name } })()"
@@ -104,16 +94,12 @@ public class RegExpResourceBoundTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testOrdinaryCaptureHeavyPatternStillMatches() {
-        // The complement: a legitimate pattern near the limit must still work.
+    public void testHugeCaptureCountIsRejectedRatherThanAllocated() {
+        // 100,000 groups used to reserve ~51 MiB of int[] before the first character was matched.
         assertThat(evalToString(
-                """
-                        (function () {
-                          const pattern = new RegExp('%s' + '(x)');
-                          const match = pattern.exec('x');
-                          return match.length + ',' + match[match.length - 1];
-                        })()""".formatted(groups(200))))
-                .isEqualTo("202,x");
+                "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
+                        .formatted(groups(100000))))
+                .isEqualTo("SyntaxError");
     }
 
     @Test
@@ -136,5 +122,19 @@ public class RegExpResourceBoundTest extends BaseTest {
                 "(function () { try { new RegExp('%s'); return 'OK' } catch (e) { return e.name } })()"
                         .formatted("(?:)".repeat(1000))))
                 .isEqualTo("OK");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testOrdinaryCaptureHeavyPatternStillMatches() {
+        // The complement: a legitimate pattern near the limit must still work.
+        assertThat(evalToString(
+                """
+                        (function () {
+                          const pattern = new RegExp('%s' + '(x)');
+                          const match = pattern.exec('x');
+                          return match.length + ',' + match[match.length - 1];
+                        })()""".formatted(groups(200))))
+                .isEqualTo("202,x");
     }
 }

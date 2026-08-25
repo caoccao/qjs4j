@@ -16,8 +16,8 @@
 
 package com.caoccao.qjs4j.core.temporal;
 
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 public record TemporalFractionalSecondDigitsOption(boolean auto, int digits) {
     public static final TemporalFractionalSecondDigitsOption AUTO = new TemporalFractionalSecondDigitsOption(true, -1);

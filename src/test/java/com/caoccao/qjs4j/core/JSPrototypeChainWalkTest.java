@@ -46,6 +46,19 @@ public class JSPrototypeChainWalkTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testCyclicPrototypeChainRaisesRangeErrorForGet() {
+        JSObject first = context.createJSObject();
+        JSObject second = context.createJSObject();
+        first.setPrototype(second);
+        second.setPrototype(first);
+
+        assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing")))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("Maximum prototype chain depth exceeded");
+    }
+
+    @Test
+    @Timeout(60)
     public void testCyclicPrototypeChainRaisesRangeErrorForHas() {
         // setPrototype is the raw embedder API and does not run the cycle check, so a cycle is
         // reachable. It used to recurse until the Java stack was exhausted.
@@ -55,19 +68,6 @@ public class JSPrototypeChainWalkTest extends BaseTest {
         second.setPrototype(first);
 
         assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing")))
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("Maximum prototype chain depth exceeded");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCyclicPrototypeChainRaisesRangeErrorForGet() {
-        JSObject first = context.createJSObject();
-        JSObject second = context.createJSObject();
-        first.setPrototype(second);
-        second.setPrototype(first);
-
-        assertThatThrownBy(() -> first.get(PropertyKey.fromString("missing")))
                 .isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Maximum prototype chain depth exceeded");
     }
@@ -84,6 +84,17 @@ public class JSPrototypeChainWalkTest extends BaseTest {
                 .as("`in` must be bounded exactly like a property read")
                 .isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Maximum prototype chain depth exceeded");
+    }
+
+    @Test
+    public void testInheritedPropertyIsFoundThroughTheChain() {
+        JSObject base = context.createJSObject();
+        base.set(PropertyKey.fromString("inherited"), new JSString("from base"));
+        JSObject derived = context.createJSObject();
+        derived.setPrototype(base);
+
+        assertThat(derived.has(PropertyKey.fromString("inherited"))).isTrue();
+        assertThat(derived.get(PropertyKey.fromString("inherited")).toString()).isEqualTo("from base");
     }
 
     @Test
@@ -117,6 +128,17 @@ public class JSPrototypeChainWalkTest extends BaseTest {
     }
 
     @Test
+    public void testSetPrototypeOfStillRejectsACycle() {
+        assertThat(context.eval(
+                        """
+                                const a = {};
+                                const b = Object.create(a);
+                                try { Object.setPrototypeOf(a, b); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }""")
+                .toString())
+                .isEqualTo("CAUGHT TypeError");
+    }
+
+    @Test
     public void testShallowPrototypeChainsAreUnaffected() {
         JSObject shallow = buildChain(100);
         shallow.set(PropertyKey.fromString("own"), JSNumber.of(1));
@@ -127,34 +149,12 @@ public class JSPrototypeChainWalkTest extends BaseTest {
     }
 
     @Test
-    public void testInheritedPropertyIsFoundThroughTheChain() {
-        JSObject base = context.createJSObject();
-        base.set(PropertyKey.fromString("inherited"), new JSString("from base"));
-        JSObject derived = context.createJSObject();
-        derived.setPrototype(base);
-
-        assertThat(derived.has(PropertyKey.fromString("inherited"))).isTrue();
-        assertThat(derived.get(PropertyKey.fromString("inherited")).toString()).isEqualTo("from base");
-    }
-
-    @Test
-    public void testSetPrototypeOfStillRejectsACycle() {
-        assertThat(context.eval(
-                """
-                        const a = {};
-                        const b = Object.create(a);
-                        try { Object.setPrototypeOf(a, b); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }""")
-                .toString())
-                .isEqualTo("CAUGHT TypeError");
-    }
-
-    @Test
     public void testTypedArrayInheritsTheDepthBoundedWalk() {
         // JSTypedArray overrides the walk; it must carry the depth through to super.
         assertThat(context.eval(
-                """
-                        const a = new Int32Array([1, 2, 3]);
-                        (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a)""")
+                        """
+                                const a = new Int32Array([1, 2, 3]);
+                                (0 in a) + ',' + (3 in a) + ',' + ('length' in a) + ',' + ('map' in a)""")
                 .toString())
                 .isEqualTo("true,false,true,true");
     }

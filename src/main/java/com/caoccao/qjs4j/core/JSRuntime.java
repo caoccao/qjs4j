@@ -100,6 +100,13 @@ public final class JSRuntime implements AutoCloseable {
         this.options = options;
     }
 
+    /**
+     * Clear a pending interrupt request so evaluation can resume.
+     */
+    public void clearInterrupt() {
+        this.interruptRequested = false;
+    }
+
     @Override
     public void close() {
         jobQueue.clear();
@@ -237,6 +244,19 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
+     * Ask any evaluation running on this runtime to stop.
+     * <p>
+     * Safe to call from another thread. The interpreter polls this every
+     * {@code INTERRUPT_CHECK_INTERVAL} opcodes and terminates with an exception that JavaScript
+     * {@code try}/{@code catch} cannot intercept, so a script cannot keep itself alive by
+     * swallowing the signal. The flag stays set until {@link #clearInterrupt()} is called, so a
+     * later evaluation on this runtime would also stop immediately.
+     */
+    public void requestInterrupt() {
+        this.interruptRequested = true;
+    }
+
+    /**
      * Run all pending host jobs on this runtime.
      * <p>
      * <strong>This drains the host queue only.</strong> It deliberately does <em>not</em> touch any
@@ -270,26 +290,6 @@ public final class JSRuntime implements AutoCloseable {
      */
     public void setCurrentExecutingContext(JSContext context) {
         this.currentExecutingContext = context;
-    }
-
-    /**
-     * Ask any evaluation running on this runtime to stop.
-     * <p>
-     * Safe to call from another thread. The interpreter polls this every
-     * {@code INTERRUPT_CHECK_INTERVAL} opcodes and terminates with an exception that JavaScript
-     * {@code try}/{@code catch} cannot intercept, so a script cannot keep itself alive by
-     * swallowing the signal. The flag stays set until {@link #clearInterrupt()} is called, so a
-     * later evaluation on this runtime would also stop immediately.
-     */
-    public void requestInterrupt() {
-        this.interruptRequested = true;
-    }
-
-    /**
-     * Clear a pending interrupt request so evaluation can resume.
-     */
-    public void clearInterrupt() {
-        this.interruptRequested = false;
     }
 
     /**

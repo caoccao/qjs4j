@@ -158,6 +158,36 @@ public final class VirtualMachine {
         }
     }
 
+    /**
+     * Build a diagnostic message for an engine defect that escaped the interpreter loop.
+     *
+     * @param function         the function being executed
+     * @param executionContext the execution context, or {@code null} if the failure happened while
+     *                         creating it
+     * @param failure          the escaping exception
+     * @return a message naming the function, the program counter and the failure type
+     */
+    private static String describeInternalFailure(
+            JSBytecodeFunction function,
+            ExecutionContext executionContext,
+            RuntimeException failure) {
+        StringBuilder message = new StringBuilder("Internal engine error");
+        if (executionContext != null) {
+            message.append(" at pc=").append(executionContext.pc);
+        }
+        if (function != null) {
+            String functionName = function.getName();
+            message.append(" in ")
+                    .append(functionName == null || functionName.isEmpty() ? "<anonymous>" : functionName);
+        }
+        message.append(": ").append(failure.getClass().getName());
+        String failureMessage = failure.getMessage();
+        if (failureMessage != null && !failureMessage.isEmpty()) {
+            message.append(": ").append(failureMessage);
+        }
+        return message.toString();
+    }
+
     static PendingExceptionAction handlePendingExceptionForExecute(ExecutionContext executionContext) {
         if (executionContext.virtualMachine.pendingException == null) {
             return PendingExceptionAction.NONE;
@@ -234,6 +264,49 @@ public final class VirtualMachine {
         }
         String exceptionMessage = executionContext.virtualMachine.safeExceptionToString(executionContext.virtualMachine.context, exception);
         throw new JSVirtualMachineException("Unhandled exception: " + exceptionMessage, exception);
+    }
+
+    /**
+     * Resolve a local variable's declared name from the running function's bytecode.
+     *
+     * @param frame      the active stack frame
+     * @param localIndex the local slot index
+     * @return the declared name, or {@code null} when it is unavailable
+     */
+    static String localVariableName(StackFrame frame, int localIndex) {
+        if (frame == null || localIndex < 0) {
+            return null;
+        }
+        JSFunction function = frame.getFunction();
+        if (!(function instanceof JSBytecodeFunction bytecodeFunction)) {
+            return null;
+        }
+        String[] names = bytecodeFunction.getBytecode().getLocalVarNames();
+        return names != null && localIndex < names.length ? names[localIndex] : null;
+    }
+
+    /**
+     * Read an own data property as a string without invoking any accessor or Proxy trap.
+     * <p>
+     * {@code getOwnPropertyDescriptor} is virtual, and {@link JSProxy} overrides it with the
+     * {@code getOwnPropertyDescriptor} trap, so this read used to re-enter guest code for a thrown
+     * Proxy — during exception unwinding, which is exactly what this path exists to avoid.
+     * {@code getOwnDataPropertyForDiagnostics} is {@code final} and reads physical storage only.
+     *
+     * @param object the object to read from
+     * @param key    the property key
+     * @return the property rendered as a string, or {@code null} when it is absent, is an accessor,
+     * or belongs to a Proxy
+     */
+    private static String ownDataPropertyAsString(JSObject object, PropertyKey key) {
+        JSValue value = object.getOwnDataPropertyForDiagnostics(key);
+        if (value instanceof JSString stringValue) {
+            return stringValue.value();
+        }
+        if (value == null || value instanceof JSUndefined) {
+            return null;
+        }
+        return value.toString();
     }
 
     JSValue addValues(JSValue left, JSValue right) {
@@ -363,6 +436,40 @@ public final class VirtualMachine {
         return args;
     }
 
+    /**
+     * Convert an engine error that escaped an opcode handler into {@link #pendingException} so the
+     * interpreter loop can route it to the script's own catch handlers.
+     * <p>
+     * Only the three JS error carriers are converted. A bare {@link NullPointerException} or
+     * {@link ClassCastException} is an engine defect, not a script error, so it is left to
+     * propagate and be reported as an internal engine error.
+     *
+     * @param e the exception that escaped the handler
+     * @return true when the exception became a pending exception, false when it must propagate
+     */
+    private boolean captureHandlerException(RuntimeException e) {
+        if (e instanceof JSVirtualMachineException vmException) {
+            captureVMException(vmException);
+            return true;
+        }
+        if (e instanceof JSException jsException) {
+            JSValue errorValue = jsException.getErrorValue();
+            pendingException = errorValue != null
+                    ? errorValue
+                    : context.throwError(jsException.getMessage() != null
+                                         ? jsException.getMessage()
+                                         : "Unhandled exception");
+            context.clearPendingException();
+            return true;
+        }
+        if (e instanceof JSErrorException errorException) {
+            pendingException = context.throwError(errorException);
+            context.clearPendingException();
+            return true;
+        }
+        return false;
+    }
+
     void capturePendingException() {
         if (pendingException == null && context.hasPendingException()) {
             pendingException = context.getPendingException();
@@ -402,36 +509,6 @@ public final class VirtualMachine {
     }
 
     /**
-     * Build a diagnostic message for an engine defect that escaped the interpreter loop.
-     *
-     * @param function         the function being executed
-     * @param executionContext the execution context, or {@code null} if the failure happened while
-     *                         creating it
-     * @param failure          the escaping exception
-     * @return a message naming the function, the program counter and the failure type
-     */
-    private static String describeInternalFailure(
-            JSBytecodeFunction function,
-            ExecutionContext executionContext,
-            RuntimeException failure) {
-        StringBuilder message = new StringBuilder("Internal engine error");
-        if (executionContext != null) {
-            message.append(" at pc=").append(executionContext.pc);
-        }
-        if (function != null) {
-            String functionName = function.getName();
-            message.append(" in ")
-                    .append(functionName == null || functionName.isEmpty() ? "<anonymous>" : functionName);
-        }
-        message.append(": ").append(failure.getClass().getName());
-        String failureMessage = failure.getMessage();
-        if (failureMessage != null && !failureMessage.isEmpty()) {
-            message.append(": ").append(failureMessage);
-        }
-        return message.toString();
-    }
-
-    /**
      * Convert a JSVirtualMachineException to a pendingException so the VM's
      * JS exception handling mechanism (catch handlers on the value stack) can process it.
      */
@@ -447,38 +524,6 @@ public final class VirtualMachine {
                     e.getMessage() != null ? e.getMessage() : "Unhandled exception");
         }
         context.clearPendingException();
-    }
-
-    void checkExecutionInterruptForExecute() {
-        if (--interruptCounter <= 0) {
-            interruptCounter = INTERRUPT_CHECK_INTERVAL;
-            checkExecutionInterrupt();
-        }
-    }
-
-    /**
-     * Release the VM's retained execution state.
-     * <p>
-     * Called from {@link JSContext#close()}. The value stack alone is up to 65,536 slots, and every
-     * slot that still holds a value pins whatever object graph that value references.
-     */
-    public void reset() {
-        valueStack.setStackTop(0);
-        currentFrame = null;
-        activeGeneratorState = null;
-        generatorResumeRecords = List.of();
-        generatorResumeIndex = 0;
-        pendingException = null;
-        awaitSuspensionPromise = null;
-        yieldResult = null;
-        forOfTempValues = null;
-        lastConstructorThisArg = null;
-        tailCallPending = null;
-        generatorReturnValue = null;
-        exhaustedForOfIterators.clear();
-        propertyAccessChain.setLength(0);
-        Arrays.fill(smallArgsBuffer, null);
-        singleArgBuffer[0] = null;
     }
 
     /**
@@ -499,38 +544,11 @@ public final class VirtualMachine {
         }
     }
 
-    /**
-     * Convert an engine error that escaped an opcode handler into {@link #pendingException} so the
-     * interpreter loop can route it to the script's own catch handlers.
-     * <p>
-     * Only the three JS error carriers are converted. A bare {@link NullPointerException} or
-     * {@link ClassCastException} is an engine defect, not a script error, so it is left to
-     * propagate and be reported as an internal engine error.
-     *
-     * @param e the exception that escaped the handler
-     * @return true when the exception became a pending exception, false when it must propagate
-     */
-    private boolean captureHandlerException(RuntimeException e) {
-        if (e instanceof JSVirtualMachineException vmException) {
-            captureVMException(vmException);
-            return true;
+    void checkExecutionInterruptForExecute() {
+        if (--interruptCounter <= 0) {
+            interruptCounter = INTERRUPT_CHECK_INTERVAL;
+            checkExecutionInterrupt();
         }
-        if (e instanceof JSException jsException) {
-            JSValue errorValue = jsException.getErrorValue();
-            pendingException = errorValue != null
-                    ? errorValue
-                    : context.throwError(jsException.getMessage() != null
-                    ? jsException.getMessage()
-                    : "Unhandled exception");
-            context.clearPendingException();
-            return true;
-        }
-        if (e instanceof JSErrorException errorException) {
-            pendingException = context.throwError(errorException);
-            context.clearPendingException();
-            return true;
-        }
-        return false;
     }
 
     void clearActiveGeneratorSuspendedExecutionState() {
@@ -1715,6 +1733,31 @@ public final class VirtualMachine {
         executionContext.opcodeRequestedReturn = true;
     }
 
+    /**
+     * Release the VM's retained execution state.
+     * <p>
+     * Called from {@link JSContext#close()}. The value stack alone is up to 65,536 slots, and every
+     * slot that still holds a value pins whatever object graph that value references.
+     */
+    public void reset() {
+        valueStack.setStackTop(0);
+        currentFrame = null;
+        activeGeneratorState = null;
+        generatorResumeRecords = List.of();
+        generatorResumeIndex = 0;
+        pendingException = null;
+        awaitSuspensionPromise = null;
+        yieldResult = null;
+        forOfTempValues = null;
+        lastConstructorThisArg = null;
+        tailCallPending = null;
+        generatorReturnValue = null;
+        exhaustedForOfIterators.clear();
+        propertyAccessChain.setLength(0);
+        Arrays.fill(smallArgsBuffer, null);
+        singleArgBuffer[0] = null;
+    }
+
     void resetPropertyAccessTracking() {
         if (trackPropertyAccess) {
             this.propertyAccessChain.setLength(0);
@@ -1780,30 +1823,6 @@ public final class VirtualMachine {
 
         // Fall back to Java toString
         return exceptionObj.toString();
-    }
-
-    /**
-     * Read an own data property as a string without invoking any accessor or Proxy trap.
-     * <p>
-     * {@code getOwnPropertyDescriptor} is virtual, and {@link JSProxy} overrides it with the
-     * {@code getOwnPropertyDescriptor} trap, so this read used to re-enter guest code for a thrown
-     * Proxy — during exception unwinding, which is exactly what this path exists to avoid.
-     * {@code getOwnDataPropertyForDiagnostics} is {@code final} and reads physical storage only.
-     *
-     * @param object the object to read from
-     * @param key    the property key
-     * @return the property rendered as a string, or {@code null} when it is absent, is an accessor,
-     * or belongs to a Proxy
-     */
-    private static String ownDataPropertyAsString(JSObject object, PropertyKey key) {
-        JSValue value = object.getOwnDataPropertyForDiagnostics(key);
-        if (value instanceof JSString stringValue) {
-            return stringValue.value();
-        }
-        if (value == null || value instanceof JSUndefined) {
-            return null;
-        }
-        return value.toString();
     }
 
     void saveActiveGeneratorSuspendedExecutionState(
@@ -1939,25 +1958,6 @@ public final class VirtualMachine {
                 ? "Cannot access a variable before initialization"
                 : "Cannot access '" + variableName + "' before initialization";
         throw new JSVirtualMachineException(context.throwReferenceError(message));
-    }
-
-    /**
-     * Resolve a local variable's declared name from the running function's bytecode.
-     *
-     * @param frame      the active stack frame
-     * @param localIndex the local slot index
-     * @return the declared name, or {@code null} when it is unavailable
-     */
-    static String localVariableName(StackFrame frame, int localIndex) {
-        if (frame == null || localIndex < 0) {
-            return null;
-        }
-        JSFunction function = frame.getFunction();
-        if (!(function instanceof JSBytecodeFunction bytecodeFunction)) {
-            return null;
-        }
-        String[] names = bytecodeFunction.getBytecode().getLocalVarNames();
-        return names != null && localIndex < names.length ? names[localIndex] : null;
     }
 
     JSValue toNumericValue(JSValue value) {

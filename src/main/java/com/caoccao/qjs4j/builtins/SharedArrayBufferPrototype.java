@@ -16,9 +16,9 @@
 
 package com.caoccao.qjs4j.builtins;
 
-import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 

@@ -192,6 +192,54 @@ public class JSModuleSourceTransformTest extends BaseTest {
     }
 
     @Test
+    public void testKnownLimitationExportMustStartItsLine() {
+        // Per spec this exports `v`. The scanner only recognises `export` as the first token on a
+        // line, so the binding is absent from the module namespace.
+        assertThatThrownBy(() -> evalModule(
+                "const t = 1; export const v = 15;",
+                """
+                        import { v } from './dep.mjs';
+                        globalThis.__out = v;"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("does not provide an export named 'v'");
+    }
+
+    @Test
+    public void testKnownLimitationRegexpLiteralDesynchronisesTheScanner() {
+        // `maskModuleComments` masks strings, templates and comments, but not regexp literals, so
+        // the quote inside /"/ desynchronises its quote state for the rest of the line and the
+        // `export` that follows is never seen.
+        assertThatThrownBy(() -> evalModule(
+                """
+                        const r = /"/; export const v = 20;""",
+                """
+                        import { v } from './dep.mjs';
+                        globalThis.__out = v;"""))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("does not provide an export named 'v'");
+    }
+
+    @Test
+    public void testKnownLimitationStaticImportMustBeAloneOnItsLine() {
+        // Per spec the import is hoisted and `v` is in scope. The scanner only recognises an
+        // import declaration that occupies its whole line.
+        assertThatThrownBy(() -> evalModule(
+                "export const v = 22;",
+                "import { v } from './dep.mjs'; globalThis.__out = v;"))
+                .isInstanceOf(JSException.class)
+                .hasMessageContaining("v is not defined");
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // Known limitations of the line-based transformer.
+    //
+    // These tests document behaviour that is wrong per the ECMAScript specification but is not
+    // fixable at this layer: the transformer classifies lines by string-matching rather than by
+    // parsing. They exist so that the compiler-based module pipeline that replaces this code has
+    // an explicit checklist of what it must start getting right.
+    // ---------------------------------------------------------------------------------------
+
+    @Test
     public void testNamespaceImportExposesExportedNames() throws IOException {
         assertThat(evalModuleToString(
                 """
@@ -230,53 +278,5 @@ public class JSModuleSourceTransformTest extends BaseTest {
                         globalThis.__out = 1;"""))
                 .isInstanceOf(JSException.class)
                 .hasMessageContaining("SyntaxError");
-    }
-
-    // ---------------------------------------------------------------------------------------
-    // Known limitations of the line-based transformer.
-    //
-    // These tests document behaviour that is wrong per the ECMAScript specification but is not
-    // fixable at this layer: the transformer classifies lines by string-matching rather than by
-    // parsing. They exist so that the compiler-based module pipeline that replaces this code has
-    // an explicit checklist of what it must start getting right.
-    // ---------------------------------------------------------------------------------------
-
-    @Test
-    public void testKnownLimitationExportMustStartItsLine() {
-        // Per spec this exports `v`. The scanner only recognises `export` as the first token on a
-        // line, so the binding is absent from the module namespace.
-        assertThatThrownBy(() -> evalModule(
-                "const t = 1; export const v = 15;",
-                """
-                        import { v } from './dep.mjs';
-                        globalThis.__out = v;"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("does not provide an export named 'v'");
-    }
-
-    @Test
-    public void testKnownLimitationRegexpLiteralDesynchronisesTheScanner() {
-        // `maskModuleComments` masks strings, templates and comments, but not regexp literals, so
-        // the quote inside /"/ desynchronises its quote state for the rest of the line and the
-        // `export` that follows is never seen.
-        assertThatThrownBy(() -> evalModule(
-                """
-                        const r = /"/; export const v = 20;""",
-                """
-                        import { v } from './dep.mjs';
-                        globalThis.__out = v;"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("does not provide an export named 'v'");
-    }
-
-    @Test
-    public void testKnownLimitationStaticImportMustBeAloneOnItsLine() {
-        // Per spec the import is hoisted and `v` is in scope. The scanner only recognises an
-        // import declaration that occupies its whole line.
-        assertThatThrownBy(() -> evalModule(
-                "export const v = 22;",
-                "import { v } from './dep.mjs'; globalThis.__out = v;"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("v is not defined");
     }
 }

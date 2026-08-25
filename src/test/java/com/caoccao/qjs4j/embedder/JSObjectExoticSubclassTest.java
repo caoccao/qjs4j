@@ -17,12 +17,7 @@
 package com.caoccao.qjs4j.embedder;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSObject;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.PropertyDescriptor;
-import com.caoccao.qjs4j.core.PropertyKey;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -51,50 +46,20 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     private static final PropertyKey VIRTUAL = PropertyKey.fromString("virtual");
     private static final JSNumber VIRTUAL_VALUE = JSNumber.of(42);
 
-    /**
-     * An object with one property that exists in no physical storage.
-     */
-    private static final class VirtualPropertyObject extends JSObject {
-        private VirtualPropertyObject(JSContext context) {
-            super(context);
-        }
-
-        @Override
-        public List<PropertyKey> getOwnPropertyKeys() {
-            List<PropertyKey> keys = new ArrayList<>(super.getOwnPropertyKeys());
-            keys.add(VIRTUAL);
-            return keys;
-        }
-
-        @Override
-        protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
-            if (VIRTUAL.equals(key)) {
-                return PropertyDescriptor.dataDescriptor(
-                        VIRTUAL_VALUE,
-                        PropertyDescriptor.DataState.All);
-            }
-            return super.getOwnPropertyDescriptorRaw(key);
-        }
-
-        @Override
-        public boolean hasOwnProperty(PropertyKey key) {
-            return VIRTUAL.equals(key) || super.hasOwnProperty(key);
-        }
-
-        @Override
-        protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-            if (VIRTUAL.equals(key)) {
-                return VIRTUAL_VALUE;
-            }
-            return super.getWithReceiver(key, receiver, depth);
-        }
-    }
-
     private VirtualPropertyObject install(String globalName) {
         VirtualPropertyObject exotic = new VirtualPropertyObject(context);
         exotic.setPrototype(context.getObjectPrototype());
         context.getGlobalObject().set(PropertyKey.fromString(globalName), exotic);
         return exotic;
+    }
+
+    @Test
+    public void testDescriptorViewReturnsACopy() {
+        // The public view copies, so a caller cannot rewrite the subclass's attributes through it.
+        VirtualPropertyObject exotic = install("exotic");
+        PropertyDescriptor first = exotic.getOwnPropertyDescriptor(VIRTUAL);
+        first.setEnumerable(false);
+        assertThat(exotic.getOwnPropertyDescriptor(VIRTUAL).isEnumerable()).isTrue();
     }
 
     @Test
@@ -107,13 +72,6 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     }
 
     @Test
-    public void testEnumerabilityViewSeesTheOverride() {
-        VirtualPropertyObject exotic = install("exotic");
-        assertThat(exotic.isOwnPropertyEnumerable(VIRTUAL)).isTrue();
-        assertThat(exotic.isOwnPropertyEnumerable(PropertyKey.fromString("absent"))).isFalse();
-    }
-
-    @Test
     public void testDirectHasSeesTheOverride() {
         VirtualPropertyObject exotic = install("exotic");
         assertThat(exotic.has(VIRTUAL)).isTrue();
@@ -121,24 +79,10 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     }
 
     @Test
-    public void testObjectKeysSeesTheOverride() {
-        install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.keys(exotic))").toString())
-                .isEqualTo("[\"virtual\"]");
-    }
-
-    @Test
-    public void testObjectGetOwnPropertyDescriptorSeesTheOverride() {
-        install("exotic");
-        assertThat(context.eval("Object.getOwnPropertyDescriptor(exotic, 'virtual').value").toString())
-                .isEqualTo("42");
-    }
-
-    @Test
-    public void testObjectAssignSeesTheOverride() {
-        install("exotic");
-        assertThat(context.eval("JSON.stringify(Object.assign({}, exotic))").toString())
-                .isEqualTo("{\"virtual\":42}");
+    public void testEnumerabilityViewSeesTheOverride() {
+        VirtualPropertyObject exotic = install("exotic");
+        assertThat(exotic.isOwnPropertyEnumerable(VIRTUAL)).isTrue();
+        assertThat(exotic.isOwnPropertyEnumerable(PropertyKey.fromString("absent"))).isFalse();
     }
 
     @Test
@@ -168,17 +112,68 @@ public class JSObjectExoticSubclassTest extends BaseTest {
     }
 
     @Test
+    public void testObjectAssignSeesTheOverride() {
+        install("exotic");
+        assertThat(context.eval("JSON.stringify(Object.assign({}, exotic))").toString())
+                .isEqualTo("{\"virtual\":42}");
+    }
+
+    @Test
+    public void testObjectGetOwnPropertyDescriptorSeesTheOverride() {
+        install("exotic");
+        assertThat(context.eval("Object.getOwnPropertyDescriptor(exotic, 'virtual').value").toString())
+                .isEqualTo("42");
+    }
+
+    @Test
+    public void testObjectKeysSeesTheOverride() {
+        install("exotic");
+        assertThat(context.eval("JSON.stringify(Object.keys(exotic))").toString())
+                .isEqualTo("[\"virtual\"]");
+    }
+
+    @Test
     public void testPropertyReadSeesTheOverride() {
         install("exotic");
         assertThat(context.eval("exotic.virtual").toString()).isEqualTo("42");
     }
 
-    @Test
-    public void testDescriptorViewReturnsACopy() {
-        // The public view copies, so a caller cannot rewrite the subclass's attributes through it.
-        VirtualPropertyObject exotic = install("exotic");
-        PropertyDescriptor first = exotic.getOwnPropertyDescriptor(VIRTUAL);
-        first.setEnumerable(false);
-        assertThat(exotic.getOwnPropertyDescriptor(VIRTUAL).isEnumerable()).isTrue();
+    /**
+     * An object with one property that exists in no physical storage.
+     */
+    private static final class VirtualPropertyObject extends JSObject {
+        private VirtualPropertyObject(JSContext context) {
+            super(context);
+        }
+
+        @Override
+        protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
+            if (VIRTUAL.equals(key)) {
+                return PropertyDescriptor.dataDescriptor(
+                        VIRTUAL_VALUE,
+                        PropertyDescriptor.DataState.All);
+            }
+            return super.getOwnPropertyDescriptorRaw(key);
+        }
+
+        @Override
+        public List<PropertyKey> getOwnPropertyKeys() {
+            List<PropertyKey> keys = new ArrayList<>(super.getOwnPropertyKeys());
+            keys.add(VIRTUAL);
+            return keys;
+        }
+
+        @Override
+        protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
+            if (VIRTUAL.equals(key)) {
+                return VIRTUAL_VALUE;
+            }
+            return super.getWithReceiver(key, receiver, depth);
+        }
+
+        @Override
+        public boolean hasOwnProperty(PropertyKey key) {
+            return VIRTUAL.equals(key) || super.hasOwnProperty(key);
+        }
     }
 }

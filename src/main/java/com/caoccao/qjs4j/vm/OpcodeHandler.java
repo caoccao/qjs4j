@@ -2504,7 +2504,8 @@ public final class OpcodeHandler {
             case GET_ARG1 -> 1;
             case GET_ARG2 -> 2;
             case GET_ARG3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short get arg opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short get arg opcode " + op);
         };
         executionContext.push(executionContext.virtualMachine.getArgumentValue(argumentIndex));
         executionContext.pc += op.getSize();
@@ -3231,7 +3232,8 @@ public final class OpcodeHandler {
             case GET_VAR_REF1 -> 1;
             case GET_VAR_REF2 -> 2;
             case GET_VAR_REF3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short get var ref opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short get var ref opcode " + op);
         };
         executionContext.push(readVarRefValue(executionContext, varRefIndex));
         executionContext.pc += op.getSize();
@@ -4774,7 +4776,8 @@ public final class OpcodeHandler {
             case PUT_ARG1 -> 1;
             case PUT_ARG2 -> 2;
             case PUT_ARG3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short put arg opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short put arg opcode " + op);
         };
         JSValue argumentValue = executionContext.pop();
         executionContext.virtualMachine.setArgumentValue(argumentIndex, argumentValue);
@@ -5327,7 +5330,8 @@ public final class OpcodeHandler {
             case PUT_VAR_REF1 -> 1;
             case PUT_VAR_REF2 -> 2;
             case PUT_VAR_REF3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short put var ref opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short put var ref opcode " + op);
         };
         JSValue value = executionContext.pop();
         writeVarRefValue(executionContext, varRefIndex, value);
@@ -5487,7 +5491,8 @@ public final class OpcodeHandler {
             case SET_ARG1 -> 1;
             case SET_ARG2 -> 2;
             case SET_ARG3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short set arg opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short set arg opcode " + op);
         };
         executionContext.virtualMachine.setArgumentValue(argumentIndex, executionContext.peek(0));
         executionContext.pc += op.getSize();
@@ -5603,7 +5608,8 @@ public final class OpcodeHandler {
             case SET_VAR_REF1 -> 1;
             case SET_VAR_REF2 -> 2;
             case SET_VAR_REF3 -> 3;
-            default -> throw new JSVirtualMachineException("Internal engine error: unexpected short set var ref opcode " + op);
+            default ->
+                    throw new JSVirtualMachineException("Internal engine error: unexpected short set var ref opcode " + op);
         };
         executionContext.frame.setVarRef(varRefIndex, executionContext.peek(0));
         executionContext.pc += op.getSize();

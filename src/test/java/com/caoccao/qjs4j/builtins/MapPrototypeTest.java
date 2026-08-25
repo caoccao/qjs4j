@@ -53,7 +53,7 @@ public class MapPrototypeTest extends BaseJavetTest {
                 // Verify the alias relationship
                 var entriesFunc = Map.prototype.entries;
                 var iteratorFunc = Map.prototype[Symbol.iterator];
-
+                
                 // They must be the exact same reference
                 entriesFunc === iteratorFunc""");
     }
@@ -63,7 +63,7 @@ public class MapPrototypeTest extends BaseJavetTest {
         // Both produce the same iteration results
         assertBooleanWithJavet("""
                 var m = new Map([[1, 'a'], [2, 'b'], [3, 'c']]);
-
+                
                 // Using entries()
                 var result1 = '';
                 var it1 = m.entries();
@@ -71,14 +71,14 @@ public class MapPrototypeTest extends BaseJavetTest {
                 while (!(entry = it1.next()).done) {
                   result1 += entry.value[0] + entry.value[1];
                 }
-
+                
                 // Using Symbol.iterator
                 var result2 = '';
                 var it2 = m[Symbol.iterator]();
                 while (!(entry = it2.next()).done) {
                   result2 += entry.value[0] + entry.value[1];
                 }
-
+                
                 // Results are identical
                 result1 === result2 && result1 === '1a2b3c'""");
     }

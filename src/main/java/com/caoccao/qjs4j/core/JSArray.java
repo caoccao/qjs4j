@@ -32,18 +32,18 @@ import java.util.*;
  */
 public final class JSArray extends JSObject {
     public static final int INITIAL_CAPACITY = 8;
-    public static final String NAME = "Array";
     /**
      * Upper bound on dense element storage. Beyond this an array falls back to sparse storage.
      */
     public static final int MAX_DENSE_SIZE = 10000;
+    public static final String NAME = "Array";
+    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
+    private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
     /**
      * Bound on the prototype chain walk performed before an indexed write to a hole.
      * A real Array prototype chain is two links; the bound only stops a cyclic chain.
      */
     private static final int MAX_PROTOTYPE_SET_DEPTH = 1000;
-    private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
-    private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
     private static final double UINT32_MAX_DOUBLE = 4_294_967_295d;
     private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
@@ -149,6 +149,22 @@ public final class JSArray extends JSObject {
         }
 
         return array;
+    }
+
+    /**
+     * Reject a length that no ECMAScript array can have.
+     * <p>
+     * A public engine API must raise an error the engine's own machinery understands, not a raw
+     * {@code java.lang} exception that is neither catchable from JavaScript nor typed for
+     * embedders.
+     *
+     * @param length the candidate length
+     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
+     */
+    private static void requireValidLength(long length) {
+        if (length < 0 || length > MAX_ARRAY_LENGTH) {
+            throw new JSRangeErrorException("Invalid array length: " + length);
+        }
     }
 
     private static Long toArrayLengthFromNumber(double value) {
@@ -650,22 +666,6 @@ public final class JSArray extends JSObject {
             return intIndex < denseArray.length && denseArray[intIndex] != null;
         }
         return super.hasOwnProperty(PropertyKey.fromString(Long.toString(index)));
-    }
-
-    /**
-     * Reject a length that no ECMAScript array can have.
-     * <p>
-     * A public engine API must raise an error the engine's own machinery understands, not a raw
-     * {@code java.lang} exception that is neither catchable from JavaScript nor typed for
-     * embedders.
-     *
-     * @param length the candidate length
-     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
-     */
-    private static void requireValidLength(long length) {
-        if (length < 0 || length > MAX_ARRAY_LENGTH) {
-            throw new JSRangeErrorException("Invalid array length: " + length);
-        }
     }
 
     private boolean hasPrototypeSetInterference(PropertyKey key) {

@@ -32,6 +32,14 @@ import org.junit.jupiter.api.Test;
 public class JSProxyOwnKeysInvariantTest extends BaseJavetTest {
 
     @Test
+    public void testDuplicateOwnKeysTrapResultReportsTypeError() {
+        assertStringWithJavet(
+                """
+                        const proxy = new Proxy({}, { ownKeys() { return ['a', 'a'] } });
+                        try { Object.getOwnPropertyNames(proxy); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }""");
+    }
+
+    @Test
     public void testFrozenArrayTargetAcceptsConformantOwnKeysTrap() {
         assertStringWithJavet(
                 """
@@ -101,14 +109,6 @@ public class JSProxyOwnKeysInvariantTest extends BaseJavetTest {
                         const r = Proxy.revocable({}, {});
                         r.revoke();
                         try { JSON.stringify(r.proxy); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }""");
-    }
-
-    @Test
-    public void testDuplicateOwnKeysTrapResultReportsTypeError() {
-        assertStringWithJavet(
-                """
-                        const proxy = new Proxy({}, { ownKeys() { return ['a', 'a'] } });
-                        try { Object.getOwnPropertyNames(proxy); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }""");
     }
 
     @Test

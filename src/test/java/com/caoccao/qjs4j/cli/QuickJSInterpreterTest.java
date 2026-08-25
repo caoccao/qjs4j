@@ -47,6 +47,14 @@ public class QuickJSInterpreterTest {
     private PrintStream originalErr;
     private PrintStream originalOut;
 
+    private String err() {
+        return capturedErr.toString(StandardCharsets.UTF_8);
+    }
+
+    private String out() {
+        return capturedOut.toString(StandardCharsets.UTF_8);
+    }
+
     @BeforeEach
     public void setUp() {
         originalOut = System.out;
@@ -63,36 +71,17 @@ public class QuickJSInterpreterTest {
         System.setErr(originalErr);
     }
 
-    private String err() {
-        return capturedErr.toString(StandardCharsets.UTF_8);
-    }
-
-    private String out() {
-        return capturedOut.toString(StandardCharsets.UTF_8);
-    }
-
-    private Path writeFile(String name, String content) throws IOException {
-        Path path = workingDirectory.resolve(name);
-        Files.writeString(path, content);
-        return path;
+    @Test
+    public void testBlankStackFallsBackToTheHeadline() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'blank stack', stack: '   ' }"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("blank stack");
     }
 
     @Test
     public void testEvalOptionEvaluatesInlineSource() {
         assertThat(QuickJSInterpreter.run(new String[]{"-e", "console.log(1 + 1)"})).isZero();
         assertThat(out()).contains("2");
-    }
-
-    @Test
-    public void testMissingEvalArgumentIsAUsageError() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e"})).isEqualTo(2);
-        assertThat(err()).contains("requires an argument");
-    }
-
-    @Test
-    public void testUnknownOptionIsAUsageError() {
-        assertThat(QuickJSInterpreter.run(new String[]{"--bogus"})).isEqualTo(2);
-        assertThat(err()).contains("unknown option --bogus");
     }
 
     @Test
@@ -110,6 +99,12 @@ public class QuickJSInterpreterTest {
     }
 
     @Test
+    public void testMissingEvalArgumentIsAUsageError() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e"})).isEqualTo(2);
+        assertThat(err()).contains("requires an argument");
+    }
+
+    @Test
     public void testModuleModeResolvesImports() throws IOException {
         writeFile("dep.mjs", "export const value = 5;\n");
         Path main = writeFile("main.mjs",
@@ -119,33 +114,26 @@ public class QuickJSInterpreterTest {
     }
 
     @Test
+    public void testNonStringStackFallsBackToTheHeadline() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'no stack here', stack: 42 }"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("no stack here").doesNotContain("42");
+    }
+
+    @Test
+    public void testOrdinaryErrorStillPrintsItsStack() {
+        // The complement: an ordinary Error keeps stack as a data property, so the trace is still
+        // reported in full.
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "function boom() { throw new Error('deep') }\nboom();"}))
+                .isEqualTo(1);
+        assertThat(err()).contains("Error: deep").contains("    at ");
+    }
+
+    @Test
     public void testScriptArgsAreExposed() throws IOException {
         Path script = writeFile("args.js", "console.log(JSON.stringify(scriptArgs.slice(1)));\n");
         assertThat(QuickJSInterpreter.run(new String[]{script.toString(), "alpha", "beta"})).isZero();
         assertThat(out()).contains("[\"alpha\",\"beta\"]");
-    }
-
-    @Test
-    public void testUncaughtErrorExitsNonZeroWithADiagnosticMessage() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw new TypeError('boom')"}))
-                .isEqualTo(1);
-        assertThat(err()).contains("TypeError: boom");
-    }
-
-    @Test
-    public void testUnreadableFileExitsNonZero() {
-        assertThat(QuickJSInterpreter.run(new String[]{
-                workingDirectory.resolve("does-not-exist.js").toString()})).isEqualTo(1);
-        assertThat(err()).contains("cannot read");
-    }
-
-    @Test
-    public void testStackTraceCarriesTheSourceName() throws IOException {
-        Path script = writeFile("named.js", "function boom() { throw new Error('inside') }\nboom();\n");
-        assertThat(QuickJSInterpreter.run(new String[]{script.toString()})).isEqualTo(1);
-        assertThat(err())
-                .as("the filename must reach eval so stack traces can name the source")
-                .contains("named.js");
     }
 
     @Test
@@ -165,6 +153,21 @@ public class QuickJSInterpreterTest {
     }
 
     @Test
+    public void testStackTraceCarriesTheSourceName() throws IOException {
+        Path script = writeFile("named.js", "function boom() { throw new Error('inside') }\nboom();\n");
+        assertThat(QuickJSInterpreter.run(new String[]{script.toString()})).isEqualTo(1);
+        assertThat(err())
+                .as("the filename must reach eval so stack traces can name the source")
+                .contains("named.js");
+    }
+
+    @Test
+    public void testThrownPrimitiveIsReported() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw 'a bare string'"})).isEqualTo(1);
+        assertThat(err()).contains("a bare string");
+    }
+
+    @Test
     public void testThrownProxyDoesNotRunItsTrapsDuringReporting() {
         assertThat(QuickJSInterpreter.run(new String[]{"-e",
                 """
@@ -177,31 +180,28 @@ public class QuickJSInterpreterTest {
     }
 
     @Test
-    public void testNonStringStackFallsBackToTheHeadline() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'no stack here', stack: 42 }"}))
+    public void testUncaughtErrorExitsNonZeroWithADiagnosticMessage() {
+        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw new TypeError('boom')"}))
                 .isEqualTo(1);
-        assertThat(err()).contains("no stack here").doesNotContain("42");
+        assertThat(err()).contains("TypeError: boom");
     }
 
     @Test
-    public void testBlankStackFallsBackToTheHeadline() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw { message: 'blank stack', stack: '   ' }"}))
-                .isEqualTo(1);
-        assertThat(err()).contains("blank stack");
+    public void testUnknownOptionIsAUsageError() {
+        assertThat(QuickJSInterpreter.run(new String[]{"--bogus"})).isEqualTo(2);
+        assertThat(err()).contains("unknown option --bogus");
     }
 
     @Test
-    public void testThrownPrimitiveIsReported() {
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "throw 'a bare string'"})).isEqualTo(1);
-        assertThat(err()).contains("a bare string");
+    public void testUnreadableFileExitsNonZero() {
+        assertThat(QuickJSInterpreter.run(new String[]{
+                workingDirectory.resolve("does-not-exist.js").toString()})).isEqualTo(1);
+        assertThat(err()).contains("cannot read");
     }
 
-    @Test
-    public void testOrdinaryErrorStillPrintsItsStack() {
-        // The complement: an ordinary Error keeps stack as a data property, so the trace is still
-        // reported in full.
-        assertThat(QuickJSInterpreter.run(new String[]{"-e", "function boom() { throw new Error('deep') }\nboom();"}))
-                .isEqualTo(1);
-        assertThat(err()).contains("Error: deep").contains("    at ");
+    private Path writeFile(String name, String content) throws IOException {
+        Path path = workingDirectory.resolve(name);
+        Files.writeString(path, content);
+        return path;
     }
 }

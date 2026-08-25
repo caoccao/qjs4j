@@ -53,30 +53,6 @@ public class JSRuntimeOptions {
         temporalEnabled = false;
     }
 
-    /**
-     * Get the regular expression backtracking budget for a single match attempt.
-     *
-     * @return the maximum number of backtracking steps, or 0 for no limit
-     */
-    public long getRegExpBacktrackLimit() {
-        return regExpBacktrackLimit;
-    }
-
-    /**
-     * Set the regular expression backtracking budget for a single match attempt.
-     * <p>
-     * Exceeding the budget raises {@code RangeError: regular expression execution exceeded the
-     * backtracking limit}, which JavaScript can catch.
-     *
-     * @param regExpBacktrackLimit the maximum number of backtracking steps; 0 or negative disables
-     *                             the limit and restores unbounded backtracking
-     * @return this
-     */
-    public JSRuntimeOptions setRegExpBacktrackLimit(long regExpBacktrackLimit) {
-        this.regExpBacktrackLimit = Math.max(0L, regExpBacktrackLimit);
-        return this;
-    }
-
     public AtomicsObject getAtomicsObject() {
         return atomicsObject;
     }
@@ -87,6 +63,15 @@ public class JSRuntimeOptions {
 
     public long getMaxStackSize() {
         return maxStackSize;
+    }
+
+    /**
+     * Get the regular expression backtracking budget for a single match attempt.
+     *
+     * @return the maximum number of backtracking steps, or 0 for no limit
+     */
+    public long getRegExpBacktrackLimit() {
+        return regExpBacktrackLimit;
     }
 
     public boolean isShadowRealmEnabled() {
@@ -109,6 +94,21 @@ public class JSRuntimeOptions {
 
     public JSRuntimeOptions setMaxStackSize(long maxStackSize) {
         this.maxStackSize = maxStackSize;
+        return this;
+    }
+
+    /**
+     * Set the regular expression backtracking budget for a single match attempt.
+     * <p>
+     * Exceeding the budget raises {@code RangeError: regular expression execution exceeded the
+     * backtracking limit}, which JavaScript can catch.
+     *
+     * @param regExpBacktrackLimit the maximum number of backtracking steps; 0 or negative disables
+     *                             the limit and restores unbounded backtracking
+     * @return this
+     */
+    public JSRuntimeOptions setRegExpBacktrackLimit(long regExpBacktrackLimit) {
+        this.regExpBacktrackLimit = Math.max(0L, regExpBacktrackLimit);
         return this;
     }
 

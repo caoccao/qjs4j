@@ -52,6 +52,40 @@ public class JSCopyDataPropertiesTest extends BaseJavetTest {
     }
 
     @Test
+    public void testObjectRestIgnoresPrototypeAccessor() {
+        assertStringWithJavet(
+                """
+                        let hit = 'no';
+                        Object.defineProperty(Object.prototype, 'restAccessor', {
+                            set() { hit = 'yes' },
+                            configurable: true,
+                        });
+                        const { a, ...rest } = { a: 1, restAccessor: 5 };
+                        try {
+                            'hit=' + hit + ' a=' + a + ' value=' + rest.restAccessor;
+                        } finally {
+                            delete Object.prototype.restAccessor;
+                        }""");
+    }
+
+    @Test
+    public void testObjectRestIgnoresPrototypeNonWritableDataProperty() {
+        assertStringWithJavet(
+                """
+                        Object.defineProperty(Object.prototype, 'restFrozen', {
+                            value: 0,
+                            writable: false,
+                            configurable: true,
+                        });
+                        const { a, ...rest } = { a: 1, restFrozen: 5 };
+                        try {
+                            'value=' + rest.restFrozen;
+                        } finally {
+                            delete Object.prototype.restFrozen;
+                        }""");
+    }
+
+    @Test
     public void testSpreadCopiesGetterResultOnce() {
         assertStringWithJavet(
                 """
@@ -118,40 +152,6 @@ public class JSCopyDataPropertiesTest extends BaseJavetTest {
                             'hit=' + hit + ' value=' + target[0];
                         } finally {
                             delete Object.prototype['0'];
-                        }""");
-    }
-
-    @Test
-    public void testObjectRestIgnoresPrototypeAccessor() {
-        assertStringWithJavet(
-                """
-                        let hit = 'no';
-                        Object.defineProperty(Object.prototype, 'restAccessor', {
-                            set() { hit = 'yes' },
-                            configurable: true,
-                        });
-                        const { a, ...rest } = { a: 1, restAccessor: 5 };
-                        try {
-                            'hit=' + hit + ' a=' + a + ' value=' + rest.restAccessor;
-                        } finally {
-                            delete Object.prototype.restAccessor;
-                        }""");
-    }
-
-    @Test
-    public void testObjectRestIgnoresPrototypeNonWritableDataProperty() {
-        assertStringWithJavet(
-                """
-                        Object.defineProperty(Object.prototype, 'restFrozen', {
-                            value: 0,
-                            writable: false,
-                            configurable: true,
-                        });
-                        const { a, ...rest } = { a: 1, restFrozen: 5 };
-                        try {
-                            'value=' + rest.restFrozen;
-                        } finally {
-                            delete Object.prototype.restFrozen;
                         }""");
     }
 }

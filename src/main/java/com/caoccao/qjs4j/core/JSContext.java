@@ -50,16 +50,16 @@ import java.util.regex.Pattern;
  */
 public final class JSContext implements AutoCloseable {
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
-    /**
-     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
-     * repeatedly failing microtask cannot itself become a leak.
-     */
-    private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
     private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
             Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
+    /**
+     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
+     * repeatedly failing microtask cannot itself become a leak.
+     */
+    private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
     private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
@@ -93,6 +93,8 @@ public final class JSContext implements AutoCloseable {
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
     private final Map<String, JSObject> iteratorPrototypes;
     private final JSGlobalObject jsGlobalObject;
+    // Failures that escaped a microtask, oldest first
+    private final List<Throwable> microtaskFailures = new ArrayList<>();
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
@@ -115,6 +117,7 @@ public final class JSContext implements AutoCloseable {
     private JSObject cachedPromisePrototype;
     private JSObject cachedRegExpConstructor;
     private JSObject cachedRegExpPrototype;
+    private boolean closed;
     // Temporarily holds new.target during native constructor calls
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
@@ -128,15 +131,12 @@ public final class JSContext implements AutoCloseable {
     private boolean inBareVariableAssignment;
     private boolean inCatchHandler;
     private int maxStackDepth;
+    private IJSMicrotaskFailureCallback microtaskFailureCallback;
     private JSValue nativeConstructorNewTarget;
     private boolean pendingClassFieldEval;
     private int pendingDirectEvalCalls;
     // Exception state
     private JSValue pendingException;
-    private boolean closed;
-    // Failures that escaped a microtask, oldest first
-    private final List<Throwable> microtaskFailures = new ArrayList<>();
-    private IJSMicrotaskFailureCallback microtaskFailureCallback;
     // Promise rejection callback
     private IJSPromiseRejectCallback promiseRejectCallback;
     private String regExpLegacyInput;
@@ -200,6 +200,30 @@ public final class JSContext implements AutoCloseable {
         initializeGlobalObject();
     }
 
+    /**
+     * Whether the given text is a well-formed ECMAScript IdentifierName.
+     *
+     * @param name the candidate identifier
+     * @return true when every code point is a legal identifier character
+     */
+    private static boolean isValidIdentifierName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        int firstCodePoint = name.codePointAt(0);
+        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
+            return false;
+        }
+        for (int offset = Character.charCount(firstCodePoint); offset < name.length(); ) {
+            int codePoint = name.codePointAt(offset);
+            if (!UnicodeData.isIdentifierPart(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
+    }
+
     private static int parseHex(String text) {
         if (text == null || text.isEmpty()) {
             return -1;
@@ -217,7 +241,6 @@ public final class JSContext implements AutoCloseable {
         }
         return value;
     }
-
 
     private void appendDynamicImportDefaultExportNameFixup(
             StringBuilder transformedSourceBuilder,
@@ -577,6 +600,13 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Discard the recorded microtask failures.
+     */
+    public void clearMicrotaskFailures() {
+        microtaskFailures.clear();
+    }
+
+    /**
      * Clear the module cache.
      */
     private void clearModuleCache() {
@@ -665,42 +695,6 @@ public final class JSContext implements AutoCloseable {
         jsGlobalObject.getGlobalObject().releaseProperties();
         // Remove from runtime
         runtime.destroyContext(this);
-    }
-
-    /**
-     * Get the names currently bound in the realm's global lexical scope.
-     * <p>
-     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()}
-     * actually releases realm state.
-     *
-     * @return a snapshot of the global lexical binding names
-     */
-    public Set<String> getGlobalLexicalBindingNames() {
-        return new HashSet<>(globalLexicalBindings.keySet());
-    }
-
-    /**
-     * Whether {@link #close()} has been called on this context.
-     *
-     * @return true when the context is closed
-     */
-    public boolean isClosed() {
-        return closed;
-    }
-
-    /**
-     * Fail fast when an operation is attempted on a closed context.
-     * <p>
-     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()}
-     * silently worked and masked lifecycle bugs in embedder code. This is one of the few places a
-     * raw Java exception is right: it is embedder API misuse, not a JavaScript error.
-     *
-     * @throws IllegalStateException when this context is closed
-     */
-    private void requireOpen() {
-        if (closed) {
-            throw new IllegalStateException("JSContext is closed");
-        }
     }
 
     private Map<String, JSSymbol> collectEvalPrivateSymbols(JSBytecodeFunction callerFunction) {
@@ -1584,52 +1578,6 @@ public final class JSContext implements AutoCloseable {
             }
         }
         return escaped.toString();
-    }
-
-    /**
-     * Validate a name that is about to be interpolated into generated module source in identifier
-     * position.
-     * <p>
-     * The module transformer builds JavaScript source text and evaluates it. Names extracted from
-     * the module source by the ad-hoc scanner reach identifier position unescaped, so a value that
-     * is not an identifier would splice arbitrary source into the generated program. Anything that
-     * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
-     *
-     * @param name        the candidate identifier
-     * @param description what the name denotes, used in the error message
-     * @return the name unchanged when it is a valid identifier
-     * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
-     */
-    private String requireGeneratedIdentifier(String name, String description) {
-        if (!isValidIdentifierName(name)) {
-            throw new JSException(throwSyntaxError(
-                    "Unsupported module syntax: " + description + " is not a valid identifier"));
-        }
-        return name;
-    }
-
-    /**
-     * Whether the given text is a well-formed ECMAScript IdentifierName.
-     *
-     * @param name the candidate identifier
-     * @return true when every code point is a legal identifier character
-     */
-    private static boolean isValidIdentifierName(String name) {
-        if (name == null || name.isEmpty()) {
-            return false;
-        }
-        int firstCodePoint = name.codePointAt(0);
-        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
-            return false;
-        }
-        for (int offset = Character.charCount(firstCodePoint); offset < name.length(); ) {
-            int codePoint = name.codePointAt(offset);
-            if (!UnicodeData.isIdentifierPart(codePoint)) {
-                return false;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return true;
     }
 
     /**
@@ -3152,6 +3100,18 @@ public final class JSContext implements AutoCloseable {
         return generatorFunctionPrototype;
     }
 
+    /**
+     * Get the names currently bound in the realm's global lexical scope.
+     * <p>
+     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()}
+     * actually releases realm state.
+     *
+     * @return a snapshot of the global lexical binding names
+     */
+    public Set<String> getGlobalLexicalBindingNames() {
+        return new HashSet<>(globalLexicalBindings.keySet());
+    }
+
     public JSObject getGlobalObject() {
         return jsGlobalObject.getGlobalObject();
     }
@@ -3289,6 +3249,27 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Get the callback that observes failures escaping a microtask.
+     *
+     * @return the callback, or {@code null} when none is installed
+     */
+    public IJSMicrotaskFailureCallback getMicrotaskFailureCallback() {
+        return microtaskFailureCallback;
+    }
+
+    /**
+     * Get the failures that escaped a microtask, oldest first.
+     * <p>
+     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is
+     * full the oldest entries are dropped.
+     *
+     * @return a snapshot of the recorded failures
+     */
+    public List<Throwable> getMicrotaskFailures() {
+        return new ArrayList<>(microtaskFailures);
+    }
+
+    /**
      * Get the microtask queue for this context.
      */
     public JSMicrotaskQueue getMicrotaskQueue() {
@@ -3316,75 +3297,6 @@ public final class JSContext implements AutoCloseable {
 
     public IJSPromiseRejectCallback getPromiseRejectCallback() {
         return promiseRejectCallback;
-    }
-
-    /**
-     * Get the callback that observes failures escaping a microtask.
-     *
-     * @return the callback, or {@code null} when none is installed
-     */
-    public IJSMicrotaskFailureCallback getMicrotaskFailureCallback() {
-        return microtaskFailureCallback;
-    }
-
-    /**
-     * Install a callback that observes failures escaping a microtask.
-     *
-     * @param callback the callback, or {@code null} to remove the current one
-     */
-    public void setMicrotaskFailureCallback(IJSMicrotaskFailureCallback callback) {
-        this.microtaskFailureCallback = callback;
-    }
-
-    /**
-     * Get the failures that escaped a microtask, oldest first.
-     * <p>
-     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is
-     * full the oldest entries are dropped.
-     *
-     * @return a snapshot of the recorded failures
-     */
-    public List<Throwable> getMicrotaskFailures() {
-        return new ArrayList<>(microtaskFailures);
-    }
-
-    /**
-     * Discard the recorded microtask failures.
-     */
-    public void clearMicrotaskFailures() {
-        microtaskFailures.clear();
-    }
-
-    /**
-     * Record a failure that escaped a microtask.
-     * <p>
-     * Draining the microtask queue has no caller to propagate to, so without this a throwing
-     * {@code .then()} handler — or an engine defect surfacing as a {@link NullPointerException} —
-     * disappeared with no trace at all. Failures are always recorded; an installed
-     * {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect with no
-     * callback installed is logged so it cannot pass unnoticed.
-     *
-     * @param failure the exception that escaped the microtask
-     */
-    public void recordMicrotaskFailure(Throwable failure) {
-        if (failure == null) {
-            return;
-        }
-        while (microtaskFailures.size() >= MAX_RECORDED_MICROTASK_FAILURES) {
-            microtaskFailures.remove(0);
-        }
-        microtaskFailures.add(failure);
-        IJSMicrotaskFailureCallback callback = microtaskFailureCallback;
-        if (callback != null) {
-            callback.onMicrotaskFailure(failure);
-            return;
-        }
-        if (!(failure instanceof JSException)) {
-            // A JSException is a script-level error and is reported through the promise reject
-            // callback. Anything else is an engine defect and must never be silent.
-            System.getLogger(JSContext.class.getName()).log(
-                    System.Logger.Level.WARNING, "Unhandled failure in microtask", failure);
-        }
     }
 
     public JSObject getPrototypeFromConstructor(JSObject constructor, String intrinsicDefaultPrototypeName) {
@@ -3676,6 +3588,15 @@ public final class JSContext implements AutoCloseable {
 
     public boolean isActiveGlobalFunctionBindingConfigurable() {
         return activeGlobalFunctionBindingConfigurable;
+    }
+
+    /**
+     * Whether {@link #close()} has been called on this context.
+     *
+     * @return true when the context is closed
+     */
+    public boolean isClosed() {
+        return closed;
     }
 
     private boolean isCompleteStaticImportStatement(String importStatement) {
@@ -5108,6 +5029,38 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
+    /**
+     * Record a failure that escaped a microtask.
+     * <p>
+     * Draining the microtask queue has no caller to propagate to, so without this a throwing
+     * {@code .then()} handler — or an engine defect surfacing as a {@link NullPointerException} —
+     * disappeared with no trace at all. Failures are always recorded; an installed
+     * {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect with no
+     * callback installed is logged so it cannot pass unnoticed.
+     *
+     * @param failure the exception that escaped the microtask
+     */
+    public void recordMicrotaskFailure(Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        while (microtaskFailures.size() >= MAX_RECORDED_MICROTASK_FAILURES) {
+            microtaskFailures.remove(0);
+        }
+        microtaskFailures.add(failure);
+        IJSMicrotaskFailureCallback callback = microtaskFailureCallback;
+        if (callback != null) {
+            callback.onMicrotaskFailure(failure);
+            return;
+        }
+        if (!(failure instanceof JSException)) {
+            // A JSException is a script-level error and is reported through the promise reject
+            // callback. Anything else is an engine defect and must never be silent.
+            System.getLogger(JSContext.class.getName()).log(
+                    System.Logger.Level.WARNING, "Unhandled failure in microtask", failure);
+        }
+    }
+
     private void registerAsyncModuleCompletion(
             JSDynamicImportModule moduleRecord,
             JSPromise asyncPromise,
@@ -5251,6 +5204,43 @@ public final class JSContext implements AutoCloseable {
         }
 
         throw new JSException(throwSyntaxError("Invalid default export declaration"));
+    }
+
+    /**
+     * Validate a name that is about to be interpolated into generated module source in identifier
+     * position.
+     * <p>
+     * The module transformer builds JavaScript source text and evaluates it. Names extracted from
+     * the module source by the ad-hoc scanner reach identifier position unescaped, so a value that
+     * is not an identifier would splice arbitrary source into the generated program. Anything that
+     * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
+     *
+     * @param name        the candidate identifier
+     * @param description what the name denotes, used in the error message
+     * @return the name unchanged when it is a valid identifier
+     * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
+     */
+    private String requireGeneratedIdentifier(String name, String description) {
+        if (!isValidIdentifierName(name)) {
+            throw new JSException(throwSyntaxError(
+                    "Unsupported module syntax: " + description + " is not a valid identifier"));
+        }
+        return name;
+    }
+
+    /**
+     * Fail fast when an operation is attempted on a closed context.
+     * <p>
+     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()}
+     * silently worked and masked lifecycle bugs in embedder code. This is one of the few places a
+     * raw Java exception is right: it is embedder API misuse, not a JavaScript error.
+     *
+     * @throws IllegalStateException when this context is closed
+     */
+    private void requireOpen() {
+        if (closed) {
+            throw new IllegalStateException("JSContext is closed");
+        }
     }
 
     private DynamicImportExportResolution resolveDynamicImportExport(
@@ -5592,6 +5582,15 @@ public final class JSContext implements AutoCloseable {
      */
     public void setMaxStackDepth(int depth) {
         this.maxStackDepth = depth;
+    }
+
+    /**
+     * Install a callback that observes failures escaping a microtask.
+     *
+     * @param callback the callback, or {@code null} to remove the current one
+     */
+    public void setMicrotaskFailureCallback(IJSMicrotaskFailureCallback callback) {
+        this.microtaskFailureCallback = callback;
     }
 
     public void setNativeConstructorNewTarget(JSValue newTarget) {

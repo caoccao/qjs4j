@@ -37,10 +37,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 public class VirtualMachineConstantObjectTest extends BaseTest {
 
-    private WeakReference<JSValue> evalToWeakReference(String code) {
-        return new WeakReference<>(context.eval(code));
-    }
-
     private static boolean awaitCollection(WeakReference<?> reference) throws InterruptedException {
         for (int attempt = 0; attempt < 20 && reference.get() != null; attempt++) {
             System.gc();
@@ -49,34 +45,17 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
         return reference.get() == null;
     }
 
-    @Test
-    public void testConstantObjectRecordsItsPrototypeInitialization() {
-        JSValue templateObject = context.eval(
-                """
-                        function tag(strings) { return strings }
-                        tag`a ${1} b`""");
-        assertThat(templateObject).isInstanceOfSatisfying(JSObject.class,
-                object -> assertThat(object.isConstantPrototypeInitialized()).isTrue());
-        // A plain runtime object is not a bytecode constant and carries no such marking.
-        assertThat(context.eval("({})")).isInstanceOfSatisfying(JSObject.class,
-                object -> assertThat(object.isConstantPrototypeInitialized()).isFalse());
+    private static long usedMemory() throws InterruptedException {
+        for (int attempt = 0; attempt < 4; attempt++) {
+            System.gc();
+            Thread.sleep(25);
+        }
+        Runtime runtime = Runtime.getRuntime();
+        return runtime.totalMemory() - runtime.freeMemory();
     }
 
-    @Test
-    public void testConstantObjectPrototypeIsStillTransferred() {
-        // The side table existed to make the transfer happen exactly once. That must still hold.
-        assertThat(context.eval(
-                """
-                        function tag(strings) { return Object.getPrototypeOf(strings) === Array.prototype }
-                        tag`a ${1} b`""").toString())
-                .isEqualTo("true");
-        assertThat(context.eval("Object.getPrototypeOf(/x/g) === RegExp.prototype").toString())
-                .isEqualTo("true");
-        assertThat(context.eval(
-                """
-                        function tag(strings) { return Object.getPrototypeOf(strings.raw) === Array.prototype }
-                        tag`a ${1} b`""").toString())
-                .isEqualTo("true");
+    private WeakReference<JSValue> evalToWeakReference(String code) {
+        return new WeakReference<>(context.eval(code));
     }
 
     @Test
@@ -99,6 +78,36 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
     }
 
     @Test
+    public void testConstantObjectPrototypeIsStillTransferred() {
+        // The side table existed to make the transfer happen exactly once. That must still hold.
+        assertThat(context.eval(
+                """
+                        function tag(strings) { return Object.getPrototypeOf(strings) === Array.prototype }
+                        tag`a ${1} b`""").toString())
+                .isEqualTo("true");
+        assertThat(context.eval("Object.getPrototypeOf(/x/g) === RegExp.prototype").toString())
+                .isEqualTo("true");
+        assertThat(context.eval(
+                """
+                        function tag(strings) { return Object.getPrototypeOf(strings.raw) === Array.prototype }
+                        tag`a ${1} b`""").toString())
+                .isEqualTo("true");
+    }
+
+    @Test
+    public void testConstantObjectRecordsItsPrototypeInitialization() {
+        JSValue templateObject = context.eval(
+                """
+                        function tag(strings) { return strings }
+                        tag`a ${1} b`""");
+        assertThat(templateObject).isInstanceOfSatisfying(JSObject.class,
+                object -> assertThat(object.isConstantPrototypeInitialized()).isTrue());
+        // A plain runtime object is not a bytecode constant and carries no such marking.
+        assertThat(context.eval("({})")).isInstanceOfSatisfying(JSObject.class,
+                object -> assertThat(object.isConstantPrototypeInitialized()).isFalse());
+    }
+
+    @Test
     @Timeout(120)
     public void testRepeatedConstantObjectEvaluationDoesNotRetainMemory() throws InterruptedException {
         context.eval("function tag(strings) { return strings.length }");
@@ -114,14 +123,5 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
         assertThat(retainedBytes)
                 .as("retained %d bytes after 20000 tagged template evaluations", retainedBytes)
                 .isLessThan(16L * 1024 * 1024);
-    }
-
-    private static long usedMemory() throws InterruptedException {
-        for (int attempt = 0; attempt < 4; attempt++) {
-            System.gc();
-            Thread.sleep(25);
-        }
-        Runtime runtime = Runtime.getRuntime();
-        return runtime.totalMemory() - runtime.freeMemory();
     }
 }

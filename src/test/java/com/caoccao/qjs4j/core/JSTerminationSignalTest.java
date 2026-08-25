@@ -52,29 +52,48 @@ public class JSTerminationSignalTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testTerminationCrossesAnAsyncFunction() {
-        installAbort();
-        assertThatThrownBy(() -> context.eval("async function f() { abort() } f(); 'SURVIVED'"))
-                .isInstanceOf(JSTerminationException.class)
-                .hasMessage("host abort");
+    public void testAnOrdinaryHostErrorStillBecomesAGuestError() {
+        // The complement of every test above: a non-terminating host failure must remain
+        // catchable, or making termination an Error would have made every host throw fatal.
+        JSNativeFunction fail = new JSNativeFunction(
+                context,
+                "fail",
+                0,
+                (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
+        context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
+        assertThat(context.eval("try { fail() } catch (e) { e.name + ': ' + e.message }").toString())
+                .isEqualTo("TypeError: host failure");
     }
 
     @Test
     @Timeout(60)
-    public void testTerminationCrossesAnAsyncFunctionAwaitResumption() {
-        installAbort();
-        assertThatThrownBy(() -> context.eval(
-                "async function f() { await Promise.resolve(1); abort() } f(); 'SURVIVED'"))
-                .isInstanceOf(JSTerminationException.class)
-                .hasMessage("host abort");
+    public void testAnOrdinaryHostErrorStillRejectsAPromise() {
+        JSNativeFunction fail = new JSNativeFunction(
+                context,
+                "fail",
+                0,
+                (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
+        context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
+        assertThat(context.eval(
+                        """
+                                globalThis.outcome = 'PENDING';
+                                new Promise(() => fail()).catch((e) => { globalThis.outcome = e.name });
+                                'STARTED'""")
+                .toString())
+                .isEqualTo("STARTED");
+        context.processMicrotasks();
+        assertThat(context.eval("outcome").toString()).isEqualTo("TypeError");
     }
 
     @Test
     @Timeout(60)
-    public void testTerminationCrossesAnAsyncGenerator() {
+    public void testTerminationCrossesAForOfIterator() {
         installAbort();
         assertThatThrownBy(() -> context.eval(
-                "async function* g() { abort(); yield 1 } g().next(); 'SURVIVED'"))
+                """
+                        const iterable = { [Symbol.iterator]() { return { next() { abort() } } } };
+                        try { for (const value of iterable) {} } catch (e) { 'SWALLOWED' }
+                        'SURVIVED'"""))
                 .isInstanceOf(JSTerminationException.class)
                 .hasMessage("host abort");
     }
@@ -108,29 +127,6 @@ public class JSTerminationSignalTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testTerminationCrossesAThenableResolution() {
-        installAbort();
-        assertThatThrownBy(() -> context.eval(
-                "Promise.resolve({ then() { abort() } }); 'SURVIVED'"))
-                .isInstanceOf(JSTerminationException.class)
-                .hasMessage("host abort");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testTerminationCrossesAForOfIterator() {
-        installAbort();
-        assertThatThrownBy(() -> context.eval(
-                """
-                        const iterable = { [Symbol.iterator]() { return { next() { abort() } } } };
-                        try { for (const value of iterable) {} } catch (e) { 'SWALLOWED' }
-                        'SURVIVED'"""))
-                .isInstanceOf(JSTerminationException.class)
-                .hasMessage("host abort");
-    }
-
-    @Test
-    @Timeout(60)
     public void testTerminationCrossesAScriptCatchBlock() {
         installAbort();
         assertThatThrownBy(() -> context.eval("try { abort() } catch (e) { 'SWALLOWED' } 'SURVIVED'"))
@@ -150,6 +146,16 @@ public class JSTerminationSignalTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testTerminationCrossesAThenableResolution() {
+        installAbort();
+        assertThatThrownBy(() -> context.eval(
+                "Promise.resolve({ then() { abort() } }); 'SURVIVED'"))
+                .isInstanceOf(JSTerminationException.class)
+                .hasMessage("host abort");
+    }
+
+    @Test
+    @Timeout(60)
     public void testTerminationCrossesAUsingDisposal() {
         installAbort();
         assertThatThrownBy(() -> context.eval(
@@ -159,6 +165,35 @@ public class JSTerminationSignalTest extends BaseTest {
                         }
                         try { scope() } catch (e) { 'SWALLOWED' }
                         'SURVIVED'"""))
+                .isInstanceOf(JSTerminationException.class)
+                .hasMessage("host abort");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testTerminationCrossesAnAsyncFunction() {
+        installAbort();
+        assertThatThrownBy(() -> context.eval("async function f() { abort() } f(); 'SURVIVED'"))
+                .isInstanceOf(JSTerminationException.class)
+                .hasMessage("host abort");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testTerminationCrossesAnAsyncFunctionAwaitResumption() {
+        installAbort();
+        assertThatThrownBy(() -> context.eval(
+                "async function f() { await Promise.resolve(1); abort() } f(); 'SURVIVED'"))
+                .isInstanceOf(JSTerminationException.class)
+                .hasMessage("host abort");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testTerminationCrossesAnAsyncGenerator() {
+        installAbort();
+        assertThatThrownBy(() -> context.eval(
+                "async function* g() { abort(); yield 1 } g().next(); 'SURVIVED'"))
                 .isInstanceOf(JSTerminationException.class)
                 .hasMessage("host abort");
     }
@@ -185,40 +220,5 @@ public class JSTerminationSignalTest extends BaseTest {
         assertThatThrownBy(() -> context.eval("Promise.resolve(1).then(() => abort())"))
                 .isInstanceOf(JSTerminationException.class);
         assertThat(context.getMicrotaskFailures()).isEmpty();
-    }
-
-    @Test
-    @Timeout(60)
-    public void testAnOrdinaryHostErrorStillBecomesAGuestError() {
-        // The complement of every test above: a non-terminating host failure must remain
-        // catchable, or making termination an Error would have made every host throw fatal.
-        JSNativeFunction fail = new JSNativeFunction(
-                context,
-                "fail",
-                0,
-                (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
-        context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
-        assertThat(context.eval("try { fail() } catch (e) { e.name + ': ' + e.message }").toString())
-                .isEqualTo("TypeError: host failure");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testAnOrdinaryHostErrorStillRejectsAPromise() {
-        JSNativeFunction fail = new JSNativeFunction(
-                context,
-                "fail",
-                0,
-                (ctx, thisArg, args) -> ctx.throwTypeError("host failure"));
-        context.getGlobalObject().set(PropertyKey.fromString("fail"), fail);
-        assertThat(context.eval(
-                        """
-                                globalThis.outcome = 'PENDING';
-                                new Promise(() => fail()).catch((e) => { globalThis.outcome = e.name });
-                                'STARTED'""")
-                .toString())
-                .isEqualTo("STARTED");
-        context.processMicrotasks();
-        assertThat(context.eval("outcome").toString()).isEqualTo("TypeError");
     }
 }

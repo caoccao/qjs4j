@@ -46,30 +46,6 @@ public class JSResourceLimitTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testCatastrophicBacktrackingIsBounded() {
-        // Without a budget this grows exponentially: 0.20s / 0.28s / 0.58s / 1.65s for 16 / 20 /
-        // 22 / 24 characters, and a 40-character input never returns.
-        assertThat(evalToString(
-                """
-                        const subject = 'a'.repeat(64) + '!';
-                        try { /(a+)+$/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCatastrophicBacktrackingInsideLookaheadIsBounded() {
-        // A lookaround runs on a nested context. It must inherit the remaining budget rather than
-        // start a fresh one, or a lookaround in a loop resets the budget on every iteration.
-        assertThat(evalToString(
-                """
-                        const subject = 'a'.repeat(64) + '!';
-                        try { /(?=(a+)+$)a/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
     public void testBacktrackingLimitIsConfigurable() {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setRegExpBacktrackLimit(0));
              JSContext unlimitedContext = runtime.createContext()) {
@@ -88,17 +64,28 @@ public class JSResourceLimitTest extends BaseTest {
     }
 
     @Test
-    public void testOrdinaryRegularExpressionsAreUnaffected() {
-        assertThat(evalToString("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]")).isEqualTo("Smith");
-        assertThat(evalToString("'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')"))
-                .isEqualTo("25/08/2026");
-        assertThat(evalToString("String('aaa'.repeat(2000).match(/a+/)[0].length)")).isEqualTo("6000");
-        assertThat(evalToString("String('x'.repeat(100000).split(/(?=x)/).length)")).isEqualTo("100000");
+    @Timeout(60)
+    public void testCatastrophicBacktrackingInsideLookaheadIsBounded() {
+        // A lookaround runs on a nested context. It must inherit the remaining budget rather than
+        // start a fresh one, or a lookaround in a loop resets the budget on every iteration.
+        assertThat(evalToString(
+                """
+                        const subject = 'a'.repeat(64) + '!';
+                        try { /(?=(a+)+$)a/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
+                .isEqualTo("CAUGHT RangeError");
     }
 
-    // -----------------------------------------------------------------------------------
-    // C-6b: maximum string length
-    // -----------------------------------------------------------------------------------
+    @Test
+    @Timeout(60)
+    public void testCatastrophicBacktrackingIsBounded() {
+        // Without a budget this grows exponentially: 0.20s / 0.28s / 0.58s / 1.65s for 16 / 20 /
+        // 22 / 24 characters, and a 40-character input never returns.
+        assertThat(evalToString(
+                """
+                        const subject = 'a'.repeat(64) + '!';
+                        try { /(a+)+$/.test(subject); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"""))
+                .isEqualTo("CAUGHT RangeError");
+    }
 
     @Test
     @Timeout(60)
@@ -113,106 +100,8 @@ public class JSResourceLimitTest extends BaseTest {
                 .isEqualTo("CAUGHT RangeError");
     }
 
-    @Test
-    @Timeout(60)
-    public void testJoinBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString(
-                """
-                        try {
-                            new Array(1000000).fill('a'.repeat(1000)).join('');
-                            'NO ERROR';
-                        } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testPadBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testRepeatBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testRepeatCountBeyondLongRangeRaisesRangeError() {
-        // The length guard used to multiply first: (long) 1e20 saturates at Long.MAX_VALUE, so
-        // 2 * that wrapped to -2, the guard passed, and `new StringBuilder(-2)` threw
-        // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
-        // multiplication is now a division, so nothing overflows before the check.
-        assertThat(evalToString("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testRepeatEdgeCountsAreUnaffectedByTheOverflowGuard() {
-        // The guard divides by s.length(), so the empty-string and zero-count shortcuts have to
-        // come first — dividing by zero would turn a legal call into an engine failure.
-        assertThat(evalToString("JSON.stringify(''.repeat(1e20))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify(''.repeat(0))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify('abc'.repeat(0))")).isEqualTo("\"\"");
-        assertThat(evalToString("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-        assertThat(evalToString("JSON.stringify('x'.repeat(NaN))")).isEqualTo("\"\"");
-        assertThat(evalToString("JSON.stringify('x'.repeat())")).isEqualTo("\"\"");
-        assertThat(evalToString("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testRepeatAtTheExactLengthBoundary() {
-        // The boundary the division has to get right: exactly MAX_LENGTH is allowed, one more is
-        // not. MAX_LENGTH is 2^27 - 1, which is odd, so a two-character string cannot reach it.
-        assertThat(evalToString("'ab'.repeat(67108863).length")).isEqualTo("134217726");
-        assertThat(evalToString("try { 'ab'.repeat(67108864); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testStringAdditionBeyondMaximumLengthRaisesRangeError() {
-        assertThat(evalToString(
-                """
-                        try {
-                            let s = 'a';
-                            for (let i = 0; i < 40; i++) { s = s + s }
-                            'NO ERROR';
-                        } catch (e) { 'CAUGHT ' + e.name }"""))
-                .isEqualTo("CAUGHT RangeError");
-    }
-
-    @Test
-    public void testOrdinaryStringOperationsAreUnaffected() {
-        assertThat(evalToString("'abc'.repeat(3)")).isEqualTo("abcabcabc");
-        assertThat(evalToString("'x'.padStart(5, '-')")).isEqualTo("----x");
-        assertThat(evalToString("'x'.padEnd(5, '-')")).isEqualTo("x----");
-        assertThat(evalToString("'a'.concat('b', 'c')")).isEqualTo("abc");
-        assertThat(evalToString("[1, 2, 3].join('-')")).isEqualTo("1-2-3");
-        assertThat(evalToString("'a' + 'b' + 1")).isEqualTo("ab1");
-    }
-
     // -----------------------------------------------------------------------------------
-    // C-6c: host interrupt and execution deadline
+    // C-6b: maximum string length
     // -----------------------------------------------------------------------------------
 
     @Test
@@ -267,8 +156,119 @@ public class JSResourceLimitTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testJoinBeyondMaximumLengthRaisesRangeError() {
+        assertThat(evalToString(
+                """
+                        try {
+                            new Array(1000000).fill('a'.repeat(1000)).join('');
+                            'NO ERROR';
+                        } catch (e) { 'CAUGHT ' + e.name }"""))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
     public void testNoDeadlineLeavesOrdinaryCodeUnaffected() {
         assertThat(context.eval("let total = 0; for (let i = 0; i < 200000; i++) { total += i } total"))
                 .isEqualTo(JSNumber.of(19999900000L));
+    }
+
+    @Test
+    public void testOrdinaryRegularExpressionsAreUnaffected() {
+        assertThat(evalToString("/(\\w+)\\s(\\w+)/.exec('John Smith')[2]")).isEqualTo("Smith");
+        assertThat(evalToString("'2026-08-25'.replace(/(\\d+)-(\\d+)-(\\d+)/, '$3/$2/$1')"))
+                .isEqualTo("25/08/2026");
+        assertThat(evalToString("String('aaa'.repeat(2000).match(/a+/)[0].length)")).isEqualTo("6000");
+        assertThat(evalToString("String('x'.repeat(100000).split(/(?=x)/).length)")).isEqualTo("100000");
+    }
+
+    @Test
+    public void testOrdinaryStringOperationsAreUnaffected() {
+        assertThat(evalToString("'abc'.repeat(3)")).isEqualTo("abcabcabc");
+        assertThat(evalToString("'x'.padStart(5, '-')")).isEqualTo("----x");
+        assertThat(evalToString("'x'.padEnd(5, '-')")).isEqualTo("x----");
+        assertThat(evalToString("'a'.concat('b', 'c')")).isEqualTo("abc");
+        assertThat(evalToString("[1, 2, 3].join('-')")).isEqualTo("1-2-3");
+        assertThat(evalToString("'a' + 'b' + 1")).isEqualTo("ab1");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testPadBeyondMaximumLengthRaisesRangeError() {
+        assertThat(evalToString("try { 'a'.padStart(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'a'.padEnd(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRepeatAtTheExactLengthBoundary() {
+        // The boundary the division has to get right: exactly MAX_LENGTH is allowed, one more is
+        // not. MAX_LENGTH is 2^27 - 1, which is odd, so a two-character string cannot reach it.
+        assertThat(evalToString("'ab'.repeat(67108863).length")).isEqualTo("134217726");
+        assertThat(evalToString("try { 'ab'.repeat(67108864); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // C-6c: host interrupt and execution deadline
+    // -----------------------------------------------------------------------------------
+
+    @Test
+    @Timeout(60)
+    public void testRepeatBeyondMaximumLengthRaisesRangeError() {
+        assertThat(evalToString("try { 'a'.repeat(1e9); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'ab'.repeat(2147483647); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRepeatCountBeyondLongRangeRaisesRangeError() {
+        // The length guard used to multiply first: (long) 1e20 saturates at Long.MAX_VALUE, so
+        // 2 * that wrapped to -2, the guard passed, and `new StringBuilder(-2)` threw
+        // NegativeArraySizeException — a Java failure that escaped the script's own catch. The
+        // multiplication is now a division, so nothing overflows before the check.
+        assertThat(evalToString("try { 'xx'.repeat(1e20); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'xx'.repeat(9223372036854775807); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'abc'.repeat(1e30); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'x'.repeat(Number.MAX_VALUE); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testRepeatEdgeCountsAreUnaffectedByTheOverflowGuard() {
+        // The guard divides by s.length(), so the empty-string and zero-count shortcuts have to
+        // come first — dividing by zero would turn a legal call into an engine failure.
+        assertThat(evalToString("JSON.stringify(''.repeat(1e20))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify(''.repeat(0))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify('abc'.repeat(0))")).isEqualTo("\"\"");
+        assertThat(evalToString("try { 'x'.repeat(-1); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("try { 'x'.repeat(Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+        assertThat(evalToString("JSON.stringify('x'.repeat(NaN))")).isEqualTo("\"\"");
+        assertThat(evalToString("JSON.stringify('x'.repeat())")).isEqualTo("\"\"");
+        assertThat(evalToString("try { 'x'.repeat(-Infinity); 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name }"))
+                .isEqualTo("CAUGHT RangeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testStringAdditionBeyondMaximumLengthRaisesRangeError() {
+        assertThat(evalToString(
+                """
+                        try {
+                            let s = 'a';
+                            for (let i = 0; i < 40; i++) { s = s + s }
+                            'NO ERROR';
+                        } catch (e) { 'CAUGHT ' + e.name }"""))
+                .isEqualTo("CAUGHT RangeError");
     }
 }

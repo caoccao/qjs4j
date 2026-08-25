@@ -103,6 +103,15 @@ public class PropertyKeyTest {
     }
 
     @Test
+    public void testSymbolKeyNeverEqualsItsPropertyString() {
+        JSSymbol symbol = new JSSymbol("description");
+        PropertyKey symbolKey = PropertyKey.fromSymbol(symbol);
+        PropertyKey stringKey = PropertyKey.fromString(symbolKey.toPropertyString());
+        assertThat(symbolKey).isNotEqualTo(stringKey);
+        assertThat(stringKey).isNotEqualTo(symbolKey);
+    }
+
+    @Test
     public void testSymbolKeysCompareByIdentity() {
         JSSymbol first = new JSSymbol("shared");
         JSSymbol second = new JSSymbol("shared");
@@ -113,14 +122,5 @@ public class PropertyKeyTest {
         keys.add(PropertyKey.fromSymbol(first));
         keys.add(PropertyKey.fromSymbol(second));
         assertThat(keys).hasSize(2);
-    }
-
-    @Test
-    public void testSymbolKeyNeverEqualsItsPropertyString() {
-        JSSymbol symbol = new JSSymbol("description");
-        PropertyKey symbolKey = PropertyKey.fromSymbol(symbol);
-        PropertyKey stringKey = PropertyKey.fromString(symbolKey.toPropertyString());
-        assertThat(symbolKey).isNotEqualTo(stringKey);
-        assertThat(stringKey).isNotEqualTo(symbolKey);
     }
 }

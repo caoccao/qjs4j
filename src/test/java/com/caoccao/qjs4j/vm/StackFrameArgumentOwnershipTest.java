@@ -17,11 +17,7 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSBytecodeFunction;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +34,34 @@ public class StackFrameArgumentOwnershipTest extends BaseTest {
 
     private JSBytecodeFunction compile(String source) {
         return (JSBytecodeFunction) context.eval(source);
+    }
+
+    @Test
+    public void testArgumentsSurviveANestedCallFromJavaScript() {
+        assertThat(context.eval(
+                """
+                        function inner(a, b, c) { return a + b + c }
+                        function outer() {
+                            const before = arguments[0];
+                            const middle = inner(9, 9, 9);
+                            return before + '/' + middle + '/' + arguments[0];
+                        }
+                        outer(1, 2, 3)""").toString())
+                .isEqualTo("1/27/1");
+    }
+
+    @Test
+    public void testArgumentsSurviveANestedCallInAFunctionWithNoDeclaredLocals() {
+        assertThat(context.eval(
+                """
+                        function noLocals() { return arguments.length }
+                        function outer() {
+                            const before = arguments[0];
+                            noLocals(7, 7, 7, 7);
+                            return before + '/' + arguments[0];
+                        }
+                        outer(1, 2, 3)""").toString())
+                .isEqualTo("1/1");
     }
 
     @Test
@@ -71,43 +95,6 @@ public class StackFrameArgumentOwnershipTest extends BaseTest {
     }
 
     @Test
-    public void testZeroArgumentFrameIsWellFormed() {
-        JSBytecodeFunction function = compile("(function () { return 1 })");
-        StackFrame frame = new StackFrame(
-                function, JSUndefined.INSTANCE, JSValue.NO_ARGS, 0, null, JSUndefined.INSTANCE, 0);
-        assertThat(frame.getArgumentCount()).isZero();
-        assertThat(frame.getArgument(0)).isEqualTo(JSUndefined.INSTANCE);
-    }
-
-    @Test
-    public void testArgumentsSurviveANestedCallFromJavaScript() {
-        assertThat(context.eval(
-                """
-                        function inner(a, b, c) { return a + b + c }
-                        function outer() {
-                            const before = arguments[0];
-                            const middle = inner(9, 9, 9);
-                            return before + '/' + middle + '/' + arguments[0];
-                        }
-                        outer(1, 2, 3)""").toString())
-                .isEqualTo("1/27/1");
-    }
-
-    @Test
-    public void testArgumentsSurviveANestedCallInAFunctionWithNoDeclaredLocals() {
-        assertThat(context.eval(
-                """
-                        function noLocals() { return arguments.length }
-                        function outer() {
-                            const before = arguments[0];
-                            noLocals(7, 7, 7, 7);
-                            return before + '/' + arguments[0];
-                        }
-                        outer(1, 2, 3)""").toString())
-                .isEqualTo("1/1");
-    }
-
-    @Test
     public void testTailCallDoesNotCorruptArguments() {
         assertThat(context.eval(
                 """
@@ -121,5 +108,14 @@ public class StackFrameArgumentOwnershipTest extends BaseTest {
                         }
                         outer(5, 6)""").toString())
                 .isEqualTo("5/34/5");
+    }
+
+    @Test
+    public void testZeroArgumentFrameIsWellFormed() {
+        JSBytecodeFunction function = compile("(function () { return 1 })");
+        StackFrame frame = new StackFrame(
+                function, JSUndefined.INSTANCE, JSValue.NO_ARGS, 0, null, JSUndefined.INSTANCE, 0);
+        assertThat(frame.getArgumentCount()).isZero();
+        assertThat(frame.getArgument(0)).isEqualTo(JSUndefined.INSTANCE);
     }
 }

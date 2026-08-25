@@ -44,14 +44,14 @@ public class JSArrayDeepPrototypeSetTest extends BaseTest {
                           let setterCalls = 0;
                           let terminal = {};
                           Object.defineProperty(terminal, '0', { set(v) { setterCalls++ } });
-
+                        
                           let head = terminal;
                           for (let i = 0; i < %d; i++) head = Object.create(head);
-
+                        
                           let array = [];
                           Object.setPrototypeOf(array, head);
                           array[0] = 1;
-
+                        
                           return setterCalls + ',' + Object.prototype.hasOwnProperty.call(array, '0');
                         })()"""
                         .formatted(depth));
@@ -59,31 +59,6 @@ public class JSArrayDeepPrototypeSetTest extends BaseTest {
 
     private String evalToString(String code) {
         return JSTypeConversions.toString(context, context.eval(code)).value();
-    }
-
-    @Test
-    @Timeout(60)
-    public void testInheritedSetterRunsAtShallowDepth() {
-        assertThat(assignThroughChain(0)).isEqualTo("1,false");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testInheritedSetterRunsJustBelowTheCutoff() {
-        assertThat(assignThroughChain(998)).isEqualTo("1,false");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testInheritedSetterRunsJustBeyondTheCutoff() {
-        // 1,001 links is the depth at which the bounded walk answered "no interference".
-        assertThat(assignThroughChain(1001)).isEqualTo("1,false");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testInheritedSetterRunsFarBeyondTheCutoff() {
-        assertThat(assignThroughChain(3000)).isEqualTo("1,false");
     }
 
     @Test
@@ -105,18 +80,40 @@ public class JSArrayDeepPrototypeSetTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testTypedArrayInTheChainForcesTheSlowPath() {
-        // A TypedArray has exotic [[Set]] for canonical numeric indices, so the fast path must
-        // defer to it rather than writing an own element.
+    public void testInheritedSetterRunsAtShallowDepth() {
+        assertThat(assignThroughChain(0)).isEqualTo("1,false");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testInheritedSetterRunsFarBeyondTheCutoff() {
+        assertThat(assignThroughChain(3000)).isEqualTo("1,false");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testInheritedSetterRunsJustBelowTheCutoff() {
+        assertThat(assignThroughChain(998)).isEqualTo("1,false");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testInheritedSetterRunsJustBeyondTheCutoff() {
+        // 1,001 links is the depth at which the bounded walk answered "no interference".
+        assertThat(assignThroughChain(1001)).isEqualTo("1,false");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testOrdinaryArrayWriteStillTakesTheFastPath() {
+        // The complement: a plain array with the ordinary prototype chain must still store
+        // elements densely and keep length in step.
         assertThat(evalToString(
                 """
-                        (function () {
-                          const array = [];
-                          Object.setPrototypeOf(array, new Int8Array(4));
-                          array[0] = 1;
-                          return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
-                        })()"""))
-                .isEqualTo("1,true");
+                        let array = [];
+                        for (let i = 0; i < 100; i++) array[i] = i * 2;
+                        array.length + ',' + array[99] + ',' + Object.prototype.hasOwnProperty.call(array, '50')"""))
+                .isEqualTo("100,198,true");
     }
 
     @Test
@@ -137,14 +134,17 @@ public class JSArrayDeepPrototypeSetTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testOrdinaryArrayWriteStillTakesTheFastPath() {
-        // The complement: a plain array with the ordinary prototype chain must still store
-        // elements densely and keep length in step.
+    public void testTypedArrayInTheChainForcesTheSlowPath() {
+        // A TypedArray has exotic [[Set]] for canonical numeric indices, so the fast path must
+        // defer to it rather than writing an own element.
         assertThat(evalToString(
                 """
-                        let array = [];
-                        for (let i = 0; i < 100; i++) array[i] = i * 2;
-                        array.length + ',' + array[99] + ',' + Object.prototype.hasOwnProperty.call(array, '50')"""))
-                .isEqualTo("100,198,true");
+                        (function () {
+                          const array = [];
+                          Object.setPrototypeOf(array, new Int8Array(4));
+                          array[0] = 1;
+                          return array[0] + ',' + Object.prototype.hasOwnProperty.call(array, '0');
+                        })()"""))
+                .isEqualTo("1,true");
     }
 }

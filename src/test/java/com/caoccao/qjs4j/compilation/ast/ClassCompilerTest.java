@@ -356,16 +356,16 @@ public class ClassCompilerTest extends BaseJavetTest {
                     constructor(value) {
                         this.value = value;
                     }
-
+                
                     add(n) {
                         return this.value + n;
                     }
-
+                
                     static multiply(a, b) {
                         return a * b;
                     }
                 }
-
+                
                 const c = new Calculator(10);
                 const instanceResult = c.add(5);
                 const staticResult = Calculator.multiply(3, 4);

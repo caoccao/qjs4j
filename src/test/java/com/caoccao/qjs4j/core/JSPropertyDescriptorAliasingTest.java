@@ -31,6 +31,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class JSPropertyDescriptorAliasingTest extends BaseTest {
 
     @Test
+    public void testAccessorDescriptorIsCopiedWithItsFunctions() {
+        context.eval(
+                """
+                        globalThis.probe = {};
+                        Object.defineProperty(probe, 'x', { get() { return 7 }, configurable: true });""");
+        JSObject probe = (JSObject) context.getGlobalObject().get(PropertyKey.fromString("probe"));
+        PropertyDescriptor descriptor = probe.getOwnPropertyDescriptor(PropertyKey.fromString("x"));
+
+        assertThat(descriptor.isAccessorDescriptor()).isTrue();
+        assertThat(descriptor.getGetter()).isNotNull();
+        descriptor.setGetter(null);
+        assertThat(context.eval("probe.x")).as("clearing the copy's getter must not affect the object")
+                .isEqualTo(JSNumber.of(7));
+    }
+
+    @Test
     public void testArgumentsDescriptorViewDoesNotCorruptTheStoredDescriptor() {
         // JSArguments adjusts the descriptor it returns to reflect the mapped argument. That
         // adjustment must apply to the returned view, not to the object's stored descriptor.
@@ -44,6 +60,51 @@ public class JSPropertyDescriptorAliasingTest extends BaseTest {
                         }
                         f(1)""").toString())
                 .isEqualTo("1,99");
+    }
+
+    @Test
+    public void testArrayIndexAboveIntegerRangeIsDescribable() {
+        // JSArray's descriptor override delegates to super for indices above Integer.MAX_VALUE.
+        // Splitting getOwnPropertyDescriptor into a public copying method and an overridable raw
+        // one made `super.getOwnPropertyDescriptor(...)` dispatch straight back into the override,
+        // so any such index recursed until the stack was exhausted.
+        assertThat(context.eval(
+                        """
+                                const a = [];
+                                a[4294967294] = 'far';
+                                a.length + ',' + a[4294967294]
+                                        + ',' + Object.getOwnPropertyDescriptor(a, '4294967294').value""")
+                .toString())
+                .isEqualTo("4294967295,far,far");
+    }
+
+    @Test
+    public void testArrayIndexAtTheIntegerBoundaryIsDescribable() {
+        assertThat(context.eval(
+                """
+                        const a = [];
+                        a[2147483647] = 'low';
+                        a[2147483648] = 'high';
+                        a.length + ',' + a[2147483647] + ',' + a[2147483648]""").toString())
+                .isEqualTo("2147483649,low,high");
+    }
+
+    @Test
+    public void testDescriptorStillReflectsTheCurrentValue() {
+        JSObject object = context.createJSObject();
+        object.set(PropertyKey.fromString("a"), JSNumber.of(1));
+        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("a")).getValue())
+                .isEqualTo(JSNumber.of(1));
+        object.set(PropertyKey.fromString("a"), JSNumber.of(2));
+        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("a")).getValue())
+                .as("the copy must be taken after the value is synced, not before")
+                .isEqualTo(JSNumber.of(2));
+    }
+
+    @Test
+    public void testMissingPropertyStillReturnsNull() {
+        JSObject object = context.createJSObject();
+        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("absent"))).isNull();
     }
 
     @Test
@@ -82,62 +143,6 @@ public class JSPropertyDescriptorAliasingTest extends BaseTest {
     }
 
     @Test
-    public void testTwoCallsReturnIndependentDescriptors() {
-        JSObject object = context.createJSObject();
-        object.set(PropertyKey.fromString("a"), JSNumber.of(1));
-        PropertyDescriptor first = object.getOwnPropertyDescriptor(PropertyKey.fromString("a"));
-        PropertyDescriptor second = object.getOwnPropertyDescriptor(PropertyKey.fromString("a"));
-        assertThat(first).isNotSameAs(second);
-        first.setValue(new JSString("tampered"));
-        assertThat(second.getValue()).isEqualTo(JSNumber.of(1));
-    }
-
-    @Test
-    public void testDescriptorStillReflectsTheCurrentValue() {
-        JSObject object = context.createJSObject();
-        object.set(PropertyKey.fromString("a"), JSNumber.of(1));
-        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("a")).getValue())
-                .isEqualTo(JSNumber.of(1));
-        object.set(PropertyKey.fromString("a"), JSNumber.of(2));
-        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("a")).getValue())
-                .as("the copy must be taken after the value is synced, not before")
-                .isEqualTo(JSNumber.of(2));
-    }
-
-    @Test
-    public void testMissingPropertyStillReturnsNull() {
-        JSObject object = context.createJSObject();
-        assertThat(object.getOwnPropertyDescriptor(PropertyKey.fromString("absent"))).isNull();
-    }
-
-    @Test
-    public void testArrayIndexAboveIntegerRangeIsDescribable() {
-        // JSArray's descriptor override delegates to super for indices above Integer.MAX_VALUE.
-        // Splitting getOwnPropertyDescriptor into a public copying method and an overridable raw
-        // one made `super.getOwnPropertyDescriptor(...)` dispatch straight back into the override,
-        // so any such index recursed until the stack was exhausted.
-        assertThat(context.eval(
-                """
-                        const a = [];
-                        a[4294967294] = 'far';
-                        a.length + ',' + a[4294967294]
-                                + ',' + Object.getOwnPropertyDescriptor(a, '4294967294').value""")
-                .toString())
-                .isEqualTo("4294967295,far,far");
-    }
-
-    @Test
-    public void testArrayIndexAtTheIntegerBoundaryIsDescribable() {
-        assertThat(context.eval(
-                """
-                        const a = [];
-                        a[2147483647] = 'low';
-                        a[2147483648] = 'high';
-                        a.length + ',' + a[2147483647] + ',' + a[2147483648]""").toString())
-                .isEqualTo("2147483649,low,high");
-    }
-
-    @Test
     public void testNonConfigurableLargeIndexBlocksLengthTruncation() {
         // Truncating length scans shape keys through the same descriptor path.
         assertThat(context.eval(
@@ -150,22 +155,6 @@ public class JSPropertyDescriptorAliasingTest extends BaseTest {
     }
 
     @Test
-    public void testAccessorDescriptorIsCopiedWithItsFunctions() {
-        context.eval(
-                """
-                        globalThis.probe = {};
-                        Object.defineProperty(probe, 'x', { get() { return 7 }, configurable: true });""");
-        JSObject probe = (JSObject) context.getGlobalObject().get(PropertyKey.fromString("probe"));
-        PropertyDescriptor descriptor = probe.getOwnPropertyDescriptor(PropertyKey.fromString("x"));
-
-        assertThat(descriptor.isAccessorDescriptor()).isTrue();
-        assertThat(descriptor.getGetter()).isNotNull();
-        descriptor.setGetter(null);
-        assertThat(context.eval("probe.x")).as("clearing the copy's getter must not affect the object")
-                .isEqualTo(JSNumber.of(7));
-    }
-
-    @Test
     public void testObjectGetOwnPropertyDescriptorStillReportsTrueAttributes() {
         assertThat(context.eval(
                 """
@@ -173,5 +162,16 @@ public class JSPropertyDescriptorAliasingTest extends BaseTest {
                         Object.defineProperty(o, 'a', { value: 1, writable: false, enumerable: true, configurable: false });
                         JSON.stringify(Object.getOwnPropertyDescriptor(o, 'a'))""").toString())
                 .isEqualTo("{\"value\":1,\"writable\":false,\"enumerable\":true,\"configurable\":false}");
+    }
+
+    @Test
+    public void testTwoCallsReturnIndependentDescriptors() {
+        JSObject object = context.createJSObject();
+        object.set(PropertyKey.fromString("a"), JSNumber.of(1));
+        PropertyDescriptor first = object.getOwnPropertyDescriptor(PropertyKey.fromString("a"));
+        PropertyDescriptor second = object.getOwnPropertyDescriptor(PropertyKey.fromString("a"));
+        assertThat(first).isNotSameAs(second);
+        first.setValue(new JSString("tampered"));
+        assertThat(second.getValue()).isEqualTo(JSNumber.of(1));
     }
 }

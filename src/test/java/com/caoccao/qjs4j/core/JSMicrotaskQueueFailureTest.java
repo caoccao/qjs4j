@@ -38,6 +38,59 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 public class JSMicrotaskQueueFailureTest extends BaseTest {
 
+    private static void enqueueForever(JSContext loopingContext) {
+        loopingContext.enqueueMicrotask(() -> enqueueForever(loopingContext));
+    }
+
+    @Test
+    public void testAJSExceptionFromAMicrotaskReachesThePromiseRejectCallback() {
+        // A JSException escaping a microtask is an unhandled rejection as far as the host is
+        // concerned, so it goes to the promise reject callback as well as the failure record.
+        List<JSValue> rejections = new ArrayList<>();
+        context.setPromiseRejectCallback((event, promise, reason) -> rejections.add(reason));
+        context.clearMicrotaskFailures();
+        JSError error = context.throwTypeError("from microtask");
+        context.clearPendingException();
+        context.enqueueMicrotask(() -> {
+            throw new com.caoccao.qjs4j.exceptions.JSException(error);
+        });
+        context.processMicrotasks();
+
+        assertThat(rejections).hasSize(1);
+        assertThat(rejections.get(0)).isEqualTo(error);
+        assertThat(context.getMicrotaskFailures()).hasSize(1);
+    }
+
+    @Test
+    public void testANonJSExceptionFromAMicrotaskSkipsThePromiseRejectCallback() {
+        // The reject callback is about promise rejections. An engine defect is not one, so it is
+        // recorded but not reported through that channel.
+        List<JSValue> rejections = new ArrayList<>();
+        context.setPromiseRejectCallback((event, promise, reason) -> rejections.add(reason));
+        context.clearMicrotaskFailures();
+        context.enqueueMicrotask(() -> {
+            throw new IllegalStateException("engine defect");
+        });
+        context.processMicrotasks();
+
+        assertThat(rejections).isEmpty();
+        assertThat(context.getMicrotaskFailures()).hasSize(1);
+        assertThat(context.getMicrotaskFailures().get(0)).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    public void testClearMicrotaskFailuresDiscardsTheRecord() {
+        context.setMicrotaskFailureCallback(failure -> {
+        });
+        context.enqueueMicrotask(() -> {
+            throw new IllegalStateException("discarded");
+        });
+        context.processMicrotasks();
+        assertThat(context.getMicrotaskFailures()).isNotEmpty();
+        context.clearMicrotaskFailures();
+        assertThat(context.getMicrotaskFailures()).isEmpty();
+    }
+
     @Test
     public void testEngineFailureInAMicrotaskIsRecorded() {
         List<Throwable> observed = new ArrayList<>();
@@ -89,19 +142,6 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
                 .hasSizeLessThan(failureCount);
         // The oldest entries are dropped, so the most recent failure is always retained.
         assertThat(failures.get(failures.size() - 1)).hasMessage("failure " + (failureCount - 1));
-    }
-
-    @Test
-    public void testClearMicrotaskFailuresDiscardsTheRecord() {
-        context.setMicrotaskFailureCallback(failure -> {
-        });
-        context.enqueueMicrotask(() -> {
-            throw new IllegalStateException("discarded");
-        });
-        context.processMicrotasks();
-        assertThat(context.getMicrotaskFailures()).isNotEmpty();
-        context.clearMicrotaskFailures();
-        assertThat(context.getMicrotaskFailures()).isEmpty();
     }
 
     @Test
@@ -157,10 +197,6 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
         }
     }
 
-    private static void enqueueForever(JSContext loopingContext) {
-        loopingContext.enqueueMicrotask(() -> enqueueForever(loopingContext));
-    }
-
     @Test
     public void testThrowingPromiseHandlerIsAPromiseRejectionNotAMicrotaskFailure() {
         // A throwing .then() handler rejects the derived promise, which is the specified
@@ -176,41 +212,5 @@ public class JSMicrotaskQueueFailureTest extends BaseTest {
         assertThat(((JSPromise) derived).getState()).isEqualTo(JSPromise.PromiseState.REJECTED);
         assertThat(observed).isEmpty();
         assertThat(context.getMicrotaskFailures()).isEmpty();
-    }
-
-    @Test
-    public void testAJSExceptionFromAMicrotaskReachesThePromiseRejectCallback() {
-        // A JSException escaping a microtask is an unhandled rejection as far as the host is
-        // concerned, so it goes to the promise reject callback as well as the failure record.
-        List<JSValue> rejections = new ArrayList<>();
-        context.setPromiseRejectCallback((event, promise, reason) -> rejections.add(reason));
-        context.clearMicrotaskFailures();
-        JSError error = context.throwTypeError("from microtask");
-        context.clearPendingException();
-        context.enqueueMicrotask(() -> {
-            throw new com.caoccao.qjs4j.exceptions.JSException(error);
-        });
-        context.processMicrotasks();
-
-        assertThat(rejections).hasSize(1);
-        assertThat(rejections.get(0)).isEqualTo(error);
-        assertThat(context.getMicrotaskFailures()).hasSize(1);
-    }
-
-    @Test
-    public void testANonJSExceptionFromAMicrotaskSkipsThePromiseRejectCallback() {
-        // The reject callback is about promise rejections. An engine defect is not one, so it is
-        // recorded but not reported through that channel.
-        List<JSValue> rejections = new ArrayList<>();
-        context.setPromiseRejectCallback((event, promise, reason) -> rejections.add(reason));
-        context.clearMicrotaskFailures();
-        context.enqueueMicrotask(() -> {
-            throw new IllegalStateException("engine defect");
-        });
-        context.processMicrotasks();
-
-        assertThat(rejections).isEmpty();
-        assertThat(context.getMicrotaskFailures()).hasSize(1);
-        assertThat(context.getMicrotaskFailures().get(0)).isInstanceOf(IllegalStateException.class);
     }
 }

@@ -56,26 +56,6 @@ public class JSErrorPathPurityTest extends BaseTest {
     }
 
     @Test
-    public void testFrozenAssignmentErrorMessageDoesNotInvokeAConstructorGetter() {
-        assertThat(context.eval(
-                """
-                        'use strict';
-                        let getterRan = false;
-                        const proto = {};
-                        Object.defineProperty(proto, 'constructor', {
-                            get() { getterRan = true; return function Tricky() {} },
-                            configurable: true,
-                        });
-                        const target = Object.create(proto);
-                        target.value = 1;
-                        Object.freeze(target);
-                        let caught = '';
-                        try { target.value = 2 } catch (e) { caught = e.name }
-                        caught + ',' + getterRan""").toString())
-                .isEqualTo("TypeError,false");
-    }
-
-    @Test
     public void testErrorMessageStillNamesAnOrdinaryConstructor() {
         // The description must still be built when constructor/name are plain data properties.
         assertThat(context.eval(
@@ -86,113 +66,6 @@ public class JSErrorPathPurityTest extends BaseTest {
                         Object.freeze(target);
                         try { target.value = 2; 'NO ERROR' } catch (e) { e.message }""").toString())
                 .contains("Widget");
-    }
-
-    @Test
-    public void testUncaughtThrownObjectWithAMessageGetterDoesNotRunIt() {
-        // safeExceptionToString builds the message for an uncaught throw. A message getter on the
-        // thrown value must not run there.
-        context.getGlobalObject().set(PropertyKey.fromString("getterRan"), JSBoolean.FALSE);
-        try {
-            context.eval(
-                    """
-                            const thrown = {};
-                            Object.defineProperty(thrown, 'message', {
-                                get() { globalThis.getterRan = true; return 'from getter' },
-                            });
-                            throw thrown;""");
-        } catch (RuntimeException ignored) {
-            // The throw is expected; what matters is whether the getter ran.
-        }
-        assertThat(context.getGlobalObject().get(PropertyKey.fromString("getterRan")))
-                .as("a message getter must not run while reporting an uncaught throw")
-                .isEqualTo(JSBoolean.FALSE);
-    }
-
-    @Test
-    public void testSetterFailureIsReportedEvenWhenAnExceptionWasAlreadyPending() {
-        // The setter's own failure must not be swallowed just because something was already
-        // pending. Reported through the strict-mode assignment result.
-        assertThat(context.eval(
-                """
-                        'use strict';
-                        const target = {};
-                        Object.defineProperty(target, 'x', {
-                            set() { throw new RangeError('from setter') },
-                            configurable: true,
-                        });
-                        try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
-                .toString())
-                .isEqualTo("CAUGHT RangeError: from setter");
-    }
-
-    @Test
-    public void testSucceedingSetterStillReportsSuccess() {
-        assertThat(context.eval(
-                """
-                        'use strict';
-                        let stored = 0;
-                        const target = {};
-                        Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
-                        target.x = 42;
-                        String(stored)""").toString())
-                .isEqualTo("42");
-    }
-
-    @Test
-    public void testInheritedSetterFailureIsReported() {
-        assertThat(context.eval(
-                """
-                        'use strict';
-                        const proto = {};
-                        Object.defineProperty(proto, 'x', {
-                            set() { throw new RangeError('from proto setter') },
-                            configurable: true,
-                        });
-                        const target = Object.create(proto);
-                        try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
-                .toString())
-                .isEqualTo("CAUGHT RangeError: from proto setter");
-    }
-
-    // -----------------------------------------------------------------------------------
-    // Proxy traps. The purity tests above cover accessors on ordinary objects only; the
-    // descriptor reads were still virtual, and on a JSProxy the override *is* the
-    // getOwnPropertyDescriptor trap. Reporting one thrown Proxy re-entered guest code four times.
-    // -----------------------------------------------------------------------------------
-
-    @Test
-    public void testThrownProxyDoesNotRunItsDescriptorTrap() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval(
-                    """
-                            globalThis.trapCalls = 0;
-                            globalThis.thrownProxy = new Proxy({}, {
-                              getOwnPropertyDescriptor() { trapCalls++; return undefined },
-                              get() { trapCalls++; return undefined },
-                              has() { trapCalls++; return false },
-                            });
-                            throw thrownProxy;"""))
-                    .isInstanceOf(JSException.class);
-            assertThat(isolated.eval("trapCalls").toString())
-                    .as("formatting the exception must not re-enter guest code")
-                    .isEqualTo("0");
-        }
-    }
-
-    @Test
-    public void testUncaughtThrownProxyDoesNotRunItsTrapsDuringUnwinding() {
-        // safeExceptionToString runs while the VM unwinds, before the JSException is built.
-        assertThat(context.eval(
-                """
-                        globalThis.unwindTrapCalls = 0;
-                        const proxy = new Proxy({}, {
-                          getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
-                          get() { unwindTrapCalls++; return undefined },
-                        });
-                        try { throw proxy } catch (e) { }
-                        String(unwindTrapCalls)""").toString())
-                .isEqualTo("0");
     }
 
     @Test
@@ -217,13 +90,39 @@ public class JSErrorPathPurityTest extends BaseTest {
     }
 
     @Test
-    public void testThrownProxyStillProducesAUsableMessage() {
-        // The complement: refusing to run traps must not produce an empty or misleading report.
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw new Proxy({}, {})"))
-                    .isInstanceOf(JSException.class)
-                    .hasMessageContaining("Error");
-        }
+    public void testFrozenAssignmentErrorMessageDoesNotInvokeAConstructorGetter() {
+        assertThat(context.eval(
+                """
+                        'use strict';
+                        let getterRan = false;
+                        const proto = {};
+                        Object.defineProperty(proto, 'constructor', {
+                            get() { getterRan = true; return function Tricky() {} },
+                            configurable: true,
+                        });
+                        const target = Object.create(proto);
+                        target.value = 1;
+                        Object.freeze(target);
+                        let caught = '';
+                        try { target.value = 2 } catch (e) { caught = e.name }
+                        caught + ',' + getterRan""").toString())
+                .isEqualTo("TypeError,false");
+    }
+
+    @Test
+    public void testInheritedSetterFailureIsReported() {
+        assertThat(context.eval(
+                        """
+                                'use strict';
+                                const proto = {};
+                                Object.defineProperty(proto, 'x', {
+                                    set() { throw new RangeError('from proto setter') },
+                                    configurable: true,
+                                });
+                                const target = Object.create(proto);
+                                try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
+                .toString())
+                .isEqualTo("CAUGHT RangeError: from proto setter");
     }
 
     @Test
@@ -236,6 +135,69 @@ public class JSErrorPathPurityTest extends BaseTest {
             assertThatThrownBy(() -> isolated.eval("throw { name: 'Custom', message: 'plain data' }"))
                     .isInstanceOf(JSException.class)
                     .hasMessage("Custom: plain data");
+        }
+    }
+
+    @Test
+    public void testSetterFailureIsReportedEvenWhenAnExceptionWasAlreadyPending() {
+        // The setter's own failure must not be swallowed just because something was already
+        // pending. Reported through the strict-mode assignment result.
+        assertThat(context.eval(
+                        """
+                                'use strict';
+                                const target = {};
+                                Object.defineProperty(target, 'x', {
+                                    set() { throw new RangeError('from setter') },
+                                    configurable: true,
+                                });
+                                try { target.x = 1; 'NO ERROR' } catch (e) { 'CAUGHT ' + e.name + ': ' + e.message }""")
+                .toString())
+                .isEqualTo("CAUGHT RangeError: from setter");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Proxy traps. The purity tests above cover accessors on ordinary objects only; the
+    // descriptor reads were still virtual, and on a JSProxy the override *is* the
+    // getOwnPropertyDescriptor trap. Reporting one thrown Proxy re-entered guest code four times.
+    // -----------------------------------------------------------------------------------
+
+    @Test
+    public void testSucceedingSetterStillReportsSuccess() {
+        assertThat(context.eval(
+                """
+                        'use strict';
+                        let stored = 0;
+                        const target = {};
+                        Object.defineProperty(target, 'x', { set(v) { stored = v }, configurable: true });
+                        target.x = 42;
+                        String(stored)""").toString())
+                .isEqualTo("42");
+    }
+
+    @Test
+    public void testThrownObjectWithAccessorNameFallsBackInsteadOfRunningIt() {
+        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
+            assertThatThrownBy(() -> isolated.eval(
+                    """
+                            globalThis.nameGetterRan = false;
+                            throw Object.defineProperty({ message: 'm' }, 'name', {
+                              get() { nameGetterRan = true; return 'Spoofed' },
+                            });"""))
+                    .isInstanceOf(JSException.class)
+                    .hasMessage("Error: m");
+            assertThat(isolated.eval("String(nameGetterRan)").toString()).isEqualTo("false");
+        }
+    }
+
+    @Test
+    public void testThrownObjectWithNoMessageReportsItsNameAlone() {
+        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
+            assertThatThrownBy(() -> isolated.eval("throw { name: 'Bare' }"))
+                    .isInstanceOf(JSException.class)
+                    .hasMessage("Bare");
+            assertThatThrownBy(() -> isolated.eval("throw new RangeError()"))
+                    .isInstanceOf(JSException.class)
+                    .hasMessage("RangeError");
         }
     }
 
@@ -254,14 +216,31 @@ public class JSErrorPathPurityTest extends BaseTest {
     }
 
     @Test
-    public void testThrownObjectWithNoMessageReportsItsNameAlone() {
+    public void testThrownProxyDoesNotRunItsDescriptorTrap() {
         try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval("throw { name: 'Bare' }"))
+            assertThatThrownBy(() -> isolated.eval(
+                    """
+                            globalThis.trapCalls = 0;
+                            globalThis.thrownProxy = new Proxy({}, {
+                              getOwnPropertyDescriptor() { trapCalls++; return undefined },
+                              get() { trapCalls++; return undefined },
+                              has() { trapCalls++; return false },
+                            });
+                            throw thrownProxy;"""))
+                    .isInstanceOf(JSException.class);
+            assertThat(isolated.eval("trapCalls").toString())
+                    .as("formatting the exception must not re-enter guest code")
+                    .isEqualTo("0");
+        }
+    }
+
+    @Test
+    public void testThrownProxyStillProducesAUsableMessage() {
+        // The complement: refusing to run traps must not produce an empty or misleading report.
+        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
+            assertThatThrownBy(() -> isolated.eval("throw new Proxy({}, {})"))
                     .isInstanceOf(JSException.class)
-                    .hasMessage("Bare");
-            assertThatThrownBy(() -> isolated.eval("throw new RangeError()"))
-                    .isInstanceOf(JSException.class)
-                    .hasMessage("RangeError");
+                    .hasMessageContaining("Error");
         }
     }
 
@@ -286,6 +265,42 @@ public class JSErrorPathPurityTest extends BaseTest {
                 .hasMessageContaining("Unhandled exception");
     }
 
+    @Test
+    public void testUncaughtThrownObjectWithAMessageGetterDoesNotRunIt() {
+        // safeExceptionToString builds the message for an uncaught throw. A message getter on the
+        // thrown value must not run there.
+        context.getGlobalObject().set(PropertyKey.fromString("getterRan"), JSBoolean.FALSE);
+        try {
+            context.eval(
+                    """
+                            const thrown = {};
+                            Object.defineProperty(thrown, 'message', {
+                                get() { globalThis.getterRan = true; return 'from getter' },
+                            });
+                            throw thrown;""");
+        } catch (RuntimeException ignored) {
+            // The throw is expected; what matters is whether the getter ran.
+        }
+        assertThat(context.getGlobalObject().get(PropertyKey.fromString("getterRan")))
+                .as("a message getter must not run while reporting an uncaught throw")
+                .isEqualTo(JSBoolean.FALSE);
+    }
+
+    @Test
+    public void testUncaughtThrownProxyDoesNotRunItsTrapsDuringUnwinding() {
+        // safeExceptionToString runs while the VM unwinds, before the JSException is built.
+        assertThat(context.eval(
+                """
+                        globalThis.unwindTrapCalls = 0;
+                        const proxy = new Proxy({}, {
+                          getOwnPropertyDescriptor() { unwindTrapCalls++; return undefined },
+                          get() { unwindTrapCalls++; return undefined },
+                        });
+                        try { throw proxy } catch (e) { }
+                        String(unwindTrapCalls)""").toString())
+                .isEqualTo("0");
+    }
+
     /**
      * Evaluate a function that throws the given expression, then call it from Java so the VM
      * reports the escaping value itself.
@@ -295,20 +310,5 @@ public class JSErrorPathPurityTest extends BaseTest {
     private void throwFrom(String expression) {
         JSValue function = context.eval("(function () { throw " + expression + " })");
         ((JSFunction) function).call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-    }
-
-    @Test
-    public void testThrownObjectWithAccessorNameFallsBackInsteadOfRunningIt() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext isolated = runtime.createContext()) {
-            assertThatThrownBy(() -> isolated.eval(
-                    """
-                            globalThis.nameGetterRan = false;
-                            throw Object.defineProperty({ message: 'm' }, 'name', {
-                              get() { nameGetterRan = true; return 'Spoofed' },
-                            });"""))
-                    .isInstanceOf(JSException.class)
-                    .hasMessage("Error: m");
-            assertThat(isolated.eval("String(nameGetterRan)").toString()).isEqualTo("false");
-        }
     }
 }

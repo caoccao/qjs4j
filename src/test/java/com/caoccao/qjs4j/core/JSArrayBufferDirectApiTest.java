@@ -21,9 +21,7 @@ import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import org.junit.jupiter.api.Test;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.*;
 
 /**
  * The direct {@code JSArrayBuffer} Java API must raise the same error kinds the specification
@@ -37,6 +35,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code IllegalStateException} and {@code IllegalArgumentException}, neither of which is thrown.
  */
 public class JSArrayBufferDirectApiTest extends BaseTest {
+
+    private String evalToString(String code) {
+        return JSTypeConversions.toString(context, context.eval(code)).value();
+    }
 
     private JSArrayBuffer fixedBuffer(int byteLength) {
         return context.createJSArrayBuffer(byteLength);
@@ -80,112 +82,6 @@ public class JSArrayBufferDirectApiTest extends BaseTest {
     }
 
     @Test
-    public void testTransferOnDetachedBufferRaisesTypeError() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        buffer.detach();
-        assertThatThrownBy(() -> buffer.transfer(context, 4))
-                .isInstanceOf(JSTypeErrorException.class)
-                .hasMessageContaining("detached");
-    }
-
-    @Test
-    public void testTransferWithNegativeLengthRaisesRangeError() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThatThrownBy(() -> buffer.transfer(context, -2))
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("non-negative");
-    }
-
-    @Test
-    public void testTransferToFixedLengthWithNegativeLengthRaisesRangeError() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThatThrownBy(() -> buffer.transferToFixedLength(context, -2))
-                .isInstanceOf(JSRangeErrorException.class)
-                .hasMessageContaining("non-negative");
-    }
-
-    @Test
-    public void testTransferToFixedLengthOnDetachedBufferRaisesTypeError() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        buffer.detach();
-        assertThatThrownBy(() -> buffer.transferToFixedLength(context, 4))
-                .isInstanceOf(JSTypeErrorException.class)
-                .hasMessageContaining("detached");
-    }
-
-    @Test
-    public void testSliceOnDetachedBufferRaisesTypeError() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        buffer.detach();
-        assertThatThrownBy(() -> buffer.slice(context, 0, 4))
-                .isInstanceOf(JSTypeErrorException.class)
-                .hasMessageContaining("detached");
-    }
-
-    @Test
-    public void testSliceCopiesTheRequestedRange() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        for (int index = 0; index < 8; index++) {
-            buffer.getBuffer().put(index, (byte) (index + 1));
-        }
-        JSArrayBuffer sliced = buffer.slice(context, 2, 6);
-        assertThat(sliced.getByteLength()).isEqualTo(4);
-        assertThat(sliced.getBuffer().get(0)).isEqualTo((byte) 3);
-        assertThat(sliced.getBuffer().get(3)).isEqualTo((byte) 6);
-        assertThat(buffer.isDetached()).isFalse();
-    }
-
-    @Test
-    public void testSliceWithAnEmptyRangeProducesAnEmptyBuffer() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThat(buffer.slice(context, 4, 4).getByteLength()).isZero();
-        assertThat(buffer.slice(context, 6, 2).getByteLength()).isZero();
-    }
-
-    @Test
-    public void testSliceNormalizesNegativeOffsets() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        for (int index = 0; index < 8; index++) {
-            buffer.getBuffer().put(index, (byte) (index + 1));
-        }
-        assertThat(buffer.slice(context, -3, -1).getByteLength()).isEqualTo(2);
-        assertThat(buffer.slice(context, -3, -1).getBuffer().get(0)).isEqualTo((byte) 6);
-        assertThat(buffer.slice(context, -100, 100).getByteLength()).isEqualTo(8);
-        assertThat(buffer.slice(context, 100, 100).getByteLength()).isZero();
-    }
-
-    @Test
-    public void testTransferWithTheDefaultLengthKeepsTheCurrentSize() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThat(buffer.transfer(context, -1).getByteLength()).isEqualTo(8);
-
-        JSArrayBuffer other = fixedBuffer(8);
-        assertThat(other.transferToFixedLength(context, -1).getByteLength()).isEqualTo(8);
-    }
-
-    @Test
-    public void testTransferToZeroLengthCopiesNothing() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        assertThat(buffer.transfer(context, 0).getByteLength()).isZero();
-
-        JSArrayBuffer other = fixedBuffer(8);
-        assertThat(other.transferToFixedLength(context, 0).getByteLength()).isZero();
-    }
-
-    @Test
-    public void testTransferStillWorksForAValidLength() {
-        JSArrayBuffer buffer = fixedBuffer(8);
-        JSArrayBuffer transferred = buffer.transfer(context, 4);
-        assertThat(transferred.getByteLength()).isEqualTo(4);
-        assertThat(buffer.isDetached()).isTrue();
-    }
-
-    // -----------------------------------------------------------------------------------
-    // Script-visible behaviour must be unchanged: the built-ins precheck every case above,
-    // so correcting the direct API's types must not alter what JavaScript observes.
-    // -----------------------------------------------------------------------------------
-
-    @Test
     public void testScriptVisibleResizeErrorsAreUnchanged() {
         assertThat(evalToString(
                 """
@@ -209,7 +105,109 @@ public class JSArrayBufferDirectApiTest extends BaseTest {
                 .isEqualTo("TypeError");
     }
 
-    private String evalToString(String code) {
-        return JSTypeConversions.toString(context, context.eval(code)).value();
+    @Test
+    public void testSliceCopiesTheRequestedRange() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        for (int index = 0; index < 8; index++) {
+            buffer.getBuffer().put(index, (byte) (index + 1));
+        }
+        JSArrayBuffer sliced = buffer.slice(context, 2, 6);
+        assertThat(sliced.getByteLength()).isEqualTo(4);
+        assertThat(sliced.getBuffer().get(0)).isEqualTo((byte) 3);
+        assertThat(sliced.getBuffer().get(3)).isEqualTo((byte) 6);
+        assertThat(buffer.isDetached()).isFalse();
+    }
+
+    @Test
+    public void testSliceNormalizesNegativeOffsets() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        for (int index = 0; index < 8; index++) {
+            buffer.getBuffer().put(index, (byte) (index + 1));
+        }
+        assertThat(buffer.slice(context, -3, -1).getByteLength()).isEqualTo(2);
+        assertThat(buffer.slice(context, -3, -1).getBuffer().get(0)).isEqualTo((byte) 6);
+        assertThat(buffer.slice(context, -100, 100).getByteLength()).isEqualTo(8);
+        assertThat(buffer.slice(context, 100, 100).getByteLength()).isZero();
+    }
+
+    @Test
+    public void testSliceOnDetachedBufferRaisesTypeError() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        buffer.detach();
+        assertThatThrownBy(() -> buffer.slice(context, 0, 4))
+                .isInstanceOf(JSTypeErrorException.class)
+                .hasMessageContaining("detached");
+    }
+
+    @Test
+    public void testSliceWithAnEmptyRangeProducesAnEmptyBuffer() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        assertThat(buffer.slice(context, 4, 4).getByteLength()).isZero();
+        assertThat(buffer.slice(context, 6, 2).getByteLength()).isZero();
+    }
+
+    @Test
+    public void testTransferOnDetachedBufferRaisesTypeError() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        buffer.detach();
+        assertThatThrownBy(() -> buffer.transfer(context, 4))
+                .isInstanceOf(JSTypeErrorException.class)
+                .hasMessageContaining("detached");
+    }
+
+    @Test
+    public void testTransferStillWorksForAValidLength() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        JSArrayBuffer transferred = buffer.transfer(context, 4);
+        assertThat(transferred.getByteLength()).isEqualTo(4);
+        assertThat(buffer.isDetached()).isTrue();
+    }
+
+    @Test
+    public void testTransferToFixedLengthOnDetachedBufferRaisesTypeError() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        buffer.detach();
+        assertThatThrownBy(() -> buffer.transferToFixedLength(context, 4))
+                .isInstanceOf(JSTypeErrorException.class)
+                .hasMessageContaining("detached");
+    }
+
+    @Test
+    public void testTransferToFixedLengthWithNegativeLengthRaisesRangeError() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        assertThatThrownBy(() -> buffer.transferToFixedLength(context, -2))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("non-negative");
+    }
+
+    // -----------------------------------------------------------------------------------
+    // Script-visible behaviour must be unchanged: the built-ins precheck every case above,
+    // so correcting the direct API's types must not alter what JavaScript observes.
+    // -----------------------------------------------------------------------------------
+
+    @Test
+    public void testTransferToZeroLengthCopiesNothing() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        assertThat(buffer.transfer(context, 0).getByteLength()).isZero();
+
+        JSArrayBuffer other = fixedBuffer(8);
+        assertThat(other.transferToFixedLength(context, 0).getByteLength()).isZero();
+    }
+
+    @Test
+    public void testTransferWithNegativeLengthRaisesRangeError() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        assertThatThrownBy(() -> buffer.transfer(context, -2))
+                .isInstanceOf(JSRangeErrorException.class)
+                .hasMessageContaining("non-negative");
+    }
+
+    @Test
+    public void testTransferWithTheDefaultLengthKeepsTheCurrentSize() {
+        JSArrayBuffer buffer = fixedBuffer(8);
+        assertThat(buffer.transfer(context, -1).getByteLength()).isEqualTo(8);
+
+        JSArrayBuffer other = fixedBuffer(8);
+        assertThat(other.transferToFixedLength(context, -1).getByteLength()).isEqualTo(8);
     }
 }

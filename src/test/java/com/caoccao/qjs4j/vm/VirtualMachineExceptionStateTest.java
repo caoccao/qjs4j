@@ -17,13 +17,7 @@
 package com.caoccao.qjs4j.vm;
 
 import com.caoccao.qjs4j.BaseTest;
-import com.caoccao.qjs4j.core.JSBoolean;
-import com.caoccao.qjs4j.core.JSError;
-import com.caoccao.qjs4j.core.JSFunction;
-import com.caoccao.qjs4j.core.JSNumber;
-import com.caoccao.qjs4j.core.JSUndefined;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.PropertyKey;
+import com.caoccao.qjs4j.core.*;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,27 +35,6 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
 
     private JSValue readGlobal(String name) {
         return context.getGlobalObject().get(PropertyKey.fromString(name));
-    }
-
-    @Test
-    public void testPendingExceptionSurvivesANestedBytecodeCall() {
-        context.eval("globalThis.ran = false; function inner() { globalThis.ran = true; return 1 }");
-        JSFunction inner = (JSFunction) context.eval("inner");
-
-        // A native callee that raises an error and then invokes a bytecode function re-enters
-        // VirtualMachine.execute(). The error it raised must still be pending afterwards.
-        context.throwTypeError("set before the nested call");
-        inner.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
-
-        assertThat(readGlobal("ran")).as("the nested bytecode function must still run")
-                .isEqualTo(JSBoolean.TRUE);
-        assertThat(context.hasPendingException())
-                .as("the exception set before the nested call must survive it")
-                .isTrue();
-        assertThat(context.getPendingException())
-                .isInstanceOfSatisfying(JSError.class,
-                        error -> assertThat(error.getMessage().value()).isEqualTo("set before the nested call"));
-        context.clearPendingException();
     }
 
     @Test
@@ -101,6 +74,27 @@ public class VirtualMachineExceptionStateTest extends BaseTest {
         assertThat(context.hasPendingException())
                 .as("a caught error must not leave the context in an exception state")
                 .isFalse();
+    }
+
+    @Test
+    public void testPendingExceptionSurvivesANestedBytecodeCall() {
+        context.eval("globalThis.ran = false; function inner() { globalThis.ran = true; return 1 }");
+        JSFunction inner = (JSFunction) context.eval("inner");
+
+        // A native callee that raises an error and then invokes a bytecode function re-enters
+        // VirtualMachine.execute(). The error it raised must still be pending afterwards.
+        context.throwTypeError("set before the nested call");
+        inner.call(context, JSUndefined.INSTANCE, JSValue.NO_ARGS);
+
+        assertThat(readGlobal("ran")).as("the nested bytecode function must still run")
+                .isEqualTo(JSBoolean.TRUE);
+        assertThat(context.hasPendingException())
+                .as("the exception set before the nested call must survive it")
+                .isTrue();
+        assertThat(context.getPendingException())
+                .isInstanceOfSatisfying(JSError.class,
+                        error -> assertThat(error.getMessage().value()).isEqualTo("set before the nested call"));
+        context.clearPendingException();
     }
 
     @Test

@@ -16,12 +16,7 @@
 
 package com.caoccao.qjs4j.cli;
 
-import com.caoccao.qjs4j.core.JSArray;
-import com.caoccao.qjs4j.core.JSContext;
-import com.caoccao.qjs4j.core.JSRuntime;
-import com.caoccao.qjs4j.core.JSString;
-import com.caoccao.qjs4j.core.JSValue;
-import com.caoccao.qjs4j.core.PropertyKey;
+import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSException;
 
 import java.io.IOException;
@@ -48,8 +43,44 @@ public final class QuickJSInterpreter {
     private static final int EXIT_FAILURE = 1;
     private static final int EXIT_USAGE = 2;
 
+    /**
+     * Render a JavaScript error for the terminal, including its stack when it has one.
+     * <p>
+     * The stack is read out of physical storage, never through {@code Get(error, "stack")}. An
+     * ordinary property read runs a {@code stack} getter or a Proxy trap on the thrown value, which
+     * means the failing script chooses what the interpreter prints while reporting its own crash:
+     * it can spoof the trace, do unbounded work, or throw a second error out of the reporting path.
+     * A thrown Proxy and an accessor {@code stack} both fall back to the headline.
+     *
+     * @param exception the uncaught exception
+     * @return the text to print
+     */
+    private static String describe(JSException exception) {
+        String headline = exception.getMessage();
+        JSValue errorValue = exception.getErrorValue();
+        if (errorValue instanceof com.caoccao.qjs4j.core.JSObject errorObject) {
+            JSValue stack = errorObject.getOwnDataPropertyForDiagnostics(PropertyKey.STACK);
+            if (stack instanceof JSString stackString && !stackString.value().isBlank()) {
+                return headline + System.lineSeparator() + stackString.value().stripTrailing();
+            }
+        }
+        return headline;
+    }
+
     public static void main(String[] args) {
         System.exit(run(args));
+    }
+
+    private static void printUsage() {
+        System.err.println("""
+                Usage: qjs4j [options] [script.js] [args...]
+                       qjs4j -e <code>
+                       qjs4j                       start the REPL
+                
+                Options:
+                  -m, --module    evaluate the script as an ES module
+                  -e, --eval      evaluate the given source instead of a file
+                  -h, --help      show this message""");
     }
 
     /**
@@ -139,30 +170,6 @@ public final class QuickJSInterpreter {
     }
 
     /**
-     * Render a JavaScript error for the terminal, including its stack when it has one.
-     * <p>
-     * The stack is read out of physical storage, never through {@code Get(error, "stack")}. An
-     * ordinary property read runs a {@code stack} getter or a Proxy trap on the thrown value, which
-     * means the failing script chooses what the interpreter prints while reporting its own crash:
-     * it can spoof the trace, do unbounded work, or throw a second error out of the reporting path.
-     * A thrown Proxy and an accessor {@code stack} both fall back to the headline.
-     *
-     * @param exception the uncaught exception
-     * @return the text to print
-     */
-    private static String describe(JSException exception) {
-        String headline = exception.getMessage();
-        JSValue errorValue = exception.getErrorValue();
-        if (errorValue instanceof com.caoccao.qjs4j.core.JSObject errorObject) {
-            JSValue stack = errorObject.getOwnDataPropertyForDiagnostics(PropertyKey.STACK);
-            if (stack instanceof JSString stackString && !stackString.value().isBlank()) {
-                return headline + System.lineSeparator() + stackString.value().stripTrailing();
-            }
-        }
-        return headline;
-    }
-
-    /**
      * Expose the script name and its trailing arguments as {@code globalThis.scriptArgs}.
      *
      * @param context    the context to populate
@@ -176,17 +183,5 @@ public final class QuickJSInterpreter {
             argv.push(new JSString(scriptArg));
         }
         context.getGlobalObject().set(PropertyKey.fromString("scriptArgs"), argv);
-    }
-
-    private static void printUsage() {
-        System.err.println("""
-                Usage: qjs4j [options] [script.js] [args...]
-                       qjs4j -e <code>
-                       qjs4j                       start the REPL
-
-                Options:
-                  -m, --module    evaluate the script as an ES module
-                  -e, --eval      evaluate the given source instead of a file
-                  -h, --help      show this message""");
     }
 }

@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+
 import java.lang.ref.WeakReference;
 
 /**

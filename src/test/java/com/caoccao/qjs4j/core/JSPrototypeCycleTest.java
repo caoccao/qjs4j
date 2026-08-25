@@ -58,61 +58,15 @@ public class JSPrototypeCycleTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testCycleRejectedAtDepthOne() {
-        assertThat(cycleAttempt(1)).isEqualTo("TypeError");
-    }
+    public void testAPreExistingCycleContainingTheTargetIsRejected() {
+        JSObject target = context.createJSObject();
+        JSObject middle = context.createJSObject();
+        middle.setPrototype(target);
+        target.setPrototype(middle);
 
-    @Test
-    @Timeout(60)
-    public void testCycleRejectedJustBelowTheOldCutoff() {
-        assertThat(cycleAttempt(999)).isEqualTo("TypeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCycleRejectedAtTheOldCutoff() {
-        assertThat(cycleAttempt(1000)).isEqualTo("TypeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCycleRejectedJustBeyondTheOldCutoff() {
-        // 1,001 and 1,002 are the depths the bounded walk reported as acyclic.
-        assertThat(cycleAttempt(1001)).isEqualTo("TypeError");
-        assertThat(cycleAttempt(1002)).isEqualTo("TypeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testCycleRejectedFarBeyondTheOldCutoff() {
-        assertThat(cycleAttempt(5000)).isEqualTo("TypeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testDirectSelfAssignmentIsRejected() {
-        assertThat(evalToString(
-                """
-                        (function () {
-                          let a = {};
-                          try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
-                        })()"""))
-                .isEqualTo("TypeError");
-    }
-
-    @Test
-    @Timeout(60)
-    public void testDeepAcyclicChainIsStillAccepted() {
-        // The complement: removing the cutoff must not start rejecting legitimate deep chains.
-        assertThat(evalToString(
-                """
-                        (function () {
-                          let a = {};
-                          let proposed = {};
-                          for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
-                          try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
-                        })()"""))
-                .isEqualTo("ALLOWED");
+        JSObject head = context.createJSObject();
+        head.setPrototype(middle);
+        assertThat(target.setPrototypeChecked(head)).isEqualTo(JSObject.SetPrototypeResult.CIRCULAR);
     }
 
     @Test
@@ -132,40 +86,59 @@ public class JSPrototypeCycleTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testAPreExistingCycleContainingTheTargetIsRejected() {
-        JSObject target = context.createJSObject();
-        JSObject middle = context.createJSObject();
-        middle.setPrototype(target);
-        target.setPrototype(middle);
-
-        JSObject head = context.createJSObject();
-        head.setPrototype(middle);
-        assertThat(target.setPrototypeChecked(head)).isEqualTo(JSObject.SetPrototypeResult.CIRCULAR);
+    public void testCycleRejectedAtDepthOne() {
+        assertThat(cycleAttempt(1)).isEqualTo("TypeError");
     }
 
     @Test
     @Timeout(60)
-    public void testTheOtherSetPrototypeRejectionsStillApply() {
-        // The circularity check is one of four outcomes; the rest must be unchanged by replacing it.
-        JSObject target = context.createJSObject();
-        JSObject proto = context.createJSObject();
+    public void testCycleRejectedAtTheOldCutoff() {
+        assertThat(cycleAttempt(1000)).isEqualTo("TypeError");
+    }
 
-        // Same prototype: a no-op success, checked before anything else.
-        assertThat(target.setPrototypeChecked(target.getPrototype()))
-                .isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
+    @Test
+    @Timeout(60)
+    public void testCycleRejectedFarBeyondTheOldCutoff() {
+        assertThat(cycleAttempt(5000)).isEqualTo("TypeError");
+    }
 
-        // Non-extensible.
-        JSObject sealed = context.createJSObject();
-        sealed.preventExtensions();
-        assertThat(sealed.setPrototypeChecked(proto))
-                .isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
+    @Test
+    @Timeout(60)
+    public void testCycleRejectedJustBelowTheOldCutoff() {
+        assertThat(cycleAttempt(999)).isEqualTo("TypeError");
+    }
 
-        // Immutable prototype exotic object: Object.prototype.
+    @Test
+    @Timeout(60)
+    public void testCycleRejectedJustBeyondTheOldCutoff() {
+        // 1,001 and 1,002 are the depths the bounded walk reported as acyclic.
+        assertThat(cycleAttempt(1001)).isEqualTo("TypeError");
+        assertThat(cycleAttempt(1002)).isEqualTo("TypeError");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testDeepAcyclicChainIsStillAccepted() {
+        // The complement: removing the cutoff must not start rejecting legitimate deep chains.
         assertThat(evalToString(
                 """
                         (function () {
-                          try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
-                          catch (e) { return e.name }
+                          let a = {};
+                          let proposed = {};
+                          for (let i = 0; i < 5000; i++) proposed = Object.create(proposed);
+                          try { Object.setPrototypeOf(a, proposed); return 'ALLOWED' } catch (e) { return e.name }
+                        })()"""))
+                .isEqualTo("ALLOWED");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testDirectSelfAssignmentIsRejected() {
+        assertThat(evalToString(
+                """
+                        (function () {
+                          let a = {};
+                          try { Object.setPrototypeOf(a, a); return 'ALLOWED' } catch (e) { return e.name }
                         })()"""))
                 .isEqualTo("TypeError");
     }
@@ -197,5 +170,32 @@ public class JSPrototypeCycleTest extends BaseTest {
                           try { Object.setPrototypeOf(a, child); return 'ALLOWED' } catch (e) { return e.name }
                         })()"""))
                 .isEqualTo("ALLOWED");
+    }
+
+    @Test
+    @Timeout(60)
+    public void testTheOtherSetPrototypeRejectionsStillApply() {
+        // The circularity check is one of four outcomes; the rest must be unchanged by replacing it.
+        JSObject target = context.createJSObject();
+        JSObject proto = context.createJSObject();
+
+        // Same prototype: a no-op success, checked before anything else.
+        assertThat(target.setPrototypeChecked(target.getPrototype()))
+                .isEqualTo(JSObject.SetPrototypeResult.SUCCESS);
+
+        // Non-extensible.
+        JSObject sealed = context.createJSObject();
+        sealed.preventExtensions();
+        assertThat(sealed.setPrototypeChecked(proto))
+                .isEqualTo(JSObject.SetPrototypeResult.NOT_EXTENSIBLE);
+
+        // Immutable prototype exotic object: Object.prototype.
+        assertThat(evalToString(
+                """
+                        (function () {
+                          try { Object.setPrototypeOf(Object.prototype, {}); return 'ALLOWED' }
+                          catch (e) { return e.name }
+                        })()"""))
+                .isEqualTo("TypeError");
     }
 }

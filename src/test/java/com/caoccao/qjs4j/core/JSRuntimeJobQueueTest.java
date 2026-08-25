@@ -34,28 +34,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class JSRuntimeJobQueueTest {
 
     @Test
-    public void testRunJobsDrainsHostJobsOnly() {
-        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
-            boolean[] hostJobRan = {false};
-            runtime.enqueueJob(() -> hostJobRan[0] = true);
-            // enqueueMicrotask directly: eval() drains the queue itself before returning.
-            context.enqueueMicrotask(() -> context.getGlobalObject()
-                    .set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
-
-            assertThat(runtime.hasPendingJobs()).isTrue();
-            assertThat(runtime.runJobs()).isEqualTo(1);
-
-            assertThat(hostJobRan[0]).isTrue();
-            assertThat(runtime.hasPendingJobs()).isFalse();
-            assertThat(context.getMicrotaskQueue().hasPendingMicrotasks())
-                    .as("runJobs() must not drain a context's microtask queue")
-                    .isTrue();
-            assertThat(context.getGlobalObject().get(PropertyKey.fromString("microtaskRan")))
-                    .isEqualTo(JSUndefined.INSTANCE);
-        }
-    }
-
-    @Test
     public void testProcessMicrotasksSettlesWhatRunJobsLeaves() {
         try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
             context.enqueueMicrotask(() -> context.getGlobalObject()
@@ -78,6 +56,28 @@ public class JSRuntimeJobQueueTest {
                     .isFalse();
             // eval() drains microtasks before returning, so the reaction has already run.
             assertThat(context.eval("settled").toString()).isEqualTo("yes");
+        }
+    }
+
+    @Test
+    public void testRunJobsDrainsHostJobsOnly() {
+        try (JSRuntime runtime = new JSRuntime(); JSContext context = runtime.createContext()) {
+            boolean[] hostJobRan = {false};
+            runtime.enqueueJob(() -> hostJobRan[0] = true);
+            // enqueueMicrotask directly: eval() drains the queue itself before returning.
+            context.enqueueMicrotask(() -> context.getGlobalObject()
+                    .set(PropertyKey.fromString("microtaskRan"), JSBoolean.TRUE));
+
+            assertThat(runtime.hasPendingJobs()).isTrue();
+            assertThat(runtime.runJobs()).isEqualTo(1);
+
+            assertThat(hostJobRan[0]).isTrue();
+            assertThat(runtime.hasPendingJobs()).isFalse();
+            assertThat(context.getMicrotaskQueue().hasPendingMicrotasks())
+                    .as("runJobs() must not drain a context's microtask queue")
+                    .isTrue();
+            assertThat(context.getGlobalObject().get(PropertyKey.fromString("microtaskRan")))
+                    .isEqualTo(JSUndefined.INSTANCE);
         }
     }
 

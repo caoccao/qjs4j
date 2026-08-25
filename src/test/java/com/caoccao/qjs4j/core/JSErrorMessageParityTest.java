@@ -31,14 +31,11 @@ import org.junit.jupiter.api.Test;
 public class JSErrorMessageParityTest extends BaseJavetTest {
 
     @Test
-    public void testTemporalDeadZoneMessageNamesTheVariable() {
+    public void testNullPropertyReadMessage() {
         assertStringWithJavet(
-                "try { tz; let tz = 1 } catch (e) { e.message }",
-                "try { tc; const tc = 1 } catch (e) { e.message }",
-                """
-                        (function () {
-                            try { inner; let inner = 1 } catch (e) { return e.message }
-                        })()""");
+                "try { null.foo } catch (e) { e.message }",
+                "try { null.length } catch (e) { e.message }",
+                "try { null['computed'] } catch (e) { e.message }");
     }
 
     @Test
@@ -51,11 +48,14 @@ public class JSErrorMessageParityTest extends BaseJavetTest {
     }
 
     @Test
-    public void testNullPropertyReadMessage() {
+    public void testTemporalDeadZoneMessageNamesTheVariable() {
         assertStringWithJavet(
-                "try { null.foo } catch (e) { e.message }",
-                "try { null.length } catch (e) { e.message }",
-                "try { null['computed'] } catch (e) { e.message }");
+                "try { tz; let tz = 1 } catch (e) { e.message }",
+                "try { tc; const tc = 1 } catch (e) { e.message }",
+                """
+                        (function () {
+                            try { inner; let inner = 1 } catch (e) { return e.message }
+                        })()""");
     }
 
     @Test

@@ -59,6 +59,13 @@ public class LabelReferenceTest extends BaseJavetTest {
     }
 
     @Test
+    public void testLetLabelInSloppyMode() {
+        // `let` is a valid label in sloppy mode only; V8 decides what strict mode does and the
+        // strict variant is generated automatically by the harness.
+        assertStringWithJavet("lbl: { break lbl; } 'ok'");
+    }
+
+    @Test
     public void testNestedLabelsWithContextualKeywords() {
         assertStringWithJavet(
                 """
@@ -74,20 +81,6 @@ public class LabelReferenceTest extends BaseJavetTest {
     }
 
     @Test
-    public void testLetLabelInSloppyMode() {
-        // `let` is a valid label in sloppy mode only; V8 decides what strict mode does and the
-        // strict variant is generated automatically by the harness.
-        assertStringWithJavet("lbl: { break lbl; } 'ok'");
-    }
-
-    @Test
-    public void testUndefinedLabelIsStillASyntaxError() {
-        assertErrorWithJavet(
-                "of: { break as; }",
-                "outer: { break missing; }");
-    }
-
-    @Test
     public void testNewlineBeforeLabelStillTriggersAutomaticSemicolonInsertion() {
         // ASI applies before the label, so this is an unlabelled `continue` — legal in a loop.
         assertStringWithJavet(
@@ -99,5 +92,12 @@ public class LabelReferenceTest extends BaseJavetTest {
                             of;
                         }
                         String(count)""");
+    }
+
+    @Test
+    public void testUndefinedLabelIsStillASyntaxError() {
+        assertErrorWithJavet(
+                "of: { break as; }",
+                "outer: { break missing; }");
     }
 }

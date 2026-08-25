@@ -16,9 +16,9 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
-import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSException;
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -273,7 +273,7 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     /**
      * Resize the ArrayBuffer to the specified size.
      * ES2024 25.1.5.3
-     *
+     * <p>
      * Detached and non-resizable are receiver-state conditions, so they are {@code TypeError}s
      * per ES2024 25.1.6.7 steps 3-4; only an out-of-range requested length is a {@code RangeError}
      * (step 6). The JavaScript built-in prechecks both, which is why the wrong type on this direct
