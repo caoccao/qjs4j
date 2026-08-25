@@ -17,19 +17,22 @@
 package com.caoccao.qjs4j.regexp;
 
 import com.caoccao.qjs4j.BaseJavetTest;
+import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.StringJoiner;
 
 /**
  * A guest-supplied pattern must not choose how much memory the matcher claims — and the ceiling it
  * runs into has to be V8's, not one picked for tidiness.
  * <p>
- * Every assertion here runs the same source through V8 and through qjs4j, because V8's behaviour is
- * the specification for these limits in a way no reasoning about them is. Two earlier attempts at
- * this budget were argued from first principles and both were wrong: the first narrowed the ceiling
- * to a round number, the second derived it from the old entry count. Both broke Test262's whole
- * {@code property-escapes} corpus, which matches a greedy {@code +} against every code point in
- * Unicode.
+ * Every limit comparison here runs the same source through V8 and through qjs4j, because V8's
+ * behaviour is the specification for these limits in a way no reasoning about them is. Two earlier
+ * attempts at this budget were argued from first principles and both were wrong: the first narrowed
+ * the ceiling to a round number, the second derived it from the old entry count. Both broke
+ * Test262's whole {@code property-escapes} corpus, which matches a greedy {@code +} against every
+ * code point in Unicode.
  * <p>
  * The cap is now {@code RegExpStack::kMaximumStackSize} — {@code 64 * MB}, from V8's
  * {@code src/regexp/regexp-stack.h} — and the backtrack frame was cut from 84 bytes to 12 so that
@@ -41,6 +44,27 @@ import org.junit.jupiter.api.Timeout;
  * V8 for that group.
  */
 public class RegExpResourceBoundTest extends BaseJavetTest {
+
+    private String allStringsInUnicodeProperty(String propertyName) {
+        UnicodePropertyResolver.SequencePropertyResult property =
+                UnicodePropertyResolver.resolveSequenceProperty(propertyName);
+        StringJoiner strings = new StringJoiner(",");
+        int[] ranges = property.codePointRanges();
+        for (int i = 0; i < ranges.length; i += 2) {
+            for (int codePoint = ranges[i]; codePoint <= ranges[i + 1]; codePoint++) {
+                strings.add(toJavaScriptString(codePoint));
+            }
+        }
+        for (int[] sequence : property.sequences()) {
+            strings.add(toJavaScriptString(sequence));
+        }
+        return """
+                (function () {
+                  const regExp = /^\\p{%2$s}$/v;
+                  const subject = [%1$s].filter(string => regExp.test(string)).join('');
+                  try { return String(/^\\p{%2$s}+$/v.test(subject)) } catch (e) { return e.name }
+                })()""".formatted(strings, propertyName);
+    }
 
     /**
      * Source that builds a subject containing every Unicode code point, then applies a pattern.
@@ -128,5 +152,26 @@ public class RegExpResourceBoundTest extends BaseJavetTest {
                           const match = pattern.exec('x');
                           return match.length + ',' + match[match.length - 1];
                         })()""".formatted(groups(200)));
+    }
+
+    @Test
+    @Timeout(300)
+    public void testRgiEmojiPropertyMatchesAllStringsAsOneSubject() {
+        // This is the same end-to-end shape as Test262's generated RGI_Emoji.js: concatenate every
+        // string in the property, then match the complete subject with a greedy +. Each failed
+        // branch pops a saved state before trying the next alternative, which exposed a leak of
+        // popped states even though the live backtrack stack remained shallow.
+        // This subject comes from qjs4j's Unicode 17 tables. The embedded V8 currently uses an
+        // older Unicode version, so each engine first filters the list through its own RGI_Emoji
+        // table. That isolates the resource-bound comparison from Unicode data-version skew.
+        assertStringWithJavet(allStringsInUnicodeProperty("RGI_Emoji"));
+    }
+
+    private String toJavaScriptString(int... codePoints) {
+        StringBuilder string = new StringBuilder("'");
+        for (int codePoint : codePoints) {
+            string.append("\\u{").append(Integer.toHexString(codePoint)).append('}');
+        }
+        return string.append('\'').toString();
     }
 }

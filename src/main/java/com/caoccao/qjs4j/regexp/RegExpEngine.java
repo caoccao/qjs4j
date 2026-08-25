@@ -1138,14 +1138,19 @@ public final class RegExpEngine {
             System.arraycopy(stateData, stateOffset, captureStarts, 0, captureCount);
             System.arraycopy(stateData, stateOffset + captureCount, captureEnds, 0, captureCount);
             System.arraycopy(stateData, stateOffset + captureCount + captureCount, registers, 0, registerCount);
-            // Reclaim every state saved after this entry's. Offsets are non-decreasing along the
-            // entry stack — an entry either appends a state or reuses the previous entry's — so
-            // anything above this offset belongs to entries that have already been popped. Without
-            // this, a push/pop cycle that dirties state each time would grow stateData for the
-            // whole match; with it, the store is bounded by the stack depth, as it was when state
-            // lived inline in the entry.
-            stateTop = stateOffset + stateSize;
-            lastStateOffset = stateOffset;
+            // The popped entry no longer owns a slot in the saved-state store. Retain only the
+            // states referenced by entries that remain on the stack. Offsets are non-decreasing —
+            // an entry either appends a state or reuses the previous entry's — so the final entry
+            // also references the final live state. Keeping the popped entry's state here leaked
+            // one state on every pop/push cycle and made a shallow alternation accumulate saved
+            // states for the whole match.
+            if (backtrackTop == 0) {
+                stateTop = 0;
+                lastStateOffset = 0;
+            } else {
+                lastStateOffset = backtrackData[backtrackTop - BACKTRACK_ENTRY_SIZE + 2];
+                stateTop = lastStateOffset + stateSize;
+            }
             stateDirty = true;
             return backtrackData[base];
         }
