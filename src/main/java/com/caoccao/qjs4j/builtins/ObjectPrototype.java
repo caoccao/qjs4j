@@ -492,6 +492,15 @@ public final class ObjectPrototype {
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
+            // A blocked array length truncation failed on a delete, not on extensibility. V8 names
+            // the element that stopped it; saying "object is not extensible" here reported a reason
+            // that was not merely differently worded but untrue — the array is extensible.
+            if (obj instanceof JSArray array) {
+                JSValue blockedTruncationError = array.throwBlockedLengthTruncation();
+                if (blockedTruncationError != null) {
+                    return blockedTruncationError;
+                }
+            }
             return context.throwTypeError("Cannot define property " + key.toPropertyString() + ", object is not extensible");
         }
         return obj;

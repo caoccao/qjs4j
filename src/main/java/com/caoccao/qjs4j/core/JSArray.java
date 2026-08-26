@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.util.*;
 
 /**
@@ -30,14 +32,26 @@ import java.util.*;
  */
 public final class JSArray extends JSObject {
     public static final int INITIAL_CAPACITY = 8;
+    /**
+     * Upper bound on dense element storage. Beyond this an array falls back to sparse storage.
+     */
+    public static final int MAX_DENSE_SIZE = 10000;
     public static final String NAME = "Array";
     private static final long MAX_ARRAY_INDEX = 0xFFFF_FFFEL; // 2^32 - 2
     private static final long MAX_ARRAY_LENGTH = 0xFFFF_FFFFL; // 2^32 - 1
-    private static final int MAX_DENSE_SIZE = 10000;
+    /**
+     * Bound on the prototype chain walk performed before an indexed write to a hole.
+     * A real Array prototype chain is two links; the bound only stops a cyclic chain.
+     */
+    private static final int MAX_PROTOTYPE_SET_DEPTH = 1000;
     private static final double UINT32_MAX_DOUBLE = 4_294_967_295d;
     private static final double UINT32_MODULO = 4_294_967_296d;
     private JSValue[] denseArray;
     private long length;
+    /**
+     * Index of the non-configurable element that stopped the most recent length truncation, or -1.
+     */
+    private long lengthTruncationBlockedIndex = -1;
 
     /**
      * Create an empty array.
@@ -54,12 +68,28 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Create an array with a specific initial length.
+     * Create an array with a specific initial length and a dense-storage capacity hint.
+     * <p>
+     * The hint is clamped into {@code [INITIAL_CAPACITY, MAX_DENSE_SIZE]}. Clamping it down to
+     * {@code INITIAL_CAPACITY} with {@code Math.min} made every capacity hint in the engine a
+     * no-op, and let a negative hint — produced by narrowing a length above {@code 2^31} to
+     * {@code int} — reach {@code new JSValue[capacity]} as a {@link NegativeArraySizeException}.
+     *
+     * @param context  the owning context
+     * @param length   the array length; must be a valid ECMAScript array length
+     * @param capacity the dense-storage capacity hint
+     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
      */
     public JSArray(JSContext context, long length, int capacity) {
         super(context);
+        // Validate the semantic length, not only the capacity hint. Clamping the hint stopped the
+        // NegativeArraySizeException a negative length used to cause, but it hid the invalid state
+        // rather than rejecting it: createJSArray(-1) produced an array reporting length -1, and
+        // createJSArray(2^32) one reporting 4294967296. Neither is an ECMAScript array length, and
+        // every later operation on such an array is undefined behaviour.
+        requireValidLength(length);
         this.length = length;
-        capacity = Math.min(capacity, INITIAL_CAPACITY);
+        capacity = Math.max(INITIAL_CAPACITY, Math.min(capacity, MAX_DENSE_SIZE));
         this.denseArray = new JSValue[capacity];
         // Mark as array class (equivalent to QuickJS class_id == JS_CLASS_ARRAY)
         this.arrayObject = true;
@@ -125,6 +155,22 @@ public final class JSArray extends JSObject {
         return array;
     }
 
+    /**
+     * Reject a length that no ECMAScript array can have.
+     * <p>
+     * A public engine API must raise an error the engine's own machinery understands, not a raw
+     * {@code java.lang} exception that is neither catchable from JavaScript nor typed for
+     * embedders.
+     *
+     * @param length the candidate length
+     * @throws JSRangeErrorException when {@code length} is not in {@code [0, 2^32 - 1]}
+     */
+    private static void requireValidLength(long length) {
+        if (length < 0 || length > MAX_ARRAY_LENGTH) {
+            throw new JSRangeErrorException("Invalid array length: " + length);
+        }
+    }
+
     private static Long toArrayLengthFromNumber(double value) {
         if (!(value >= 0 && value <= UINT32_MAX_DOUBLE)) {
             return null;
@@ -143,6 +189,21 @@ public final class JSArray extends JSObject {
             modulo += UINT32_MODULO;
         }
         return (long) modulo;
+    }
+
+    /**
+     * Take the index that last blocked a length truncation, clearing it.
+     * <p>
+     * Set by {@link #defineProperty(PropertyKey, PropertyDescriptor)} and read by whichever caller
+     * is going to throw, so that a non-throwing caller such as {@code Reflect.defineProperty} is
+     * unaffected.
+     *
+     * @return the blocking index, or -1 when the last length truncation was not blocked
+     */
+    private long consumeLengthTruncationBlockedIndex() {
+        long blockedIndex = lengthTruncationBlockedIndex;
+        lengthTruncationBlockedIndex = -1;
+        return blockedIndex;
     }
 
     @Override
@@ -199,15 +260,25 @@ public final class JSArray extends JSObject {
             // Non-configurable elements stop deletion (QuickJS set_array_length).
             // Scan shape properties to find the highest non-configurable index >= newLen.
             long actualNewLength = newLength;
+            long blockingIndex = -1;
             for (PropertyKey shapeKey : shape.getPropertyKeys()) {
                 long idx = shapeKey.toArrayIndex();
                 if (idx >= newLength && idx < oldLength) {
-                    PropertyDescriptor elemDesc = super.getOwnPropertyDescriptor(shapeKey);
+                    PropertyDescriptor elemDesc = super.getOwnPropertyDescriptorRaw(shapeKey);
                     if (elemDesc != null && !elemDesc.isConfigurable()) {
+                        if (idx + 1 > actualNewLength) {
+                            blockingIndex = idx;
+                        }
                         actualNewLength = Math.max(actualNewLength, idx + 1);
                     }
                 }
             }
+            // Remember which element stopped the truncation. A throwing caller reports that, the
+            // way V8 does — the delete is the operation that actually failed, so "Cannot delete
+            // property 'N' of [object Array]" says what went wrong where a message about the
+            // length assignment does not. Recorded rather than thrown here because
+            // Reflect.defineProperty must return false without an exception.
+            lengthTruncationBlockedIndex = blockingIndex;
 
             // Truncate to the actual achievable length
             setLength(actualNewLength);
@@ -385,7 +456,7 @@ public final class JSArray extends JSObject {
         long index = key.toArrayIndex();
         if (index >= 0) {
             // Check shape for accessor properties first (e.g., Object.defineProperty with getter)
-            PropertyDescriptor desc = super.getOwnPropertyDescriptor(key);
+            PropertyDescriptor desc = super.getOwnPropertyDescriptorRaw(key);
             if (desc != null && desc.hasGetter()) {
                 return super.get(key);
             }
@@ -419,8 +490,8 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
-        PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
+        PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
         if (descriptor != null) {
             return descriptor;
         }
@@ -442,8 +513,9 @@ public final class JSArray extends JSObject {
                 }
             }
         } else {
-            PropertyDescriptor largeIndexDescriptor = super.getOwnPropertyDescriptor(PropertyKey.fromString(Long.toString(index)));
-            return largeIndexDescriptor;
+            // getOwnPropertyDescriptorRaw, not getOwnPropertyDescriptor: the public method
+            // dispatches back to this override, so `super.` on it recurses forever.
+            return super.getOwnPropertyDescriptorRaw(PropertyKey.fromString(Long.toString(index)));
         }
 
         return null;
@@ -514,7 +586,7 @@ public final class JSArray extends JSObject {
             long index = key.toArrayIndex();
             if (index >= 0) {
                 if (!seenNumericIndices.contains(index)) {
-                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                     if (descriptor != null && (!enumerableOnly || descriptor.isEnumerable())) {
                         if (seenNumericIndices.add(index)) {
                             if (index <= Integer.MAX_VALUE) {
@@ -533,7 +605,7 @@ public final class JSArray extends JSObject {
                         symbolKeys.add(key);
                     }
                 } else {
-                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                    PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                     if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
                         symbolKeys.add(key);
                     }
@@ -545,7 +617,7 @@ public final class JSArray extends JSObject {
                     stringKeys.add(key);
                 }
             } else {
-                PropertyDescriptor descriptor = super.getOwnPropertyDescriptor(key);
+                PropertyDescriptor descriptor = super.getOwnPropertyDescriptorRaw(key);
                 if (descriptor != null && descriptor.isEnumerable() && seenPropertyKeys.add(key)) {
                     stringKeys.add(key);
                 }
@@ -626,13 +698,25 @@ public final class JSArray extends JSObject {
     }
 
     private boolean hasPrototypeSetInterference(PropertyKey key) {
+        // Runs on every element write to a hole, which includes every write that grows an array.
+        // It used to allocate a HashSet<JSObject> per call purely as a cycle guard, and to take a
+        // defensive copy of each descriptor it only null-checked. A depth bound and the raw
+        // descriptor accessor give the same protection with no allocation at all.
+        //
+        // The two answers are not symmetric. False means "nothing on the chain can observe this
+        // write", which licenses the dense fast path and skips ordinary [[Set]]; true only costs a
+        // slower, fully specification-compliant write. So running out of depth must answer true.
+        // Answering false there meant a setter 1,001 links up was never called and an own element
+        // was created instead — `array[0] = 1` silently diverging from [[Set]] by prototype depth.
         JSObject prototypeObject = getPrototype();
-        Set<JSObject> visitedObjects = new HashSet<>();
-        while (prototypeObject != null && visitedObjects.add(prototypeObject)) {
+        for (int depth = 0; prototypeObject != null; depth++) {
+            if (depth >= MAX_PROTOTYPE_SET_DEPTH) {
+                return true;
+            }
             if (prototypeObject instanceof JSTypedArray || prototypeObject instanceof JSProxy) {
                 return true;
             }
-            if (prototypeObject.getOwnPropertyDescriptor(key) != null) {
+            if (prototypeObject.getOwnPropertyDescriptorRaw(key) != null) {
                 return true;
             }
             prototypeObject = prototypeObject.getPrototype();
@@ -793,10 +877,6 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Override set by PropertyKey with context to handle array indices.
-     */
-
-    /**
      * Override set by PropertyKey to handle array indices.
      */
     @Override
@@ -813,7 +893,8 @@ public final class JSArray extends JSObject {
             // Route through ArraySetLength so internal `length` and element truncation
             // stay in sync with the observable length data property.
             boolean result = setWithResult(key, value, this);
-            if (!result && !this.context.hasPendingException() && this.context.isStrictMode()) {
+            if (!result && !this.context.hasPendingException() && this.context.isStrictMode()
+                    && throwBlockedLengthTruncation() == null) {
                 this.context.throwTypeError(
                         "Cannot assign to read only property 'length' of object '[object Array]'");
             }
@@ -828,9 +909,7 @@ public final class JSArray extends JSObject {
      * When length is reduced, elements beyond the new length are deleted.
      */
     public void setLength(long newLength) {
-        if (newLength < 0 || newLength > MAX_ARRAY_LENGTH) {
-            throw new IllegalArgumentException("Invalid array length: " + newLength);
-        }
+        requireValidLength(newLength);
 
         if (newLength < length) {
             // Truncate array - delete elements beyond new length
@@ -948,11 +1027,42 @@ public final class JSArray extends JSObject {
     }
 
     /**
+     * Raise the {@code TypeError} for a length truncation a non-configurable element blocked.
+     * <p>
+     * V8 names the element rather than the length assignment, because the delete is the operation
+     * that actually failed. Both throwing callers — a strict-mode {@code length} assignment and
+     * {@code Object.defineProperty} — report it through here so the message stays in one place;
+     * a non-throwing caller such as {@code Reflect.defineProperty} never calls it and still just
+     * sees {@code false}.
+     *
+     * @return the error value, or {@code null} when the last truncation was not blocked
+     */
+    public JSValue throwBlockedLengthTruncation() {
+        long blockedIndex = consumeLengthTruncationBlockedIndex();
+        if (blockedIndex < 0) {
+            return null;
+        }
+        return context.throwTypeError(
+                "Cannot delete property '" + blockedIndex + "' of " + getObjectDescriptionForError(true));
+    }
+
+    /**
      * Convert array to a Java array.
+     * <p>
+     * A JavaScript array length is a {@code uint32} and can exceed {@code Integer.MAX_VALUE}, which
+     * no Java array can hold. Narrowing the length to {@code int} produced a negative size and a
+     * {@link NegativeArraySizeException}; the range is checked explicitly instead.
+     *
+     * @return the array elements
+     * @throws JSRangeErrorException when the length exceeds {@code Integer.MAX_VALUE}
      */
     public JSValue[] toArray() {
+        if (length > Integer.MAX_VALUE) {
+            throw new JSRangeErrorException(
+                    "Array length " + length + " exceeds the maximum Java array size");
+        }
         JSValue[] result = new JSValue[(int) length];
-        for (int i = 0; i < length; i++) {
+        for (int i = 0; i < result.length; i++) {
             result[i] = get(i);
         }
         return result;

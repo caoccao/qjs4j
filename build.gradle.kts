@@ -86,6 +86,7 @@ object Config {
 plugins {
     java
     id("application")
+    jacoco
     `maven-publish`
     signing
     id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
@@ -98,11 +99,31 @@ repositories {
     mavenCentral()
 }
 
+// The JDK that runs the tests. Defaults to the compilation toolchain; the CI matrix overrides it
+// with -PtestJavaVersion so each cell actually exercises the engine on that JDK. Pinning both to 17
+// meant the "JDK 21" matrix cell only proved that Gradle could be launched by 21 — the engine still
+// compiled and ran on 17 in both cells.
+val testJavaVersion = (findProperty("testJavaVersion") as String? ?: Config.Versions.JAVA_VERSION).toInt()
+
 java {
-    sourceCompatibility = JavaVersion.VERSION_17
-    targetCompatibility = JavaVersion.VERSION_17
+    // A toolchain, not sourceCompatibility/targetCompatibility. Those only set javac flags —
+    // Gradle still ran on whatever JDK was on PATH, and the compiled bytecode silently followed the
+    // launcher. The toolchain fixes compilation at JDK 17 wherever the build runs from.
+    //
+    // It does not, however, make every launcher work: Gradle's Kotlin DSL compiles the build script
+    // before any toolchain is resolved, so a launcher its embedded Kotlin compiler does not know
+    // aborts first, with a bare version number. That is a property of the Gradle version, not of
+    // this project — hence the wrapper at 9.4.1, which accepts launchers through JDK 25. Launching
+    // on a JDK newer than the wrapper supports still fails early; upgrade the wrapper for that.
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(Config.Versions.JAVA_VERSION.toInt()))
+    }
     withJavadocJar()
     withSourcesJar()
+}
+
+val testJavaLauncher = javaToolchains.launcherFor {
+    languageVersion.set(JavaLanguageVersion.of(testJavaVersion))
 }
 
 application {
@@ -205,6 +226,51 @@ tasks.register<JavaExec>("test262Language") {
     jvmArgs = listOf("-Xmx2g")
 }
 
+// Coverage measurement. There was none, so nothing said which of the ~450 main source files the
+// suite exercised at all.
+jacoco {
+    toolVersion = "0.8.12"
+}
+
+tasks.named<JacocoReport>("jacocoTestReport") {
+    dependsOn(tasks.named("test"))
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
+}
+
+// A report is observational: it cannot fail a build, so nothing stopped coverage from sliding.
+// This is the ratchet. The floors sit just under the measured figures for the whole tree, which is
+// ~450 files of ported engine written long before any suite existed — a 100% whole-tree rule would
+// be a fiction that had to be disabled to commit anything. Raise the floors as coverage rises;
+// never lower them to make a build pass.
+// Measured on this tree: 57.88% line, 43.99% branch.
+val minimumLineCoverage = "0.57".toBigDecimal()
+val minimumBranchCoverage = "0.43".toBigDecimal()
+
+tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
+    dependsOn(tasks.named("test"))
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = minimumLineCoverage
+            }
+            limit {
+                counter = "BRANCH"
+                value = "COVEREDRATIO"
+                minimum = minimumBranchCoverage
+            }
+        }
+    }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.named("jacocoTestCoverageVerification"))
+}
+
 tasks.register("sourceJar") {
     group = "build"
     description = "Alias task for sourcesJar."
@@ -214,15 +280,36 @@ tasks.register("sourceJar") {
 tasks {
     withType<JavaCompile> {
         options.encoding = "UTF-8"
-        options.compilerArgs.add("-Xlint:deprecation")
+        // -Xlint:all rather than deprecation alone: the disabled categories surface the unchecked
+        // casts, fall-throughs and this-escapes that hid real defects. `serial` is off because no
+        // class here is meant to be Java-serialized, and `processing` because no annotation
+        // processors are configured.
+        // -Werror makes the zero-warning claim enforceable. -Xlint:all only prints; the tree was
+        // reported as warning-free while a trailing-space text block warned on every build.
+        // The toolchain pins javac to one release, so the warning set does not drift with the
+        // launching JDK.
+        options.compilerArgs.addAll(
+            listOf("-Xlint:all", "-Xlint:-serial", "-Xlint:-processing", "-Werror")
+        )
     }
     withType<Javadoc> {
         options.encoding = "UTF-8"
-        isFailOnError = false
-        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:none", "-quiet")
+        // Now that the tree is clean under the categories below, a new Javadoc defect fails the
+        // build instead of scrolling past.
+        isFailOnError = true
+        // Xdoclint:none suppressed the diagnostics that would have caught a Javadoc block naming
+        // the wrong type, a stray asterisk mid-sentence, and one comment swallowed into another.
+        // syntax+reference are the categories that find those; the noisier `missing` stays off.
+        (options as StandardJavadocDocletOptions).addStringOption("Xdoclint:syntax,reference", "-quiet")
     }
     withType<Test> {
+        javaLauncher.set(testJavaLauncher)
         systemProperty("file.encoding", "UTF-8")
+        // Gradle's default test heap is 512 MB, which is below what the engine's own resource
+        // limits need to be reachable: a string-length or array-join limit only fires after the
+        // builder has grown past it, so a smaller heap runs out first and the JVM dies instead of
+        // the test observing a RangeError. Matches the heap the test262 tasks already use.
+        maxHeapSize = "2g"
         val cpuCount = Runtime.getRuntime().availableProcessors()
         maxParallelForks = maxOf(
             1,
@@ -260,7 +347,9 @@ publishing {
                 scm {
                     connection.set(Config.Pom.Scm.CONNECTION)
                     developerConnection.set(Config.Pom.Scm.DEVELOPER_CONNECTION)
-                    tag.set(Config.Versions.JAVET)
+                    // The release tag, not a dependency's version. This used to publish
+                    // Javet's version as qjs4j's SCM tag, breaking source-provenance tooling.
+                    tag.set("v${Config.VERSION}")
                     url.set(Config.URL)
                 }
                 properties.set(

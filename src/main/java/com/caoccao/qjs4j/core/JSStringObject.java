@@ -164,7 +164,7 @@ public final class JSStringObject extends JSObject {
      * @return the property descriptor
      */
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         int charIndex = key.toIndex();
         if (charIndex >= 0 && charIndex < value.value().length()) {
             JSValue charValue = new JSString(String.valueOf(value.value().charAt(charIndex)));
@@ -175,7 +175,7 @@ public final class JSStringObject extends JSObject {
         }
 
         // For non-indexed properties, use default behavior
-        return super.getOwnPropertyDescriptor(key);
+        return super.getOwnPropertyDescriptorRaw(key);
     }
 
     /**

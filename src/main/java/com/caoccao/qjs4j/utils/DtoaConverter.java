@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.utils;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -253,7 +255,7 @@ public final class DtoaConverter {
      */
     public static String convertExponentialWithFractionDigits(double value, int fractionDigits) {
         if (fractionDigits < 0 || fractionDigits > MAX_DIGITS) {
-            throw new IllegalArgumentException("fractionDigits must be between 0 and " + MAX_DIGITS);
+            throw new JSRangeErrorException("fractionDigits must be between 0 and " + MAX_DIGITS);
         }
 
         // Handle special values
@@ -335,7 +337,7 @@ public final class DtoaConverter {
      */
     public static String convertFixed(double value, int fractionDigits) {
         if (fractionDigits < 0 || fractionDigits > MAX_DIGITS) {
-            throw new IllegalArgumentException("fractionDigits must be between 0 and " + MAX_DIGITS);
+            throw new JSRangeErrorException("fractionDigits must be between 0 and " + MAX_DIGITS);
         }
 
         // Handle special values
@@ -376,7 +378,7 @@ public final class DtoaConverter {
      */
     public static String convertIntRadix(int value, int radix) {
         if (radix < 2 || radix > 36) {
-            throw new IllegalArgumentException("radix must be between 2 and 36");
+            throw new JSRangeErrorException("radix must be between 2 and 36");
         }
         return Integer.toString(value, radix);
     }
@@ -393,7 +395,7 @@ public final class DtoaConverter {
      */
     public static String convertLongRadix(long value, int radix) {
         if (radix < 2 || radix > 36) {
-            throw new IllegalArgumentException("radix must be between 2 and 36");
+            throw new JSRangeErrorException("radix must be between 2 and 36");
         }
         return Long.toString(value, radix);
     }
@@ -422,7 +424,7 @@ public final class DtoaConverter {
      */
     public static String convertWithPrecision(double value, int precision) {
         if (precision < 1 || precision > MAX_DIGITS) {
-            throw new IllegalArgumentException("precision must be between 1 and " + MAX_DIGITS);
+            throw new JSRangeErrorException("precision must be between 1 and " + MAX_DIGITS);
         }
 
         // Handle special values

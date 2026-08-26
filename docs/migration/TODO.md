@@ -30,7 +30,7 @@ No pending medium-priority built-in object gaps are currently tracked.
 ## Test Coverage Gaps
 
 ### Tests Needing Implementation
-From [TEST262.md](TEST262.md):
+From [TEST262_PLAN.md](TEST262_PLAN.md):
 - Full Test262 conformance suite integration
 - Async iteration integration tests (for-await-of with various iterables)
 - Break/continue in nested for-await-of loops
@@ -69,7 +69,7 @@ From [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md):
 - [MIGRATION_STATUS.md](MIGRATION_STATUS.md) - Migration progress from QuickJS C
 - [OPCODE_IMPLEMENTATION_STATUS.md](OPCODE_IMPLEMENTATION_STATUS.md) - Bytecode instruction coverage
 - [TESTING_NOTES.md](TESTING_NOTES.md) - Known test issues
-- [TEST262.md](TEST262.md) - ECMAScript conformance test runner plan
+- [TEST262_PLAN.md](TEST262_PLAN.md) - ECMAScript conformance test runner plan
 - [ASYNC_AWAIT_ENHANCEMENTS.md](ASYNC_AWAIT_ENHANCEMENTS.md) - Async/await implementation details
 - [PRIVATE_FIELDS_IMPLEMENTATION.md](PRIVATE_FIELDS_IMPLEMENTATION.md) - Class features status
 - [ASYNC_DISPOSABLE_STACK_PLAN.md](ASYNC_DISPOSABLE_STACK_PLAN.md) - Planned ES2024 feature

@@ -31,6 +31,17 @@ import java.util.*;
 public final class RegExpCompiler {
 
     /**
+     * Maximum number of capture groups in one pattern, counting group 0 — QuickJS
+     * {@code CAPTURE_COUNT_MAX}, so 254 explicit groups.
+     * <p>
+     * Two reasons, beyond matching QuickJS: the compiled bytecode encodes capture indices as a
+     * single byte ({@code appendU8(captureCount - 1)}), so a 256th group silently wrapped and
+     * produced bytecode that reset the wrong capture range; and the matcher's backtrack entry grows
+     * by two ints per capture, so an unbounded capture count let a guest-supplied pattern set the
+     * size of every backtrack frame.
+     */
+    private static final int CAPTURE_COUNT_MAX = 255;
+    /**
      * JavaScript whitespace ranges for \s (differs from Unicode White_Space:
      * includes U+FEFF which is not in the Unicode White_Space property).
      * Pairs of [start, end] inclusive.
@@ -140,6 +151,11 @@ public final class RegExpCompiler {
                     buffer.toByteArray(),
                     flagBits,
                     captureCount,
+                    // Registers this pattern actually allocated. The matcher saves them on every
+                    // backtrack point where state changed, so reporting the real count instead of
+                    // the maximum is the difference between 12 and 76 bytes of saved state per
+                    // point for a typical pattern.
+                    Math.min(context.nextAdvanceCheckRegister, RegExpBytecode.ExecutionLimits.MAX_REGISTERS),
                     compiledGroupNames
             );
         } catch (Exception e) {
@@ -382,16 +398,24 @@ public final class RegExpCompiler {
                     RegExpOpcode.RANGE.getCode());
         }
 
+        // Range order is not observable, but the matcher relies on non-case-folded ranges being
+        // sorted and disjoint so it can use binary search. A source class may list its members in
+        // any order (for example, [za-c]), so normalize it before emitting bytecode.
+        int[] emittedRanges = toIntArray(ranges);
+        if (!context.isIgnoreCase()) {
+            emittedRanges = normalizeRangePairs(emittedRanges);
+        }
+
         // Calculate size: 2 bytes for count + (numRanges * 8 bytes per range)
-        int numRanges = ranges.size() / 2;
+        int numRanges = emittedRanges.length / 2;
         int dataSize = 2 + (numRanges * 8);
 
         context.buffer.appendU16(dataSize);
         context.buffer.appendU16(numRanges);
 
-        for (int i = 0; i < ranges.size(); i += 2) {
-            context.buffer.appendU32(ranges.get(i));   // start
-            context.buffer.appendU32(ranges.get(i + 1)); // end
+        for (int i = 0; i < emittedRanges.length; i += 2) {
+            context.buffer.appendU32(emittedRanges[i]);
+            context.buffer.appendU32(emittedRanges[i + 1]);
         }
         if (isBackwardDirection) {
             context.buffer.appendU8(RegExpOpcode.PREV.getCode());
@@ -865,6 +889,9 @@ public final class RegExpCompiler {
 
         int groupIndex = -1;
         if (isCapturing) {
+            if (captureCount >= CAPTURE_COUNT_MAX) {
+                throw new RegExpSyntaxException("too many captures");
+            }
             groupIndex = captureCount++;
             ensureGroupNameSize(groupIndex + 1);
             if (captureName != null) {
@@ -1689,14 +1716,40 @@ public final class RegExpCompiler {
     }
 
     private int[] normalizeRangePairs(int[] ranges) {
-        if (ranges.length == 0) {
+        if (ranges.length <= 2) {
             return ranges;
         }
-        int[] normalized = new int[0];
+
+        // Pack each pair into one long so sorting is allocation-free apart from the two primitive
+        // arrays. Code points are non-negative, so the natural long order sorts by start and then
+        // by end. The previous repeated union was quadratic for large Unicode properties embedded
+        // in a character class.
+        long[] sortedRanges = new long[ranges.length / 2];
         for (int i = 0; i < ranges.length; i += 2) {
-            normalized = UnicodePropertyResolver.unionRanges(normalized, new int[]{ranges[i], ranges[i + 1]});
+            sortedRanges[i / 2] = ((long) ranges[i] << Integer.SIZE)
+                    | (ranges[i + 1] & 0xFFFF_FFFFL);
         }
-        return normalized;
+        Arrays.sort(sortedRanges);
+
+        int[] normalizedRanges = new int[ranges.length];
+        int normalizedLength = 0;
+        int currentStart = (int) (sortedRanges[0] >>> Integer.SIZE);
+        int currentEnd = (int) sortedRanges[0];
+        for (int i = 1; i < sortedRanges.length; i++) {
+            int nextStart = (int) (sortedRanges[i] >>> Integer.SIZE);
+            int nextEnd = (int) sortedRanges[i];
+            if ((long) nextStart <= (long) currentEnd + 1) {
+                currentEnd = Math.max(currentEnd, nextEnd);
+            } else {
+                normalizedRanges[normalizedLength++] = currentStart;
+                normalizedRanges[normalizedLength++] = currentEnd;
+                currentStart = nextStart;
+                currentEnd = nextEnd;
+            }
+        }
+        normalizedRanges[normalizedLength++] = currentStart;
+        normalizedRanges[normalizedLength++] = currentEnd;
+        return Arrays.copyOf(normalizedRanges, normalizedLength);
     }
 
     private int parseClassEscape(CompileContext context, List<Integer> ranges) {

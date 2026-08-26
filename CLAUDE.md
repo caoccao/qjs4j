@@ -46,11 +46,10 @@ com.caoccao.qjs4j/
 │   ├── lexer/             Lexer, LexerTemplateScanner
 │   └── parser/            Parser, ParserDelegates, Expression*Parser, StatementParser
 ├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy
-├── vm/                    ← VirtualMachine, Opcode (262 opcodes), StackFrame, CallStack
+├── vm/                    ← VirtualMachine, Opcode, StackFrame, CallStack
 ├── builtins/              ← Constructor + Prototype pairs (ArrayConstructor/ArrayPrototype, etc.)
 ├── exceptions/            ← JSCompilerException, JSSyntaxErrorException, JSTypeErrorException,
 │                            JSRangeErrorException, JSVirtualMachineException, JSErrorException
-├── memory/                ← GarbageCollector, HeapManager, MemoryPool, ReferenceCounter
 ├── regexp/                ← RegExp engine
 ├── unicode/               ← Unicode data and normalization
 ├── utils/                 ← AtomTable, DtoaConverter, Float16
@@ -90,7 +89,7 @@ com.caoccao.qjs4j/
 
 #### Virtual Machine (vm/)
 - **VirtualMachine**: Stack-based bytecode interpreter
-- **Opcode**: Enumeration of 262 bytecode instructions
+- **Opcode**: Enumeration of the bytecode instruction set
 - **StackFrame**: Call stack frame with locals, arguments, and return address
 - **CallStack**: Value stack for operand manipulation
 - Critical opcodes: `RETURN_ASYNC` (async return), `FOR_OF_START/NEXT` (sync iteration), `FOR_AWAIT_OF_START/NEXT` (async iteration), `CALL`, `NEW`, `GET_FIELD`, `SET_FIELD`
@@ -163,6 +162,23 @@ For async code, always call `context.processMicrotasks()` to settle promises.
 
 ## Migration from QuickJS C
 
+### Reference material
+
+- QuickJS reference source: `../quickjs` (especially `quickjs.c` and `quickjs-opcode.h`).
+- Test262 conformance suite: `../test262`.
+- Migration work is tracked in `docs/migration/` (`TODO.md`, `FEATURES.md`, `MIGRATION_STATUS.md`).
+- Goal: preserve QuickJS semantics while staying consistent with existing qjs4j architecture.
+
+### Core rule: follow QuickJS
+
+1. Confirm behavior from QuickJS source.
+2. Validate with `../quickjs/qjs` or `../quickjs/qjs -m` when useful.
+3. Port semantics, not just syntax.
+4. If qjs4j diverges from QuickJS, prefer fixing qjs4j.
+5. Do not introduce new opcodes unless explicitly required; use the existing set in `Opcode`.
+
+### Translation notes
+
 When porting QuickJS C code to Java:
 
 1. **Opcode Mapping**: QuickJS opcode numbers differ from qjs4j. Use semantic matching, not numeric matching.
@@ -176,7 +192,7 @@ When porting QuickJS C code to Java:
 - **Primitive Auto-Boxing**: VM auto-boxes primitives (strings, numbers) when accessing properties or iterating via `toObject()`.
 - **Strict Mode Tracking**: Each function has a `strict` flag set by the compiler; the VM saves/restores it on function entry/exit.
 - **Exception Propagation**: Exceptions stored in `context.pendingException`, checked after each opcode. Catch handlers clear the exception and jump.
-- **Microtask Queue**: `processMicrotasks()` drains the queue with re-entrancy depth tracking to prevent infinite loops.
+- **Microtask Queue**: `processMicrotasks()` drains the queue until it is empty. A nested call returns immediately and drains nothing — the outer drain still owns the queue (`isProcessing()` distinguishes the two). The host interrupt and execution deadline are polled during the drain so a microtask that re-enqueues itself cannot loop forever. A failure escaping a microtask is recorded via `JSContext.recordMicrotaskFailure`.
 
 ## Code Style
 
@@ -194,7 +210,8 @@ When porting QuickJS C code to Java:
 - `docs/migration/FEATURES.md` — Complete feature matrix
 - `docs/migration/MIGRATION_STATUS.md` — Overall migration progress
 - `docs/migration/OPCODE_IMPLEMENTATION_STATUS.md` — Bytecode instruction coverage
-- `docs/migration/TEST262.md` — ECMAScript conformance status
+- `docs/migration/TEST262_PLAN.md` — Test262 runner design (a plan, not results). Conformance
+  results are not checked in; run `./gradlew test262` or see the CI `test262-quick-log` artifact.
 
 ## Main Entry Point
 

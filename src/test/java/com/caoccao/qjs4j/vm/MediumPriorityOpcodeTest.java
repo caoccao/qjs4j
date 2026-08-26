@@ -450,7 +450,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(getLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter getLocCheckThisEmitter = new BytecodeEmitter();
         getLocCheckThisEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -459,7 +459,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(getLocCheckThisEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckEmitter = new BytecodeEmitter();
         putLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -469,7 +469,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(putLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter setLocCheckEmitter = new BytecodeEmitter();
         setLocCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -479,7 +479,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(setLocCheckEmitter, 1, JSValue.NO_ARGS, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter putLocCheckInitEmitter = new BytecodeEmitter();
         putLocCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -501,7 +501,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(varRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckEmitter = new BytecodeEmitter();
         putVarRefCheckEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);
@@ -512,7 +512,7 @@ public class MediumPriorityOpcodeTest extends BaseTest {
 
         assertThatThrownBy(() -> execute(putVarRefCheckEmitter, 1, new JSValue[]{JSUndefined.INSTANCE}, JSUndefined.INSTANCE))
                 .isInstanceOf(JSVirtualMachineException.class)
-                .hasMessageContaining("variable is uninitialized");
+                .hasMessageContaining("before initialization");
 
         BytecodeEmitter putVarRefCheckInitEmitter = new BytecodeEmitter();
         putVarRefCheckInitEmitter.emitOpcodeU16(Opcode.SET_LOC_UNINITIALIZED, 0);

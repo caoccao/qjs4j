@@ -1711,8 +1711,8 @@ public final class JSBytecodeFunction extends JSFunction {
     /**
      * Get the capture source info array for template functions.
      * Each entry encodes the source of a closure capture:
-     * - value >= 0: LOCAL capture at that local slot index
-     * - value < 0: VAR_REF capture at -(value + 1)
+     * - {@code value >= 0}: LOCAL capture at that local slot index
+     * - {@code value < 0}: VAR_REF capture at {@code -(value + 1)}
      * Returns null for non-template (instantiated) functions.
      */
     public int[] getCaptureSourceInfos() {
@@ -1987,7 +1987,7 @@ public final class JSBytecodeFunction extends JSFunction {
 
     /**
      * Check if this function is in strict mode.
-     * Following QuickJS js_mode & JS_MODE_STRICT.
+     * Following QuickJS {@code js_mode & JS_MODE_STRICT}.
      */
     public boolean isStrict() {
         return strict;

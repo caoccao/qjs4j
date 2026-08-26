@@ -20,6 +20,7 @@ import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.exceptions.*;
+import com.caoccao.qjs4j.unicode.UnicodeData;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
@@ -54,6 +55,11 @@ public final class JSContext implements AutoCloseable {
     private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
             Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
+    /**
+     * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
+     * repeatedly failing microtask cannot itself become a leak.
+     */
+    private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
     private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
@@ -87,6 +93,8 @@ public final class JSContext implements AutoCloseable {
     // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
     private final Map<String, JSObject> iteratorPrototypes;
     private final JSGlobalObject jsGlobalObject;
+    // Failures that escaped a microtask, oldest first
+    private final List<Throwable> microtaskFailures = new ArrayList<>();
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
     private final Map<String, JSModule> moduleCache;
@@ -109,6 +117,7 @@ public final class JSContext implements AutoCloseable {
     private JSObject cachedPromisePrototype;
     private JSObject cachedRegExpConstructor;
     private JSObject cachedRegExpPrototype;
+    private boolean closed;
     // Temporarily holds new.target during native constructor calls
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
@@ -122,6 +131,7 @@ public final class JSContext implements AutoCloseable {
     private boolean inBareVariableAssignment;
     private boolean inCatchHandler;
     private int maxStackDepth;
+    private IJSMicrotaskFailureCallback microtaskFailureCallback;
     private JSValue nativeConstructorNewTarget;
     private boolean pendingClassFieldEval;
     private int pendingDirectEvalCalls;
@@ -190,6 +200,30 @@ public final class JSContext implements AutoCloseable {
         initializeGlobalObject();
     }
 
+    /**
+     * Whether the given text is a well-formed ECMAScript IdentifierName.
+     *
+     * @param name the candidate identifier
+     * @return true when every code point is a legal identifier character
+     */
+    private static boolean isValidIdentifierName(String name) {
+        if (name == null || name.isEmpty()) {
+            return false;
+        }
+        int firstCodePoint = name.codePointAt(0);
+        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
+            return false;
+        }
+        for (int offset = Character.charCount(firstCodePoint); offset < name.length(); ) {
+            int codePoint = name.codePointAt(offset);
+            if (!UnicodeData.isIdentifierPart(codePoint)) {
+                return false;
+            }
+            offset += Character.charCount(codePoint);
+        }
+        return true;
+    }
+
     private static int parseHex(String text) {
         if (text == null || text.isEmpty()) {
             return -1;
@@ -208,10 +242,10 @@ public final class JSContext implements AutoCloseable {
         return value;
     }
 
-
     private void appendDynamicImportDefaultExportNameFixup(
             StringBuilder transformedSourceBuilder,
-            String localName) {
+            String rawLocalName) {
+        String localName = requireGeneratedIdentifier(rawLocalName, "default export binding '" + rawLocalName + "'");
         transformedSourceBuilder.append("if (typeof ")
                 .append(localName)
                 .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
@@ -239,11 +273,16 @@ public final class JSContext implements AutoCloseable {
                 .append(";\n");
         for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
             String escapedName = escapeJavaScriptString(localExportBinding.exportedName());
+            // The exported name lands in string position, so escaping is enough. The local name
+            // lands in identifier position, where only a real identifier is safe.
+            String localName = requireGeneratedIdentifier(
+                    localExportBinding.localName(),
+                    "local binding of export '" + localExportBinding.exportedName() + "'");
             // Exports are always live bindings, including re-exported imports.
             transformedSourceBuilder.append("Object.defineProperty(__qjs4jModuleExports, \"")
                     .append(escapedName)
                     .append("\", { enumerable: true, configurable: false, get() { return ")
-                    .append(localExportBinding.localName())
+                    .append(localName)
                     .append("; } });\n");
         }
     }
@@ -561,6 +600,13 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Discard the recorded microtask failures.
+     */
+    public void clearMicrotaskFailures() {
+        microtaskFailures.clear();
+    }
+
+    /**
      * Clear the module cache.
      */
     private void clearModuleCache() {
@@ -577,16 +623,76 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Close this context and release resources.
-     * Called when the context is no longer needed.
+     * Close this context and release its realm.
+     * <p>
+     * The post-close contract is that this context owns nothing: every collection it holds is
+     * empty, every cached intrinsic and host callback is dropped, and the global object is stripped
+     * of its properties and its prototype. An embedder that keeps a reference to the context, to
+     * the global object, or to a value it read out of the realm therefore retains that one object
+     * and not the realm graph behind it.
+     * <p>
+     * Clearing a selection of collections is not enough for that claim. The global object alone
+     * reaches every intrinsic, every constructor and everything a script attached to
+     * {@code globalThis}, so leaving it populated left the entire realm reachable through a closed
+     * context — as did the declaration tables, the cached prototypes and the host callbacks.
+     * <p>
+     * Idempotent: a second call does nothing.
      */
     @Override
     public void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         // Clear all caches
         clearModuleCache();
         clearCallStack();
         clearPendingException();
         clearErrorStackTrace();
+        // State that close() used to leave behind: pending promise reactions were abandoned with
+        // no callback, and the realm's binding tables, iterator prototypes, finalization
+        // registries, eval overlays and import.meta cache all stayed reachable through the
+        // context object.
+        microtaskQueue.clear();
+        globalLexicalBindings.clear();
+        iteratorPrototypes.clear();
+        finalizationRegistries.clear();
+        evalOverlayFrames.clear();
+        importMetaCache.clear();
+        microtaskFailures.clear();
+        dynamicImportModuleCache.clear();
+        globalConstDeclarations.clear();
+        globalLexDeclarations.clear();
+        globalVarDeclarations.clear();
+        activeGlobalFunctionBindingInitializations = null;
+        // Host callbacks: an embedder's listener can reach arbitrary application state.
+        microtaskFailureCallback = null;
+        promiseRejectCallback = null;
+        // Cached intrinsics. Each one is a live handle on the realm.
+        asyncFunctionConstructor = null;
+        asyncGeneratorFunctionPrototype = null;
+        asyncGeneratorPrototype = null;
+        cachedDatePrototype = null;
+        cachedObjectPrototype = null;
+        cachedPromisePrototype = null;
+        cachedRegExpConstructor = null;
+        cachedRegExpPrototype = null;
+        generatorFunctionPrototype = null;
+        throwTypeErrorIntrinsic = null;
+        // Transient execution values.
+        constructorNewTarget = null;
+        nativeConstructorNewTarget = null;
+        currentThis = null;
+        // RegExp legacy static state holds the last subject string, which can be arbitrarily large.
+        Arrays.fill(regExpLegacyCaptures, "");
+        regExpLegacyInput = null;
+        regExpLegacyLastMatch = null;
+        regExpLegacyLastParen = null;
+        regExpLegacyLeftContext = null;
+        regExpLegacyRightContext = null;
+        virtualMachine.reset();
+        // Last: everything above may still need the realm while it runs.
+        jsGlobalObject.getGlobalObject().releaseProperties();
         // Remove from runtime
         runtime.destroyContext(this);
     }
@@ -775,20 +881,28 @@ public final class JSContext implements AutoCloseable {
      * Create a new JSArray with specified length and proper prototype chain.
      * Sets the array's prototype to Array.prototype from the global object.
      *
-     * @param length Initial length of the array
+     * @param length Initial length of the array; must be in {@code [0, 2^32 - 1]}
      * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
+     *                                                            ECMAScript array length
      */
     public JSArray createJSArray(long length) {
-        return createJSArray(length, (int) length);
+        // A JavaScript array length is a uint32, so narrowing it to int for the capacity hint can
+        // produce a negative value (4294967295L narrows to -1) and a NegativeArraySizeException.
+        // Clamp instead: the hint is only a dense-storage sizing suggestion. The length itself is
+        // validated by the JSArray constructor, which rejects anything outside [0, 2^32 - 1].
+        return createJSArray(length, (int) Math.min(Math.max(length, 0), JSArray.MAX_DENSE_SIZE));
     }
 
     /**
      * Create a new JSArray with specified length, capacity, and proper prototype chain.
      * Sets the array's prototype to Array.prototype from the global object.
      *
-     * @param length   Initial length of the array
+     * @param length   Initial length of the array; must be in {@code [0, 2^32 - 1]}
      * @param capacity Initial capacity of the array
      * @return A new JSArray instance with prototype set
+     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
+     *                                                            ECMAScript array length
      */
     public JSArray createJSArray(long length, int capacity) {
         JSArray jsArray = new JSArray(this, length, capacity);
@@ -1425,13 +1539,45 @@ public final class JSContext implements AutoCloseable {
         this.strictMode = true;
     }
 
+    /**
+     * Escape a value for interpolation into a double-quoted JavaScript string literal in generated
+     * module source.
+     * <p>
+     * Escaping only {@code \} and {@code "} is not enough: a line terminator, a control character
+     * or U+2028/U+2029 inside the value terminates the literal and turns the remainder of the value
+     * into source text.
+     *
+     * @param text the raw value
+     * @return the value with every character that is unsafe inside a string literal escaped
+     */
     private String escapeJavaScriptString(String text) {
         if (text == null || text.isEmpty()) {
             return "";
         }
-        return text
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"");
+        StringBuilder escaped = new StringBuilder(text.length() + 8);
+        for (int characterIndex = 0; characterIndex < text.length(); characterIndex++) {
+            char character = text.charAt(characterIndex);
+            switch (character) {
+                case '\\' -> escaped.append("\\\\");
+                case '"' -> escaped.append("\\\"");
+                case '\'' -> escaped.append("\\'");
+                case '\b' -> escaped.append("\\b");
+                case '\f' -> escaped.append("\\f");
+                case '\n' -> escaped.append("\\n");
+                case '\r' -> escaped.append("\\r");
+                case '\t' -> escaped.append("\\t");
+                default -> {
+                    // Control characters, U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are
+                    // all line terminators or otherwise unsafe inside a JavaScript string literal.
+                    if (character < 0x20 || character == 0x2028 || character == 0x2029) {
+                        escaped.append(String.format("\\u%04x", (int) character));
+                    } else {
+                        escaped.append(character);
+                    }
+                }
+            }
+        }
+        return escaped.toString();
     }
 
     /**
@@ -1480,6 +1626,11 @@ public final class JSContext implements AutoCloseable {
                          boolean skipGlobalDeclarationTracking,
                          boolean inheritedStrictModeForDirectEval,
                          boolean useDirectEvalCallerFrame) {
+        // The single gateway every public eval overload funnels through, so the lifecycle check
+        // belongs here. Duplicating it in selected overloads left eval(code, filename, isModule,
+        // isDirectEval) unguarded: a closed context ran the source, mutated the realm, and only
+        // then failed inside the automatic microtask drain — after the side effects had landed.
+        requireOpen();
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
@@ -1511,6 +1662,12 @@ public final class JSContext implements AutoCloseable {
                 try {
                     resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
                 } catch (JSException jsException) {
+                    // A filename that does not resolve to a module on disk is normal here — the
+                    // source was handed to eval() directly. Clear the pending exception the
+                    // matching throwTypeError left on the context: catching the Java exception
+                    // alone leaves the context in an exception state, and the next activation
+                    // reports that stale error as its own failure.
+                    clearPendingException();
                     resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
                 }
                 JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
@@ -2898,7 +3055,10 @@ public final class JSContext implements AutoCloseable {
                     dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers.
+                // Skip unresolvable specifiers. Discarding the Java exception is not enough: the
+                // matching throwTypeError also left a pending exception on the context, and a
+                // later activation would otherwise pick up that stale error.
+                clearPendingException();
             }
         }
         return dependencyPromises;
@@ -2938,6 +3098,18 @@ public final class JSContext implements AutoCloseable {
      */
     public JSObject getGeneratorFunctionPrototype() {
         return generatorFunctionPrototype;
+    }
+
+    /**
+     * Get the names currently bound in the realm's global lexical scope.
+     * <p>
+     * Exposed so an embedder — and this project's own tests — can observe that {@link #close()}
+     * actually releases realm state.
+     *
+     * @return a snapshot of the global lexical binding names
+     */
+    public Set<String> getGlobalLexicalBindingNames() {
+        return new HashSet<>(globalLexicalBindings.keySet());
     }
 
     public JSObject getGlobalObject() {
@@ -3074,6 +3246,27 @@ public final class JSContext implements AutoCloseable {
 
     public int getMaxStackDepth() {
         return maxStackDepth;
+    }
+
+    /**
+     * Get the callback that observes failures escaping a microtask.
+     *
+     * @return the callback, or {@code null} when none is installed
+     */
+    public IJSMicrotaskFailureCallback getMicrotaskFailureCallback() {
+        return microtaskFailureCallback;
+    }
+
+    /**
+     * Get the failures that escaped a microtask, oldest first.
+     * <p>
+     * The list is capped so a repeatedly failing microtask cannot itself become a leak; once it is
+     * full the oldest entries are dropped.
+     *
+     * @return a snapshot of the recorded failures
+     */
+    public List<Throwable> getMicrotaskFailures() {
+        return new ArrayList<>(microtaskFailures);
     }
 
     /**
@@ -3219,7 +3412,9 @@ public final class JSContext implements AutoCloseable {
                     return true;
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
         return false;
@@ -3349,7 +3544,9 @@ public final class JSContext implements AutoCloseable {
             sourceBuilder.append("\"")
                     .append(escapeJavaScriptString(hoistedBinding.localName()))
                     .append("\": ")
-                    .append(hoistedBinding.localName());
+                    .append(requireGeneratedIdentifier(
+                            hoistedBinding.localName(),
+                            "hoisted function export '" + hoistedBinding.localName() + "'"));
         }
         sourceBuilder.append("};\n})();");
 
@@ -3391,6 +3588,15 @@ public final class JSContext implements AutoCloseable {
 
     public boolean isActiveGlobalFunctionBindingConfigurable() {
         return activeGlobalFunctionBindingConfigurable;
+    }
+
+    /**
+     * Whether {@link #close()} has been called on this context.
+     *
+     * @return true when the context is closed
+     */
+    public boolean isClosed() {
+        return closed;
     }
 
     private boolean isCompleteStaticImportStatement(String importStatement) {
@@ -3453,8 +3659,10 @@ public final class JSContext implements AutoCloseable {
             }
             return resolvedImportPathString.equalsIgnoreCase(modulePathString);
         } catch (JSException ignored) {
+            clearPendingException();
             return false;
         } catch (Exception ignored) {
+            clearPendingException();
             return false;
         }
     }
@@ -4124,6 +4332,39 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
+    /**
+     * Rewrite ES module source into plain script source that the compiler can evaluate.
+     * <p>
+     * <strong>This is a line-based textual transformer, not a parser.</strong> It splits the source
+     * on {@code \n}, classifies each line by string-matching {@code import }/{@code export }, and
+     * splices generated JavaScript into the result. It cannot see the language's real grammar, so
+     * the module syntax it accepts is a restricted subset of ECMAScript:
+     * <ul>
+     * <li>{@code export} must be the first token on its line (leading whitespace is fine). An
+     * {@code export} that follows another statement on the same line is not recognised, and the
+     * binding is silently absent from the module namespace.</li>
+     * <li>A static {@code import ... from '...'} declaration must be alone on its line. An import
+     * followed by another statement on the same line is not hoisted.</li>
+     * <li>{@code maskModuleComments} masks strings, templates and comments, but not regular
+     * expression literals. A regexp literal containing a quote — {@code /"/} — desynchronises its
+     * quote state for the rest of the line.</li>
+     * <li>Export names must be identifiers. String export names
+     * ({@code export { x as "a-b" }}, ES2022) are rejected with a SyntaxError.</li>
+     * <li>The generated bindings {@code __qjs4jDefaultExport$<n>} and {@code __qjs4jModuleExports}
+     * are declared in the module's own scope and are observable from module code.</li>
+     * </ul>
+     * Every value that reaches identifier position in the generated source is validated by
+     * {@link #requireGeneratedIdentifier(String, String)}, and every value that reaches string
+     * position is escaped by {@link #escapeJavaScriptString(String)}, so a name the scanner
+     * mis-extracts produces a diagnosable SyntaxError rather than spliced source text.
+     * <p>
+     * The structural limits above are not fixable at this layer. Routing modules through the
+     * existing lexer, parser and compiler — real {@code ImportDeclaration}/{@code Export*}
+     * AST nodes and module-environment bindings emitted by {@code BytecodeCompiler} — is the
+     * actual fix, and is a dedicated milestone rather than a patch.
+     *
+     * @param moduleRecord the module whose raw source is to be transformed
+     */
     private void parseDynamicImportModuleSource(JSDynamicImportModule moduleRecord) {
         String sourceCode = moduleRecord.rawSource();
         String scanSourceCode = maskModuleComments(sourceCode);
@@ -4286,7 +4527,9 @@ public final class JSContext implements AutoCloseable {
                                 remainingCode = "";
                             }
                             transformedSourceBuilder.append("let ")
-                                    .append(declarationName)
+                                    .append(requireGeneratedIdentifier(
+                                            declarationName,
+                                            "default export declaration name '" + declarationName + "'"))
                                     .append(" = ")
                                     .append(declarationPart)
                                     .append(";\n");
@@ -4693,7 +4936,9 @@ public final class JSContext implements AutoCloseable {
                             new HashSet<>(importResolutionStack), importAttributes);
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
     }
@@ -4703,6 +4948,7 @@ public final class JSContext implements AutoCloseable {
      * This should be called at the end of each task in the event loop.
      */
     public void processMicrotasks() {
+        requireOpen();
         microtaskQueue.processMicrotasks();
         pollFinalizationRegistries();
     }
@@ -4781,6 +5027,38 @@ public final class JSContext implements AutoCloseable {
             }
         }
         return true;
+    }
+
+    /**
+     * Record a failure that escaped a microtask.
+     * <p>
+     * Draining the microtask queue has no caller to propagate to, so without this a throwing
+     * {@code .then()} handler — or an engine defect surfacing as a {@link NullPointerException} —
+     * disappeared with no trace at all. Failures are always recorded; an installed
+     * {@link IJSMicrotaskFailureCallback} sees them immediately, and an engine defect with no
+     * callback installed is logged so it cannot pass unnoticed.
+     *
+     * @param failure the exception that escaped the microtask
+     */
+    public void recordMicrotaskFailure(Throwable failure) {
+        if (failure == null) {
+            return;
+        }
+        while (microtaskFailures.size() >= MAX_RECORDED_MICROTASK_FAILURES) {
+            microtaskFailures.remove(0);
+        }
+        microtaskFailures.add(failure);
+        IJSMicrotaskFailureCallback callback = microtaskFailureCallback;
+        if (callback != null) {
+            callback.onMicrotaskFailure(failure);
+            return;
+        }
+        if (!(failure instanceof JSException)) {
+            // A JSException is a script-level error and is reported through the promise reject
+            // callback. Anything else is an engine defect and must never be silent.
+            System.getLogger(JSContext.class.getName()).log(
+                    System.Logger.Level.WARNING, "Unhandled failure in microtask", failure);
+        }
     }
 
     private void registerAsyncModuleCompletion(
@@ -4899,7 +5177,9 @@ public final class JSContext implements AutoCloseable {
                     asyncDepCount++;
                 }
             } catch (JSException ignored) {
-                // Skip unresolvable specifiers
+                // Skip unresolvable specifiers. Clear the pending exception the matching
+                // throwTypeError left behind, so the context does not stay in an exception state.
+                clearPendingException();
             }
         }
         moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
@@ -4924,6 +5204,43 @@ public final class JSContext implements AutoCloseable {
         }
 
         throw new JSException(throwSyntaxError("Invalid default export declaration"));
+    }
+
+    /**
+     * Validate a name that is about to be interpolated into generated module source in identifier
+     * position.
+     * <p>
+     * The module transformer builds JavaScript source text and evaluates it. Names extracted from
+     * the module source by the ad-hoc scanner reach identifier position unescaped, so a value that
+     * is not an identifier would splice arbitrary source into the generated program. Anything that
+     * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
+     *
+     * @param name        the candidate identifier
+     * @param description what the name denotes, used in the error message
+     * @return the name unchanged when it is a valid identifier
+     * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
+     */
+    private String requireGeneratedIdentifier(String name, String description) {
+        if (!isValidIdentifierName(name)) {
+            throw new JSException(throwSyntaxError(
+                    "Unsupported module syntax: " + description + " is not a valid identifier"));
+        }
+        return name;
+    }
+
+    /**
+     * Fail fast when an operation is attempted on a closed context.
+     * <p>
+     * {@code close()} used to set no flag at all, so {@code close()} followed by {@code eval()}
+     * silently worked and masked lifecycle bugs in embedder code. This is one of the few places a
+     * raw Java exception is right: it is embedder API misuse, not a JavaScript error.
+     *
+     * @throws IllegalStateException when this context is closed
+     */
+    private void requireOpen() {
+        if (closed) {
+            throw new IllegalStateException("JSContext is closed");
+        }
     }
 
     private DynamicImportExportResolution resolveDynamicImportExport(
@@ -5265,6 +5582,15 @@ public final class JSContext implements AutoCloseable {
      */
     public void setMaxStackDepth(int depth) {
         this.maxStackDepth = depth;
+    }
+
+    /**
+     * Install a callback that observes failures escaping a microtask.
+     *
+     * @param callback the callback, or {@code null} to remove the current one
+     */
+    public void setMicrotaskFailureCallback(IJSMicrotaskFailureCallback callback) {
+        this.microtaskFailureCallback = callback;
     }
 
     public void setNativeConstructorNewTarget(JSValue newTarget) {

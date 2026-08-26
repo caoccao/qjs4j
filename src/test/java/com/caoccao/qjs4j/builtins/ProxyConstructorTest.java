@@ -1764,7 +1764,7 @@ public class ProxyConstructorTest extends BaseJavetTest {
                 
                 var handler = {
                   apply: function(t, thisArg, args) {
-                    // Check prototype of t inside trap  
+                    // Check prototype of t inside trap
                     var protoInTrap = Object.getPrototypeOf(t);
                     if (!protoInTrap) {
                       throw new Error('t has null prototype inside trap, t is ' + typeof t);

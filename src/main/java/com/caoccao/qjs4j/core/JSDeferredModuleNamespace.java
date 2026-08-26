@@ -128,9 +128,9 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public PropertyDescriptor getOwnPropertyDescriptor(PropertyKey key) {
+    protected PropertyDescriptor getOwnPropertyDescriptorRaw(PropertyKey key) {
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.getOwnPropertyDescriptor(key);
+            return super.getOwnPropertyDescriptorRaw(key);
         }
         try {
             return ensureEvaluated().getOwnPropertyDescriptor(key);
@@ -169,9 +169,9 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public boolean has(PropertyKey key) {
+    protected boolean has(PropertyKey key, int depth) {
         if (isSymbolLikeNamespaceKey(key)) {
-            return super.has(key);
+            return super.has(key, depth);
         }
         try {
             return ensureEvaluated().has(key);

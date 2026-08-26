@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import com.caoccao.qjs4j.utils.Float16;
 
 import java.math.BigInteger;
@@ -57,7 +58,7 @@ public final class JSDataView extends JSObject {
     public JSDataView(JSContext context, IJSArrayBuffer buffer, int byteOffset, int byteLength, boolean lengthTracking) {
         super(context);
         if (buffer == null || buffer.isDetached()) {
-            throw new IllegalArgumentException("Cannot create DataView on detached buffer");
+            throw new JSTypeErrorException("Cannot create DataView on detached buffer");
         }
         if (byteOffset < 0 || byteOffset > buffer.getByteLength()) {
             throw new JSRangeErrorException("DataView byteOffset out of range");
@@ -187,10 +188,10 @@ public final class JSDataView extends JSObject {
 
     private void checkOffset(int offset, int size) {
         if (buffer.isDetached()) {
-            throw new IllegalStateException("ArrayBuffer is detached");
+            throw new JSTypeErrorException("ArrayBuffer is detached");
         }
         if (isOutOfBounds()) {
-            throw new IllegalStateException("DataView is out of bounds");
+            throw new JSTypeErrorException("DataView is out of bounds");
         }
         int effectiveByteLength = getByteLength();
         if (offset < 0 || (long) offset + size > effectiveByteLength) {

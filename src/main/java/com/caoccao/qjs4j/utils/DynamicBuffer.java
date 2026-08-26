@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.utils;
 
+import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -284,7 +286,7 @@ public final class DynamicBuffer {
      */
     public void truncate(int newSize) {
         if (newSize < 0 || newSize > size) {
-            throw new IllegalArgumentException("Invalid size");
+            throw new JSRangeErrorException("Invalid size");
         }
         size = newSize;
     }

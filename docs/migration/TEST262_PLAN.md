@@ -1,5 +1,10 @@
 # Test262 Runner Implementation Plan
 
+> This is the runner's **design document**, not a conformance report. Results are not recorded in
+> this repository — run `./gradlew test262` or `./gradlew test262Quick` for the current numbers. CI
+> publishes a fresh run of the quick subset on every push and uploads it as the `test262-quick-log`
+> artifact (see `.github/workflows/build.yml`).
+
 ## Overview
 
 This document outlines the plan to implement a Test262 conformance test runner for qjs4j. Test262 is the official ECMAScript conformance test suite maintained by TC39. Implementing a runner will allow us to validate qjs4j's ECMAScript compliance and track implementation progress.

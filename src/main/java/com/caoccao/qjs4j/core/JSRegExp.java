@@ -42,7 +42,7 @@ public final class JSRegExp extends JSObject {
         // Compile the pattern to bytecode
         RegExpCompiler compiler = new RegExpCompiler(context.getUnicodePropertyResolver());
         this.bytecode = compiler.compile(this.pattern, rawFlags);
-        this.engine = new RegExpEngine(bytecode);
+        this.engine = new RegExpEngine(bytecode, context.getRuntime().getOptions().getRegExpBacktrackLimit());
         this.flags = this.bytecode.flagsToString();
 
         // Per spec, lastIndex is an own data property:
@@ -262,7 +262,9 @@ public final class JSRegExp extends JSObject {
 
         RegExpCompiler compiler = new RegExpCompiler(getContext().getUnicodePropertyResolver());
         RegExpBytecode nextBytecode = compiler.compile(nextPattern, rawFlags);
-        RegExpEngine nextEngine = new RegExpEngine(nextBytecode);
+        RegExpEngine nextEngine = new RegExpEngine(
+                nextBytecode,
+                getContext().getRuntime().getOptions().getRegExpBacktrackLimit());
         String nextFlags = nextBytecode.flagsToString();
 
         // Update internal slots only after successful compilation.

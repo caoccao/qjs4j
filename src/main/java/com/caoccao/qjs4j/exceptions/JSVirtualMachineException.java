@@ -21,6 +21,10 @@ import com.caoccao.qjs4j.core.JSValue;
 
 /**
  * VM exception for runtime errors.
+ * <p>
+ * This type carries guest errors: the engine catches it at many boundaries and turns it into a
+ * JavaScript value — a thrown error, a rejected promise. Host-initiated termination is deliberately
+ * <em>not</em> modelled here; see {@link JSTerminationException}.
  */
 public class JSVirtualMachineException extends RuntimeException {
     private final JSError jsError;

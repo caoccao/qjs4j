@@ -17,6 +17,7 @@
 package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 
 import java.nio.ByteBuffer;
@@ -145,8 +146,11 @@ public final class ArrayBufferPrototype {
         try {
             buffer.resize((int) newByteLength);
             return JSUndefined.INSTANCE;
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return context.throwRangeError(e.getMessage());
+        } catch (JSErrorException e) {
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -324,8 +328,11 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transfer(context, (int) newByteLength);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return context.throwTypeError(e.getMessage());
+        } catch (JSErrorException e) {
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -369,8 +376,11 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transferToFixedLength(context, (int) newByteLength);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return context.throwTypeError(e.getMessage());
+        } catch (JSErrorException e) {
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 
@@ -385,8 +395,11 @@ public final class ArrayBufferPrototype {
 
         try {
             return buffer.transferToImmutable(context);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return context.throwTypeError(e.getMessage());
+        } catch (JSErrorException e) {
+            // Preserve the error's own type. Collapsing every JSErrorException to one type turned
+            // a RangeError into a TypeError (or the reverse) whenever a precheck above missed a
+            // case, which is precisely when the type matters.
+            return context.throwError(e);
         }
     }
 }
