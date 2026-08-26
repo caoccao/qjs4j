@@ -93,37 +93,41 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
-        boolean declaredSelfNameBinding = false;
+        // ES2024 15.2.5: the BindingIdentifier of a named function expression is bound in a
+        // function environment that *wraps* the function's parameter and variable environments.
+        // Default-parameter initializers resolve through the parameter environment into it, so the
+        // name is visible there; a `var`, lexical, class or function declaration of the same name
+        // in the body creates a different binding that shadows it from the body onwards, and that
+        // binding starts as undefined rather than holding the function object.
+        //
+        // Both halves are modelled with two local slots: the self-name slot is declared first so
+        // defaults see it, and the body declaration then takes over the name in a fresh slot.
+        Integer selfNameLocalIndex = null;
+        boolean selfNameShadowedByBodyDeclaration = false;
         if (functionExpression.getId() != null) {
-            boolean conflictsWithParameter = false;
+            String selfName = functionExpression.getId().getName();
+            boolean conflictsWithParameter;
             Set<String> allParamNames = new HashSet<>();
             for (Pattern param : functionExpression.getParams()) {
                 allParamNames.addAll(param.getBoundNames());
             }
-            conflictsWithParameter = allParamNames.contains(functionExpression.getId().getName());
+            conflictsWithParameter = allParamNames.contains(selfName);
             if (!conflictsWithParameter && functionExpression.getRestParameter() != null) {
                 List<String> restBoundNames = functionExpression.getRestParameter().getArgument().getBoundNames();
-                conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
+                conflictsWithParameter = restBoundNames.contains(selfName);
             }
-            // ES2024 15.2.5: the BindingIdentifier of a named function expression is bound in an
-            // environment that wraps the function's variable environment. A `var`, lexical, class
-            // or function declaration of the same name in the body therefore creates a different
-            // binding that shadows it, and that binding starts as undefined — it does not inherit
-            // the function object. Sharing one local slot for both made `function n() { var n; }`
-            // observe the function instead.
-            boolean shadowedByBodyDeclaration = functionContext.compilerAnalysis.bodyDeclaresBinding(
-                    functionExpression.getBody().getBody(), functionExpression.getId().getName());
-            if (!conflictsWithParameter && !shadowedByBodyDeclaration) {
-                declaredSelfNameBinding = true;
-                functionContext.scopeManager.currentScope().declareLocal(functionExpression.getId().getName());
+            if (!conflictsWithParameter) {
+                selfNameShadowedByBodyDeclaration = functionContext.compilerAnalysis.bodyDeclaresBinding(
+                        functionExpression.getBody().getBody(), selfName);
+                selfNameLocalIndex = functionContext.scopeManager.currentScope().declareLocal(selfName);
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
                 // - In strict mode: mark as const so assignment throws TypeError
                 // - In non-strict mode: mark as function name so assignment is silently ignored
                 if (functionContext.strictMode) {
-                    functionContext.scopeManager.currentScope().markConstLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markConstLocal(selfName);
                 } else {
-                    functionContext.scopeManager.currentScope().markFunctionNameLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markFunctionNameLocal(selfName);
                 }
             }
         }
@@ -156,6 +160,15 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
             functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
+        }
+
+        // The parameter environment is fully built by now, so anything the body declares under the
+        // function's own name takes over that name in a slot of its own. Bytecode emitted above for
+        // the default initializers keeps referring to the self-name slot by index.
+        if (selfNameShadowedByBodyDeclaration) {
+            functionContext.scopeManager.currentScope().shadowLocalWithFreshSlot(
+                    functionExpression.getId().getName(),
+                    "$function_expression_name_" + functionExpression.getId().getName());
         }
 
         // Phase 0: Pre-declare all var bindings as locals before function hoisting.
@@ -225,10 +238,6 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
-        Integer functionExpressionSelfLocalIndex = null;
-        if (declaredSelfNameBinding) {
-            functionExpressionSelfLocalIndex = functionContext.scopeManager.currentScope().getLocal(functionExpression.getId().getName());
-        }
         int localCount = functionContext.scopeManager.currentScope().getLocalCount();
         String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
         functionContext.scopeManager.exitScope();
@@ -269,8 +278,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 functionSource   // source code for toString()
         );
         function.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
-        if (functionExpressionSelfLocalIndex != null) {
-            function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
+        if (selfNameLocalIndex != null) {
+            function.setSelfLocalIndex(selfNameLocalIndex);
         }
 
         // Prototype chain will be initialized when the function is loaded

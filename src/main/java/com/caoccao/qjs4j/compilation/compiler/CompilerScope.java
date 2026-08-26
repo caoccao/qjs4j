@@ -167,4 +167,31 @@ final class CompilerScope {
         this.usingStackLocalIndex = usingStackLocalIndex;
         this.usingStackAsync = usingStackAsync;
     }
+
+    /**
+     * Rebind {@code name} to a brand new slot and hide the slot it used to name.
+     * <p>
+     * This models one environment shadowing another inside a single compiled scope: code emitted
+     * before the call keeps referring to the old slot by index, while everything compiled
+     * afterwards resolves the name to the new slot. The old slot is renamed to {@code hiddenName},
+     * which by convention starts with {@code $} so no source identifier and no name-driven lookup
+     * (direct {@code eval} overlays, capture resolution) can reach it again.
+     *
+     * @param name       the binding to rebind
+     * @param hiddenName the name the previous slot keeps for debugging
+     * @return the index of the new slot
+     */
+    int shadowLocalWithFreshSlot(String name, String hiddenName) {
+        Integer previousIndex = locals.get(name);
+        if (previousIndex != null) {
+            localNamesByIndex.put(previousIndex, hiddenName);
+        }
+        // The shadowing declaration is an ordinary mutable binding, whatever the hidden one was.
+        constLocals.remove(name);
+        functionNameLocals.remove(name);
+        int index = nextLocalIndex++;
+        locals.put(name, index);
+        localNamesByIndex.put(index, name);
+        return index;
+    }
 }

@@ -966,58 +966,19 @@ public non-sealed class JSObject implements JSValue {
             return ownValue;
         }
 
-        // Legacy SpiderMonkey-style function.caller/arguments extension.
-        // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
-        // non-strict functions still report dynamic caller/arguments information.
-        if (key.isString()
-                && this instanceof JSFunction currentFunction
-                && isLegacyFunctionPropertyAccessible(currentFunction)) {
-            String propertyName = key.asString();
-            if (JSKeyword.ARGUMENTS.equals(propertyName)) {
-                JSContext propertyAccessContext = this.context;
-                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
-                if (currentFunctionFrame == null) {
-                    return JSNull.INSTANCE;
-                }
-                JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
-                if (argumentsObject == null) {
-                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
-                    propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
-                    currentFunctionFrame.setArgumentsObject(false, argumentsObject);
-                }
-                return argumentsObject;
-            }
-            if ("caller".equals(propertyName)) {
-                JSContext propertyAccessContext = this.context;
-                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
-                if (currentFunctionFrame == null) {
-                    return JSNull.INSTANCE;
-                }
-                StackFrame callerFrame = currentFunctionFrame.getCaller();
-                while (callerFrame != null && shouldSkipLegacyCallerFrame(callerFrame)) {
-                    callerFrame = callerFrame.getCaller();
-                }
-                if (callerFrame == null || callerFrame.getCaller() == null) {
-                    return JSNull.INSTANCE;
-                }
-                JSFunction callerFunction = callerFrame.getFunction();
-                if (!isLegacyFunctionPropertyAccessible(callerFunction)) {
-                    return JSNull.INSTANCE;
-                }
-                return callerFunction;
-            }
-        }
-
-        // Walk the prototype chain. An ordinary link costs a loop iteration, not a Java frame, so
-        // the chain length a program may build is bounded by memory rather than by a threshold:
-        // `for (let i = 0; i < 1001; i++) object = Object.create(object)` is a valid program and
-        // reading through it used to be a RangeError. Only an exotic prototype — a Proxy, a module
-        // namespace, a typed array, an array — is dispatched to virtually, because only those
-        // intercept the lookup; each such hop is one frame and stays bounded.
+        // Walk the prototype chain. A link costs a loop iteration, not a Java frame, so the chain
+        // length a program may build is bounded by memory rather than by a threshold: a thousand
+        // links of `Object.create`, of arrays, or of functions is a valid program, and reading
+        // through it used to be a RangeError once the links stopped being plain objects. Own
+        // lookup is a virtual call, so an array's dense elements and a string wrapper's characters
+        // are found without leaving the loop. Only a link that *replaces* the lookup — a Proxy,
+        // a deferred module namespace, a typed array asked for a canonical numeric index — is
+        // dispatched to virtually, because only those decide the whole operation themselves; each
+        // such hop is one frame and stays bounded.
         JSObject current = prototype;
         JSObject tortoise = prototype;
         boolean advanceTortoise = false;
-        while (current != null && current.getClass() == JSObject.class) {
+        while (current != null && !current.interceptsPropertyLookup(key)) {
             JSValue value = current.lookupOwnForGet(key, receiver);
             if (value != null) {
                 return value;
@@ -1096,12 +1057,14 @@ public non-sealed class JSObject implements JSValue {
         if (hasOwnProperty(key)) {
             return true;
         }
-        // Iterative for ordinary links, for the reason given on getWithReceiver: `'x' in object`
-        // over a thousand-link chain built by Object.create is a valid program.
+        // Iterative for every link that does not replace the lookup, for the reason given on
+        // getWithReceiver: `'x' in object` over a thousand-link chain — of plain objects, of
+        // arrays, of functions — is a valid program. hasOwnProperty is virtual, so each link's own
+        // exotic storage is consulted without leaving the loop.
         JSObject current = prototype;
         JSObject tortoise = prototype;
         boolean advanceTortoise = false;
-        while (current != null && current.getClass() == JSObject.class) {
+        while (current != null && !current.interceptsPropertyLookup(key)) {
             if (current.hasOwnProperty(key)) {
                 return true;
             }
@@ -1170,6 +1133,24 @@ public non-sealed class JSObject implements JSValue {
     public void initProperties(PropertyKey[] keys, PropertyDescriptor[] descriptors, JSValue[] values) {
         this.shape = new JSShape(keys, descriptors);
         this.propertyValues = values;
+    }
+
+    /**
+     * Whether this object's {@code [[Get]]}/{@code [[HasProperty]]} replaces the ordinary lookup
+     * for the given key, rather than merely adding own storage to it.
+     * <p>
+     * Only such an object has to be dispatched to virtually when it turns up in someone else's
+     * prototype chain; everything else is walked iteratively, so the chain length a program may
+     * build is bounded by memory rather than by a Java stack frame per link. Gating that walk on
+     * {@code getClass() == JSObject.class} instead made arrays, functions and every other ordinary
+     * built-in subclass recurse, so a thousand-link chain of arrays was a {@code RangeError} while
+     * the same chain of plain objects was not.
+     *
+     * @param key the property being looked up
+     * @return true when this object decides the whole operation itself
+     */
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return false;
     }
 
     /**
@@ -1326,7 +1307,7 @@ public non-sealed class JSObject implements JSValue {
      * @param receiver the receiver to pass to a getter
      * @return the value, or {@code null} when this object has no own property for the key
      */
-    private JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
+    protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
         long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             JSValue sparseValue = sparseProperties.get((int) arrayIndex);
@@ -1390,6 +1371,48 @@ public non-sealed class JSObject implements JSValue {
             // "no own property" sentinel, so it reads as undefined.
             JSValue storedValue = propertyValues[offset];
             return storedValue == null ? JSUndefined.INSTANCE : storedValue;
+        }
+
+        // Legacy SpiderMonkey-style function.caller/arguments extension.
+        // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
+        // non-strict functions still report dynamic caller/arguments information.
+        if (key.isString()
+                && this instanceof JSFunction currentFunction
+                && isLegacyFunctionPropertyAccessible(currentFunction)) {
+            String propertyName = key.asString();
+            if (JSKeyword.ARGUMENTS.equals(propertyName)) {
+                JSContext propertyAccessContext = this.context;
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
+                if (argumentsObject == null) {
+                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
+                    propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
+                    currentFunctionFrame.setArgumentsObject(false, argumentsObject);
+                }
+                return argumentsObject;
+            }
+            if ("caller".equals(propertyName)) {
+                JSContext propertyAccessContext = this.context;
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                StackFrame callerFrame = currentFunctionFrame.getCaller();
+                while (callerFrame != null && shouldSkipLegacyCallerFrame(callerFrame)) {
+                    callerFrame = callerFrame.getCaller();
+                }
+                if (callerFrame == null || callerFrame.getCaller() == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSFunction callerFunction = callerFrame.getFunction();
+                if (!isLegacyFunctionPropertyAccessible(callerFunction)) {
+                    return JSNull.INSTANCE;
+                }
+                return callerFunction;
+            }
         }
 
         return null;

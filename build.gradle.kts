@@ -160,6 +160,10 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("performance")
     }
+    // Pinned rather than left at Gradle's default so the memory-accounting tests have a known
+    // ceiling to overshoot: they assert that a data-block allocation the JVM refuses gives its
+    // reservation back, which needs a request that is reliably larger than the heap.
+    maxHeapSize = "1g"
 }
 
 // Create a separate task for performance tests

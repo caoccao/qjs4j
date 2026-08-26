@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.test262;
 
+import com.caoccao.qjs4j.builtins.AtomicsObject;
 import com.caoccao.qjs4j.compilation.compiler.Compiler;
 import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.*;
@@ -179,11 +180,16 @@ public class Test262Executor {
         List<JSRuntime> realmRuntimes = new ArrayList<>();
         Test262AgentHost agentHost = new Test262AgentHost(this);
         TestResult result;
+        // The agent cluster's Atomics object is created here and injected, so it is not owned by
+        // any one of the runtimes that share it: the main runtime would otherwise close it —
+        // cancelling every agent's wait — while the agents were still being shut down below.
+        AtomicsObject clusterAtomics = new AtomicsObject();
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions()
+                .setAtomicsObject(clusterAtomics)
                 .setShadowRealmEnabled(true)
                 .setTemporalEnabled(true))) {
             try (JSContext context = runtime.createContext()) {
-                agentHost.setSharedAtomicsObject(runtime.getOptions().getAtomicsObject());
+                agentHost.setSharedAtomicsObject(clusterAtomics);
                 context.setWaitable(!test.hasFlag("CanBlockIsFalse"));
                 install262Object(context, realmRuntimes, agentHost, null);
 
@@ -214,6 +220,7 @@ public class Test262Executor {
                 String code = prepareCode(test);
                 boolean isModule = test.getVariant() == Test262TestCase.Variant.MODULE;
                 Test262TestCase.NegativeInfo negative = test.getNegative();
+                boolean[] bodyEvaluated = installDoNotEvaluateProbe(context);
 
                 if (negative != null && PHASE_PARSE.equals(negative.getPhase())) {
                     // A parse-phase test must fail while the source is being compiled. Compiling
@@ -225,6 +232,7 @@ public class Test262Executor {
                         // A resolution- or runtime-phase test must get past compilation first.
                         TestResult parseFailure = requireSourceCompiles(context, code, isModule, test);
                         result = parseFailure != null ? parseFailure : evaluate(context, runtime, code, test);
+                        result = requireNegativePhase(result, test, bodyEvaluated[0]);
                     } else {
                         result = evaluate(context, runtime, code, test);
                     }
@@ -237,6 +245,8 @@ public class Test262Executor {
             for (JSRuntime realmRuntime : realmRuntimes) {
                 realmRuntime.close();
             }
+            // Last, once every runtime that shared it has gone: the cluster owner closes it.
+            clusterAtomics.close();
         }
         test.setTimeElapsed(System.currentTimeMillis() - startTime);
         return result;
@@ -526,6 +536,38 @@ public class Test262Executor {
     }
 
     /**
+     * Wrap the harness's {@code $DONOTEVALUATE} so the executor can see whether the test body ran.
+     * <p>
+     * {@code INTERPRETING.md} splits negative tests by <em>phase</em>, and the engine has no
+     * separate link step: loading, linking and evaluating a module all happen inside one
+     * {@code eval}. Comparing the thrown constructor alone therefore cannot tell a resolution
+     * failure from a body that ran and threw the same constructor later. Test262 marks the boundary
+     * itself — every parse- and resolution-phase test opens its body with {@code $DONOTEVALUATE()},
+     * whose whole purpose is to be unreachable — so observing that call is a direct, source-driven
+     * answer to "did the body execute?".
+     * <p>
+     * The original function is still called, so the value the test throws is unchanged.
+     *
+     * @param context the context whose harness has already been loaded
+     * @return a one-element array set to true once the test body starts executing
+     */
+    private boolean[] installDoNotEvaluateProbe(JSContext context) {
+        boolean[] bodyEvaluated = {false};
+        JSObject globalObject = context.getGlobalObject();
+        JSValue existing = globalObject.get("$DONOTEVALUATE");
+        if (!(existing instanceof JSFunction originalFunction)) {
+            // A raw test has no harness. Nothing to observe, and no resolution-phase test is raw.
+            return bodyEvaluated;
+        }
+        globalObject.set("$DONOTEVALUATE", new JSNativeFunction(context, "$DONOTEVALUATE", 0,
+                (childContext, thisArg, args) -> {
+                    bodyEvaluated[0] = true;
+                    return originalFunction.call(childContext, thisArg, args);
+                }));
+        return bodyEvaluated;
+    }
+
+    /**
      * Produce the source for this interpretation.
      * <p>
      * The strict variant gets a {@code "use strict";} prologue as {@code INTERPRETING.md}
@@ -550,6 +592,16 @@ public class Test262Executor {
     }
 
     /**
+     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
+     *
+     * @param context  the context
+     * @param code     the prepared source
+     * @param isModule whether the source is module source
+     * @param test     the test case
+     * @return a failing result when the source did not compile, or {@code null} when it did
+     */
+
+    /**
      * Prewarm runtime/context class loading before parallel test execution.
      * This reduces startup class-loader contention when many workers create contexts simultaneously.
      *
@@ -569,14 +621,30 @@ public class Test262Executor {
     }
 
     /**
-     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
+     * Hold a negative test to the phase its metadata declares.
+     * <p>
+     * A resolution-phase failure has to happen while the module graph is being linked, so the test
+     * body must never run. A parse- or resolution-phase test that reaches {@code $DONOTEVALUATE()}
+     * has therefore failed in the wrong phase, however well the thrown constructor matches.
      *
-     * @param context  the context
-     * @param code     the prepared source
-     * @param isModule whether the source is module source
-     * @param test     the test case
-     * @return a failing result when the source did not compile, or {@code null} when it did
+     * @param result        the result the phase-agnostic comparison produced
+     * @param test          the test case
+     * @param bodyEvaluated whether the test body started executing
+     * @return the result, downgraded to a failure on a phase mismatch
      */
+    private TestResult requireNegativePhase(TestResult result, Test262TestCase test, boolean bodyEvaluated) {
+        Test262TestCase.NegativeInfo negative = test.getNegative();
+        if (!result.isPassed() || negative == null || PHASE_RUNTIME.equals(negative.getPhase())) {
+            return result;
+        }
+        if (!bodyEvaluated) {
+            return result;
+        }
+        return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
+                + negative.getType() + " but the test body was evaluated, so the error was raised "
+                + "after the module graph had been linked");
+    }
+
     private TestResult requireSourceCompiles(JSContext context, String code, boolean isModule, Test262TestCase test) {
         Test262TestCase.NegativeInfo negative = test.getNegative();
         try {

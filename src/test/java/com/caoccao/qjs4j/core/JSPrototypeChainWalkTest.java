@@ -33,10 +33,15 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code RangeError}, because {@code for (let i = 0; i < 1001; i++) o = Object.create(o)} is
  * legal and reading through it must work.
  * <p>
- * The walk is now a loop over ordinary links, so its length is bounded by memory rather than by a
- * threshold, and only an exotic prototype — a Proxy, a module namespace, a typed array — costs a
- * Java frame. Termination on a corrupt graph comes from Floyd's cycle detection rather than from a
- * count.
+ * The walk is now a loop, so its length is bounded by memory rather than by a threshold, and only a
+ * prototype that <em>replaces</em> the lookup — a Proxy, a deferred module namespace, a typed array
+ * asked for a canonical numeric index — costs a Java frame. Termination on a corrupt graph comes
+ * from Floyd's cycle detection rather than from a count.
+ * <p>
+ * The loop first ran only while the link's class was exactly {@code JSObject}, which left arrays,
+ * functions and every other ordinary built-in subclass on the recursive path with the old
+ * thousand-link cutoff: a chain of {@code Object.create} worked while the same chain of arrays was
+ * a {@code RangeError}. Own lookup is a virtual call now, so those links are walked like any other.
  * <p>
  * The script-observable walks are asserted against V8. The cyclic chains are not: they are built
  * with the raw {@code setPrototype} embedder API, which has no JavaScript equivalent — no script
@@ -52,6 +57,14 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
             object = child;
         }
         return object;
+    }
+
+    @Test
+    public void testArrayElementsAreVisibleThroughAPrototypeChain() {
+        assertStringWithJavet("""
+                const base = [10, 20];
+                const derived = Object.create(base);
+                [derived[0], derived[1], String(derived[2]), 0 in derived, 5 in derived].join(',');""");
     }
 
     @Test
@@ -80,6 +93,60 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
         assertThatThrownBy(() -> first.has(PropertyKey.fromString("missing")))
                 .isInstanceOf(JSRangeErrorException.class)
                 .hasMessageContaining("Cyclic prototype chain");
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDeepChainOfAlternatingObjectsAndArrays() {
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = i % 2 === 0 ? [] : {};
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o, String(o.absent)].join(',');""");
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDeepChainOfArrays() {
+        // The review's reproducer. Every link is a JSArray, which used to mean one Java frame and
+        // one unit of the thousand-link budget each.
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = [];
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDeepChainOfFunctions() {
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = function () {};
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
+    }
+
+    @Test
+    @Timeout(120)
+    public void testDeepChainOfTypedArrays() {
+        assertStringWithJavet("""
+                let o = { x: 'found' };
+                for (let i = 0; i < 1002; i++) {
+                  const link = new Uint8Array(0);
+                  Object.setPrototypeOf(link, o);
+                  o = link;
+                }
+                [o.x, 'x' in o, 'absent' in o].join(',');""");
     }
 
     @Test
@@ -166,6 +233,25 @@ public class JSPrototypeChainWalkTest extends BaseJavetTest {
         assertThat(shallow.has(PropertyKey.fromString("own"))).isTrue();
         assertThat(shallow.has(PropertyKey.fromString("missing"))).isFalse();
         assertThat(shallow.get(PropertyKey.fromString("missing"))).isEqualTo(JSUndefined.INSTANCE);
+    }
+
+    @Test
+    public void testStringWrapperInAPrototypeChainStillIndexesItsCharacters() {
+        assertStringWithJavet("""
+                const wrapper = new String('abc');
+                const derived = Object.create(wrapper);
+                [derived[0], derived[2], String(derived[9]), derived.length, 1 in derived].join(',');""");
+    }
+
+    @Test
+    public void testTypedArrayElementsAreVisibleThroughAPrototypeChain() {
+        // A canonical numeric index on an integer-indexed exotic object stops the walk, so an
+        // out-of-range index reads undefined rather than continuing up the chain.
+        assertStringWithJavet("""
+                const base = new Uint8Array([1, 2, 3]);
+                Object.getPrototypeOf(base).nine = 'inherited';
+                const derived = Object.create(base);
+                [derived[0], String(derived[9]), 0 in derived, 9 in derived].join(',');""");
     }
 
     @Test

@@ -250,6 +250,24 @@ public class JSModuleSourceTransformTest extends BaseTest {
     }
 
     @Test
+    public void testImportedModuleMissingARequiredSemicolonIsASyntaxError() throws IOException {
+        // The declaration-splitting pass runs on every module the loader reads, not only on the one
+        // handed to eval, so a dependency that depends on a semicolon it does not have has to be
+        // rejected there too — and as an ordinary SyntaxError, not a raw Java exception.
+        Files.writeString(moduleDirectory.resolve("dep.mjs"), "export {} let x = 1;\n");
+        Path mainPath = moduleDirectory.resolve("main.mjs");
+        String mainSource = """
+                import { v } from './dep.mjs';
+                globalThis.__out = v;""";
+        Files.writeString(mainPath, mainSource);
+        assertThatThrownBy(() -> context.eval(mainSource, mainPath.toString(), true))
+                .isInstanceOf(JSException.class)
+                // Module code is strict, so `let` is a reserved word there — the parser's own
+                // diagnostic, identical to V8's for the same source.
+                .hasMessage("SyntaxError: Unexpected strict mode reserved word");
+    }
+
+    @Test
     public void testIndentedExportIsImportable() throws IOException {
         assertThat(evalModuleToString(
                 "    export const v = 14;",

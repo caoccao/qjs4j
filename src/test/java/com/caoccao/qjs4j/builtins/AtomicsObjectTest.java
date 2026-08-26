@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
@@ -145,6 +146,25 @@ public class AtomicsObjectTest extends BaseJavetTest {
         // Test invalid size
         result = atomics().isLockFree(context, null, new JSValue[]{new JSNumber(3)});
         assertThat(result.isBooleanFalse()).isTrue(); // Should be false for unsupported sizes
+    }
+
+    @Test
+    public void testIsLockFreeReportsThePathTheEngineActuallyTook() {
+        // A capability query has to describe the implementation, not the width. JDK 25 withdrew the
+        // atomic access modes from byte-array view VarHandles, so the engine serialises every width
+        // on a lock there — while Atomics.isLockFree(4) still answered true, which is precisely the
+        // premise guest code picks a lock-free algorithm on.
+        boolean lockFree = ByteArrayAtomics.isLockFree();
+        for (int size : new int[]{1, 2, 4, 8}) {
+            assertThat(atomics().isLockFree(context, null, new JSValue[]{new JSNumber(size)}))
+                    .as("size " + size)
+                    .isEqualTo(JSBoolean.valueOf(lockFree));
+            assertThat(context.eval("Atomics.isLockFree(" + size + ")").toString())
+                    .as("guest-visible size " + size)
+                    .isEqualTo(String.valueOf(lockFree));
+        }
+        assertThat(context.eval("Atomics.isLockFree(3)").toString()).isEqualTo("false");
+        assertThat(context.eval("Atomics.isLockFree(0)").toString()).isEqualTo("false");
     }
 
     @Test

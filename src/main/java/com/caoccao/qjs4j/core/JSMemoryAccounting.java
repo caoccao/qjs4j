@@ -16,7 +16,11 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.lang.ref.Cleaner;
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
+import java.lang.ref.WeakReference;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -29,7 +33,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * reservation that would exceed {@link JSRuntimeOptions#getMaxMemoryUsage()} is refused and the
  * caller raises a catchable {@code RangeError}, so a script cannot walk the JVM heap off a cliff
  * with {@code new ArrayBuffer(n)}. Reservations are released when the buffer is detached or
- * transferred, and otherwise when the buffer becomes unreachable, through a {@link Cleaner}.
+ * transferred, and otherwise when the buffer becomes unreachable: each reservation is a weak
+ * reference to its buffer, and {@link #reserve(long)} drains the collected ones before deciding
+ * whether the next allocation fits. Reclaiming at the moment the limit is consulted, on the thread
+ * consulting it, is both more accurate than waiting for a background thread to have run and free of
+ * one — this object belongs to a single runtime, and so does everything it reclaims.
  * <p>
  * <strong>What this does not bound.</strong> It is not a heap limit and does not pretend to be
  * one. Objects, arrays, strings, shapes, bytecode and the engine's own working memory are ordinary
@@ -47,16 +55,18 @@ public final class JSMemoryAccounting {
      */
     public static final long UNLIMITED = 0L;
     /**
-     * One {@code Cleaner} for the process rather than one per runtime: a {@code Cleaner} owns a
-     * daemon thread, and an embedder that creates a runtime per unit of work would otherwise pay
-     * for a thread every time.
+     * The buffers whose data blocks have been collected, so their bytes can be given back.
      */
-    private static final Cleaner CLEANER = Cleaner.create(runnable -> {
-        Thread thread = new Thread(runnable, "qjs4j-memory-accounting");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private final ReferenceQueue<Object> collectedOwners = new ReferenceQueue<>();
     private final long limit;
+    /**
+     * The reservations still outstanding.
+     * <p>
+     * A reservation is only enqueued if the reference object is itself still reachable when its
+     * buffer is collected, and the buffer is otherwise the only thing holding it — so this set is
+     * what keeps reclamation possible. It holds reservations, never buffers, so it pins nothing.
+     */
+    private final Set<Reservation> outstandingReservations = ConcurrentHashMap.newKeySet();
     private final AtomicLong reservedBytes = new AtomicLong();
 
     /**
@@ -83,6 +93,7 @@ public final class JSMemoryAccounting {
      * @return the reserved byte count
      */
     public long getReservedBytes() {
+        releaseCollectedReservations();
         return reservedBytes.get();
     }
 
@@ -98,10 +109,8 @@ public final class JSMemoryAccounting {
      * @return a handle that releases the reservation
      */
     public Reservation registerReservation(Object owner, long bytes) {
-        Reservation reservation = new Reservation(this, bytes);
-        // The cleanup action must not capture `owner`, or the buffer would never become
-        // unreachable and the reservation would never be released.
-        CLEANER.register(owner, reservation);
+        Reservation reservation = new Reservation(this, owner, bytes);
+        outstandingReservations.add(reservation);
         return reservation;
     }
 
@@ -120,6 +129,19 @@ public final class JSMemoryAccounting {
     }
 
     /**
+     * Give back the bytes of every buffer the collector has taken.
+     * <p>
+     * Called before the limit is consulted and before the total is reported, both of which happen
+     * on the thread using the engine. An empty queue poll costs nothing.
+     */
+    private void releaseCollectedReservations() {
+        Reference<?> collected;
+        while ((collected = collectedOwners.poll()) != null) {
+            ((Reservation) collected).release();
+        }
+    }
+
+    /**
      * Reserve capacity for a data block, or refuse.
      * <p>
      * Refusal is a normal, catchable outcome; the caller turns it into a {@code RangeError}. It is
@@ -133,6 +155,9 @@ public final class JSMemoryAccounting {
         if (bytes < 0) {
             throw new IllegalArgumentException("Cannot reserve a negative number of bytes: " + bytes);
         }
+        // Reclaim before refusing: a limit that still counts blocks the collector has already taken
+        // is not the limit the embedder configured.
+        releaseCollectedReservations();
         if (limit == UNLIMITED) {
             reservedBytes.addAndGet(bytes);
             return true;
@@ -162,14 +187,18 @@ public final class JSMemoryAccounting {
     }
 
     /**
-     * A released-once reservation. Runs as the {@link Cleaner} action for its owner.
+     * A released-once reservation, and the weak reference to the buffer whose lifetime it follows.
+     * <p>
+     * Being the reference means there is no separate cleanup object to keep alive, and nothing
+     * anywhere captures the buffer — which would stop it ever being collected and defeat the point.
      */
-    public static final class Reservation implements Runnable {
+    public static final class Reservation extends WeakReference<Object> {
         private final JSMemoryAccounting accounting;
         private final AtomicBoolean released = new AtomicBoolean();
         private volatile long bytes;
 
-        private Reservation(JSMemoryAccounting accounting, long bytes) {
+        private Reservation(JSMemoryAccounting accounting, Object owner, long bytes) {
+            super(owner, accounting.collectedOwners);
             this.accounting = accounting;
             this.bytes = bytes;
         }
@@ -189,7 +218,10 @@ public final class JSMemoryAccounting {
          * @param additionalBytes the extra bytes to reserve
          * @return true when the reservation grew
          */
-        public boolean grow(long additionalBytes) {
+        public synchronized boolean grow(long additionalBytes) {
+            if (additionalBytes < 0) {
+                throw new IllegalArgumentException("Cannot grow by a negative number of bytes: " + additionalBytes);
+            }
             if (released.get()) {
                 return false;
             }
@@ -203,15 +235,37 @@ public final class JSMemoryAccounting {
         /**
          * Release this reservation. Idempotent.
          */
-        public void release() {
+        public synchronized void release() {
             if (released.compareAndSet(false, true)) {
                 accounting.release(bytes);
+                bytes = 0L;
+                accounting.outstandingReservations.remove(this);
+                clear();
             }
         }
 
-        @Override
-        public void run() {
-            release();
+        /**
+         * Give back part of this reservation.
+         * <p>
+         * This is the rollback for an allocation that was charged and then failed. Accounting is
+         * committed before the JVM allocation, deliberately — a reservation the allocation would
+         * exceed has to be refused before any memory is touched — so the exceptional path has to
+         * hand the bytes back. Without it a transient {@code OutOfMemoryError} left the runtime's
+         * ceiling permanently inflated, and later, much smaller allocations were refused for space
+         * nothing was using.
+         *
+         * @param releasedBytes the bytes to give back, clamped to what this reservation holds
+         */
+        public synchronized void shrink(long releasedBytes) {
+            if (releasedBytes < 0) {
+                throw new IllegalArgumentException("Cannot shrink by a negative number of bytes: " + releasedBytes);
+            }
+            if (released.get()) {
+                return;
+            }
+            long amount = Math.min(releasedBytes, bytes);
+            bytes -= amount;
+            accounting.release(amount);
         }
     }
 }

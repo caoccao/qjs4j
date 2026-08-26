@@ -18,6 +18,10 @@ package com.caoccao.qjs4j.utils;
 
 import org.junit.jupiter.api.Test;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -203,5 +207,40 @@ public class ByteArrayAtomicsTest {
                 .byteArrayViewVarHandle(int[].class, java.nio.ByteOrder.LITTLE_ENDIAN)
                 .isAccessModeSupported(java.lang.invoke.VarHandle.AccessMode.GET_AND_ADD);
         assertThat(ByteArrayAtomics.isLockFree()).isEqualTo(expected);
+    }
+
+    @Test
+    public void testProbeCoversEveryAccessModeTheDirectPathInvokes() {
+        // The probe checked every mode on the int view but only two on long and one on short, while
+        // the selected path goes on to invoke long SET_VOLATILE, COMPARE_AND_EXCHANGE, GET_AND_SET
+        // and all three bitwise modes, plus short SET_VOLATILE. A JVM with partial support would
+        // have taken the direct path and then thrown UnsupportedOperationException from a mode
+        // nothing checked — the very failure this abstraction exists to prevent.
+        for (Class<?> viewType : List.of(short[].class, int[].class, long[].class)) {
+            VarHandle handle = MethodHandles.byteArrayViewVarHandle(viewType, ByteOrder.LITTLE_ENDIAN);
+            for (VarHandle.AccessMode accessMode : ByteArrayAtomics.requiredAccessModes(viewType)) {
+                assertThat(handle.isAccessModeSupported(accessMode))
+                        .as(viewType.getSimpleName() + " " + accessMode)
+                        .isEqualTo(ByteArrayAtomics.isLockFree());
+            }
+        }
+    }
+
+    @Test
+    public void testRequiredAccessModesNameEveryModeUsedForEachWidth() {
+        assertThat(ByteArrayAtomics.requiredAccessModes(short[].class))
+                .contains(VarHandle.AccessMode.GET_VOLATILE, VarHandle.AccessMode.SET_VOLATILE);
+        assertThat(ByteArrayAtomics.requiredAccessModes(int[].class))
+                .contains(
+                        VarHandle.AccessMode.GET_VOLATILE,
+                        VarHandle.AccessMode.SET_VOLATILE,
+                        VarHandle.AccessMode.COMPARE_AND_EXCHANGE,
+                        VarHandle.AccessMode.GET_AND_SET,
+                        VarHandle.AccessMode.GET_AND_ADD,
+                        VarHandle.AccessMode.GET_AND_BITWISE_AND,
+                        VarHandle.AccessMode.GET_AND_BITWISE_OR,
+                        VarHandle.AccessMode.GET_AND_BITWISE_XOR);
+        assertThat(ByteArrayAtomics.requiredAccessModes(long[].class))
+                .isEqualTo(ByteArrayAtomics.requiredAccessModes(int[].class));
     }
 }

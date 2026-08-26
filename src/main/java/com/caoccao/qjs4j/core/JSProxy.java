@@ -922,6 +922,18 @@ public final class JSProxy extends JSObject {
     }
 
     /**
+     * A proxy's traps decide the whole lookup, so a proxy in someone else's prototype chain is
+     * always dispatched to rather than walked through.
+     *
+     * @param key the property being looked up
+     * @return always true
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return true;
+    }
+
+    /**
      * Check if two descriptors are compatible.
      * Following ES2020 ValidateAndApplyPropertyDescriptor logic.
      */

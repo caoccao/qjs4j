@@ -68,10 +68,63 @@ public class DynamicBufferGrowthTest {
     }
 
     @Test
+    public void testInsertOpensAGapAndKeepsTheTail() {
+        DynamicBuffer buffer = new DynamicBuffer(64, 1024);
+        buffer.append(new byte[]{1, 2, 3, 4});
+        buffer.insert(2, 2);
+        assertThat(buffer.size()).isEqualTo(6);
+        byte[] bytes = buffer.toByteArray();
+        assertThat(bytes[0]).isEqualTo((byte) 1);
+        assertThat(bytes[1]).isEqualTo((byte) 2);
+        assertThat(bytes[4]).isEqualTo((byte) 3);
+        assertThat(bytes[5]).isEqualTo((byte) 4);
+        // A zero-length insert is a no-op rather than an error.
+        buffer.insert(0, 0);
+        assertThat(buffer.size()).isEqualTo(6);
+    }
+
+    @Test
     public void testInsertPastTheCeilingThrows() {
         DynamicBuffer buffer = new DynamicBuffer(16, 32);
         buffer.append(new byte[30]);
         assertThatThrownBy(() -> buffer.insert(0, 16)).isInstanceOf(JSRangeErrorException.class);
+    }
+
+    @Test
+    public void testInsertRejectsALengthThatOverflowsTheSize() {
+        DynamicBuffer buffer = new DynamicBuffer(64, 1024);
+        buffer.append(new byte[]{1, 2, 3});
+        // size + length overflows int and lands on a value an int comparison accepts.
+        assertThatThrownBy(() -> buffer.insert(1, Integer.MAX_VALUE))
+                .isInstanceOf(JSRangeErrorException.class);
+        assertThat(buffer.size()).isEqualTo(3);
+        assertThat(buffer.toByteArray()).containsExactly(1, 2, 3);
+    }
+
+    @Test
+    public void testInsertRejectsANegativeLengthInsteadOfDeletingData() {
+        // insert(5, -1) validated the position but not the length, so it performed a legal
+        // overlapping copy from index 5 to index 4 and set the size to 9: it deleted a byte and
+        // reported success.
+        DynamicBuffer buffer = new DynamicBuffer(64, 1024);
+        buffer.append(new byte[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+        assertThatThrownBy(() -> buffer.insert(5, -1)).isInstanceOf(IndexOutOfBoundsException.class);
+        assertThat(buffer.size()).as("a rejected insert changes nothing").isEqualTo(10);
+        assertThat(buffer.toByteArray()).containsExactly(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+    }
+
+    @Test
+    public void testRangeValidationSurvivesOverflowingOffsets() {
+        DynamicBuffer buffer = new DynamicBuffer(64, 1024);
+        buffer.append(new byte[]{1, 2, 3, 4});
+        // offset + length wraps negative in int, which used to pass the bounds test.
+        assertThatThrownBy(() -> buffer.getRange(Integer.MAX_VALUE, Integer.MAX_VALUE))
+                .isInstanceOf(IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> buffer.append(new byte[]{1, 2}, Integer.MAX_VALUE, Integer.MAX_VALUE))
+                .isInstanceOf(IndexOutOfBoundsException.class);
+        assertThatThrownBy(() -> buffer.setU32(Integer.MAX_VALUE, 1))
+                .isInstanceOf(IndexOutOfBoundsException.class);
+        assertThat(buffer.size()).isEqualTo(4);
     }
 
     @Test

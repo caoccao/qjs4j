@@ -636,32 +636,6 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Override three-arg get so prototype chain lookups find dense array elements.
-     * Without this, JSObject's three-arg get only checks shape/sparse properties,
-     * missing JSArray's dense storage when this array is in a prototype chain.
-     */
-    @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        long index = key.toArrayIndex();
-        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
-            int intIndex = (int) index;
-            // Check dense array
-            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
-                return denseArray[intIndex];
-            }
-            // Check sparse storage
-            if (sparseProperties != null) {
-                JSValue value = sparseProperties.get(intIndex);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        // Delegate to JSObject for shape properties, getters, and prototype chain
-        return super.getWithReceiver(key, receiver, depth);
-    }
-
-    /**
      * Check whether an index has an own element (distinguishes holes from undefined values).
      */
     public boolean hasElement(long index) {
@@ -739,6 +713,39 @@ public final class JSArray extends JSObject {
     private boolean isLengthWritable() {
         PropertyDescriptor descriptor = shape.getDescriptor(PropertyKey.LENGTH);
         return descriptor == null || descriptor.isWritable();
+    }
+
+    /**
+     * Own-property lookup, so a prototype-chain walk finds dense array elements.
+     * <p>
+     * This used to override {@code getWithReceiver}, which meant an array link in a prototype
+     * chain could only be reached by recursing into it — one Java frame and one unit of the
+     * prototype-depth budget per link. Adding the elements to the own lookup instead lets the
+     * iterative walk in {@link JSObject} handle arrays like any other ordinary object.
+     *
+     * @param key      the property key
+     * @param receiver the receiver a getter is called with
+     * @return the value, or {@code null} when there is no own property
+     */
+    @Override
+    protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
+        long index = key.toArrayIndex();
+        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            // Check dense array
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return denseArray[intIndex];
+            }
+            // Check sparse storage
+            if (sparseProperties != null) {
+                JSValue value = sparseProperties.get(intIndex);
+                if (value != null) {
+                    return value;
+                }
+            }
+        }
+        // Delegate to JSObject for shape properties and getters
+        return super.lookupOwnForGet(key, receiver);
     }
 
     @Override

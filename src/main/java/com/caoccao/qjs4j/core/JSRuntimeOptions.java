@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.builtins.AtomicsObject;
 
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runtime configuration options.
@@ -53,7 +54,21 @@ public class JSRuntimeOptions {
      * {@link #setRegExpBacktrackLimit(long)}.
      */
     public static final long DEFAULT_REGEXP_BACKTRACK_LIMIT = 10_000_000L;
+    /**
+     * Set once the runtime that will close the default {@link AtomicsObject} has taken it, so
+     * handing the same options to two runtimes does not give both of them ownership.
+     */
+    protected final AtomicBoolean atomicsOwnershipClaimed = new AtomicBoolean();
     protected AtomicsObject atomicsObject;
+    /**
+     * Whether the {@link AtomicsObject} came from the embedder.
+     * <p>
+     * An injected instance belongs to an agent cluster and is closed by whoever owns that cluster;
+     * the one the default constructor creates belongs to the single runtime that takes these
+     * options, and that runtime closes it. Without the distinction, either every default runtime
+     * leaked an executor or a shared cluster object was shut down by the first member to close.
+     */
+    protected boolean atomicsObjectInjected;
     protected long maxMemoryUsage;
     protected long maxStackSize;
     protected long regExpBacktrackLimit;
@@ -67,6 +82,19 @@ public class JSRuntimeOptions {
         regExpBacktrackLimit = DEFAULT_REGEXP_BACKTRACK_LIMIT;
         shadowRealmEnabled = false;
         temporalEnabled = false;
+    }
+
+    /**
+     * Claim responsibility for closing the {@link AtomicsObject} these options carry.
+     * <p>
+     * Succeeds at most once, and only for the instance the default constructor created. An injected
+     * instance is a shared agent-cluster object that the embedder owns, and two runtimes built from
+     * one options object must not both close the same executor.
+     *
+     * @return true when the caller is now responsible for closing it
+     */
+    boolean claimAtomicsObjectOwnership() {
+        return !atomicsObjectInjected && atomicsOwnershipClaimed.compareAndSet(false, true);
     }
 
     public AtomicsObject getAtomicsObject() {
@@ -116,6 +144,15 @@ public class JSRuntimeOptions {
         return regExpBacktrackLimit;
     }
 
+    /**
+     * Whether the {@link AtomicsObject} was supplied by the embedder rather than created here.
+     *
+     * @return true when the instance was injected
+     */
+    public boolean isAtomicsObjectInjected() {
+        return atomicsObjectInjected;
+    }
+
     public boolean isShadowRealmEnabled() {
         return shadowRealmEnabled;
     }
@@ -126,6 +163,7 @@ public class JSRuntimeOptions {
 
     public JSRuntimeOptions setAtomicsObject(AtomicsObject atomicsObject) {
         this.atomicsObject = Objects.requireNonNull(atomicsObject);
+        this.atomicsObjectInjected = true;
         return this;
     }
 

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.utils.AtomTable;
 
+import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -72,8 +73,35 @@ public final class JSRuntime implements AutoCloseable {
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
+    /**
+     * Serialises admission against shutdown.
+     * <p>
+     * Setting {@link #closed} and clearing what the runtime owns were two independent steps, so a
+     * producer that had already passed the closed check could be suspended, let {@code close()}
+     * clear the queue, and then deposit its job into a runtime that had finished letting go of it.
+     * The registry had the same window, because it tested {@code closed} outside its own monitor.
+     * Every accepted mutation now happens under this lock, and {@code close()} clears under it —
+     * after sealing intake, so a producer either gets in before the clear or is refused.
+     */
+    private final Object lifecycleLock = new Object();
     private final JSMemoryAccounting memoryAccounting;
     private final JSRuntimeOptions options;
+    /**
+     * Whether {@link #close()} is responsible for closing the runtime's {@link AtomicsObject}.
+     */
+    private final boolean ownsAtomicsObject;
+    /**
+     * The weak collections this runtime's keys have outlived.
+     * <p>
+     * A {@code WeakMap}/{@code WeakSet} entry lives on its key and holds its value strongly, so a
+     * collection that dies while its keys live has to be noticed somewhere or the value is retained
+     * for as long as the key is. Each entry is a weak reference registered here, and the weak
+     * collection operations — and {@link #gc()} — drain the queue on the calling thread. Owning the
+     * queue rather than sharing a process-wide {@code Cleaner} keeps reclamation on the thread that
+     * is using the engine, which is the only thread allowed to touch anything reachable from a
+     * {@link JSContext}.
+     */
+    private final ReferenceQueue<Object> weakCollectionOwners = new ReferenceQueue<>();
     /**
      * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm
      * proxy paths. Declared volatile so a reader never observes a stale context.
@@ -105,6 +133,10 @@ public final class JSRuntime implements AutoCloseable {
         this.globalSymbolReverseRegistry = new HashMap<>();
         this.options = options;
         this.memoryAccounting = new JSMemoryAccounting(options.getMaxMemoryUsage());
+        // An AtomicsObject the options created belongs to this runtime alone, and its waitAsync
+        // executor is a resource nothing else will release; one the embedder injected is an agent
+        // cluster's shared object, and shutting it down here would break the other members.
+        this.ownsAtomicsObject = options.claimAtomicsObjectOwnership();
     }
 
     /**
@@ -135,22 +167,34 @@ public final class JSRuntime implements AutoCloseable {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        // Stop asynchronous producers before clearing anything they could still write to.
+        // Intake is sealed by the line above; from here nothing new is admitted. Stop asynchronous
+        // producers before clearing anything they could still write to.
         if (options != null && options.getAtomicsObject() != null) {
-            options.getAtomicsObject().cancelAsyncWaits(this);
+            if (ownsAtomicsObject) {
+                // Nothing else shares this one, so its waitAsync executor goes with the runtime
+                // rather than keeping a daemon thread alive for the cached pool's idle timeout.
+                options.getAtomicsObject().close();
+            } else {
+                options.getAtomicsObject().cancelAsyncWaits(this);
+            }
         }
-        jobQueue.clear();
-        for (JSContext context : getContextSnapshot()) {
+        List<JSContext> contextSnapshot;
+        synchronized (lifecycleLock) {
+            // A producer that passed the closed check holds this lock, so its job lands before the
+            // clear rather than after it. Only the fast clears happen here.
+            jobQueue.clear();
+            globalSymbolRegistry.clear();
+            globalSymbolReverseRegistry.clear();
+            contextSnapshot = getContextSnapshot();
+            contexts.clear();
+        }
+        // Context teardown is slow and reaches back into the runtime, so it stays outside the lock.
+        for (JSContext context : contextSnapshot) {
             if (context != null) {
                 context.close();
             }
         }
-        contexts.clear();
         atoms.clear();
-        synchronized (globalSymbolRegistry) {
-            globalSymbolRegistry.clear();
-            globalSymbolReverseRegistry.clear();
-        }
         currentExecutingContext = null;
         gc();
     }
@@ -162,10 +206,12 @@ public final class JSRuntime implements AutoCloseable {
      * @throws IllegalStateException when the runtime is closed
      */
     public JSContext createContext() {
-        requireOpen();
-        JSContext context = new JSContext(this);
-        contexts.add(context);
-        return context;
+        synchronized (lifecycleLock) {
+            requireOpen();
+            JSContext context = new JSContext(this);
+            contexts.add(context);
+            return context;
+        }
     }
 
     /**
@@ -188,9 +234,11 @@ public final class JSRuntime implements AutoCloseable {
      * @throws IllegalStateException when the runtime is closed
      */
     public void enqueueJob(Job job) {
-        requireOpen();
-        if (job != null) {
-            jobQueue.offer(job);
+        synchronized (lifecycleLock) {
+            requireOpen();
+            if (job != null) {
+                jobQueue.offer(job);
+            }
         }
     }
 
@@ -208,6 +256,7 @@ public final class JSRuntime implements AutoCloseable {
      * embedder that creates a runtime per unit of work would pay a full JVM collection every time.
      */
     public void gc() {
+        releaseDeadWeakCollectionEntries();
         List<JSContext> contextSnapshot = getContextSnapshot();
         for (JSContext context : contextSnapshot) {
             if (context != null) {
@@ -244,7 +293,7 @@ public final class JSRuntime implements AutoCloseable {
      * Get the key for a runtime-global symbol, or null if the symbol is not in the runtime registry.
      */
     public String getGlobalSymbolKey(JSSymbol symbol) {
-        synchronized (globalSymbolRegistry) {
+        synchronized (lifecycleLock) {
             return globalSymbolReverseRegistry.get(symbol);
         }
     }
@@ -273,8 +322,8 @@ public final class JSRuntime implements AutoCloseable {
      * Get or create a runtime-global symbol by key.
      */
     public JSSymbol getOrCreateGlobalSymbol(String key) {
-        requireOpen();
-        synchronized (globalSymbolRegistry) {
+        synchronized (lifecycleLock) {
+            requireOpen();
             JSSymbol existing = globalSymbolRegistry.get(key);
             if (existing != null) {
                 return existing;
@@ -306,6 +355,15 @@ public final class JSRuntime implements AutoCloseable {
      */
     public boolean isClosed() {
         return closed.get();
+    }
+
+    /**
+     * Clear the values of weak-collection entries whose collection has been collected.
+     * <p>
+     * Cheap when there is nothing to do: an empty queue poll and no allocation.
+     */
+    void releaseDeadWeakCollectionEntries() {
+        JSWeakEntryTable.releaseDeadEntries(weakCollectionOwners);
     }
 
     /**
@@ -372,6 +430,15 @@ public final class JSRuntime implements AutoCloseable {
      */
     public boolean shouldInterrupt() {
         return interruptRequested;
+    }
+
+    /**
+     * The queue a new weak-collection entry registers itself with.
+     *
+     * @return this runtime's queue of collected weak collections
+     */
+    ReferenceQueue<Object> weakCollectionOwners() {
+        return weakCollectionOwners;
     }
 
     /**

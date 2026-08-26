@@ -19,6 +19,8 @@ package com.caoccao.qjs4j.utils;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Atomic 8-, 16-, 32- and 64-bit access to a {@code byte[]} data block, on every supported JDK.
@@ -268,6 +270,38 @@ public final class ByteArrayAtomics {
         return (short) ((array[offset] & 0xFF) | ((array[offset + 1] & 0xFF) << 8));
     }
 
+    /**
+     * Every access mode the direct path invokes on a view of the given width.
+     * <p>
+     * The probe used to check all eight modes on the {@code int} view but only two on {@code long}
+     * and one on {@code short}, while the path it selected went on to invoke long
+     * {@code SET_VOLATILE}, {@code COMPARE_AND_EXCHANGE}, {@code GET_AND_SET} and all three bitwise
+     * modes, plus short {@code SET_VOLATILE}. On the JDKs this project supports those capabilities
+     * move together, so nothing failed — but the contract the probe stated was broader than what it
+     * verified, and a JVM with partial support would have taken the direct path and thrown
+     * {@code UnsupportedOperationException} from an unchecked mode. Naming the modes in one place
+     * keeps the probe and the calls it authorises the same list.
+     *
+     * @param viewType the view element type: {@code short[]}, {@code int[]} or {@code long[]}
+     * @return the access modes that width requires
+     */
+    static Set<VarHandle.AccessMode> requiredAccessModes(Class<?> viewType) {
+        if (viewType == short[].class) {
+            // 16-bit access goes through the enclosing 32-bit word for read-modify-write, so the
+            // short view itself only ever loads and stores.
+            return EnumSet.of(VarHandle.AccessMode.GET_VOLATILE, VarHandle.AccessMode.SET_VOLATILE);
+        }
+        return EnumSet.of(
+                VarHandle.AccessMode.GET_VOLATILE,
+                VarHandle.AccessMode.SET_VOLATILE,
+                VarHandle.AccessMode.COMPARE_AND_EXCHANGE,
+                VarHandle.AccessMode.GET_AND_SET,
+                VarHandle.AccessMode.GET_AND_ADD,
+                VarHandle.AccessMode.GET_AND_BITWISE_AND,
+                VarHandle.AccessMode.GET_AND_BITWISE_OR,
+                VarHandle.AccessMode.GET_AND_BITWISE_XOR);
+    }
+
     public static void setVolatileByte(byte[] array, int offset, byte value) {
         if (LOCK_FREE) {
             BYTE_VH.setVolatile(array, offset, value);
@@ -284,6 +318,8 @@ public final class ByteArrayAtomics {
         Fallback.setVolatileInt(array, offset, value);
     }
 
+    // --- little-endian plain accessors used by the fallback ---
+
     public static void setVolatileLong(byte[] array, int offset, long value) {
         if (LOCK_FREE) {
             LONG_VH.setVolatile(array, offset, value);
@@ -291,8 +327,6 @@ public final class ByteArrayAtomics {
         }
         Fallback.setVolatileLong(array, offset, value);
     }
-
-    // --- little-endian plain accessors used by the fallback ---
 
     public static void setVolatileShort(byte[] array, int offset, short value) {
         if (LOCK_FREE) {
@@ -304,20 +338,28 @@ public final class ByteArrayAtomics {
 
     private static boolean supportsAtomicAccessModes() {
         try {
-            return INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_VOLATILE)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.SET_VOLATILE)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.COMPARE_AND_EXCHANGE)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_ADD)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_SET)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_BITWISE_AND)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_BITWISE_OR)
-                    && INT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_BITWISE_XOR)
-                    && LONG_VH.isAccessModeSupported(VarHandle.AccessMode.GET_VOLATILE)
-                    && LONG_VH.isAccessModeSupported(VarHandle.AccessMode.GET_AND_ADD)
-                    && SHORT_VH.isAccessModeSupported(VarHandle.AccessMode.GET_VOLATILE);
+            return supportsRequiredAccessModes(SHORT_VH, short[].class)
+                    && supportsRequiredAccessModes(INT_VH, int[].class)
+                    && supportsRequiredAccessModes(LONG_VH, long[].class);
         } catch (RuntimeException e) {
             return false;
         }
+    }
+
+    /**
+     * Whether one view handle offers every mode the direct path would invoke on it.
+     *
+     * @param handle   the view handle
+     * @param viewType the view element type
+     * @return true when every required mode is supported
+     */
+    private static boolean supportsRequiredAccessModes(VarHandle handle, Class<?> viewType) {
+        for (VarHandle.AccessMode accessMode : requiredAccessModes(viewType)) {
+            if (!handle.isAccessModeSupported(accessMode)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void writeInt(byte[] array, int offset, int value) {

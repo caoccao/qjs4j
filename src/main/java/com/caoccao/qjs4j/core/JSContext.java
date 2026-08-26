@@ -1770,14 +1770,6 @@ public final class JSContext implements AutoCloseable {
         if (code == null || code.isEmpty()) {
             return JSUndefined.INSTANCE;
         }
-        if (isModule && !isDirectEval) {
-            // Put every top-level import/export declaration on its own lines before anything
-            // downstream classifies module source by line. Only line breaks are inserted, decided
-            // by the lexer, so nothing else about the source changes — see
-            // normalizeModuleDeclarationLines.
-            code = normalizeModuleDeclarationLines(code);
-        }
-
         // Check for recursion limit
         if (!pushStackFrame(new JSStackFrame("<eval>", filename, 1))) {
             return throwError("RangeError", "Maximum call stack size exceeded");
@@ -1790,6 +1782,13 @@ public final class JSContext implements AutoCloseable {
         boolean removeSelfModuleRecordAfterEval = false;
         JSValue evalError = null;
         try {
+            if (isModule && !isDirectEval) {
+                // Put every top-level import/export declaration on its own lines before anything
+                // downstream classifies module source by line. Inside the try because the source is
+                // parsed as written first, and a source that does not parse has to be reported the
+                // way every other parse error is — see normalizeModuleDeclarationLines.
+                code = normalizeModuleDeclarationLines(code);
+            }
             boolean skipEvaluatedDynamicImportModule = false;
             boolean shouldTrackDynamicImportModule = isModule
                     && !isDirectEval
@@ -4448,15 +4447,25 @@ public final class JSContext implements AutoCloseable {
      * invisible or unhoisted purely because of where the line breaks fell. Only line breaks are
      * inserted — no token is moved, rewritten or dropped — so the only observable difference is that
      * source positions after a break shift by a line.
+     * <p>
+     * A line terminator is not a neutral thing to insert: line terminators are what lets automatic
+     * semicolon insertion terminate a statement, so splitting unconditionally handed the parser a
+     * semicolon the author never wrote, and the engine accepted modules — {@code export {} let x =
+     * 1;} — that a conforming parser must reject. The source is therefore parsed <em>as written</em>
+     * before any break is inserted. Breaks only ever go immediately before a top-level declaration
+     * or immediately after one whose extent is identifiable, and in source the parser has already
+     * accepted both of those are statement boundaries, so the split cannot change what it means.
      *
      * @param sourceCode the module source
      * @return the source with declarations on their own lines
+     * @throws JSSyntaxErrorException when the source as written is not a valid module
      */
     private String normalizeModuleDeclarationLines(String sourceCode) {
         ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
         if (scan == null || scan.lineBreakOffsets().isEmpty()) {
             return sourceCode;
         }
+        requireModuleSourceParses(sourceCode);
         StringBuilder normalized = new StringBuilder(sourceCode.length() + scan.lineBreakOffsets().size());
         int copiedUpTo = 0;
         for (int breakOffset : scan.lineBreakOffsets()) {
@@ -5413,6 +5422,22 @@ public final class JSContext implements AutoCloseable {
                     "Unsupported module syntax: " + description + " is not a valid identifier"));
         }
         return name;
+    }
+
+    /**
+     * Require that module source is valid <em>as written</em>, before it is split onto more lines.
+     * <p>
+     * The grammar is the only thing that knows where a statement really ends: whether a brace closes
+     * a block or an object literal, whether a line terminator would trigger automatic semicolon
+     * insertion, whether a restricted production is in play. Re-deriving any of that from a token
+     * scan would be a second, worse implementation of the parser — and its diagnostics would be a
+     * second, worse vocabulary. Handing the source to the parser gives both for free.
+     *
+     * @param sourceCode the module source, unmodified
+     * @throws JSSyntaxErrorException when the source does not parse as a module
+     */
+    private void requireModuleSourceParses(String sourceCode) {
+        new Compiler(sourceCode, "<module>").setContext(this).parse(true);
     }
 
     /**

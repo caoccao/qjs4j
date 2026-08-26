@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Represents a JavaScript SharedArrayBuffer object.
@@ -41,9 +42,18 @@ import java.nio.ByteOrder;
 public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffer {
     public static final String NAME = "SharedArrayBuffer";
     private final ByteBuffer buffer;
+    /**
+     * The current length, which every agent sharing this buffer reads and any of them may grow.
+     * <p>
+     * A plain {@code int} gave neither guarantee the class's own contract needs. Two agents could
+     * read the same old length, request 50 and 100, and write 100 then 50 — both calls reporting
+     * success while the buffer observably shrank — and an agent on another thread had no
+     * happens-before edge that made a new length visible at all. The compare-and-set loop below
+     * makes growth monotonic, and the volatile read makes it visible.
+     */
+    private final AtomicInteger byteLength;
     private final boolean growable;
     private final int maxByteLength;
-    private int byteLength;
 
     /**
      * Create a SharedArrayBuffer with the specified byte length.
@@ -92,10 +102,20 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
                     "Shared array buffer allocation failed: the runtime memory limit of "
                             + accounting.getLimit() + " bytes would be exceeded");
         }
+        ByteBuffer allocated;
+        try {
+            allocated = ByteBuffer.allocate(capacity);
+        } catch (RuntimeException | Error allocationFailure) {
+            // Reserving before allocating is deliberate, so a failed allocation has to hand the
+            // bytes back rather than leave the runtime's ceiling inflated by a block that does not
+            // exist. Registration follows the allocation for the same reason.
+            accounting.release(capacity);
+            throw allocationFailure;
+        }
         accounting.registerReservation(this, capacity);
-        this.buffer = ByteBuffer.allocate(capacity);
+        this.buffer = allocated;
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
-        this.byteLength = byteLength;
+        this.byteLength = new AtomicInteger(byteLength);
         this.maxByteLength = maxByteLength;
         this.growable = growable;
     }
@@ -207,7 +227,7 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      * @return The byte length
      */
     public int getByteLength() {
-        return byteLength;
+        return byteLength.get();
     }
 
     /**
@@ -229,10 +249,21 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         if (!growable) {
             throw new JSTypeErrorException("array buffer is not growable");
         }
-        if (newByteLength < byteLength || newByteLength > maxByteLength) {
+        if (newByteLength > maxByteLength) {
             throw new JSRangeErrorException("invalid array buffer length");
         }
-        this.byteLength = newByteLength;
+        // Compare against the length this attempt actually observed, and publish only a larger
+        // one. A request below the current length is rejected however the agents interleave, and
+        // a request that loses the race to a larger one is rejected rather than shrinking it back.
+        while (true) {
+            int currentByteLength = byteLength.get();
+            if (newByteLength < currentByteLength) {
+                throw new JSRangeErrorException("invalid array buffer length");
+            }
+            if (byteLength.compareAndSet(currentByteLength, newByteLength)) {
+                return;
+            }
+        }
     }
 
     /**
@@ -279,18 +310,21 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      * @return A new SharedArrayBuffer
      */
     public JSSharedArrayBuffer slice(int begin, int end) {
+        // One read of the shared length, so both ends are normalised against the same value.
+        int currentByteLength = byteLength.get();
+
         // Normalize begin
         if (begin < 0) {
-            begin = Math.max(byteLength + begin, 0);
+            begin = Math.max(currentByteLength + begin, 0);
         } else {
-            begin = Math.min(begin, byteLength);
+            begin = Math.min(begin, currentByteLength);
         }
 
         // Normalize end
         if (end < 0) {
-            end = Math.max(byteLength + end, 0);
+            end = Math.max(currentByteLength + end, 0);
         } else {
-            end = Math.min(end, byteLength);
+            end = Math.min(end, currentByteLength);
         }
 
         // Calculate new length

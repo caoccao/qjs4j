@@ -77,6 +77,51 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testDefaultRuntimeClosesTheAtomicsObjectItCreated() {
+        // Every default JSRuntimeOptions builds its own AtomicsObject, and that object owns a
+        // cached thread pool. Closing the runtime cancelled its waits but left the executor
+        // running, so `try (JSRuntime runtime = new JSRuntime())` did not release everything the
+        // runtime caused to exist — and a worker survived for the pool's 60-second idle timeout.
+        JSRuntime runtime = new JSRuntime();
+        AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+        JSContext context = runtime.createContext();
+        context.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+        assertThat(atomics.getPendingAsyncWaitCount(runtime)).isEqualTo(1);
+        assertThat(atomics.isWaitExecutorTerminated()).isFalse();
+
+        runtime.close();
+
+        assertThat(atomics.isWaitExecutorTerminated())
+                .as("a runtime that created its own Atomics object closes it")
+                .isTrue();
+        assertThat(atomics.getPendingAsyncWaitCount(runtime)).isZero();
+    }
+
+    @Test
+    @Timeout(60)
+    public void testInjectedAtomicsObjectOutlivesTheRuntimesThatShareIt() {
+        // An injected object belongs to an agent cluster, so no single member may shut it down.
+        try (AtomicsObject clusterAtomics = new AtomicsObject()) {
+            JSRuntime first = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(clusterAtomics));
+            try (JSRuntime second = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(clusterAtomics))) {
+                first.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+                second.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+
+                first.close();
+
+                assertThat(clusterAtomics.isWaitExecutorTerminated())
+                        .as("a shared cluster object is not closed by one of its members")
+                        .isFalse();
+                assertThat(clusterAtomics.getPendingAsyncWaitCount(second)).isEqualTo(1);
+            }
+        }
+    }
+
+    @Test
+    @Timeout(60)
     public void testNotifyGoesToTheSelectedWaiterNotWhoeverArrivesNext() throws InterruptedException {
         // Notifications used to be a shared count, so a waiter that arrived after notify() had
         // chosen its targets could take the lock first and spend the token — leaving the agent the
@@ -181,6 +226,61 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testOneOptionsObjectGivesOwnershipToOneRuntimeOnly() {
+        // Handing the same options to two runtimes must not make both of them close the one
+        // AtomicsObject those options carry.
+        JSRuntimeOptions options = new JSRuntimeOptions();
+        AtomicsObject atomics = options.getAtomicsObject();
+        assertThat(options.isAtomicsObjectInjected()).isFalse();
+        JSRuntime owner = new JSRuntime(options);
+        JSRuntime sharer = new JSRuntime(options);
+        sharer.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+        sharer.close();
+        assertThat(atomics.isWaitExecutorTerminated())
+                .as("the second runtime never claimed ownership")
+                .isFalse();
+        owner.close();
+        assertThat(atomics.isWaitExecutorTerminated()).isTrue();
+    }
+
+    @Test
+    @Timeout(60)
+    public void testReclaimedWaitListRefusesALateRegistration() {
+        // The exact interleaving from the review, played out one step at a time: an agent obtains
+        // the wait list, the last old waiter leaves and the list is reclaimed, and only then does
+        // the agent try to join. Joining the reclaimed list would put it somewhere Atomics.notify
+        // can no longer look, so it must be refused and the agent given the live list instead.
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSContext context = runtime.createContext();
+            JSTypedArray array = sharedInt32Array(context, 2);
+            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+
+            AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
+            assertThat(atomics.findWaitList(array, 0)).isSameAs(first.waitList());
+
+            // The last old waiter leaves, and the empty list is dropped from the lookup.
+            first.waitList().cancel(first.waiter());
+            atomics.releaseWaitList(first);
+            assertThat(atomics.findWaitList(array, 0)).isNull();
+
+            assertThat(first.waitList().registerIfLive())
+                    .as("a list that is no longer reachable must not accept a waiter")
+                    .isNull();
+
+            AtomicsObject.WaitRegistration second = atomics.registerWaiter(array, 0);
+            assertThat(second.waitList())
+                    .as("the late registration lands on the list that is actually in the lookup")
+                    .isNotSameAs(first.waitList());
+            assertThat(atomics.findWaitList(array, 0)).isSameAs(second.waitList());
+            assertThat(second.waitList().notifyWaiters(1))
+                    .as("and Atomics.notify can therefore find it")
+                    .isEqualTo(1);
+        }
+    }
+
+    @Test
+    @Timeout(60)
     public void testWaitAsyncSettlesOnNotify() throws InterruptedException {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
@@ -199,6 +299,49 @@ public class AtomicsWaitListTest extends BaseTest {
                 Thread.sleep(10);
             }
             assertThat(context.eval("String(settled)").toString()).isEqualTo("ok");
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void testWaitListWithAWaiterIsNotReclaimed() {
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSContext context = runtime.createContext();
+            JSTypedArray array = sharedInt32Array(context, 2);
+            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+
+            AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
+            AtomicsObject.WaitRegistration second = atomics.registerWaiter(array, 0);
+            assertThat(second.waitList()).isSameAs(first.waitList());
+
+            // One of two waiters leaves: the list still has an occupant, so it stays reachable.
+            first.waitList().cancel(first.waiter());
+            atomics.releaseWaitList(first);
+            assertThat(atomics.findWaitList(array, 0)).isSameAs(first.waitList());
+            assertThat(first.waitList().registerIfLive()).isNotNull();
+
+            assertThat(second.waitList().notifyWaiters(2)).isEqualTo(2);
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void testWaitListsOfDifferentOffsetsAreIndependent() {
+        try (JSRuntime runtime = new JSRuntime()) {
+            JSContext context = runtime.createContext();
+            JSTypedArray array = sharedInt32Array(context, 4);
+            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+
+            AtomicsObject.WaitRegistration atZero = atomics.registerWaiter(array, 0);
+            AtomicsObject.WaitRegistration atTwo = atomics.registerWaiter(array, 2);
+            assertThat(atTwo.waitList()).isNotSameAs(atZero.waitList());
+
+            atZero.waitList().cancel(atZero.waiter());
+            atomics.releaseWaitList(atZero);
+            assertThat(atomics.findWaitList(array, 0)).isNull();
+            assertThat(atomics.findWaitList(array, 2))
+                    .as("reclaiming one location must not disturb another")
+                    .isSameAs(atTwo.waitList());
         }
     }
 }

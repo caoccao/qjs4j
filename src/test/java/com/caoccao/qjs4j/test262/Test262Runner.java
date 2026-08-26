@@ -33,6 +33,11 @@ import java.util.stream.Stream;
  * Main runner for executing test262 conformance tests.
  */
 public class Test262Runner {
+    /**
+     * The prefix every worker thread's name carries, so a leaked worker is identifiable.
+     */
+    static final String WORKER_THREAD_NAME_PREFIX = "test262-worker-";
+    private static final long WORKER_TERMINATION_TIMEOUT_MINUTES = 5;
     private final Test262Config config;
     private final Test262Executor executor;
     private final Test262Parser parser;
@@ -136,6 +141,34 @@ public class Test262Runner {
         }
     }
 
+    /**
+     * Wait for every worker to stop, ignoring further interruption so cleanup always completes.
+     *
+     * @param executorService the pool, already shut down
+     * @return true when the pool terminated, false when it was interrupted or gave up
+     */
+    private boolean awaitWorkerTermination(ThreadPoolExecutor executorService) {
+        boolean interrupted = false;
+        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(WORKER_TERMINATION_TIMEOUT_MINUTES);
+        while (true) {
+            try {
+                if (executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+                    return !interrupted;
+                }
+                if (System.nanoTime() - deadline >= 0) {
+                    System.err.println("Gave up waiting for " + executorService.getActiveCount()
+                            + " test task(s) to finish");
+                    return false;
+                }
+                System.out.println("Waiting for remaining test tasks to finish...");
+            } catch (InterruptedException e) {
+                // Absorbed here and re-raised by the caller once the pool has stopped.
+                interrupted = true;
+                executorService.shutdownNow();
+            }
+        }
+    }
+
     private List<Path> discoverTests(Path testsDir) throws IOException {
         List<Path> testFiles = new ArrayList<>();
 
@@ -215,7 +248,7 @@ public class Test262Runner {
         if (testFiles.isEmpty()) {
             System.out.println("No test file matched the current filter.");
             return allowEmptySelection
-                    ? RunOutcome.of(reporter, false)
+                    ? RunOutcome.of(reporter, false, true)
                     : RunOutcome.discoveryFailed("No test file matched the current filter.");
         }
 
@@ -252,8 +285,16 @@ public class Test262Runner {
         System.out.println("Prewarmed runtime/context in " + prewarmElapsedMilliseconds + " ms");
         System.out.println("Starting test execution with " + threadCount + " threads...\n");
 
+        AtomicInteger workerNumber = new AtomicInteger();
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(
-                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>());
+                threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
+                runnable -> {
+                    // Named so a leaked worker is identifiable, and daemon so one that will not
+                    // stop cannot keep the JVM alive after run() has returned.
+                    Thread worker = new Thread(runnable, WORKER_THREAD_NAME_PREFIX + workerNumber.incrementAndGet());
+                    worker.setDaemon(true);
+                    return worker;
+                });
         AtomicInteger testCount = new AtomicInteger(0);
         // One work item per file. Parsing decides how many interpretations the file has, so the
         // expansion happens on the worker after parse() rather than here.
@@ -310,7 +351,10 @@ public class Test262Runner {
             try {
                 futures.get(i).get();
             } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+                // The interrupt flag is deliberately not restored yet: awaitTermination below
+                // would throw immediately, which is how an interrupted run used to return a
+                // final-looking outcome while its workers carried on executing files and
+                // mutating the reporter. It is restored once the pool has actually stopped.
                 interrupted = true;
                 break;
             } catch (ExecutionException e) {
@@ -320,21 +364,33 @@ public class Test262Runner {
                 reporter.recordResult(TestResult.fail(testCase,
                         "Internal runner error: " + cause.getClass().getSimpleName()
                                 + (cause.getMessage() != null ? " - " + cause.getMessage() : "")));
+            } catch (CancellationException e) {
+                // Only reachable once cleanup has cancelled the remaining work.
+                interrupted = true;
+                break;
             }
         }
 
-        try {
-            while (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
-                System.out.println("Waiting for remaining test tasks to finish...");
+        if (interrupted) {
+            System.err.println("Test execution interrupted; cancelling remaining tests");
+            for (Future<?> future : futures) {
+                future.cancel(true);
             }
-        } catch (InterruptedException e) {
+            executorService.shutdownNow();
+        }
+        interrupted |= !awaitWorkerTermination(executorService);
+        if (interrupted) {
+            // Restored now that nothing is still writing to the reporter, so the caller sees the
+            // interruption it asked for and the summary below is a snapshot of a stopped run.
             Thread.currentThread().interrupt();
-            interrupted = true;
-            System.err.println("Test execution interrupted");
         }
 
         reporter.printSummary();
-        return RunOutcome.of(reporter, interrupted);
+        RunOutcome outcome = RunOutcome.of(reporter, interrupted, allowEmptySelection);
+        if (!outcome.isSuccessful()) {
+            System.err.println(outcome.diagnostic());
+        }
+        return outcome;
     }
 
     /**
@@ -354,12 +410,13 @@ public class Test262Runner {
     /**
      * The outcome of a run, and the process status that follows from it.
      *
-     * @param failed         the number of failing tests
-     * @param timedOut       the number of timed-out tests
-     * @param passed         the number of passing tests
-     * @param skipped        the number of skipped tests
-     * @param interrupted    whether the run was interrupted before it finished
-     * @param discoveryError the reason discovery produced nothing usable, or {@code null}
+     * @param failed                the number of failing tests
+     * @param timedOut              the number of timed-out tests
+     * @param passed                the number of passing tests
+     * @param skipped               the number of skipped tests
+     * @param interrupted           whether the run was interrupted before it finished
+     * @param discoveryError        the reason discovery produced nothing usable, or {@code null}
+     * @param emptySelectionAllowed whether the caller opted into a run that executes nothing
      */
     public record RunOutcome(
             int failed,
@@ -367,20 +424,59 @@ public class Test262Runner {
             int passed,
             int skipped,
             boolean interrupted,
-            String discoveryError) {
+            String discoveryError,
+            boolean emptySelectionAllowed) {
 
         static RunOutcome discoveryFailed(String reason) {
-            return new RunOutcome(0, 0, 0, 0, false, reason);
+            return new RunOutcome(0, 0, 0, 0, false, reason, false);
         }
 
-        static RunOutcome of(Test262Reporter reporter, boolean interrupted) {
+        static RunOutcome of(Test262Reporter reporter, boolean interrupted, boolean emptySelectionAllowed) {
             return new RunOutcome(
                     reporter.getFailed(),
                     reporter.getTimeout(),
                     reporter.getPassed(),
                     reporter.getSkipped(),
                     interrupted,
-                    null);
+                    null,
+                    emptySelectionAllowed);
+        }
+
+        /**
+         * Why this run did not demonstrate conformance.
+         * <p>
+         * Discovery finding no file and discovery finding files that were then all skipped are
+         * different problems, and asking for a concrete test that declares only unsupported
+         * features produces the second one: zero interpretations executed, and — before the
+         * {@link #isSuccessful()} rule below — exit status zero.
+         *
+         * @return the diagnostic, or {@code null} when the run is successful
+         */
+        public String diagnostic() {
+            if (discoveryError != null) {
+                return discoveryError;
+            }
+            if (interrupted) {
+                return "The run was interrupted before it finished.";
+            }
+            if (failed > 0 || timedOut > 0) {
+                return failed + " test(s) failed and " + timedOut + " timed out.";
+            }
+            if (!emptySelectionAllowed && executed() == 0) {
+                return skipped > 0
+                        ? "All " + skipped + " discovered test file(s) were skipped; nothing was executed."
+                        : "No test was executed.";
+            }
+            return null;
+        }
+
+        /**
+         * How many interpretations actually ran.
+         *
+         * @return the number of executed interpretations
+         */
+        public int executed() {
+            return passed + failed + timedOut;
         }
 
         /**
@@ -395,10 +491,11 @@ public class Test262Runner {
         /**
          * Whether the run demonstrated conformance over its selection.
          *
-         * @return true when discovery succeeded, the run completed, and nothing failed or timed out
+         * @return true when discovery succeeded, the run completed, something ran, and nothing
+         * failed or timed out
          */
         public boolean isSuccessful() {
-            return discoveryError == null && !interrupted && failed == 0 && timedOut == 0;
+            return diagnostic() == null;
         }
     }
 }

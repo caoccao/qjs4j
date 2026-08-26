@@ -26,7 +26,10 @@ import org.junit.jupiter.api.Test;
  * undefined rather than holding the function.
  * <p>
  * The compiler used to give both bindings one local slot, which the frame pre-loaded with the
- * function object, so the shadowing declaration observed the function instead.
+ * function object, so the shadowing declaration observed the function instead. Suppressing the
+ * self-name slot entirely fixed that half and broke the other: default-parameter initializers are
+ * evaluated in the parameter environment, which sits <em>inside</em> the function-name environment
+ * and outside the body's variable environment, so they must still see the function.
  */
 public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     @Test
@@ -39,6 +42,45 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                 };
                 f();
                 probe();""");
+    }
+
+    @Test
+    void testClassDeclarationShadowsSelfNameButNotDefaultParameters() {
+        assertStringWithJavet("""
+                var f = function n(a = n, b = typeof n) {
+                  class n {}
+                  return [a === f, b, typeof n].join(',');
+                };
+                f();""");
+    }
+
+    @Test
+    void testDefaultParameterClosureCapturesTheSelfName() {
+        // The closure is created in the parameter environment, so it keeps the function-name
+        // binding even though the body rebinds the name in a slot of its own.
+        assertStringWithJavet("""
+                var f = function n(a = function () { return n; }) {
+                  var n = 'body';
+                  return [a() === f, n].join(',');
+                };
+                f();""");
+    }
+
+    @Test
+    void testDefaultParameterSeesSelfNameWhenNothingShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = n) { return a === f; };
+                String(f());""");
+    }
+
+    @Test
+    void testFunctionDeclarationShadowsSelfNameButNotDefaultParameters() {
+        assertStringWithJavet("""
+                var f = function n(a = n) {
+                  function n() { return 'inner'; }
+                  return [a === f, n()].join(',');
+                };
+                f();""");
     }
 
     @Test
@@ -66,6 +108,25 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     }
 
     @Test
+    void testLetDeclarationShadowsSelfNameButNotDefaultParameters() {
+        assertStringWithJavet("""
+                var f = function n(a = n) {
+                  let n = 'body';
+                  return [a === f, n].join(',');
+                };
+                f();""");
+    }
+
+    @Test
+    void testParameterOfTheSameNameShadowsTheSelfNameBinding() {
+        // A parameter binding is in the parameter environment itself, so it wins over the
+        // function-name environment for every initializer that follows it.
+        assertStringWithJavet("""
+                var f = function n(n, a = n) { return [n, a].join(','); };
+                f('parameter');""");
+    }
+
+    @Test
     void testSelfNameIsVisibleWhenNotShadowed() {
         assertStringWithJavet("""
                 var probe;
@@ -77,6 +138,19 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     }
 
     @Test
+    void testSelfNameStaysImmutableInsideDefaultParameters() {
+        assertStringWithJavet("""
+                var f = function n(a = (function () {
+                  try { n = 1; } catch (e) { return e.constructor.name; }
+                  return typeof n;
+                })()) {
+                  var n;
+                  return [a, typeof n].join(',');
+                };
+                f();""");
+    }
+
+    @Test
     void testSelfNameStaysImmutableWhenNotShadowed() {
         // Assigning to the name binding is silently ignored in sloppy mode and a TypeError in
         // strict mode; either way the binding still holds the function.
@@ -84,6 +158,19 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                 var f = function n() {
                   try { n = 1; } catch (e) { return 'TypeError'; }
                   return typeof n;
+                };
+                f();""");
+    }
+
+    @Test
+    void testShadowingBodyBindingIsMutableUnlikeTheSelfName() {
+        // The self-name binding is immutable; the binding a body declaration creates is an ordinary
+        // one, so the two must not share the const/function-name marking either.
+        assertStringWithJavet("""
+                var f = function n(a = n) {
+                  var n = 'first';
+                  n = 'assigned';
+                  return [a === f, n].join(',');
                 };
                 f();""");
     }
@@ -100,6 +187,17 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                 };
                 f();
                 probe();""");
+    }
+
+    @Test
+    void testVarDeclarationShadowsSelfNameButNotDefaultParameters() {
+        // The reproducer from the review: valid in every conforming engine, a ReferenceError here.
+        assertStringWithJavet("""
+                var f = function n(a = n) {
+                  var n;
+                  return [a === f, typeof n].join(',');
+                };
+                f();""");
     }
 
     @Test

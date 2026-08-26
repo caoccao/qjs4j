@@ -194,6 +194,18 @@ final class JSDeferredModuleNamespace extends JSObject {
         }
     }
 
+    /**
+     * Reading a non-symbol key evaluates the deferred module, so this object decides the lookup
+     * itself and must be dispatched to when it appears in a prototype chain.
+     *
+     * @param key the property being looked up
+     * @return true unless the key is one of the namespace's own symbol-like keys
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return !isSymbolLikeNamespaceKey(key);
+    }
+
     @Override
     public boolean isExtensible() {
         return false;

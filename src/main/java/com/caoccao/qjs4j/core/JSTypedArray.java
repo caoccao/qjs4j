@@ -675,6 +675,20 @@ public sealed abstract class JSTypedArray extends JSObject permits
         }
     }
 
+    /**
+     * A canonical numeric index on an integer-indexed exotic object resolves to the element or to
+     * undefined without consulting the prototype chain, so a typed array asked for such a key
+     * decides the lookup itself. Every other key is an ordinary lookup that the iterative
+     * prototype walk can carry on through.
+     *
+     * @param key the property being looked up
+     * @return true for a canonical numeric index string
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return resolveCanonicalNumericIndex(key) != CANONICAL_NUMERIC_INDEX_NOT_CANONICAL;
+    }
+
     public abstract boolean isAtomicsReadableAndWriteable();
 
     /**

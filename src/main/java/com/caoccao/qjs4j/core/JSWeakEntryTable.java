@@ -16,6 +16,8 @@
 
 package com.caoccao.qjs4j.core;
 
+import java.lang.ref.Reference;
+import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,11 +38,19 @@ import java.util.List;
  * ECMAScript object keys have — a {@code WeakHashMap} calls {@code equals}, which any subclass can
  * override, and did.</li>
  * </ul>
- * The owning collection is held weakly so that a key outliving a collection does not pin it; dead
- * entries are pruned whenever the table is touched. A key typically belongs to one or two weak
- * collections, so the linear scan is the right shape.
  * <p>
- * Not thread-safe, like everything else reachable from a {@link JSContext}.
+ * <strong>How a dead collection lets go of its values.</strong> An entry is itself the weak
+ * reference to its collection, registered with the owning {@link JSRuntime}'s queue. When the
+ * collection is collected the entry is enqueued, and the next weak-collection operation on that
+ * runtime — or {@link JSRuntime#gc()} — clears its value. That covers the case pruning on access
+ * could not: entries used to be dropped only when something touched the <em>same</em> key's table,
+ * so a short-lived {@code WeakMap} could leave a large value graph attached to a long-lived key
+ * with nothing that would ever collect it. Draining a queue the runtime owns reaches every dead
+ * entry in the runtime, whichever key it sits on.
+ * <p>
+ * Draining happens on the thread that is using the engine, which is what keeps this class — like
+ * everything else reachable from a {@link JSContext} — free of any synchronisation and free of a
+ * background thread reaching into it.
  */
 final class JSWeakEntryTable {
     /**
@@ -51,6 +61,23 @@ final class JSWeakEntryTable {
     private final List<Entry> entries = new ArrayList<>(2);
 
     /**
+     * Clear the values of every entry whose collection has been collected.
+     * <p>
+     * The queue belongs to a {@link JSRuntime}, so one call reaches every dead entry in that
+     * runtime rather than only the entries of whichever key is being touched.
+     *
+     * @param deadOwners the runtime's queue of collected weak collections
+     */
+    static void releaseDeadEntries(ReferenceQueue<Object> deadOwners) {
+        Reference<?> dead;
+        while ((dead = deadOwners.poll()) != null) {
+            // The entry stays on its key's list until that list is next scanned; by then it holds
+            // nothing, and the scan drops it.
+            ((Entry) dead).value = null;
+        }
+    }
+
+    /**
      * The value this key holds for a collection.
      *
      * @param owner the owning {@code WeakMap} or {@code WeakSet}
@@ -59,7 +86,7 @@ final class JSWeakEntryTable {
     JSValue get(Object owner) {
         for (int index = entries.size() - 1; index >= 0; index--) {
             Entry entry = entries.get(index);
-            Object entryOwner = entry.owner.get();
+            Object entryOwner = entry.get();
             if (entryOwner == null) {
                 entries.remove(index);
             } else if (entryOwner == owner) {
@@ -82,13 +109,14 @@ final class JSWeakEntryTable {
     /**
      * Record or replace this key's entry for a collection.
      *
-     * @param owner the owning {@code WeakMap} or {@code WeakSet}
-     * @param value the value to store; {@link #PRESENT} for a set
+     * @param owner      the owning {@code WeakMap} or {@code WeakSet}
+     * @param value      the value to store; {@link #PRESENT} for a set
+     * @param deadOwners the runtime's queue, which the new entry registers itself with
      */
-    void put(Object owner, JSValue value) {
+    void put(Object owner, JSValue value, ReferenceQueue<Object> deadOwners) {
         for (int index = entries.size() - 1; index >= 0; index--) {
             Entry entry = entries.get(index);
-            Object entryOwner = entry.owner.get();
+            Object entryOwner = entry.get();
             if (entryOwner == null) {
                 entries.remove(index);
             } else if (entryOwner == owner) {
@@ -96,7 +124,7 @@ final class JSWeakEntryTable {
                 return;
             }
         }
-        entries.add(new Entry(owner, value));
+        entries.add(new Entry(owner, value, deadOwners));
     }
 
     /**
@@ -109,7 +137,7 @@ final class JSWeakEntryTable {
         boolean removed = false;
         for (int index = entries.size() - 1; index >= 0; index--) {
             Entry entry = entries.get(index);
-            Object entryOwner = entry.owner.get();
+            Object entryOwner = entry.get();
             if (entryOwner == null) {
                 entries.remove(index);
             } else if (entryOwner == owner) {
@@ -126,16 +154,23 @@ final class JSWeakEntryTable {
      * @return the entry count after pruning dead owners
      */
     int size() {
-        entries.removeIf(entry -> entry.owner.get() == null);
+        entries.removeIf(entry -> entry.get() == null);
         return entries.size();
     }
 
-    private static final class Entry {
-        private final WeakReference<Object> owner;
+    /**
+     * One key's membership of one collection, and the weak reference to that collection.
+     * <p>
+     * Being the reference is what makes reclamation work without a second object to keep alive: the
+     * key's list holds the entry, so the entry is still reachable when its collection dies and can
+     * therefore be enqueued — while a key that dies first takes the entry with it, and nothing is
+     * enqueued at all.
+     */
+    private static final class Entry extends WeakReference<Object> {
         private JSValue value;
 
-        private Entry(Object owner, JSValue value) {
-            this.owner = new WeakReference<>(owner);
+        private Entry(Object owner, JSValue value, ReferenceQueue<Object> deadOwners) {
+            super(owner, deadOwners);
             this.value = value;
         }
     }

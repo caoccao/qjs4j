@@ -19,6 +19,7 @@ package com.caoccao.qjs4j.test262;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -31,6 +32,43 @@ import static org.assertj.core.api.Assertions.assertThat;
  * every test failed all produced {@code BUILD SUCCESSFUL}.
  */
 public class Test262RunnerOutcomeTest {
+    /**
+     * A configuration that declares the synthetic file's only feature unsupported.
+     *
+     * @return the configuration
+     */
+    private static Test262Config configSkippingEverything() {
+        Test262Config config = Test262Config.loadDefault();
+        config.addUnsupportedFeatures("no-such-feature-at-all");
+        return config;
+    }
+
+    /**
+     * How many worker threads of any runner are still alive.
+     *
+     * @return the count
+     */
+    private static int liveWorkerThreadCount() {
+        int count = 0;
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.isAlive() && thread.getName().startsWith(Test262Runner.WORKER_THREAD_NAME_PREFIX)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /**
+     * A test file that takes long enough for an interruption to land mid-run.
+     *
+     * @return the source
+     */
+    private static String slowTestSource() {
+        return "/*---\nflags: [raw]\n---*/\n"
+                + "var total = 0;\n"
+                + "for (var i = 0; i < 200000; i++) { total += i; }\n";
+    }
+
     private static Path writeFakeTest262Root(Path root, String testFileName, String testSource) throws IOException {
         Path testDirectory = root.resolve("test");
         Files.createDirectories(testDirectory);
@@ -44,6 +82,30 @@ public class Test262RunnerOutcomeTest {
                 "function Test262Error(message) { this.message = message || ''; }\n"
                         + "function $DONOTEVALUATE() { throw 'Test262: This statement should not be evaluated.'; }\n");
         return root;
+    }
+
+    @Test
+    void testAllSkippedSelectionFailsUnlessOptedIn() throws IOException {
+        // Discovery finds a file, its metadata says the engine cannot run it, and the run executes
+        // nothing at all. A green exit here is the same false green as a filter that matched
+        // nothing — and it is what asking for one concrete unsupported test produced.
+        Path root = writeFakeTest262Root(
+                Files.createTempDirectory("qjs4j-test262-skipped"),
+                "skipped.js",
+                "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
+        Test262Runner.RunOutcome failing = new Test262Runner(root, configSkippingEverything()).run();
+        assertThat(failing.skipped()).isEqualTo(1);
+        assertThat(failing.executed()).isZero();
+        assertThat(failing.discoveryError()).isNull();
+        assertThat(failing.diagnostic()).contains("were skipped");
+        assertThat(failing.isSuccessful()).isFalse();
+        assertThat(failing.exitCode()).isEqualTo(1);
+
+        Test262Runner.RunOutcome allowed = new Test262Runner(root, configSkippingEverything())
+                .setAllowEmptySelection(true)
+                .run();
+        assertThat(allowed.isSuccessful()).isTrue();
+        assertThat(allowed.exitCode()).isZero();
     }
 
     @Test
@@ -75,9 +137,48 @@ public class Test262RunnerOutcomeTest {
     }
 
     @Test
+    void testInterruptedRunLeavesNoWorkerRunning() throws IOException, InterruptedException {
+        // Interruption used to restore the flag and break, which made the awaitTermination that
+        // followed throw at once: run() returned a final-looking outcome while non-daemon workers
+        // kept executing files and mutating the reporter behind it.
+        Path root = Files.createTempDirectory("qjs4j-test262-interrupt");
+        writeFakeTest262Root(root, "slow-000.js", slowTestSource());
+        for (int index = 1; index < 400; index++) {
+            Files.writeString(root.resolve("test").resolve(String.format("slow-%03d.js", index)), slowTestSource());
+        }
+        Test262Runner runner = new Test262Runner(root, Test262Config.loadDefault(), null, 2);
+        Test262Runner.RunOutcome[] outcome = {null};
+        boolean[] interruptFlagPreserved = {false};
+        Thread runnerThread = new Thread(() -> {
+            try {
+                outcome[0] = runner.run();
+                interruptFlagPreserved[0] = Thread.currentThread().isInterrupted();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }, "test262-runner");
+        runnerThread.start();
+        Thread.sleep(500);
+        runnerThread.interrupt();
+        runnerThread.join(120_000);
+
+        assertThat(runnerThread.isAlive()).isFalse();
+        assertThat(outcome[0]).isNotNull();
+        assertThat(outcome[0].interrupted()).isTrue();
+        assertThat(outcome[0].isSuccessful()).isFalse();
+        assertThat(outcome[0].exitCode()).isEqualTo(1);
+        assertThat(interruptFlagPreserved[0])
+                .as("the caller's interrupt status survives the cleanup")
+                .isTrue();
+        assertThat(liveWorkerThreadCount())
+                .as("no Test262 worker may still be running once run() has returned")
+                .isZero();
+    }
+
+    @Test
     void testInterruptionProducesNonZeroExit() {
         Test262Runner.RunOutcome outcome =
-                new Test262Runner.RunOutcome(0, 0, 10, 0, true, null);
+                new Test262Runner.RunOutcome(0, 0, 10, 0, true, null, false);
         assertThat(outcome.isSuccessful()).isFalse();
         assertThat(outcome.exitCode()).isEqualTo(1);
     }
@@ -119,7 +220,7 @@ public class Test262RunnerOutcomeTest {
     @Test
     void testTimeoutProducesNonZeroExit() {
         Test262Runner.RunOutcome outcome =
-                new Test262Runner.RunOutcome(0, 1, 10, 0, false, null);
+                new Test262Runner.RunOutcome(0, 1, 10, 0, false, null, false);
         assertThat(outcome.isSuccessful()).isFalse();
         assertThat(outcome.exitCode()).isEqualTo(1);
     }
