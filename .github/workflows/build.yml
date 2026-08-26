@@ -1,13 +1,14 @@
 name: Build
 
+# Every branch, not just main. A branch filter here means a push to a working branch produces no
+# CI at all until a pull request into main exists, so the first signal a change gets is whenever
+# someone remembers to open one — and a branch that is never proposed is never built.
 on:
   push:
-    branches: [ main ]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
   pull_request:
-    branches: [ main ]
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
