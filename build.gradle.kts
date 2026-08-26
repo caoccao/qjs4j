@@ -160,10 +160,10 @@ tasks.test {
     useJUnitPlatform {
         excludeTags("performance")
     }
-    // Pinned rather than left at Gradle's default so the memory-accounting tests have a known
-    // ceiling to overshoot: they assert that a data-block allocation the JVM refuses gives its
-    // reservation back, which needs a request that is reliably larger than the heap.
-    maxHeapSize = "1g"
+    // The heap is set once, for every Test task, in the `withType<Test>` block below. Setting it
+    // here as well only looked like it worked: the later block is configured second and wins, so
+    // this task ran on a heap the comment here disagreed with, and the memory-accounting tests
+    // that were said to depend on it were passing for a different reason than the one documented.
 }
 
 // Create a separate task for performance tests
@@ -382,11 +382,24 @@ tasks {
     withType<Test> {
         javaLauncher.set(testJavaLauncher)
         systemProperty("file.encoding", "UTF-8")
-        // Gradle's default test heap is 512 MB, which is below what the engine's own resource
-        // limits need to be reachable: a string-length or array-join limit only fires after the
-        // builder has grown past it, so a smaller heap runs out first and the JVM dies instead of
-        // the test observing a RangeError. Matches the heap the test262 tasks already use.
+        // The one authoritative test heap. Gradle's default of 512 MB is below what the engine's
+        // own resource limits need to be reachable: a string-length or array-join limit only fires
+        // after the builder has grown past it, so a smaller heap runs out first and the JVM dies
+        // instead of the test observing a RangeError. Matches the heap the test262 tasks use.
+        //
+        // No test asserts anything about this number. The memory-accounting rollback tests drive
+        // their failure through an injected allocator, and the two that go through the JVM's own
+        // allocation limit state their premise as an assumption, so they skip rather than quietly
+        // stop testing anything if a future heap could satisfy the request.
         maxHeapSize = "2g"
+        // The interpreter recurses through Java frames for structures a script nests — a chain of a
+        // thousand proxies, for one — and the engine's own call-depth budget is meant to be what
+        // bounds that, with a catchable RangeError at a documented, configurable limit. On the
+        // default thread stack it is not: whether a thousand layers fit depends on how much the JIT
+        // has compiled, so the same deep-chain test passed alone and overflowed the JVM stack in a
+        // busy suite, reporting the same RangeError for a quite different reason. A larger stack
+        // makes the engine's limit the one being observed.
+        jvmArgs("-Xss8m")
         val cpuCount = Runtime.getRuntime().availableProcessors()
         maxParallelForks = maxOf(
             1,
@@ -424,11 +437,6 @@ publishing {
                 scm {
                     connection.set(Config.Pom.Scm.CONNECTION)
                     developerConnection.set(Config.Pom.Scm.DEVELOPER_CONNECTION)
-                    // The release tag, not a dependency's version. This used to publish
-                    // Javet's version as qjs4j's SCM tag, breaking source-provenance tooling.
-                    // The release workflow is triggered by a `v<version>` tag and refuses to
-                    // publish when the tag and this version disagree, so the value below now
-                    // resolves to a tag that exists.
                     tag.set("v${Config.VERSION}")
                     url.set(Config.URL)
                 }

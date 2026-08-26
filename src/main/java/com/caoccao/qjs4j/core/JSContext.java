@@ -125,8 +125,26 @@ public final class JSContext implements AutoCloseable {
     private JSValue constructorNewTarget;
     private JSValue currentThis;
     private int evalOverlayLookupSuppressionDepth;
+    /**
+     * Whether the module body about to run was pulled in to satisfy an import.
+     * <p>
+     * See {@link #getImportedModuleBodyEvaluationCount()}.
+     */
+    private boolean evaluatingImportedModule;
+    /**
+     * How many module bodies threw instead of running to completion.
+     * <p>
+     * See {@link #getFailedModuleBodyEvaluationCount()}.
+     */
+    private int failedModuleBodyEvaluationCount;
     // Generator prototype chain (not exposed in global scope)
     private JSObject generatorFunctionPrototype;
+    /**
+     * How many of the module bodies that ran were pulled in to satisfy an import.
+     * <p>
+     * See {@link #getImportedModuleBodyEvaluationCount()}.
+     */
+    private int importedModuleBodyEvaluationCount;
     // Flag set by the VM's PUT_VAR handler before calling globalObject.set()
     // so that import overlay setters can distinguish bare variable assignment
     // (which should throw TypeError) from property-based writes (which should succeed).
@@ -134,6 +152,12 @@ public final class JSContext implements AutoCloseable {
     private boolean inCatchHandler;
     private int maxStackDepth;
     private IJSMicrotaskFailureCallback microtaskFailureCallback;
+    /**
+     * How many module bodies have begun executing in this context.
+     * <p>
+     * See {@link #getModuleBodyEvaluationCount()}.
+     */
+    private int moduleBodyEvaluationCount;
     private JSValue nativeConstructorNewTarget;
     private boolean pendingClassFieldEval;
     private int pendingDirectEvalCalls;
@@ -1783,11 +1807,17 @@ public final class JSContext implements AutoCloseable {
         JSValue evalError = null;
         try {
             if (isModule && !isDirectEval) {
+                // Every early error the source has is raised here, against the text the caller
+                // passed, before a single character of it is rewritten. Downstream the source is
+                // split onto more lines and then wrapped in generated module code, and neither
+                // keeps the caller's coordinate system: a duplicate `__proto__` at offset 44 of a
+                // 60-character module was reported at offset 119, which names no character of the
+                // input at all. See requireModuleSourceCompiles.
+                requireModuleSourceCompiles(code);
                 // Put every top-level import/export declaration on its own lines before anything
-                // downstream classifies module source by line. Inside the try because the source is
-                // parsed as written first, and a source that does not parse has to be reported the
-                // way every other parse error is — see normalizeModuleDeclarationLines.
-                code = normalizeModuleDeclarationLines(code);
+                // downstream classifies module source by line. The compile above has already
+                // accepted the source as written, so the split cannot silently repair it.
+                code = normalizeModuleDeclarationLines(code, false);
             }
             boolean skipEvaluatedDynamicImportModule = false;
             boolean shouldTrackDynamicImportModule = isModule
@@ -1823,9 +1853,8 @@ public final class JSContext implements AutoCloseable {
                                 new JSDynamicImportModule(resolvedModuleSpecifier, createModuleNamespaceObject());
                         dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
                         dynamicImportEvalModuleRecord.setRawSource(code);
-                        // Validate the original source for early errors (duplicate exports,
-                        // unresolvable bindings, etc.) before doing IIFE transformation.
-                        new Compiler(code, filename).setContext(this).parse(true);
+                        // Early errors were already raised above, against the caller's own text
+                        // rather than this normalised copy of it.
                         parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
                         dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
                     } else if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
@@ -2181,8 +2210,28 @@ public final class JSContext implements AutoCloseable {
                 }
             }
             JSValue result;
+            boolean evaluatingModuleBody = isModule && !isDirectEval;
+            if (evaluatingModuleBody) {
+                // Everything a module needs linked is linked by now — imports were resolved and
+                // the modules behind them were pulled in above. Crossing this line is the
+                // observable boundary between the two phases a negative module test distinguishes.
+                moduleBodyEvaluationCount++;
+                if (evaluatingImportedModule) {
+                    importedModuleBodyEvaluationCount++;
+                }
+            }
             try {
                 result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS, evalNewTarget);
+                if (evaluatingModuleBody && result == null) {
+                    // A pending exception rather than a thrown one, but the body still did not
+                    // finish.
+                    failedModuleBodyEvaluationCount++;
+                }
+            } catch (RuntimeException | Error moduleBodyFailure) {
+                if (evaluatingModuleBody) {
+                    failedModuleBodyEvaluationCount++;
+                }
+                throw moduleBodyFailure;
             } finally {
                 setGlobalFunctionBindingInitializations(null, false);
             }
@@ -3258,6 +3307,21 @@ public final class JSContext implements AutoCloseable {
         return jsGlobalObject.getGlobalObject();
     }
 
+    /**
+     * How many of the module bodies counted by {@link #getModuleBodyEvaluationCount()} belong to
+     * modules pulled in to satisfy an import.
+     * <p>
+     * The difference between the two counts is what a host needs to distinguish a graph that
+     * failed to link from one that linked and then threw. A module whose import cannot be resolved
+     * may still have evaluated the dependency it imports <em>from</em> — so "something ran" does
+     * not mean the module the host asked for ran. When the two counts differ, it did.
+     *
+     * @return the number of imported module bodies that have started executing
+     */
+    public int getImportedModuleBodyEvaluationCount() {
+        return importedModuleBodyEvaluationCount;
+    }
+
     public String getIntrinsicDefaultPrototypeName(JSFunction function) {
         JSConstructorType constructorType = function.getConstructorType();
         if (constructorType != null) {
@@ -3418,6 +3482,25 @@ public final class JSContext implements AutoCloseable {
         return microtaskQueue;
     }
 
+    /**
+     * How many module bodies have begun executing in this context.
+     * <p>
+     * ECMAScript loads, links and evaluates a module graph as three stages, and a conformance
+     * suite's negative module tests declare which of the three they fail in. This engine still
+     * performs all three inside one {@code eval}, so a host that has to tell them apart cannot do
+     * it by catching the error alone: a link failure and an evaluation failure can carry the same
+     * constructor. The count moves exactly once per module body, at the point where that module's
+     * imports have all been resolved and its own code is about to run, so a host can ask the one
+     * question the stages differ on — whether anything was evaluated at all.
+     * <p>
+     * It counts every module body in the graph, dependencies included, and never decreases.
+     *
+     * @return the number of module bodies that have started executing
+     */
+    public int getModuleBodyEvaluationCount() {
+        return moduleBodyEvaluationCount;
+    }
+
     public JSValue getNativeConstructorNewTarget() {
         return nativeConstructorNewTarget;
     }
@@ -3565,6 +3648,27 @@ public final class JSContext implements AutoCloseable {
 
     public boolean hasGlobalLexicalBinding(String name) {
         return globalLexicalBindings.containsKey(name);
+    }
+
+    /**
+     * Whether any module body failed, rather than the graph failing to link.
+     * <p>
+     * A module graph can fail in two quite different ways that carry the same error: an import that
+     * names an export nothing provides fails while the graph is linked, and a dependency whose body
+     * throws fails while the graph is evaluated. This engine pulls a dependency in and evaluates it
+     * in one step, so "a body ran" cannot tell them apart on its own — a failed import may well
+     * have evaluated the module it was importing from. "A body failed" can, because a link failure
+     * raises its error with every body it touched having run to completion.
+     * <p>
+     * Both shapes of failure count: a body that threw, and a top-level-await body that finished but
+     * whose evaluation promise rejected. Only the body's own failure counts — a module marked as
+     * failed because something it imported failed did not fail itself, and a graph that could not
+     * be linked marks records that way too.
+     *
+     * @return true when a module body failed
+     */
+    public boolean hasModuleBodyEvaluationFailed() {
+        return failedModuleBodyEvaluationCount > 0;
     }
 
     private boolean hasModuleExportSyntax(String code) {
@@ -3856,51 +3960,16 @@ public final class JSContext implements AutoCloseable {
             Map<String, String> importAttributes,
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
-        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
-        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
-        // Check if the module was pre-loaded (deferred) but not yet evaluated.
-        JSDynamicImportModule preloaded = dynamicImportModuleCache.get(moduleCacheKey);
-        if (preloaded != null && preloaded.status() == JSDynamicImportModule.Status.LOADING
-                && preloaded.deferredPreload()) {
-            try {
-                evaluateDynamicImportModule(preloaded);
-                resolveDynamicImportReExports(preloaded, new HashSet<>());
-                preloaded.namespace().finalizeNamespace();
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED);
-            } catch (JSException jsException) {
-                preloaded.setEvaluationError(jsException.getErrorValue());
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                throw jsException;
-            }
-            return preloaded.namespace();
+        // Everything evaluated from here down is a module pulled in to satisfy an import,
+        // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
+        boolean previouslyEvaluatingImportedModule = evaluatingImportedModule;
+        evaluatingImportedModule = true;
+        try {
+            return loadDynamicImportModuleInternal(
+                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
+        } finally {
+            evaluatingImportedModule = previouslyEvaluatingImportedModule;
         }
-        JSDynamicImportModule moduleRecord =
-                loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), importAttributes);
-        // If the module is still completing async evaluation, chain the import promise
-        // onto the module's async evaluation promise instead of resolving immediately.
-        if (importPromise != null && resolveState != null
-                && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                && moduleRecord.asyncEvaluationPromise() != null) {
-            chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
-            return null;
-        }
-        if (importPromise != null && resolveState != null
-                && moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            List<JSPromise> asyncDependencyPromises = getEvaluatingAsyncDependencyPromises(moduleRecord);
-            if (!asyncDependencyPromises.isEmpty()) {
-                chainImportPromiseOntoAsyncDependencies(
-                        asyncDependencyPromises,
-                        moduleRecord.namespace(),
-                        importPromise,
-                        resolveState);
-                return null;
-            }
-        }
-        // If the module evaluation failed, throw so the import() promise gets rejected
-        if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            throw new JSException(moduleRecord.evaluationError());
-        }
-        return moduleRecord.namespace();
     }
 
     public JSObject loadDynamicImportModuleDeferred(
@@ -3917,6 +3986,24 @@ public final class JSContext implements AutoCloseable {
      * Returns null when the import promise is handled internally.
      */
     public JSObject loadDynamicImportModuleDeferred(
+            String specifier,
+            String referrerFilename,
+            Map<String, String> importAttributes,
+            JSPromise importPromise,
+            JSPromise.ResolveState resolveState) {
+        // Everything evaluated from here down is a module pulled in to satisfy an import,
+        // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
+        boolean previouslyEvaluatingImportedModule = evaluatingImportedModule;
+        evaluatingImportedModule = true;
+        try {
+            return loadDynamicImportModuleDeferredInternal(
+                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
+        } finally {
+            evaluatingImportedModule = previouslyEvaluatingImportedModule;
+        }
+    }
+
+    private JSObject loadDynamicImportModuleDeferredInternal(
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes,
@@ -3975,17 +4062,7 @@ public final class JSContext implements AutoCloseable {
                 parseDynamicImportModuleSource(moduleRecord);
                 // Eagerly validate syntax of deferred modules per spec.
                 // SyntaxErrors are not deferred — they must be detected at linking time.
-                try {
-                    new Compiler(sourceCode, resolvedSpecifier).setContext(this).parse(true);
-                } catch (JSSyntaxErrorException syntaxError) {
-                    dynamicImportModuleCache.remove(moduleCacheKey);
-                    throw new JSException(throwSyntaxError(
-                            syntaxError.getMessage(), syntaxError.getSourceLocation()));
-                } catch (JSCompilerException compilerError) {
-                    dynamicImportModuleCache.remove(moduleCacheKey);
-                    throw new JSException(throwSyntaxError(
-                            compilerError.getMessage(), compilerError.getSourceLocation()));
-                }
+                requireDependencyModuleSourceCompiles(sourceCode, resolvedSpecifier);
             } catch (IOException ioException) {
                 dynamicImportModuleCache.remove(moduleCacheKey);
                 throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
@@ -4095,6 +4172,59 @@ public final class JSContext implements AutoCloseable {
         return moduleRecord.deferredNamespace();
     }
 
+    private JSObject loadDynamicImportModuleInternal(
+            String specifier,
+            String referrerFilename,
+            Map<String, String> importAttributes,
+            JSPromise importPromise,
+            JSPromise.ResolveState resolveState) {
+        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
+        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
+        // Check if the module was pre-loaded (deferred) but not yet evaluated.
+        JSDynamicImportModule preloaded = dynamicImportModuleCache.get(moduleCacheKey);
+        if (preloaded != null && preloaded.status() == JSDynamicImportModule.Status.LOADING
+                && preloaded.deferredPreload()) {
+            try {
+                evaluateDynamicImportModule(preloaded);
+                resolveDynamicImportReExports(preloaded, new HashSet<>());
+                preloaded.namespace().finalizeNamespace();
+                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED);
+            } catch (JSException jsException) {
+                preloaded.setEvaluationError(jsException.getErrorValue());
+                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
+                throw jsException;
+            }
+            return preloaded.namespace();
+        }
+        JSDynamicImportModule moduleRecord =
+                loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), importAttributes);
+        // If the module is still completing async evaluation, chain the import promise
+        // onto the module's async evaluation promise instead of resolving immediately.
+        if (importPromise != null && resolveState != null
+                && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
+                && moduleRecord.asyncEvaluationPromise() != null) {
+            chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
+            return null;
+        }
+        if (importPromise != null && resolveState != null
+                && moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED_ERROR) {
+            List<JSPromise> asyncDependencyPromises = getEvaluatingAsyncDependencyPromises(moduleRecord);
+            if (!asyncDependencyPromises.isEmpty()) {
+                chainImportPromiseOntoAsyncDependencies(
+                        asyncDependencyPromises,
+                        moduleRecord.namespace(),
+                        importPromise,
+                        resolveState);
+                return null;
+            }
+        }
+        // If the module evaluation failed, throw so the import() promise gets rejected
+        if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
+            throw new JSException(moduleRecord.evaluationError());
+        }
+        return moduleRecord.namespace();
+    }
+
     private JSDynamicImportModule loadJSDynamicImportModule(
             String resolvedSpecifier,
             Set<String> importResolutionStack,
@@ -4162,6 +4292,10 @@ public final class JSContext implements AutoCloseable {
                 moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
                 return moduleRecord;
             }
+            // The dependency's own early errors, raised against the dependency's own text. Without
+            // this they surfaced only once the file had become generated module code, so a
+            // duplicate `__proto__` at offset 33 of a 53-character file was reported at offset 228.
+            requireDependencyModuleSourceCompiles(sourceCode, resolvedSpecifier);
             parseDynamicImportModuleSource(moduleRecord);
             resolveDynamicImportReExports(moduleRecord, importResolutionStack);
             // Pre-load all static imports so we can detect EVALUATING_ASYNC dependencies.
@@ -4461,11 +4595,26 @@ public final class JSContext implements AutoCloseable {
      * @throws JSSyntaxErrorException when the source as written is not a valid module
      */
     private String normalizeModuleDeclarationLines(String sourceCode) {
+        return normalizeModuleDeclarationLines(sourceCode, true);
+    }
+
+    /**
+     * Rewrite module source so that every top-level declaration occupies whole lines.
+     *
+     * @param sourceCode the module source
+     * @param validate   whether to compile the source as written first; false only when the caller
+     *                   has already done so and would otherwise pay for a second compilation
+     * @return the source with declarations on their own lines
+     * @throws JSSyntaxErrorException when the source as written is not a valid module
+     */
+    private String normalizeModuleDeclarationLines(String sourceCode, boolean validate) {
         ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
         if (scan == null || scan.lineBreakOffsets().isEmpty()) {
             return sourceCode;
         }
-        requireModuleSourceParses(sourceCode);
+        if (validate) {
+            requireModuleSourceCompiles(sourceCode);
+        }
         StringBuilder normalized = new StringBuilder(sourceCode.length() + scan.lineBreakOffsets().size());
         int copiedUpTo = 0;
         for (int breakOffset : scan.lineBreakOffsets()) {
@@ -5277,6 +5426,11 @@ public final class JSContext implements AutoCloseable {
         JSNativeFunction onReject = new JSNativeFunction(this, "onReject", 1,
                 (ctx, thisArg, args) -> {
                     JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
+                    // A top-level-await body that finished and then rejected still failed while
+                    // the graph was being evaluated. Counting it is what lets a host tell that
+                    // apart from a graph that never got past linking — see
+                    // hasModuleBodyEvaluationFailed().
+                    failedModuleBodyEvaluationCount++;
                     moduleRecord.setEvaluationError(error);
                     moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
                     triggerPendingDependents(moduleRecord);
@@ -5403,6 +5557,32 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Require that a module loaded from disk is valid, and report its failure as a JavaScript
+     * {@code SyntaxError} carrying that file's own coordinates.
+     * <p>
+     * A dependency is compiled before it is turned into generated module code for the same reason
+     * an entry module is — see {@link #requireModuleSourceCompiles(String)} — and additionally
+     * because a Java compiler exception escaping here would leave the module cache holding a record
+     * stuck in {@code LOADING}. Converting it to a {@link JSException} lets the caller's existing
+     * handler evict that record.
+     *
+     * @param sourceCode        the dependency's source, unmodified
+     * @param resolvedSpecifier the resolved path, used as the compilation's file name
+     * @throws JSException when the dependency is not a valid module
+     */
+    private void requireDependencyModuleSourceCompiles(String sourceCode, String resolvedSpecifier) {
+        try {
+            new Compiler(sourceCode, resolvedSpecifier).setContext(this).compile(true);
+        } catch (JSSyntaxErrorException syntaxError) {
+            throw new JSException(throwSyntaxError(
+                    syntaxError.getMessage(), syntaxError.getSourceLocation()));
+        } catch (JSCompilerException compilerError) {
+            throw new JSException(throwSyntaxError(
+                    compilerError.getMessage(), compilerError.getSourceLocation()));
+        }
+    }
+
+    /**
      * Validate a name that is about to be interpolated into generated module source in identifier
      * position.
      * <p>
@@ -5425,19 +5605,29 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Require that module source is valid <em>as written</em>, before it is split onto more lines.
+     * Require that module source is valid <em>as written</em>, before it is rewritten.
      * <p>
      * The grammar is the only thing that knows where a statement really ends: whether a brace closes
      * a block or an object literal, whether a line terminator would trigger automatic semicolon
      * insertion, whether a restricted production is in play. Re-deriving any of that from a token
      * scan would be a second, worse implementation of the parser — and its diagnostics would be a
      * second, worse vocabulary. Handing the source to the parser gives both for free.
+     * <p>
+     * <strong>Why this compiles rather than parses.</strong> Parsing alone answers the automatic
+     * semicolon insertion question but leaves every early error the bytecode compiler raises —
+     * duplicate {@code __proto__}, a duplicate export name, an unresolvable {@code break} target, an
+     * invalid regular expression literal — to be discovered later, by which point the source has
+     * been split onto more lines and wrapped in generated module code. The location on such an
+     * error then belongs to text the caller never wrote: a duplicate {@code __proto__} at offset 44
+     * of a 60-character module was reported at offset 119. Compiling the untouched source moves
+     * every early error in front of the rewrite, so all of them are reported in the caller's
+     * coordinates. The bytecode produced here is discarded; only the diagnostics matter.
      *
      * @param sourceCode the module source, unmodified
-     * @throws JSSyntaxErrorException when the source does not parse as a module
+     * @throws JSSyntaxErrorException when the source is not a valid module
      */
-    private void requireModuleSourceParses(String sourceCode) {
-        new Compiler(sourceCode, "<module>").setContext(this).parse(true);
+    private void requireModuleSourceCompiles(String sourceCode) {
+        new Compiler(sourceCode, "<module>").setContext(this).compile(true);
     }
 
     /**

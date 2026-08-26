@@ -406,7 +406,10 @@ public final class JSGlobalObject {
      * Initialize Atomics object.
      */
     private void initializeAtomicsObject() {
-        AtomicsObject atomicsObject = context.getRuntime().getOptions().getAtomicsObject();
+        // The runtime's own instance, not whatever its options object currently holds: every
+        // context of one runtime has to bind these functions to the same object, and a mutation of
+        // the options between two createContext() calls must not put them on different ones.
+        AtomicsObject atomicsObject = context.getRuntime().getAtomicsObject();
         JSObject atomics = context.createJSObject();
         atomics.defineProperty(PropertyKey.fromString("add"), new JSNativeFunction(context, "add", 3, atomicsObject::add), PropertyDescriptor.DataState.ConfigurableWritable);
         atomics.defineProperty(PropertyKey.fromString("and"), new JSNativeFunction(context, "and", 3, atomicsObject::and), PropertyDescriptor.DataState.ConfigurableWritable);
@@ -3121,6 +3124,12 @@ public final class JSGlobalObject {
             // silently ignored in sloppy mode).
             int functionNameLocalIndex = callerBytecodeFunction != null
                     ? callerBytecodeFunction.getSelfLocalIndex() : -1;
+            // Whether the function-expression name currently means the function rather than the
+            // body declaration that shadows it. See overlayParameterScopeFunctionName.
+            boolean parameterScopeFunctionNameActive =
+                    isParameterScopeFunctionNameActive(callerFrame, callerBytecodeFunction);
+            String parameterScopeFunctionName = parameterScopeFunctionNameActive
+                    ? callerBytecodeFunction.getParameterScopeFunctionName() : null;
 
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
@@ -3245,6 +3254,21 @@ public final class JSGlobalObject {
                                     absentKeys,
                                     touchedOverlayKeys);
                             capturedVarOverlaySlots.put(capturedVarName, captureSlot);
+                            if (parameterScopeFunctionNameActive
+                                    && capturedVarName.equals(
+                                    callerBytecodeFunction.getParameterScopeFunctionName())) {
+                                // A closure created in a default initializer captured the named
+                                // function expression's own binding, which is immutable.
+                                PropertyDescriptor capturedSelfDescriptor = new PropertyDescriptor();
+                                capturedSelfDescriptor.setValue(
+                                        capturedValue != null ? capturedValue : JSUndefined.INSTANCE);
+                                capturedSelfDescriptor.setWritable(false);
+                                capturedSelfDescriptor.setEnumerable(true);
+                                capturedSelfDescriptor.setConfigurable(true);
+                                global.defineProperty(
+                                        PropertyKey.fromString(capturedVarName), capturedSelfDescriptor);
+                                immutableOverlayBindingNames.add(capturedVarName);
+                            }
                             if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
                                 PropertyDescriptor capturedFunctionNameDescriptor = new PropertyDescriptor();
                                 capturedFunctionNameDescriptor.setValue(
@@ -3257,6 +3281,20 @@ public final class JSGlobalObject {
                             }
                         }
                     }
+                    // ES2024 15.2.5: a default initializer runs in the parameter environment, whose
+                    // outer environment holds the named function expression's own binding. A `var`,
+                    // lexical, class or function declaration of that name in the body is a
+                    // different binding, and it does not exist yet. Both are slots of one flattened
+                    // frame and the name maps to the body one, so while the frame is still
+                    // initializing parameters the name has to be pointed back at the function.
+                    overlayParameterScopeFunctionName(
+                            global,
+                            callerFrame,
+                            callerBytecodeFunction,
+                            savedGlobals,
+                            absentKeys,
+                            touchedOverlayKeys,
+                            immutableOverlayBindingNames);
                     Map<String, JSValue> dynamicVarBindings = callerFrame.getDynamicVarBindings();
                     if (dynamicVarBindings != null) {
                         for (Map.Entry<String, JSValue> entry : dynamicVarBindings.entrySet()) {
@@ -3561,6 +3599,12 @@ public final class JSGlobalObject {
                         if (functionNameLocalIndex >= 0 && i == functionNameLocalIndex) {
                             continue;
                         }
+                        // While the parameter environment is what the name resolves through, the
+                        // overlay holds the function, not the body's binding of the same name.
+                        // Copying it back would put the function into the body's slot.
+                        if (name.equals(parameterScopeFunctionName)) {
+                            continue;
+                        }
                         PropertyKey key = PropertyKey.fromString(name);
                         if (global.has(key)) {
                             locals[i] = global.get(key);
@@ -3579,6 +3623,10 @@ public final class JSGlobalObject {
                             continue;
                         }
                         if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
+                            continue;
+                        }
+                        // Immutable, like any other named-function-expression binding.
+                        if (name.equals(parameterScopeFunctionName)) {
                             continue;
                         }
                         PropertyKey key = PropertyKey.fromString(name);
@@ -3813,6 +3861,34 @@ public final class JSGlobalObject {
             return JSBoolean.valueOf(Double.isNaN(num));
         }
 
+        /**
+         * Whether the frame currently resolves the named function expression's own name through
+         * its parameter environment rather than through the body's declaration of that name.
+         * <p>
+         * True for the whole of parameter initialization on the frame that owns the shape, and
+         * always true on a closure created inside such an initializer — that closure's environment
+         * <em>is</em> the parameter environment, whatever the frame that built it is doing by the
+         * time the closure runs.
+         *
+         * @param frame            the caller frame
+         * @param bytecodeFunction the caller frame's function
+         * @return true when the function-expression binding is the one in scope
+         */
+        private static boolean isParameterScopeFunctionNameActive(
+                StackFrame frame, JSBytecodeFunction bytecodeFunction) {
+            if (bytecodeFunction == null || bytecodeFunction.getParameterScopeFunctionName() == null) {
+                return false;
+            }
+            int bodyScopeEnteredLocalIndex = bytecodeFunction.getBodyScopeEnteredLocalIndex();
+            if (bodyScopeEnteredLocalIndex < 0) {
+                return true;
+            }
+            JSValue[] locals = frame == null ? null : frame.getLocals();
+            return locals != null
+                    && bodyScopeEnteredLocalIndex < locals.length
+                    && locals[bodyScopeEnteredLocalIndex] != JSBoolean.TRUE;
+        }
+
         private static boolean isURIReserved(int c) {
             return c < URI_RESERVED_TABLE.length && URI_RESERVED_TABLE[c];
         }
@@ -3846,14 +3922,7 @@ public final class JSGlobalObject {
             if (name == null || touchedOverlayKeys == null || savedGlobals == null || absentKeys == null) {
                 return;
             }
-            if (touchedOverlayKeys.add(name)) {
-                PropertyKey key = PropertyKey.fromString(name);
-                if (global.has(key)) {
-                    savedGlobals.put(name, global.get(key));
-                } else {
-                    absentKeys.add(name);
-                }
-            }
+            rememberOverlayKey(global, name, savedGlobals, absentKeys, touchedOverlayKeys);
             global.set(PropertyKey.fromString(name), value != null ? value : JSUndefined.INSTANCE);
         }
 
@@ -3901,6 +3970,62 @@ public final class JSGlobalObject {
                         savedGlobals,
                         absentKeys,
                         touchedOverlayKeys);
+            }
+        }
+
+        /**
+         * Point the named function expression's own name back at the function while its default
+         * initializers are running.
+         *
+         * @param global                       the realm's global object, which carries the overlay
+         * @param callerFrame                  the frame the direct eval runs on behalf of
+         * @param callerBytecodeFunction       that frame's function
+         * @param savedGlobals                 globals displaced by the overlay
+         * @param absentKeys                   overlay names that did not exist before
+         * @param touchedOverlayKeys           overlay names already saved
+         * @param immutableOverlayBindingNames names the overlay makes non-writable
+         */
+        private static void overlayParameterScopeFunctionName(
+                JSObject global,
+                StackFrame callerFrame,
+                JSBytecodeFunction callerBytecodeFunction,
+                Map<String, JSValue> savedGlobals,
+                Set<String> absentKeys,
+                Set<String> touchedOverlayKeys,
+                Set<String> immutableOverlayBindingNames) {
+            if (!isParameterScopeFunctionNameActive(callerFrame, callerBytecodeFunction)) {
+                return;
+            }
+            int selfLocalIndex = callerBytecodeFunction.getSelfLocalIndex();
+            int bodyScopeEnteredLocalIndex = callerBytecodeFunction.getBodyScopeEnteredLocalIndex();
+            JSValue[] locals = callerFrame.getLocals();
+            // Only the frame that owns the two slots can read the function out of one of them; a
+            // closure created in the initializer reaches the same binding through its capture,
+            // which the captured-variable overlay above has already applied.
+            if (bodyScopeEnteredLocalIndex < 0
+                    || locals == null
+                    || selfLocalIndex < 0
+                    || selfLocalIndex >= locals.length) {
+                return;
+            }
+            String name = callerBytecodeFunction.getParameterScopeFunctionName();
+            JSValue selfValue = locals[selfLocalIndex] != null ? locals[selfLocalIndex] : JSUndefined.INSTANCE;
+            rememberOverlayKey(global, name, savedGlobals, absentKeys, touchedOverlayKeys);
+            // ES2024 15.2.5 makes the binding immutable: assignment throws in strict mode and is
+            // ignored in sloppy mode. Without this it would instead reach the body's slot.
+            //
+            // Defined rather than assigned, because the body's declaration of the same name may
+            // itself be a `const`, in which case the loop above has already made this very
+            // property non-writable — and assigning to a non-writable property throws in strict
+            // mode, which turned a shadowing `const` into a TypeError from the parameter list.
+            PropertyDescriptor selfDescriptor = new PropertyDescriptor();
+            selfDescriptor.setValue(selfValue);
+            selfDescriptor.setWritable(false);
+            selfDescriptor.setEnumerable(true);
+            selfDescriptor.setConfigurable(true);
+            global.defineProperty(PropertyKey.fromString(name), selfDescriptor);
+            if (immutableOverlayBindingNames != null) {
+                immutableOverlayBindingNames.add(name);
             }
         }
 
@@ -4076,6 +4201,35 @@ public final class JSGlobalObject {
                 index++;
             }
             return depth;
+        }
+
+        /**
+         * Note what the global held under a name before the overlay took it over, so the restore
+         * can put it back.
+         *
+         * @param global             the realm's global object
+         * @param name               the overlaid name
+         * @param savedGlobals       globals displaced by the overlay
+         * @param absentKeys         overlay names that did not exist before
+         * @param touchedOverlayKeys overlay names already saved
+         */
+        private static void rememberOverlayKey(
+                JSObject global,
+                String name,
+                Map<String, JSValue> savedGlobals,
+                Set<String> absentKeys,
+                Set<String> touchedOverlayKeys) {
+            if (name == null || touchedOverlayKeys == null || savedGlobals == null || absentKeys == null) {
+                return;
+            }
+            if (touchedOverlayKeys.add(name)) {
+                PropertyKey key = PropertyKey.fromString(name);
+                if (global.has(key)) {
+                    savedGlobals.put(name, global.get(key));
+                } else {
+                    absentKeys.add(name);
+                }
+            }
         }
 
         private static int skipLeadingWhitespace(String str) {

@@ -97,7 +97,8 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
         int capacity = JSArrayBuffer.paddedCapacity(maxByteLength);
         JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
-        if (!accounting.reserve(capacity)) {
+        JSMemoryAccounting.Reservation pendingReservation = accounting.reserve(this, capacity);
+        if (pendingReservation == null) {
             throw new JSRangeErrorException(
                     "Shared array buffer allocation failed: the runtime memory limit of "
                             + accounting.getLimit() + " bytes would be exceeded");
@@ -108,11 +109,10 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         } catch (RuntimeException | Error allocationFailure) {
             // Reserving before allocating is deliberate, so a failed allocation has to hand the
             // bytes back rather than leave the runtime's ceiling inflated by a block that does not
-            // exist. Registration follows the allocation for the same reason.
-            accounting.release(capacity);
+            // exist.
+            pendingReservation.release();
             throw allocationFailure;
         }
-        accounting.registerReservation(this, capacity);
         this.buffer = allocated;
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.byteLength = new AtomicInteger(byteLength);

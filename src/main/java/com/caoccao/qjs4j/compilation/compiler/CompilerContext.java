@@ -105,6 +105,20 @@ final class CompilerContext {
     ObjectExpressionCompiler objectExpressionCompiler;
     ObjectExpressionDestructuringAssignmentCompiler objectExpressionDestructuringAssignmentCompiler;
     ObjectPatternCompiler objectPatternCompiler;
+    /**
+     * The named-function-expression binding the code being compiled resolves through its parameter
+     * environment, or null.
+     * <p>
+     * Set only while a default initializer of a function expression whose body redeclares its own
+     * name is being compiled, and inherited by every function nested inside that initializer —
+     * everything lexically there is in the parameter environment, whose outer environment holds the
+     * name. A closure created there must capture the binding by name, because a direct
+     * {@code eval} inside it resolves names at run time and the frame it runs on is the closure's,
+     * not the one whose parameters were being initialized.
+     *
+     * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getParameterScopeFunctionName()
+     */
+    String parameterScopeFunctionName;
     PatternCompiler patternCompiler;
     Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;

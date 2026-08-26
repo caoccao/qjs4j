@@ -232,7 +232,7 @@ public class Test262Executor {
                         // A resolution- or runtime-phase test must get past compilation first.
                         TestResult parseFailure = requireSourceCompiles(context, code, isModule, test);
                         result = parseFailure != null ? parseFailure : evaluate(context, runtime, code, test);
-                        result = requireNegativePhase(result, test, bodyEvaluated[0]);
+                        result = requireNegativePhase(result, test, context, bodyEvaluated[0]);
                     } else {
                         result = evaluate(context, runtime, code, test);
                     }
@@ -568,6 +568,35 @@ public class Test262Executor {
     }
 
     /**
+     * Whether anything in the module graph was actually evaluated.
+     * <p>
+     * This is the one question a resolution-phase and a runtime-phase negative test disagree on,
+     * and it is the question the executor could not previously answer. The engine settles it two
+     * ways: the module the runner itself handed to {@code eval} began running (the total body count
+     * exceeds the count of bodies pulled in by an import), or some module body failed rather than
+     * finishing. Either is evaluation. Neither happens when an import names an export nothing
+     * provides — the engine pulls the dependency in and runs it to completion, then fails to
+     * resolve the binding, which is why "a module body ran" on its own is not the test.
+     *
+     * @param context the context the test ran in
+     * @return true when the graph got past linking
+     */
+    private boolean moduleGraphWasEvaluated(JSContext context) {
+        return context.getModuleBodyEvaluationCount() > context.getImportedModuleBodyEvaluationCount()
+                || context.hasModuleBodyEvaluationFailed();
+    }
+
+    /**
+     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
+     *
+     * @param context  the context
+     * @param code     the prepared source
+     * @param isModule whether the source is module source
+     * @param test     the test case
+     * @return a failing result when the source did not compile, or {@code null} when it did
+     */
+
+    /**
      * Produce the source for this interpretation.
      * <p>
      * The strict variant gets a {@code "use strict";} prologue as {@code INTERPRETING.md}
@@ -592,16 +621,6 @@ public class Test262Executor {
     }
 
     /**
-     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
-     *
-     * @param context  the context
-     * @param code     the prepared source
-     * @param isModule whether the source is module source
-     * @param test     the test case
-     * @return a failing result when the source did not compile, or {@code null} when it did
-     */
-
-    /**
      * Prewarm runtime/context class loading before parallel test execution.
      * This reduces startup class-loader contention when many workers create contexts simultaneously.
      *
@@ -623,26 +642,47 @@ public class Test262Executor {
     /**
      * Hold a negative test to the phase its metadata declares.
      * <p>
-     * A resolution-phase failure has to happen while the module graph is being linked, so the test
-     * body must never run. A parse- or resolution-phase test that reaches {@code $DONOTEVALUATE()}
-     * has therefore failed in the wrong phase, however well the thrown constructor matches.
+     * {@code INTERPRETING.md} splits negative tests by the stage they fail in, and both directions
+     * have to be enforced or neither claim means anything. A resolution-phase failure happens while
+     * the graph is linked, so nothing may have been evaluated; a runtime-phase failure happens
+     * while it is evaluated, so something must have been. Checking only the first let a genuine
+     * link failure pass under {@code runtime}, and checking only the root test body let a
+     * dependency that threw pass under {@code resolution}.
+     * <p>
+     * {@code $DONOTEVALUATE()} stays as a second, source-level witness: it is what the suite itself
+     * writes to mark the boundary, and it names the offending module directly.
      *
      * @param result        the result the phase-agnostic comparison produced
      * @param test          the test case
-     * @param bodyEvaluated whether the test body started executing
+     * @param context       the context the test ran in
+     * @param bodyEvaluated whether the root test body started executing
      * @return the result, downgraded to a failure on a phase mismatch
      */
-    private TestResult requireNegativePhase(TestResult result, Test262TestCase test, boolean bodyEvaluated) {
+    private TestResult requireNegativePhase(
+            TestResult result, Test262TestCase test, JSContext context, boolean bodyEvaluated) {
         Test262TestCase.NegativeInfo negative = test.getNegative();
-        if (!result.isPassed() || negative == null || PHASE_RUNTIME.equals(negative.getPhase())) {
+        if (!result.isPassed() || negative == null) {
             return result;
         }
-        if (!bodyEvaluated) {
-            return result;
+        if (PHASE_RUNTIME.equals(negative.getPhase())) {
+            if (test.getVariant() != Test262TestCase.Variant.MODULE || moduleGraphWasEvaluated(context)) {
+                return result;
+            }
+            return TestResult.fail(test, "Expected a runtime-phase " + negative.getType()
+                    + " but no module body was evaluated, so the error was raised while the module "
+                    + "graph was still being linked");
         }
-        return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
-                + negative.getType() + " but the test body was evaluated, so the error was raised "
-                + "after the module graph had been linked");
+        if (bodyEvaluated) {
+            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
+                    + negative.getType() + " but the test body was evaluated, so the error was raised "
+                    + "after the module graph had been linked");
+        }
+        if (moduleGraphWasEvaluated(context)) {
+            return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
+                    + negative.getType() + " but a module body was evaluated, so the error was raised "
+                    + "after the module graph had been linked");
+        }
+        return result;
     }
 
     private TestResult requireSourceCompiles(JSContext context, String code, boolean isModule, Test262TestCase test) {

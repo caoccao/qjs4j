@@ -249,15 +249,21 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      * half-constructed buffer was collected, and until then a runtime's ceiling was inflated by an
      * allocation that never happened.
      *
+     * <p>
+     * Package-private so a test can hand it an allocator that fails on demand. Reaching that path
+     * through the JVM's own allocation limit needs a request larger than the heap, which makes the
+     * test's premise a property of the build's {@code -Xmx} rather than of the code under test.
+     *
      * @param context   the owning context
      * @param capacity  the number of bytes being charged
      * @param allocator produces the block
      * @return the allocated block
      * @throws JSRangeErrorException when the runtime's limit would be exceeded
      */
-    private ByteBuffer accountBlock(JSContext context, int capacity, Supplier<ByteBuffer> allocator) {
+    ByteBuffer accountBlock(JSContext context, int capacity, Supplier<ByteBuffer> allocator) {
         JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
-        if (!accounting.reserve(capacity)) {
+        JSMemoryAccounting.Reservation pendingReservation = accounting.reserve(this, capacity);
+        if (pendingReservation == null) {
             throw new JSRangeErrorException(
                     "Array buffer allocation failed: the runtime memory limit of "
                             + accounting.getLimit() + " bytes would be exceeded");
@@ -266,10 +272,10 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         try {
             allocated = allocator.get();
         } catch (RuntimeException | Error allocationFailure) {
-            accounting.release(capacity);
+            pendingReservation.release();
             throw allocationFailure;
         }
-        this.reservation = accounting.registerReservation(this, capacity);
+        this.reservation = pendingReservation;
         return allocated;
     }
 
@@ -331,6 +337,42 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public int getMaxByteLength() {
         return maxByteLength;
+    }
+
+    /**
+     * Grow this buffer's reservation, produce the larger block, and give the growth back if
+     * producing it fails.
+     * <p>
+     * The reservation grows before the copy, so a buffer declared with a large
+     * {@code maxByteLength} is charged as it actually grows rather than all at once — and can still
+     * be refused when the runtime limit is reached. A failed copy therefore has to hand the growth
+     * back: leaving it charged kept the old buffer alive with a reservation sized for a block that
+     * was never allocated, phantom bytes for the runtime's whole life since nothing later releases
+     * them.
+     * <p>
+     * Package-private for the same reason as {@link #accountBlock}: a test can hand it an
+     * allocator that fails on demand instead of asking for more memory than the JVM has.
+     *
+     * @param additionalBytes how much bigger the block is becoming
+     * @param allocator       produces the larger block
+     * @return the larger block
+     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     */
+    byte[] growAccountedBlock(int additionalBytes, Supplier<byte[]> allocator) {
+        if (reservation != null && !reservation.grow(additionalBytes)) {
+            JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
+            throw new JSRangeErrorException(
+                    "Array buffer resize failed: the runtime memory limit of "
+                            + accounting.getLimit() + " bytes would be exceeded");
+        }
+        try {
+            return allocator.get();
+        } catch (RuntimeException | Error allocationFailure) {
+            if (reservation != null) {
+                reservation.shrink(additionalBytes);
+            }
+            throw allocationFailure;
+        }
     }
 
     /**
@@ -396,25 +438,9 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
             // than all at once — and can still be refused if the runtime limit is reached.
             int newCapacity = paddedCapacity(newByteLength);
             int additionalBytes = newCapacity - buffer.capacity();
-            if (reservation != null && !reservation.grow(additionalBytes)) {
-                JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
-                throw new JSRangeErrorException(
-                        "Array buffer resize failed: the runtime memory limit of "
-                                + accounting.getLimit() + " bytes would be exceeded");
-            }
-            byte[] grown;
-            try {
-                grown = Arrays.copyOf(buffer.array(), newCapacity);
-            } catch (RuntimeException | Error allocationFailure) {
-                // The reservation was grown before the copy, so a failed copy has to give the
-                // bytes back. Leaving them charged kept the old buffer alive with a reservation
-                // sized for a block that was never allocated — phantom bytes for the runtime's
-                // whole life, since nothing later releases them.
-                if (reservation != null) {
-                    reservation.shrink(additionalBytes);
-                }
-                throw allocationFailure;
-            }
+            byte[] source = buffer.array();
+            byte[] grown = growAccountedBlock(
+                    additionalBytes, () -> Arrays.copyOf(source, newCapacity));
             // Bytes between the old length and the old capacity can hold data from before an
             // earlier shrink; ES2024 requires newly accessible bytes to read as zero.
             Arrays.fill(grown, oldByteLength, newByteLength, (byte) 0);

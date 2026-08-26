@@ -121,7 +121,14 @@ public class JSDeepChainSemanticsTest extends BaseJavetTest {
     @Test
     @Timeout(120)
     public void testDeepProxyChainIsConstructable() {
-        for (int depth : new int[]{1001, 1002, 20000}) {
+        // 1,001 and 1,002 because those are the classification cutoff this class exists to pin —
+        // a function behind that many proxies used to refuse to be constructed. Not 20,000: like
+        // calling through a chain, constructing through one nests an activation per proxy, so past
+        // some depth it is each engine's call-stack budget being measured rather than the
+        // classification. At 20,000 that budget is V8's, and how much of it is left depends on how
+        // busy the suite is — the assertion held only while V8 happened not to run out first.
+        // Classification at 20,000 is covered by testDeepProxyChainTypeof, which does not recurse.
+        for (int depth : new int[]{1001, 1002}) {
             assertIntegerWithJavet(BUILD_PROXY_CHAIN + """
                     function Point(x) { this.x = x }
                     Reflect.construct(proxiesOf(DEPTH, Point), [7]).x;""".replace("DEPTH", String.valueOf(depth)));

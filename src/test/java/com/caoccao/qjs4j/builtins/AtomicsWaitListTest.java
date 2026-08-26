@@ -45,6 +45,28 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testAnInjectedClusterObjectOutlivesEveryMemberRuntime() {
+        // The embedder owns an injected instance. No member may close it, however many of them
+        // shut down, and it stays usable until its owner closes it.
+        AtomicsObject clusterAtomics = new AtomicsObject();
+        JSRuntimeOptions options = new JSRuntimeOptions().setAtomicsObject(clusterAtomics);
+        assertThat(options.isAtomicsObjectInjected()).isTrue();
+        JSRuntime first = new JSRuntime(options);
+        JSRuntime second = new JSRuntime(options);
+        assertThat(first.getAtomicsObject()).isSameAs(clusterAtomics);
+        assertThat(second.getAtomicsObject()).isSameAs(clusterAtomics);
+        first.close();
+        assertThat(clusterAtomics.isWaitExecutorTerminated()).isFalse();
+        second.close();
+        assertThat(clusterAtomics.isWaitExecutorTerminated())
+                .as("the last member still does not own it")
+                .isFalse();
+        clusterAtomics.close();
+        assertThat(clusterAtomics.isWaitExecutorTerminated()).isTrue();
+    }
+
+    @Test
+    @Timeout(60)
     public void testCloseCancelsOnlyTheClosingRuntimesWaits() throws InterruptedException {
         AtomicsObject sharedAtomics = new AtomicsObject();
         JSRuntime first = new JSRuntime(new JSRuntimeOptions().setAtomicsObject(sharedAtomics));
@@ -77,13 +99,51 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testContextsCreatedEitherSideOfAnOptionsMutationShareOneAtomicsObject() {
+        // Two contexts of one runtime have to coordinate with each other. Binding the global
+        // Atomics functions through the live options object meant a mutation between the two
+        // createContext() calls put them on different objects, and a wait in one was invisible to
+        // a notify in the other.
+        JSRuntimeOptions options = new JSRuntimeOptions();
+        AtomicsObject replacement = new AtomicsObject();
+        try (JSRuntime runtime = new JSRuntime(options)) {
+            JSContext before = runtime.createContext();
+            options.setAtomicsObject(replacement);
+            JSContext after = runtime.createContext();
+
+            JSTypedArray array = sharedInt32Array(before, 2);
+            before.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            assertThat(runtime.getAtomicsObject().getPendingAsyncWaitCount(runtime)).isEqualTo(1);
+
+            // The second context's Atomics has to be able to see the first context's waiters.
+            AtomicsObject.WaitRegistration registration =
+                    runtime.getAtomicsObject().registerWaiter(array, 0);
+            try {
+                assertThat(runtime.getAtomicsObject().findWaitList(array, 0))
+                        .isSameAs(registration.waitList());
+                after.getGlobalObject().set("sharedArray", array);
+                assertThat(after.eval("Atomics.notify(sharedArray, 0, 1)", "atomics.js", false).toString())
+                        .as("the second context's Atomics.notify reaches the first context's waiter")
+                        .isEqualTo("1");
+            } finally {
+                registration.waitList().cancel(registration.waiter());
+                runtime.getAtomicsObject().releaseWaitList(registration);
+            }
+        } finally {
+            replacement.close();
+        }
+    }
+
+    @Test
+    @Timeout(60)
     public void testDefaultRuntimeClosesTheAtomicsObjectItCreated() {
         // Every default JSRuntimeOptions builds its own AtomicsObject, and that object owns a
         // cached thread pool. Closing the runtime cancelled its waits but left the executor
         // running, so `try (JSRuntime runtime = new JSRuntime())` did not release everything the
         // runtime caused to exist — and a worker survived for the pool's 60-second idle timeout.
         JSRuntime runtime = new JSRuntime();
-        AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+        AtomicsObject atomics = runtime.getAtomicsObject();
         JSContext context = runtime.createContext();
         context.eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
                 + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
@@ -122,6 +182,31 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
+    public void testMutatingOptionsAfterConstructionCannotReachAnExistingRuntime() {
+        // The runtime read its AtomicsObject out of the mutable options object again at shutdown,
+        // so replacing it afterwards closed the replacement — which the runtime had never used —
+        // and leaked the one it had.
+        JSRuntimeOptions options = new JSRuntimeOptions();
+        JSRuntime runtime = new JSRuntime(options);
+        AtomicsObject used = runtime.getAtomicsObject();
+        AtomicsObject replacement = new AtomicsObject();
+        try {
+            options.setAtomicsObject(replacement);
+            assertThat(runtime.getAtomicsObject()).isSameAs(used);
+            runtime.close();
+            assertThat(used.isWaitExecutorTerminated())
+                    .as("the runtime closes the instance it actually used")
+                    .isTrue();
+            assertThat(replacement.isWaitExecutorTerminated())
+                    .as("an instance the runtime never used is not its to close")
+                    .isFalse();
+        } finally {
+            replacement.close();
+        }
+    }
+
+    @Test
+    @Timeout(60)
     public void testNotifyGoesToTheSelectedWaiterNotWhoeverArrivesNext() throws InterruptedException {
         // Notifications used to be a shared count, so a waiter that arrived after notify() had
         // chosen its targets could take the lock first and spend the token — leaving the agent the
@@ -129,7 +214,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             CountDownLatch firstWaiterStarted = new CountDownLatch(1);
             String[] firstResult = {null};
@@ -160,7 +245,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 4);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             CountDownLatch started = new CountDownLatch(1);
             String[] result = {null};
@@ -188,7 +273,7 @@ public class AtomicsWaitListTest extends BaseTest {
             JSContext context = runtime.createContext();
             JSTypedArray waited = sharedInt32Array(context, 2);
             JSTypedArray other = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             CountDownLatch started = new CountDownLatch(1);
             String[] result = {null};
@@ -218,7 +303,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
             assertThat(atomics.notify(context, JSUndefined.INSTANCE, new JSValue[]{
                     array, JSNumber.of(0), JSNumber.of(1)}).toString()).isEqualTo("0");
         }
@@ -226,22 +311,53 @@ public class AtomicsWaitListTest extends BaseTest {
 
     @Test
     @Timeout(60)
-    public void testOneOptionsObjectGivesOwnershipToOneRuntimeOnly() {
-        // Handing the same options to two runtimes must not make both of them close the one
-        // AtomicsObject those options carry.
+    public void testOneOptionsObjectCanBeReusedRepeatedly() {
+        // Ownership used to be a one-shot claim, so the third, fourth and fiftieth runtime built
+        // from one options object all ran on an executor none of them owned.
         JSRuntimeOptions options = new JSRuntimeOptions();
-        AtomicsObject atomics = options.getAtomicsObject();
+        AtomicsObject[] instances = new AtomicsObject[8];
+        for (int index = 0; index < instances.length; index++) {
+            try (JSRuntime runtime = new JSRuntime(options)) {
+                instances[index] = runtime.getAtomicsObject();
+                runtime.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                        + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            }
+            assertThat(instances[index].isWaitExecutorTerminated())
+                    .as("runtime " + index + " owns and closes its own instance")
+                    .isTrue();
+        }
+        for (int index = 1; index < instances.length; index++) {
+            assertThat(instances[index]).isNotSameAs(instances[index - 1]);
+        }
+    }
+
+    @Test
+    @Timeout(60)
+    public void testOneOptionsObjectGivesEveryRuntimeItsOwnAtomicsObject() {
+        // Options that inject nothing describe "one per runtime". They used to build a single
+        // instance eagerly and hand it to whichever runtime claimed it first, which left every
+        // later runtime using an object it did not own — so closing the first took Atomics.waitAsync
+        // away from runtimes that were still running.
+        JSRuntimeOptions options = new JSRuntimeOptions();
         assertThat(options.isAtomicsObjectInjected()).isFalse();
-        JSRuntime owner = new JSRuntime(options);
-        JSRuntime sharer = new JSRuntime(options);
-        sharer.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
-                + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
-        sharer.close();
-        assertThat(atomics.isWaitExecutorTerminated())
-                .as("the second runtime never claimed ownership")
-                .isFalse();
-        owner.close();
-        assertThat(atomics.isWaitExecutorTerminated()).isTrue();
+        assertThat(options.getAtomicsObject()).isNull();
+        JSRuntime first = new JSRuntime(options);
+        JSRuntime second = new JSRuntime(options);
+        try {
+            assertThat(first.getAtomicsObject()).isNotSameAs(second.getAtomicsObject());
+            first.close();
+            assertThat(first.getAtomicsObject().isWaitExecutorTerminated()).isTrue();
+            assertThat(second.getAtomicsObject().isWaitExecutorTerminated())
+                    .as("a runtime that is still open keeps its own executor")
+                    .isFalse();
+            // And it still works, which is the part an embedder would actually notice.
+            second.createContext().eval("globalThis.i = new Int32Array(new SharedArrayBuffer(8));"
+                    + "globalThis.r = Atomics.waitAsync(i, 0, 0);", "atomics.js", false);
+            assertThat(second.getAtomicsObject().getPendingAsyncWaitCount(second)).isEqualTo(1);
+        } finally {
+            second.close();
+        }
+        assertThat(second.getAtomicsObject().isWaitExecutorTerminated()).isTrue();
     }
 
     @Test
@@ -254,7 +370,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
             assertThat(atomics.findWaitList(array, 0)).isSameAs(first.waitList());
@@ -308,7 +424,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 2);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             AtomicsObject.WaitRegistration first = atomics.registerWaiter(array, 0);
             AtomicsObject.WaitRegistration second = atomics.registerWaiter(array, 0);
@@ -330,7 +446,7 @@ public class AtomicsWaitListTest extends BaseTest {
         try (JSRuntime runtime = new JSRuntime()) {
             JSContext context = runtime.createContext();
             JSTypedArray array = sharedInt32Array(context, 4);
-            AtomicsObject atomics = runtime.getOptions().getAtomicsObject();
+            AtomicsObject atomics = runtime.getAtomicsObject();
 
             AtomicsObject.WaitRegistration atZero = atomics.registerWaiter(array, 0);
             AtomicsObject.WaitRegistration atTwo = atomics.registerWaiter(array, 2);

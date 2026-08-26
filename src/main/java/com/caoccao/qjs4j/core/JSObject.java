@@ -533,6 +533,17 @@ public non-sealed class JSObject implements JSValue {
 
     private boolean failSet(PropertyKey key, boolean throwOnFailure) {
         if (throwOnFailure && context.isStrictMode()) {
+            // Direct eval resolves identifiers through properties the engine puts on the global for
+            // the duration of the call, so an immutable binding — a `const`, a class name, a named
+            // function expression's own name — is a non-writable property while eval runs. Writing
+            // to one is an assignment to a binding, not to a property, and reporting it as a
+            // property write named an object the script never mentioned.
+            if (context.isInBareVariableAssignment()
+                    && key.isString()
+                    && context.hasEvalOverlayBinding(key.asString())) {
+                context.throwTypeError("Assignment to constant variable.");
+                return false;
+            }
             context.throwTypeError(
                     "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
         }

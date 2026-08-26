@@ -33,6 +33,18 @@ import org.junit.jupiter.api.Test;
  */
 public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     @Test
+    void testAssigningToTheSelfNameThroughDirectEvalIsRefused() {
+        // The binding is immutable, so a sloppy assignment is ignored and a strict one throws. The
+        // shadowing body binding must not receive the value either.
+        assertStringWithJavet("""
+                var f = function n(a = (eval('n = 1'), eval('n'))) {
+                  var n;
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
     void testClassDeclarationShadowsSelfName() {
         assertStringWithJavet("""
                 var probe;
@@ -71,6 +83,161 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
         assertStringWithJavet("""
                 var f = function n(a = n) { return a === f; };
                 String(f());""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterOfANestedNamedFunctionSeesItsOwnName() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = eval('q')) { var q; return typeof b; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterOfANestedNamedFunctionStillSeesTheOuterName() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = eval('n')) { var q; return b; }) {
+                  var n;
+                  return String(a() === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenAClassShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  class n {}
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenAConstShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  const n = 1;
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenAFunctionShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  function n() {}
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenALetShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  let n;
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenAVarShadowsIt() {
+        // Compiled references resolve to the right slot by index. Direct eval resolves by name at
+        // run time, and the name mapped to the body's slot from the moment the body declared it —
+        // so eval("n") in a default initializer saw undefined instead of the function.
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  var n;
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADefaultParameterSeesTheSelfNameWhenNothingShadowsIt() {
+        assertStringWithJavet("""
+                var f = function n(a = eval('n')) {
+                  return String(a === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADestructuringDefaultSeesTheSelfName() {
+        assertStringWithJavet("""
+                var f = function n({x = eval('n')} = {}) {
+                  var n;
+                  return String(x === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInADoublyNestedClosureFromADefaultParameterKeepsTheSelfName() {
+        assertStringWithJavet("""
+                var f = function n(a = () => () => eval('n')) {
+                  var n;
+                  return String(a()() === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInAFunctionCreatedByADefaultParameterKeepsTheSelfName() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { return eval('n'); }) {
+                  var n = 5;
+                  return String(a() === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInAGeneratorDefaultParameterSeesTheSelfName() {
+        assertStringWithJavet("""
+                var f = function* n(a = eval('n')) {
+                  var n;
+                  yield String(a === f);
+                };
+                f().next().value;""");
+    }
+
+    @Test
+    void testDirectEvalInAnArrowCreatedByADefaultParameterKeepsTheSelfName() {
+        // The arrow's environment is the parameter environment, so calling it from the body — where
+        // the name means something else — does not change what its eval resolves.
+        assertStringWithJavet("""
+                var f = function n(a = () => eval('n')) {
+                  let n;
+                  return String(a() === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInTheBodySeesAnUninitializedShadowingVar() {
+        assertStringWithJavet("""
+                var f = function n(a = 1) {
+                  var n;
+                  return String(eval('typeof n'));
+                };
+                f();""");
+    }
+
+    @Test
+    void testDirectEvalInTheBodySeesTheBodyDeclaration() {
+        // The other half of the same rule: once the body is running, the name is the body's.
+        assertStringWithJavet("""
+                var f = function n(a = 1) {
+                  var n = 7;
+                  return String(eval('n'));
+                };
+                f();""");
     }
 
     @Test

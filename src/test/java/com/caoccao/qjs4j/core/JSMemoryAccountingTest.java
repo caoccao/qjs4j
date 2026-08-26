@@ -21,9 +21,13 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ref.WeakReference;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * {@code maxMemoryUsage} and {@code maxStackSize} were public setters that nothing read: an
@@ -32,6 +36,21 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * enforced, that reservations are released, and that the boundary is a catchable guest error.
  */
 public class JSMemoryAccountingTest extends BaseTest {
+    /**
+     * Require that the JVM cannot satisfy the largest data block the engine will accept.
+     * <p>
+     * The largest block is capped near two gigabytes, so on a big enough heap the request succeeds
+     * and there is no allocation failure to roll back. That is a property of the build's
+     * {@code -Xmx}, not of the code, so it is stated as an assumption: a heap that grows past this
+     * point makes these two tests skip and say why, instead of leaving them green while they stop
+     * exercising anything.
+     */
+    private static void assumeTheJvmRefusesTheLargestBlock() {
+        assumeTrue(Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength(),
+                "the JVM heap is large enough to allocate the biggest block the engine allows, so "
+                        + "there is no allocation failure to observe");
+    }
+
     /**
      * Ask the collector for a while and report whether the reference cleared.
      *
@@ -76,6 +95,30 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
+    public void testAResizeThatFailsToAllocateGivesTheGrowthBackWhateverTheHeapIs() {
+        // The growth is charged before the copy, so a copy that fails has to hand it back. Driven
+        // by an allocator that fails on demand, so the test does not depend on the build's -Xmx.
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
+            JSContext context = runtime.createContext();
+            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024, 32768);
+            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
+
+            assertThatThrownBy(() -> buffer.growAccountedBlock(4096, () -> {
+                throw new OutOfMemoryError("injected");
+            })).isInstanceOf(OutOfMemoryError.class);
+
+            assertThat(runtime.getMemoryAccounting().getReservedBytes())
+                    .as("growth that failed to allocate must not stay charged")
+                    .isEqualTo(chargedBefore);
+            // The buffer is untouched and still resizes normally afterwards.
+            buffer.resize(2048);
+            assertThat(buffer.getByteLength()).isEqualTo(2048);
+            buffer.detach();
+            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
+        }
+    }
+
+    @Test
     public void testAllocationBelowLimitSucceeds() {
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
             // Kept reachable on purpose: reading the total reclaims collected blocks, so a buffer
@@ -94,6 +137,33 @@ public class JSMemoryAccountingTest extends BaseTest {
                     "try { new ArrayBuffer(1048576); 'allocated'; } catch (e) { e.name; }"))
                     .isEqualTo("RangeError");
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
+        }
+    }
+
+    @Test
+    public void testAnAllocationThatFailsGivesItsReservationBackWhateverTheHeapIs() {
+        // The same rollback as testFailedAllocationGivesItsReservationBack, driven by an allocator
+        // that fails on demand rather than by asking for more memory than the JVM has. Whether a
+        // request is bigger than the heap is a property of the build's -Xmx; whether the charge is
+        // handed back when an allocation fails is a property of this code, and that is what is
+        // being tested.
+        try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
+            JSContext context = runtime.createContext();
+            JSArrayBuffer buffer = new JSArrayBuffer(context, 1024);
+            long chargedBefore = runtime.getMemoryAccounting().getReservedBytes();
+            assertThat(chargedBefore).isEqualTo(1024);
+
+            assertThatThrownBy(() -> buffer.accountBlock(context, 4096, () -> {
+                throw new OutOfMemoryError("injected");
+            })).isInstanceOf(OutOfMemoryError.class);
+
+            assertThat(runtime.getMemoryAccounting().getReservedBytes())
+                    .as("a block that never allocated must not stay charged")
+                    .isEqualTo(chargedBefore);
+            // The successful path still binds its reservation, so the two are not confusable.
+            ByteBuffer allocated = buffer.accountBlock(context, 2048, () -> ByteBuffer.allocate(2048));
+            assertThat(allocated.capacity()).isEqualTo(2048);
+            assertThat(runtime.getMemoryAccounting().getReservedBytes()).isEqualTo(1024 + 2048);
         }
     }
 
@@ -151,6 +221,7 @@ public class JSMemoryAccountingTest extends BaseTest {
         // pointless — so a JVM allocation failure has to roll the charge back. It used to leave the
         // bytes charged until the half-constructed buffer was collected, which inflated the
         // runtime's ceiling and made later, much smaller allocations fail for space nothing used.
+        assumeTheJvmRefusesTheLargestBlock();
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(0))) {
             JSContext context = runtime.createContext();
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
@@ -166,6 +237,7 @@ public class JSMemoryAccountingTest extends BaseTest {
 
     @Test
     public void testFailedResizeGivesTheGrowthBackAndLeavesTheBufferAlone() {
+        assumeTheJvmRefusesTheLargestBlock();
         try (JSRuntime runtime = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(0))) {
             JSContext context = runtime.createContext();
             JSArrayBuffer buffer = new JSArrayBuffer(context, 16, unallocatableByteLength());
@@ -187,10 +259,18 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
+    public void testRefusedReservationChargesNothing() {
+        JSMemoryAccounting accounting = new JSMemoryAccounting(64);
+        assertThat(accounting.reserve(new Object(), 65)).isNull();
+        assertThat(accounting.getReservedBytes()).isZero();
+        assertThat(accounting.wouldExceedLimit(64)).isFalse();
+    }
+
+    @Test
     public void testReleasedReservationCannotGrow() {
         JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
         Object owner = new Object();
-        JSMemoryAccounting.Reservation reservation = accounting.registerReservation(owner, 0);
+        JSMemoryAccounting.Reservation reservation = accounting.reserve(owner, 0);
         assertThat(reservation.grow(16)).isTrue();
         assertThat(reservation.bytes()).isEqualTo(16);
         reservation.release();
@@ -204,7 +284,7 @@ public class JSMemoryAccountingTest extends BaseTest {
     public void testReservationCanBeShrunkBackAndRejectsNegativeAmounts() {
         JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
         Object owner = new Object();
-        JSMemoryAccounting.Reservation reservation = accounting.registerReservation(owner, 0);
+        JSMemoryAccounting.Reservation reservation = accounting.reserve(owner, 0);
         assertThat(reservation.grow(256)).isTrue();
         reservation.shrink(100);
         assertThat(reservation.bytes()).isEqualTo(156);
@@ -223,6 +303,34 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
+    public void testReservationIsChargedAndBoundInOneStep() {
+        // The charge and the handle used to be two public calls, so a handle could be registered
+        // for bytes nothing had paid for. Releasing it then drove the total below zero, and since
+        // the limit check reads `limit - reserved`, a 64-byte ceiling handed out 154 bytes.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(64);
+        Object charged = new Object();
+        Object uncharged = new Object();
+        assertThat(accounting.reserve(charged, 10)).isNotNull();
+        JSMemoryAccounting.Reservation second = accounting.reserve(uncharged, 40);
+        assertThat(second).isNotNull();
+        second.release();
+        assertThat(accounting.getReservedBytes())
+                .as("releasing gives back exactly what was charged")
+                .isEqualTo(10);
+        // Releasing the same handle again is a no-op rather than a second refund.
+        second.release();
+        assertThat(accounting.getReservedBytes()).isEqualTo(10);
+        assertThat(accounting.reserve(new Object(), 55))
+                .as("only 54 bytes are left under the ceiling")
+                .isNull();
+        assertThat(accounting.reserve(new Object(), 54)).isNotNull();
+        assertThat(accounting.getReservedBytes()).isEqualTo(64);
+        assertThat(accounting.reserve(new Object(), 1)).isNull();
+        assertThat(charged).as("owners stay reachable so nothing reclaims them mid-test").isNotNull();
+        assertThat(uncharged).isNotNull();
+    }
+
+    @Test
     public void testReservationIsPerRuntime() {
         try (JSRuntime first = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024));
              JSRuntime second = new JSRuntime(new JSRuntimeOptions().setMaxMemoryUsage(64 * 1024))) {
@@ -233,10 +341,15 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
-    public void testReservationRejectsNegativeAmounts() {
+    public void testReservationRejectsNegativeAmountsAndAMissingOwner() {
         JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
-        assertThatThrownBy(() -> accounting.reserve(-1)).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> accounting.release(-1)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> accounting.reserve(new Object(), -1))
+                .isInstanceOf(IllegalArgumentException.class);
+        // A reservation with no owner would never be reclaimed, so its bytes would be charged for
+        // the runtime's whole life.
+        assertThatThrownBy(() -> accounting.reserve(null, 16))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(accounting.getReservedBytes()).isZero();
     }
 
     @Test
@@ -294,6 +407,45 @@ public class JSMemoryAccountingTest extends BaseTest {
     public void testStackSizeIsClampedToAtLeastOneFrame() {
         assertThat(new JSRuntimeOptions().setMaxStackSize(1).getMaxStackDepth()).isEqualTo(1);
         assertThat(new JSRuntimeOptions().setMaxStackSize(-5).getMaxStackDepth()).isEqualTo(1);
+    }
+
+    @Test
+    public void testTheTotalNeverGoesBelowZeroUnderConcurrentReserveAndRelease() throws Exception {
+        // The counter is the one thing on this class other threads touch, so the floor has to hold
+        // when releases and reservations interleave.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(JSMemoryAccounting.UNLIMITED);
+        int threadCount = 8;
+        int roundsPerThread = 500;
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicLong lowestObserved = new java.util.concurrent.atomic.AtomicLong();
+        List<Thread> threads = new ArrayList<>();
+        for (int threadIndex = 0; threadIndex < threadCount; threadIndex++) {
+            Thread thread = new Thread(() -> {
+                try {
+                    start.await();
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                for (int round = 0; round < roundsPerThread; round++) {
+                    Object owner = new Object();
+                    JSMemoryAccounting.Reservation reservation = accounting.reserve(owner, 128);
+                    lowestObserved.accumulateAndGet(accounting.getReservedBytes(), Math::min);
+                    reservation.release();
+                    reservation.release();
+                    lowestObserved.accumulateAndGet(accounting.getReservedBytes(), Math::min);
+                    assertThat(owner).isNotNull();
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        start.countDown();
+        for (Thread thread : threads) {
+            thread.join();
+        }
+        assertThat(lowestObserved.get()).isNotNegative();
+        assertThat(accounting.getReservedBytes()).isZero();
     }
 
     @Test

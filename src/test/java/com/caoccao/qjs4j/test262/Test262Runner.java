@@ -35,9 +35,14 @@ import java.util.stream.Stream;
 public class Test262Runner {
     /**
      * The prefix every worker thread's name carries, so a leaked worker is identifiable.
+     * <p>
+     * Each runner appends a number of its own — see {@link #workerThreadNamePrefix()} — so a
+     * thread that outlives its run can be traced back to the run that started it rather than to
+     * "some Test262 run in this JVM".
      */
     static final String WORKER_THREAD_NAME_PREFIX = "test262-worker-";
-    private static final long WORKER_TERMINATION_TIMEOUT_MINUTES = 5;
+    private static final long DEFAULT_WORKER_TERMINATION_TIMEOUT_MILLISECONDS = TimeUnit.MINUTES.toMillis(5);
+    private static final AtomicInteger RUNNER_NUMBER = new AtomicInteger();
     private final Test262Config config;
     private final Test262Executor executor;
     private final Test262Parser parser;
@@ -45,7 +50,10 @@ public class Test262Runner {
     private final Integer requestedThreadCount;
     private final String singleTestPathFragment;
     private final Path test262Root;
+    private final String workerThreadNamePrefix =
+            WORKER_THREAD_NAME_PREFIX + RUNNER_NUMBER.incrementAndGet() + "-";
     private boolean allowEmptySelection;
+    private long workerTerminationTimeoutMilliseconds = DEFAULT_WORKER_TERMINATION_TIMEOUT_MILLISECONDS;
 
     public Test262Runner(Path test262Root, Test262Config config) {
         this(test262Root, config, null, null);
@@ -143,22 +151,31 @@ public class Test262Runner {
 
     /**
      * Wait for every worker to stop, ignoring further interruption so cleanup always completes.
+     * <p>
+     * Java interruption is cooperative, so this can only ever wait — a native call, a monitor wait
+     * or a loop that never checks its interrupt flag survives {@code shutdownNow()}. Waiting
+     * forever is not an option either, so the wait has a deadline and what happens past it is
+     * reported rather than assumed: the count of workers still running becomes part of the run's
+     * outcome, and the reporter is frozen so nothing they do afterwards can move a number the
+     * caller has already been given.
      *
      * @param executorService the pool, already shut down
-     * @return true when the pool terminated, false when it was interrupted or gave up
+     * @return how the wait ended
      */
-    private boolean awaitWorkerTermination(ThreadPoolExecutor executorService) {
+    WorkerShutdown awaitWorkerTermination(ThreadPoolExecutor executorService) {
         boolean interrupted = false;
-        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(WORKER_TERMINATION_TIMEOUT_MINUTES);
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(workerTerminationTimeoutMilliseconds);
+        long pollMilliseconds = Math.max(1L, Math.min(TimeUnit.MINUTES.toMillis(1), workerTerminationTimeoutMilliseconds));
         while (true) {
             try {
-                if (executorService.awaitTermination(1, TimeUnit.MINUTES)) {
-                    return !interrupted;
+                if (executorService.awaitTermination(pollMilliseconds, TimeUnit.MILLISECONDS)) {
+                    return new WorkerShutdown(!interrupted, 0);
                 }
                 if (System.nanoTime() - deadline >= 0) {
-                    System.err.println("Gave up waiting for " + executorService.getActiveCount()
-                            + " test task(s) to finish");
-                    return false;
+                    int abandonedWorkers = Math.max(1, executorService.getActiveCount());
+                    System.err.println("Gave up waiting for " + abandonedWorkers
+                            + " test task(s) to finish; abandoning them");
+                    return new WorkerShutdown(false, abandonedWorkers);
                 }
                 System.out.println("Waiting for remaining test tasks to finish...");
             } catch (InterruptedException e) {
@@ -189,6 +206,18 @@ public class Test262Runner {
         testFiles.removeIf(testFile ->
                 !testFile.toString().replace('\\', '/').contains(normalizedPathFragment));
         return testFiles;
+    }
+
+    /**
+     * The reporter this run wrote into.
+     * <p>
+     * Package-private and for tests: what a run returns should not change afterwards, and proving
+     * that means being able to look at the reporter once the run is over.
+     *
+     * @return the reporter
+     */
+    Test262Reporter reporter() {
+        return reporter;
     }
 
     private Path resolveSingleTestPath(Path testsDir) {
@@ -248,7 +277,7 @@ public class Test262Runner {
         if (testFiles.isEmpty()) {
             System.out.println("No test file matched the current filter.");
             return allowEmptySelection
-                    ? RunOutcome.of(reporter, false, true)
+                    ? RunOutcome.of(reporter, false, 0, true)
                     : RunOutcome.discoveryFailed("No test file matched the current filter.");
         }
 
@@ -291,7 +320,7 @@ public class Test262Runner {
                 runnable -> {
                     // Named so a leaked worker is identifiable, and daemon so one that will not
                     // stop cannot keep the JVM alive after run() has returned.
-                    Thread worker = new Thread(runnable, WORKER_THREAD_NAME_PREFIX + workerNumber.incrementAndGet());
+                    Thread worker = new Thread(runnable, workerThreadNamePrefix + workerNumber.incrementAndGet());
                     worker.setDaemon(true);
                     return worker;
                 });
@@ -323,6 +352,12 @@ public class Test262Runner {
                     // two. Running only the first one is why strict-mode-only regressions could
                     // be reported as passing.
                     for (Test262TestCase variant : parsedFile.expandVariants()) {
+                        // Between variants is the cheapest place to notice a cancellation, and
+                        // taking it keeps the exceptional path — the one that ends in workers
+                        // being abandoned — as short as it can be.
+                        if (Thread.currentThread().isInterrupted()) {
+                            return;
+                        }
                         TestResult result = executor.execute(variant);
                         reporter.recordResult(result);
 
@@ -378,15 +413,25 @@ public class Test262Runner {
             }
             executorService.shutdownNow();
         }
-        interrupted |= !awaitWorkerTermination(executorService);
+        WorkerShutdown shutdown = awaitWorkerTermination(executorService);
+        interrupted |= !shutdown.clean();
+        // Whatever the workers are doing now, the run is over: the counts stop moving here, so the
+        // summary that is printed and the outcome that is returned are the same snapshot. A worker
+        // that outlived the wait can no longer change either, and its attempts are counted.
+        reporter.freeze();
         if (interrupted) {
-            // Restored now that nothing is still writing to the reporter, so the caller sees the
-            // interruption it asked for and the summary below is a snapshot of a stopped run.
+            // Restored now that the reporter is closed, so the caller sees the interruption it
+            // asked for and the summary below is a snapshot of a stopped run.
             Thread.currentThread().interrupt();
         }
 
         reporter.printSummary();
-        RunOutcome outcome = RunOutcome.of(reporter, interrupted, allowEmptySelection);
+        if (shutdown.abandonedWorkers() > 0) {
+            System.err.println(shutdown.abandonedWorkers() + " test task(s) were abandoned; the "
+                    + "counts above exclude anything they do from now on");
+        }
+        RunOutcome outcome = RunOutcome.of(
+                reporter, interrupted, shutdown.abandonedWorkers(), allowEmptySelection);
         if (!outcome.isSuccessful()) {
             System.err.println(outcome.diagnostic());
         }
@@ -408,6 +453,29 @@ public class Test262Runner {
     }
 
     /**
+     * Set how long {@link #awaitWorkerTermination} waits before abandoning workers.
+     * <p>
+     * Package-private and for tests: the five-minute default cannot be reached in a unit test, and
+     * the behaviour past the deadline is the part worth testing.
+     *
+     * @param workerTerminationTimeoutMilliseconds the timeout in milliseconds
+     * @return this
+     */
+    Test262Runner setWorkerTerminationTimeoutMilliseconds(long workerTerminationTimeoutMilliseconds) {
+        this.workerTerminationTimeoutMilliseconds = workerTerminationTimeoutMilliseconds;
+        return this;
+    }
+
+    /**
+     * The name prefix this runner's worker threads carry.
+     *
+     * @return the prefix, unique to this runner
+     */
+    String workerThreadNamePrefix() {
+        return workerThreadNamePrefix;
+    }
+
+    /**
      * The outcome of a run, and the process status that follows from it.
      *
      * @param failed                the number of failing tests
@@ -415,6 +483,8 @@ public class Test262Runner {
      * @param passed                the number of passing tests
      * @param skipped               the number of skipped tests
      * @param interrupted           whether the run was interrupted before it finished
+     * @param abandonedWorkers      how many workers were still running when the runner stopped
+     *                              waiting for them
      * @param discoveryError        the reason discovery produced nothing usable, or {@code null}
      * @param emptySelectionAllowed whether the caller opted into a run that executes nothing
      */
@@ -424,20 +494,26 @@ public class Test262Runner {
             int passed,
             int skipped,
             boolean interrupted,
+            int abandonedWorkers,
             String discoveryError,
             boolean emptySelectionAllowed) {
 
         static RunOutcome discoveryFailed(String reason) {
-            return new RunOutcome(0, 0, 0, 0, false, reason, false);
+            return new RunOutcome(0, 0, 0, 0, false, 0, reason, false);
         }
 
-        static RunOutcome of(Test262Reporter reporter, boolean interrupted, boolean emptySelectionAllowed) {
+        static RunOutcome of(
+                Test262Reporter reporter,
+                boolean interrupted,
+                int abandonedWorkers,
+                boolean emptySelectionAllowed) {
             return new RunOutcome(
                     reporter.getFailed(),
                     reporter.getTimeout(),
                     reporter.getPassed(),
                     reporter.getSkipped(),
                     interrupted,
+                    abandonedWorkers,
                     null,
                     emptySelectionAllowed);
         }
@@ -455,6 +531,10 @@ public class Test262Runner {
         public String diagnostic() {
             if (discoveryError != null) {
                 return discoveryError;
+            }
+            if (abandonedWorkers > 0) {
+                return abandonedWorkers + " test task(s) did not stop and were abandoned; these "
+                        + "counts describe only what finished before then.";
             }
             if (interrupted) {
                 return "The run was interrupted before it finished.";
@@ -497,5 +577,14 @@ public class Test262Runner {
         public boolean isSuccessful() {
             return diagnostic() == null;
         }
+    }
+
+    /**
+     * How a wait for the worker pool ended.
+     *
+     * @param clean            true when every worker stopped and nothing was interrupted
+     * @param abandonedWorkers how many workers were still running when the wait gave up
+     */
+    record WorkerShutdown(boolean clean, int abandonedWorkers) {
     }
 }

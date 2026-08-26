@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * caller raises a catchable {@code RangeError}, so a script cannot walk the JVM heap off a cliff
  * with {@code new ArrayBuffer(n)}. Reservations are released when the buffer is detached or
  * transferred, and otherwise when the buffer becomes unreachable: each reservation is a weak
- * reference to its buffer, and {@link #reserve(long)} drains the collected ones before deciding
+ * reference to its buffer, and {@link #reserve(Object, long)} drains the collected ones before deciding
  * whether the next allocation fits. Reclaiming at the moment the limit is consulted, on the thread
  * consulting it, is both more accurate than waiting for a background thread to have run and free of
  * one — this object belongs to a single runtime, and so does everything it reclaims.
@@ -79,6 +79,36 @@ public final class JSMemoryAccounting {
     }
 
     /**
+     * Charge the counter, or refuse.
+     * <p>
+     * Private, and the only thing that ever adds to the total. The charge and the reservation that
+     * owns it were once two public calls, so a caller could register a handle nothing had paid for
+     * and then release it — driving the total negative and, since the limit check reads
+     * {@code limit - reserved}, handing out more capacity than the embedder configured.
+     *
+     * @param bytes the number of bytes to charge; must not be negative
+     * @return true when the charge fits under the limit
+     */
+    private boolean chargeBytes(long bytes) {
+        // Reclaim before refusing: a limit that still counts blocks the collector has already taken
+        // is not the limit the embedder configured.
+        releaseCollectedReservations();
+        if (limit == UNLIMITED) {
+            reservedBytes.addAndGet(bytes);
+            return true;
+        }
+        while (true) {
+            long current = reservedBytes.get();
+            if (bytes > limit - current) {
+                return false;
+            }
+            if (reservedBytes.compareAndSet(current, current + bytes)) {
+                return true;
+            }
+        }
+    }
+
+    /**
      * The configured ceiling.
      *
      * @return the limit in bytes, or {@link #UNLIMITED}
@@ -98,33 +128,24 @@ public final class JSMemoryAccounting {
     }
 
     /**
-     * Register a reservation to be released when {@code owner} becomes unreachable.
+     * Give the counter back some bytes, never taking it below zero.
      * <p>
-     * The returned handle also releases on demand, so a buffer that is detached or transferred
-     * gives its reservation back immediately instead of waiting for a collection. Releasing twice
-     * is harmless.
+     * Private, and reached only through a live {@link Reservation}, which releases its own recorded
+     * size once. The floor is a second line of defence rather than the first: a negative total is a
+     * limit that has stopped being a limit, so it is clamped rather than propagated.
      *
-     * @param owner the object whose lifetime the reservation follows
-     * @param bytes the reserved byte count
-     * @return a handle that releases the reservation
+     * @param bytes the number of bytes to give back
      */
-    public Reservation registerReservation(Object owner, long bytes) {
-        Reservation reservation = new Reservation(this, owner, bytes);
-        outstandingReservations.add(reservation);
-        return reservation;
-    }
-
-    /**
-     * Release a previous reservation.
-     *
-     * @param bytes the number of bytes to release; must not be negative
-     */
-    public void release(long bytes) {
-        if (bytes < 0) {
-            throw new IllegalArgumentException("Cannot release a negative number of bytes: " + bytes);
+    private void releaseBytes(long bytes) {
+        if (bytes <= 0) {
+            return;
         }
-        if (bytes > 0) {
-            reservedBytes.addAndGet(-bytes);
+        while (true) {
+            long current = reservedBytes.get();
+            long updated = Math.max(0L, current - bytes);
+            if (reservedBytes.compareAndSet(current, updated)) {
+                return;
+            }
         }
     }
 
@@ -142,34 +163,43 @@ public final class JSMemoryAccounting {
     }
 
     /**
-     * Reserve capacity for a data block, or refuse.
+     * Reserve capacity for a data block and bind it to its owner, or refuse.
+     * <p>
+     * One operation, because the two halves are not independently meaningful: bytes that are
+     * charged but not bound to an owner are never given back, and a handle bound to bytes that were
+     * never charged gives back capacity that was never taken. Either outcome breaks the limit, and
+     * the split version of this let both happen through the public API.
      * <p>
      * Refusal is a normal, catchable outcome; the caller turns it into a {@code RangeError}. It is
      * deliberately not an {@code OutOfMemoryError}: a script that asks for too much has made an
-     * ordinary mistake, and the engine stays usable afterwards.
+     * ordinary mistake, and the engine stays usable afterwards. Nothing is charged on refusal.
+     * <p>
+     * The returned handle releases when {@code owner} becomes unreachable, and on demand — so a
+     * buffer that is detached or transferred gives its reservation back immediately instead of
+     * waiting for a collection. Releasing twice is harmless.
      *
+     * @param owner the object whose lifetime the reservation follows
      * @param bytes the number of bytes to reserve; must not be negative
-     * @return true when the reservation succeeded
+     * @return the reservation, or null when the limit would be exceeded
      */
-    public boolean reserve(long bytes) {
+    public Reservation reserve(Object owner, long bytes) {
+        if (owner == null) {
+            throw new IllegalArgumentException("A reservation needs an owner to follow");
+        }
         if (bytes < 0) {
             throw new IllegalArgumentException("Cannot reserve a negative number of bytes: " + bytes);
         }
-        // Reclaim before refusing: a limit that still counts blocks the collector has already taken
-        // is not the limit the embedder configured.
-        releaseCollectedReservations();
-        if (limit == UNLIMITED) {
-            reservedBytes.addAndGet(bytes);
-            return true;
+        if (!chargeBytes(bytes)) {
+            return null;
         }
-        while (true) {
-            long current = reservedBytes.get();
-            if (bytes > limit - current) {
-                return false;
-            }
-            if (reservedBytes.compareAndSet(current, current + bytes)) {
-                return true;
-            }
+        try {
+            Reservation reservation = new Reservation(this, owner, bytes);
+            outstandingReservations.add(reservation);
+            return reservation;
+        } catch (RuntimeException | Error registrationFailure) {
+            // The charge landed before the handle existed, so nothing else can give it back.
+            releaseBytes(bytes);
+            throw registrationFailure;
         }
     }
 
@@ -225,7 +255,7 @@ public final class JSMemoryAccounting {
             if (released.get()) {
                 return false;
             }
-            if (!accounting.reserve(additionalBytes)) {
+            if (!accounting.chargeBytes(additionalBytes)) {
                 return false;
             }
             bytes += additionalBytes;
@@ -237,7 +267,7 @@ public final class JSMemoryAccounting {
          */
         public synchronized void release() {
             if (released.compareAndSet(false, true)) {
-                accounting.release(bytes);
+                accounting.releaseBytes(bytes);
                 bytes = 0L;
                 accounting.outstandingReservations.remove(this);
                 clear();
@@ -265,7 +295,7 @@ public final class JSMemoryAccounting {
             }
             long amount = Math.min(releasedBytes, bytes);
             bytes -= amount;
-            accounting.release(amount);
+            accounting.releaseBytes(amount);
         }
     }
 }

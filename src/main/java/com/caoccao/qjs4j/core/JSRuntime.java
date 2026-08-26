@@ -16,6 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.AtomicsObject;
 import com.caoccao.qjs4j.utils.AtomTable;
 
 import java.lang.ref.ReferenceQueue;
@@ -64,6 +65,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * the guarantee: it does not make the engine thread-safe.
  */
 public final class JSRuntime implements AutoCloseable {
+    /**
+     * The {@link AtomicsObject} this runtime's contexts coordinate through, fixed at construction.
+     * <p>
+     * A snapshot rather than a look-up through {@link #options}, because the options object is
+     * mutable and shared: reading it again at shutdown could close an instance this runtime never
+     * used while leaking the one it did, and two contexts of one runtime created either side of a
+     * mutation would have stopped coordinating with each other.
+     */
+    private final AtomicsObject atomicsObject;
     private final AtomTable atoms;
     /**
      * Terminal: once set, the runtime refuses every operation that would create or accept new work.
@@ -121,9 +131,14 @@ public final class JSRuntime implements AutoCloseable {
 
     /**
      * Create a new runtime with custom options.
-     * If {@link JSRuntimeOptions#atomicsObject} is set, that shared instance is used
-     * so multiple runtimes in the same agent cluster can coordinate via Atomics.wait/notify.
-     * Otherwise a new AtomicsObject is created for this runtime.
+     * <p>
+     * When {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)} injected a shared instance,
+     * this runtime uses it and never closes it — that is how the members of an agent cluster
+     * coordinate through {@code Atomics.wait}/{@code notify}. Otherwise this runtime constructs its
+     * own and closes it on shutdown, so handing one options object to several runtimes gives each
+     * of them an executor of its own rather than one they all take turns shutting down.
+     *
+     * @param options the configuration to snapshot
      */
     public JSRuntime(JSRuntimeOptions options) {
         this.contexts = Collections.synchronizedList(new ArrayList<>());
@@ -133,10 +148,12 @@ public final class JSRuntime implements AutoCloseable {
         this.globalSymbolReverseRegistry = new HashMap<>();
         this.options = options;
         this.memoryAccounting = new JSMemoryAccounting(options.getMaxMemoryUsage());
-        // An AtomicsObject the options created belongs to this runtime alone, and its waitAsync
-        // executor is a resource nothing else will release; one the embedder injected is an agent
-        // cluster's shared object, and shutting it down here would break the other members.
-        this.ownsAtomicsObject = options.claimAtomicsObjectOwnership();
+        // An AtomicsObject this runtime made belongs to it alone, and its waitAsync executor is a
+        // resource nothing else will release; one the embedder injected is an agent cluster's
+        // shared object, and shutting it down here would break the other members.
+        AtomicsObject injectedAtomicsObject = options.getAtomicsObject();
+        this.ownsAtomicsObject = injectedAtomicsObject == null;
+        this.atomicsObject = ownsAtomicsObject ? new AtomicsObject() : injectedAtomicsObject;
     }
 
     /**
@@ -169,13 +186,13 @@ public final class JSRuntime implements AutoCloseable {
         }
         // Intake is sealed by the line above; from here nothing new is admitted. Stop asynchronous
         // producers before clearing anything they could still write to.
-        if (options != null && options.getAtomicsObject() != null) {
+        if (atomicsObject != null) {
             if (ownsAtomicsObject) {
                 // Nothing else shares this one, so its waitAsync executor goes with the runtime
                 // rather than keeping a daemon thread alive for the cached pool's idle timeout.
-                options.getAtomicsObject().close();
+                atomicsObject.close();
             } else {
-                options.getAtomicsObject().cancelAsyncWaits(this);
+                atomicsObject.cancelAsyncWaits(this);
             }
         }
         List<JSContext> contextSnapshot;
@@ -263,6 +280,18 @@ public final class JSRuntime implements AutoCloseable {
                 context.pollFinalizationRegistries();
             }
         }
+    }
+
+    /**
+     * The {@link AtomicsObject} this runtime's contexts coordinate through.
+     * <p>
+     * Fixed when the runtime was constructed: either the instance the embedder injected, or one
+     * this runtime made and will close. Mutating the options object afterwards does not change it.
+     *
+     * @return this runtime's instance, never null
+     */
+    public AtomicsObject getAtomicsObject() {
+        return atomicsObject;
     }
 
     /**

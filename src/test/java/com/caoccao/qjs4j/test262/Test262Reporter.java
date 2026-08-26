@@ -20,10 +20,18 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Tracks and reports test262 execution results.
+ * <p>
+ * <strong>Freezing.</strong> Java interruption is cooperative, so a runner that gives up waiting
+ * for its workers cannot promise they have stopped — only that it will stop listening to them.
+ * {@link #freeze()} is that boundary: the counts the runner reports afterwards are a snapshot no
+ * late worker can change, and the writes those workers attempt are counted rather than applied, so
+ * a leaked worker shows up as a number instead of as a total that disagrees with the one already
+ * printed.
  */
 public class Test262Reporter {
     private static final int TOP_SLOW_TEST_COUNT = 5;
@@ -31,13 +39,38 @@ public class Test262Reporter {
     private final ConcurrentLinkedQueue<TestResult> allResults = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failed = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> failures = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean frozen = new AtomicBoolean();
+    private final AtomicInteger lateWrites = new AtomicInteger(0);
     private final AtomicInteger passed = new AtomicInteger(0);
     private final AtomicInteger skipped = new AtomicInteger(0);
     private final AtomicInteger timeout = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> timeouts = new ConcurrentLinkedQueue<>();
 
+    /**
+     * Stop accepting results, permanently.
+     * <p>
+     * Called once the runner has stopped waiting for its workers, whether they all finished or some
+     * were abandoned. From here the counts cannot move, so the summary that is printed and the
+     * outcome that is returned describe the same run.
+     */
+    public void freeze() {
+        frozen.set(true);
+    }
+
     public int getFailed() {
         return failed.get();
+    }
+
+    /**
+     * How many results arrived after {@link #freeze()} and were therefore discarded.
+     * <p>
+     * Non-zero means a worker outlived the run. It is diagnostic, not a count of tests: those
+     * results were never part of any total.
+     *
+     * @return the number of discarded results
+     */
+    public int getLateWrites() {
+        return lateWrites.get();
     }
 
     public int getPassed() {
@@ -58,6 +91,15 @@ public class Test262Reporter {
 
     public int getTotalTests() {
         return getTotalExecuted() + skipped.get();
+    }
+
+    /**
+     * Whether this reporter has stopped accepting results.
+     *
+     * @return true once frozen
+     */
+    public boolean isFrozen() {
+        return frozen.get();
     }
 
     public void printProgress() {
@@ -133,6 +175,10 @@ public class Test262Reporter {
     }
 
     public void recordResult(TestResult result) {
+        if (frozen.get()) {
+            lateWrites.incrementAndGet();
+            return;
+        }
         allResults.add(result);
         switch (result.getStatus()) {
             case PASS:
@@ -153,6 +199,10 @@ public class Test262Reporter {
     }
 
     public void recordSkipped(Test262TestCase test, String reason) {
+        if (frozen.get()) {
+            lateWrites.incrementAndGet();
+            return;
+        }
         skipped.incrementAndGet();
     }
 
@@ -161,6 +211,8 @@ public class Test262Reporter {
         failed.set(0);
         skipped.set(0);
         timeout.set(0);
+        lateWrites.set(0);
+        frozen.set(false);
         allResults.clear();
         failures.clear();
         timeouts.clear();

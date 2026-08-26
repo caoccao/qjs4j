@@ -34,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class AtomicsObjectTest extends BaseJavetTest {
 
     private AtomicsObject atomics() {
-        return context.getRuntime().getOptions().getAtomicsObject();
+        return context.getRuntime().getAtomicsObject();
     }
 
     @Test
@@ -247,7 +247,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
             Thread waiter = new Thread(() -> {
                 JSContext waiterCtx = sharedRuntime.createContext();
                 allWaitersStarted.countDown();
-                JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+                JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                         arr, new JSNumber(0), new JSNumber(200), new JSNumber(5000)
                 });
 
@@ -295,7 +295,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread waiter = new Thread(() -> {
             JSContext waiterCtx = sharedRuntime.createContext();
             waiterStarted.countDown();
-            sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+            sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(300), new JSNumber(5000)
             });
             waiterFinished.countDown();
@@ -453,7 +453,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread waiter = new Thread(() -> {
             JSContext waiterCtx = sharedRuntime.createContext();
             waitStarted.countDown();
-            JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+            JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(100), new JSNumber(5000) // 5 second timeout
             });
 

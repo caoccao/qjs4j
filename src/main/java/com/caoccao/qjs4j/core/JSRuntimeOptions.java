@@ -19,7 +19,6 @@ package com.caoccao.qjs4j.core;
 import com.caoccao.qjs4j.builtins.AtomicsObject;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runtime configuration options.
@@ -55,20 +54,19 @@ public class JSRuntimeOptions {
      */
     public static final long DEFAULT_REGEXP_BACKTRACK_LIMIT = 10_000_000L;
     /**
-     * Set once the runtime that will close the default {@link AtomicsObject} has taken it, so
-     * handing the same options to two runtimes does not give both of them ownership.
-     */
-    protected final AtomicBoolean atomicsOwnershipClaimed = new AtomicBoolean();
-    protected AtomicsObject atomicsObject;
-    /**
-     * Whether the {@link AtomicsObject} came from the embedder.
+     * The {@link AtomicsObject} the embedder injected, or null.
      * <p>
-     * An injected instance belongs to an agent cluster and is closed by whoever owns that cluster;
-     * the one the default constructor creates belongs to the single runtime that takes these
-     * options, and that runtime closes it. Without the distinction, either every default runtime
-     * leaked an executor or a shared cluster object was shut down by the first member to close.
+     * Null is the ordinary case and means "one per runtime": every {@link JSRuntime} built from
+     * these options constructs its own and closes it on shutdown. A non-null value is an agent
+     * cluster's shared object, which belongs to whoever injected it and is never closed by a member
+     * runtime.
+     * <p>
+     * These options used to construct one eagerly and hand it to whichever runtime claimed it
+     * first. That made the default case indistinguishable from injection: every runtime built from
+     * one options object shared a single instance, so closing the first one took
+     * {@code Atomics.waitAsync} away from the others while they were still running.
      */
-    protected boolean atomicsObjectInjected;
+    protected AtomicsObject atomicsObject;
     protected long maxMemoryUsage;
     protected long maxStackSize;
     protected long regExpBacktrackLimit;
@@ -76,7 +74,6 @@ public class JSRuntimeOptions {
     protected boolean temporalEnabled;
 
     public JSRuntimeOptions() {
-        atomicsObject = new AtomicsObject();
         maxMemoryUsage = DEFAULT_MAX_MEMORY_USAGE;
         maxStackSize = DEFAULT_MAX_STACK_SIZE;
         regExpBacktrackLimit = DEFAULT_REGEXP_BACKTRACK_LIMIT;
@@ -85,18 +82,14 @@ public class JSRuntimeOptions {
     }
 
     /**
-     * Claim responsibility for closing the {@link AtomicsObject} these options carry.
+     * The shared {@link AtomicsObject} an agent cluster coordinates through, if one was injected.
      * <p>
-     * Succeeds at most once, and only for the instance the default constructor created. An injected
-     * instance is a shared agent-cluster object that the embedder owns, and two runtimes built from
-     * one options object must not both close the same executor.
+     * A runtime does not read this after construction — it snapshots what it will use — so changing
+     * it later cannot alter a runtime that already exists. Read a live runtime's instance from
+     * {@link JSRuntime#getAtomicsObject()}.
      *
-     * @return true when the caller is now responsible for closing it
+     * @return the injected instance, or null when each runtime makes its own
      */
-    boolean claimAtomicsObjectOwnership() {
-        return !atomicsObjectInjected && atomicsOwnershipClaimed.compareAndSet(false, true);
-    }
-
     public AtomicsObject getAtomicsObject() {
         return atomicsObject;
     }
@@ -145,12 +138,13 @@ public class JSRuntimeOptions {
     }
 
     /**
-     * Whether the {@link AtomicsObject} was supplied by the embedder rather than created here.
+     * Whether an {@link AtomicsObject} was supplied by the embedder rather than left to each
+     * runtime.
      *
-     * @return true when the instance was injected
+     * @return true when an instance was injected
      */
     public boolean isAtomicsObjectInjected() {
-        return atomicsObjectInjected;
+        return atomicsObject != null;
     }
 
     public boolean isShadowRealmEnabled() {
@@ -161,9 +155,21 @@ public class JSRuntimeOptions {
         return temporalEnabled;
     }
 
+    /**
+     * Share one {@link AtomicsObject} between the runtimes of an agent cluster.
+     * <p>
+     * The instance stays the caller's: no runtime built from these options will close it, and each
+     * of them only cancels the waits it started itself. Without this, every runtime makes and owns
+     * its own, and {@code Atomics.wait}/{@code notify} coordinate only within that runtime.
+     * <p>
+     * A runtime snapshots the instance when it is constructed, so setting this afterwards affects
+     * only runtimes created later.
+     *
+     * @param atomicsObject the shared instance
+     * @return this
+     */
     public JSRuntimeOptions setAtomicsObject(AtomicsObject atomicsObject) {
         this.atomicsObject = Objects.requireNonNull(atomicsObject);
-        this.atomicsObjectInjected = true;
         return this;
     }
 
