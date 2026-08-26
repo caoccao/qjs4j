@@ -122,8 +122,7 @@ final class CompilerContext {
      * disappeared from anything compiled there. A set rather than a list because membership is the
      * only question asked of it.
      *
-     * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getParameterScopeFunctionNames(
-     *com.caoccao.qjs4j.vm.StackFrame)
+     * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getInheritedParameterScopeFunctionNames()
      */
     Set<String> parameterScopeFunctionNames = Set.of();
     PatternCompiler patternCompiler;

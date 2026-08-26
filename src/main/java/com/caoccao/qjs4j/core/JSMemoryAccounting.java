@@ -95,12 +95,7 @@ public final class JSMemoryAccounting {
         releaseCollectedReservations();
         while (true) {
             long current = reservedBytes.get();
-            // "No limit" is not "no arithmetic". Unlimited mode used plain signed addition, so a
-            // total already near Long.MAX_VALUE wrapped to a negative byte count — a number this
-            // class's contract says cannot happen, and one that later release arithmetic then
-            // worked from. The headroom is whichever of the configured ceiling and the range of a
-            // long comes first.
-            long headroom = limit == UNLIMITED ? Long.MAX_VALUE - current : limit - current;
+            long headroom = headroomFrom(current);
             if (bytes > headroom) {
                 return false;
             }
@@ -127,6 +122,25 @@ public final class JSMemoryAccounting {
     public long getReservedBytes() {
         releaseCollectedReservations();
         return reservedBytes.get();
+    }
+
+    /**
+     * The number of bytes that can still be charged on top of a given total.
+     * <p>
+     * "No limit" is not "no arithmetic". Unlimited mode used plain signed addition, so a total
+     * already near {@code Long.MAX_VALUE} wrapped to a negative byte count — a number this class's
+     * contract says cannot happen, and one that later release arithmetic then worked from. The
+     * headroom is whichever of the configured ceiling and the range of a long comes first.
+     * <p>
+     * Shared with {@link #wouldExceedLimit(long)} so that the preflight answer and the charge that
+     * follows it cannot disagree: the preflight had its own unconditional {@code false} for
+     * unlimited mode, so it promised capacity the charge then refused.
+     *
+     * @param current the total currently reserved
+     * @return the remaining capacity, never negative
+     */
+    private long headroomFrom(long current) {
+        return limit == UNLIMITED ? Long.MAX_VALUE - current : limit - current;
     }
 
     /**
@@ -207,15 +221,24 @@ public final class JSMemoryAccounting {
 
     /**
      * Whether a reservation of the given size would be refused.
+     * <p>
+     * This answers for the counter as it stands, so it reclaims what the collector has taken first
+     * and then asks the same question {@link #reserve(Object, long)} asks — otherwise the two
+     * disagree, and a caller that checked before reserving is told capacity exists that the very
+     * next call refuses. It also rejects a negative size for the same reason: {@code reserve}
+     * throws for one, so predicting {@code reserve} means throwing too rather than answering
+     * "would fit".
      *
-     * @param bytes the byte count
+     * @param bytes the byte count; must not be negative
      * @return true when the reservation would exceed the limit
+     * @throws IllegalArgumentException when {@code bytes} is negative
      */
     public boolean wouldExceedLimit(long bytes) {
-        if (limit == UNLIMITED) {
-            return false;
+        if (bytes < 0) {
+            throw new IllegalArgumentException("Cannot reserve a negative number of bytes: " + bytes);
         }
-        return bytes > limit - reservedBytes.get();
+        releaseCollectedReservations();
+        return bytes > headroomFrom(reservedBytes.get());
     }
 
     /**

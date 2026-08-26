@@ -3125,15 +3125,21 @@ public final class JSGlobalObject {
             int functionNameLocalIndex = callerBytecodeFunction != null
                     ? callerBytecodeFunction.getSelfLocalIndex() : -1;
             // The named-function-expression bindings this frame resolves through a parameter
-            // environment rather than through an ordinary local — its own, while it is still
-            // initializing parameters, and every one it captured from an enclosing initializer.
-            // See overlayParameterScopeFunctionNames.
-            // Read, not built: the function holds both possible answers, so a direct eval costs a
-            // field read rather than an allocation. It used to be copied into a set here on every
-            // eval, to answer three contains() calls.
-            Set<String> parameterScopeFunctionNames = callerBytecodeFunction == null
+            // environment rather than through an ordinary local. The two are kept apart because
+            // they are not the same claim, and conflating them was a defect: a name is not a
+            // binding identity, so an *inherited* name says nothing about a binding of the same
+            // spelling that this frame declares itself. A nested closure written in an enclosing
+            // initializer may have its own parameter, `var`, lexical, class or function called `n`,
+            // and that nearer binding shadows the function-expression one and is mutable — but
+            // membership in a set of names classified it as the immutable one, so direct eval's
+            // assignment to it was discarded. The frame's *own* name is a binding of this frame, so
+            // it stays authoritative. See overlayParameterScopeFunctionNames.
+            String activeOwnParameterScopeFunctionName = callerBytecodeFunction == null
+                    ? null
+                    : callerBytecodeFunction.getActiveParameterScopeFunctionName(callerFrame);
+            Set<String> inheritedParameterScopeFunctionNames = callerBytecodeFunction == null
                     ? Set.of()
-                    : callerBytecodeFunction.getParameterScopeFunctionNames(callerFrame);
+                    : callerBytecodeFunction.getInheritedParameterScopeFunctionNames();
 
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
@@ -3258,9 +3264,13 @@ public final class JSGlobalObject {
                                     absentKeys,
                                     touchedOverlayKeys);
                             capturedVarOverlaySlots.put(capturedVarName, captureSlot);
-                            if (parameterScopeFunctionNames.contains(capturedVarName)) {
+                            if (inheritedParameterScopeFunctionNames.contains(capturedVarName)) {
                                 // A closure created in a default initializer captured a named
-                                // function expression's binding, which is immutable.
+                                // function expression's binding, which is immutable. Reached only
+                                // for a name this frame has no local of — a local of the same
+                                // spelling shadows the captured binding and skipped this loop
+                                // above, which is what keeps the classification about the binding
+                                // rather than about the name.
                                 PropertyDescriptor capturedSelfDescriptor = new PropertyDescriptor();
                                 capturedSelfDescriptor.setValue(
                                         capturedValue != null ? capturedValue : JSUndefined.INSTANCE);
@@ -3604,7 +3614,13 @@ public final class JSGlobalObject {
                         // While the parameter environment is what the name resolves through, the
                         // overlay holds the function, not the body's binding of the same name.
                         // Copying it back would put the function into the body's slot.
-                        if (parameterScopeFunctionNames.contains(name)) {
+                        //
+                        // Only this frame's own name. Every name in this loop is a local of this
+                        // frame, and a local is a nearer binding than anything an enclosing
+                        // parameter environment provides, so an inherited name here belongs to a
+                        // binding that is being shadowed. Skipping those discarded the write: a
+                        // nested closure's `let n = 1; eval('n = 2')` left n at 1.
+                        if (name.equals(activeOwnParameterScopeFunctionName)) {
                             continue;
                         }
                         PropertyKey key = PropertyKey.fromString(name);
@@ -3627,8 +3643,10 @@ public final class JSGlobalObject {
                         if (selfCaptureIndex >= 0 && captureSlot == selfCaptureIndex) {
                             continue;
                         }
-                        // Immutable, like any other named-function-expression binding.
-                        if (parameterScopeFunctionNames.contains(name)) {
+                        // Immutable, like any other named-function-expression binding. A capture is
+                        // only reached for a name this frame has no local of, so the entry really
+                        // does describe the binding the overlay holds.
+                        if (inheritedParameterScopeFunctionNames.contains(name)) {
                             continue;
                         }
                         PropertyKey key = PropertyKey.fromString(name);

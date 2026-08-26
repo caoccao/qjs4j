@@ -87,6 +87,11 @@ public final class Lexer {
     int column;
     int line;
     int position;
+    /**
+     * Whether the {@code default} keyword just produced was a property name — {@code x.default} —
+     * rather than the {@code default} of {@code export default}. See {@link #expectRegex()}.
+     */
+    private boolean defaultFollowsPropertyAccess;
     private TokenType lastTokenType;
     private Token lookahead;
     private boolean moduleMode;
@@ -100,6 +105,7 @@ public final class Lexer {
         this.column = 1;
         this.lookahead = null;
         this.lastTokenType = null;
+        this.defaultFollowsPropertyAccess = false;
         this.moduleMode = false;
         this.strictMode = false;
     }
@@ -147,6 +153,13 @@ public final class Lexer {
                  // Generator contexts that need a regex after yield use parser rescan.
                  RETURN, THROW, TYPEOF, VOID, DELETE, NEW,
                  IF, WHILE, FOR, CASE -> true;
+            // `export default /re/` is a regular expression: `default` is followed by an
+            // AssignmentExpression there, and it was read as division, so `export default /\(/;`
+            // failed to lex at all. `case` was already here; `default` is its other half in a
+            // switch, where a colon always separates it from what follows. The one other place the
+            // keyword can appear before a '/' is as a property name — `x.default / 2` — which is
+            // division, so that is asked about separately.
+            case DEFAULT -> !defaultFollowsPropertyAccess;
             default -> false;
         };
     }
@@ -334,6 +347,7 @@ public final class Lexer {
         column = 1;
         lookahead = null;
         lastTokenType = null;
+        defaultFollowsPropertyAccess = false;
     }
 
     public void restoreState(LexerState state) {
@@ -341,12 +355,14 @@ public final class Lexer {
         this.line = state.line();
         this.column = state.column();
         this.lastTokenType = state.lastTokenType();
+        this.defaultFollowsPropertyAccess = state.defaultFollowsPropertyAccess();
         this.lookahead = state.lookahead();
         this.strictMode = state.strictMode();
     }
 
     public LexerState saveState() {
-        return new LexerState(position, line, column, lastTokenType, lookahead, strictMode);
+        return new LexerState(
+                position, line, column, lastTokenType, defaultFollowsPropertyAccess, lookahead, strictMode);
     }
 
     private Token scanBinaryNumber(int startPos, int startLine, int startColumn) {
@@ -952,6 +968,11 @@ public final class Lexer {
         // Identifiers and keywords
         if (isIdentifierStart(c)) {
             Token token = scanIdentifier(startPos, startLine, startColumn, c, false);
+            // `default` is the one keyword that can also be a property name, and the two want
+            // opposite answers for a following '/'. Only meaningful while lastTokenType is DEFAULT,
+            // which nothing but this branch can make it.
+            defaultFollowsPropertyAccess = lastTokenType == TokenType.DOT
+                    || lastTokenType == TokenType.OPTIONAL_CHAINING;
             lastTokenType = token.type();
             return token;
         }

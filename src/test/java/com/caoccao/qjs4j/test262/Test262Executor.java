@@ -646,13 +646,12 @@ public class Test262Executor {
     /**
      * Whether anything in the module graph was actually evaluated.
      * <p>
-     * This is the one question a resolution-phase and a runtime-phase negative test disagree on,
-     * and it is the question the executor could not previously answer. The engine settles it two
-     * ways: the module the runner itself handed to {@code eval} began running (the total body count
-     * exceeds the count of bodies pulled in by an import), or some module body failed rather than
-     * finishing. Either is evaluation. Neither happens when an import names an export nothing
-     * provides — the engine pulls the dependency in and runs it to completion, then fails to
-     * resolve the binding, which is why "a module body ran" on its own is not the test.
+     * Asked by the runtime-phase branch, which needs the opposite assurance from the
+     * resolution-phase one: something must have run. The engine settles it two ways — the module
+     * the runner itself handed to {@code eval} began running (the total body count exceeds the
+     * count of bodies pulled in by an import), or some module body failed rather than finishing.
+     * Either is evaluation, and a runtime-phase failure raised by a dependency that threw shows up
+     * only as the second.
      *
      * @param context the context the test ran in
      * @return true when the graph got past linking
@@ -743,15 +742,13 @@ public class Test262Executor {
                     + negative.getType() + " but the test body was evaluated, so the error was raised "
                     + "after the module graph had been linked");
         }
-        // Ideally: not one module body, anywhere in the graph. The engine links a graph's named,
-        // default and indirect exports before evaluating any of it, so for those a resolution
-        // failure now evaluates nothing — and JSModuleLinkOrderTest holds it to exactly that,
-        // through a host-visible counter. What it does not yet link is ambiguity, namespace
-        // construction and resolution across a cycle, and those still fail after a dependency has
-        // run. Demanding zero here would fail the suite's own tests for them, so the weaker
-        // question is asked instead: did the module the runner asked for begin evaluating, or did
-        // some body fail. See QJS4J-BRANCH-02 in the fix report for what remains.
-        if (moduleGraphWasEvaluated(context)) {
+        // Not one module body, anywhere in the graph. This used to ask a weaker question — whether
+        // the module the runner asked for had begun evaluating — because the engine linked named,
+        // default and indirect exports before evaluating but decided ambiguity and resolution
+        // across a cycle only by running the graph, and demanding zero would have failed the
+        // suite's own tests for those. The link pass decides them now, so the real requirement can
+        // be asked: a resolution failure means the graph never started.
+        if (context.getModuleBodyEvaluationCount() > 0) {
             return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
                     + negative.getType() + " but a module body was evaluated, so the error was raised "
                     + "after the module graph had been linked");

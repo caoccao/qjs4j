@@ -45,6 +45,119 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     }
 
     @Test
+    void testANestedArrowsOwnLetIsAssignableThroughDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = () => { let n = 1; eval('n = 2'); return n; }) {
+                  var n;
+                  return String(a());
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosureCanDeclareAFunctionInsideDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () {
+                  let n = 1;
+                  eval('function h() { return n; }');
+                  return String(typeof h);
+                }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosureCanDeclareAVarInsideDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { let n = 1; eval('var m = n + 1;'); return typeof m; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosureCanRedeclareItsOwnVarInsideDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { var n = 1; eval('var n = 3;'); return String(n); }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnClassIsAssignableThroughDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { class n {} eval('n = 2'); return typeof n; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnConstIsWhatDirectEvalReads() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { const n = 1; return String(eval('n')); }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnFunctionDeclarationIsAssignableThroughDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { function n() {} eval('n = 2'); return typeof n; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnLetIsAssignableThroughDirectEval() {
+        // The review's reproduction. A name is not a binding identity: the closure's own `let n` is
+        // a different, mutable binding from the enclosing function expression's immutable name, and
+        // classifying it by spelling discarded the assignment and left n at 1.
+        assertStringWithJavet("""
+                var f = function n(
+                  a = function () {
+                    let n = 1;
+                    eval('n = 2');
+                    return n;
+                  }
+                ) {
+                  var n;
+                  return String(a());
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnParameterIsAssignableThroughDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function (n) { eval('n = 2'); return n; }) {
+                  var n;
+                  return String(a(1));
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedClosuresOwnVarIsAssignableThroughDirectEval() {
+        assertStringWithJavet("""
+                var f = function n(a = function () { var n = 1; eval('n = 2'); return n; }) {
+                  var n;
+                  return String(a());
+                };
+                f();""");
+    }
+
+    @Test
     void testANestedGeneratorInitializerSeesTheOuterBinding() {
         assertStringWithJavet("""
                 var f = function* n(a = function q(b = eval('n')) { var q; return b; }) {
@@ -450,6 +563,26 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                   return [a === f, n].join(',');
                 };
                 f();""");
+    }
+
+    @Test
+    void testTheInnermostOfTwoNestedInitializersShadowsWithItsOwnBinding() {
+        // Two nested parameter environments, and a closure inside the inner one that binds the
+        // outer environment's name itself. Its own binding must win, while the inner environment's
+        // name — which it does not bind — is still the immutable function.
+        assertStringWithJavet("""
+                var f = function n(a = function m(b = function () {
+                  let n = 5;
+                  eval('n = 6');
+                  return [n, typeof m];
+                }) {
+                  var m;
+                  return b;
+                }) {
+                  var n;
+                  return a;
+                };
+                String(f()()());""");
     }
 
     @Test

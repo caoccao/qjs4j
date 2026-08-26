@@ -37,8 +37,34 @@ import static org.assertj.core.api.Assertions.assertThat;
  * while the runner froze the reporter, printed its summary and snapshotted the outcome, and then
  * apply its result into the totals the caller had already been handed — the exact integrity problem
  * freezing exists to prevent, and one a single-threaded test cannot reach.
+ * <p>
+ * The interleavings are established with latches and thread states rather than with sleeps. A sleep
+ * is not evidence of ordering: on a loaded machine the thread whose blocking the test exists to
+ * observe can simply fail to be scheduled inside the window, and the assertion then passes for a
+ * reason that has nothing to do with the lock — including when the lock has been removed.
  */
 public class Test262ReporterFreezeTest {
+    /**
+     * Block until a thread has parked, which for a thread whose only blocking call is a lock
+     * acquisition is proof that it reached that acquisition and could not complete it.
+     *
+     * @param thread the thread to watch
+     */
+    private static void awaitParked(Thread thread) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
+        while (System.nanoTime() < deadline) {
+            Thread.State state = thread.getState();
+            if (state == Thread.State.WAITING || state == Thread.State.TIMED_WAITING) {
+                return;
+            }
+            if (state == Thread.State.TERMINATED) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError(thread.getName() + " never parked; state is " + thread.getState());
+    }
+
     private static TestResult passingResult() {
         return TestResult.pass(new Test262TestCase(Paths.get("concurrent.js")));
     }
@@ -52,17 +78,26 @@ public class Test262ReporterFreezeTest {
         PausableReporter reporter = new PausableReporter();
         Thread writer = new Thread(() -> reporter.recordResult(passingResult()), "reporter-writer");
         writer.start();
-        assertThat(reporter.admitted.await(30, TimeUnit.SECONDS)).isTrue();
+        assertThat(reporter.admitted.await(30, TimeUnit.SECONDS))
+                .as("the writer is inside an admission")
+                .isTrue();
 
         AtomicBoolean frozeEarly = new AtomicBoolean(true);
+        CountDownLatch freezerAtGate = new CountDownLatch(1);
         Thread freezer = new Thread(() -> {
+            freezerAtGate.countDown();
             reporter.freeze();
             frozeEarly.set(false);
         }, "reporter-freezer");
         freezer.start();
 
-        // Give freeze() every chance to finish while the write is still in flight.
-        Thread.sleep(200);
+        // Not "wait a while and hope": wait until the freezer has reached freeze() and parked in
+        // it. Its only blocking call is the write lock, so a parked freezer is a blocked freeze().
+        assertThat(freezerAtGate.await(30, TimeUnit.SECONDS)).isTrue();
+        awaitParked(freezer);
+        assertThat(freezer.getState())
+                .as("freeze() is blocked, not merely unscheduled")
+                .isNotEqualTo(Thread.State.TERMINATED);
         assertThat(frozeEarly.get())
                 .as("freeze() cannot complete while a result is being admitted")
                 .isTrue();
@@ -88,6 +123,9 @@ public class Test262ReporterFreezeTest {
         int writerCount = 8;
         int resultsPerWriter = 2_000;
         CountDownLatch start = new CountDownLatch(1);
+        // Every writer signals that it has been through an admission, so the freeze below is known
+        // to land in the middle of live contention rather than before it or after it.
+        CountDownLatch everyWriterAdmitted = new CountDownLatch(writerCount);
         AtomicInteger attempted = new AtomicInteger();
         List<Thread> writers = new ArrayList<>();
         for (int writerIndex = 0; writerIndex < writerCount; writerIndex++) {
@@ -101,13 +139,18 @@ public class Test262ReporterFreezeTest {
                 for (int index = 0; index < resultsPerWriter; index++) {
                     reporter.recordResult(passingResult());
                     attempted.incrementAndGet();
+                    if (index == 0) {
+                        everyWriterAdmitted.countDown();
+                    }
                 }
             }, "reporter-writer-" + writerIndex);
             writers.add(writer);
             writer.start();
         }
         start.countDown();
-        Thread.sleep(5);
+        assertThat(everyWriterAdmitted.await(60, TimeUnit.SECONDS))
+                .as("every writer is contending before the freeze")
+                .isTrue();
         reporter.freeze();
 
         int executedAtFreeze = reporter.getTotalExecuted();
@@ -118,6 +161,9 @@ public class Test262ReporterFreezeTest {
         assertThat(reporter.getTotalExecuted())
                 .as("nothing lands after freeze() returns")
                 .isEqualTo(executedAtFreeze);
+        assertThat(reporter.getPassed())
+                .as("the freeze happened after real writes, not before any of them")
+                .isGreaterThanOrEqualTo(writerCount);
         assertThat(reporter.getPassed() + reporter.getLateWrites())
                 .as("every attempt was either counted or refused, and none was both or neither")
                 .isEqualTo(attempted.get());

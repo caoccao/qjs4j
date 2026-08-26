@@ -509,4 +509,60 @@ public class JSMemoryAccountingTest extends BaseTest {
         assertThat(first).as("owners stay reachable so nothing reclaims them mid-test").isNotNull();
         assertThat(second).isNotNull();
     }
+
+    @Test
+    public void testWouldExceedLimitAgreesWithReserveAtAConfiguredCeiling() {
+        JSMemoryAccounting accounting = new JSMemoryAccounting(64);
+        Object owner = new Object();
+        assertThat(accounting.wouldExceedLimit(64)).isFalse();
+        assertThat(accounting.wouldExceedLimit(65)).isTrue();
+        assertThat(accounting.reserve(owner, 64)).isNotNull();
+        assertThat(accounting.wouldExceedLimit(0)).isFalse();
+        assertThat(accounting.wouldExceedLimit(1)).isTrue();
+        assertThat(accounting.reserve(new Object(), 1)).isNull();
+        assertThat(owner).as("the owner stays reachable so nothing reclaims it mid-test").isNotNull();
+    }
+
+    @Test
+    public void testWouldExceedLimitAgreesWithReserveInUnlimitedMode() {
+        // The review's reproduction. The preflight answered `false` unconditionally in unlimited
+        // mode while the charge behind it refuses anything that would overflow a long, so a caller
+        // that asked first was told capacity existed that the very next call refused.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(JSMemoryAccounting.UNLIMITED);
+        Object first = new Object();
+        assertThat(accounting.wouldExceedLimit(Long.MAX_VALUE)).isFalse();
+        assertThat(accounting.reserve(first, Long.MAX_VALUE)).isNotNull();
+
+        assertThat(accounting.wouldExceedLimit(0))
+                .as("nothing always fits")
+                .isFalse();
+        assertThat(accounting.wouldExceedLimit(1))
+                .as("and the preflight says so before reserve() proves it")
+                .isTrue();
+        assertThat(accounting.reserve(new Object(), 1)).isNull();
+        assertThat(first).as("the owner stays reachable so nothing reclaims it mid-test").isNotNull();
+    }
+
+    @Test
+    public void testWouldExceedLimitReclaimsBeforeAnswering() {
+        // The preflight predicts the reservation that follows it, so it has to see the same total
+        // that reservation would see — including the bytes the collector has already taken back.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(64);
+        JSMemoryAccounting.Reservation reservation = accounting.reserve(new Object(), 64);
+        assertThat(reservation).isNotNull();
+        reservation.release();
+        assertThat(accounting.wouldExceedLimit(64)).isFalse();
+        assertThat(accounting.reserve(new Object(), 64)).isNotNull();
+    }
+
+    @Test
+    public void testWouldExceedLimitRejectsANegativeSizeExactlyAsReserveDoes() {
+        JSMemoryAccounting accounting = new JSMemoryAccounting(64);
+        assertThatThrownBy(() -> accounting.wouldExceedLimit(-1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot reserve a negative number of bytes: -1");
+        assertThatThrownBy(() -> accounting.reserve(new Object(), -1))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Cannot reserve a negative number of bytes: -1");
+    }
 }
