@@ -22,11 +22,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
@@ -42,6 +41,16 @@ public class Test262Runner {
      */
     static final String WORKER_THREAD_NAME_PREFIX = "test262-worker-";
     private static final long DEFAULT_WORKER_TERMINATION_TIMEOUT_MILLISECONDS = TimeUnit.MINUTES.toMillis(5);
+    /**
+     * The selections this runner accepts, and nothing else.
+     * <p>
+     * A map rather than a {@code switch} with a {@code default}, so that an argument the runner does
+     * not recognise has nowhere to fall through to.
+     */
+    private static final Map<String, Supplier<Test262Config>> MODE_CONFIGURATIONS = Map.of(
+            "--quick", Test262Config::forQuickTest,
+            "--language", Test262Config::forLanguageTests,
+            "--long-running", Test262Config::forLongRunningTest);
     private static final AtomicInteger RUNNER_NUMBER = new AtomicInteger();
     private final Test262Config config;
     private final Test262Executor executor;
@@ -106,7 +115,7 @@ public class Test262Runner {
     static int runMain(String[] args) throws IOException {
         {
             Path test262Root = Paths.get("../test262");
-            String mode = "";
+            String mode = null;
             String singleTestPathFragment = null;
             Integer requestedThreadCount = null;
 
@@ -133,20 +142,45 @@ public class Test262Runner {
                     argIndex += 2;
                     continue;
                 }
+                // Anything left has to be a mode, and it has to be one this runner knows. Every
+                // unrecognised argument used to overwrite `mode` and then fall through the switch
+                // below to the full default selection, so `--quik`, a stray positional, or a focus
+                // argument appended after `--quick` silently ran a much larger suite than the one
+                // asked for — and a mistyped `--long-running` silently ran no long-running test
+                // while still reporting success.
+                if (!MODE_CONFIGURATIONS.containsKey(argument)) {
+                    throw new IllegalArgumentException(
+                            "Unknown argument '" + argument + "'.\n" + usage());
+                }
+                if (mode != null) {
+                    throw new IllegalArgumentException(
+                            "Modes are mutually exclusive, but both '" + mode + "' and '" + argument
+                                    + "' were given.\n" + usage());
+                }
                 mode = argument;
                 argIndex++;
             }
 
-            Test262Config config = switch (mode) {
-                case "--quick" -> Test262Config.forQuickTest();
-                case "--language" -> Test262Config.forLanguageTests();
-                case "--long-running" -> Test262Config.forLongRunningTest();
-                default -> Test262Config.loadDefault();
-            };
+            Test262Config config = mode == null
+                    ? Test262Config.loadDefault()
+                    : MODE_CONFIGURATIONS.get(mode).get();
 
             Test262Runner runner = new Test262Runner(test262Root, config, singleTestPathFragment, requestedThreadCount);
             return runner.run().exitCode();
         }
+    }
+
+    /**
+     * How to invoke the runner.
+     *
+     * @return the usage text
+     */
+    private static String usage() {
+        List<String> modes = new ArrayList<>(MODE_CONFIGURATIONS.keySet());
+        Collections.sort(modes);
+        return "Usage: Test262Runner [<test262-root>] [" + String.join(" | ", modes) + "]"
+                + " [--single <path-fragment>] [--threads <count>]\n"
+                + "With no mode, the full default selection runs.";
     }
 
     /**
@@ -342,16 +376,22 @@ public class Test262Runner {
                 try {
                     parser.parse(parsedFile);
 
+                    // Test262 defines how many interpretations a file has; an ordinary file has
+                    // two. Running only the first one is why strict-mode-only regressions could
+                    // be reported as passing — and skipping by the file rather than by the
+                    // interpretation is why the summary added unlike units, counting two
+                    // interpretations for a file that ran and one for a file that did not.
+                    List<Test262TestCase> variants = parsedFile.expandVariants();
+
                     // Apply filters
                     if (config.shouldSkipTest(parsedFile)) {
-                        reporter.recordSkipped(parsedFile, "Feature not supported or excluded");
+                        for (Test262TestCase variant : variants) {
+                            reporter.recordSkipped(variant, "Feature not supported or excluded");
+                        }
                         return;
                     }
 
-                    // Test262 defines how many interpretations a file has; an ordinary file has
-                    // two. Running only the first one is why strict-mode-only regressions could
-                    // be reported as passing.
-                    for (Test262TestCase variant : parsedFile.expandVariants()) {
+                    for (Test262TestCase variant : variants) {
                         // Between variants is the cheapest place to notice a cancellation, and
                         // taking it keeps the exceptional path — the one that ends in workers
                         // being abandoned — as short as it can be.

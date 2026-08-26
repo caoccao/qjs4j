@@ -3124,12 +3124,16 @@ public final class JSGlobalObject {
             // silently ignored in sloppy mode).
             int functionNameLocalIndex = callerBytecodeFunction != null
                     ? callerBytecodeFunction.getSelfLocalIndex() : -1;
-            // Whether the function-expression name currently means the function rather than the
-            // body declaration that shadows it. See overlayParameterScopeFunctionName.
-            boolean parameterScopeFunctionNameActive =
-                    isParameterScopeFunctionNameActive(callerFrame, callerBytecodeFunction);
-            String parameterScopeFunctionName = parameterScopeFunctionNameActive
-                    ? callerBytecodeFunction.getParameterScopeFunctionName() : null;
+            // The named-function-expression bindings this frame resolves through a parameter
+            // environment rather than through an ordinary local — its own, while it is still
+            // initializing parameters, and every one it captured from an enclosing initializer.
+            // See overlayParameterScopeFunctionNames.
+            // Read, not built: the function holds both possible answers, so a direct eval costs a
+            // field read rather than an allocation. It used to be copied into a set here on every
+            // eval, to answer three contains() calls.
+            Set<String> parameterScopeFunctionNames = callerBytecodeFunction == null
+                    ? Set.of()
+                    : callerBytecodeFunction.getParameterScopeFunctionNames(callerFrame);
 
             // When eval runs inside a function, snapshot global property names so we can
             // clean up var/function bindings that should be function-scoped (not global).
@@ -3254,11 +3258,9 @@ public final class JSGlobalObject {
                                     absentKeys,
                                     touchedOverlayKeys);
                             capturedVarOverlaySlots.put(capturedVarName, captureSlot);
-                            if (parameterScopeFunctionNameActive
-                                    && capturedVarName.equals(
-                                    callerBytecodeFunction.getParameterScopeFunctionName())) {
-                                // A closure created in a default initializer captured the named
-                                // function expression's own binding, which is immutable.
+                            if (parameterScopeFunctionNames.contains(capturedVarName)) {
+                                // A closure created in a default initializer captured a named
+                                // function expression's binding, which is immutable.
                                 PropertyDescriptor capturedSelfDescriptor = new PropertyDescriptor();
                                 capturedSelfDescriptor.setValue(
                                         capturedValue != null ? capturedValue : JSUndefined.INSTANCE);
@@ -3287,7 +3289,7 @@ public final class JSGlobalObject {
                     // different binding, and it does not exist yet. Both are slots of one flattened
                     // frame and the name maps to the body one, so while the frame is still
                     // initializing parameters the name has to be pointed back at the function.
-                    overlayParameterScopeFunctionName(
+                    overlayParameterScopeFunctionNames(
                             global,
                             callerFrame,
                             callerBytecodeFunction,
@@ -3602,7 +3604,7 @@ public final class JSGlobalObject {
                         // While the parameter environment is what the name resolves through, the
                         // overlay holds the function, not the body's binding of the same name.
                         // Copying it back would put the function into the body's slot.
-                        if (name.equals(parameterScopeFunctionName)) {
+                        if (parameterScopeFunctionNames.contains(name)) {
                             continue;
                         }
                         PropertyKey key = PropertyKey.fromString(name);
@@ -3626,7 +3628,7 @@ public final class JSGlobalObject {
                             continue;
                         }
                         // Immutable, like any other named-function-expression binding.
-                        if (name.equals(parameterScopeFunctionName)) {
+                        if (parameterScopeFunctionNames.contains(name)) {
                             continue;
                         }
                         PropertyKey key = PropertyKey.fromString(name);
@@ -3861,34 +3863,6 @@ public final class JSGlobalObject {
             return JSBoolean.valueOf(Double.isNaN(num));
         }
 
-        /**
-         * Whether the frame currently resolves the named function expression's own name through
-         * its parameter environment rather than through the body's declaration of that name.
-         * <p>
-         * True for the whole of parameter initialization on the frame that owns the shape, and
-         * always true on a closure created inside such an initializer — that closure's environment
-         * <em>is</em> the parameter environment, whatever the frame that built it is doing by the
-         * time the closure runs.
-         *
-         * @param frame            the caller frame
-         * @param bytecodeFunction the caller frame's function
-         * @return true when the function-expression binding is the one in scope
-         */
-        private static boolean isParameterScopeFunctionNameActive(
-                StackFrame frame, JSBytecodeFunction bytecodeFunction) {
-            if (bytecodeFunction == null || bytecodeFunction.getParameterScopeFunctionName() == null) {
-                return false;
-            }
-            int bodyScopeEnteredLocalIndex = bytecodeFunction.getBodyScopeEnteredLocalIndex();
-            if (bodyScopeEnteredLocalIndex < 0) {
-                return true;
-            }
-            JSValue[] locals = frame == null ? null : frame.getLocals();
-            return locals != null
-                    && bodyScopeEnteredLocalIndex < locals.length
-                    && locals[bodyScopeEnteredLocalIndex] != JSBoolean.TRUE;
-        }
-
         private static boolean isURIReserved(int c) {
             return c < URI_RESERVED_TABLE.length && URI_RESERVED_TABLE[c];
         }
@@ -3974,8 +3948,12 @@ public final class JSGlobalObject {
         }
 
         /**
-         * Point the named function expression's own name back at the function while its default
+         * Point a named function expression's own name back at the function while its default
          * initializers are running.
+         * <p>
+         * Only the frame that owns the two slots can read the function out of one of them. The
+         * bindings a closure inherited from enclosing initializers reach the same environments
+         * through its captures, which the captured-variable overlay above has already applied.
          *
          * @param global                       the realm's global object, which carries the overlay
          * @param callerFrame                  the frame the direct eval runs on behalf of
@@ -3985,7 +3963,7 @@ public final class JSGlobalObject {
          * @param touchedOverlayKeys           overlay names already saved
          * @param immutableOverlayBindingNames names the overlay makes non-writable
          */
-        private static void overlayParameterScopeFunctionName(
+        private static void overlayParameterScopeFunctionNames(
                 JSObject global,
                 StackFrame callerFrame,
                 JSBytecodeFunction callerBytecodeFunction,
@@ -3993,19 +3971,13 @@ public final class JSGlobalObject {
                 Set<String> absentKeys,
                 Set<String> touchedOverlayKeys,
                 Set<String> immutableOverlayBindingNames) {
-            if (!isParameterScopeFunctionNameActive(callerFrame, callerBytecodeFunction)) {
+            if (callerBytecodeFunction == null
+                    || !callerBytecodeFunction.isOwnParameterScopeActive(callerFrame)) {
                 return;
             }
             int selfLocalIndex = callerBytecodeFunction.getSelfLocalIndex();
-            int bodyScopeEnteredLocalIndex = callerBytecodeFunction.getBodyScopeEnteredLocalIndex();
             JSValue[] locals = callerFrame.getLocals();
-            // Only the frame that owns the two slots can read the function out of one of them; a
-            // closure created in the initializer reaches the same binding through its capture,
-            // which the captured-variable overlay above has already applied.
-            if (bodyScopeEnteredLocalIndex < 0
-                    || locals == null
-                    || selfLocalIndex < 0
-                    || selfLocalIndex >= locals.length) {
+            if (locals == null || selfLocalIndex < 0 || selfLocalIndex >= locals.length) {
                 return;
             }
             String name = callerBytecodeFunction.getParameterScopeFunctionName();

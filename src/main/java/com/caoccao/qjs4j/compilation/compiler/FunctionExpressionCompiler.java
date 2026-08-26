@@ -34,6 +34,30 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
+     * Add a name to the set of named-function-expression bindings the enclosing parameter
+     * environments make visible.
+     * <p>
+     * A set that already carries the name is already the answer, and is returned as it stands: an
+     * inner function expression reusing an outer one's name shadows it, and the entry says all the
+     * consumers ask — whether the name resolves through a parameter environment.
+     *
+     * @param enclosingNames the enclosing environments' names
+     * @param name           the name to add
+     * @return the set including that name
+     */
+    private static Set<String> withParameterScopeName(Set<String> enclosingNames, String name) {
+        if (enclosingNames.isEmpty()) {
+            return Set.of(name);
+        }
+        if (enclosingNames.contains(name)) {
+            return enclosingNames;
+        }
+        Set<String> names = new HashSet<>(enclosingNames);
+        names.add(name);
+        return Collections.unmodifiableSet(names);
+    }
+
+    /**
      * Returns true when a strict-mode wrapper function can safely be used
      * around a class body expression. Wrapper functions introduce a new
      * function boundary, which breaks yield/await semantics, so they must
@@ -73,7 +97,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         inheritClassInnerNameCapture(functionContext);
-        String enclosingParameterScopeFunctionName = inheritParameterScopeFunctionNameCapture(functionContext);
+        Set<String> enclosingParameterScopeFunctionNames =
+                inheritParameterScopeFunctionNameCapture(functionContext);
         inheritVisibleLexicalCapturesForDirectEvalInBody(
                 functionContext,
                 functionExpression.getBody(),
@@ -135,12 +160,15 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
 
         // Everything compiled from here to the end of parameter initialization sits in the
         // parameter environment, so a closure created there has to carry the function-expression
-        // binding with it — see CompilerContext.parameterScopeFunctionName. The inherited value is
-        // restored afterwards rather than cleared: a function nested in an *enclosing* function's
-        // default initializer is still inside that initializer, body and all.
-        String inheritedParameterScopeFunctionName = functionContext.parameterScopeFunctionName;
+        // bindings with it — see CompilerContext.parameterScopeFunctionNames. This function's own
+        // name goes in front of whatever it inherited rather than replacing it, because a closure
+        // here is inside both environments. The inherited list is restored afterwards rather than
+        // cleared: a function nested in an *enclosing* function's default initializer is still
+        // inside that initializer, body and all.
+        Set<String> inheritedParameterScopeFunctionNames = functionContext.parameterScopeFunctionNames;
         if (selfNameShadowedByBodyDeclaration) {
-            functionContext.parameterScopeFunctionName = functionExpression.getId().getName();
+            functionContext.parameterScopeFunctionNames = withParameterScopeName(
+                    inheritedParameterScopeFunctionNames, functionExpression.getId().getName());
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -176,7 +204,7 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // The parameter environment is fully built by now, so anything the body declares under the
         // function's own name takes over that name in a slot of its own. Bytecode emitted above for
         // the default initializers keeps referring to the self-name slot by index.
-        functionContext.parameterScopeFunctionName = inheritedParameterScopeFunctionName;
+        functionContext.parameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
         int bodyScopeEnteredLocalIndex = -1;
         if (selfNameShadowedByBodyDeclaration) {
             String selfName = functionExpression.getId().getName();
@@ -304,13 +332,12 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             function.setSelfLocalIndex(selfNameLocalIndex);
         }
         if (bodyScopeEnteredLocalIndex >= 0) {
-            function.setParameterScopeFunctionName(
+            function.setOwnParameterScopeFunctionName(
                     functionExpression.getId().getName(), bodyScopeEnteredLocalIndex);
-        } else if (enclosingParameterScopeFunctionName != null) {
-            // Created inside an enclosing default initializer: the capture is the binding, and it
-            // is in scope for this function's whole lifetime, so there is no phase slot.
-            function.setParameterScopeFunctionName(enclosingParameterScopeFunctionName, -1);
         }
+        // Created inside enclosing default initializers: those captures are the bindings, and they
+        // are in scope for this function's whole lifetime, so they have no phase slot.
+        function.setInheritedParameterScopeFunctionNames(enclosingParameterScopeFunctionNames);
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -475,15 +502,18 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
      * reading a string at run time.
      *
      * @param targetContext the nested function's compilation context
-     * @return the inherited binding's name, or null when there is none
+     * @return the inherited bindings; empty when there are none
      */
-    String inheritParameterScopeFunctionNameCapture(CompilerContext targetContext) {
-        String parameterScopeFunctionName = compilerContext.parameterScopeFunctionName;
-        if (parameterScopeFunctionName != null) {
-            targetContext.parameterScopeFunctionName = parameterScopeFunctionName;
-            targetContext.captureResolver.resolveCapturedBindingIndex(parameterScopeFunctionName);
+    Set<String> inheritParameterScopeFunctionNameCapture(CompilerContext targetContext) {
+        Set<String> parameterScopeFunctionNames = compilerContext.parameterScopeFunctionNames;
+        if (!parameterScopeFunctionNames.isEmpty()) {
+            targetContext.parameterScopeFunctionNames = parameterScopeFunctionNames;
+            // Every one of them, not just the innermost: they are all still in scope here.
+            for (String parameterScopeFunctionName : parameterScopeFunctionNames) {
+                targetContext.captureResolver.resolveCapturedBindingIndex(parameterScopeFunctionName);
+            }
         }
-        return parameterScopeFunctionName;
+        return parameterScopeFunctionNames;
     }
 
     void inheritVisibleLexicalCapturesForDirectEvalInBody(

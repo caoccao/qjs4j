@@ -20,8 +20,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Tracks and reports test262 execution results.
@@ -36,25 +37,46 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class Test262Reporter {
     private static final int TOP_SLOW_TEST_COUNT = 5;
 
+    /**
+     * Separates admitting a result from closing the reporter.
+     * <p>
+     * Recording holds the read lock and freezing holds the write lock, which is what makes
+     * admission a transaction rather than two steps. A flag on its own gave each of them their own
+     * visibility and nothing more: a worker could read "not frozen", be descheduled, and apply its
+     * result after {@code freeze()} had returned and the outcome had been snapshotted — the exact
+     * integrity problem freezing exists to prevent. Recording stays concurrent with recording,
+     * because the counters and queues underneath are already safe against each other.
+     */
+    private final ReadWriteLock admissionLock = new ReentrantReadWriteLock();
     private final ConcurrentLinkedQueue<TestResult> allResults = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failed = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> failures = new ConcurrentLinkedQueue<>();
-    private final AtomicBoolean frozen = new AtomicBoolean();
     private final AtomicInteger lateWrites = new AtomicInteger(0);
     private final AtomicInteger passed = new AtomicInteger(0);
     private final AtomicInteger skipped = new AtomicInteger(0);
     private final AtomicInteger timeout = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> timeouts = new ConcurrentLinkedQueue<>();
+    /**
+     * Guarded by {@link #admissionLock}.
+     */
+    private boolean frozen;
 
     /**
      * Stop accepting results, permanently.
      * <p>
      * Called once the runner has stopped waiting for its workers, whether they all finished or some
-     * were abandoned. From here the counts cannot move, so the summary that is printed and the
-     * outcome that is returned describe the same run.
+     * were abandoned. Taking the write lock means every result already being admitted has finished
+     * being applied, and none can start afterwards — so from the moment this returns, the counts
+     * cannot move and the summary that is printed and the outcome that is returned describe the
+     * same run.
      */
     public void freeze() {
-        frozen.set(true);
+        admissionLock.writeLock().lock();
+        try {
+            frozen = true;
+        } finally {
+            admissionLock.writeLock().unlock();
+        }
     }
 
     public int getFailed() {
@@ -89,6 +111,16 @@ public class Test262Reporter {
         return passed.get() + failed.get() + timeout.get();
     }
 
+    /**
+     * Every interpretation the run accounted for, executed or skipped.
+     * <p>
+     * One unit throughout: an interpretation, not a file. The runner used to filter by file and
+     * record one skip for it while an executed file contributed two results, so this sum added
+     * unlike things and could be reconciled with neither the file count nor the interpretation
+     * count.
+     *
+     * @return the number of interpretations executed plus the number skipped
+     */
     public int getTotalTests() {
         return getTotalExecuted() + skipped.get();
     }
@@ -99,7 +131,21 @@ public class Test262Reporter {
      * @return true once frozen
      */
     public boolean isFrozen() {
-        return frozen.get();
+        admissionLock.readLock().lock();
+        try {
+            return frozen;
+        } finally {
+            admissionLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Called while a result is being admitted, after the frozen check and before it is applied.
+     * <p>
+     * A no-op seam so a test can hold a write open at exactly the point the race lived, and observe
+     * that a concurrent {@code freeze()} cannot complete around it.
+     */
+    protected void onAdmitting() {
     }
 
     public void printProgress() {
@@ -175,46 +221,63 @@ public class Test262Reporter {
     }
 
     public void recordResult(TestResult result) {
-        if (frozen.get()) {
-            lateWrites.incrementAndGet();
-            return;
-        }
-        allResults.add(result);
-        switch (result.getStatus()) {
-            case PASS:
-                passed.incrementAndGet();
-                break;
-            case FAIL:
-                failed.incrementAndGet();
-                failures.add(result);
-                break;
-            case SKIP:
-                skipped.incrementAndGet();
-                break;
-            case TIMEOUT:
-                timeout.incrementAndGet();
-                timeouts.add(result);
-                break;
+        admissionLock.readLock().lock();
+        try {
+            if (frozen) {
+                lateWrites.incrementAndGet();
+                return;
+            }
+            onAdmitting();
+            allResults.add(result);
+            switch (result.getStatus()) {
+                case PASS:
+                    passed.incrementAndGet();
+                    break;
+                case FAIL:
+                    failed.incrementAndGet();
+                    failures.add(result);
+                    break;
+                case SKIP:
+                    skipped.incrementAndGet();
+                    break;
+                case TIMEOUT:
+                    timeout.incrementAndGet();
+                    timeouts.add(result);
+                    break;
+            }
+        } finally {
+            admissionLock.readLock().unlock();
         }
     }
 
     public void recordSkipped(Test262TestCase test, String reason) {
-        if (frozen.get()) {
-            lateWrites.incrementAndGet();
-            return;
+        admissionLock.readLock().lock();
+        try {
+            if (frozen) {
+                lateWrites.incrementAndGet();
+                return;
+            }
+            onAdmitting();
+            skipped.incrementAndGet();
+        } finally {
+            admissionLock.readLock().unlock();
         }
-        skipped.incrementAndGet();
     }
 
     public void reset() {
-        passed.set(0);
-        failed.set(0);
-        skipped.set(0);
-        timeout.set(0);
-        lateWrites.set(0);
-        frozen.set(false);
-        allResults.clear();
-        failures.clear();
-        timeouts.clear();
+        admissionLock.writeLock().lock();
+        try {
+            passed.set(0);
+            failed.set(0);
+            skipped.set(0);
+            timeout.set(0);
+            lateWrites.set(0);
+            frozen = false;
+            allResults.clear();
+            failures.clear();
+            timeouts.clear();
+        } finally {
+            admissionLock.writeLock().unlock();
+        }
     }
 }

@@ -23,10 +23,7 @@ import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
 import com.caoccao.qjs4j.vm.YieldResult;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Represents a JavaScript function compiled to bytecode.
@@ -80,11 +77,23 @@ public final class JSBytecodeFunction extends JSFunction {
     private boolean evalSuperCallAllowed;
     private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
+    /**
+     * The named-function-expression bindings this function captured from enclosing parameter
+     * environments. Never null.
+     * <p>
+     * See {@link #getParameterScopeFunctionNames(StackFrame)}.
+     */
+    private Set<String> inheritedParameterScopeFunctionNames = Set.of();
     private boolean newTargetAllowed;
+    /**
+     * The same set with this function's own name added, when it has one. See
+     * {@link #getParameterScopeFunctionNames(StackFrame)}.
+     */
+    private Set<String> ownParameterScopeFunctionNames = Set.of();
     /**
      * The name of this named function expression when its body redeclares it, else null.
      * <p>
-     * See {@link #getParameterScopeFunctionName()}.
+     * See {@link #getParameterScopeFunctionNames(StackFrame)}.
      */
     private String parameterScopeFunctionName;
     private int selfLocalIndex;
@@ -1659,6 +1668,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
         copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+        copiedFunction.ownParameterScopeFunctionNames = ownParameterScopeFunctionNames;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
@@ -1699,6 +1710,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
         copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+        copiedFunction.ownParameterScopeFunctionNames = ownParameterScopeFunctionNames;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
@@ -1854,6 +1867,25 @@ public final class JSBytecodeFunction extends JSFunction {
     }
 
     /**
+     * Every named-function-expression binding a direct {@code eval} on this function's frame must
+     * resolve through a parameter environment rather than through an ordinary local.
+     * <p>
+     * This function's own name is included when it has one and the frame has not entered its body;
+     * the rest are the ones it captured from enclosing default initializers, which are in scope for
+     * its whole lifetime. A closure written inside two nested initializers is inside both
+     * environments, so one name was never enough — the inner one displaced the outer, and the outer
+     * binding silently vanished from everything compiled there.
+     *
+     * @param frame the frame to answer for
+     * @return the visible bindings; empty when there are none
+     */
+    public Set<String> getParameterScopeFunctionNames(StackFrame frame) {
+        return isOwnParameterScopeActive(frame)
+                ? ownParameterScopeFunctionNames
+                : inheritedParameterScopeFunctionNames;
+    }
+
+    /**
      * Get the self-capture index for closure self-reference patching.
      * Returns -1 if this function does not capture its own name.
      * Following QuickJS var_refs pattern where a function's closure variable
@@ -1970,6 +2002,8 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.selfLocalIndex = selfLocalIndex;
         copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
         copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+        copiedFunction.ownParameterScopeFunctionNames = ownParameterScopeFunctionNames;
         copiedFunction.varRefs = varRefs;
         copiedFunction.capturedActiveFunction = capturedActiveFunction;
         copiedFunction.capturedArguments = capturedArguments;
@@ -2035,6 +2069,23 @@ public final class JSBytecodeFunction extends JSFunction {
 
     public boolean isNewTargetAllowed() {
         return newTargetAllowed;
+    }
+
+    /**
+     * Whether this frame is still initializing the parameters of a named function expression whose
+     * body redeclares its own name.
+     *
+     * @param frame the frame to answer for
+     * @return true while the parameter environment, not the body, is what the name resolves through
+     */
+    public boolean isOwnParameterScopeActive(StackFrame frame) {
+        if (parameterScopeFunctionName == null || bodyScopeEnteredLocalIndex < 0) {
+            return false;
+        }
+        JSValue[] locals = frame == null ? null : frame.getLocals();
+        return locals != null
+                && bodyScopeEnteredLocalIndex < locals.length
+                && locals[bodyScopeEnteredLocalIndex] != JSBoolean.TRUE;
     }
 
     /**
@@ -2151,6 +2202,20 @@ public final class JSBytecodeFunction extends JSFunction {
         this.hasParameterExpressions = hasParameterExpressions;
     }
 
+    /**
+     * Record the named-function-expression bindings this function captured from the parameter
+     * environments it was created inside.
+     *
+     * @param inheritedParameterScopeFunctionNames the names
+     * @see #getParameterScopeFunctionNames(StackFrame)
+     */
+    public void setInheritedParameterScopeFunctionNames(Set<String> inheritedParameterScopeFunctionNames) {
+        this.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames == null
+                ? Set.of()
+                : inheritedParameterScopeFunctionNames;
+        updateOwnParameterScopeFunctionNames();
+    }
+
     public void setNewTargetAllowed(boolean newTargetAllowed) {
         this.newTargetAllowed = newTargetAllowed;
     }
@@ -2161,11 +2226,12 @@ public final class JSBytecodeFunction extends JSFunction {
      *
      * @param parameterScopeFunctionName the function-expression name
      * @param bodyScopeEnteredLocalIndex the slot set to true on entering the body
-     * @see #getParameterScopeFunctionName()
+     * @see #getParameterScopeFunctionNames(StackFrame)
      */
-    public void setParameterScopeFunctionName(String parameterScopeFunctionName, int bodyScopeEnteredLocalIndex) {
+    public void setOwnParameterScopeFunctionName(String parameterScopeFunctionName, int bodyScopeEnteredLocalIndex) {
         this.parameterScopeFunctionName = parameterScopeFunctionName;
         this.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        updateOwnParameterScopeFunctionNames();
     }
 
     public void setSelfLocalIndex(int selfLocalIndex) {
@@ -2210,6 +2276,30 @@ public final class JSBytecodeFunction extends JSFunction {
     @Override
     public JSValueType type() {
         return JSValueType.FUNCTION;
+    }
+
+    /**
+     * Recompute the set that includes this function's own name.
+     * <p>
+     * There are only two answers a frame can get, and both are known once the function is built, so
+     * they are built once here rather than assembled on every direct eval.
+     */
+    private void updateOwnParameterScopeFunctionNames() {
+        if (parameterScopeFunctionName == null) {
+            ownParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+            return;
+        }
+        if (inheritedParameterScopeFunctionNames.isEmpty()) {
+            ownParameterScopeFunctionNames = Set.of(parameterScopeFunctionName);
+            return;
+        }
+        if (inheritedParameterScopeFunctionNames.contains(parameterScopeFunctionName)) {
+            ownParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+            return;
+        }
+        Set<String> names = new HashSet<>(inheritedParameterScopeFunctionNames);
+        names.add(parameterScopeFunctionName);
+        ownParameterScopeFunctionNames = Collections.unmodifiableSet(names);
     }
 
     private static final class AsyncGeneratorReturnSignal extends JSObject {

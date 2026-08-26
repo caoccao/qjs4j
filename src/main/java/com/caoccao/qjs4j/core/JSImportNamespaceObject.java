@@ -206,6 +206,16 @@ public final class JSImportNamespaceObject extends JSObject {
         return super.hasOwnProperty(key);
     }
 
+    /**
+     * Whether this namespace declares an export name.
+     *
+     * @param exportName the name
+     * @return true when the name is one of this module's exports
+     */
+    public boolean hasExportName(String exportName) {
+        return exportName != null && exportNames.contains(exportName);
+    }
+
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
         return super.hasOwnProperty(key);

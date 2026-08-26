@@ -52,6 +52,10 @@ import java.util.regex.Pattern;
  * from the others (separate globals, separate module namespaces).
  */
 public final class JSContext implements AutoCloseable {
+    /**
+     * Sentinel origin for an export name two different {@code export *} targets provide.
+     */
+    private static final String AMBIGUOUS_LINKED_EXPORT = "\u0000ambiguous";
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
     private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
             Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
@@ -67,6 +71,8 @@ public final class JSContext implements AutoCloseable {
             Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
             Pattern.compile("(?m)^\\s*export\\s");
+    private static final Pattern MODULE_IMPORT_ATTRIBUTES_PATTERN =
+            Pattern.compile("\\bwith\\s*\\{");
     private static final Pattern MODULE_NAMESPACE_IMPORT_PATTERN =
             Pattern.compile("(?m)^\\s*import\\s*(?:(defer)\\s+)?\\*\\s*as\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\3(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_SIDE_EFFECT_IMPORT_PATTERN =
@@ -79,6 +85,11 @@ public final class JSContext implements AutoCloseable {
             Pattern.compile("(?m)^\\s*await\\b");
     private static final Pattern MODULE_WITH_CLAUSE_PATTERN =
             Pattern.compile("with\\s*\\{([^}]*)\\}");
+    /**
+     * Sentinel origin for an export the link pass cannot decide about, because a module it would
+     * have to read is not one this pass can read. Evaluation still decides those.
+     */
+    private static final String UNKNOWN_LINKED_EXPORT = "\u0000unknown";
     // Call stack management
     private final Deque<JSStackFrame> callStack;
     private final Map<String, JSDynamicImportModule> dynamicImportModuleCache;
@@ -426,10 +437,12 @@ public final class JSContext implements AutoCloseable {
 
     private void appendDynamicImportExportAssignments(
             StringBuilder transformedSourceBuilder,
+            String generatedNamePrefix,
             String exportBindingName,
             List<JSDynamicImportModule.LocalExportBinding> localExportBindings,
             Set<String> importedBindingNames) {
-        transformedSourceBuilder.append("const __qjs4jModuleExports = ")
+        String moduleExportsName = generatedNamePrefix + "ModuleExports";
+        transformedSourceBuilder.append("const ").append(moduleExportsName).append(" = ")
                 .append(exportBindingName)
                 .append(";\n");
         for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
@@ -440,7 +453,7 @@ public final class JSContext implements AutoCloseable {
                     localExportBinding.localName(),
                     "local binding of export '" + localExportBinding.exportedName() + "'");
             // Exports are always live bindings, including re-exported imports.
-            transformedSourceBuilder.append("Object.defineProperty(__qjs4jModuleExports, \"")
+            transformedSourceBuilder.append("Object.defineProperty(").append(moduleExportsName).append(", \"")
                     .append(escapedName)
                     .append("\", { enumerable: true, configurable: false, get() { return ")
                     .append(localName)
@@ -740,6 +753,58 @@ public final class JSContext implements AutoCloseable {
         moduleRecord.asyncEvaluationPromise().addReactions(
                 new JSPromise.ReactionRecord(onFulfill, this, null, null),
                 new JSPromise.ReactionRecord(onReject, this, null, null));
+    }
+
+    /**
+     * Check one module's named imports and indirect exports, then those of everything it reaches.
+     *
+     * @param moduleRecord the module being linked
+     * @param linkRecords  the modules parsed so far, by resolved specifier
+     * @param visiting     the specifiers already being linked, so a cycle terminates
+     */
+    private void checkModuleLinks(
+            JSDynamicImportModule moduleRecord,
+            Map<String, JSDynamicImportModule> linkRecords,
+            Set<String> visiting) {
+        String importerSpecifier = moduleRecord.resolvedSpecifier();
+        String scanSourceCode = maskModuleComments(moduleRecord.rawSource());
+        Matcher bindingMatcher = MODULE_BINDING_IMPORT_PATTERN.matcher(scanSourceCode);
+        while (bindingMatcher.find()) {
+            String importClause = bindingMatcher.group(1);
+            String specifier = bindingMatcher.group(3);
+            if (hasImportAttributes(bindingMatcher.group(0))) {
+                // `with { type: 'text' }` and friends name a synthetic module whose exports are
+                // manufactured by the host, not read out of JavaScript source. This pass does not
+                // model those, and reading the payload as a module would be exactly the mistake
+                // the text-import path used to make.
+                continue;
+            }
+            JSDynamicImportModule targetRecord =
+                    linkModule(specifier, importerSpecifier, linkRecords, visiting);
+            if (targetRecord == null) {
+                continue;
+            }
+            // A namespace import asks for no particular name, but linking the module it names is
+            // still what surfaces that module's own unresolvable imports and indirect exports.
+            for (String importedName : namedImportsOfClause(importClause)) {
+                requireLinkedExportResolves(targetRecord, importedName, linkRecords);
+            }
+        }
+        // `export { a } from './x.js'` asks './x.js' for `a` exactly as an import does, and fails
+        // the same way when nothing provides it.
+        for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
+            // `export * as ns from` is recorded as a re-export of the pseudo-name "*namespace*",
+            // which asks the target for its whole namespace rather than for a name it exports.
+            if (reExportBinding.starExport()
+                    || "*namespace*".equals(reExportBinding.importedName())) {
+                continue;
+            }
+            JSDynamicImportModule targetRecord = linkModule(
+                    reExportBinding.sourceSpecifier(), importerSpecifier, linkRecords, visiting);
+            if (targetRecord != null) {
+                requireLinkedExportResolves(targetRecord, reExportBinding.importedName(), linkRecords);
+            }
+        }
     }
 
     /**
@@ -1582,8 +1647,12 @@ public final class JSContext implements AutoCloseable {
         return jsWeakSet;
     }
 
-    private String createModuleExportBindingName(String resolvedSpecifier) {
-        return "__qjs4jDynamicImportExports$" + Math.abs(resolvedSpecifier.hashCode()) + "$"
+    private String createModuleExportBindingName(String generatedNamePrefix, String resolvedSpecifier) {
+        // Unsigned, because Math.abs(Integer.MIN_VALUE) is still Integer.MIN_VALUE: a specifier
+        // whose hash landed there produced an identifier containing a minus sign, and a valid
+        // module then failed to evaluate because of what its file was called.
+        return generatedNamePrefix + "DynamicImportExports$"
+                + Integer.toUnsignedString(resolvedSpecifier.hashCode()) + "$"
                 + dynamicImportModuleCache.size();
     }
 
@@ -1818,6 +1887,10 @@ public final class JSContext implements AutoCloseable {
                 // downstream classifies module source by line. The compile above has already
                 // accepted the source as written, so the split cannot silently repair it.
                 code = normalizeModuleDeclarationLines(code, false);
+                // Link before evaluating: a name this graph imports and nothing exports is a
+                // failure of the whole graph, and must be raised before any of it runs. See
+                // requireModuleGraphLinks.
+                requireModuleGraphLinks(code, filename);
             }
             boolean skipEvaluatedDynamicImportModule = false;
             boolean shouldTrackDynamicImportModule = isModule
@@ -3129,6 +3202,35 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * A prefix for this module's generated bindings that the module's own source does not use.
+     * <p>
+     * The transformer declares its bookkeeping bindings in the module's own scope, where they are
+     * ordinary, writable, observable names. {@code __qjs4jDefaultExport$0} is a legal identifier, so
+     * a module that happened to declare it had its value replaced by the transformer's — silently,
+     * and only for that one name. Choosing a prefix the source does not contain keeps the generated
+     * names out of the author's way whatever the author writes.
+     * <p>
+     * This is containment, not a fix: the generated bindings are still in the module's scope and
+     * still observable. Only real module environments remove them.
+     *
+     * @param sourceCode the module source the generated bindings will sit beside
+     * @return a prefix that does not occur in the source
+     */
+    private String generatedModuleNamePrefix(String sourceCode) {
+        String prefix = "__qjs4j";
+        if (sourceCode == null || !sourceCode.contains(prefix)) {
+            return prefix;
+        }
+        for (int salt = 0; salt < Integer.MAX_VALUE; salt++) {
+            String candidate = "__qjs4j" + salt + "_";
+            if (!sourceCode.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return prefix;
+    }
+
+    /**
      * Get the AsyncFunction constructor (internal use only).
      * Used for setting up prototype chains for async functions.
      */
@@ -3651,6 +3753,17 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Whether an import declaration carries a {@code with \{ ... \}} attribute clause.
+     *
+     * @param importDeclaration the matched declaration text
+     * @return true when attributes are present
+     */
+    private boolean hasImportAttributes(String importDeclaration) {
+        return importDeclaration != null
+                && MODULE_IMPORT_ATTRIBUTES_PATTERN.matcher(importDeclaration).find();
+    }
+
+    /**
      * Whether any module body failed, rather than the graph failing to link.
      * <p>
      * A module graph can fail in two quite different ways that carry the same error: an import that
@@ -3836,6 +3949,30 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Whether an expression's brackets, braces and parentheses all close.
+     * <p>
+     * Comments, strings and templates are masked first, so a delimiter inside one of them does not
+     * count. This decides only whether a default-export expression has run past the end of its
+     * line; it is not a parser, and cannot be one at this layer.
+     *
+     * @param expressionText the text scanned so far
+     * @return true when nothing is left open
+     */
+    private boolean isBalancedExpressionText(String expressionText) {
+        String maskedExpressionText = maskModuleComments(expressionText);
+        int depth = 0;
+        for (int index = 0; index < maskedExpressionText.length(); index++) {
+            switch (maskedExpressionText.charAt(index)) {
+                case '(', '[', '{' -> depth++;
+                case ')', ']', '}' -> depth--;
+                default -> {
+                }
+            }
+        }
+        return depth <= 0;
+    }
+
+    /**
      * Whether {@link #close()} has been called on this context.
      *
      * @return true when the context is closed
@@ -3937,6 +4074,64 @@ public final class JSContext implements AutoCloseable {
         return waitable;
     }
 
+    /**
+     * Parse one module for linking, without evaluating it.
+     *
+     * @param specifier   the specifier as written
+     * @param filename    the importing module's name
+     * @param linkRecords the modules parsed so far, by resolved specifier
+     * @param visiting    the specifiers already being linked, so a cycle terminates
+     * @return the parsed record, or null when the specifier is not a JavaScript module this pass
+     * can read
+     */
+    private JSDynamicImportModule linkModule(
+            String specifier,
+            String filename,
+            Map<String, JSDynamicImportModule> linkRecords,
+            Set<String> visiting) {
+        String resolvedSpecifier;
+        try {
+            resolvedSpecifier = resolveDynamicImportSpecifier(specifier, filename, specifier);
+        } catch (JSException unresolvable) {
+            // Not this pass's error to report: evaluation raises it, with its own message.
+            clearPendingException();
+            return null;
+        }
+        if (visiting.contains(resolvedSpecifier)) {
+            // A cycle, and the module on the other side of it is only half linked. ECMAScript
+            // resolves exports across a cycle with rules this scan cannot reproduce, so this pass
+            // declines to judge rather than guess — evaluation still reports whatever is wrong.
+            return null;
+        }
+        JSDynamicImportModule existingRecord = linkRecords.get(resolvedSpecifier);
+        if (existingRecord != null) {
+            return existingRecord;
+        }
+        visiting.add(resolvedSpecifier);
+        try {
+            if (resolvedSpecifier.endsWith(".json")) {
+                return null;
+            }
+            String dependencySource;
+            try {
+                dependencySource = Files.readString(Path.of(resolvedSpecifier));
+            } catch (IOException | RuntimeException unreadable) {
+                // Again, evaluation reports this — as a TypeError naming the module.
+                return null;
+            }
+            JSDynamicImportModule linkRecord =
+                    new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
+            linkRecord.setStatus(JSDynamicImportModule.Status.LOADING);
+            linkRecord.setRawSource(normalizeModuleDeclarationLines(dependencySource));
+            parseDynamicImportModuleSource(linkRecord);
+            linkRecords.put(resolvedSpecifier, linkRecord);
+            checkModuleLinks(linkRecord, linkRecords, visiting);
+            return linkRecord;
+        } finally {
+            visiting.remove(resolvedSpecifier);
+        }
+    }
+
     public JSObject loadDynamicImportModule(String specifier, String referrerFilename) {
         return loadDynamicImportModule(specifier, referrerFilename, null);
     }
@@ -4021,8 +4216,12 @@ public final class JSContext implements AutoCloseable {
                 String importType = importAttributes != null ? importAttributes.get("type") : null;
                 // Handle type: 'text' import attribute
                 if ("text".equals(importType)) {
+                    // The payload is data, not source. Putting it through the module normaliser
+                    // meant a text file whose bytes happened to look like a declaration was
+                    // tokenised and compiled as JavaScript, so `export {}; this is arbitrary text`
+                    // was a SyntaxError instead of a string.
                     String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                    moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
+                    moduleRecord.setRawSource(sourceCode);
                     defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
                     moduleRecord.explicitExportNames().add("default");
                     moduleRecord.exportOrigins().put("default", resolvedSpecifier);
@@ -4254,8 +4453,9 @@ public final class JSContext implements AutoCloseable {
             String importType = importAttributes != null ? importAttributes.get("type") : null;
             // Handle type: 'text' import attribute
             if ("text".equals(importType)) {
+                // Data, not source — see the deferred path above.
                 String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
+                moduleRecord.setRawSource(sourceCode);
                 defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
                 moduleRecord.explicitExportNames().add("default");
                 moduleRecord.exportOrigins().put("default", resolvedSpecifier);
@@ -4572,6 +4772,50 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * The names a {@code { a, b as c }} import clause asks the exporting module for.
+     *
+     * @param importClause the clause between {@code import} and {@code from}
+     * @return the imported names
+     */
+    private List<String> namedImportsOfClause(String importClause) {
+        if (importClause == null) {
+            return List.of();
+        }
+        List<String> importedNames = new ArrayList<>();
+        // A default binding — the `d` of `import d from '...'` or `import d, { a } from '...'` —
+        // asks for the name `default` and fails to link exactly as any other name does.
+        String beforeBrace = importClause;
+        int firstBrace = importClause.indexOf('{');
+        if (firstBrace >= 0) {
+            beforeBrace = importClause.substring(0, firstBrace);
+        }
+        String defaultBinding = beforeBrace.replace(",", " ").trim();
+        if (!defaultBinding.isEmpty()
+                && !defaultBinding.startsWith("*")
+                && isValidIdentifierName(defaultBinding)) {
+            importedNames.add("default");
+        }
+        int braceStart = importClause.indexOf('{');
+        int braceEnd = importClause.lastIndexOf('}');
+        if (braceStart < 0 || braceEnd <= braceStart) {
+            return importedNames;
+        }
+        for (String entry : splitOnTopLevelCommas(importClause.substring(braceStart + 1, braceEnd))) {
+            String trimmedEntry = entry.trim();
+            if (trimmedEntry.isEmpty()) {
+                continue;
+            }
+            int asIndex = trimmedEntry.indexOf(" as ");
+            String importedName = asIndex < 0 ? trimmedEntry : trimmedEntry.substring(0, asIndex).trim();
+            // A string import name (`import { "a-b" as c }`) is not something this scan reads.
+            if (!importedName.isEmpty() && isValidIdentifierName(importedName)) {
+                importedNames.add(importedName);
+            }
+        }
+        return importedNames;
+    }
+
+    /**
      * Rewrite module source so that every top-level {@code import} and {@code export} declaration
      * occupies whole lines.
      * <p>
@@ -4711,6 +4955,8 @@ public final class JSContext implements AutoCloseable {
         // author happened to break lines.
         String sourceCode = normalizeModuleDeclarationLines(moduleRecord.rawSource());
         String scanSourceCode = maskModuleComments(sourceCode);
+        // Bookkeeping names the module's own source does not use — see generatedModuleNamePrefix.
+        String generatedNamePrefix = generatedModuleNamePrefix(sourceCode);
         // Which lines really begin a declaration, decided by the lexer rather than by how a line
         // reads. Null when the source did not tokenise, in which case the string match stands.
         Set<Integer> moduleDeclarationLines = moduleDeclarationLineIndices(sourceCode);
@@ -4807,7 +5053,7 @@ public final class JSContext implements AutoCloseable {
                     }
                     boolean anonymousDefaultDeclaration = false;
                     if (declarationName == null || declarationName.isEmpty()) {
-                        String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
+                        String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
                         declarationName = defaultLocalName;
                         // Use var assignment instead of renaming the declaration.
                         // var hoists to the IIFE function scope, so the getter in the
@@ -4891,11 +5137,24 @@ public final class JSContext implements AutoCloseable {
                     }
                     localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, "default"));
                 } else {
+                    // An expression may run past the end of its line. The scan is line-oriented, so
+                    // it used to take the first line alone: `export default (` became
+                    // `let X = (0, ();`, and a valid module failed to parse at a position in
+                    // generated source. Keep taking lines while the delimiters are unbalanced.
                     String defaultExpression = defaultClause;
+                    while (!isBalancedExpressionText(defaultExpression) && lineIndex + 1 < lines.length) {
+                        lineIndex++;
+                        String continuationLine = lines[lineIndex];
+                        if (continuationLine.endsWith("\r")) {
+                            continuationLine = continuationLine.substring(0, continuationLine.length() - 1);
+                        }
+                        defaultExpression = defaultExpression + "\n" + continuationLine;
+                    }
+                    defaultExpression = defaultExpression.trim();
                     while (defaultExpression.endsWith(";")) {
                         defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
                     }
-                    String defaultLocalName = "__qjs4jDefaultExport$" + defaultExportIndex++;
+                    String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
                     transformedSourceBuilder.append("let ")
                             .append(defaultLocalName)
                             .append(" = (0, ")
@@ -5094,14 +5353,15 @@ public final class JSContext implements AutoCloseable {
         moduleRecord.setHasTLA(hasTLA);
 
         if (hasExportSyntax) {
-            String exportBindingName = createModuleExportBindingName(moduleRecord.resolvedSpecifier());
+            String exportBindingName = createModuleExportBindingName(
+                    generatedNamePrefix, moduleRecord.resolvedSpecifier());
             // Build the export assignment preamble separately — it goes at the START
             // of the IIFE body so self-import getters can read from the namespace
             // before user code executes. Getter functions are lazy (not called at
             // definition time), so TDZ for const/class locals is not violated.
             StringBuilder exportPreamble = new StringBuilder();
             appendDynamicImportExportAssignments(
-                    exportPreamble, exportBindingName,
+                    exportPreamble, generatedNamePrefix, exportBindingName,
                     localExportBindings, importedBindingNames);
             if (!defaultExportNameFixups.isEmpty()) {
                 exportPreamble.append(defaultExportNameFixups);
@@ -5605,6 +5865,75 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * Require that a module being linked resolves an export name to exactly one binding.
+     *
+     * @param moduleRecord the exporting module
+     * @param exportName   the name asked for
+     * @param linkRecords  the modules parsed so far, by resolved specifier
+     */
+    private void requireLinkedExportResolves(
+            JSDynamicImportModule moduleRecord,
+            String exportName,
+            Map<String, JSDynamicImportModule> linkRecords) {
+        String origin = resolveLinkedExportOrigin(moduleRecord, exportName, linkRecords, new HashSet<>());
+        if (UNKNOWN_LINKED_EXPORT.equals(origin) || AMBIGUOUS_LINKED_EXPORT.equals(origin)) {
+            // Undecidable here. Two `export *` targets that provide a name are ambiguous only when
+            // they provide *different bindings*, and a scan that knows modules rather than bindings
+            // cannot tell that from two routes to the same one — `export * as foo from './m.js'` in
+            // one and `import * as foo from './m.js'; export { foo }` in the other name a single
+            // namespace, which the spec calls unambiguous. Evaluation still reports the real ones.
+            return;
+        }
+        if (origin == null) {
+            throw new JSException(throwSyntaxError(
+                    "The requested module does not provide an export named '" + exportName + "'"));
+        }
+    }
+
+    /**
+     * Load and parse every module the graph reaches, and check every name it imports, before any
+     * module body is evaluated.
+     * <p>
+     * ECMAScript links a whole module graph and only then evaluates it. This engine loads a
+     * dependency and evaluates it in the same step, so an import naming an export nothing provides
+     * was discovered <em>after</em> the module it imports from had already run — externally visible
+     * side effects and all — for a graph that must never have begun evaluating.
+     * <p>
+     * This pass restores the ordering for the failure that is observable: it reads and parses the
+     * graph, resolves each named import against what the exporting module actually provides, and
+     * raises the same {@code SyntaxError} the later path would raise, before anything runs. It uses
+     * records of its own rather than the module cache, so the evaluation that follows is completely
+     * unaffected — the cost is parsing each module's source twice, and the only behavioural change
+     * is that a link failure now happens at link time.
+     * <p>
+     * It is containment, not the fix. Loading, linking and evaluating are still one operation for
+     * everything else: a dependency that <em>throws</em> still does so before the rest of the graph
+     * is linked, and only real module records with separate stages resolve that.
+     *
+     * @param sourceCode the entry module's source
+     * @param filename   the entry module's name, used to resolve its specifiers
+     */
+    private void requireModuleGraphLinks(String sourceCode, String filename) {
+        String rootSpecifier;
+        try {
+            rootSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
+        } catch (JSException unresolvable) {
+            clearPendingException();
+            rootSpecifier = normalizeModuleSpecifier(filename);
+        }
+        Map<String, JSDynamicImportModule> linkRecords = new HashMap<>();
+        JSDynamicImportModule rootRecord =
+                new JSDynamicImportModule(rootSpecifier, createModuleNamespaceObject());
+        rootRecord.setStatus(JSDynamicImportModule.Status.LOADING);
+        rootRecord.setRawSource(sourceCode);
+        parseDynamicImportModuleSource(rootRecord);
+        linkRecords.put(rootSpecifier, rootRecord);
+        Set<String> visiting = new HashSet<>();
+        visiting.add(rootSpecifier);
+        checkModuleLinks(rootRecord, linkRecords, visiting);
+    }
+
+    /**
      * Require that module source is valid <em>as written</em>, before it is rewritten.
      * <p>
      * The grammar is the only thing that knows where a statement really ends: whether a brace closes
@@ -5896,6 +6225,75 @@ public final class JSContext implements AutoCloseable {
                 exportOrigins.put(reExport.exportedName(), resolvedOrigin);
             }
         }
+    }
+
+    /**
+     * Where a module being linked gets an export name from, following {@code export * from}.
+     * <p>
+     * ECMAScript makes a name ambiguous when two different {@code export *} targets provide it, and
+     * ambiguity is only an error when something asks for the name — which is why this answers with
+     * an origin rather than a boolean.
+     *
+     * @param moduleRecord the exporting module
+     * @param exportName   the name the importer asked for
+     * @param linkRecords  the modules parsed so far, by resolved specifier
+     * @param visited      the modules already consulted, so a cycle terminates
+     * @return the specifier the binding comes from, {@link #AMBIGUOUS_LINKED_EXPORT}, or null when
+     * nothing provides it
+     */
+    private String resolveLinkedExportOrigin(
+            JSDynamicImportModule moduleRecord,
+            String exportName,
+            Map<String, JSDynamicImportModule> linkRecords,
+            Set<String> visited) {
+        if (!visited.add(moduleRecord.resolvedSpecifier())) {
+            return null;
+        }
+        // A module's own export shadows anything a star target of the same name would provide.
+        // Re-export bindings count: the names they introduce are only merged into the export set
+        // when the module is evaluated, and this pass runs before that.
+        if (moduleRecord.explicitExportNames().contains(exportName)
+                || moduleRecord.namespace().hasExportName(exportName)) {
+            return moduleRecord.resolvedSpecifier();
+        }
+        for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
+            if (!reExportBinding.starExport() && exportName.equals(reExportBinding.exportedName())) {
+                return moduleRecord.resolvedSpecifier();
+            }
+        }
+        // `export *` never re-exports `default`.
+        if ("default".equals(exportName)) {
+            return null;
+        }
+        String resolvedOrigin = null;
+        for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
+            if (!reExportBinding.starExport()) {
+                continue;
+            }
+            JSDynamicImportModule starTarget = linkModule(
+                    reExportBinding.sourceSpecifier(),
+                    moduleRecord.resolvedSpecifier(),
+                    linkRecords,
+                    new HashSet<>());
+            if (starTarget == null) {
+                // A star target this pass cannot read may still provide the name at evaluation
+                // time, so an unreadable one is not evidence either way.
+                return UNKNOWN_LINKED_EXPORT;
+            }
+            String starOrigin = resolveLinkedExportOrigin(starTarget, exportName, linkRecords, visited);
+            if (starOrigin == null) {
+                continue;
+            }
+            if (UNKNOWN_LINKED_EXPORT.equals(starOrigin) || AMBIGUOUS_LINKED_EXPORT.equals(starOrigin)) {
+                return starOrigin;
+            }
+            if (resolvedOrigin == null) {
+                resolvedOrigin = starOrigin;
+            } else if (!resolvedOrigin.equals(starOrigin)) {
+                return AMBIGUOUS_LINKED_EXPORT;
+            }
+        }
+        return resolvedOrigin;
     }
 
     private void restoreEvalOverlayFrame(EvalOverlayFrame evalOverlayFrame) {

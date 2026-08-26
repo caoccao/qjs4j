@@ -95,6 +95,19 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
+    public void testALimitedCeilingIsStillTheCeilingNearTheRangeOfALong() {
+        // The two guards are independent: the configured limit still applies when it is far below
+        // the range of a long.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
+        Object owner = new Object();
+        assertThat(accounting.reserve(owner, Long.MAX_VALUE)).isNull();
+        assertThat(accounting.getReservedBytes()).isZero();
+        assertThat(accounting.reserve(owner, 1024)).isNotNull();
+        assertThat(accounting.getReservedBytes()).isEqualTo(1024);
+        assertThat(owner).isNotNull();
+    }
+
+    @Test
     public void testAResizeThatFailsToAllocateGivesTheGrowthBackWhateverTheHeapIs() {
         // The growth is charged before the copy, so a copy that fails has to hand it back. Driven
         // by an allocator that fails on demand, so the test does not depend on the build's -Xmx.
@@ -256,6 +269,21 @@ public class JSMemoryAccountingTest extends BaseTest {
             buffer.detach();
             assertThat(runtime.getMemoryAccounting().getReservedBytes()).isZero();
         }
+    }
+
+    @Test
+    public void testGrowingPastTheRangeOfALongIsRefused() {
+        JSMemoryAccounting accounting = new JSMemoryAccounting(JSMemoryAccounting.UNLIMITED);
+        Object owner = new Object();
+        JSMemoryAccounting.Reservation reservation = accounting.reserve(owner, Long.MAX_VALUE - 8);
+        assertThat(reservation).isNotNull();
+        assertThat(reservation.grow(8)).isTrue();
+        assertThat(reservation.grow(1))
+                .as("growth is charged through the same checked counter")
+                .isFalse();
+        assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
+        assertThat(reservation.bytes()).isEqualTo(Long.MAX_VALUE);
+        assertThat(owner).as("the owner stays reachable so nothing reclaims it mid-test").isNotNull();
     }
 
     @Test
@@ -455,5 +483,30 @@ public class JSMemoryAccountingTest extends BaseTest {
             assertThat(runtime.getMemoryAccounting().wouldExceedLimit(Long.MAX_VALUE)).isFalse();
             assertThat(evalToString(runtime, "new ArrayBuffer(1048576).byteLength")).isEqualTo("1048576");
         }
+    }
+
+    @Test
+    public void testUnlimitedModeStillRefusesAReservationThatWouldOverflow() {
+        // "No limit" is not "no arithmetic". Unlimited mode added without checking, so a total near
+        // Long.MAX_VALUE wrapped to a negative byte count — a number the contract says cannot
+        // happen, and one the release path then worked from.
+        JSMemoryAccounting accounting = new JSMemoryAccounting(JSMemoryAccounting.UNLIMITED);
+        Object first = new Object();
+        Object second = new Object();
+        assertThat(accounting.reserve(first, Long.MAX_VALUE)).isNotNull();
+        assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
+
+        assertThat(accounting.reserve(second, 1))
+                .as("one more byte does not fit in a long")
+                .isNull();
+        assertThat(accounting.getReservedBytes())
+                .as("the refused reservation charged nothing")
+                .isEqualTo(Long.MAX_VALUE);
+        assertThat(accounting.reserve(second, 0))
+                .as("nothing is still nothing")
+                .isNotNull();
+        assertThat(accounting.getReservedBytes()).isEqualTo(Long.MAX_VALUE);
+        assertThat(first).as("owners stay reachable so nothing reclaims them mid-test").isNotNull();
+        assertThat(second).isNotNull();
     }
 }

@@ -29,6 +29,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The runner used to report success whatever happened: {@code main} treated only a thrown Java
@@ -71,7 +72,6 @@ public class Test262RunnerOutcomeTest {
      *
      * @return the source
      */
-
     private static String slowTestSource() {
         return "/*---\nflags: [raw]\n---*/\n"
                 + "var total = 0;\n"
@@ -191,7 +191,9 @@ public class Test262RunnerOutcomeTest {
                 "skipped.js",
                 "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
         Test262Runner.RunOutcome failing = new Test262Runner(root, configSkippingEverything()).run();
-        assertThat(failing.skipped()).isEqualTo(1);
+        // Two, not one: an ordinary file has a sloppy and a strict interpretation, and both were
+        // skipped. Counting the file instead meant the summary added files to interpretations.
+        assertThat(failing.skipped()).isEqualTo(2);
         assertThat(failing.executed()).isZero();
         assertThat(failing.discoveryError()).isNull();
         assertThat(failing.diagnostic()).contains("were skipped");
@@ -349,6 +351,33 @@ public class Test262RunnerOutcomeTest {
     }
 
     @Test
+    void testSkipsAreCountedByInterpretationLikeExecutions() throws IOException {
+        // An ordinary file has two interpretations and a noStrict or module file has one. Filtering
+        // by file and recording a single skip made the summary add files to interpretations, so
+        // neither the file count nor the interpretation count could be reconciled with it.
+        Path root = Files.createTempDirectory("qjs4j-test262-skip-units");
+        writeFakeTest262Root(root, "ordinary.js",
+                "/*---\nfeatures: [no-such-feature-at-all]\n---*/\nvar x = 1;\n");
+        Files.writeString(root.resolve("test").resolve("only-strict.js"),
+                "/*---\nfeatures: [no-such-feature-at-all]\nflags: [onlyStrict]\n---*/\nvar x = 1;\n");
+        Files.writeString(root.resolve("test").resolve("no-strict.js"),
+                "/*---\nfeatures: [no-such-feature-at-all]\nflags: [noStrict]\n---*/\nvar x = 1;\n");
+        Files.writeString(root.resolve("test").resolve("raw.js"),
+                "/*---\nfeatures: [no-such-feature-at-all]\nflags: [raw]\n---*/\nvar x = 1;\n");
+        Files.writeString(root.resolve("test").resolve("module.js"),
+                "/*---\nfeatures: [no-such-feature-at-all]\nflags: [module]\n---*/\nvar x = 1;\n");
+
+        Test262Runner.RunOutcome outcome = new Test262Runner(root, configSkippingEverything())
+                .setAllowEmptySelection(true)
+                .run();
+        assertThat(outcome.executed()).isZero();
+        // 2 for the ordinary file, 1 each for onlyStrict, noStrict, raw and module.
+        assertThat(outcome.skipped())
+                .as("one skip per interpretation the run would otherwise have executed")
+                .isEqualTo(6);
+    }
+
+    @Test
     void testStrictVariantIsExecutedForOrdinaryFiles() throws IOException {
         // No flags: two interpretations. The source is only an error under a strict prologue, so
         // one variant passes and one fails — proving both ran.
@@ -365,5 +394,46 @@ public class Test262RunnerOutcomeTest {
                 new Test262Runner.RunOutcome(0, 1, 10, 0, false, 0, null, false);
         assertThat(outcome.isSuccessful()).isFalse();
         assertThat(outcome.exitCode()).isEqualTo(1);
+    }
+
+    @Test
+    void testUnknownArgumentsAreRejectedRatherThanSilentlySelectingTheFullSuite() throws IOException {
+        // Every unrecognised argument used to overwrite the mode and then fall through to the full
+        // default selection. A typo, a stray positional, or a focus argument appended after
+        // --quick therefore ran a much larger suite than the one asked for, with no diagnostic —
+        // and a mistyped --long-running ran no long-running test while still reporting success.
+        Path root = writeFakeTest262Root(
+                Files.createTempDirectory("qjs4j-test262-args"),
+                "ok.js",
+                "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
+        String rootPath = root.toString();
+
+        assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quik"}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown argument '--quik'")
+                .hasMessageContaining("Usage:");
+        assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quick", "language"}))
+                .as("a positional appended after a mode is not a mode")
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unknown argument 'language'");
+        assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--quick", "--language"}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("mutually exclusive");
+        assertThatThrownBy(() -> Test262Runner.runMain(new String[]{rootPath, "--single"}))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Missing value for --single");
+    }
+
+    @Test
+    void testValidArgumentOrderingsAreAccepted() throws IOException {
+        Path root = writeFakeTest262Root(
+                Files.createTempDirectory("qjs4j-test262-args-ok"),
+                "ok.js",
+                "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
+        String rootPath = root.toString();
+        // Exit status 0 means the selection ran and passed; the point is that none of these throw.
+        assertThat(Test262Runner.runMain(new String[]{rootPath})).isZero();
+        assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1"})).isZero();
+        assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1", "--single", "ok.js"})).isZero();
     }
 }

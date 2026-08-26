@@ -43,7 +43,18 @@ public class Test262Executor {
     static final String PHASE_PARSE = "parse";
     static final String PHASE_RESOLUTION = "resolution";
     static final String PHASE_RUNTIME = "runtime";
+    /**
+     * The one non-native type a negative test may require.
+     */
+    private static final String TEST262_ERROR = "Test262Error";
     private final long asyncTimeoutMs;
+    /**
+     * The harness's {@code Test262Error.prototype} for the test this thread is executing.
+     * <p>
+     * Thread-confined because one executor is shared by every worker in a run, so a field would be
+     * whichever test happened to write it last. See {@link #captureHarnessErrorPrototype(JSContext)}.
+     */
+    private final ThreadLocal<JSObject> harnessErrorPrototype = new ThreadLocal<>();
     private final HarnessLoader harnessLoader;
     private final long syncTimeoutMs;
 
@@ -59,6 +70,25 @@ public class Test262Executor {
         this.harnessLoader = harnessLoader;
         this.asyncTimeoutMs = asyncTimeoutMs;
         this.syncTimeoutMs = syncTimeoutMs;
+    }
+
+    /**
+     * Remember the harness's own {@code Test262Error.prototype}, before the test runs.
+     * <p>
+     * Captured by identity while the harness is the only thing that has executed, so a test that
+     * later replaces {@code Test262Error} or its {@code prototype} cannot make an unrelated object
+     * answer to the name.
+     *
+     * @param context the context whose harness has just been loaded
+     */
+    private void captureHarnessErrorPrototype(JSContext context) {
+        harnessErrorPrototype.remove();
+        if (context.getGlobalObject().get(PropertyKey.fromString(TEST262_ERROR))
+                instanceof JSObject harnessConstructor
+                && harnessConstructor.get(PropertyKey.fromString("prototype"))
+                instanceof JSObject harnessPrototype) {
+            harnessErrorPrototype.set(harnessPrototype);
+        }
     }
 
     /**
@@ -135,23 +165,62 @@ public class Test262Executor {
     }
 
     /**
-     * The name of the constructor of a thrown JavaScript value.
+     * The type of a thrown JavaScript value, decided by what it <em>is</em>.
      * <p>
-     * Test262 matches a negative test's {@code type} against the constructor of the thrown value,
-     * so a thrown string, number or plain object never satisfies one however its text reads.
+     * Test262 matches a negative test's {@code type} against the constructor of the thrown value.
+     * Reading {@code thrown.constructor.name} to find that out asks the failing program to
+     * describe its own failure: every part of that expression is guest-writable, so
+     * {@code throw { constructor: { name: 'TypeError' } }} satisfied a test that requires a real
+     * {@code TypeError}, and the reads themselves could run an accessor or a Proxy trap while the
+     * runner was trying to classify a failure. It is the same class of false green as reading the
+     * error message, moved to a different mutable property.
+     * <p>
+     * Native errors are sealed Java classes, so their identity is not forgeable from script.
+     * {@code Test262Error} is defined by the harness, so it is identified by walking the internal
+     * prototype chain to the prototype object this run captured before the test could touch
+     * anything — again without consulting a property the test can write.
      *
      * @param thrown the thrown value
-     * @return the constructor name, or {@code null} when the value has none
+     * @return the type name, or {@code null} when the value is not one the suite can require
      */
     private String errorConstructorName(JSValue thrown) {
-        if (!(thrown instanceof JSObject thrownObject)) {
-            return null;
+        // Order matters: the sealed subclasses before the base class they extend.
+        if (thrown instanceof JSAggregateError) {
+            return "AggregateError";
         }
-        JSValue constructor = thrownObject.get(PropertyKey.CONSTRUCTOR);
-        if (constructor instanceof JSObject constructorObject
-                && constructorObject.get(PropertyKey.NAME) instanceof JSString name
-                && !name.value().isEmpty()) {
-            return name.value();
+        if (thrown instanceof JSEvalError) {
+            return "EvalError";
+        }
+        if (thrown instanceof JSRangeError) {
+            return "RangeError";
+        }
+        if (thrown instanceof JSReferenceError) {
+            return "ReferenceError";
+        }
+        if (thrown instanceof JSSuppressedError) {
+            return "SuppressedError";
+        }
+        if (thrown instanceof JSSyntaxError) {
+            return "SyntaxError";
+        }
+        if (thrown instanceof JSTypeError) {
+            return "TypeError";
+        }
+        if (thrown instanceof JSURIError) {
+            return "URIError";
+        }
+        if (thrown instanceof JSError) {
+            return "Error";
+        }
+        JSObject capturedHarnessErrorPrototype = harnessErrorPrototype.get();
+        if (capturedHarnessErrorPrototype != null && thrown instanceof JSObject thrownObject) {
+            for (JSObject prototype = thrownObject.getPrototype();
+                 prototype != null;
+                 prototype = prototype.getPrototype()) {
+                if (prototype == capturedHarnessErrorPrototype) {
+                    return TEST262_ERROR;
+                }
+            }
         }
         return null;
     }
@@ -216,6 +285,10 @@ public class Test262Executor {
                     }
                 }
 
+                // Taken while the harness is the only thing that has run, so a test cannot make
+                // an object of its own answer to Test262Error by reassigning the constructor.
+                captureHarnessErrorPrototype(context);
+
                 // Prepare code for this interpretation (strict prologue, module, or raw)
                 String code = prepareCode(test);
                 boolean isModule = test.getVariant() == Test262TestCase.Variant.MODULE;
@@ -241,6 +314,9 @@ public class Test262Executor {
         } catch (Exception e) {
             result = handleException(e, test);
         } finally {
+            // The captured prototype belongs to a context that is now closed, and this worker
+            // thread is about to be handed another test.
+            harnessErrorPrototype.remove();
             agentHost.close();
             for (JSRuntime realmRuntime : realmRuntimes) {
                 realmRuntime.close();
@@ -587,16 +663,6 @@ public class Test262Executor {
     }
 
     /**
-     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
-     *
-     * @param context  the context
-     * @param code     the prepared source
-     * @param isModule whether the source is module source
-     * @param test     the test case
-     * @return a failing result when the source did not compile, or {@code null} when it did
-     */
-
-    /**
      * Produce the source for this interpretation.
      * <p>
      * The strict variant gets a {@code "use strict";} prologue as {@code INTERPRETING.md}
@@ -677,6 +743,14 @@ public class Test262Executor {
                     + negative.getType() + " but the test body was evaluated, so the error was raised "
                     + "after the module graph had been linked");
         }
+        // Ideally: not one module body, anywhere in the graph. The engine links a graph's named,
+        // default and indirect exports before evaluating any of it, so for those a resolution
+        // failure now evaluates nothing — and JSModuleLinkOrderTest holds it to exactly that,
+        // through a host-visible counter. What it does not yet link is ambiguity, namespace
+        // construction and resolution across a cycle, and those still fail after a dependency has
+        // run. Demanding zero here would fail the suite's own tests for them, so the weaker
+        // question is asked instead: did the module the runner asked for begin evaluating, or did
+        // some body fail. See QJS4J-BRANCH-02 in the fix report for what remains.
         if (moduleGraphWasEvaluated(context)) {
             return TestResult.fail(test, "Expected a " + negative.getPhase() + "-phase "
                     + negative.getType() + " but a module body was evaluated, so the error was raised "
@@ -685,6 +759,15 @@ public class Test262Executor {
         return result;
     }
 
+    /**
+     * Compile the source and report a failure when compilation is <em>not</em> supposed to fail.
+     *
+     * @param context  the context
+     * @param code     the prepared source
+     * @param isModule whether the source is module source
+     * @param test     the test case
+     * @return a failing result when the source did not compile, or {@code null} when it did
+     */
     private TestResult requireSourceCompiles(JSContext context, String code, boolean isModule, Test262TestCase test) {
         Test262TestCase.NegativeInfo negative = test.getNegative();
         try {

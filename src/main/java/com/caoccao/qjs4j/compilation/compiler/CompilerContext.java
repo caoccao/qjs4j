@@ -106,19 +106,26 @@ final class CompilerContext {
     ObjectExpressionDestructuringAssignmentCompiler objectExpressionDestructuringAssignmentCompiler;
     ObjectPatternCompiler objectPatternCompiler;
     /**
-     * The named-function-expression binding the code being compiled resolves through its parameter
-     * environment, or null.
+     * The named-function-expression bindings the code being compiled resolves through enclosing
+     * parameter environments. Never null; empty when there are none.
      * <p>
-     * Set only while a default initializer of a function expression whose body redeclares its own
-     * name is being compiled, and inherited by every function nested inside that initializer —
+     * Set while a default initializer of a function expression whose body redeclares its own name
+     * is being compiled, and inherited by every function nested inside that initializer —
      * everything lexically there is in the parameter environment, whose outer environment holds the
-     * name. A closure created there must capture the binding by name, because a direct
+     * name. A closure created there must capture the bindings by name, because a direct
      * {@code eval} inside it resolves names at run time and the frame it runs on is the closure's,
      * not the one whose parameters were being initialized.
+     * <p>
+     * A set rather than one name, because the initializers nest: a named function expression inside
+     * another one's default initializer is inside <em>both</em> parameter environments, and a single
+     * slot could only remember the inner one. It held the inner one, so the outer binding silently
+     * disappeared from anything compiled there. A set rather than a list because membership is the
+     * only question asked of it.
      *
-     * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getParameterScopeFunctionName()
+     * @see com.caoccao.qjs4j.core.JSBytecodeFunction#getParameterScopeFunctionNames(
+     *com.caoccao.qjs4j.vm.StackFrame)
      */
-    String parameterScopeFunctionName;
+    Set<String> parameterScopeFunctionNames = Set.of();
     PatternCompiler patternCompiler;
     Runnable pendingPostSuperInitialization;
     boolean predeclareProgramLexicalsAsLocals;

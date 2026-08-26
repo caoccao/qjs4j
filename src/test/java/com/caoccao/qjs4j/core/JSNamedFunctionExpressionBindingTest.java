@@ -33,6 +33,116 @@ import org.junit.jupiter.api.Test;
  */
 public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
     @Test
+    void testABodyDeclarationStillShadowsInsideANestedFunction() {
+        // The chain must not reach past a nearer binding: once the inner body is running, its own
+        // declaration is what the name means.
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = 1) { var q = 5; return eval('q'); }) {
+                  var n;
+                  return String(a());
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedGeneratorInitializerSeesTheOuterBinding() {
+        assertStringWithJavet("""
+                var f = function* n(a = function q(b = eval('n')) { var q; return b; }) {
+                  var n;
+                  yield String(a() === f);
+                };
+                f().next().value;""");
+    }
+
+    @Test
+    void testANestedInitializerWithNoShadowStillSeesBoth() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = () => [eval('n'), eval('q')]) { return b; }) {
+                  var n;
+                  return a;
+                };
+                var a = f();
+                var v = a()();
+                String([v[0] === f, v[1] === a]);""");
+    }
+
+    @Test
+    void testANestedNamedFunctionExpressionReusingTheOuterNameShadowsIt() {
+        // The nearest binding wins, and the outer one of the same name is simply not visible.
+        assertStringWithJavet("""
+                var f = function n(a = function n(b = eval('n')) { var n; return b; }) {
+                  var n;
+                  return String(a() === a);
+                };
+                f();""");
+    }
+
+    @Test
+    void testANestedNamedFunctionExpressionReusingTheOuterNameWithoutABodyShadow() {
+        assertStringWithJavet("""
+                var f = function n(a = function n(b = eval('n')) { return b; }) {
+                  var n;
+                  return String(a() === a);
+                };
+                f();""");
+    }
+
+    @Test
+    void testAPlainFunctionClosureInsideNestedInitializersSeesBothBindings() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = function () { return [eval('n'), eval('q')]; }) {
+                  var q;
+                  return b;
+                }) {
+                  var n;
+                  return a;
+                };
+                var a = f();
+                var v = a()();
+                String([v[0] === f, v[1] === a]);""");
+    }
+
+    @Test
+    void testAnInnerInitializerCanReadTheOuterBindingDirectly() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = eval('n')) { var q; return b; }) {
+                  var n;
+                  return String(a() === f);
+                };
+                f();""");
+    }
+
+    @Test
+    void testAnInnerInitializerSeesItsOwnBindingByTypeof() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = eval('typeof q')) { var q; return b; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testAssigningToAnInnerNestedBindingThroughEvalIsRefused() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = (eval('q = 1'), eval('typeof q'))) { var q; return b; }) {
+                  var n;
+                  return a();
+                };
+                f();""");
+    }
+
+    @Test
+    void testAssigningToAnOuterNestedBindingThroughEvalIsRefused() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = (eval('n = 1'), eval('n'))) { var q; return b; }) {
+                  var n;
+                  return String(a() === f);
+                };
+                f();""");
+    }
+
+    @Test
     void testAssigningToTheSelfNameThroughDirectEvalIsRefused() {
         // The binding is immutable, so a sloppy assignment is ignored and a strict one throws. The
         // shadowing body binding must not receive the value either.
@@ -340,6 +450,44 @@ public class JSNamedFunctionExpressionBindingTest extends BaseJavetTest {
                   return [a === f, n].join(',');
                 };
                 f();""");
+    }
+
+    @Test
+    void testThreeNestedNamedFunctionExpressionsKeepAllThreeBindings() {
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = function r(c = () => [eval('n'), eval('q'), eval('r')]) {
+                  var r;
+                  return c;
+                }) {
+                  var q;
+                  return b;
+                }) {
+                  var n;
+                  return a;
+                };
+                var a = f();
+                var b = a();
+                var c = b();
+                var v = c();
+                String([v[0] === f, v[1] === a, v[2] === b]);""");
+    }
+
+    @Test
+    void testTwoNestedNamedFunctionExpressionsKeepBothBindings() {
+        // The review's reproduction. One slot could only remember the innermost name, so the outer
+        // function-expression binding disappeared from everything compiled inside the inner
+        // initializer — a closure there saw `undefined`, or a global of the same name.
+        assertStringWithJavet("""
+                var f = function n(a = function q(b = () => [eval('n'), eval('q')]) {
+                  var q;
+                  return b;
+                }) {
+                  var n;
+                  return [a(), a];
+                };
+                var r = f();
+                var v = r[0]();
+                String([v[0] === f, v[1] === r[1]]);""");
     }
 
     @Test

@@ -60,7 +60,7 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
                 || compilerContext.inClassFieldInitializer;
         // Inherit class inner name so eval() inside nested arrows can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
-        String enclosingParameterScopeFunctionName =
+        Set<String> enclosingParameterScopeFunctionNames =
                 compilerContext.functionExpressionCompiler.inheritParameterScopeFunctionNameCapture(functionContext);
         // Arrow functions inherit arguments from enclosing non-arrow function.
         // If the parent is a regular function (not arrow, not global program), it has arguments binding.
@@ -243,11 +243,9 @@ final class ArrowFunctionExpressionCompiler extends AstNodeCompiler<ArrowFunctio
         );
         function.setHasParameterExpressions(hasNonSimpleParameters);
         function.setHasArgumentsParameterBinding(hasArgumentsParameterBinding);
-        if (enclosingParameterScopeFunctionName != null) {
-            // Created inside an enclosing default initializer, so the captured named-function
-            // -expression binding is in scope for this arrow's whole lifetime.
-            function.setParameterScopeFunctionName(enclosingParameterScopeFunctionName, -1);
-        }
+        // Created inside enclosing default initializers, so the captured named-function-expression
+        // bindings are in scope for this arrow's whole lifetime.
+        function.setInheritedParameterScopeFunctionNames(enclosingParameterScopeFunctionNames);
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)

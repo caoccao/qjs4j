@@ -93,13 +93,15 @@ public final class JSMemoryAccounting {
         // Reclaim before refusing: a limit that still counts blocks the collector has already taken
         // is not the limit the embedder configured.
         releaseCollectedReservations();
-        if (limit == UNLIMITED) {
-            reservedBytes.addAndGet(bytes);
-            return true;
-        }
         while (true) {
             long current = reservedBytes.get();
-            if (bytes > limit - current) {
+            // "No limit" is not "no arithmetic". Unlimited mode used plain signed addition, so a
+            // total already near Long.MAX_VALUE wrapped to a negative byte count — a number this
+            // class's contract says cannot happen, and one that later release arithmetic then
+            // worked from. The headroom is whichever of the configured ceiling and the range of a
+            // long comes first.
+            long headroom = limit == UNLIMITED ? Long.MAX_VALUE - current : limit - current;
+            if (bytes > headroom) {
                 return false;
             }
             if (reservedBytes.compareAndSet(current, current + bytes)) {
