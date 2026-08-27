@@ -42,6 +42,26 @@ public class Test262EnvironmentTest {
     @TempDir
     Path workingDirectory;
 
+    /**
+     * Run something with the revision check waived, exactly as {@code -Ptest262AllowAnyRevision}
+     * does, and put the property back afterwards.
+     *
+     * @param body what to run
+     */
+    private static void withRevisionCheckWaived(Runnable body) {
+        String previous = System.getProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY);
+        System.setProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY, "true");
+        try {
+            body.run();
+        } finally {
+            if (previous == null) {
+                System.clearProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY);
+            } else {
+                System.setProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY, previous);
+            }
+        }
+    }
+
     private Path gitDirectory() throws IOException {
         Path gitDirectory = workingDirectory.resolve(".git");
         Files.createDirectories(gitDirectory);
@@ -74,18 +94,21 @@ public class Test262EnvironmentTest {
     }
 
     @Test
-    public void testASuiteWithNoHistoryIsQualifiedRatherThanRefused() {
-        // A suite unpacked from an archive has no revision to read. That run cannot be reported as
-        // the pinned one, but it is still worth running, and saying so is not the same as the
-        // silent acceptance this replaced.
+    public void testASuiteWhoseRevisionCannotBeReadIsRefused() {
+        // A suite unpacked from an archive has no revision to read. It may well be the pinned one,
+        // but nothing here can say so — and the whole point of the check is that a green run means
+        // "the pinned suite passed". This was a warning, printed on standard error into a log
+        // nobody reads when the build is green, while the count it qualified went on being quoted
+        // as the pinned one. The override below is how a suite without history is run deliberately.
         List<Test262Environment.Diagnostic> diagnostics =
                 Test262Environment.check(workingDirectory, PINNED, "UTC");
 
         assertThat(diagnostics).hasSize(1);
-        assertThat(diagnostics.get(0).fatal()).isFalse();
+        assertThat(diagnostics.get(0).fatal()).isTrue();
         assertThat(diagnostics.get(0).message())
                 .contains("Cannot tell which revision")
-                .contains(PINNED);
+                .contains(PINNED)
+                .contains("-Ptest262AllowAnyRevision=true");
     }
 
     @Test
@@ -144,6 +167,42 @@ public class Test262EnvironmentTest {
     }
 
     @Test
+    public void testCheckoutRevisionFollowsALinkedWorktreeOnABranch() throws IOException {
+        // The shape the previous case did not have: a linked worktree whose HEAD is symbolic. Its
+        // HEAD is per-worktree and lives in .git/worktrees/<name>/, but its branches are not —
+        // those are in the repository's common directory, named by the commondir file beside that
+        // HEAD. Looking only beside HEAD resolved a detached worktree and gave up on this one,
+        // which is the ordinary shape of a worktree, so the run could not say what it was testing.
+        Path worktreeDirectory = workingDirectory.resolve("main/.git/worktrees/conformance");
+        Path commonDirectory = workingDirectory.resolve("main/.git");
+        write(workingDirectory.resolve(".git"), "gitdir: main/.git/worktrees/conformance\n");
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/heads/pinned\n");
+        write(worktreeDirectory.resolve("commondir"), "../..\n");
+        write(commonDirectory.resolve("refs/heads/pinned"), PINNED + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory))
+                .as("a loose reference in the common directory")
+                .isEqualTo(PINNED);
+
+        // And when that repository has packed its references instead.
+        Files.delete(commonDirectory.resolve("refs/heads/pinned"));
+        write(commonDirectory.resolve("packed-refs"),
+                "# pack-refs with: peeled fully-peeled sorted\n" + PINNED + " refs/heads/pinned\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory))
+                .as("a packed reference in the common directory")
+                .isEqualTo(PINNED);
+
+        // Git writes commondir relative; an absolute one names the same directory.
+        write(worktreeDirectory.resolve("commondir"), commonDirectory + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory)).isEqualTo(PINNED);
+
+        // A per-worktree reference beside HEAD still wins over the common directory, which is what
+        // Git does: HEAD, and the bisect and rebase references, belong to this worktree alone.
+        write(worktreeDirectory.resolve("refs/heads/pinned"), "0123456789abcdef0123456789abcdef01234567\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory))
+                .isEqualTo("0123456789abcdef0123456789abcdef01234567");
+    }
+
+    @Test
     public void testCheckoutRevisionReadsADetachedHead() throws IOException {
         // What a pinned CI checkout looks like: HEAD holds the revision itself.
         write(gitDirectory().resolve("HEAD"), PINNED + "\n");
@@ -184,6 +243,36 @@ public class Test262EnvironmentTest {
     }
 
     @Test
+    public void testDescribeStatesTheRevisionAndZoneOfEveryRun() throws IOException {
+        // The successful log used to print the suite root and nothing else, so a count copied out
+        // of it — or a CI artifact downloaded once the workflow run had scrolled away — could not
+        // say which suite produced it. A count without a revision is not comparable with anything.
+        assertThat(Test262Environment.describe(workingDirectory, PINNED, "UTC").lines())
+                .as("a suite with no readable history says so rather than guessing")
+                .containsExactly(
+                        "Test262 revision: unknown (not the pinned " + PINNED + ")",
+                        "Test262 time zone: UTC");
+
+        write(gitDirectory().resolve("HEAD"), PINNED + "\n");
+        assertThat(Test262Environment.describe(workingDirectory, PINNED, "UTC").lines())
+                .containsExactly(
+                        "Test262 revision: " + PINNED + " (pinned)",
+                        "Test262 time zone: UTC");
+
+        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        assertThat(Test262Environment.describe(workingDirectory, PINNED, "Asia/Shanghai").lines())
+                .containsExactly(
+                        "Test262 revision: 0123456789abcdef0123456789abcdef01234567 (not the pinned "
+                                + PINNED + ")",
+                        "Test262 time zone: Asia/Shanghai");
+
+        assertThat(Test262Environment.describe(workingDirectory, null, "UTC").lines())
+                .containsExactly(
+                        "Test262 revision: 0123456789abcdef0123456789abcdef01234567 (nothing pinned)",
+                        "Test262 time zone: UTC");
+    }
+
+    @Test
     public void testPinnedRevisionIgnoresCommentsAndBlankLines() throws IOException {
         // The file is the one place the revision is written down, so it has to be able to say why.
         write(workingDirectory.resolve(Test262Environment.REVISION_FILE_NAME), """
@@ -198,6 +287,27 @@ public class Test262EnvironmentTest {
         assertThat(Test262Environment.pinnedRevision(workingDirectory)).isNull();
         write(workingDirectory.resolve(Test262Environment.REVISION_FILE_NAME), "# only a comment\n");
         assertThat(Test262Environment.pinnedRevision(workingDirectory)).isNull();
+    }
+
+    @Test
+    public void testWaivingTheRevisionCheckStillReportsTheRevision() throws IOException {
+        // The override exists for running against upstream tip on purpose, which is the case most
+        // in need of a revision in the log — and the one that used to report none, because the
+        // diagnostic path returns before reading one and the log printed only what it produced.
+        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        withRevisionCheckWaived(() -> {
+            assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC"))
+                    .as("the wrong revision is what was asked for, so there is nothing to report")
+                    .isEmpty();
+            assertThat(Test262Environment.describe(workingDirectory, PINNED, "UTC").lines())
+                    .containsExactly(
+                            "Test262 revision: 0123456789abcdef0123456789abcdef01234567"
+                                    + " (revision check waived, pinned " + PINNED + ")",
+                            "Test262 time zone: UTC");
+        });
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC"))
+                .as("and the waiver lasts no longer than it was asked for")
+                .hasSize(1);
     }
 
     @Test

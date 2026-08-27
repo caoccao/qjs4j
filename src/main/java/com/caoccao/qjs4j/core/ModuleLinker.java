@@ -61,6 +61,7 @@ final class ModuleLinker {
     static final LinkedBinding UNKNOWN_LINKED_EXPORT = new LinkedBinding("", "unknown");
     private final JSContext context;
     private final ModuleSourceTransformer transformer;
+
     ModuleLinker(JSContext context, ModuleSourceTransformer transformer) {
         this.context = context;
         this.transformer = transformer;

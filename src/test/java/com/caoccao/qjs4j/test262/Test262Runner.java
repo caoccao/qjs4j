@@ -101,18 +101,24 @@ public class Test262Runner {
     }
 
     /**
-     * Report what is wrong with the premises of this run, and say whether it should go ahead.
+     * State what this run is, report what is wrong with its premises, and say whether it should go
+     * ahead.
      * <p>
-     * A suite at the wrong revision is refused, because counts from another revision are not
-     * comparable with anything this repository records. Everything else is printed and the run
-     * continues: a suite exported without its history, or a host in a zone the pinned harness
-     * dislikes, still produces a useful answer — it just cannot be reported as the pinned one
-     * without saying so.
+     * The revision and the zone are printed whatever happens. A pass count means nothing without
+     * them, and a log is where a count outlives the machine that produced it — the CI artifact is
+     * this output and nothing else, so a summary copied out of it has to carry its own provenance.
+     * <p>
+     * A suite whose revision is not the pinned one, or cannot be read at all, is refused: counts
+     * from another revision are not comparable with anything this repository records, and a suite
+     * that cannot be identified cannot be said to be the pinned one. A host in a zone the pinned
+     * harness dislikes is only printed — it costs a handful of intl402 interpretations, not the
+     * meaning of the run.
      *
      * @param test262Root the suite root
      * @return true when the run should be refused
      */
     private static boolean reportEnvironment(Path test262Root) {
+        System.out.println(Test262Environment.describe(test262Root));
         boolean refused = false;
         for (Test262Environment.Diagnostic diagnostic : Test262Environment.check(test262Root)) {
             System.err.println((diagnostic.fatal() ? "Error: " : "Warning: ") + diagnostic.message());

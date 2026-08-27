@@ -66,7 +66,7 @@ public final class JSMemoryAccounting {
      * buffer is collected, and the buffer is otherwise the only thing holding it — so this set is
      * what keeps reclamation possible. It holds reservations, never buffers, so it pins nothing.
      */
-    private final Set<Reservation> outstandingReservations = ConcurrentHashMap.newKeySet();
+    private final Set<Reservation> outstandingReservations;
     private final AtomicLong reservedBytes = new AtomicLong();
 
     /**
@@ -75,7 +75,30 @@ public final class JSMemoryAccounting {
      * @param limit the maximum number of data-block bytes, or a non-positive value for no limit
      */
     JSMemoryAccounting(long limit) {
+        this(limit, ConcurrentHashMap.newKeySet());
+    }
+
+    /**
+     * Create accounting with the given ceiling and registry.
+     * <p>
+     * The registry is a parameter for one reason: {@link #reserve(Object, long)} charges the counter
+     * before the handle that owns the charge exists, and rolls the charge back if registering that
+     * handle throws. Nothing the ordinary registry — a {@code ConcurrentHashMap} key set — can do
+     * reaches that rollback, so the branch guarding the runtime's ceiling against a permanent leak
+     * could not be exercised at all, and would have shipped untested until a change made it
+     * reachable. A registry that throws on registration is how a test reaches it.
+     * <p>
+     * Package-private, and not on any public path: {@link JSRuntime} uses the constructor above, so
+     * a runtime always gets the concurrent set. It is typed rather than reflective so that changing
+     * this field's representation is a compilation error in the test rather than a runtime one.
+     *
+     * @param limit                   the maximum number of data-block bytes, or a non-positive value
+     *                                for no limit
+     * @param outstandingReservations where live reservations are held so they stay reclaimable
+     */
+    JSMemoryAccounting(long limit, Set<Reservation> outstandingReservations) {
         this.limit = Math.max(UNLIMITED, limit);
+        this.outstandingReservations = outstandingReservations;
     }
 
     /**

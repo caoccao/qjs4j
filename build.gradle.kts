@@ -186,9 +186,64 @@ tasks.register<Test>("performanceTest") {
     // anything twice — all but the first fail outright with "Another JMH instance might be
     // running". Benchmarks that did share a machine would be measuring the contention rather than
     // the engine, so this is what the task wants regardless.
+    //
+    // Setting it here is not by itself enough: the `withType<Test>` block below is configured
+    // second and its assignment wins, which is how a task documented as single-forked started
+    // twelve executors and measured the first benchmark iterations while the Octane workload had
+    // the same machine. That block now leaves this task's value alone, so this is the only place
+    // the number is decided and the outcome no longer depends on configuration order.
     maxParallelForks = 1
+    // No coverage agent. JaCoCo attaches to every Test task, and this one launches JMH, so the
+    // benchmark ran instrumented — which is not an equal handicap for both sides of the
+    // comparison it exists to make: the qjs4j half is Java the agent instruments, and the V8 half
+    // is native code it cannot, so the ratio was biased against qjs4j by the act of measuring it.
+    // Coverage of a benchmark is worth nothing anyway; the unit-test task is what feeds the gate.
+    configure<JacocoTaskExtension> {
+        isEnabled = false
+    }
     group = "verification"
     description = "Runs performance tests using JMH"
+    shouldRunAfter(tasks.test)
+    // Both guarantees above are about configuration that another block can silently overwrite, and
+    // both were being overwritten. Asserted here rather than trusted: `doFirst` runs after all
+    // configuration, so it sees the values the task is really about to run with, and says which one
+    // is wrong instead of leaving a green run whose measurements mean something else.
+    doFirst {
+        val performanceTest = this as Test
+        check(performanceTest.maxParallelForks == 1) {
+            "performanceTest must run in a single fork, because JMH takes a process-global lock " +
+                "and benchmarks sharing a machine measure the contention; it is configured for " +
+                "${performanceTest.maxParallelForks}. Something configured after the task's own " +
+                "block has overwritten maxParallelForks."
+        }
+        check(!performanceTest.extensions.getByType<JacocoTaskExtension>().isEnabled) {
+            "performanceTest must not run under the JaCoCo agent: it instruments the qjs4j half " +
+                "of every comparison benchmark and cannot instrument the native V8 half, so the " +
+                "measurements are biased by the act of taking them."
+        }
+    }
+}
+
+// The performance-tagged cases that assert an outcome rather than measure one.
+//
+// `performanceTest` is two different things under one tag: an end-to-end Octane v7 regression and
+// three Temporal hot-path cases, which assert a result and either pass or fail — and two JMH
+// wrappers, which report a number that only means something on a quiet machine. The first kind
+// belongs on a shared CI runner and the second does not, so a continuous-integration job that
+// wanted the regressions had to pay for a benchmark it could not trust, and consequently neither
+// ran: the Octane case is the regression for issue 7 and nothing gates it.
+//
+// This is the selection such a job runs. It is about eleven seconds; `performanceTest` is ninety,
+// almost all of it JMH.
+tasks.register<Test>("slowRegressionTest") {
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("performance & !benchmark")
+    }
+    exclude("**/jmh_generated/**")
+    group = "verification"
+    description = "Runs the slow functional regressions, without the JMH benchmarks"
     shouldRunAfter(tasks.test)
 }
 
@@ -437,11 +492,18 @@ tasks {
         // busy suite, reporting the same RangeError for a quite different reason. A larger stack
         // makes the engine's limit the one being observed.
         jvmArgs("-Xss8m")
-        val cpuCount = Runtime.getRuntime().availableProcessors()
-        maxParallelForks = maxOf(
-            1,
-            if (os.isMacOsX) cpuCount * 3 / 4 else cpuCount / 2
-        )
+        // Every Test task but the performance one. That task sets its own single fork and says why;
+        // this block is configured second, so an unconditional assignment here silently replaced it
+        // with a machine-dependent number — twelve executors on the reviewed machine, benchmarks
+        // overlapping each other, and a result that varied with the host's CPU count. Named rather
+        // than ordered so the two cannot be put back the wrong way round.
+        if (name != "performanceTest") {
+            val cpuCount = Runtime.getRuntime().availableProcessors()
+            maxParallelForks = maxOf(
+                1,
+                if (os.isMacOsX) cpuCount * 3 / 4 else cpuCount / 2
+            )
+        }
     }
 }
 

@@ -41,10 +41,16 @@ import java.util.Set;
  * repository measures itself against, and that the host has not silently made the run something
  * other than what it claims to be.
  * <p>
- * A wrong revision is a refusal, because a gate that follows a moving suite is not a gate — it
- * turned red once already when upstream added tests for features the engine has not implemented,
- * without a line of this repository changing. Everything else is a warning: a suite exported
- * without its history can still be run, it just cannot be said to be the pinned one.
+ * A revision that is not the pinned one is a refusal, because a gate that follows a moving suite is
+ * not a gate — it turned red once already when upstream added tests for features the engine has not
+ * implemented, without a line of this repository changing. A revision that cannot be read at all is
+ * the same refusal: a suite exported without its history may well be the pinned one, but nothing
+ * here can say so, and a gate that passes on a suite it cannot identify is not a gate either. Both
+ * are waived by {@code -Ptest262AllowAnyRevision=true}, which is the one explicit, reviewable way to
+ * run against something other than the pin.
+ * <p>
+ * The host's time zone is only a warning, because it costs a handful of intl402 interpretations
+ * rather than the meaning of the run.
  */
 final class Test262Environment {
     /**
@@ -132,11 +138,62 @@ final class Test262Environment {
         if (reference.isEmpty()) {
             return null;
         }
+        // Beside HEAD first, because a few references are per-worktree and live there; then the
+        // common directory, which is where a linked worktree's branches actually are. In an
+        // ordinary checkout the two are the same directory and this reads it once.
         String looseReference = readTrimmed(gitDirectory.resolve(reference));
         if (looseReference != null && !looseReference.isEmpty()) {
             return looseReference;
         }
-        return packedReference(gitDirectory, reference);
+        Path referenceDirectory = referenceDirectory(gitDirectory);
+        if (!referenceDirectory.equals(gitDirectory)) {
+            String commonReference = readTrimmed(referenceDirectory.resolve(reference));
+            if (commonReference != null && !commonReference.isEmpty()) {
+                return commonReference;
+            }
+        }
+        return packedReference(referenceDirectory, reference);
+    }
+
+    /**
+     * What this run is, in the two lines a pass count has to be quoted alongside.
+     * <p>
+     * Printed whatever happens, including when the revision check has been waived — that is the case
+     * most in need of a revision, and the diagnostic path deliberately does not read one there. A
+     * count without a suite revision is not comparable with anything, and the log is where a count
+     * outlives the machine that produced it.
+     *
+     * @param test262Root the suite root
+     * @return two lines: the suite revision and how it relates to the pin, then the time zone
+     */
+    static String describe(Path test262Root) {
+        return describe(test262Root, pinnedRevision(Paths.get("")), ZoneId.systemDefault().getId());
+    }
+
+    /**
+     * What this run is, against values supplied by the caller.
+     *
+     * @param test262Root       the suite root
+     * @param pinnedRevision    the revision this repository pins, or null when none is configured
+     * @param defaultTimeZoneId the identifier of the zone the run will read dates in
+     * @return two lines: the suite revision and how it relates to the pin, then the time zone
+     */
+    static String describe(Path test262Root, String pinnedRevision, String defaultTimeZoneId) {
+        String checkoutRevision = checkoutRevision(test262Root);
+        String qualification;
+        if (pinnedRevision == null || pinnedRevision.isEmpty()) {
+            qualification = "nothing pinned";
+        } else if (isAnyRevisionAllowed()) {
+            qualification = "revision check waived, pinned " + pinnedRevision;
+        } else if (checkoutRevision != null && checkoutRevision.equalsIgnoreCase(pinnedRevision)) {
+            qualification = "pinned";
+        } else {
+            qualification = "not the pinned " + pinnedRevision;
+        }
+        return "Test262 revision: " + (checkoutRevision == null ? "unknown" : checkoutRevision)
+                + " (" + qualification + ")"
+                + System.lineSeparator()
+                + "Test262 time zone: " + defaultTimeZoneId;
     }
 
     /**
@@ -243,6 +300,30 @@ final class Test262Environment {
     }
 
     /**
+     * The directory holding the references a checkout's {@code HEAD} can name.
+     * <p>
+     * A linked worktree keeps its own {@code HEAD} in {@code .git/worktrees/<name>/}, but not its
+     * branches: those are in the repository's common Git directory, named by the {@code commondir}
+     * file beside that {@code HEAD}. Looking only beside {@code HEAD} therefore resolved a detached
+     * worktree and gave up on a branch-based one — which is the ordinary shape of a worktree —
+     * leaving the run unable to say which revision it was testing.
+     *
+     * @param gitDirectory the directory holding {@code HEAD}
+     * @return the directory holding the references, which is {@code gitDirectory} itself unless this
+     * is a linked worktree
+     */
+    private static Path referenceDirectory(Path gitDirectory) {
+        String commonDirectory = readTrimmed(gitDirectory.resolve("commondir"));
+        if (commonDirectory == null || commonDirectory.isEmpty()) {
+            return gitDirectory;
+        }
+        Path resolved = Paths.get(commonDirectory);
+        return resolved.isAbsolute()
+                ? resolved.normalize()
+                : gitDirectory.resolve(resolved).normalize();
+    }
+
+    /**
      * Whether the suite on disk is the one this repository measures itself against.
      *
      * @param test262Root    the suite root
@@ -255,11 +336,18 @@ final class Test262Environment {
         }
         String checkoutRevision = checkoutRevision(test262Root);
         if (checkoutRevision == null) {
+            // A refusal, not a warning. A suite whose revision cannot be read may well be the
+            // pinned one, but nothing here can say so — and a run reported as green against a suite
+            // it cannot identify is exactly the claim this check exists to stop being made. The
+            // warning it used to be was printed on standard error, into a log nobody reads when the
+            // build is green, while the count it qualified went on being quoted as the pinned one.
             return new Diagnostic(
                     "Cannot tell which revision of test262 is at " + test262Root
                             + ", so this run cannot be compared with the recorded baseline. This"
-                            + " repository pins " + pinnedRevision + " in " + REVISION_FILE_NAME + ".",
-                    false);
+                            + " repository pins " + pinnedRevision + " in " + REVISION_FILE_NAME + "."
+                            + " Use a checkout with its Git metadata intact, or pass"
+                            + " -Ptest262AllowAnyRevision=true to run against whatever is on disk.",
+                    true);
         }
         if (checkoutRevision.equalsIgnoreCase(pinnedRevision)) {
             return null;

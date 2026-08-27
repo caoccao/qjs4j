@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.exceptions.JSException;
 import org.junit.jupiter.api.Test;
 
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -53,6 +52,41 @@ public class JSMemoryAccountingTest extends BaseTest {
      * headroom before believing otherwise makes the premise mean what it says.
      */
     private static final long HEAP_HEADROOM_BYTES = 256L * 1024 * 1024;
+
+    /**
+     * Accounting whose reservation registry refuses to register anything.
+     * <p>
+     * Nothing in the class as it stands can throw between the charge and the handle that owns it —
+     * the registry is a {@code ConcurrentHashMap} key set and the handle is a {@code WeakReference}
+     * — which is precisely why the rollback that guards the gap cannot be reached from the public
+     * API, and why it would otherwise ship untested until the day a change made it reachable.
+     * <p>
+     * Given to the constructor rather than written over the field afterwards. The reflective version
+     * of this erased the field's element type, depended on the field's name, and left the object in
+     * a state its own construction cannot produce; this is typed, so a change to how reservations
+     * are held stops compiling here instead of failing at runtime.
+     *
+     * @param limit the ceiling for the accounting
+     * @return accounting that throws {@code IllegalStateException} when a reservation is registered
+     */
+    private static JSMemoryAccounting accountingThatCannotRegisterReservations(long limit) {
+        return new JSMemoryAccounting(limit, new AbstractSet<>() {
+            @Override
+            public boolean add(JSMemoryAccounting.Reservation reservation) {
+                throw new IllegalStateException("injected registration failure");
+            }
+
+            @Override
+            public Iterator<JSMemoryAccounting.Reservation> iterator() {
+                return Collections.emptyIterator();
+            }
+
+            @Override
+            public int size() {
+                return 0;
+            }
+        });
+    }
 
     /**
      * Require that the JVM cannot satisfy the largest data block the engine will accept.
@@ -99,45 +133,9 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     /**
-     * Make registering a reservation fail.
-     * <p>
-     * Nothing in the class as it stands can throw between the charge and the handle that owns it —
-     * the registry is a {@code ConcurrentHashMap} key set and the handle is a {@code WeakReference}
-     * — which is precisely why the rollback that guards the gap cannot be reached from the public
-     * API, and why it would otherwise ship untested until the day a change made it reachable. The
-     * registry is replaced rather than the class subclassed because the class is final, and it is
-     * replaced by reflection rather than through a seam because a seam on a safety-critical class
-     * that exists only for a test is worse than this is.
-     *
-     * @param accounting the accounting whose registry to replace
-     * @throws Exception if the field cannot be replaced, which is a real failure and not a skip:
-     *                   it means this case has stopped testing what it says it tests
-     */
-    private static void installAFailingReservationRegistry(JSMemoryAccounting accounting) throws Exception {
-        Field registryField = JSMemoryAccounting.class.getDeclaredField("outstandingReservations");
-        registryField.setAccessible(true);
-        registryField.set(accounting, new AbstractSet<Object>() {
-            @Override
-            public boolean add(Object element) {
-                throw new IllegalStateException("injected registration failure");
-            }
-
-            @Override
-            public Iterator<Object> iterator() {
-                return Collections.emptyIterator();
-            }
-
-            @Override
-            public int size() {
-                return 0;
-            }
-        });
-    }
-
-    /**
      * A data-block length the JVM will refuse outright.
      * <p>
-     * The test task pins {@code -Xmx1g}, so a request of the largest array HotSpot supports fails
+     * The test tasks pin {@code -Xmx2g}, so a request of the largest array HotSpot supports fails
      * immediately with {@code OutOfMemoryError} — without heap pressure, because the size exceeds
      * the maximum heap before anything is committed.
      *
@@ -163,13 +161,12 @@ public class JSMemoryAccountingTest extends BaseTest {
     }
 
     @Test
-    public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() throws Exception {
+    public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() {
         // The charge lands before the handle exists, deliberately — a reservation the limit would
         // refuse has to be refused before any memory is touched. That leaves a gap: if registering
         // the handle fails, nothing else holds the bytes, so they would stay charged for the
         // runtime's whole life and permanently shrink the ceiling the embedder configured.
-        JSMemoryAccounting accounting = new JSMemoryAccounting(1024);
-        installAFailingReservationRegistry(accounting);
+        JSMemoryAccounting accounting = accountingThatCannotRegisterReservations(1024);
 
         assertThatThrownBy(() -> accounting.reserve(new Object(), 256))
                 .as("the failure is reported, not swallowed into a null reservation")

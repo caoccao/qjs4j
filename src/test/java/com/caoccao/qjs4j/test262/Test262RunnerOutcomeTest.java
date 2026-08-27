@@ -125,6 +125,34 @@ public class Test262RunnerOutcomeTest {
     }
 
     @Test
+    void testARunAgainstASuiteItCannotIdentifyIsRefused() throws IOException {
+        // The other half of the same guarantee: without the override, a root whose revision cannot
+        // be read is refused rather than run and reported. It used to print a warning on standard
+        // error and go on to report success, so a conformance job could report a green count for a
+        // suite nothing could identify.
+        //
+        // The pin is set here rather than left to the file in the project directory, so this states
+        // its own premise instead of depending on where the runner was started from.
+        Path root = writeFakeTest262Root(
+                Files.createTempDirectory("qjs4j-test262-unidentifiable"),
+                "ok.js",
+                "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
+        String previousRevision = System.getProperty(Test262Environment.REVISION_PROPERTY);
+        System.setProperty(Test262Environment.REVISION_PROPERTY, "0123456789abcdef0123456789abcdef01234567");
+        try {
+            assertThat(Test262Runner.runMain(new String[]{root.toString()}))
+                    .as("a temporary directory is not a checkout of the pinned suite")
+                    .isEqualTo(1);
+        } finally {
+            if (previousRevision == null) {
+                System.clearProperty(Test262Environment.REVISION_PROPERTY);
+            } else {
+                System.setProperty(Test262Environment.REVISION_PROPERTY, previousRevision);
+            }
+        }
+    }
+
+    @Test
     void testAbandonedWorkersAreReportedRatherThanAssumedToHaveStopped() throws Exception {
         // Interruption is cooperative, so the wait for the workers can expire with some of them
         // still running. run() used to print a summary and return a final-looking outcome anyway,
@@ -431,9 +459,24 @@ public class Test262RunnerOutcomeTest {
                 "ok.js",
                 "/*---\nflags: [raw]\n---*/\nvar x = 1;\n");
         String rootPath = root.toString();
-        // Exit status 0 means the selection ran and passed; the point is that none of these throw.
-        assertThat(Test262Runner.runMain(new String[]{rootPath})).isZero();
-        assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1"})).isZero();
-        assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1", "--single", "ok.js"})).isZero();
+        // These roots are one fabricated file in a temporary directory, not a checkout of test262,
+        // so the runner cannot read a revision for them and refuses the run — which is the point of
+        // that check and not something to weaken for a test. The documented override is how a suite
+        // that is deliberately not the pinned one is run, and that is what this is.
+        String previousOverride = System.getProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY);
+        System.setProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY, "true");
+        try {
+            // Exit status 0 means the selection ran and passed; the point is that none of these throw.
+            assertThat(Test262Runner.runMain(new String[]{rootPath})).isZero();
+            assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1"})).isZero();
+            assertThat(Test262Runner.runMain(new String[]{rootPath, "--threads", "1", "--single", "ok.js"}))
+                    .isZero();
+        } finally {
+            if (previousOverride == null) {
+                System.clearProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY);
+            } else {
+                System.setProperty(Test262Environment.ALLOW_ANY_REVISION_PROPERTY, previousOverride);
+            }
+        }
     }
 }

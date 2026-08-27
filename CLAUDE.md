@@ -38,13 +38,23 @@ The project implements ES2024 features with full QuickJS specification complianc
 Every `test262*` task pins the two things a conformance count depends on, so the commands above
 mean the same thing on every machine:
 
-- **Suite revision.** `test262-revision.txt` holds the revision `../test262` must be at, and the
-  runner refuses to start against any other one. Pass `-Ptest262AllowAnyRevision=true` to test
-  upstream tip deliberately. Record the revision alongside any pass count; a count without one is
-  not comparable with anything.
+- **Suite revision.** `test262-revision.txt` holds the revision `../test262` must be at. The runner
+  refuses to start against any other one, and against a checkout whose revision it cannot read —
+  an export without its Git metadata, for instance — because a count for a suite nothing can
+  identify is not a count for the pinned suite. Pass `-Ptest262AllowAnyRevision=true` to run against
+  upstream tip, or an archive, deliberately. What it does not check is whether the checkout is
+  clean, so it establishes which commit is on disk, not that nobody has edited it.
 - **Time zone.** The tasks run in `UTC`. The suite reads the host's zone, and the pinned harness
   rejects the identifier `Etc/UTC` that many Linux hosts use — so without this the same code gave
   different answers on different machines.
+
+Every run prints both before it discovers anything, so a pass count copied out of a log or a CI
+artifact carries its own provenance:
+
+```text
+Test262 revision: 5c8206929d81b2d3d727ca6aac56c18358c8d790 (pinned)
+Test262 time zone: UTC
+```
 
 ## Architecture Overview
 

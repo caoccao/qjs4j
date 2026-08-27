@@ -40,6 +40,13 @@ import static org.assertj.core.api.Fail.fail;
 /**
  * Performance test comparing V8 and qjs4j execution of prime number calculation.
  * Run with: ./gradlew performanceTest
+ * <p>
+ * The two JUnit methods below are wrappers that launch JMH, so they are tagged {@code benchmark} as
+ * well as {@code performance}. They measure rather than assert: what they report is only meaningful
+ * on a quiet machine, which is why {@code performanceTest} runs in a single fork with no coverage
+ * agent, and why {@code slowRegressionTest} — the selection meant for continuous integration —
+ * leaves them out. The other performance-tagged cases assert an outcome and are worth running on a
+ * shared runner; these are not.
  */
 @State(Scope.Thread)
 @BenchmarkMode(Mode.AverageTime)
@@ -100,6 +107,7 @@ public class PrimeNumberTest extends BaseJavetTest {
      */
     @Test
     @Tag("performance")
+    @Tag("benchmark")
     public void testQjs4jPerformance() throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(this.getClass().getSimpleName() + ".benchmarkQjs4j")
@@ -112,6 +120,7 @@ public class PrimeNumberTest extends BaseJavetTest {
      */
     @Test
     @Tag("performance")
+    @Tag("benchmark")
     public void testV8Performance() throws RunnerException {
         Options opt = new OptionsBuilder()
                 .include(this.getClass().getSimpleName() + ".benchmarkV8")

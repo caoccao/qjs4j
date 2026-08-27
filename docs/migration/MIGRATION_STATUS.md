@@ -722,13 +722,20 @@ rest:
 | `ImportBindingInstaller` | installing import bindings and namespace exports | `js_create_module_bytecode_function` bindings |
 
 Results:
-- `JSContext.java`: 8,056 → 1,444 lines. The largest extracted class is
-  `ModuleSourceTransformer` at 2,549 — the textual transformer, which is the component the
-  follow-up below replaces outright rather than splits further.
-- Zero public API changes; builtins, the VM and the existing tests are untouched.
+- `JSContext.java`: roughly 8,000 lines down to roughly 1,400. The largest extracted class is
+  `ModuleSourceTransformer`, at roughly 2,550 — the textual transformer, which is the component the
+  follow-up below replaces outright rather than splits further. Approximate on purpose: an exact
+  count here is a number that goes stale on the next small commit and then misreports the result it
+  was written to record.
+- Zero public API changes; builtins and the VM are untouched, and so is every existing test but
+  two — `JSMemoryAccountingTest` and `ModuleSourceTransformerTest`, both changed because the
+  extraction made something newly reachable to test rather than because behaviour moved.
 - `./gradlew test` green, and `./gradlew test262` unchanged at 101,607 passed / 430 skipped / 0 failed
   against tc39/test262 `5c8206929d81b2d3d727ca6aac56c18358c8d790` — the revision now pinned in
-  `test262-revision.txt`, which the conformance tasks refuse to run without.
+  `test262-revision.txt`. Every conformance task refuses a checkout at another revision, and one
+  whose revision it cannot read at all, unless `-Ptest262AllowAnyRevision=true` says otherwise; a
+  dirty checkout at the pinned revision is not detected, so the guard establishes which commit is on
+  disk and not that nothing has been edited since.
 - `ModuleSourceTransformerTest`, `ModuleLoaderTest` and `EvalOverlayManagerTest` are new: the
   extracted collaborators are now directly testable, which is what the escape-decoding and
   Unicode-identifier defects needed and never had. Writing the loader's cache-eviction cases found
