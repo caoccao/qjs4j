@@ -80,6 +80,15 @@ jobs:
 
   test262:
     runs-on: ubuntu-latest
+    # The suite reads the host's default time zone, so without pinning one the result depends on
+    # what the runner happens to be set to. UTC rather than the runner's own Etc/UTC: those are the
+    # same instant but not the same identifier, and the pinned harness's
+    # isCanonicalizedStructurallyValidTimeZoneName still applies the pre-canonical-tz rule that
+    # rejects "Etc/UTC" — while canonicalize-utc-timezone.js, in the same suite, asserts the engine
+    # must preserve it. The engine follows the newer rule and is right to; only the harness is
+    # behind, and only on a host whose own zone is spelled that way.
+    env:
+      TZ: UTC
     steps:
     - name: Checkout qjs4j
       uses: actions/checkout@v4
