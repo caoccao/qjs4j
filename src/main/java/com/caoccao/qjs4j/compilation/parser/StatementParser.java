@@ -753,7 +753,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     }
                     Expression leftExpression = binaryExpression.getLeft();
                     if (!parserContext.isValidForInOfTarget(leftExpression)) {
-                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                        throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                     }
                     int errorOffset = binaryExpression.getLocation() != null
                             ? binaryExpression.getLocation().offset()
@@ -774,7 +774,7 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                     // for (expr in obj) -- expression-based for-in
                     // Validate: left side must be a valid LeftHandSideExpression
                     if (!parserContext.isValidForInOfTarget(expr)) {
-                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                        throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                     }
                     delegates.expressions.validateForInOfAssignmentTarget(expr, parserContext.currentToken.offset());
                     parserContext.advance(); // consume 'in'
@@ -789,16 +789,16 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 } else if (parserContext.match(TokenType.OF)) {
                     // for (expr of iterable) -- expression-based for-of
                     if (!isAwait && leftStartsWithLetToken) {
-                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                        throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                     }
                     if (!isAwait
                             && leftStartsWithAsyncToken
                             && expr instanceof Identifier identifier
                             && JSKeyword.ASYNC.equals(identifier.getName())) {
-                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                        throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                     }
                     if (!parserContext.isValidForInOfTarget(expr)) {
-                        throw new JSSyntaxErrorException("invalid for in/of left hand-side");
+                        throw new JSSyntaxErrorException("Invalid left-hand side in for-loop");
                     }
                     delegates.expressions.validateForInOfAssignmentTarget(expr, parserContext.currentToken.offset());
                     parserContext.advance(); // consume 'of'
@@ -1435,7 +1435,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
                 if (parserContext.match(TokenType.STRING)) {
                     key = parserContext.currentToken.value();
                     parserContext.advance();
-                } else if (parserContext.match(TokenType.IDENTIFIER)) {
+                } else if (isIdentifierNameToken(parserContext.currentToken.type())) {
+                    // AttributeKey is IdentifierName, not IdentifierReference, so a reserved word
+                    // is a valid key: `import x from './m.js' with {if: ''}` parses.
                     key = parserContext.currentToken.value();
                     parserContext.advance();
                 } else {

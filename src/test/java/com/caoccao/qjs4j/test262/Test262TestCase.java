@@ -17,12 +17,18 @@
 package com.caoccao.qjs4j.test262;
 
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Represents a single test262 test case with its metadata and code.
+ * <p>
+ * A parsed file is not by itself an executable unit. Test262's {@code INTERPRETING.md} defines
+ * how many <em>interpretations</em> a file has and what each one is: an ordinary file is executed
+ * twice, once as sloppy-mode script source and once with a {@code "use strict"} prologue prepended,
+ * while {@code onlyStrict}, {@code noStrict}, {@code module} and {@code raw} each define exactly
+ * one. {@link #expandVariants()} turns a parsed file into those units, and {@link #getVariant()}
+ * says which one an instance is, so a result is attributable to an interpretation rather than to a
+ * path.
  */
 public class Test262TestCase {
     private String code;
@@ -35,9 +41,24 @@ public class Test262TestCase {
     private NegativeInfo negative;
     private Path path;
     private long timeElapsed;
+    private Variant variant = Variant.NON_STRICT;
 
     public Test262TestCase(Path path) {
         this.path = path;
+    }
+
+    private Test262TestCase copyWithVariant(Variant newVariant) {
+        Test262TestCase copy = new Test262TestCase(path);
+        copy.code = code;
+        copy.description = description;
+        copy.esid = esid;
+        copy.features = features;
+        copy.flags = flags;
+        copy.includes = includes;
+        copy.index = index;
+        copy.negative = negative;
+        copy.variant = newVariant;
+        return copy;
     }
 
     @Override
@@ -49,7 +70,37 @@ public class Test262TestCase {
             return false;
         }
         Test262TestCase that = (Test262TestCase) o;
-        return Objects.equals(path, that.path);
+        return Objects.equals(path, that.path) && variant == that.variant;
+    }
+
+    /**
+     * Expand this parsed file into the execution variants Test262 requires for it.
+     * <p>
+     * The returned cases share this instance's parsed metadata and source; they differ only in
+     * {@link #getVariant()}, which the executor turns into a strict prologue, a module evaluation
+     * or a harness-free raw evaluation.
+     *
+     * @return one case per required interpretation, never empty
+     */
+    public List<Test262TestCase> expandVariants() {
+        List<Test262TestCase> variants = new ArrayList<>(2);
+        // `module` is checked before `raw` because the two are not alternatives: `module` names the
+        // parse goal and `raw` only says the source is evaluated with no harness and no
+        // modification. A file flagged `[module, raw]` is module source, and compiling it as a
+        // script fails on its own import declarations.
+        if (hasFlag("module")) {
+            variants.add(copyWithVariant(Variant.MODULE));
+        } else if (hasFlag("raw")) {
+            variants.add(copyWithVariant(Variant.RAW));
+        } else if (hasFlag("onlyStrict")) {
+            variants.add(copyWithVariant(Variant.STRICT));
+        } else if (hasFlag("noStrict")) {
+            variants.add(copyWithVariant(Variant.NON_STRICT));
+        } else {
+            variants.add(copyWithVariant(Variant.NON_STRICT));
+            variants.add(copyWithVariant(Variant.STRICT));
+        }
+        return variants;
     }
 
     public String getCode() {
@@ -92,13 +143,22 @@ public class Test262TestCase {
         return timeElapsed;
     }
 
+    /**
+     * The interpretation this case represents.
+     *
+     * @return the variant, never {@code null}
+     */
+    public Variant getVariant() {
+        return variant;
+    }
+
     public boolean hasFlag(String flag) {
         return flags.contains(flag);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(path);
+        return Objects.hash(path, variant);
     }
 
     public void setCode(String code) {
@@ -141,9 +201,49 @@ public class Test262TestCase {
         this.timeElapsed = timeElapsed;
     }
 
+    public void setVariant(Variant variant) {
+        this.variant = Objects.requireNonNull(variant);
+    }
+
     @Override
     public String toString() {
-        return path != null ? path.toString() : "unknown";
+        String pathText = path != null ? path.toString() : "unknown";
+        return variant == Variant.NON_STRICT ? pathText : pathText + " [" + variant.label() + "]";
+    }
+
+    /**
+     * The interpretations a Test262 file can have.
+     */
+    public enum Variant {
+        /**
+         * The file's source, evaluated as sloppy-mode script source.
+         */
+        NON_STRICT("non-strict"),
+        /**
+         * The file's source with a {@code "use strict";} prologue prepended, evaluated as script
+         * source. Required for every file that is not {@code noStrict}, {@code module} or
+         * {@code raw}.
+         */
+        STRICT("strict"),
+        /**
+         * The file's source evaluated as module source. Module code is always strict, so this is
+         * the only interpretation a {@code module} file has.
+         */
+        MODULE("module"),
+        /**
+         * The file's source evaluated with no harness and no modification.
+         */
+        RAW("raw");
+
+        private final String label;
+
+        Variant(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
     }
 
     /**

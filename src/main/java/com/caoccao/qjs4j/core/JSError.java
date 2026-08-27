@@ -18,17 +18,33 @@ package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
 
-import java.util.Objects;
-
 /**
  * Represents a JavaScript Error object.
  * Base class for all JavaScript error types.
+ * <p>
+ * <strong>Identity, not value.</strong> This class deliberately does not override {@code equals} or
+ * {@code hashCode}. It used to, over its own guest-visible {@code name} and {@code message}
+ * properties, which broke three things at once: two distinct errors with the same message collapsed
+ * into one entry in any Java collection holding {@link JSObject}s, an error's hash changed when a
+ * script assigned to {@code message}, and computing that hash invoked whatever accessor the script
+ * had installed. ECMAScript objects compare by identity; every {@code JSObject} subclass must leave
+ * {@code equals} and {@code hashCode} alone.
  */
 public sealed class JSError extends JSObject permits
         JSAggregateError, JSRangeError, JSReferenceError, JSSyntaxError, JSTypeError, JSEvalError, JSURIError, JSSuppressedError {
     public static final String NAME = "Error";
     protected final JSContext context;
     private final SourceLocation sourceLocation;
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into, when it is not the source
+     * the embedder handed to {@code eval}.
+     * <p>
+     * Set after construction rather than taken as a constructor parameter because every error class
+     * in this hierarchy would otherwise need another constructor, and only module linking — which
+     * is the one place that reports a position in a file the caller never passed in — has anything
+     * to put here.
+     */
+    private String sourceName;
     private String vmMessage;
 
     /**
@@ -173,16 +189,6 @@ public sealed class JSError extends JSObject permits
         return JSBoolean.valueOf(arg instanceof JSError);
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        JSError jsError = (JSError) o;
-        return Objects.equals(getName(), jsError.getName()) &&
-                Objects.equals(getMessage(), jsError.getMessage());
-    }
-
     public String getErrorName() {
         return NAME;
     }
@@ -214,17 +220,32 @@ public sealed class JSError extends JSObject permits
      *
      * @return the source location, or {@code null} when it is unavailable
      */
+
     public SourceLocation getSourceLocation() {
         return sourceLocation;
+    }
+
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into.
+     *
+     * @return the source name, or null when the location belongs to the source the embedder
+     * supplied, or when there is no location
+     */
+    public String getSourceName() {
+        return sourceName;
     }
 
     public String getVmMessage() {
         return vmMessage;
     }
 
-    @Override
-    public int hashCode() {
-        return Objects.hash(getName(), getMessage());
+    /**
+     * Record which source this error's location indexes into.
+     *
+     * @param sourceName the source name
+     */
+    void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
     }
 
     public void setVmMessage(String vmMessage) {

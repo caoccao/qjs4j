@@ -1026,7 +1026,11 @@ final class ExpressionPrimaryParser {
             parserContext.advance();
             Expression operand = parseUnaryExpression();
             if (op == UnaryOperator.DELETE) {
-                if (parserContext.strictMode && operand instanceof Identifier) {
+                // The early error is stated over IdentifierReference. `this` and `new.target` are
+                // parsed as Identifier nodes but are a PrimaryExpression and a MetaProperty, so
+                // `delete this` and `delete new.target` are legal in strict mode and evaluate to
+                // true.
+                if (parserContext.strictMode && ParserContext.isIdentifierReference(operand)) {
                     throw new JSSyntaxErrorException("Delete of an unqualified identifier in strict mode.");
                 }
                 if (isPrivateDeleteTarget(operand)) {

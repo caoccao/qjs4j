@@ -296,7 +296,7 @@ public final class Parser {
         for (String exportBinding : parserContext.pendingExportBindings) {
             if (!allBoundNames.contains(exportBinding)) {
                 throw new JSSyntaxErrorException(
-                        "Export '" + exportBinding + "' is not defined");
+                        "Export '" + exportBinding + "' is not defined in module");
             }
         }
     }

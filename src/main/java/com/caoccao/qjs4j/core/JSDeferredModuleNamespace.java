@@ -59,12 +59,12 @@ final class JSDeferredModuleNamespace extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         if (isSymbolLikeNamespaceKey(key)) {
             return true;
         }
         try {
-            return ensureEvaluated().delete(key);
+            return ensureEvaluated().delete(key, throwOnFailure);
         } catch (JSException jsException) {
             setEvaluationPendingException(context, jsException);
             return false;
@@ -192,6 +192,18 @@ final class JSDeferredModuleNamespace extends JSObject {
             setEvaluationPendingException(null, jsException);
             return false;
         }
+    }
+
+    /**
+     * Reading a non-symbol key evaluates the deferred module, so this object decides the lookup
+     * itself and must be dispatched to when it appears in a prototype chain.
+     *
+     * @param key the property being looked up
+     * @return true unless the key is one of the namespace's own symbol-like keys
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return !isSymbolLikeNamespaceKey(key);
     }
 
     @Override

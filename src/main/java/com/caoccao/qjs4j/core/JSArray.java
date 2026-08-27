@@ -364,15 +364,15 @@ public final class JSArray extends JSObject {
     }
 
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         long index = key.toArrayIndex();
         if (index < 0) {
-            return super.delete(key);
+            return super.delete(key, throwOnFailure);
         }
 
         if (sealed || frozen) {
             PropertyKey stringKey = key.isString() ? key : PropertyKey.fromString(Long.toString(index));
-            return super.delete(stringKey);
+            return super.delete(stringKey, throwOnFailure);
         }
 
         if (index <= Integer.MAX_VALUE) {
@@ -386,7 +386,7 @@ public final class JSArray extends JSObject {
             }
         }
 
-        return super.delete(key);
+        return super.delete(key, throwOnFailure);
     }
 
     /**
@@ -636,32 +636,6 @@ public final class JSArray extends JSObject {
     }
 
     /**
-     * Override three-arg get so prototype chain lookups find dense array elements.
-     * Without this, JSObject's three-arg get only checks shape/sparse properties,
-     * missing JSArray's dense storage when this array is in a prototype chain.
-     */
-    @Override
-    protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        long index = key.toArrayIndex();
-        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
-            int intIndex = (int) index;
-            // Check dense array
-            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
-                return denseArray[intIndex];
-            }
-            // Check sparse storage
-            if (sparseProperties != null) {
-                JSValue value = sparseProperties.get(intIndex);
-                if (value != null) {
-                    return value;
-                }
-            }
-        }
-        // Delegate to JSObject for shape properties, getters, and prototype chain
-        return super.getWithReceiver(key, receiver, depth);
-    }
-
-    /**
      * Check whether an index has an own element (distinguishes holes from undefined values).
      */
     public boolean hasElement(long index) {
@@ -741,6 +715,39 @@ public final class JSArray extends JSObject {
         return descriptor == null || descriptor.isWritable();
     }
 
+    /**
+     * Own-property lookup, so a prototype-chain walk finds dense array elements.
+     * <p>
+     * This used to override {@code getWithReceiver}, which meant an array link in a prototype
+     * chain could only be reached by recursing into it — one Java frame and one unit of the
+     * prototype-depth budget per link. Adding the elements to the own lookup instead lets the
+     * iterative walk in {@link JSObject} handle arrays like any other ordinary object.
+     *
+     * @param key      the property key
+     * @param receiver the receiver a getter is called with
+     * @return the value, or {@code null} when there is no own property
+     */
+    @Override
+    protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
+        long index = key.toArrayIndex();
+        if (index >= 0 && index < length && index <= Integer.MAX_VALUE) {
+            int intIndex = (int) index;
+            // Check dense array
+            if (intIndex < denseArray.length && denseArray[intIndex] != null) {
+                return denseArray[intIndex];
+            }
+            // Check sparse storage
+            if (sparseProperties != null) {
+                JSValue value = sparseProperties.get(intIndex);
+                if (value != null) {
+                    return value;
+                }
+            }
+        }
+        // Delegate to JSObject for shape properties and getters
+        return super.lookupOwnForGet(key, receiver);
+    }
+
     @Override
     public PropertyKey[] ownPropertyKeys() {
         return getOwnPropertyKeys().toArray(new PropertyKey[0]);
@@ -763,7 +770,9 @@ public final class JSArray extends JSObject {
         } else if (lastIndex <= Integer.MAX_VALUE && sparseProperties != null) {
             sparseProperties.remove((int) lastIndex);
         } else {
-            super.delete(PropertyKey.fromString(Long.toString(lastIndex)));
+            // Two-argument form so the call stays non-virtual: the one-argument delete now
+            // routes back through the overridable [[Delete]], which would re-enter this class.
+            super.delete(PropertyKey.fromString(Long.toString(lastIndex)), context.isStrictMode());
         }
 
         setLength(lastIndex);
@@ -927,7 +936,7 @@ public final class JSArray extends JSObject {
             for (PropertyKey key : shape.getPropertyKeys()) {
                 long index = key.toArrayIndex();
                 if (index >= newLength && index >= 0) {
-                    super.delete(key);
+                    super.delete(key, context.isStrictMode());
                 }
             }
         }

@@ -18,6 +18,7 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.BaseJavetTest;
 import com.caoccao.qjs4j.core.*;
+import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CountDownLatch;
@@ -33,7 +34,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class AtomicsObjectTest extends BaseJavetTest {
 
     private AtomicsObject atomics() {
-        return context.getRuntime().getOptions().getAtomicsObject();
+        return context.getRuntime().getAtomicsObject();
     }
 
     @Test
@@ -148,6 +149,25 @@ public class AtomicsObjectTest extends BaseJavetTest {
     }
 
     @Test
+    public void testIsLockFreeReportsThePathTheEngineActuallyTook() {
+        // A capability query has to describe the implementation, not the width. JDK 25 withdrew the
+        // atomic access modes from byte-array view VarHandles, so the engine serialises every width
+        // on a lock there — while Atomics.isLockFree(4) still answered true, which is precisely the
+        // premise guest code picks a lock-free algorithm on.
+        boolean lockFree = ByteArrayAtomics.isLockFree();
+        for (int size : new int[]{1, 2, 4, 8}) {
+            assertThat(atomics().isLockFree(context, null, new JSValue[]{new JSNumber(size)}))
+                    .as("size " + size)
+                    .isEqualTo(JSBoolean.valueOf(lockFree));
+            assertThat(context.eval("Atomics.isLockFree(" + size + ")").toString())
+                    .as("guest-visible size " + size)
+                    .isEqualTo(String.valueOf(lockFree));
+        }
+        assertThat(context.eval("Atomics.isLockFree(3)").toString()).isEqualTo("false");
+        assertThat(context.eval("Atomics.isLockFree(0)").toString()).isEqualTo("false");
+    }
+
+    @Test
     public void testIsLockFreeWithJavet() {
         assertBooleanWithJavet(
                 "Atomics.isLockFree('1') === Atomics.isLockFree(1)",
@@ -227,7 +247,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
             Thread waiter = new Thread(() -> {
                 JSContext waiterCtx = sharedRuntime.createContext();
                 allWaitersStarted.countDown();
-                JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+                JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                         arr, new JSNumber(0), new JSNumber(200), new JSNumber(5000)
                 });
 
@@ -275,7 +295,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread waiter = new Thread(() -> {
             JSContext waiterCtx = sharedRuntime.createContext();
             waiterStarted.countDown();
-            sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+            sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(300), new JSNumber(5000)
             });
             waiterFinished.countDown();
@@ -433,7 +453,7 @@ public class AtomicsObjectTest extends BaseJavetTest {
         Thread waiter = new Thread(() -> {
             JSContext waiterCtx = sharedRuntime.createContext();
             waitStarted.countDown();
-            JSValue result = sharedRuntime.getOptions().getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
+            JSValue result = sharedRuntime.getAtomicsObject().wait(waiterCtx, null, new JSValue[]{
                     arr, new JSNumber(0), new JSNumber(100), new JSNumber(5000) // 5 second timeout
             });
 

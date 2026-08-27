@@ -55,7 +55,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
             target.breakPositions.add(jumpPos);
         } else {
             if (compilerContext.loopManager.isEmpty()) {
-                throw new JSCompilerException("Break statement outside of loop", breakStmt);
+                throw new JSCompilerException("Illegal break statement", breakStmt);
             }
             LoopContext loopContext = null;
             for (LoopContext loopCtx : compilerContext.loopManager) {
@@ -65,7 +65,7 @@ final class BreakStatementCompiler extends AstNodeCompiler<BreakStatement> {
                 }
             }
             if (loopContext == null) {
-                throw new JSCompilerException("Break statement outside of loop", breakStmt);
+                throw new JSCompilerException("Illegal break statement", breakStmt);
             }
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.breakTargetScopeDepth);
             emitActiveFinallyGosubs();

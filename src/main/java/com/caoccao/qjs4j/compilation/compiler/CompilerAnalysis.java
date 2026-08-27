@@ -35,6 +35,41 @@ final class CompilerAnalysis {
         this.compilerContext = compilerContext;
     }
 
+    /**
+     * Whether a function body declares a binding with the given name.
+     * <p>
+     * Used to decide whether a named function expression's own name binding is shadowed. Per
+     * ES2024 15.2.5 the name lives in a separate environment that wraps the function's variable
+     * environment, so a {@code var}, {@code let}, {@code const}, {@code class} or {@code function}
+     * declaration of the same name in the body creates a <em>different</em> binding that hides it.
+     *
+     * @param body the function body statements
+     * @param name the name to look for
+     * @return true when the body declares that name
+     */
+    boolean bodyDeclaresBinding(List<Statement> body, String name) {
+        Set<String> declaredNames = new HashSet<>();
+        for (Statement statement : body) {
+            if (statement instanceof FunctionDeclaration functionDeclaration) {
+                if (functionDeclaration.getId() != null) {
+                    declaredNames.add(functionDeclaration.getId().getName());
+                }
+                continue;
+            }
+            collectVarNamesFromStatement(statement, declaredNames);
+            if (statement instanceof VariableDeclaration variableDeclaration
+                    && variableDeclaration.getKind() != VariableKind.VAR) {
+                for (VariableDeclarator declarator : variableDeclaration.getDeclarations()) {
+                    collectPatternBindingNames(declarator.getId(), declaredNames);
+                }
+            } else if (statement instanceof ClassDeclaration classDeclaration
+                    && classDeclaration.getId() != null) {
+                declaredNames.add(classDeclaration.getId().getName());
+            }
+        }
+        return declaredNames.contains(name);
+    }
+
     void collectLexicalBindings(List<Statement> body, Set<String> lexicals) {
         for (Statement statement : body) {
             if (statement instanceof VariableDeclaration variableDeclaration && variableDeclaration.getKind() != VariableKind.VAR) {
@@ -67,6 +102,21 @@ final class CompilerAnalysis {
             collectPatternBindingNames(restElement.getArgument(), names);
         }
     }
+
+    /**
+     * Pre-declare all variable and function declaration names as locals in the current scope
+     * in a single pass over the function body.
+     * <p>
+     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
+     * so nested function declarations can properly capture outer variables via VarRef,
+     * and sibling function declarations are visible to closure capture resolution.
+     * <p>
+     * Handles:
+     * - Function declarations: top-level names declared as locals
+     * - var declarations: function-scoped, recurse into blocks (they hoist)
+     * - let/const declarations: block-scoped, only top-level of function body
+     * (they don't hoist into nested blocks but ARE in scope at function level)
+     */
 
     /**
      * Recursively collect all var-declared names from a statement tree.
@@ -148,20 +198,6 @@ final class CompilerAnalysis {
         }
     }
 
-    /**
-     * Pre-declare all variable and function declaration names as locals in the current scope
-     * in a single pass over the function body.
-     * <p>
-     * This ensures bindings are visible during Phase 1 (function declaration hoisting),
-     * so nested function declarations can properly capture outer variables via VarRef,
-     * and sibling function declarations are visible to closure capture resolution.
-     * <p>
-     * Handles:
-     * - Function declarations: top-level names declared as locals
-     * - var declarations: function-scoped, recurse into blocks (they hoist)
-     * - let/const declarations: block-scoped, only top-level of function body
-     * (they don't hoist into nested blocks but ARE in scope at function level)
-     */
     void hoistAllDeclarationsAsLocals(List<Statement> body) {
         Set<String> varNames = new HashSet<>();
         Set<String> lexicalNames = new HashSet<>();

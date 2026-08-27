@@ -21,23 +21,78 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * Tracks and reports test262 execution results.
+ * <p>
+ * <strong>Freezing.</strong> Java interruption is cooperative, so a runner that gives up waiting
+ * for its workers cannot promise they have stopped — only that it will stop listening to them.
+ * {@link #freeze()} is that boundary: the counts the runner reports afterwards are a snapshot no
+ * late worker can change, and the writes those workers attempt are counted rather than applied, so
+ * a leaked worker shows up as a number instead of as a total that disagrees with the one already
+ * printed.
  */
 public class Test262Reporter {
     private static final int TOP_SLOW_TEST_COUNT = 5;
 
+    /**
+     * Separates admitting a result from closing the reporter.
+     * <p>
+     * Recording holds the read lock and freezing holds the write lock, which is what makes
+     * admission a transaction rather than two steps. A flag on its own gave each of them their own
+     * visibility and nothing more: a worker could read "not frozen", be descheduled, and apply its
+     * result after {@code freeze()} had returned and the outcome had been snapshotted — the exact
+     * integrity problem freezing exists to prevent. Recording stays concurrent with recording,
+     * because the counters and queues underneath are already safe against each other.
+     */
+    private final ReadWriteLock admissionLock = new ReentrantReadWriteLock();
     private final ConcurrentLinkedQueue<TestResult> allResults = new ConcurrentLinkedQueue<>();
     private final AtomicInteger failed = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> failures = new ConcurrentLinkedQueue<>();
+    private final AtomicInteger lateWrites = new AtomicInteger(0);
     private final AtomicInteger passed = new AtomicInteger(0);
     private final AtomicInteger skipped = new AtomicInteger(0);
     private final AtomicInteger timeout = new AtomicInteger(0);
     private final ConcurrentLinkedQueue<TestResult> timeouts = new ConcurrentLinkedQueue<>();
+    /**
+     * Guarded by {@link #admissionLock}.
+     */
+    private boolean frozen;
+
+    /**
+     * Stop accepting results, permanently.
+     * <p>
+     * Called once the runner has stopped waiting for its workers, whether they all finished or some
+     * were abandoned. Taking the write lock means every result already being admitted has finished
+     * being applied, and none can start afterwards — so from the moment this returns, the counts
+     * cannot move and the summary that is printed and the outcome that is returned describe the
+     * same run.
+     */
+    public void freeze() {
+        admissionLock.writeLock().lock();
+        try {
+            frozen = true;
+        } finally {
+            admissionLock.writeLock().unlock();
+        }
+    }
 
     public int getFailed() {
         return failed.get();
+    }
+
+    /**
+     * How many results arrived after {@link #freeze()} and were therefore discarded.
+     * <p>
+     * Non-zero means a worker outlived the run. It is diagnostic, not a count of tests: those
+     * results were never part of any total.
+     *
+     * @return the number of discarded results
+     */
+    public int getLateWrites() {
+        return lateWrites.get();
     }
 
     public int getPassed() {
@@ -56,8 +111,41 @@ public class Test262Reporter {
         return passed.get() + failed.get() + timeout.get();
     }
 
+    /**
+     * Every interpretation the run accounted for, executed or skipped.
+     * <p>
+     * One unit throughout: an interpretation, not a file. The runner used to filter by file and
+     * record one skip for it while an executed file contributed two results, so this sum added
+     * unlike things and could be reconciled with neither the file count nor the interpretation
+     * count.
+     *
+     * @return the number of interpretations executed plus the number skipped
+     */
     public int getTotalTests() {
         return getTotalExecuted() + skipped.get();
+    }
+
+    /**
+     * Whether this reporter has stopped accepting results.
+     *
+     * @return true once frozen
+     */
+    public boolean isFrozen() {
+        admissionLock.readLock().lock();
+        try {
+            return frozen;
+        } finally {
+            admissionLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Called while a result is being admitted, after the frozen check and before it is applied.
+     * <p>
+     * A no-op seam so a test can hold a write open at exactly the point the race lived, and observe
+     * that a concurrent {@code freeze()} cannot complete around it.
+     */
+    protected void onAdmitting() {
     }
 
     public void printProgress() {
@@ -80,7 +168,7 @@ public class Test262Reporter {
             sortedFailures.sort(Comparator.comparingInt(r -> r.getTestCase().getIndex()));
             System.out.println("\nFailed Tests:");
             for (TestResult failure : sortedFailures) {
-                System.out.printf("  ❌ %s%n", failure.getTestCase().getPath());
+                System.out.printf("  ❌ %s%n", failure.getTestCase());
                 if (failure.getMessage() != null) {
                     System.out.printf("     %s%n", failure.getMessage());
                 }
@@ -90,7 +178,7 @@ public class Test262Reporter {
         if (!timeouts.isEmpty()) {
             System.out.println("\nTimeout Tests:");
             for (TestResult timeout : timeouts) {
-                System.out.printf("  ⏱️  %s%n", timeout.getTestCase().getPath());
+                System.out.printf("  ⏱️  %s%n", timeout.getTestCase());
             }
         }
 
@@ -124,7 +212,7 @@ public class Test262Reporter {
                 System.out.println("Top " + topCount + " Slowest Tests:");
                 for (int i = 0; i < topCount; i++) {
                     Test262TestCase testCase = sortedByTime.get(i).getTestCase();
-                    System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase.getPath(), testCase.getTimeElapsed());
+                    System.out.printf("  %d. %s (%d ms)%n", i + 1, testCase, testCase.getTimeElapsed());
                 }
             }
         }
@@ -133,36 +221,63 @@ public class Test262Reporter {
     }
 
     public void recordResult(TestResult result) {
-        allResults.add(result);
-        switch (result.getStatus()) {
-            case PASS:
-                passed.incrementAndGet();
-                break;
-            case FAIL:
-                failed.incrementAndGet();
-                failures.add(result);
-                break;
-            case SKIP:
-                skipped.incrementAndGet();
-                break;
-            case TIMEOUT:
-                timeout.incrementAndGet();
-                timeouts.add(result);
-                break;
+        admissionLock.readLock().lock();
+        try {
+            if (frozen) {
+                lateWrites.incrementAndGet();
+                return;
+            }
+            onAdmitting();
+            allResults.add(result);
+            switch (result.getStatus()) {
+                case PASS:
+                    passed.incrementAndGet();
+                    break;
+                case FAIL:
+                    failed.incrementAndGet();
+                    failures.add(result);
+                    break;
+                case SKIP:
+                    skipped.incrementAndGet();
+                    break;
+                case TIMEOUT:
+                    timeout.incrementAndGet();
+                    timeouts.add(result);
+                    break;
+            }
+        } finally {
+            admissionLock.readLock().unlock();
         }
     }
 
     public void recordSkipped(Test262TestCase test, String reason) {
-        skipped.incrementAndGet();
+        admissionLock.readLock().lock();
+        try {
+            if (frozen) {
+                lateWrites.incrementAndGet();
+                return;
+            }
+            onAdmitting();
+            skipped.incrementAndGet();
+        } finally {
+            admissionLock.readLock().unlock();
+        }
     }
 
     public void reset() {
-        passed.set(0);
-        failed.set(0);
-        skipped.set(0);
-        timeout.set(0);
-        allResults.clear();
-        failures.clear();
-        timeouts.clear();
+        admissionLock.writeLock().lock();
+        try {
+            passed.set(0);
+            failed.set(0);
+            skipped.set(0);
+            timeout.set(0);
+            lateWrites.set(0);
+            frozen = false;
+            allResults.clear();
+            failures.clear();
+            timeouts.clear();
+        } finally {
+            admissionLock.writeLock().unlock();
+        }
     }
 }

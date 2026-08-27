@@ -3079,7 +3079,13 @@ public final class OpcodeHandler {
             executionContext.pc = pc + op.getSize();
             return;
         }
-        if (shouldScanClosureVarRefsForGetVar(executionContext)) {
+        // A name the eval overlay already resolved is not up for reinterpretation: the overlay was
+        // built from the caller's locals, captures and parameter environments in the order the
+        // grammar gives them, and this scan knows only names. Letting the scan win meant a captured
+        // outer binding beat a nearer one of the same name — a function expression named `n` nested
+        // in the default initializer of another named `n` saw the outer function, not itself.
+        if (shouldScanClosureVarRefsForGetVar(executionContext)
+                && !executionContext.virtualMachine.context.hasEvalOverlayBinding(variableName)) {
             // Check closure VarRefs in current frame and caller frames.
             // VarRef-based closure variables are checked so that eval() inside class
             // member functions can resolve the class inner name binding.

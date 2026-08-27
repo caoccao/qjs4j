@@ -63,6 +63,13 @@ public non-sealed class JSObject implements JSValue {
     protected JSShape shape;
     protected Map<Integer, JSValue> sparseProperties; // For array indices
     private boolean superConstructorCalled; // Tracks whether super() has been called in derived constructor
+    /**
+     * {@code WeakMap}/{@code WeakSet} entries naming this object as their key. Created on first
+     * use, so an object that is never a weak-collection key costs one null reference.
+     *
+     * @see JSWeakEntryTable
+     */
+    private JSWeakEntryTable weakEntryTable;
 
     /**
      * Create an empty object with no prototype.
@@ -152,8 +159,6 @@ public non-sealed class JSObject implements JSValue {
 
         this.propertyValues = newValues;
     }
-
-    // Property operations
 
     /**
      * [[DefineOwnProperty]] per ES spec.
@@ -255,6 +260,8 @@ public non-sealed class JSObject implements JSValue {
         return defineProperty(key, PropertyDescriptor.accessorDescriptor(getter, null, state));
     }
 
+    // Property operations
+
     /**
      * Define an accessor property with a getter and a setter.
      */
@@ -313,11 +320,30 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
-     * Delete a property by key.
-     * Following QuickJS delete_property() implementation.
+     * The {@code delete} operator: {@code [[Delete]]} followed by the strict-mode failure throw.
+     * <p>
+     * Only the operator throws. Specification algorithms that call {@code [[Delete]]} internally —
+     * {@code InternalizeJSONProperty} is one — must not inherit the ambient strict mode, so they
+     * call {@link #delete(PropertyKey, boolean)} with {@code false} instead. Reading
+     * {@code context.isStrictMode()} inside {@code [[Delete]]} made every internal deletion behave
+     * as though the calling script had written {@code delete}.
+     *
+     * @param key the property key
+     * @return true when the property is gone afterwards
      */
     public boolean delete(PropertyKey key) {
-        boolean strictMode = context.isStrictMode();
+        return delete(key, context.isStrictMode());
+    }
+
+    /**
+     * {@code [[Delete]]}, optionally raising the {@code delete} operator's {@code TypeError}.
+     *
+     * @param key            the property key
+     * @param throwOnFailure true to throw a {@code TypeError} when the property cannot be deleted
+     * @return true when the property is gone afterwards
+     */
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
+        boolean strictMode = throwOnFailure;
         // Check sparse properties first.
         long arrayIndex = key.toArrayIndex();
         if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
@@ -486,8 +512,38 @@ public non-sealed class JSObject implements JSValue {
         return Arrays.copyOf(values, valueCount);
     }
 
+    /**
+     * Java equality on an ECMAScript object is identity, and is {@code final} so it stays that way.
+     * <p>
+     * {@link JSError} used to override this over its own guest-visible {@code name} and
+     * {@code message}. Every Java collection in the engine that holds objects — weak collections,
+     * prototype-walk guards, the {@code for}-{@code in} visited set, the VM's exhausted-iterator
+     * set — silently acquired value semantics for that one subclass, so two distinct errors with
+     * the same message became one entry, and computing a hash ran whatever accessor a script had
+     * installed on {@code message}. Sealing the contract here means a future subclass cannot
+     * reintroduce that by accident: an override is a compile error rather than a behaviour change.
+     *
+     * @param other the object to compare with
+     * @return true only when {@code other} is this same object
+     */
+    @Override
+    public final boolean equals(Object other) {
+        return this == other;
+    }
+
     private boolean failSet(PropertyKey key, boolean throwOnFailure) {
         if (throwOnFailure && context.isStrictMode()) {
+            // Direct eval resolves identifiers through properties the engine puts on the global for
+            // the duration of the call, so an immutable binding — a `const`, a class name, a named
+            // function expression's own name — is a non-writable property while eval runs. Writing
+            // to one is an assignment to a binding, not to a property, and reporting it as a
+            // property write named an object the script never mentioned.
+            if (context.isInBareVariableAssignment()
+                    && key.isString()
+                    && context.hasEvalOverlayBinding(key.asString())) {
+                context.throwTypeError("Assignment to constant variable.");
+                return false;
+            }
             context.throwTypeError(
                     "Cannot assign to read only property '" + key.toPropertyString() + "' of " + getObjectDescriptionForError(false));
         }
@@ -591,6 +647,15 @@ public non-sealed class JSObject implements JSValue {
         }
         if (arrayObject || this instanceof JSArray) {
             return JSArray.NAME;
+        }
+        if (this instanceof JSTypedArray typedArray) {
+            // A typed array's Symbol.toStringTag lives on %TypedArray%.prototype as an accessor,
+            // so the data-property read above cannot see it and the tag fell through to "Object".
+            // getTypedArrayName() is the same name without running script.
+            return typedArray.getTypedArrayName();
+        }
+        if (this instanceof JSDataView) {
+            return JSDataView.NAME;
         }
         if (this instanceof JSArguments) {
             return "Arguments";
@@ -900,123 +965,54 @@ public non-sealed class JSObject implements JSValue {
     /**
      * Internal get method with receiver tracking for prototype chain getter invocation.
      * Protected to allow JSProxy to override with proper trap handling.
+     *
+     * @param key      the property key
+     * @param receiver the receiver to pass to a getter
+     * @param depth    how many <em>exotic</em> prototype links have already been followed
+     * @return the value, or {@code undefined} when the chain has no such property
      */
     protected JSValue getWithReceiver(PropertyKey key, JSValue receiver, int depth) {
-        long arrayIndex = key.toArrayIndex();
-        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
-            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
-            if (sparseValue != null) {
-                return sparseValue;
-            }
+        JSValue ownValue = lookupOwnForGet(key, receiver);
+        if (ownValue != null) {
+            return ownValue;
         }
 
-        // String primitive wrapper: return character at numeric index
-        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
-            String s = str.value();
-            if (arrayIndex < s.length()) {
-                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
+        // Walk the prototype chain. A link costs a loop iteration, not a Java frame, so the chain
+        // length a program may build is bounded by memory rather than by a threshold: a thousand
+        // links of `Object.create`, of arrays, or of functions is a valid program, and reading
+        // through it used to be a RangeError once the links stopped being plain objects. Own
+        // lookup is a virtual call, so an array's dense elements and a string wrapper's characters
+        // are found without leaving the loop. Only a link that *replaces* the lookup — a Proxy,
+        // a deferred module namespace, a typed array asked for a canonical numeric index — is
+        // dispatched to virtually, because only those decide the whole operation themselves; each
+        // such hop is one frame and stays bounded.
+        JSObject current = prototype;
+        JSObject tortoise = prototype;
+        boolean advanceTortoise = false;
+        while (current != null && !current.interceptsPropertyLookup(key)) {
+            JSValue value = current.lookupOwnForGet(key, receiver);
+            if (value != null) {
+                return value;
+            }
+            current = current.prototype;
+            // Floyd's cycle detection, in place of a depth threshold. `Object.setPrototypeOf`
+            // rejects cycles, so a cyclic chain can only come from the raw embedder API — but it
+            // must still terminate rather than spin.
+            if (advanceTortoise) {
+                tortoise = tortoise.prototype;
+            }
+            advanceTortoise = !advanceTortoise;
+            if (current != null && current == tortoise) {
+                throw new JSRangeErrorException("Cyclic prototype chain");
             }
         }
-
-        // Look in own properties
-        int offset = getOwnPropertyOffset(key);
-        if (offset >= 0) {
-            PropertyDescriptor desc = shape.getDescriptorAt(offset);
-            if (desc != null && desc.isAccessorDescriptor()) {
-                JSFunction getter = desc.getGetter();
-                if (getter != null) {
-                    JSContext propertyAccessContext = this.context;
-                    try {
-                        // Call the getter with the ORIGINAL receiver as 'this', not the prototype
-                        JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
-                        // Check if getter threw an exception - return the error value or undefined
-                        if (propertyAccessContext.hasPendingException()) {
-                            // Cross-realm: propagate exception to receiver's context
-                            if (receiver instanceof JSObject receiverObj
-                                    && receiverObj.context != null
-                                    && receiverObj.context != propertyAccessContext) {
-                                receiverObj.context.setPendingException(
-                                        propertyAccessContext.getPendingException());
-                                propertyAccessContext.clearPendingException();
-                            }
-                            return result != null ? result : propertyAccessContext.getPendingException();
-                        }
-                        return result;
-                    } catch (JSVirtualMachineException e) {
-                        // Getter threw - convert to pending exception so callers can handle it
-                        JSValue exception = e.getJsError() != null ? e.getJsError()
-                                : e.getJsValue() != null ? e.getJsValue()
-                                  : propertyAccessContext.throwError(e.getMessage());
-                        propertyAccessContext.setPendingException(exception);
-                        // Cross-realm: propagate exception to receiver's context
-                        if (receiver instanceof JSObject receiverObj
-                                && receiverObj.context != null
-                                && receiverObj.context != propertyAccessContext) {
-                            receiverObj.context.setPendingException(exception);
-                            propertyAccessContext.clearPendingException();
-                        }
-                        return JSUndefined.INSTANCE;
-                    }
-                }
-                // Accessor property without getter (or without context) reads as undefined.
-                return JSUndefined.INSTANCE;
-            }
-            // Regular property with value
-            return propertyValues[offset];
+        if (current == null) {
+            return JSUndefined.INSTANCE;
         }
-
-        // Legacy SpiderMonkey-style function.caller/arguments extension.
-        // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
-        // non-strict functions still report dynamic caller/arguments information.
-        if (key.isString()
-                && this instanceof JSFunction currentFunction
-                && isLegacyFunctionPropertyAccessible(currentFunction)) {
-            String propertyName = key.asString();
-            if (JSKeyword.ARGUMENTS.equals(propertyName)) {
-                JSContext propertyAccessContext = this.context;
-                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
-                if (currentFunctionFrame == null) {
-                    return JSNull.INSTANCE;
-                }
-                JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
-                if (argumentsObject == null) {
-                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
-                    propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
-                    currentFunctionFrame.setArgumentsObject(false, argumentsObject);
-                }
-                return argumentsObject;
-            }
-            if ("caller".equals(propertyName)) {
-                JSContext propertyAccessContext = this.context;
-                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
-                if (currentFunctionFrame == null) {
-                    return JSNull.INSTANCE;
-                }
-                StackFrame callerFrame = currentFunctionFrame.getCaller();
-                while (callerFrame != null && shouldSkipLegacyCallerFrame(callerFrame)) {
-                    callerFrame = callerFrame.getCaller();
-                }
-                if (callerFrame == null || callerFrame.getCaller() == null) {
-                    return JSNull.INSTANCE;
-                }
-                JSFunction callerFunction = callerFrame.getFunction();
-                if (!isLegacyFunctionPropertyAccessible(callerFunction)) {
-                    return JSNull.INSTANCE;
-                }
-                return callerFunction;
-            }
+        if (depth >= MAX_PROTOTYPE_DEPTH) {
+            throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
         }
-
-        // Look in the prototype chain, bounded so a cyclic or pathologically deep chain reports a
-        // diagnosable error rather than exhausting the Java stack or silently answering undefined.
-        if (prototype != null) {
-            if (depth >= MAX_PROTOTYPE_DEPTH) {
-                throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
-            }
-            return prototype.getWithReceiver(key, receiver, depth + 1);
-        }
-
-        return JSUndefined.INSTANCE;
+        return current.getWithReceiver(key, receiver, depth + 1);
     }
 
     /**
@@ -1072,13 +1068,33 @@ public non-sealed class JSObject implements JSValue {
         if (hasOwnProperty(key)) {
             return true;
         }
-        if (prototype == null) {
+        // Iterative for every link that does not replace the lookup, for the reason given on
+        // getWithReceiver: `'x' in object` over a thousand-link chain — of plain objects, of
+        // arrays, of functions — is a valid program. hasOwnProperty is virtual, so each link's own
+        // exotic storage is consulted without leaving the loop.
+        JSObject current = prototype;
+        JSObject tortoise = prototype;
+        boolean advanceTortoise = false;
+        while (current != null && !current.interceptsPropertyLookup(key)) {
+            if (current.hasOwnProperty(key)) {
+                return true;
+            }
+            current = current.prototype;
+            if (advanceTortoise) {
+                tortoise = tortoise.prototype;
+            }
+            advanceTortoise = !advanceTortoise;
+            if (current != null && current == tortoise) {
+                throw new JSRangeErrorException("Cyclic prototype chain");
+            }
+        }
+        if (current == null) {
             return false;
         }
         if (depth >= MAX_PROTOTYPE_DEPTH) {
             throw new JSRangeErrorException("Maximum prototype chain depth exceeded");
         }
-        return prototype.has(key, depth + 1);
+        return current.has(key, depth + 1);
     }
 
     /**
@@ -1110,6 +1126,16 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Identity hash, {@code final} for the reason given on {@link #equals(Object)}.
+     *
+     * @return the identity hash code
+     */
+    @Override
+    public final int hashCode() {
+        return System.identityHashCode(this);
+    }
+
+    /**
      * Initialize properties in bulk on a freshly created object with no existing properties.
      * This is more efficient than calling defineProperty repeatedly because it avoids
      * the O(N²) cost of incremental shape growth (linear scans + array copies per property).
@@ -1118,6 +1144,24 @@ public non-sealed class JSObject implements JSValue {
     public void initProperties(PropertyKey[] keys, PropertyDescriptor[] descriptors, JSValue[] values) {
         this.shape = new JSShape(keys, descriptors);
         this.propertyValues = values;
+    }
+
+    /**
+     * Whether this object's {@code [[Get]]}/{@code [[HasProperty]]} replaces the ordinary lookup
+     * for the given key, rather than merely adding own storage to it.
+     * <p>
+     * Only such an object has to be dispatched to virtually when it turns up in someone else's
+     * prototype chain; everything else is walked iteratively, so the chain length a program may
+     * build is bounded by memory rather than by a Java stack frame per link. Gating that walk on
+     * {@code getClass() == JSObject.class} instead made arrays, functions and every other ordinary
+     * built-in subclass recurse, so a thousand-link chain of arrays was a {@code RangeError} while
+     * the same chain of plain objects was not.
+     *
+     * @param key the property being looked up
+     * @return true when this object decides the whole operation itself
+     */
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return false;
     }
 
     /**
@@ -1263,6 +1307,129 @@ public non-sealed class JSObject implements JSValue {
     }
 
     /**
+     * Own-property lookup for {@link #getWithReceiver(PropertyKey, JSValue, int)}, without the
+     * prototype walk.
+     * <p>
+     * Split out so the walk can run as a loop over ordinary prototypes rather than one Java frame
+     * per link, while the two callers — this object and each ordinary prototype the loop reaches —
+     * share exactly one implementation of what "own property" means.
+     *
+     * @param key      the property key
+     * @param receiver the receiver to pass to a getter
+     * @return the value, or {@code null} when this object has no own property for the key
+     */
+    protected JSValue lookupOwnForGet(PropertyKey key, JSValue receiver) {
+        long arrayIndex = key.toArrayIndex();
+        if (arrayIndex >= 0 && arrayIndex <= Integer.MAX_VALUE && sparseProperties != null) {
+            JSValue sparseValue = sparseProperties.get((int) arrayIndex);
+            if (sparseValue != null) {
+                return sparseValue;
+            }
+        }
+
+        // String primitive wrapper: return character at numeric index
+        if (primitiveValue instanceof JSString str && arrayIndex >= 0) {
+            String s = str.value();
+            if (arrayIndex < s.length()) {
+                return new JSString(String.valueOf(s.charAt((int) arrayIndex)));
+            }
+        }
+
+        // Look in own properties
+        int offset = getOwnPropertyOffset(key);
+        if (offset >= 0) {
+            PropertyDescriptor desc = shape.getDescriptorAt(offset);
+            if (desc != null && desc.isAccessorDescriptor()) {
+                JSFunction getter = desc.getGetter();
+                if (getter != null) {
+                    JSContext propertyAccessContext = this.context;
+                    try {
+                        // Call the getter with the ORIGINAL receiver as 'this', not the prototype
+                        JSValue result = getter.call(propertyAccessContext, receiver, JSValue.NO_ARGS);
+                        // Check if getter threw an exception - return the error value or undefined
+                        if (propertyAccessContext.hasPendingException()) {
+                            // Cross-realm: propagate exception to receiver's context
+                            if (receiver instanceof JSObject receiverObj
+                                    && receiverObj.context != null
+                                    && receiverObj.context != propertyAccessContext) {
+                                receiverObj.context.setPendingException(
+                                        propertyAccessContext.getPendingException());
+                                propertyAccessContext.clearPendingException();
+                            }
+                            return result != null ? result : propertyAccessContext.getPendingException();
+                        }
+                        return result;
+                    } catch (JSVirtualMachineException e) {
+                        // Getter threw - convert to pending exception so callers can handle it
+                        JSValue exception = e.getJsError() != null ? e.getJsError()
+                                : e.getJsValue() != null ? e.getJsValue()
+                                  : propertyAccessContext.throwError(e.getMessage());
+                        propertyAccessContext.setPendingException(exception);
+                        // Cross-realm: propagate exception to receiver's context
+                        if (receiver instanceof JSObject receiverObj
+                                && receiverObj.context != null
+                                && receiverObj.context != propertyAccessContext) {
+                            receiverObj.context.setPendingException(exception);
+                            propertyAccessContext.clearPendingException();
+                        }
+                        return JSUndefined.INSTANCE;
+                    }
+                }
+                // Accessor property without getter (or without context) reads as undefined.
+                return JSUndefined.INSTANCE;
+            }
+            // Regular property with value. A null slot would be indistinguishable from the
+            // "no own property" sentinel, so it reads as undefined.
+            JSValue storedValue = propertyValues[offset];
+            return storedValue == null ? JSUndefined.INSTANCE : storedValue;
+        }
+
+        // Legacy SpiderMonkey-style function.caller/arguments extension.
+        // Function.prototype itself exposes %ThrowTypeError% accessors, but regular
+        // non-strict functions still report dynamic caller/arguments information.
+        if (key.isString()
+                && this instanceof JSFunction currentFunction
+                && isLegacyFunctionPropertyAccessible(currentFunction)) {
+            String propertyName = key.asString();
+            if (JSKeyword.ARGUMENTS.equals(propertyName)) {
+                JSContext propertyAccessContext = this.context;
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSArguments argumentsObject = currentFunctionFrame.getArgumentsObject(false);
+                if (argumentsObject == null) {
+                    argumentsObject = new JSArguments(propertyAccessContext, currentFunctionFrame.getArguments(), true, null);
+                    propertyAccessContext.transferPrototype(argumentsObject, JSObject.NAME);
+                    currentFunctionFrame.setArgumentsObject(false, argumentsObject);
+                }
+                return argumentsObject;
+            }
+            if ("caller".equals(propertyName)) {
+                JSContext propertyAccessContext = this.context;
+                StackFrame currentFunctionFrame = findInnermostFrameForFunction(propertyAccessContext, currentFunction);
+                if (currentFunctionFrame == null) {
+                    return JSNull.INSTANCE;
+                }
+                StackFrame callerFrame = currentFunctionFrame.getCaller();
+                while (callerFrame != null && shouldSkipLegacyCallerFrame(callerFrame)) {
+                    callerFrame = callerFrame.getCaller();
+                }
+                if (callerFrame == null || callerFrame.getCaller() == null) {
+                    return JSNull.INSTANCE;
+                }
+                JSFunction callerFunction = callerFrame.getFunction();
+                if (!isLegacyFunctionPropertyAccessible(callerFunction)) {
+                    return JSNull.INSTANCE;
+                }
+                return callerFunction;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Record that the realm prototype has been transferred onto this constant object.
      * For internal use only - not accessible from JavaScript.
      *
@@ -1401,8 +1568,6 @@ public non-sealed class JSObject implements JSValue {
         setInternal(key, value, this, true);
     }
 
-    // Prototype chain
-
     /**
      * Set the constructor type internal slot.
      * This is for internal use only - not accessible from JavaScript.
@@ -1411,14 +1576,14 @@ public non-sealed class JSObject implements JSValue {
         constructorType = type;
     }
 
+    // Prototype chain
+
     /**
      * Set the [IsHTMLDDA] internal slot.
      */
     public void setHTMLDDA(boolean htmlDDA) {
         this.htmlDDA = htmlDDA;
     }
-
-    // Object integrity levels (ES5)
 
     /**
      * Mark this object as an immutable prototype exotic object.
@@ -1429,6 +1594,8 @@ public non-sealed class JSObject implements JSValue {
     public void setImmutablePrototype() {
         immutablePrototype = true;
     }
+
+    // Object integrity levels (ES5)
 
     private boolean setInternal(PropertyKey key, JSValue value, JSObject receiver, boolean throwOnFailure) {
         // Check if property already exists
@@ -1738,12 +1905,12 @@ public non-sealed class JSObject implements JSValue {
         return objMap;
     }
 
-    // JSValue implementation
-
     @Override
     public String toString() {
         return "[object Object]";
     }
+
+    // JSValue implementation
 
     @Override
     public JSValueType type() {
@@ -1770,6 +1937,20 @@ public non-sealed class JSObject implements JSValue {
             return true;
         }
         return findDataPropertyForDiagnostics(PropertyKey.TO_STRING) == ordinaryToString;
+    }
+
+    /**
+     * The weak-collection entries naming this object as their key.
+     *
+     * @param create true to create the table when absent
+     * @return the table, or {@code null} when absent and {@code create} is false
+     * @see JSWeakEntryTable
+     */
+    final JSWeakEntryTable weakEntries(boolean create) {
+        if (weakEntryTable == null && create) {
+            weakEntryTable = new JSWeakEntryTable();
+        }
+        return weakEntryTable;
     }
 
     public enum SetPrototypeResult {

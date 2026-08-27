@@ -34,6 +34,30 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
     }
 
     /**
+     * Add a name to the set of named-function-expression bindings the enclosing parameter
+     * environments make visible.
+     * <p>
+     * A set that already carries the name is already the answer, and is returned as it stands: an
+     * inner function expression reusing an outer one's name shadows it, and the entry says all the
+     * consumers ask — whether the name resolves through a parameter environment.
+     *
+     * @param enclosingNames the enclosing environments' names
+     * @param name           the name to add
+     * @return the set including that name
+     */
+    private static Set<String> withParameterScopeName(Set<String> enclosingNames, String name) {
+        if (enclosingNames.isEmpty()) {
+            return Set.of(name);
+        }
+        if (enclosingNames.contains(name)) {
+            return enclosingNames;
+        }
+        Set<String> names = new HashSet<>(enclosingNames);
+        names.add(name);
+        return Collections.unmodifiableSet(names);
+    }
+
+    /**
      * Returns true when a strict-mode wrapper function can safely be used
      * around a class body expression. Wrapper functions introduce a new
      * function boundary, which breaks yield/await semantics, so they must
@@ -73,6 +97,8 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         functionContext.isInGeneratorFunction = functionExpression.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         inheritClassInnerNameCapture(functionContext);
+        Set<String> enclosingParameterScopeFunctionNames =
+                inheritParameterScopeFunctionNameCapture(functionContext);
         inheritVisibleLexicalCapturesForDirectEvalInBody(
                 functionContext,
                 functionExpression.getBody(),
@@ -93,29 +119,56 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             declareAndInitializeImplicitArgumentsBinding(functionContext);
         }
 
+        // ES2024 15.2.5: the BindingIdentifier of a named function expression is bound in a
+        // function environment that *wraps* the function's parameter and variable environments.
+        // Default-parameter initializers resolve through the parameter environment into it, so the
+        // name is visible there; a `var`, lexical, class or function declaration of the same name
+        // in the body creates a different binding that shadows it from the body onwards, and that
+        // binding starts as undefined rather than holding the function object.
+        //
+        // Both halves are modelled with two local slots: the self-name slot is declared first so
+        // defaults see it, and the body declaration then takes over the name in a fresh slot.
+        Integer selfNameLocalIndex = null;
+        boolean selfNameShadowedByBodyDeclaration = false;
         if (functionExpression.getId() != null) {
-            boolean conflictsWithParameter = false;
+            String selfName = functionExpression.getId().getName();
+            boolean conflictsWithParameter;
             Set<String> allParamNames = new HashSet<>();
             for (Pattern param : functionExpression.getParams()) {
                 allParamNames.addAll(param.getBoundNames());
             }
-            conflictsWithParameter = allParamNames.contains(functionExpression.getId().getName());
+            conflictsWithParameter = allParamNames.contains(selfName);
             if (!conflictsWithParameter && functionExpression.getRestParameter() != null) {
                 List<String> restBoundNames = functionExpression.getRestParameter().getArgument().getBoundNames();
-                conflictsWithParameter = restBoundNames.contains(functionExpression.getId().getName());
+                conflictsWithParameter = restBoundNames.contains(selfName);
             }
             if (!conflictsWithParameter) {
-                functionContext.scopeManager.currentScope().declareLocal(functionExpression.getId().getName());
+                selfNameShadowedByBodyDeclaration = functionContext.compilerAnalysis.bodyDeclaresBinding(
+                        functionExpression.getBody().getBody(), selfName);
+                selfNameLocalIndex = functionContext.scopeManager.currentScope().declareLocal(selfName);
                 // Per ES2024 15.2.5: The BindingIdentifier in a named function expression
                 // is an immutable binding. Following QuickJS add_func_var:
                 // - In strict mode: mark as const so assignment throws TypeError
                 // - In non-strict mode: mark as function name so assignment is silently ignored
                 if (functionContext.strictMode) {
-                    functionContext.scopeManager.currentScope().markConstLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markConstLocal(selfName);
                 } else {
-                    functionContext.scopeManager.currentScope().markFunctionNameLocal(functionExpression.getId().getName());
+                    functionContext.scopeManager.currentScope().markFunctionNameLocal(selfName);
                 }
             }
+        }
+
+        // Everything compiled from here to the end of parameter initialization sits in the
+        // parameter environment, so a closure created there has to carry the function-expression
+        // bindings with it — see CompilerContext.parameterScopeFunctionNames. This function's own
+        // name goes in front of whatever it inherited rather than replacing it, because a closure
+        // here is inside both environments. The inherited list is restored afterwards rather than
+        // cleared: a function nested in an *enclosing* function's default initializer is still
+        // inside that initializer, body and all.
+        Set<String> inheritedParameterScopeFunctionNames = functionContext.parameterScopeFunctionNames;
+        if (selfNameShadowedByBodyDeclaration) {
+            functionContext.parameterScopeFunctionNames = withParameterScopeName(
+                    inheritedParameterScopeFunctionNames, functionExpression.getId().getName());
         }
 
         // Emit default parameter initialization following QuickJS pattern
@@ -146,6 +199,26 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
         // If this is a generator function, emit INITIAL_YIELD at the start
         if (functionExpression.isGenerator()) {
             functionContext.emitter.emitOpcode(Opcode.INITIAL_YIELD);
+        }
+
+        // The parameter environment is fully built by now, so anything the body declares under the
+        // function's own name takes over that name in a slot of its own. Bytecode emitted above for
+        // the default initializers keeps referring to the self-name slot by index.
+        functionContext.parameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
+        int bodyScopeEnteredLocalIndex = -1;
+        if (selfNameShadowedByBodyDeclaration) {
+            String selfName = functionExpression.getId().getName();
+            // The one thing an index cannot express: which of the two environments the frame is
+            // executing in. Direct eval resolves by name at run time and needs to know, so the
+            // transition is recorded in a slot of its own — false for the whole of parameter
+            // initialization, true from the first instruction of the body.
+            bodyScopeEnteredLocalIndex = functionContext.scopeManager.currentScope()
+                    .declareLocal("$function_expression_body_entered_" + selfName);
+            functionContext.emitter.emitOpcode(Opcode.PUSH_TRUE);
+            functionContext.emitter.emitOpcodeU16(Opcode.PUT_LOC, bodyScopeEnteredLocalIndex);
+            functionContext.scopeManager.currentScope().shadowLocalWithFreshSlot(
+                    selfName,
+                    "$function_expression_name_" + selfName);
         }
 
         // Phase 0: Pre-declare all var bindings as locals before function hoisting.
@@ -215,10 +288,6 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             functionContext.emitter.patchJump(jumpOverCatch, functionContext.emitter.currentOffset());
         }
 
-        Integer functionExpressionSelfLocalIndex = null;
-        if (functionExpression.getId() != null) {
-            functionExpressionSelfLocalIndex = functionContext.scopeManager.currentScope().getLocal(functionExpression.getId().getName());
-        }
         int localCount = functionContext.scopeManager.currentScope().getLocalCount();
         String[] localVarNames = functionContext.scopeManager.getLocalVarNames();
         functionContext.scopeManager.exitScope();
@@ -259,9 +328,16 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
                 functionSource   // source code for toString()
         );
         function.setHasParameterExpressions(functionExpression.getFunctionParams().hasNonSimpleParameters());
-        if (functionExpressionSelfLocalIndex != null) {
-            function.setSelfLocalIndex(functionExpressionSelfLocalIndex);
+        if (selfNameLocalIndex != null) {
+            function.setSelfLocalIndex(selfNameLocalIndex);
         }
+        if (bodyScopeEnteredLocalIndex >= 0) {
+            function.setOwnParameterScopeFunctionName(
+                    functionExpression.getId().getName(), bodyScopeEnteredLocalIndex);
+        }
+        // Created inside enclosing default initializers: those captures are the bindings, and they
+        // are in scope for this function's whole lifetime, so they have no phase slot.
+        function.setInheritedParameterScopeFunctionNames(enclosingParameterScopeFunctionNames);
 
         // Prototype chain will be initialized when the function is loaded
         // during bytecode execution (see FCLOSURE opcode handler)
@@ -413,6 +489,31 @@ final class FunctionExpressionCompiler extends AstNodeCompiler<FunctionExpressio
             targetContext.classInnerNameToCapture = classInnerName;
             targetContext.captureResolver.resolveCapturedBindingIndex(classInnerName);
         }
+    }
+
+    /**
+     * Carry the enclosing parameter environment's function-expression binding into a nested
+     * function, and on into anything nested inside that.
+     * <p>
+     * Compiled references need nothing: they resolve to the enclosing slot by index. A direct
+     * {@code eval} does, because it resolves by name on the frame it runs on — the closure's — and
+     * from there the enclosing function's slot is reachable only through a capture. The name is
+     * captured whether or not the closure mentions it, since whether it does is only knowable by
+     * reading a string at run time.
+     *
+     * @param targetContext the nested function's compilation context
+     * @return the inherited bindings; empty when there are none
+     */
+    Set<String> inheritParameterScopeFunctionNameCapture(CompilerContext targetContext) {
+        Set<String> parameterScopeFunctionNames = compilerContext.parameterScopeFunctionNames;
+        if (!parameterScopeFunctionNames.isEmpty()) {
+            targetContext.parameterScopeFunctionNames = parameterScopeFunctionNames;
+            // Every one of them, not just the innermost: they are all still in scope here.
+            for (String parameterScopeFunctionName : parameterScopeFunctionNames) {
+                targetContext.captureResolver.resolveCapturedBindingIndex(parameterScopeFunctionName);
+            }
+        }
+        return parameterScopeFunctionNames;
     }
 
     void inheritVisibleLexicalCapturesForDirectEvalInBody(

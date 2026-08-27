@@ -57,6 +57,12 @@ public final class JSBytecodeFunction extends JSFunction {
     private final JSObject prototype;
     private final int selfCaptureIndex;
     private final boolean strict;
+    /**
+     * The local slot a named function expression sets on entering its body, or -1.
+     * <p>
+     * See {@link #getParameterScopeFunctionName()} for what it is for.
+     */
+    private int bodyScopeEnteredLocalIndex = -1;
     private int[] captureSourceInfos;
     private JSFunction capturedActiveFunction;
     private JSValue capturedArguments;
@@ -74,7 +80,20 @@ public final class JSBytecodeFunction extends JSFunction {
     private boolean evalSuperCallAllowed;
     private boolean hasArgumentsParameterBinding;
     private boolean hasParameterExpressions;
+    /**
+     * The named-function-expression bindings this function captured from enclosing parameter
+     * environments. Never null.
+     * <p>
+     * See {@link #getInheritedParameterScopeFunctionNames()}.
+     */
+    private Set<String> inheritedParameterScopeFunctionNames = Set.of();
     private boolean newTargetAllowed;
+    /**
+     * The name of this named function expression when its body redeclares it, else null.
+     * <p>
+     * See {@link #getActiveParameterScopeFunctionName(StackFrame)}.
+     */
+    private String parameterScopeFunctionName;
     private int selfLocalIndex;
     private String sourceCode;
     private VarRef[] varRefs;
@@ -1645,6 +1664,9 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
+        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
@@ -1683,6 +1705,9 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasParameterExpressions = this.hasParameterExpressions;
         copiedFunction.hasArgumentsParameterBinding = this.hasArgumentsParameterBinding;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
+        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
         copiedFunction.capturedActiveFunction = this.capturedActiveFunction;
         copiedFunction.capturedDerivedThisRef = this.capturedDerivedThisRef;
         copiedFunction.capturedThisArg = this.capturedThisArg;
@@ -1699,6 +1724,33 @@ public final class JSBytecodeFunction extends JSFunction {
 
     public boolean displaysAsArgumentsObjectInToString() {
         return displaysAsArgumentsObjectInToString;
+    }
+
+    /**
+     * This function's own named-function-expression binding, when the given frame is still
+     * initializing parameters and so resolves the name through the parameter environment.
+     * <p>
+     * Kept apart from {@link #getInheritedParameterScopeFunctionNames()} because the two answer
+     * different questions. This one names a binding of <em>this</em> frame, so it holds whatever
+     * the frame's own slots say; an inherited one names a binding of an enclosing frame, which any
+     * binding this function declares under the same spelling shadows.
+     *
+     * @param frame the frame to answer for
+     * @return the name, or null when the frame is not in that phase
+     */
+    public String getActiveParameterScopeFunctionName(StackFrame frame) {
+        return isOwnParameterScopeActive(frame) ? parameterScopeFunctionName : null;
+    }
+
+    /**
+     * The local slot this function sets to {@code true} the moment it enters its body, or -1 when
+     * it has no such slot.
+     *
+     * @return the slot index, or -1
+     * @see #getParameterScopeFunctionName()
+     */
+    public int getBodyScopeEnteredLocalIndex() {
+        return bodyScopeEnteredLocalIndex;
     }
 
     /**
@@ -1793,6 +1845,26 @@ public final class JSBytecodeFunction extends JSFunction {
         return evalDynamicScopeFrame;
     }
 
+    /**
+     * The named-function-expression bindings this function captured from enclosing parameter
+     * environments.
+     * <p>
+     * A closure written inside two nested initializers is inside both environments, so one name was
+     * never enough — the inner one displaced the outer, and the outer binding silently vanished
+     * from everything compiled there.
+     * <p>
+     * These are names, not binding identities, and a name is not a binding: a function nested in an
+     * enclosing initializer may declare its own parameter, {@code var}, lexical, class or function
+     * of the same spelling, and that nearer binding is a different one — mutable, except for
+     * {@code const}. Callers must therefore treat an entry here as authoritative only for a name
+     * the frame does not bind itself.
+     *
+     * @return the inherited bindings; empty when there are none
+     */
+    public Set<String> getInheritedParameterScopeFunctionNames() {
+        return inheritedParameterScopeFunctionNames;
+    }
+
     @Override
     public int getLength() {
         return length;
@@ -1801,6 +1873,29 @@ public final class JSBytecodeFunction extends JSFunction {
     @Override
     public String getName() {
         return name;
+    }
+
+    /**
+     * The name of this named function expression, when the body declares that name again.
+     * <p>
+     * ES2024 15.2.5 binds the {@code BindingIdentifier} of a named function expression in a
+     * function environment that <em>wraps</em> the parameter and variable environments. A default
+     * initializer therefore resolves the name to the function itself, while a {@code var}, lexical,
+     * class or function declaration of the same name in the body is a different binding that starts
+     * as {@code undefined}. Both live in one flattened frame here, in two slots, and compiled code
+     * refers to whichever is correct by index.
+     * <p>
+     * Direct {@code eval} cannot: it resolves by name, at run time, and the answer depends on which
+     * of the two environments the frame is currently executing in. {@link
+     * #getBodyScopeEnteredLocalIndex()} is what tells the two phases apart — it is false for the
+     * whole of parameter initialization and true from the first instruction of the body — so a
+     * direct {@code eval} in a default initializer can be given the function, and one in the body
+     * the body's own binding.
+     *
+     * @return the shadowed function-expression name, or null when this function has none
+     */
+    public String getParameterScopeFunctionName() {
+        return parameterScopeFunctionName;
     }
 
     /**
@@ -1918,6 +2013,9 @@ public final class JSBytecodeFunction extends JSFunction {
         copiedFunction.hasArgumentsParameterBinding = hasArgumentsParameterBinding;
         copiedFunction.hasParameterExpressions = hasParameterExpressions;
         copiedFunction.selfLocalIndex = selfLocalIndex;
+        copiedFunction.parameterScopeFunctionName = parameterScopeFunctionName;
+        copiedFunction.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
+        copiedFunction.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames;
         copiedFunction.varRefs = varRefs;
         copiedFunction.capturedActiveFunction = capturedActiveFunction;
         copiedFunction.capturedArguments = capturedArguments;
@@ -1983,6 +2081,23 @@ public final class JSBytecodeFunction extends JSFunction {
 
     public boolean isNewTargetAllowed() {
         return newTargetAllowed;
+    }
+
+    /**
+     * Whether this frame is still initializing the parameters of a named function expression whose
+     * body redeclares its own name.
+     *
+     * @param frame the frame to answer for
+     * @return true while the parameter environment, not the body, is what the name resolves through
+     */
+    public boolean isOwnParameterScopeActive(StackFrame frame) {
+        if (parameterScopeFunctionName == null || bodyScopeEnteredLocalIndex < 0) {
+            return false;
+        }
+        JSValue[] locals = frame == null ? null : frame.getLocals();
+        return locals != null
+                && bodyScopeEnteredLocalIndex < locals.length
+                && locals[bodyScopeEnteredLocalIndex] != JSBoolean.TRUE;
     }
 
     /**
@@ -2099,8 +2214,34 @@ public final class JSBytecodeFunction extends JSFunction {
         this.hasParameterExpressions = hasParameterExpressions;
     }
 
+    /**
+     * Record the named-function-expression bindings this function captured from the parameter
+     * environments it was created inside.
+     *
+     * @param inheritedParameterScopeFunctionNames the names
+     * @see #getInheritedParameterScopeFunctionNames()
+     */
+    public void setInheritedParameterScopeFunctionNames(Set<String> inheritedParameterScopeFunctionNames) {
+        this.inheritedParameterScopeFunctionNames = inheritedParameterScopeFunctionNames == null
+                ? Set.of()
+                : inheritedParameterScopeFunctionNames;
+    }
+
     public void setNewTargetAllowed(boolean newTargetAllowed) {
         this.newTargetAllowed = newTargetAllowed;
+    }
+
+    /**
+     * Record the two-environment shape of a named function expression whose body redeclares its
+     * name.
+     *
+     * @param parameterScopeFunctionName the function-expression name
+     * @param bodyScopeEnteredLocalIndex the slot set to true on entering the body
+     * @see #getActiveParameterScopeFunctionName(StackFrame)
+     */
+    public void setOwnParameterScopeFunctionName(String parameterScopeFunctionName, int bodyScopeEnteredLocalIndex) {
+        this.parameterScopeFunctionName = parameterScopeFunctionName;
+        this.bodyScopeEnteredLocalIndex = bodyScopeEnteredLocalIndex;
     }
 
     public void setSelfLocalIndex(int selfLocalIndex) {

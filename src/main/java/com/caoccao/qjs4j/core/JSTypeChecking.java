@@ -26,9 +26,6 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
  * Provides fast type checking predicates for all JavaScript value types.
  */
 public final class JSTypeChecking {
-    private static final int MAX_PROXY_NESTING_DEPTH = 1000;
-
-    // Primitive type checks
 
     /**
      * Get the JavaScript type name of a value.
@@ -74,20 +71,30 @@ public final class JSTypeChecking {
      * @return 1 if array, 0 if not, -1 if exception (revoked proxy)
      */
     public static int isArray(JSContext context, JSValue value) {
-        int depth = 0;
-        while (value instanceof JSProxy proxy) {
-            if (++depth > MAX_PROXY_NESTING_DEPTH) {
-                context.throwTypeError("too much recursion");
-                return -1;
-            }
+        JSValue hare = value;
+        JSValue tortoise = value;
+        boolean advanceTortoise = false;
+        while (hare instanceof JSProxy proxy) {
             if (proxy.isRevoked()) {
                 context.throwTypeError("Cannot perform 'isArray' on a proxy that has been revoked");
                 return -1;
             }
-            value = proxy.getTarget();
+            hare = proxy.getTarget();
+            if (advanceTortoise && tortoise instanceof JSProxy tortoiseProxy) {
+                tortoise = tortoiseProxy.getTarget();
+            }
+            advanceTortoise = !advanceTortoise;
+            if (hare == tortoise) {
+                // Only reachable through the raw embedder API; the Proxy constructor cannot make
+                // a cycle. Reported rather than spun on.
+                context.throwTypeError("Cyclic proxy chain");
+                return -1;
+            }
         }
-        return (value instanceof JSObject obj && obj.isArrayObject()) ? 1 : 0;
+        return (hare instanceof JSObject obj && obj.isArrayObject()) ? 1 : 0;
     }
+
+    // Primitive type checks
 
     /**
      * Check if value is an array. Simple version without context
@@ -97,10 +104,7 @@ public final class JSTypeChecking {
         if (value instanceof JSObject obj && obj.isArrayObject()) {
             return true;
         }
-        if (value instanceof JSProxy proxy) {
-            return isProxyArray(proxy, 0);
-        }
-        return false;
+        return unwrapTargets(value, false) instanceof JSObject target && target.isArrayObject();
     }
 
     /**
@@ -128,21 +132,20 @@ public final class JSTypeChecking {
      * Check if value is a constructor (can be used with new).
      */
     public static boolean isConstructor(JSValue value) {
-        // Check if function has [[Construct]] internal method
-        if (value instanceof JSBytecodeFunction bytecodeFunc) {
-            return bytecodeFunc.isConstructor();
-        } else if (value instanceof JSBoundFunction boundFunction) {
-            return isConstructor(boundFunction.getTarget());
-        } else if (value instanceof JSNativeFunction nativeFunc) {
-            return nativeFunc.isConstructor();
-        } else if (value instanceof JSProxy proxy) {
-            return isProxyConstructor(proxy, 0);
-        } else // Other function types default to constructor-capable.
-            if (value instanceof JSClass) {
-                return true;
-            } else {
-                return value instanceof JSFunction;
-            }
+        // [[Construct]] follows both a Proxy's target and a bound function's target, and either
+        // can nest arbitrarily, so the unwrap is a loop rather than two mutual recursions.
+        JSValue target = unwrapTargets(value, true);
+        if (target instanceof JSBytecodeFunction bytecodeFunction) {
+            return bytecodeFunction.isConstructor();
+        }
+        if (target instanceof JSNativeFunction nativeFunction) {
+            return nativeFunction.isConstructor();
+        }
+        // Other function types default to constructor-capable.
+        if (target instanceof JSClass) {
+            return true;
+        }
+        return target instanceof JSFunction;
     }
 
     /**
@@ -166,10 +169,7 @@ public final class JSTypeChecking {
         if (value instanceof JSFunction) {
             return true;
         }
-        if (value instanceof JSProxy proxy) {
-            return isProxyFunction(proxy, 0);
-        }
-        return false;
+        return unwrapTargets(value, false) instanceof JSFunction;
     }
 
     /**
@@ -190,8 +190,6 @@ public final class JSTypeChecking {
         return value instanceof JSNumber n && Double.isNaN(n.value());
     }
 
-    // Composite checks
-
     /**
      * Check if value is null.
      */
@@ -206,14 +204,14 @@ public final class JSTypeChecking {
         return value instanceof JSNull || value instanceof JSUndefined;
     }
 
+    // Composite checks
+
     /**
      * Check if value is a number.
      */
     public static boolean isNumber(JSValue value) {
         return value instanceof JSNumber;
     }
-
-    // Number-specific checks
 
     /**
      * Check if value is an object (including functions, arrays).
@@ -235,40 +233,7 @@ public final class JSTypeChecking {
                 value instanceof JSBigInt;
     }
 
-    private static boolean isProxyArray(JSProxy proxy, int depth) {
-        if (depth > MAX_PROXY_NESTING_DEPTH) {
-            return false;
-        }
-        JSValue target = proxy.getTarget();
-        if (target instanceof JSProxy nestedProxy) {
-            return isProxyArray(nestedProxy, depth + 1);
-        }
-        return target instanceof JSObject obj && obj.isArrayObject();
-    }
-
-    private static boolean isProxyConstructor(JSProxy proxy, int depth) {
-        if (depth > MAX_PROXY_NESTING_DEPTH) {
-            return false;
-        }
-        JSValue target = proxy.getTarget();
-        if (target instanceof JSProxy nestedProxy) {
-            return isProxyConstructor(nestedProxy, depth + 1);
-        }
-        return isConstructor(target);
-    }
-
-    private static boolean isProxyFunction(JSProxy proxy, int depth) {
-        if (depth > MAX_PROXY_NESTING_DEPTH) {
-            return false;
-        }
-        JSValue target = proxy.getTarget();
-        if (target instanceof JSProxy nestedProxy) {
-            return isProxyFunction(nestedProxy, depth + 1);
-        }
-        return target instanceof JSFunction;
-    }
-
-    // Boolean value checks
+    // Number-specific checks
 
     /**
      * Check if value is a safe integer (-(2^53 - 1) to 2^53 - 1).
@@ -293,7 +258,7 @@ public final class JSTypeChecking {
         return a.type() == b.type();
     }
 
-    // Type equality checks
+    // Boolean value checks
 
     /**
      * Check if value is a string.
@@ -309,7 +274,7 @@ public final class JSTypeChecking {
         return value instanceof JSSymbol;
     }
 
-    // Validation helpers
+    // Type equality checks
 
     /**
      * Check if value is truthy (converts to true in boolean context).
@@ -323,6 +288,25 @@ public final class JSTypeChecking {
      */
     public static boolean isUndefined(JSValue value) {
         return value instanceof JSUndefined;
+    }
+
+    // Validation helpers
+
+    /**
+     * One step of {@link #unwrapTargets(JSValue, boolean)}.
+     *
+     * @param value                the current value
+     * @param unwrapBoundFunctions true to also follow {@code [[BoundTargetFunction]]}
+     * @return the next value, or {@code null} when this one is the end of the chain
+     */
+    private static JSValue nextTarget(JSValue value, boolean unwrapBoundFunctions) {
+        if (value instanceof JSProxy proxy) {
+            return proxy.getTarget();
+        }
+        if (unwrapBoundFunctions && value instanceof JSBoundFunction boundFunction) {
+            return boundFunction.getTarget();
+        }
+        return null;
     }
 
     /**
@@ -413,5 +397,44 @@ public final class JSTypeChecking {
             return "object";
         }
         return "undefined";
+    }
+
+    /**
+     * Follow a chain of {@code Proxy} targets — and optionally bound-function targets — to the
+     * value at the end of it.
+     * <p>
+     * Iterative, and with no depth cutoff. Classification used to recurse with a limit of 1,000
+     * and then answer {@code false}, so wrapping a function in 1,002 proxies changed its
+     * {@code typeof} from {@code "function"} to {@code "object"} and made it unconstructable:
+     * a valid object's ECMAScript type depended on how many times it had been wrapped. A target
+     * is fixed when its {@code Proxy} is created, so the walk cannot see a chain change under it.
+     * <p>
+     * Termination does not rely on the chain being acyclic. The {@code Proxy} constructor cannot
+     * build a cycle — the target must already exist — but the raw embedder API is not bound by
+     * that, so Floyd's algorithm runs alongside the walk and reports a cycle as "not found"
+     * instead of spinning.
+     *
+     * @param value                the value to unwrap
+     * @param unwrapBoundFunctions true to also follow {@code [[BoundTargetFunction]]}
+     * @return the value at the end of the chain, or {@code null} when the chain is cyclic
+     */
+    private static JSValue unwrapTargets(JSValue value, boolean unwrapBoundFunctions) {
+        JSValue hare = value;
+        JSValue tortoise = value;
+        boolean advanceTortoise = false;
+        while (true) {
+            JSValue next = nextTarget(hare, unwrapBoundFunctions);
+            if (next == null) {
+                return hare;
+            }
+            hare = next;
+            if (advanceTortoise) {
+                tortoise = nextTarget(tortoise, unwrapBoundFunctions);
+            }
+            advanceTortoise = !advanceTortoise;
+            if (hare == tortoise) {
+                return null;
+            }
+        }
     }
 }

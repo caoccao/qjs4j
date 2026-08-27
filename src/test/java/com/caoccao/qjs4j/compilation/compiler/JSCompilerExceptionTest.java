@@ -38,7 +38,7 @@ class JSCompilerExceptionTest {
                 JSCompilerException.class,
                 () -> new BytecodeCompiler().compile(program));
 
-        assertThat(exception.getMessage()).isEqualTo("Break statement outside of loop");
+        assertThat(exception.getMessage()).isEqualTo("Illegal break statement");
         assertThat(exception.getAst()).isSameAs(breakStatement);
         assertThat(exception.getAst().getLocation()).isSameAs(sourceLocation);
     }

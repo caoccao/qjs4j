@@ -16,10 +16,13 @@
 
 package com.caoccao.qjs4j.core;
 
+import com.caoccao.qjs4j.builtins.AtomicsObject;
 import com.caoccao.qjs4j.utils.AtomTable;
 
+import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Represents a JavaScript runtime environment.
@@ -62,12 +65,53 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * the guarantee: it does not make the engine thread-safe.
  */
 public final class JSRuntime implements AutoCloseable {
+    /**
+     * The {@link AtomicsObject} this runtime's contexts coordinate through, fixed at construction.
+     * <p>
+     * A snapshot rather than a look-up through {@link #options}, because the options object is
+     * mutable and shared: reading it again at shutdown could close an instance this runtime never
+     * used while leaking the one it did, and two contexts of one runtime created either side of a
+     * mutation would have stopped coordinating with each other.
+     */
+    private final AtomicsObject atomicsObject;
     private final AtomTable atoms;
+    /**
+     * Terminal: once set, the runtime refuses every operation that would create or accept new work.
+     */
+    private final AtomicBoolean closed = new AtomicBoolean();
     private final List<JSContext> contexts;
     private final Map<String, JSSymbol> globalSymbolRegistry;
     private final Map<JSSymbol, String> globalSymbolReverseRegistry;
     private final Queue<Job> jobQueue;
+    /**
+     * Serialises admission against shutdown.
+     * <p>
+     * Setting {@link #closed} and clearing what the runtime owns were two independent steps, so a
+     * producer that had already passed the closed check could be suspended, let {@code close()}
+     * clear the queue, and then deposit its job into a runtime that had finished letting go of it.
+     * The registry had the same window, because it tested {@code closed} outside its own monitor.
+     * Every accepted mutation now happens under this lock, and {@code close()} clears under it —
+     * after sealing intake, so a producer either gets in before the clear or is refused.
+     */
+    private final Object lifecycleLock = new Object();
+    private final JSMemoryAccounting memoryAccounting;
     private final JSRuntimeOptions options;
+    /**
+     * Whether {@link #close()} is responsible for closing the runtime's {@link AtomicsObject}.
+     */
+    private final boolean ownsAtomicsObject;
+    /**
+     * The weak collections this runtime's keys have outlived.
+     * <p>
+     * A {@code WeakMap}/{@code WeakSet} entry lives on its key and holds its value strongly, so a
+     * collection that dies while its keys live has to be noticed somewhere or the value is retained
+     * for as long as the key is. Each entry is a weak reference registered here, and the weak
+     * collection operations — and {@link #gc()} — drain the queue on the calling thread. Owning the
+     * queue rather than sharing a process-wide {@code Cleaner} keeps reclamation on the thread that
+     * is using the engine, which is the only thread allowed to touch anything reachable from a
+     * {@link JSContext}.
+     */
+    private final ReferenceQueue<Object> weakCollectionOwners = new ReferenceQueue<>();
     /**
      * Written by {@code VirtualMachine.execute} on the evaluating thread and read from cross-realm
      * proxy paths. Declared volatile so a reader never observes a stale context.
@@ -87,9 +131,14 @@ public final class JSRuntime implements AutoCloseable {
 
     /**
      * Create a new runtime with custom options.
-     * If {@link JSRuntimeOptions#atomicsObject} is set, that shared instance is used
-     * so multiple runtimes in the same agent cluster can coordinate via Atomics.wait/notify.
-     * Otherwise a new AtomicsObject is created for this runtime.
+     * <p>
+     * When {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)} injected a shared instance,
+     * this runtime uses it and never closes it — that is how the members of an agent cluster
+     * coordinate through {@code Atomics.wait}/{@code notify}. Otherwise this runtime constructs its
+     * own and closes it on shutdown, so handing one options object to several runtimes gives each
+     * of them an executor of its own rather than one they all take turns shutting down.
+     *
+     * @param options the configuration to snapshot
      */
     public JSRuntime(JSRuntimeOptions options) {
         this.contexts = Collections.synchronizedList(new ArrayList<>());
@@ -98,6 +147,13 @@ public final class JSRuntime implements AutoCloseable {
         this.globalSymbolRegistry = new HashMap<>();
         this.globalSymbolReverseRegistry = new HashMap<>();
         this.options = options;
+        this.memoryAccounting = new JSMemoryAccounting(options.getMaxMemoryUsage());
+        // An AtomicsObject this runtime made belongs to it alone, and its waitAsync executor is a
+        // resource nothing else will release; one the embedder injected is an agent cluster's
+        // shared object, and shutting it down here would break the other members.
+        AtomicsObject injectedAtomicsObject = options.getAtomicsObject();
+        this.ownsAtomicsObject = injectedAtomicsObject == null;
+        this.atomicsObject = ownsAtomicsObject ? new AtomicsObject() : injectedAtomicsObject;
     }
 
     /**
@@ -107,25 +163,72 @@ public final class JSRuntime implements AutoCloseable {
         this.interruptRequested = false;
     }
 
+    /**
+     * Close the runtime. Terminal and idempotent.
+     * <p>
+     * Closing used to be advisory: there was no closed state, so after {@code close()} an embedder
+     * could still create a context and evaluate in it, still enqueue jobs and still drain them, and
+     * the global symbol registries kept whatever they held. Shutdown is now an ownership boundary —
+     * {@link #createContext()}, {@link #enqueueJob(Job)} and
+     * {@link #getOrCreateGlobalSymbol(String)} refuse afterwards, and everything the runtime owns
+     * is released.
+     * <p>
+     * Asynchronous producers are stopped before the queues are cleared, so nothing can be deposited
+     * into a runtime that has already let go of it: {@code Atomics.waitAsync} operations this
+     * runtime started are cancelled, which also releases the promises and contexts an unbounded
+     * wait would otherwise have pinned for the life of the process. Waits belonging to other
+     * runtimes in the same agent cluster are untouched.
+     */
     @Override
     public void close() {
-        jobQueue.clear();
-        for (JSContext context : getContextSnapshot()) {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        // Intake is sealed by the line above; from here nothing new is admitted. Stop asynchronous
+        // producers before clearing anything they could still write to.
+        if (atomicsObject != null) {
+            if (ownsAtomicsObject) {
+                // Nothing else shares this one, so its waitAsync executor goes with the runtime
+                // rather than keeping a daemon thread alive for the cached pool's idle timeout.
+                atomicsObject.close();
+            } else {
+                atomicsObject.cancelAsyncWaits(this);
+            }
+        }
+        List<JSContext> contextSnapshot;
+        synchronized (lifecycleLock) {
+            // A producer that passed the closed check holds this lock, so its job lands before the
+            // clear rather than after it. Only the fast clears happen here.
+            jobQueue.clear();
+            globalSymbolRegistry.clear();
+            globalSymbolReverseRegistry.clear();
+            contextSnapshot = getContextSnapshot();
+            contexts.clear();
+        }
+        // Context teardown is slow and reaches back into the runtime, so it stays outside the lock.
+        for (JSContext context : contextSnapshot) {
             if (context != null) {
                 context.close();
             }
         }
         atoms.clear();
+        currentExecutingContext = null;
         gc();
     }
 
     /**
      * Create a new execution context.
+     *
+     * @return the new context
+     * @throws IllegalStateException when the runtime is closed
      */
     public JSContext createContext() {
-        JSContext context = new JSContext(this);
-        contexts.add(context);
-        return context;
+        synchronized (lifecycleLock) {
+            requireOpen();
+            JSContext context = new JSContext(this);
+            contexts.add(context);
+            return context;
+        }
     }
 
     /**
@@ -145,10 +248,14 @@ public final class JSRuntime implements AutoCloseable {
      * {@link JSContext#processMicrotasks()} on the context that owns them.
      *
      * @param job the job to enqueue; {@code null} is ignored
+     * @throws IllegalStateException when the runtime is closed
      */
     public void enqueueJob(Job job) {
-        if (job != null) {
-            jobQueue.offer(job);
+        synchronized (lifecycleLock) {
+            requireOpen();
+            if (job != null) {
+                jobQueue.offer(job);
+            }
         }
     }
 
@@ -166,12 +273,25 @@ public final class JSRuntime implements AutoCloseable {
      * embedder that creates a runtime per unit of work would pay a full JVM collection every time.
      */
     public void gc() {
+        releaseDeadWeakCollectionEntries();
         List<JSContext> contextSnapshot = getContextSnapshot();
         for (JSContext context : contextSnapshot) {
             if (context != null) {
                 context.pollFinalizationRegistries();
             }
         }
+    }
+
+    /**
+     * The {@link AtomicsObject} this runtime's contexts coordinate through.
+     * <p>
+     * Fixed when the runtime was constructed: either the instance the embedder injected, or one
+     * this runtime made and will close. Mutating the options object afterwards does not change it.
+     *
+     * @return this runtime's instance, never null
+     */
+    public AtomicsObject getAtomicsObject() {
+        return atomicsObject;
     }
 
     /**
@@ -202,9 +322,22 @@ public final class JSRuntime implements AutoCloseable {
      * Get the key for a runtime-global symbol, or null if the symbol is not in the runtime registry.
      */
     public String getGlobalSymbolKey(JSSymbol symbol) {
-        synchronized (globalSymbolRegistry) {
+        synchronized (lifecycleLock) {
             return globalSymbolReverseRegistry.get(symbol);
         }
+    }
+
+    /**
+     * Accounting for the binary data blocks guest code sizes directly.
+     * <p>
+     * This is what makes {@link JSRuntimeOptions#setMaxMemoryUsage(long)} an enforced limit rather
+     * than a stored number. See {@link JSMemoryAccounting} for exactly what it does and does not
+     * bound.
+     *
+     * @return this runtime's accounting, never {@code null}
+     */
+    public JSMemoryAccounting getMemoryAccounting() {
+        return memoryAccounting;
     }
 
     /**
@@ -218,7 +351,8 @@ public final class JSRuntime implements AutoCloseable {
      * Get or create a runtime-global symbol by key.
      */
     public JSSymbol getOrCreateGlobalSymbol(String key) {
-        synchronized (globalSymbolRegistry) {
+        synchronized (lifecycleLock) {
+            requireOpen();
             JSSymbol existing = globalSymbolRegistry.get(key);
             if (existing != null) {
                 return existing;
@@ -244,6 +378,24 @@ public final class JSRuntime implements AutoCloseable {
     }
 
     /**
+     * Whether {@link #close()} has run.
+     *
+     * @return true when the runtime is closed
+     */
+    public boolean isClosed() {
+        return closed.get();
+    }
+
+    /**
+     * Clear the values of weak-collection entries whose collection has been collected.
+     * <p>
+     * Cheap when there is nothing to do: an empty queue poll and no allocation.
+     */
+    void releaseDeadWeakCollectionEntries() {
+        JSWeakEntryTable.releaseDeadEntries(weakCollectionOwners);
+    }
+
+    /**
      * Ask any evaluation running on this runtime to stop.
      * <p>
      * Safe to call from another thread. The interpreter polls this every
@@ -254,6 +406,12 @@ public final class JSRuntime implements AutoCloseable {
      */
     public void requestInterrupt() {
         this.interruptRequested = true;
+    }
+
+    private void requireOpen() {
+        if (closed.get()) {
+            throw new IllegalStateException("JSRuntime is closed");
+        }
     }
 
     /**
@@ -271,6 +429,7 @@ public final class JSRuntime implements AutoCloseable {
      * @return the number of host jobs executed
      */
     public int runJobs() {
+        requireOpen();
         int count = 0;
         while (!jobQueue.isEmpty()) {
             Job job = jobQueue.poll();
@@ -300,6 +459,15 @@ public final class JSRuntime implements AutoCloseable {
      */
     public boolean shouldInterrupt() {
         return interruptRequested;
+    }
+
+    /**
+     * The queue a new weak-collection entry registers itself with.
+     *
+     * @return this runtime's queue of collected weak collections
+     */
+    ReferenceQueue<Object> weakCollectionOwners() {
+        return weakCollectionOwners;
     }
 
     /**

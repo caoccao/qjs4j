@@ -37,15 +37,25 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
         if (contStmt.getLabel() != null) {
             String labelName = contStmt.getLabel().getName();
             LoopContext target = null;
+            // A label that exists but names something other than a loop is a different error from
+            // one that does not exist, and the two used to be reported the same way.
+            boolean labelExists = false;
             for (LoopContext loopCtx : compilerContext.loopManager) {
-                if (labelName.equals(loopCtx.label) && !loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
+                if (!labelName.equals(loopCtx.label)) {
+                    continue;
+                }
+                labelExists = true;
+                if (!loopCtx.isRegularStmt && !loopCtx.isSwitchStatement) {
                     target = loopCtx;
                     break;
                 }
             }
             if (target == null) {
                 throw new JSCompilerException(
-                        "Undefined label '" + labelName + "'",
+                        labelExists
+                                ? "Illegal continue statement: '" + labelName
+                                  + "' does not denote an iteration statement"
+                                : "Undefined label '" + labelName + "'",
                         contStmt);
             }
             compilerContext.emitHelpers.emitIteratorCloseForLoopsUntil(target);
@@ -62,7 +72,7 @@ final class ContinueStatementCompiler extends AstNodeCompiler<ContinueStatement>
                 }
             }
             if (loopContext == null) {
-                throw new JSCompilerException("Continue statement outside of loop", contStmt);
+                throw new JSCompilerException("Illegal continue statement: no surrounding iteration statement", contStmt);
             }
             compilerContext.emitHelpers.emitUsingDisposalsForScopeDepthGreaterThan(loopContext.continueTargetScopeDepth);
             emitActiveFinallyGosubs();
