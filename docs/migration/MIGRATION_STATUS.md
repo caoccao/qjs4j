@@ -695,6 +695,48 @@ All symbols available as Symbol.* properties and via getWellKnownSymbol() helper
   - Default depth is 1, Infinity flattens all levels
   - Recursive flattening with depth control
 
+### Phase 28: JSContext Decomposition ✅
+
+**Structural only — no behaviour change.** `JSContext` had grown to 8,056 lines with about ten
+distinct responsibilities, and in `quickjs.c` most of them are not on `struct JSContext` at all:
+module handling lives in the `JSModuleDef` section, eval in `JS_EvalInternal`, error construction in
+the `JS_ThrowError2` family. This phase restores that separation, using package-private classes in
+`core` where C used file sections, following the delegate pattern `BytecodeCompiler` already uses.
+
+`JSContext` now holds realm identity only (runtime, global object, call stack, `this`,
+`new.target`, pending exception, strict mode, lifecycle, microtask entry points) and delegates the
+rest:
+
+| Class | Responsibility | QuickJS counterpart |
+|---|---|---|
+| `JSValueFactory` | `createJSXxx` allocators with prototypes attached | `JS_NewObjectProto*` |
+| `JSErrorReporter` | `throwXxx` + stack-trace capture | `JS_ThrowError2` family |
+| `RealmIntrinsics` | cached/hidden prototypes, iterator prototypes, `%ThrowTypeError%`, `getPrototypeFromConstructor`, `getFunctionRealm` | `class_proto[]`, `JS_GetFunctionRealm` |
+| `GlobalLexicalScope` | global `let`/`const` bindings and declaration tables | `global_var_obj` |
+| `EvalOverlayManager` | the global-object overlays a module's imports are installed as | (no counterpart: QuickJS has module environments) |
+| `RegExpLegacyStatics` | `RegExp.input` / `.lastMatch` / `.$1`–`.$9` | (legacy RegExp statics; not in QuickJS) |
+| `EvalRunner` | the eval pipeline, split into named phases on `EvalActivation` | `JS_EvalInternal` |
+| `ModuleSourceTransformer` | textual module rewrite, `MODULE_*` patterns, identifier/string decoding | (no counterpart: QuickJS builds `JSModuleDef` from the AST) |
+| `ModuleLinker` | link-before-evaluate pass, ResolveExport, import/export token readers | `js_resolve_export`, `js_link_module` |
+| `ModuleLoader` | module cache, specifier resolution, JSON/text/bytes payloads, async evaluation ordering | `js_host_resolve_imported_module`, `js_evaluate_module` |
+| `ImportBindingInstaller` | installing import bindings and namespace exports | `js_create_module_bytecode_function` bindings |
+
+Results:
+- `JSContext.java`: 8,056 → 1,444 lines. The largest extracted class is
+  `ModuleSourceTransformer` at 2,549 — the textual transformer, which is the component the
+  follow-up below replaces outright rather than splits further.
+- Zero public API changes; builtins, the VM and the existing tests are untouched.
+- `./gradlew test` green, and `./gradlew test262` unchanged at 101,607 passed / 430 skipped / 0 failed.
+- `ModuleSourceTransformerTest` is new: the transformer is now directly testable, which is what the
+  escape-decoding and Unicode-identifier defects needed and never had.
+
+Follow-up this makes tractable (deliberately **not** done here, so each is reviewable on its own):
+- The open review-08 findings, each now a small change in one small class.
+- Replacing the textual transformer with parser-based module records — QuickJS's `JSModuleDef`
+  approach. `ModuleSourceTransformer` is now a replaceable component behind the loader and linker
+  seams rather than 2,000 lines fused into `JSContext`.
+- `JSGlobalObject` (4,286 lines) is the next candidate for the same treatment.
+
 ## Next Steps (Planned)
 
 ### Phase 26: Enhanced Async/Await Support
