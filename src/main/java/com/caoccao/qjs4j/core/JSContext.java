@@ -17,7 +17,8 @@
 package com.caoccao.qjs4j.core;
 
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.exceptions.*;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
@@ -66,8 +67,6 @@ public final class JSContext implements AutoCloseable {
     private final ModuleLinker moduleLinker;
     // Loads, caches and orders the evaluation of modules; see ModuleLoader
     private final ModuleLoader moduleLoader;
-    // Rewrites ES module source into script source; see ModuleSourceTransformer
-    private final ModuleSourceTransformer moduleSourceTransformer;
     // The realm's intrinsic objects and prototype-resolution rules; see RealmIntrinsics
     private final RealmIntrinsics realmIntrinsics;
     // RegExp.input / .lastMatch / .lastParen / .leftContext / .rightContext / .$1-$9
@@ -144,7 +143,10 @@ public final class JSContext implements AutoCloseable {
                 ? runtime.getOptions().getMaxStackDepth()
                 : DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
-        this.moduleSourceTransformer = new ModuleSourceTransformer(this);
+        // A local, not a field: the transformer is given to the three collaborators that use it and
+        // the context itself never asks for it again. Keeping a reference would be realm state that
+        // nothing reads.
+        ModuleSourceTransformer moduleSourceTransformer = new ModuleSourceTransformer(this);
         this.evalRunner = new EvalRunner(this, moduleSourceTransformer);
         this.moduleLinker = new ModuleLinker(this, moduleSourceTransformer);
         this.importBindingInstaller =
@@ -1075,19 +1077,6 @@ public final class JSContext implements AutoCloseable {
         return moduleLoader;
     }
 
-    /**
-     * The realm's module source transformer.
-     * <p>
-     * The other collaborators hold their own reference; this accessor is the seam
-     * {@code ModuleSourceTransformerTest} reaches the transformer through, which is what makes its
-     * scanning answerable directly rather than only through {@code eval}.
-     *
-     * @return the module source transformer
-     */
-    ModuleSourceTransformer moduleSourceTransformer() {
-        return moduleSourceTransformer;
-    }
-
     void pollFinalizationRegistries() {
         for (int registryIndex = 0; registryIndex < finalizationRegistries.size(); registryIndex++) {
             finalizationRegistries.get(registryIndex).pollCleanups();
@@ -1246,8 +1235,8 @@ public final class JSContext implements AutoCloseable {
      * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace
      * through it; the work itself belongs to {@link ModuleLinker}.
      *
-     * @param moduleRecord           the module whose re-exports are being resolved
-     * @param importResolutionStack  the specifiers already being resolved, so a cycle is detected
+     * @param moduleRecord          the module whose re-exports are being resolved
+     * @param importResolutionStack the specifiers already being resolved, so a cycle is detected
      */
     void resolveDynamicImportReExports(
             JSDynamicImportModule moduleRecord,

@@ -101,6 +101,27 @@ public class Test262Runner {
     }
 
     /**
+     * Report what is wrong with the premises of this run, and say whether it should go ahead.
+     * <p>
+     * A suite at the wrong revision is refused, because counts from another revision are not
+     * comparable with anything this repository records. Everything else is printed and the run
+     * continues: a suite exported without its history, or a host in a zone the pinned harness
+     * dislikes, still produces a useful answer — it just cannot be reported as the pinned one
+     * without saying so.
+     *
+     * @param test262Root the suite root
+     * @return true when the run should be refused
+     */
+    private static boolean reportEnvironment(Path test262Root) {
+        boolean refused = false;
+        for (Test262Environment.Diagnostic diagnostic : Test262Environment.check(test262Root)) {
+            System.err.println((diagnostic.fatal() ? "Error: " : "Warning: ") + diagnostic.message());
+            refused |= diagnostic.fatal();
+        }
+        return refused;
+    }
+
+    /**
      * Parse the command line, run the suite and decide the process status.
      * <p>
      * Anything that means "the suite did not demonstrate conformance" is a nonzero status: a
@@ -159,6 +180,14 @@ public class Test262Runner {
                 }
                 mode = argument;
                 argIndex++;
+            }
+
+            // A pass count means nothing without the suite revision that produced it and the zone
+            // the host read dates in. Both used to be arranged in one CI workflow, so the
+            // documented Gradle command accepted whatever was on disk; a run that cannot say what
+            // it tested is checked here instead, once, before anything is discovered.
+            if (reportEnvironment(test262Root)) {
+                return 1;
             }
 
             Test262Config config = mode == null

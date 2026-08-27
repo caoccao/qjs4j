@@ -40,8 +40,31 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * masking does and does not blank out.
  */
 public class ModuleSourceTransformerTest extends BaseTest {
-    private ModuleSourceTransformer transformer() {
-        return context.moduleSourceTransformer();
+    @Test
+    public void testCollectingImportBindingsReadsNamesAsValues() {
+        Set<String> bindingNames = new java.util.HashSet<>();
+        Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
+        transformer().collectImportBindings(
+                "import { x as \\u0079 } from './d\\u0065p.mjs';",
+                bindingNames,
+                importedBindings);
+        // The local binding is called `y`, because that is the name module code writes to reach it.
+        assertThat(bindingNames).containsExactly("y");
+        assertThat(importedBindings).containsKey("y");
+        assertThat(importedBindings.get("y").importedName()).isEqualTo("x");
+        assertThat(importedBindings.get("y").sourceSpecifier()).isEqualTo("./dep.mjs");
+        assertThat(importedBindings.get("y").deferredImport()).isFalse();
+    }
+
+    @Test
+    public void testCollectingImportBindingsRecordsANamespaceBinding() {
+        Set<String> bindingNames = new java.util.HashSet<>();
+        Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
+        transformer().collectImportBindings(
+                "import * as ns from './dep.mjs';", bindingNames, importedBindings);
+        assertThat(bindingNames).containsExactly("ns");
+        assertThat(importedBindings.get("ns").importedName())
+                .isEqualTo(ModuleSourceTransformer.MODULE_NAMESPACE_EXPORT_NAME);
     }
 
     @Test
@@ -55,6 +78,21 @@ public class ModuleSourceTransformerTest extends BaseTest {
     }
 
     @Test
+    public void testDecodeIdentifierEscapesLeavesAnUnterminatedBracedEscapeAlone() {
+        // An unterminated braced escape is malformed, so it gets the same answer as every other
+        // malformed escape: its text stands. The branch used to append the escape and then rewind
+        // the cursor to the backslash, so the loop walked the same characters twice and a
+        // three-character unterminated escape decoded to five.
+        assertThat(transformer().decodeIdentifierEscapes("\\u{")).isEqualTo("\\u{");
+        assertThat(transformer().decodeIdentifierEscapes("a\\u{")).isEqualTo("a\\u{");
+        assertThat(transformer().decodeIdentifierEscapes("\\u{12")).isEqualTo("\\u{12");
+        // Only the malformed escape is left alone. Whatever follows it is still decoded, exactly as
+        // it is after an escape with non-hexadecimal digits, so one bad escape does not silently
+        // stop the scan.
+        assertThat(transformer().decodeIdentifierEscapes("\\u{ \\u0041")).isEqualTo("\\u{ A");
+    }
+
+    @Test
     public void testDecodeIdentifierEscapesLeavesMalformedEscapesAlone() {
         // Not a decodable escape, so the text stands: the compiler rejects it with a real message.
         assertThat(transformer().decodeIdentifierEscapes("\\uZZZZ")).isEqualTo("\\uZZZZ");
@@ -62,14 +100,12 @@ public class ModuleSourceTransformerTest extends BaseTest {
     }
 
     @Test
-    public void testDecodeIdentifierEscapesDuplicatesAnUnterminatedBracedEscape() {
-        // A defect, pinned rather than fixed: this is the behaviour the extraction moved verbatim.
-        // The unterminated braced-escape branch appends the escape text and then rewinds the cursor
-        // to the backslash, so the loop emits the same three characters a second time. Every other
-        // malformed escape leaves its text alone, as the two cases above show. Fixing it belongs to
-        // a change that can be reviewed on its own; when that lands, this assertion fails and says
-        // so.
-        assertThat(transformer().decodeIdentifierEscapes("\\u{")).isEqualTo("\\u{u{");
+    public void testDecodeIdentifierEscapesReadsABracedEscapeThatIsTerminated() {
+        // The sibling of the case above: the brace does close, so the escape decodes. Both branches
+        // read the same opening prefix, and only the closing brace tells them apart.
+        assertThat(transformer().decodeIdentifierEscapes("\\u{41}")).isEqualTo("A");
+        // A braced escape whose body is not hexadecimal is malformed too, and stands as written.
+        assertThat(transformer().decodeIdentifierEscapes("\\u{ZZ}b")).isEqualTo("\\u{ZZ}b");
     }
 
     @Test
@@ -142,6 +178,18 @@ public class ModuleSourceTransformerTest extends BaseTest {
         assertThat(transformer().defaultExportExtents("export default function f() {}\n")).isEmpty();
         assertThat(transformer().defaultExportExtents("export default class C {}\n")).isEmpty();
         assertThat(transformer().defaultExportExtents("export default async function g() {}\n")).isEmpty();
+    }
+
+    @Test
+    public void testEscapingAJavaScriptStringCoversEveryLineTerminator() {
+        // A line terminator inside an interpolated value would end the generated literal and turn
+        // the rest of the value into source text. U+2028 and U+2029 are line terminators too.
+        assertThat(transformer().escapeJavaScriptString("a\"b")).isEqualTo("a\\\"b");
+        assertThat(transformer().escapeJavaScriptString("a\\b")).isEqualTo("a\\\\b");
+        assertThat(transformer().escapeJavaScriptString("a\nb")).isEqualTo("a\\nb");
+        assertThat(transformer().escapeJavaScriptString("a\u2028b")).isEqualTo("a\\u2028b");
+        assertThat(transformer().escapeJavaScriptString("a\u2029b")).isEqualTo("a\\u2029b");
+        assertThat(transformer().escapeJavaScriptString("a\u0001b")).isEqualTo("a\\u0001b");
     }
 
     @Test
@@ -284,42 +332,17 @@ public class ModuleSourceTransformerTest extends BaseTest {
         context.clearPendingException();
     }
 
-    @Test
-    public void testCollectingImportBindingsReadsNamesAsValues() {
-        Set<String> bindingNames = new java.util.HashSet<>();
-        Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
-        transformer().collectImportBindings(
-                "import { x as \\u0079 } from './d\\u0065p.mjs';",
-                bindingNames,
-                importedBindings);
-        // The local binding is called `y`, because that is the name module code writes to reach it.
-        assertThat(bindingNames).containsExactly("y");
-        assertThat(importedBindings).containsKey("y");
-        assertThat(importedBindings.get("y").importedName()).isEqualTo("x");
-        assertThat(importedBindings.get("y").sourceSpecifier()).isEqualTo("./dep.mjs");
-        assertThat(importedBindings.get("y").deferredImport()).isFalse();
-    }
-
-    @Test
-    public void testCollectingImportBindingsRecordsANamespaceBinding() {
-        Set<String> bindingNames = new java.util.HashSet<>();
-        Map<String, ModuleSourceTransformer.ImportBinding> importedBindings = new java.util.HashMap<>();
-        transformer().collectImportBindings(
-                "import * as ns from './dep.mjs';", bindingNames, importedBindings);
-        assertThat(bindingNames).containsExactly("ns");
-        assertThat(importedBindings.get("ns").importedName())
-                .isEqualTo(ModuleSourceTransformer.MODULE_NAMESPACE_EXPORT_NAME);
-    }
-
-    @Test
-    public void testEscapingAJavaScriptStringCoversEveryLineTerminator() {
-        // A line terminator inside an interpolated value would end the generated literal and turn
-        // the rest of the value into source text. U+2028 and U+2029 are line terminators too.
-        assertThat(transformer().escapeJavaScriptString("a\"b")).isEqualTo("a\\\"b");
-        assertThat(transformer().escapeJavaScriptString("a\\b")).isEqualTo("a\\\\b");
-        assertThat(transformer().escapeJavaScriptString("a\nb")).isEqualTo("a\\nb");
-        assertThat(transformer().escapeJavaScriptString("a\u2028b")).isEqualTo("a\\u2028b");
-        assertThat(transformer().escapeJavaScriptString("a\u2029b")).isEqualTo("a\\u2029b");
-        assertThat(transformer().escapeJavaScriptString("a\u0001b")).isEqualTo("a\\u0001b");
+    /**
+     * A transformer of this test's own, rather than the realm's.
+     * <p>
+     * The transformer holds no state beyond the context it reports syntax errors through, so one
+     * built here answers exactly what the realm's does — and the context does not have to carry an
+     * accessor that only a test would ever call. This test is in the transformer's own package,
+     * which is the whole reason its constructor can be reached.
+     *
+     * @return a transformer bound to this test's context
+     */
+    private ModuleSourceTransformer transformer() {
+        return new ModuleSourceTransformer(context);
     }
 }

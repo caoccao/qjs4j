@@ -726,9 +726,14 @@ Results:
   `ModuleSourceTransformer` at 2,549 — the textual transformer, which is the component the
   follow-up below replaces outright rather than splits further.
 - Zero public API changes; builtins, the VM and the existing tests are untouched.
-- `./gradlew test` green, and `./gradlew test262` unchanged at 101,607 passed / 430 skipped / 0 failed.
-- `ModuleSourceTransformerTest` is new: the transformer is now directly testable, which is what the
-  escape-decoding and Unicode-identifier defects needed and never had.
+- `./gradlew test` green, and `./gradlew test262` unchanged at 101,607 passed / 430 skipped / 0 failed
+  against tc39/test262 `5c8206929d81b2d3d727ca6aac56c18358c8d790` — the revision now pinned in
+  `test262-revision.txt`, which the conformance tasks refuse to run without.
+- `ModuleSourceTransformerTest`, `ModuleLoaderTest` and `EvalOverlayManagerTest` are new: the
+  extracted collaborators are now directly testable, which is what the escape-decoding and
+  Unicode-identifier defects needed and never had. Writing the loader's cache-eviction cases found
+  a live one: a module whose payload could not be read left its record in the cache, so the next
+  import of the same specifier resolved with an empty namespace instead of failing again.
 
 Follow-up this makes tractable (deliberately **not** done here, so each is reviewable on its own):
 - The open review-08 findings, each now a small change in one small class.

@@ -100,25 +100,6 @@ final class RealmIntrinsics {
     }
 
     /**
-     * Drop every intrinsic this holds.
-     * <p>
-     * Called from {@link JSContext#close()}: each cached prototype is a live handle on the realm.
-     */
-    void release() {
-        iteratorPrototypes.clear();
-        asyncFunctionConstructor = null;
-        asyncGeneratorFunctionPrototype = null;
-        asyncGeneratorPrototype = null;
-        cachedDatePrototype = null;
-        cachedObjectPrototype = null;
-        cachedPromisePrototype = null;
-        cachedRegExpConstructor = null;
-        cachedRegExpPrototype = null;
-        generatorFunctionPrototype = null;
-        throwTypeErrorIntrinsic = null;
-    }
-
-    /**
      * Get the AsyncFunction constructor (internal use only).
      * Used for setting up prototype chains for async functions.
      */
@@ -344,6 +325,25 @@ final class RealmIntrinsics {
      */
     void registerIteratorPrototype(String tag, JSObject prototype) {
         iteratorPrototypes.put(tag, prototype);
+    }
+
+    /**
+     * Drop every intrinsic this holds.
+     * <p>
+     * Called from {@link JSContext#close()}: each cached prototype is a live handle on the realm.
+     */
+    void release() {
+        iteratorPrototypes.clear();
+        asyncFunctionConstructor = null;
+        asyncGeneratorFunctionPrototype = null;
+        asyncGeneratorPrototype = null;
+        cachedDatePrototype = null;
+        cachedObjectPrototype = null;
+        cachedPromisePrototype = null;
+        cachedRegExpConstructor = null;
+        cachedRegExpPrototype = null;
+        generatorFunctionPrototype = null;
+        throwTypeErrorIntrinsic = null;
     }
 
     /**

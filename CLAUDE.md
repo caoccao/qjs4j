@@ -31,8 +31,20 @@ The project implements ES2024 features with full QuickJS specification complianc
 ./gradlew performanceTest         # JMH benchmarks (@Tag("performance"))
 ./gradlew test262Quick            # Quick Test262 subset
 ./gradlew test262                 # Full Test262 suite (requires ../test262, -Xmx2g)
+./gradlew test262LongRunning      # RegExp / URI / staging-Date selection excluded from the quick subset
 ./gradlew test262Language         # Language tests only
 ```
+
+Every `test262*` task pins the two things a conformance count depends on, so the commands above
+mean the same thing on every machine:
+
+- **Suite revision.** `test262-revision.txt` holds the revision `../test262` must be at, and the
+  runner refuses to start against any other one. Pass `-Ptest262AllowAnyRevision=true` to test
+  upstream tip deliberately. Record the revision alongside any pass count; a count without one is
+  not comparable with anything.
+- **Time zone.** The tasks run in `UTC`. The suite reads the host's zone, and the pinned harness
+  rejects the identifier `Etc/UTC` that many Linux hosts use — so without this the same code gave
+  different answers on different machines.
 
 ## Architecture Overview
 

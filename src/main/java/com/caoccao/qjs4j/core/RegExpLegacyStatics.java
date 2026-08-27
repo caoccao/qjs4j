@@ -170,14 +170,15 @@ final class RegExpLegacyStatics {
             captures[captureIndex] = captureValue;
         }
 
+        // `RegExp.lastParen` is the last capture group by position, whether or not it participated
+        // — not the last one that did. This used to walk backwards for the last non-null, so
+        // `/(a)|(z)/.exec('a')` answered "a" where V8 answers "": the second group is the last one,
+        // and it matched nothing. QuickJS has no legacy statics at all, so V8 is the reference here.
         String lastParenValue = "";
         if (captureValues != null && captureValues.length > 1) {
-            for (int captureIndex = captureValues.length - 1; captureIndex >= 1; captureIndex--) {
-                String captureValue = captureValues[captureIndex];
-                if (captureValue != null) {
-                    lastParenValue = captureValue;
-                    break;
-                }
+            String lastCaptureValue = captureValues[captureValues.length - 1];
+            if (lastCaptureValue != null) {
+                lastParenValue = lastCaptureValue;
             }
         }
         lastParen = lastParenValue;

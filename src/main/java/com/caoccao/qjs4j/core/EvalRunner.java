@@ -109,10 +109,10 @@ final class EvalRunner {
     }
 
     JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
-                         boolean predeclareProgramLexicalsAsLocals,
-                         boolean skipGlobalDeclarationTracking,
-                         boolean inheritedStrictModeForDirectEval,
-                         boolean useDirectEvalCallerFrame) {
+                 boolean predeclareProgramLexicalsAsLocals,
+                 boolean skipGlobalDeclarationTracking,
+                 boolean inheritedStrictModeForDirectEval,
+                 boolean useDirectEvalCallerFrame) {
         // The single gateway every public eval overload funnels through, so the lifecycle check
         // belongs here. Duplicating it in selected overloads left eval(code, filename, isModule,
         // isDirectEval) unguarded: a closed context ran the source, mutated the realm, and only
@@ -424,8 +424,8 @@ final class EvalRunner {
         private boolean allowSuperCallInEval;
         private boolean allowSuperPropertyInEval;
         private String code;
-        private Compiler compiler;
         private Compiler.CompileResult compileResult;
+        private Compiler compiler;
         private StackFrame directEvalCallerFrame;
         private JSDynamicImportModule dynamicImportEvalModuleRecord;
         private JSValue evalError;
@@ -437,8 +437,8 @@ final class EvalRunner {
         private Set<String> globalScriptFunctionNames;
         private EvalOverlayManager.Frame moduleNamespaceImportOverlay;
         private boolean removeSelfModuleRecordAfterEval;
-        private JSDynamicImportModule selfModuleRecord;
         private JSDynamicImportModule.Status selfModulePreviousStatus;
+        private JSDynamicImportModule selfModuleRecord;
         private boolean shouldEvaluateRawModuleThroughTransformedSource;
         private boolean shouldEvaluateRawTopLevelAwaitModule;
         private boolean skipEvaluatedDynamicImportModule;

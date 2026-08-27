@@ -1,0 +1,14 @@
+# The revision of tc39/test262 this repository measures itself against.
+#
+# Every conformance count recorded anywhere in this repository — docs/migration/MIGRATION_STATUS.md,
+# a pull request description, a CI log — is a count against this revision and means nothing without
+# it. A gate that follows a moving suite is not a gate: unpinned, the conformance job tracked the
+# tip of tc39/test262, so upstream adding tests for features this engine has not implemented turned
+# it red without a line of this repository changing.
+#
+# The Gradle test262* tasks read this file and refuse to run against a checkout at another revision.
+# Pass -Ptest262AllowAnyRevision=true to test upstream tip deliberately.
+#
+# Bumping it is a deliberate, reviewable act that says which new tests are being taken on. The
+# `ref:` of the test262 checkout step in .github/workflows/build.yml has to be moved with it.
+5c8206929d81b2d3d727ca6aac56c18358c8d790

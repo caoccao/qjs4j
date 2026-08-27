@@ -500,8 +500,13 @@ final class ModuleSourceTransformer {
             if (index < text.length() && text.charAt(index) == '{') {
                 int braceEnd = text.indexOf('}', index + 1);
                 if (braceEnd < 0) {
+                    // Nothing closes the brace, so there is no code point to decode and the text
+                    // stands — the same answer every other malformed escape here gets. The cursor
+                    // stays on the brace and the loop's own increment steps past it; it used to be
+                    // rewound to the backslash instead, which made the loop emit the escape text
+                    // and then walk over its last two characters a second time, so a three-
+                    // character unterminated escape decoded to five.
                     decodedTextBuilder.append(text, escapeStart, index + 1);
-                    index = escapeStart;
                     continue;
                 }
                 String codePointText = text.substring(index + 1, braceEnd);

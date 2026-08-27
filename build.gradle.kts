@@ -168,67 +168,87 @@ tasks.test {
 
 // Create a separate task for performance tests
 tasks.register<Test>("performanceTest") {
+    // The built-in `test` task is given these by the java plugin; a Test task registered here is
+    // not, and one with no test classes and no runtime classpath is not an empty run — it is
+    // `NO-SOURCE`, which Gradle reports as a successful build having executed nothing. The one
+    // advertised way to check a performance claim was therefore a guaranteed green with zero
+    // measurements, and stayed that way through every change to the hot paths it names.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("performance")
     }
+    // The JMH annotation processor generates a shadow class per benchmark, each a subclass of the
+    // class it was generated from — so each one inherits that class's @Test methods and JUnit runs
+    // the whole wrapper again, four extra times, once the task can see them at all.
+    exclude("**/jmh_generated/**")
+    // One fork. JMH takes a process-global lock, so wrappers running side by side do not measure
+    // anything twice — all but the first fail outright with "Another JMH instance might be
+    // running". Benchmarks that did share a machine would be measuring the contention rather than
+    // the engine, so this is what the task wants regardless.
+    maxParallelForks = 1
     group = "verification"
     description = "Runs performance tests using JMH"
     shouldRunAfter(tasks.test)
 }
 
-// Create a task for running test262 conformance tests
-tasks.register<JavaExec>("test262") {
-    group = "verification"
-    description = "Run Test262 ECMAScript conformance tests"
-    
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    // Pass test262 root path (default: ../test262)
-    args = listOf("../test262")
-    
-    // Increase heap for large test suite
-    jvmArgs = listOf("-Xmx2g")
-}
+// The zone every conformance run reads dates in.
+//
+// The suite reads the host's zone, so without pinning one the result depends on what the machine
+// happens to be set to — which is how the same code and the same suite gave opposite answers
+// depending on whether the task was invoked by a CI wrapper that set TZ or by Gradle as documented.
+// Pinned here rather than there, so the task itself owns the guarantee and every caller gets it.
+//
+// UTC rather than the runner's own Etc/UTC: those are the same instant but not the same identifier,
+// and the pinned harness's isCanonicalizedStructurallyValidTimeZoneName still applies the
+// pre-canonical-tz rule that rejects "Etc/UTC" — while canonicalize-utc-timezone.js, in the same
+// suite, asserts the engine must preserve it. The engine follows the newer rule and is right; only
+// the harness is behind. Both spellings are set because the JVM reads user.timezone on every
+// platform and TZ only on some.
+val test262TimeZone = "UTC"
 
-// Quick test262 validation (limited tests)
-tasks.register<JavaExec>("test262Quick") {
-    group = "verification"
-    description = "Run a quick subset of Test262 tests for validation"
-    
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    args = listOf("../test262", "--quick")
-    
-    jvmArgs = listOf("-Xmx2g")
-}
+// The revision the suite has to be at, from the one file that holds it, so the Gradle tasks and the
+// runner cannot drift apart from each other or from what this repository records. The runner
+// refuses a checkout at any other revision; see test262-revision.txt and Test262Environment.
+val test262Revision = providers.fileContents(layout.projectDirectory.file("test262-revision.txt"))
+    .asText
+    .map { contents ->
+        contents.lineSequence()
+            .map(String::trim)
+            .firstOrNull { line -> line.isNotEmpty() && !line.startsWith("#") }
+            .orEmpty()
+    }
+    .getOrElse("")
 
-// Long-running tests (e.g. decodeURI heavy loops)
-tasks.register<JavaExec>("test262LongRunning") {
-    group = "verification"
-    description = "Run long-running Test262 tests"
+val test262AllowAnyRevision = providers.gradleProperty("test262AllowAnyRevision").getOrElse("false")
 
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+// Register one Test262 selection.
+//
+// Every selection gets the same heap, the same pinned zone and the same pinned revision. These were
+// four copies of one block, which is how the zone and the revision came to be guaranteed by a CI
+// workflow rather than by the tasks contributors are told to run.
+fun registerTest262Task(name: String, taskDescription: String, vararg modeArguments: String) =
+    tasks.register<JavaExec>(name) {
+        group = "verification"
+        description = taskDescription
 
-    args = listOf("../test262", "--long-running")
+        classpath = sourceSets["test"].runtimeClasspath
+        mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
 
-    jvmArgs = listOf("-Xmx2g")
-}
+        // Pass test262 root path (default: ../test262)
+        args = listOf("../test262", *modeArguments)
 
-// Language tests only
-tasks.register<JavaExec>("test262Language") {
-    group = "verification"
-    description = "Run Test262 language tests only"
-    
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    args = listOf("../test262", "--language")
-    
-    jvmArgs = listOf("-Xmx2g")
-}
+        // Increase heap for large test suite
+        jvmArgs("-Xmx2g", "-Duser.timezone=$test262TimeZone")
+        environment("TZ", test262TimeZone)
+        systemProperty("qjs4j.test262.revision", test262Revision)
+        systemProperty("qjs4j.test262.allowAnyRevision", test262AllowAnyRevision)
+    }
+
+registerTest262Task("test262", "Run Test262 ECMAScript conformance tests")
+registerTest262Task("test262Quick", "Run a quick subset of Test262 tests for validation", "--quick")
+registerTest262Task("test262LongRunning", "Run long-running Test262 tests", "--long-running")
+registerTest262Task("test262Language", "Run Test262 language tests only", "--language")
 
 // Coverage measurement. There was none, so nothing said which of the ~450 main source files the
 // suite exercised at all.
@@ -252,9 +272,9 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 // ~450 files of ported engine written long before any suite existed — a 100% whole-tree rule would
 // be a fiction that had to be disabled to commit anything. Raise the floors as coverage rises;
 // never lower them to make a build pass.
-// Measured on this tree: 59.21% line, 45.11% branch.
-val minimumLineCoverage = "0.59".toBigDecimal()
-val minimumBranchCoverage = "0.45".toBigDecimal()
+// Measured on this tree: 61.03% line, 46.80% branch.
+val minimumLineCoverage = "0.60".toBigDecimal()
+val minimumBranchCoverage = "0.46".toBigDecimal()
 
 // A single whole-tree rule is not a gate on any particular subsystem: a change can leave an entire
 // critical package untested while unrelated covered code holds the aggregate above the floor. The
@@ -285,14 +305,14 @@ val packageCoverageFloors = mapOf(
 // individually covered, so none can quietly become dead-but-shipped code again.
 val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/core/JSRuntime" to "0.95",
-    // 0.85 rather than 0.90, for margin rather than because anything stopped being covered. The
-    // class measures 41 of 44 lines — the three are the catch around registering a reservation,
-    // which nothing can make a HashSet.add throw to reach — so a 0.90 floor demands 40 and leaves a
-    // single line of slack. CI has reported 39 on one runner while the same commit measured 41 in
-    // the same workflow's coverage job, on the baseline commit, and locally; that two-line
-    // difference is not a coverage loss anyone can point at, and is most likely exec data lost from
-    // one of the parallel test forks. A gate wants more room than a measurement's own noise.
-    "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.85",
+    // 0.95, above the 0.90 this used to be. It was briefly lowered to 0.85 for margin, on a guess
+    // that a run reporting 39 of 44 lines where every other run reported 41 had lost exec data —
+    // which lowering an assertion does nothing about, while it does let three covered lines quietly
+    // stop being covered. The three that were missing were the rollback around registering a
+    // reservation, unreachable from the public API because nothing in the class can throw between
+    // the charge and the handle; they now have a test that injects a registry that can, so the
+    // class measures 44 of 44 and this floor demands 42. Stricter than it was, with more room.
+    "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.95",
     "com/caoccao/qjs4j/core/JSWeakEntryTable" to "0.85",
     "com/caoccao/qjs4j/exceptions/JSException" to "0.95",
     "com/caoccao/qjs4j/exceptions/JSVirtualMachineException" to "0.80",
@@ -304,6 +324,16 @@ val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/core/JSArrayBuffer" to "0.70",
     "com/caoccao/qjs4j/utils/ByteArrayAtomics" to "0.65",
     "com/caoccao/qjs4j/utils/DynamicBuffer" to "0.70",
+    // The realm collaborators JSContext was decomposed into. A package floor cannot protect any of
+    // these: `core` is large and well covered in aggregate, so the whole of ModuleLoader could stop
+    // being exercised without the package rule noticing. Each sits just under what it measures.
+    "com/caoccao/qjs4j/core/EvalOverlayManager" to "0.95",
+    "com/caoccao/qjs4j/core/RegExpLegacyStatics" to "0.95",
+    "com/caoccao/qjs4j/core/ModuleSourceTransformer" to "0.78",
+    // Lower than its neighbours because it is: the loader's TLA and deferred-evaluation ordering is
+    // reached only by evaluating real module graphs, and much of it is still only covered that way.
+    // It is a floor to raise, not a figure to be satisfied with.
+    "com/caoccao/qjs4j/core/ModuleLoader" to "0.50",
 )
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {

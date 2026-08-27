@@ -16,13 +16,7 @@
 
 package com.caoccao.qjs4j.core;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * The stack of temporary global-object overlays a module's imports are installed as.

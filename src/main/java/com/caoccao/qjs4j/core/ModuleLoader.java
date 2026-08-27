@@ -59,6 +59,31 @@ final class ModuleLoader {
         this.asyncEvaluationOrderCounter = 0;
     }
 
+    /**
+     * Put a module record in the cache.
+     * <p>
+     * Package-private so the eval pipeline can register the module it is about to evaluate, which
+     * is what lets a self-import see the re-entrancy.
+     *
+     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
+     * @param moduleRecord   the record to cache
+     */
+    void cacheModule(String moduleCacheKey, JSDynamicImportModule moduleRecord) {
+        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
+    }
+
+    /**
+     * The module record the dynamic-import cache holds for a key, or null.
+     * <p>
+     * Package-private so {@link ModuleLinker} can look a module up without owning the cache.
+     *
+     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
+     * @return the cached record, or null when there is none
+     */
+    JSDynamicImportModule cachedModule(String moduleCacheKey) {
+        return dynamicImportModuleCache.get(moduleCacheKey);
+    }
+
     void chainImportPromiseOntoAsyncDependencies(
             List<JSPromise> dependencyPromises,
             JSObject namespace,
@@ -122,48 +147,11 @@ final class ModuleLoader {
     }
 
     /**
-     * Put a module record in the cache.
-     * <p>
-     * Package-private so the eval pipeline can register the module it is about to evaluate, which
-     * is what lets a self-import see the re-entrancy.
-     *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
-     * @param moduleRecord   the record to cache
-     */
-    void cacheModule(String moduleCacheKey, JSDynamicImportModule moduleRecord) {
-        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
-    }
-
-    /**
      * Clear the module cache.
      */
     void clearModuleCache() {
         dynamicImportModuleCache.clear();
         importMetaCache.clear();
-    }
-
-    /**
-     * How many modules the dynamic-import cache holds.
-     * <p>
-     * Read by {@link ModuleSourceTransformer} when it invents a name for a module's generated
-     * export binding, so two modules transformed in one realm cannot collide on it.
-     *
-     * @return the number of cached module records
-     */
-    int moduleCacheSize() {
-        return dynamicImportModuleCache.size();
-    }
-
-    /**
-     * The module record the dynamic-import cache holds for a key, or null.
-     * <p>
-     * Package-private so {@link ModuleLinker} can look a module up without owning the cache.
-     *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
-     * @return the cached record, or null when there is none
-     */
-    JSDynamicImportModule cachedModule(String moduleCacheKey) {
-        return dynamicImportModuleCache.get(moduleCacheKey);
     }
 
     JSObject createImportMetaObject(String filename) {
@@ -206,7 +194,7 @@ final class ModuleLoader {
      * Collects all ancestor modules whose pending async dependencies have all resolved.
      */
     void gatherAvailableAncestors(JSDynamicImportModule module,
-                                          List<JSDynamicImportModule> execList) {
+                                  List<JSDynamicImportModule> execList) {
         List<JSDynamicImportModule> dependents = new ArrayList<>(module.pendingDependents());
         module.pendingDependents().clear();
         for (JSDynamicImportModule dependent : dependents) {
@@ -781,6 +769,13 @@ final class ModuleLoader {
             moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
             return moduleRecord;
         } catch (IOException ioException) {
+            // The record was registered before the payload was read, and the read never happened —
+            // so there is no module here, only a specifier that resolved to something unreadable, a
+            // directory being the ordinary case. Leaving the record behind makes the next import of
+            // the same specifier find it, see LOADING, and answer with a namespace nothing ever
+            // populated, rather than failing the way the first one did. The deferred path above
+            // already evicts for the same reason.
+            dynamicImportModuleCache.remove(moduleCacheKey);
             throw new JSException(context.throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
         } catch (JSSyntaxErrorException syntaxErrorException) {
             JSValue error = context.throwSyntaxError(
@@ -806,15 +801,16 @@ final class ModuleLoader {
         }
     }
 
-    String normalizeModuleSpecifier(String specifier) {
-        if (specifier == null || specifier.isEmpty()) {
-            return "";
-        }
-        try {
-            return Paths.get(specifier).normalize().toString();
-        } catch (InvalidPathException invalidPathException) {
-            return specifier;
-        }
+    /**
+     * How many modules the dynamic-import cache holds.
+     * <p>
+     * Read by {@link ModuleSourceTransformer} when it invents a name for a module's generated
+     * export binding, so two modules transformed in one realm cannot collide on it.
+     *
+     * @return the number of cached module records
+     */
+    int moduleCacheSize() {
+        return dynamicImportModuleCache.size();
     }
 
     /**
@@ -828,6 +824,17 @@ final class ModuleLoader {
      */
     int nextAsyncEvaluationOrder() {
         return asyncEvaluationOrderCounter++;
+    }
+
+    String normalizeModuleSpecifier(String specifier) {
+        if (specifier == null || specifier.isEmpty()) {
+            return "";
+        }
+        try {
+            return Paths.get(specifier).normalize().toString();
+        } catch (InvalidPathException invalidPathException) {
+            return specifier;
+        }
     }
 
     JSValue parseJsonModuleSource(String sourceCode) {
@@ -869,21 +876,10 @@ final class ModuleLoader {
      * Pre-load all static imports of a module so that EVALUATING_ASYNC dependencies
      * are discovered before we decide whether to defer or evaluate the module.
      */
-    /**
-     * Drop a module record from the cache.
-     * <p>
-     * Package-private so the eval pipeline can evict the record it registered when the evaluation
-     * it registered it for did not complete.
-     *
-     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
-     */
-    void removeCachedModule(String moduleCacheKey) {
-        dynamicImportModuleCache.remove(moduleCacheKey);
-    }
 
     void preloadStaticImports(JSDynamicImportModule moduleRecord,
-                                      Set<String> importResolutionStack,
-                                      Map<String, String> importAttributes) {
+                              Set<String> importResolutionStack,
+                              Map<String, String> importAttributes) {
         String scanSource = transformer.maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = ModuleSourceTransformer.MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
         while (matcher.find()) {
@@ -1046,6 +1042,18 @@ final class ModuleLoader {
             }
         }
         moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
+    }
+
+    /**
+     * Drop a module record from the cache.
+     * <p>
+     * Package-private so the eval pipeline can evict the record it registered when the evaluation
+     * it registered it for did not complete.
+     *
+     * @param moduleCacheKey the resolved specifier, possibly qualified by an import type
+     */
+    void removeCachedModule(String moduleCacheKey) {
+        dynamicImportModuleCache.remove(moduleCacheKey);
     }
 
     String resolveDynamicImportSpecifier(

@@ -59,6 +59,12 @@ final class ModuleLinker {
      * Recognised by identity, never by value, so no module can produce a binding equal to it.
      */
     static final LinkedBinding UNKNOWN_LINKED_EXPORT = new LinkedBinding("", "unknown");
+    private final JSContext context;
+    private final ModuleSourceTransformer transformer;
+    ModuleLinker(JSContext context, ModuleSourceTransformer transformer) {
+        this.context = context;
+        this.transformer = transformer;
+    }
 
     String getDynamicImportModuleExport(
             JSDynamicImportModule moduleRecord,
@@ -77,14 +83,6 @@ final class ModuleLinker {
                     "module '" + targetSpecifier + "' does not provide export '" + exportName + "'"));
         }
         return resolution.bindingName();
-    }
-
-    private final JSContext context;
-    private final ModuleSourceTransformer transformer;
-
-    ModuleLinker(JSContext context, ModuleSourceTransformer transformer) {
-        this.context = context;
-        this.transformer = transformer;
     }
 
     /**
