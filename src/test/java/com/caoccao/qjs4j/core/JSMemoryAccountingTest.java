@@ -37,6 +37,24 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 public class JSMemoryAccountingTest extends BaseTest {
     /**
+     * How much larger than the largest data block a heap has to be before it could really satisfy
+     * one.
+     * <p>
+     * A bare {@code maxMemory() < blockLength} comparison decides this on a knife edge, and the
+     * build's {@code -Xmx2g} lands on the wrong side of it by twelve bytes: G1 and ZGC report
+     * {@code maxMemory()} as exactly 2,147,483,648 while the largest block is 2,147,483,636, so the
+     * premise read as "the heap can satisfy it" — and ParallelGC and SerialGC, which report a
+     * little less than the nominal heap, read the opposite. Which collector the JVM picks depends on
+     * how many processors and how much memory it sees, so the same two tests ran on one machine and
+     * skipped on the next, and the suite quietly tested less on some runners than on others.
+     * <p>
+     * A heap only marginally larger than the block cannot satisfy it in any case: the array needs
+     * contiguous space and the heap is already holding the engine and the suite. Requiring real
+     * headroom before believing otherwise makes the premise mean what it says.
+     */
+    private static final long HEAP_HEADROOM_BYTES = 256L * 1024 * 1024;
+
+    /**
      * Require that the JVM cannot satisfy the largest data block the engine will accept.
      * <p>
      * The largest block is capped near two gigabytes, so on a big enough heap the request succeeds
@@ -46,7 +64,8 @@ public class JSMemoryAccountingTest extends BaseTest {
      * exercising anything.
      */
     private static void assumeTheJvmRefusesTheLargestBlock() {
-        assumeTrue(Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength(),
+        assumeTrue(
+                Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength() + HEAP_HEADROOM_BYTES,
                 "the JVM heap is large enough to allocate the biggest block the engine allows, so "
                         + "there is no allocation failure to observe");
     }
