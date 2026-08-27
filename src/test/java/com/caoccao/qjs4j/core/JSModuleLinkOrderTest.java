@@ -182,10 +182,13 @@ public class JSModuleLinkOrderTest extends BaseTest {
 
     @Test
     public void testALinkFailureInADependencySaysWhichModuleAskedAndWhere() throws IOException {
-        // A dependency's offsets are positions in text the caller never passed, so attaching them
-        // to the exception would name a place the caller cannot find. They are reported in words.
+        // A dependency's offsets are positions in a file the caller never passed to eval, so on
+        // their own they would name a place in the wrong text — which is why they used to be
+        // dropped and written into the message instead, leaving an embedder to parse prose for
+        // something the engine already knew. Paired with the name of the source they index, they
+        // are exactly as usable as a root failure's, and are reported the same structured way.
         writeModule("dep-transitive.mjs", "export const other = 1;\n");
-        writeModule("mid-transitive.mjs",
+        Path mid = writeModule("mid-transitive.mjs",
                 "import { missing } from './dep-transitive.mjs';\nexport const m = 1;\n");
         String entrySource = "import { m } from './mid-transitive.mjs';\n";
         Path entry = writeModule("main-transitive.mjs", entrySource);
@@ -198,9 +201,17 @@ public class JSModuleLinkOrderTest extends BaseTest {
                     .contains("The requested module './dep-transitive.mjs' "
                             + "does not provide an export named 'missing'")
                     .contains("mid-transitive.mjs:1:10");
-            assertThat(failure.getSourceLocation())
-                    .as("no position in the caller's source can describe a dependency's declaration")
-                    .isNull();
+            assertThat(failure.getSourceName())
+                    .as("the offsets index the dependency, and the diagnostic says so")
+                    .isEqualTo(mid.toString());
+            SourceLocation location = failure.getSourceLocation();
+            assertThat(location).isNotNull();
+            assertThat(location.line()).isEqualTo(1);
+            assertThat(location.column()).isEqualTo(10);
+            String dependencySource = Files.readString(mid);
+            assertThat(dependencySource.substring(location.offset(), location.endOffset()))
+                    .as("the offsets select the imported name in the dependency's own source")
+                    .isEqualTo("missing");
         }
     }
 
@@ -359,6 +370,24 @@ public class JSModuleLinkOrderTest extends BaseTest {
                 "import { missing as here } from './dep-renamed.mjs';\nglobalThis.rootBodyRan = true;\n",
                 "main-renamed.mjs",
                 "does not provide an export named 'missing'");
+    }
+
+    @Test
+    public void testARootLinkFailureNamesNoSeparateSource() throws IOException {
+        // The complement: when the failing declaration is in the text the caller passed, the
+        // offsets already index that text and there is no other source to name.
+        writeModule("dep-root-named.mjs", "export const other = 1;\n");
+        String entrySource = "import { missing } from './dep-root-named.mjs';\n";
+        Path entry = writeModule("main-root-named.mjs", entrySource);
+        try (JSRuntime runtime = new JSRuntime();
+             JSContext context = runtime.createContext()) {
+            JSException failure = catchThrowableOfType(
+                    JSException.class, () -> context.eval(entrySource, entry.toString(), true));
+            assertThat(failure).isNotNull();
+            assertThat(failure.getMessage()).doesNotContain("imported by");
+            assertThat(failure.getSourceName()).isEqualTo(entry.toString());
+            assertThat(failure.getSourceLocation()).isNotNull();
+        }
     }
 
     @Test

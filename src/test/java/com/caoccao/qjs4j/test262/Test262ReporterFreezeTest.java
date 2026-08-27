@@ -22,7 +22,10 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -119,13 +122,19 @@ public class Test262ReporterFreezeTest {
     void testNoResultIsEverPartiallyAppliedUnderContention() throws InterruptedException {
         // Many writers against one freeze. Every attempt must end up either wholly counted or
         // wholly refused, and the totals must not move once freeze() has returned.
-        Test262Reporter reporter = new Test262Reporter();
+        //
+        // The overlap is established, not hoped for. An earlier version signalled after each
+        // writer's first write had *completed*, which proves only that a write happened — not that
+        // any writer was still inside an admission when the freeze began. A scheduler that let the
+        // workers run their remaining loops to completion before returning to the test thread
+        // produced a freeze after all contention was over, and the assertions passed anyway,
+        // because zero late writes still satisfies "counted or refused". Here every writer is held
+        // *inside* its first admission until all of them are, and freeze() is then observed to park
+        // behind them.
         int writerCount = 8;
         int resultsPerWriter = 2_000;
+        ContendedReporter reporter = new ContendedReporter();
         CountDownLatch start = new CountDownLatch(1);
-        // Every writer signals that it has been through an admission, so the freeze below is known
-        // to land in the middle of live contention rather than before it or after it.
-        CountDownLatch everyWriterAdmitted = new CountDownLatch(writerCount);
         AtomicInteger attempted = new AtomicInteger();
         List<Thread> writers = new ArrayList<>();
         for (int writerIndex = 0; writerIndex < writerCount; writerIndex++) {
@@ -139,21 +148,43 @@ public class Test262ReporterFreezeTest {
                 for (int index = 0; index < resultsPerWriter; index++) {
                     reporter.recordResult(passingResult());
                     attempted.incrementAndGet();
-                    if (index == 0) {
-                        everyWriterAdmitted.countDown();
-                    }
                 }
             }, "reporter-writer-" + writerIndex);
             writers.add(writer);
             writer.start();
         }
         start.countDown();
-        assertThat(everyWriterAdmitted.await(60, TimeUnit.SECONDS))
-                .as("every writer is contending before the freeze")
+        assertThat(reporter.awaitAdmissions(writerCount, 60, TimeUnit.SECONDS))
+                .as("every writer is inside an admission, not merely past one")
                 .isTrue();
-        reporter.freeze();
 
+        AtomicBoolean frozeEarly = new AtomicBoolean(true);
+        CountDownLatch freezerAtGate = new CountDownLatch(1);
+        Thread freezer = new Thread(() -> {
+            freezerAtGate.countDown();
+            reporter.freeze();
+            frozeEarly.set(false);
+        }, "reporter-freezer");
+        freezer.start();
+        assertThat(freezerAtGate.await(30, TimeUnit.SECONDS)).isTrue();
+        awaitParked(freezer);
+        assertThat(frozeEarly.get())
+                .as("freeze() is blocked behind eight live admissions")
+                .isTrue();
+
+        reporter.releaseAdmissions();
+        freezer.join(60_000);
+        assertThat(reporter.isFrozen()).isTrue();
         int executedAtFreeze = reporter.getTotalExecuted();
+
+        // Deterministic proof that the boundary refuses: this attempt is made after freeze() has
+        // demonstrably returned, so it must be refused rather than counted.
+        reporter.recordResult(passingResult());
+        attempted.incrementAndGet();
+        assertThat(reporter.getLateWrites())
+                .as("a write after the boundary is refused")
+                .isPositive();
+
         for (Thread writer : writers) {
             writer.join(60_000);
         }
@@ -162,7 +193,7 @@ public class Test262ReporterFreezeTest {
                 .as("nothing lands after freeze() returns")
                 .isEqualTo(executedAtFreeze);
         assertThat(reporter.getPassed())
-                .as("the freeze happened after real writes, not before any of them")
+                .as("every held admission landed before the freeze, so the freeze was mid-flight")
                 .isGreaterThanOrEqualTo(writerCount);
         assertThat(reporter.getPassed() + reporter.getLateWrites())
                 .as("every attempt was either counted or refused, and none was both or neither")
@@ -184,6 +215,48 @@ public class Test262ReporterFreezeTest {
         assertThat(reporter.getLateWrites()).isZero();
         reporter.recordResult(passingResult());
         assertThat(reporter.getPassed()).isEqualTo(1);
+    }
+
+    /**
+     * A reporter that holds each thread inside its <em>first</em> admission until released.
+     * <p>
+     * Holding the first admission of every writer, rather than any {@code n} admissions, is what
+     * makes "all eight are contending" true rather than "one fast writer went round eight times".
+     */
+    private static final class ContendedReporter extends Test262Reporter {
+        private final Set<Thread> heldThreads = ConcurrentHashMap.newKeySet();
+        private final Semaphore inAdmission = new Semaphore(0);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        /**
+         * Block until the given number of distinct threads are inside an admission.
+         *
+         * @param count   how many admissions to wait for
+         * @param timeout how long to wait
+         * @param unit    the timeout's unit
+         * @return true when they all arrived
+         */
+        private boolean awaitAdmissions(int count, long timeout, TimeUnit unit)
+                throws InterruptedException {
+            return inAdmission.tryAcquire(count, timeout, unit);
+        }
+
+        @Override
+        protected void onAdmitting() {
+            if (!heldThreads.add(Thread.currentThread())) {
+                return;
+            }
+            inAdmission.release();
+            try {
+                release.await(60, TimeUnit.SECONDS);
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        private void releaseAdmissions() {
+            release.countDown();
+        }
     }
 
     /**

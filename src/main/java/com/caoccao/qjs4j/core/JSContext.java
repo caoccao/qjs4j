@@ -55,22 +55,42 @@ import java.util.regex.Pattern;
  */
 public final class JSContext implements AutoCloseable {
     /**
-     * Sentinel origin for an export name two different {@code export *} targets provide.
+     * Sentinel for an export name two different {@code export *} targets provide.
+     * <p>
+     * Recognised by identity, never by value, so no module can produce a binding equal to it.
      */
-    private static final String AMBIGUOUS_LINKED_EXPORT = "\u0000ambiguous";
+    private static final LinkedBinding AMBIGUOUS_LINKED_EXPORT = new LinkedBinding("", "ambiguous");
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
-    private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
-            Pattern.compile("^class\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
-    private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
-            Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\b");
     private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
+    /**
+     * An ECMAScript {@code IdentifierName}, as a regular-expression fragment.
+     * <p>
+     * The module transformer used to re-extract binding names with {@code [A-Za-z_$][A-Za-z0-9_$]*},
+     * which is not the identifier grammar the lexer three files away accepts. {@code café} and
+     * {@code módulo} are ordinary identifiers; so is {@code \\u0078}, which <em>is</em> {@code x}.
+     * The parser took all of them and the transformer did not, so valid source was handed to one
+     * component that accepted it and another that assigned it different semantics — a module
+     * exporting {@code café} reported no such export, and a namespace bound to {@code módulo} was
+     * not defined when the module body ran.
+     * <p>
+     * Deliberately a little wider than the real grammar: whatever this matches is decoded by
+     * {@link #decodeIdentifierEscapes(String)} and then checked against the Unicode tables by
+     * {@link #isValidIdentifierName(String)}, which is the authority. Matching slightly too much
+     * costs a rejection with a message; matching too little silently loses a binding.
+     */
+    private static final String IDENTIFIER_NAME_REGEX =
+            "(?:[\\p{L}\\p{Nl}$_]|\\\\u[0-9A-Fa-f]{4}|\\\\u\\{[0-9A-Fa-f]{1,6}\\})"
+                    + "(?:[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}$_\\u200C\\u200D]"
+                    + "|\\\\u[0-9A-Fa-f]{4}|\\\\u\\{[0-9A-Fa-f]{1,6}\\})*";
+    private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
+            Pattern.compile("^class\\s+(" + IDENTIFIER_NAME_REGEX + ")");
+    private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
+            Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+(" + IDENTIFIER_NAME_REGEX + ")");
     /**
      * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
      * repeatedly failing microtask cannot itself become a leak.
      */
     private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
-    private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
             Pattern.compile("(?m)^\\s*export\\s");
     /**
@@ -79,12 +99,28 @@ public final class JSContext implements AutoCloseable {
      * that module exports.
      */
     private static final String MODULE_NAMESPACE_EXPORT_NAME = "*namespace*";
+    /**
+     * The body of a module specifier's string literal, as a regular-expression fragment.
+     * <p>
+     * A backslash escapes whatever follows it, so a quote character does not necessarily end the
+     * literal and a line terminator does not necessarily end the declaration. The previous
+     * {@code [^'"\r\n]+} could express neither: {@code './a\'b.mjs'} matched nothing at all, and
+     * so did a specifier written across a LineContinuation.
+     */
+    private static final String MODULE_SPECIFIER_BODY_REGEX = "(?:\\\\[\\s\\S]|[^'\"\\\\\\r\\n])+";
+    private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
+            Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
+                    + ")\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_NAMESPACE_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(?:(defer)\\s+)?\\*\\s*as\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s+from\\s+(['\"])([^'\"\\r\\n]+)\\3(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
+            Pattern.compile("(?m)^\\s*import\\s*(?:(defer)\\s+)?\\*\\s*as\\s+(" + IDENTIFIER_NAME_REGEX
+                    + ")\\s+from\\s+(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
+                    + ")\\3(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_SIDE_EFFECT_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(['\"])([^'\"\\r\\n]+)\\1(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
+            Pattern.compile("(?m)^\\s*import\\s*(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
+                    + ")\\1(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_STATIC_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(?:defer\\s+)?(?:[^;]*?\\s+from\\s+)?['\"]([^'\"\\r\\n]+)['\"](?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
+            Pattern.compile("(?m)^\\s*import\\s*(?:defer\\s+)?(?:[^;]*?\\s+from\\s+)?['\"]("
+                    + MODULE_SPECIFIER_BODY_REGEX + ")['\"](?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
     private static final Pattern MODULE_STATIC_IMPORT_SYNTAX_PATTERN =
             Pattern.compile("(?m)^\\s*import(?!\\s*\\(|\\s*\\.)");
     private static final Pattern MODULE_TOP_LEVEL_AWAIT_PATTERN =
@@ -92,10 +128,12 @@ public final class JSContext implements AutoCloseable {
     private static final Pattern MODULE_WITH_CLAUSE_PATTERN =
             Pattern.compile("with\\s*\\{([^}]*)\\}");
     /**
-     * Sentinel origin for an export the link pass cannot decide about, because a module it would
-     * have to read is not one this pass can read. Evaluation still decides those.
+     * Sentinel for an export the link pass cannot decide about, because a module it would have to
+     * read is not one this pass can read. Evaluation still decides those.
+     * <p>
+     * Recognised by identity, never by value, so no module can produce a binding equal to it.
      */
-    private static final String UNKNOWN_LINKED_EXPORT = "\u0000unknown";
+    private static final LinkedBinding UNKNOWN_LINKED_EXPORT = new LinkedBinding("", "unknown");
     // Call stack management
     private final Deque<JSStackFrame> callStack;
     private final Map<String, JSDynamicImportModule> dynamicImportModuleCache;
@@ -422,8 +460,10 @@ public final class JSContext implements AutoCloseable {
 
     private void appendDynamicImportDefaultExportNameFixup(
             StringBuilder transformedSourceBuilder,
-            String rawLocalName) {
-        String localName = requireGeneratedIdentifier(rawLocalName, "default export binding '" + rawLocalName + "'");
+            String rawLocalName,
+            String moduleSpecifier) {
+        String localName = requireGeneratedIdentifier(
+                rawLocalName, "default export binding '" + rawLocalName + "'", moduleSpecifier);
         transformedSourceBuilder.append("if (typeof ")
                 .append(localName)
                 .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
@@ -446,7 +486,8 @@ public final class JSContext implements AutoCloseable {
             String generatedNamePrefix,
             String exportBindingName,
             List<JSDynamicImportModule.LocalExportBinding> localExportBindings,
-            Set<String> importedBindingNames) {
+            Set<String> importedBindingNames,
+            String moduleSpecifier) {
         String moduleExportsName = generatedNamePrefix + "ModuleExports";
         transformedSourceBuilder.append("const ").append(moduleExportsName).append(" = ")
                 .append(exportBindingName)
@@ -457,7 +498,8 @@ public final class JSContext implements AutoCloseable {
             // lands in identifier position, where only a real identifier is safe.
             String localName = requireGeneratedIdentifier(
                     localExportBinding.localName(),
-                    "local binding of export '" + localExportBinding.exportedName() + "'");
+                    "local binding of export '" + localExportBinding.exportedName() + "'",
+                    moduleSpecifier);
             // Exports are always live bindings, including re-exported imports.
             transformedSourceBuilder.append("Object.defineProperty(").append(moduleExportsName).append(", \"")
                     .append(escapedName)
@@ -465,6 +507,36 @@ public final class JSContext implements AutoCloseable {
                     .append(localName)
                     .append("; } });\n");
         }
+    }
+
+    /**
+     * Append the character a {@code \\uHHHH} or {@code \\u\{H+\}} escape denotes.
+     *
+     * @param text           the literal body
+     * @param uIndex         the index of the {@code u}
+     * @param decodedBuilder collects the decoded text
+     * @return the index of the escape's last character
+     */
+    private int appendModuleUnicodeEscape(String text, int uIndex, StringBuilder decodedBuilder) {
+        if (uIndex + 1 < text.length() && text.charAt(uIndex + 1) == '{') {
+            int braceEnd = text.indexOf('}', uIndex + 2);
+            int codePoint = braceEnd < 0 ? -1 : parseHex(text.substring(uIndex + 2, braceEnd));
+            if (codePoint < 0 || codePoint > Character.MAX_CODE_POINT) {
+                decodedBuilder.append('u');
+                return uIndex;
+            }
+            decodedBuilder.appendCodePoint(codePoint);
+            return braceEnd;
+        }
+        int codeUnit = uIndex + 4 < text.length()
+                ? parseHex(text.substring(uIndex + 1, uIndex + 5))
+                : -1;
+        if (codeUnit < 0) {
+            decodedBuilder.append('u');
+            return uIndex;
+        }
+        decodedBuilder.append((char) codeUnit);
+        return uIndex + 4;
     }
 
     private void applyImportClauseBindings(
@@ -515,7 +587,10 @@ public final class JSContext implements AutoCloseable {
             String localName,
             JSObject namespaceObject,
             String importedName) {
-        String bindingName = localName.trim();
+        // The overlay key is the decoded name, because that is what module code writes to reach
+        // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
+        // property nothing in the module can name.
+        String bindingName = decodeIdentifierEscapes(localName.trim());
         if (bindingName.isEmpty()) {
             return;
         }
@@ -575,7 +650,10 @@ public final class JSContext implements AutoCloseable {
             Set<String> absentKeys,
             String localName,
             JSValue value) {
-        String bindingName = localName.trim();
+        // The overlay key is the decoded name, because that is what module code writes to reach
+        // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
+        // property nothing in the module can name.
+        String bindingName = decodeIdentifierEscapes(localName.trim());
         if (bindingName.isEmpty()) {
             return;
         }
@@ -925,7 +1003,7 @@ public final class JSContext implements AutoCloseable {
         if (namespaceMatcher.find()) {
             boolean deferredImport = "defer".equals(namespaceMatcher.group(1));
             String localName = namespaceMatcher.group(2);
-            String sourceSpecifier = namespaceMatcher.group(4);
+            String sourceSpecifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
             registerImportedBinding(
                     localName,
                     sourceSpecifier,
@@ -940,7 +1018,7 @@ public final class JSContext implements AutoCloseable {
             return;
         }
         String clause = bindingMatcher.group(1).trim();
-        String sourceSpecifier = bindingMatcher.group(3);
+        String sourceSpecifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
         if (clause.startsWith("*") || clause.startsWith("defer *")) {
             return;
         }
@@ -1660,6 +1738,81 @@ public final class JSContext implements AutoCloseable {
             }
         }
         return decodedTextBuilder.toString();
+    }
+
+    /**
+     * The {@code StringValue} of a {@code StringLiteral} body — the text between the delimiters,
+     * with every escape sequence applied.
+     * <p>
+     * A module specifier and an arbitrary module export name are {@code StringLiteral}s, and a
+     * {@code StringLiteral}'s meaning is its {@code StringValue}, not its spelling.
+     * {@code './d\\u0065p.mjs'} names {@code ./dep.mjs} and {@code "a\\u002db"} is the export name
+     * {@code a-b} — the lexer knows that, and the token-driven link pass therefore already agreed
+     * with it. The evaluation path pulled the same literals out of raw source with
+     * {@code substring} and kept the backslashes, so the two stages disagreed about module identity
+     * and about export-name identity: the link check passed and evaluation then failed to find a
+     * module or a name that was there all along, in one case after a dependency had already run.
+     * <p>
+     * Octal escapes are deliberately not decoded. They are a {@code SyntaxError} in a module, the
+     * source has already been compiled once before this runs, and inventing a value for text the
+     * grammar rejects would be worse than leaving it alone.
+     *
+     * @param literalBody the literal's text without its delimiters
+     * @return the decoded value
+     */
+    private String decodeModuleStringLiteralValue(String literalBody) {
+        if (literalBody == null || literalBody.indexOf('\\') < 0) {
+            return literalBody;
+        }
+        StringBuilder decodedBuilder = new StringBuilder(literalBody.length());
+        for (int index = 0; index < literalBody.length(); index++) {
+            char ch = literalBody.charAt(index);
+            if (ch != '\\' || index + 1 >= literalBody.length()) {
+                decodedBuilder.append(ch);
+                continue;
+            }
+            char escaped = literalBody.charAt(++index);
+            switch (escaped) {
+                case 'b' -> decodedBuilder.append('\b');
+                case 'f' -> decodedBuilder.append('\f');
+                case 'n' -> decodedBuilder.append('\n');
+                case 'r' -> decodedBuilder.append('\r');
+                case 't' -> decodedBuilder.append('\t');
+                case 'v' -> decodedBuilder.append('\u000B');
+                case 'x' -> {
+                    int value = index + 2 < literalBody.length()
+                            ? parseHex(literalBody.substring(index + 1, index + 3))
+                            : -1;
+                    if (value < 0) {
+                        decodedBuilder.append(escaped);
+                    } else {
+                        decodedBuilder.append((char) value);
+                        index += 2;
+                    }
+                }
+                case 'u' -> index = appendModuleUnicodeEscape(literalBody, index, decodedBuilder);
+                case '0' -> {
+                    if (index + 1 < literalBody.length()
+                            && Character.isDigit(literalBody.charAt(index + 1))) {
+                        // A legacy octal escape: left as written, per the note above.
+                        decodedBuilder.append('\\').append(escaped);
+                    } else {
+                        decodedBuilder.append('\0');
+                    }
+                }
+                // A LineContinuation contributes nothing, and CRLF is one line terminator.
+                case '\r' -> {
+                    if (index + 1 < literalBody.length() && literalBody.charAt(index + 1) == '\n') {
+                        index++;
+                    }
+                }
+                case '\n', '\u2028', '\u2029' -> {
+                }
+                // \' \" \\ and every other IdentityEscape stand for the character itself.
+                default -> decodedBuilder.append(escaped);
+            }
+        }
+        return decodedBuilder.toString();
     }
 
     /**
@@ -2623,7 +2776,7 @@ public final class JSContext implements AutoCloseable {
                     // Side-effect import
                     sideEffectMatcher.reset(scanCode);
                     if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                        String specifier = sideEffectMatcher.group(2);
+                        String specifier = decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
                         Map<String, String> importAttributes = extractImportAttributes(sideEffectMatcher.group(0));
                         loadDynamicImportModule(specifier, filename, importAttributes);
                         // If this side-effect import was generated for an export-from,
@@ -2637,7 +2790,7 @@ public final class JSContext implements AutoCloseable {
                     if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
                         String deferKeyword = namespaceMatcher.group(1);
                         String localName = namespaceMatcher.group(2);
-                        String specifier = namespaceMatcher.group(4);
+                        String specifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
                         Map<String, String> importAttributes = extractImportAttributes(namespaceMatcher.group(0));
                         JSObject namespaceObject;
                         if ("defer".equals(deferKeyword)) {
@@ -2655,7 +2808,7 @@ public final class JSContext implements AutoCloseable {
                         if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
                             continue;
                         }
-                        String specifier = bindingMatcher.group(3);
+                        String specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
                         Map<String, String> importAttributes = extractImportAttributes(bindingMatcher.group(0));
                         if (specifier.endsWith(".json")
                                 && importAttributes != null
@@ -2709,7 +2862,7 @@ public final class JSContext implements AutoCloseable {
                         continue;
                     }
                 }
-                String specifier = bindingMatcher.group(3);
+                String specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
                 String resolvedSpec;
                 try {
                     resolvedSpec = resolveDynamicImportSpecifier(specifier, filename, specifier);
@@ -2747,7 +2900,7 @@ public final class JSContext implements AutoCloseable {
             if (type == 0) {
                 sideEffectMatcher.reset(scanCode);
                 if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                    specifier = sideEffectMatcher.group(2);
+                    specifier = decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
                 }
             } else if (type == 1) {
                 namespaceMatcher.reset(scanCode);
@@ -2758,7 +2911,7 @@ public final class JSContext implements AutoCloseable {
                     if ("defer".equals(deferKeyword)) {
                         continue;
                     }
-                    specifier = namespaceMatcher.group(4);
+                    specifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
                 }
             } else {
                 bindingMatcher.reset(scanCode);
@@ -2769,7 +2922,7 @@ public final class JSContext implements AutoCloseable {
                     if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
                         continue;
                     }
-                    specifier = bindingMatcher.group(3);
+                    specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
                 }
             }
             if (specifier != null) {
@@ -2823,14 +2976,24 @@ public final class JSContext implements AutoCloseable {
         extractSingleDestructuringName(trimmed.substring(start).trim(), names);
     }
 
+    /**
+     * The name a {@code function} or {@code class} declaration binds, decoded.
+     * <p>
+     * Decoded because the declared binding is the decoded name: {@code export function café()}
+     * declares {@code café}, and the generated export bookkeeping has to name it the way the rest of
+     * the module names it.
+     *
+     * @param exportClause the declaration text, with {@code export} already removed
+     * @return the bound name, or null when the declaration is anonymous
+     */
     private String extractExportedFunctionOrClassName(String exportClause) {
         Matcher functionMatcher = DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN.matcher(exportClause);
         if (functionMatcher.find()) {
-            return functionMatcher.group(1);
+            return decodeIdentifierEscapes(functionMatcher.group(1));
         }
         Matcher classMatcher = DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN.matcher(exportClause);
         if (classMatcher.find()) {
-            String candidateName = classMatcher.group(1);
+            String candidateName = decodeIdentifierEscapes(classMatcher.group(1));
             if (JSKeyword.EXTENDS.equals(candidateName)) {
                 return null;
             }
@@ -2925,7 +3088,9 @@ public final class JSContext implements AutoCloseable {
                     // Array destructuring pattern: [a, b, c] → extract bound names
                     extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1), declarationNames);
                 } else {
-                    declarationNames.add(declaratorText);
+                    // The binding is called by its decoded name: `export const \\u0078 = 1` declares
+                    // `x`, and the generated export bookkeeping has to name it that way too.
+                    declarationNames.add(decodeIdentifierEscapes(declaratorText));
                 }
             }
         }
@@ -2956,7 +3121,7 @@ public final class JSContext implements AutoCloseable {
         } else if (element.startsWith("[") && element.endsWith("]")) {
             extractDestructuringNames(element.substring(1, element.length() - 1), names);
         } else if (!element.isEmpty()) {
-            names.add(element);
+            names.add(decodeIdentifierEscapes(element));
         }
     }
 
@@ -3268,7 +3433,7 @@ public final class JSContext implements AutoCloseable {
         }
         Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
         while (matcher.find()) {
-            String childSpecifier = matcher.group(1);
+            String childSpecifier = decodeModuleStringLiteralValue(matcher.group(1));
             String resolvedChildSpecifier = resolveDynamicImportSpecifier(
                     childSpecifier,
                     resolvedSpecifier,
@@ -3436,7 +3601,7 @@ public final class JSContext implements AutoCloseable {
         JSDynamicImportModule moduleCycleRoot =
                 moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
         while (matcher.find()) {
-            String specifier = matcher.group(1);
+            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
             try {
                 String resolved = resolveDynamicImportSpecifier(
                         specifier, moduleRecord.resolvedSpecifier(), specifier);
@@ -3831,7 +3996,7 @@ public final class JSContext implements AutoCloseable {
         String scanSource = maskModuleComments(moduleRecord.rawSource());
         Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
         while (matcher.find()) {
-            String specifier = matcher.group(1);
+            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
             try {
                 String resolved = resolveDynamicImportSpecifier(
                         specifier, moduleRecord.resolvedSpecifier(), specifier);
@@ -4002,7 +4167,8 @@ public final class JSContext implements AutoCloseable {
                     .append("\": ")
                     .append(requireGeneratedIdentifier(
                             hoistedBinding.localName(),
-                            "hoisted function export '" + hoistedBinding.localName() + "'"));
+                            "hoisted function export '" + hoistedBinding.localName() + "'",
+                            moduleRecord.resolvedSpecifier()));
         }
         sourceBuilder.append("};\n})();");
 
@@ -5071,32 +5237,43 @@ public final class JSContext implements AutoCloseable {
      * Rewrite ES module source into plain script source that the compiler can evaluate.
      * <p>
      * <strong>This is a line-based textual transformer, not a parser.</strong> It splits the source
-     * on {@code \n}, classifies each line by string-matching {@code import }/{@code export }, and
-     * splices generated JavaScript into the result. It cannot see the language's real grammar, so
-     * the module syntax it accepts is a restricted subset of ECMAScript:
+     * on {@code \n}, classifies each line, and splices generated JavaScript into the result.
+     * <p>
+     * <em>Which</em> text it classifies is no longer decided by how the source is formatted.
+     * {@link #normalizeModuleDeclarationLines(String)} tokenises the source first and puts every
+     * top-level declaration on its own lines, {@link #defaultExportExtents(String)} asks the parser
+     * where an {@code export default} expression ends, and both binding names and string literals
+     * are read as the values the lexer says they are rather than as the characters that spell
+     * them. So a declaration sharing a line with other code, a regular expression literal
+     * containing a quote, a Unicode or escaped identifier, and a string export name are all handled
+     * — those were once documented here as unsupported, and are covered by
+     * {@code JSModuleSourceTransformTest}, {@code JSModuleDefaultExportExtentTest} and
+     * {@code JSModuleIdentifierSpellingTest}.
+     * <p>
+     * What remains wrong is not a scanning problem and cannot be fixed at this layer:
      * <ul>
-     * <li>{@code export} must be the first token on its line (leading whitespace is fine). An
-     * {@code export} that follows another statement on the same line is not recognised, and the
-     * binding is silently absent from the module namespace.</li>
-     * <li>A static {@code import ... from '...'} declaration must be alone on its line. An import
-     * followed by another statement on the same line is not hoisted.</li>
-     * <li>{@code maskModuleComments} masks strings, templates and comments, but not regular
-     * expression literals. A regexp literal containing a quote — {@code /"/} — desynchronises its
-     * quote state for the rest of the line.</li>
-     * <li>Export names must be identifiers. String export names
-     * ({@code export { x as "a-b" }}, ES2022) are rejected with a SyntaxError.</li>
-     * <li>The generated bindings {@code __qjs4jDefaultExport$<n>} and {@code __qjs4jModuleExports}
-     * are declared in the module's own scope and are observable from module code.</li>
+     * <li>An import is a temporary accessor on the global object, removed when the module body
+     * finishes, rather than a binding in a module environment. A closure retained past evaluation
+     * cannot read it, and it is not live.</li>
+     * <li>The generated bindings — {@code __qjs4jDefaultExport$<n>}, {@code __qjs4jModuleExports}
+     * and the namespace binding — are declared in the module's own scope and are reachable from a
+     * direct {@code eval} in it. {@link #generatedModuleNamePrefix(String)} keeps them clear of
+     * names the author writes, which is containment, not scope.</li>
+     * <li>An import attribute naming a module type the engine does not implement is ignored, and
+     * the target is loaded as JavaScript.</li>
      * </ul>
-     * Every value that reaches identifier position in the generated source is validated by
-     * {@link #requireGeneratedIdentifier(String, String)}, and every value that reaches string
+     * That list is executable: each entry is a {@code testKnownLimitation*} test in
+     * {@code JSModuleKnownLimitationTest} that asserts the wrong answer on purpose, so fixing one
+     * makes its test fail. Real module environment records — {@code ImportDeclaration}/{@code Export*}
+     * AST nodes the parser keeps instead of discards, and indirect bindings the
+     * {@code BytecodeCompiler} can capture — are the fix for all three, and are a dedicated
+     * milestone rather than a patch.
+     * <p>
+     * Loading and linking are separate from evaluation: see {@link #requireModuleGraphLinks(String,
+     * String)}. Every value that reaches identifier position in the generated source is validated by
+     * {@link #requireGeneratedIdentifier(String, String, String)}, and every value that reaches string
      * position is escaped by {@link #escapeJavaScriptString(String)}, so a name the scanner
      * mis-extracts produces a diagnosable SyntaxError rather than spliced source text.
-     * <p>
-     * The structural limits above are not fixable at this layer. Routing modules through the
-     * existing lexer, parser and compiler — real {@code ImportDeclaration}/{@code Export*}
-     * AST nodes and module-environment bindings emitted by {@code BytecodeCompiler} — is the
-     * actual fix, and is a dedicated milestone rather than a patch.
      *
      * @param moduleRecord the module whose raw source is to be transformed
      */
@@ -5248,12 +5425,14 @@ public final class JSContext implements AutoCloseable {
                                     .append(" = ")
                                     .append(declarationPart)
                                     .append(";\n");
-                            appendDynamicImportDefaultExportNameFixup(transformedSourceBuilder, declarationName);
+                            appendDynamicImportDefaultExportNameFixup(
+                                    transformedSourceBuilder, declarationName, moduleRecord.resolvedSpecifier());
                         } else {
                             String renamedDeclaration = renameAnonymousDefaultExportDeclaration(
                                     declarationPart, defaultLocalName);
                             transformedSourceBuilder.append(renamedDeclaration).append('\n');
-                            appendDynamicImportDefaultExportNameFixup(defaultExportNameFixups, declarationName);
+                            appendDynamicImportDefaultExportNameFixup(
+                                    defaultExportNameFixups, declarationName, moduleRecord.resolvedSpecifier());
                         }
                         if (!remainingCode.isEmpty()) {
                             transformedSourceBuilder.append(remainingCode).append('\n');
@@ -5278,7 +5457,8 @@ public final class JSContext implements AutoCloseable {
                             transformedSourceBuilder.append("let ")
                                     .append(requireGeneratedIdentifier(
                                             declarationName,
-                                            "default export declaration name '" + declarationName + "'"))
+                                            "default export declaration name '" + declarationName + "'",
+                                            moduleRecord.resolvedSpecifier()))
                                     .append(" = ")
                                     .append(declarationPart)
                                     .append(";\n");
@@ -5323,7 +5503,8 @@ public final class JSContext implements AutoCloseable {
                             .append(" = (0, ")
                             .append(defaultExpression)
                             .append(");\n");
-                    appendDynamicImportDefaultExportNameFixup(transformedSourceBuilder, defaultLocalName);
+                    appendDynamicImportDefaultExportNameFixup(
+                            transformedSourceBuilder, defaultLocalName, moduleRecord.resolvedSpecifier());
                     if (!trailingCode.isEmpty()) {
                         transformedSourceBuilder.append(trailingCode).append('\n');
                     }
@@ -5528,7 +5709,7 @@ public final class JSContext implements AutoCloseable {
             StringBuilder exportPreamble = new StringBuilder();
             appendDynamicImportExportAssignments(
                     exportPreamble, generatedNamePrefix, exportBindingName,
-                    localExportBindings, importedBindingNames);
+                    localExportBindings, importedBindingNames, moduleRecord.resolvedSpecifier());
             if (!defaultExportNameFixups.isEmpty()) {
                 exportPreamble.append(defaultExportNameFixups);
             }
@@ -5636,9 +5817,10 @@ public final class JSContext implements AutoCloseable {
      */
     private String parseModuleExportNameValue(String raw) {
         String trimmed = raw.trim();
-        if ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
-                || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
-            return trimmed.substring(1, trimmed.length() - 1);
+        if (trimmed.length() >= 2
+                && ((trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"')
+                || (trimmed.charAt(0) == '\'' && trimmed.charAt(trimmed.length() - 1) == '\''))) {
+            return decodeModuleStringLiteralValue(trimmed.substring(1, trimmed.length() - 1));
         }
         return decodeIdentifierEscapes(trimmed);
     }
@@ -5690,7 +5872,7 @@ public final class JSContext implements AutoCloseable {
                     continue;
                 }
             }
-            String specifier = matcher.group(1);
+            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
             try {
                 String resolved = resolveDynamicImportSpecifier(
                         specifier, moduleRecord.resolvedSpecifier(), specifier);
@@ -5791,6 +5973,7 @@ public final class JSContext implements AutoCloseable {
         }
         requests.add(new LinkedModuleRequest(
                 tokens.get(index).value(),
+                moduleTokenLocation(tokens, index, sourceCode),
                 readImportAttributes(tokens, index),
                 List.copyOf(requestedNames)));
         return skipModuleDeclarationTail(tokens, index);
@@ -5888,6 +6071,7 @@ public final class JSContext implements AutoCloseable {
         }
         requests.add(new LinkedModuleRequest(
                 tokens.get(index).value(),
+                moduleTokenLocation(tokens, index, sourceCode),
                 readImportAttributes(tokens, index),
                 List.copyOf(importedNames)));
         return skipModuleDeclarationTail(tokens, index);
@@ -5962,7 +6146,7 @@ public final class JSContext implements AutoCloseable {
         }
         Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
         while (matcher.find()) {
-            String childSpecifier = matcher.group(1);
+            String childSpecifier = decodeModuleStringLiteralValue(matcher.group(1));
             String resolvedChildSpecifier;
             try {
                 resolvedChildSpecifier = resolveDynamicImportSpecifier(
@@ -6075,7 +6259,8 @@ public final class JSContext implements AutoCloseable {
             boolean deferredImport,
             Set<String> bindingNames,
             Map<String, ImportBinding> importedBindings) {
-        String normalizedLocalName = localName == null ? "" : localName.trim();
+        String normalizedLocalName =
+                localName == null ? "" : decodeIdentifierEscapes(localName.trim());
         if (normalizedLocalName.isEmpty()) {
             return;
         }
@@ -6101,7 +6286,7 @@ public final class JSContext implements AutoCloseable {
         JSDynamicImportModule moduleCycleRoot =
                 moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
         while (matcher.find()) {
-            String specifier = matcher.group(1);
+            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
             try {
                 String resolved = resolveDynamicImportSpecifier(
                         specifier, moduleRecord.resolvedSpecifier(), specifier);
@@ -6190,17 +6375,25 @@ public final class JSContext implements AutoCloseable {
      * is not an identifier would splice arbitrary source into the generated program. Anything that
      * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
      *
-     * @param name        the candidate identifier
-     * @param description what the name denotes, used in the error message
+     * @param name            the candidate identifier
+     * @param description     what the name denotes, used in the error message
+     * @param moduleSpecifier which module is being transformed, or null when it is not known
      * @return the name unchanged when it is a valid identifier
      * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
      */
-    private String requireGeneratedIdentifier(String name, String description) {
-        if (!isValidIdentifierName(name)) {
-            throw new JSException(throwSyntaxError(
-                    "Unsupported module syntax: " + description + " is not a valid identifier"));
+    private String requireGeneratedIdentifier(String name, String description, String moduleSpecifier) {
+        if (isValidIdentifierName(name)) {
+            return name;
         }
-        return name;
+        // No SourceLocation: the transformer works on rewritten text, and offsets into that name
+        // no character of the source anybody wrote. Naming the module is the part that can be made
+        // true, and it is the part an embedder with a graph of them actually needs — the message
+        // used to identify neither the module nor the position.
+        JSError error = throwSyntaxError("Unsupported module syntax: " + description
+                + " is not a valid identifier"
+                + (moduleSpecifier == null ? "" : " in module '" + moduleSpecifier + "'"));
+        error.setSourceName(moduleSpecifier);
+        throw new JSException(error);
     }
 
     /**
@@ -6787,21 +6980,40 @@ public final class JSContext implements AutoCloseable {
         return result;
     }
 
+    /**
+     * The module a quoted specifier names, as a value rather than as source text.
+     *
+     * @param text the specifier literal, possibly followed by an attributes clause
+     * @return the decoded specifier
+     */
     private String stripQuotedSpecifier(String text) {
         String specifierText = text.trim();
         if (specifierText.length() < 2) {
             throw new JSException(throwSyntaxError("Invalid module specifier"));
         }
-        char firstChar = specifierText.charAt(0);
-        if (firstChar != '\'' && firstChar != '"') {
+        char quote = specifierText.charAt(0);
+        if (quote != '\'' && quote != '"') {
             throw new JSException(throwSyntaxError("Invalid module specifier"));
         }
-        // Find the closing quote — everything after (e.g., `with { ... }`) is ignored
-        int closeQuote = specifierText.indexOf(firstChar, 1);
+        // A backslash escapes whatever follows it, so the first matching quote is not necessarily
+        // the closing one: `'./a\\'b.mjs'` ends at the third quote, not the second.
+        int closeQuote = -1;
+        for (int index = 1; index < specifierText.length(); index++) {
+            char ch = specifierText.charAt(index);
+            if (ch == '\\') {
+                index++;
+                continue;
+            }
+            if (ch == quote) {
+                closeQuote = index;
+                break;
+            }
+        }
         if (closeQuote < 0) {
             throw new JSException(throwSyntaxError("Invalid module specifier"));
         }
-        return specifierText.substring(1, closeQuote);
+        // Everything after the closing quote (e.g. `with { ... }`) is not part of the specifier.
+        return decodeModuleStringLiteralValue(specifierText.substring(1, closeQuote));
     }
 
     public JSGlobalObject.EvalOverlaySnapshot suspendEvalOverlays() {
@@ -7325,6 +7537,21 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * What ECMAScript's ResolveExport answers with: a module, and a name within it.
+     * <p>
+     * Two fields rather than one delimited string. The delimited form needed a separator that could
+     * not occur in either half, which meant a NUL — a byte that made the engine's largest source
+     * file read as binary to ordinary search tooling. A pair needs no separator, and its
+     * {@code equals} is exactly the binding identity that decides whether two {@code export *}
+     * routes to a name are the same binding or an ambiguity.
+     *
+     * @param specifier the resolved specifier of the module the binding lives in
+     * @param name      the name of the binding within that module
+     */
+    private record LinkedBinding(String specifier, String name) {
+    }
+
+    /**
      * One name an import clause asks the exporting module for, and where it asked.
      *
      * @param name     the requested export name, decoded
@@ -7336,13 +7563,16 @@ public final class JSContext implements AutoCloseable {
     /**
      * One static {@code import} declaration, as the link pass needs it.
      *
-     * @param specifier     the module specifier as written
+     * @param specifier     the module specifier, decoded
+     * @param location      where the specifier was written, so a module that cannot be loaded can
+     *                      be reported at the declaration that asked for it
      * @param attributes    the {@code with}/{@code assert} attributes, empty when there are none
      * @param importedNames the names asked for; empty for a namespace or side-effect import, which
      *                      still names a module that has to link
      */
     private record LinkedModuleRequest(
             String specifier,
+            SourceLocation location,
             Map<String, String> attributes,
             List<LinkedExportNameRequest> importedNames) {
     }
@@ -7381,29 +7611,32 @@ public final class JSContext implements AutoCloseable {
         /**
          * Check every module one module names, and every name it asks them for, then do the same
          * for everything it reaches.
+         * <p>
+         * Every request is decided here, and none is deferred. The pass used to skip a request it
+         * could not resolve, could not read, or that carried a {@code type} attribute, on the
+         * grounds that evaluation would report it. Evaluation does — but evaluation reaches the
+         * requests in source order, so by the time it reached the skipped one it had already run
+         * the bodies of the modules named before it. A graph containing an unloadable module must
+         * never begin evaluating, so a request this pass cannot satisfy fails here, at the
+         * declaration that made it.
          *
          * @param moduleRecord the module being linked
          */
         private void checkModuleLinks(JSDynamicImportModule moduleRecord) {
-            String importerSpecifier = moduleRecord.resolvedSpecifier();
             List<LinkedModuleRequest> moduleRequests = linkedModuleRequests(moduleRecord.rawSource());
             if (moduleRequests == null) {
                 // Source that does not tokenise is the compiler's to reject, not this pass's.
                 return;
             }
             for (LinkedModuleRequest moduleRequest : moduleRequests) {
-                if (moduleRequest.attributes().containsKey("type")) {
-                    // `with { type: 'text' }` and friends name a synthetic module whose exports are
-                    // manufactured by the host, not read out of JavaScript source. Reading the
-                    // payload as a module would be exactly the mistake the text-import path used to
-                    // make. Attributes that do not choose a module type say nothing about the
-                    // target, so a declaration carrying only those is still checked.
+                String resolvedSpecifier = requireModuleResolves(moduleRequest, moduleRecord);
+                String moduleType = moduleRequest.attributes().get("type");
+                if (isSyntheticModuleRequest(resolvedSpecifier, moduleType)) {
+                    checkSyntheticModuleLinks(moduleRequest, resolvedSpecifier, moduleType, moduleRecord);
                     continue;
                 }
-                JSDynamicImportModule targetRecord = linkModule(moduleRequest.specifier(), importerSpecifier);
-                if (targetRecord == null) {
-                    continue;
-                }
+                JSDynamicImportModule targetRecord =
+                        requireJavaScriptModuleLinks(moduleRequest, resolvedSpecifier, moduleRecord);
                 // A namespace import and `export *` ask for no particular name, but linking the
                 // module they name is still what surfaces that module's own unresolvable imports.
                 for (LinkedExportNameRequest requestedName : moduleRequest.importedNames()) {
@@ -7418,33 +7651,105 @@ public final class JSContext implements AutoCloseable {
         }
 
         /**
-         * Build the {@code SyntaxError} for a link failure, positioned where the caller can use it.
+         * Check a request for a module whose exports the host manufactures rather than reading out
+         * of JavaScript source: a {@code type: 'text'} or {@code type: 'bytes'} payload, or JSON.
          * <p>
-         * A {@code SourceLocation} names an offset in <em>some</em> source, and the only source the
-         * caller has coordinates for is the one it passed to {@code eval}. Attaching a dependency's
-         * offsets to the exception would name a position in text the caller never saw — the same
-         * mistake as reporting a generated wrapper's offsets — so a failure inside a dependency
-         * says where it is in words instead.
+         * Such a module provides exactly one export, {@code default}. The rules and the wording are
+         * the ones evaluation already applies; the only thing that changes is that they are applied
+         * before anything runs.
+         *
+         * @param moduleRequest     the declaration's request
+         * @param resolvedSpecifier the resolved path of the payload
+         * @param moduleType        the {@code type} attribute, or null when the declaration has none
+         * @param importerRecord    the module whose declaration made the request
+         */
+        private void checkSyntheticModuleLinks(
+                LinkedModuleRequest moduleRequest,
+                String resolvedSpecifier,
+                String moduleType,
+                JSDynamicImportModule importerRecord) {
+            String moduleKind;
+            if ("text".equals(moduleType)) {
+                moduleKind = "Text";
+            } else if ("bytes".equals(moduleType)) {
+                moduleKind = "Bytes";
+            } else if ("json".equals(moduleType)) {
+                moduleKind = "JSON";
+            } else {
+                // A .json payload is JSON whatever the declaration says, and evaluation refuses to
+                // read one it was not told to expect.
+                throw linkFailure(
+                        "Import attribute type must be 'json'",
+                        importerRecord,
+                        moduleRequest.location(),
+                        true);
+            }
+            requireModuleIsReadable(moduleRequest, resolvedSpecifier, importerRecord);
+            for (LinkedExportNameRequest requestedName : moduleRequest.importedNames()) {
+                if (!"default".equals(requestedName.name())) {
+                    throw linkFailure(
+                            moduleKind + " modules do not support named exports",
+                            importerRecord,
+                            requestedName.location(),
+                            false);
+                }
+            }
+        }
+
+        /**
+         * Whether a request names a module whose exports the host manufactures.
+         * <p>
+         * The order matters and mirrors the loader's: {@code type} chooses first, so a {@code .json}
+         * payload imported as text is text.
+         *
+         * @param resolvedSpecifier the resolved path
+         * @param moduleType        the {@code type} attribute, or null
+         * @return true when the target is not JavaScript source
+         */
+        private boolean isSyntheticModuleRequest(String resolvedSpecifier, String moduleType) {
+            return "text".equals(moduleType)
+                    || "bytes".equals(moduleType)
+                    || resolvedSpecifier.endsWith(".json");
+        }
+
+        /**
+         * Build the error for a link failure, positioned at the declaration that caused it.
+         * <p>
+         * A {@code SourceLocation} is an offset into <em>some</em> source, and on its own it does
+         * not say which. That is why a failure in a dependency used to carry no location at all: a
+         * dependency's offsets attached to a bare exception would have read as offsets into the
+         * text the caller passed to {@code eval}. The exception now carries the source's name
+         * alongside its offsets, so a dependency's position can be reported as what it is — and the
+         * embedder gets one structured diagnostic for a root failure and a transitive one alike,
+         * instead of having to parse coordinates back out of a message.
          *
          * @param message         what went wrong
          * @param importerRecord  the module whose declaration made the request
          * @param requestLocation where the request was written, or null when it is not a source name
+         * @param typeError       true for a module that cannot be loaded, false for one that links
+         *                        but does not provide what was asked of it
          * @return the exception to throw
          */
         private JSException linkFailure(
                 String message,
                 JSDynamicImportModule importerRecord,
-                SourceLocation requestLocation) {
-            boolean importerIsEntryModule = rootSpecifier.equals(importerRecord.resolvedSpecifier());
-            if (requestLocation == null) {
-                return new JSException(throwSyntaxError(message));
+                SourceLocation requestLocation,
+                boolean typeError) {
+            String importerSpecifier = importerRecord.resolvedSpecifier();
+            boolean importerIsEntryModule = rootSpecifier.equals(importerSpecifier);
+            String reportedMessage = importerIsEntryModule || requestLocation == null
+                    ? message
+                    : message + " (imported by " + importerSpecifier
+                      + ":" + requestLocation.line() + ":" + requestLocation.column() + ")";
+            JSError error = typeError
+                    ? throwTypeError(reportedMessage, requestLocation)
+                    : throwSyntaxError(reportedMessage, requestLocation);
+            // Which source the offsets belong to. Recorded on the error value rather than only on
+            // the exception, because eval() re-wraps its pending exception on the way out.
+            if (requestLocation != null) {
+                error.setSourceName(importerSpecifier);
             }
-            if (importerIsEntryModule) {
-                return new JSException(throwSyntaxError(message, requestLocation));
-            }
-            return new JSException(throwSyntaxError(message
-                    + " (imported by " + importerRecord.resolvedSpecifier()
-                    + ":" + requestLocation.line() + ":" + requestLocation.column() + ")"));
+            return new JSException(error);
         }
 
         /**
@@ -7483,7 +7788,6 @@ public final class JSContext implements AutoCloseable {
             try {
                 resolvedSpecifier = resolveDynamicImportSpecifier(specifier, filename, specifier);
             } catch (JSException unresolvable) {
-                // Not this pass's error to report: evaluation raises it, with its own message.
                 clearPendingException();
                 return null;
             }
@@ -7494,17 +7798,31 @@ public final class JSContext implements AutoCloseable {
             if (resolvedSpecifier.endsWith(".json")) {
                 return null;
             }
-            String dependencySource;
-            try {
-                dependencySource = Files.readString(Path.of(resolvedSpecifier));
-            } catch (IOException | RuntimeException unreadable) {
-                // Again, evaluation reports this — as a TypeError naming the module.
+            String dependencySource = readModuleSource(resolvedSpecifier);
+            if (dependencySource == null) {
                 return null;
             }
-            // ECMAScript parses every module in the graph while loading it, so a module anywhere in
-            // the graph that is not valid source is a failure of the whole graph before any of it
-            // runs. Without this the engine compiled each dependency as it reached it, so the
-            // dependencies ahead of a broken one had already been evaluated.
+            return loadLinkRecord(resolvedSpecifier, dependencySource);
+        }
+
+        /**
+         * Parse one module into a link record and check what it, in turn, names.
+         * <p>
+         * ECMAScript parses every module in the graph while loading it, so a module anywhere in the
+         * graph that is not valid source is a failure of the whole graph before any of it runs.
+         * Without this the engine compiled each dependency as it reached it, so the dependencies
+         * ahead of a broken one had already been evaluated.
+         * <p>
+         * The record goes into {@link #linkRecords} before its own links are checked, which is what
+         * makes a cycle resolvable: a module's exports are known as soon as its source has been
+         * parsed, so the module on the other side of a cycle can be asked for a name even though it
+         * is only half linked.
+         *
+         * @param resolvedSpecifier the module's resolved path
+         * @param dependencySource  its source, as written
+         * @return the link record
+         */
+        private JSDynamicImportModule loadLinkRecord(String resolvedSpecifier, String dependencySource) {
             requireDependencyModuleSourceCompiles(dependencySource, resolvedSpecifier);
             JSDynamicImportModule linkRecord =
                     new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
@@ -7514,6 +7832,20 @@ public final class JSContext implements AutoCloseable {
             linkRecords.put(resolvedSpecifier, linkRecord);
             checkModuleLinks(linkRecord);
             return linkRecord;
+        }
+
+        /**
+         * A module's source, or null when it cannot be read.
+         *
+         * @param resolvedSpecifier the resolved path
+         * @return the source, or null
+         */
+        private String readModuleSource(String resolvedSpecifier) {
+            try {
+                return Files.readString(Path.of(resolvedSpecifier));
+            } catch (IOException | RuntimeException unreadable) {
+                return null;
+            }
         }
 
         /**
@@ -7531,25 +7863,104 @@ public final class JSContext implements AutoCloseable {
                 String specifier,
                 JSDynamicImportModule importerRecord,
                 SourceLocation requestLocation) {
-            String binding = resolveExport(moduleRecord, exportName, new HashSet<>());
-            if (UNKNOWN_LINKED_EXPORT.equals(binding)) {
+            LinkedBinding binding = resolveExport(moduleRecord, exportName, new HashSet<>());
+            if (binding == UNKNOWN_LINKED_EXPORT) {
                 // A star target this pass could not read may still provide the name. Evaluation
                 // reports it if it does not.
                 return;
             }
-            if (AMBIGUOUS_LINKED_EXPORT.equals(binding)) {
+            if (binding == AMBIGUOUS_LINKED_EXPORT) {
                 throw linkFailure(
                         "The requested module '" + specifier
                                 + "' contains conflicting star exports for the name '" + exportName + "'",
                         importerRecord,
-                        requestLocation);
+                        requestLocation,
+                        false);
             }
             if (binding == null) {
                 throw linkFailure(
                         "The requested module '" + specifier
                                 + "' does not provide an export named '" + exportName + "'",
                         importerRecord,
-                        requestLocation);
+                        requestLocation,
+                        false);
+            }
+        }
+
+        /**
+         * Load, parse and link the JavaScript module a request names, or fail at the request.
+         *
+         * @param moduleRequest     the declaration's request
+         * @param resolvedSpecifier the resolved path
+         * @param importerRecord    the module whose declaration made the request
+         * @return the linked record, never null
+         */
+        private JSDynamicImportModule requireJavaScriptModuleLinks(
+                LinkedModuleRequest moduleRequest,
+                String resolvedSpecifier,
+                JSDynamicImportModule importerRecord) {
+            JSDynamicImportModule existingRecord = linkRecords.get(resolvedSpecifier);
+            if (existingRecord != null) {
+                return existingRecord;
+            }
+            String dependencySource = readModuleSource(resolvedSpecifier);
+            if (dependencySource == null) {
+                throw linkFailure(
+                        "Cannot find module '" + resolvedSpecifier + "'",
+                        importerRecord,
+                        moduleRequest.location(),
+                        true);
+            }
+            return loadLinkRecord(resolvedSpecifier, dependencySource);
+        }
+
+        /**
+         * Require that a payload the host will read is actually readable.
+         *
+         * @param moduleRequest     the declaration's request
+         * @param resolvedSpecifier the resolved path
+         * @param importerRecord    the module whose declaration made the request
+         */
+        private void requireModuleIsReadable(
+                LinkedModuleRequest moduleRequest,
+                String resolvedSpecifier,
+                JSDynamicImportModule importerRecord) {
+            // isReadable alone is true of a directory, and a directory is not a payload: the read
+            // would fail at evaluation, which is the ordering this pass exists to prevent.
+            Path payloadPath = Path.of(resolvedSpecifier);
+            if (!Files.isRegularFile(payloadPath) || !Files.isReadable(payloadPath)) {
+                throw linkFailure(
+                        "Cannot find module '" + resolvedSpecifier + "'",
+                        importerRecord,
+                        moduleRequest.location(),
+                        true);
+            }
+        }
+
+        /**
+         * Resolve a request's specifier to a path, or fail at the request.
+         *
+         * @param moduleRequest  the declaration's request
+         * @param importerRecord the module whose declaration made the request
+         * @return the resolved specifier
+         */
+        private String requireModuleResolves(
+                LinkedModuleRequest moduleRequest,
+                JSDynamicImportModule importerRecord) {
+            try {
+                return resolveDynamicImportSpecifier(
+                        moduleRequest.specifier(),
+                        importerRecord.resolvedSpecifier(),
+                        moduleRequest.specifier());
+            } catch (JSException unresolvable) {
+                // Rebuilt rather than rethrown, so it carries the position of the declaration that
+                // named the module instead of no position at all.
+                clearPendingException();
+                throw linkFailure(
+                        "Cannot find module '" + moduleRequest.specifier() + "'",
+                        importerRecord,
+                        moduleRequest.location(),
+                        true);
             }
         }
 
@@ -7568,15 +7979,14 @@ public final class JSContext implements AutoCloseable {
          * @param moduleRecord the exporting module
          * @param exportName   the name the importer asked for
          * @param resolveSet   the (module, name) requests already in progress, so a cycle terminates
-         * @return an opaque binding identity, {@link #AMBIGUOUS_LINKED_EXPORT},
+         * @return the binding the name resolves to, {@link #AMBIGUOUS_LINKED_EXPORT},
          * {@link #UNKNOWN_LINKED_EXPORT}, or null when nothing provides the name
          */
-        private String resolveExport(
+        private LinkedBinding resolveExport(
                 JSDynamicImportModule moduleRecord,
                 String exportName,
-                Set<String> resolveSet) {
-            String request = moduleRecord.resolvedSpecifier() + ' ' + exportName;
-            if (!resolveSet.add(request)) {
+                Set<LinkedBinding> resolveSet) {
+            if (!resolveSet.add(new LinkedBinding(moduleRecord.resolvedSpecifier(), exportName))) {
                 // This module has already been asked for this name further up the recursion: a
                 // circular request, which resolves to nothing rather than to a second binding.
                 return null;
@@ -7584,7 +7994,8 @@ public final class JSContext implements AutoCloseable {
             for (JSDynamicImportModule.LocalExportBinding localExportBinding
                     : moduleRecord.localExportBindings()) {
                 if (exportName.equals(localExportBinding.exportedName())) {
-                    return moduleRecord.resolvedSpecifier() + ' ' + localExportBinding.localName();
+                    return new LinkedBinding(
+                            moduleRecord.resolvedSpecifier(), localExportBinding.localName());
                 }
             }
             for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
@@ -7599,7 +8010,8 @@ public final class JSContext implements AutoCloseable {
                 if (MODULE_NAMESPACE_EXPORT_NAME.equals(reExportBinding.importedName())) {
                     // The binding is the target's namespace object, which every route to that
                     // module shares.
-                    return target.resolvedSpecifier() + ' ' + MODULE_NAMESPACE_EXPORT_NAME;
+                    return new LinkedBinding(
+                            target.resolvedSpecifier(), MODULE_NAMESPACE_EXPORT_NAME);
                 }
                 return resolveExport(target, reExportBinding.importedName(), resolveSet);
             }
@@ -7607,13 +8019,13 @@ public final class JSContext implements AutoCloseable {
                     || moduleRecord.namespace().hasExportName(exportName)) {
                 // A name the parse recorded without a binding to go with it. Treating it as the
                 // module's own is what keeps this pass from rejecting something it cannot model.
-                return moduleRecord.resolvedSpecifier() + ' ' + exportName;
+                return new LinkedBinding(moduleRecord.resolvedSpecifier(), exportName);
             }
             // `export *` never re-exports `default`.
             if ("default".equals(exportName)) {
                 return null;
             }
-            String starBinding = null;
+            LinkedBinding starBinding = null;
             for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
                 if (!reExportBinding.starExport()) {
                     continue;
@@ -7625,11 +8037,11 @@ public final class JSContext implements AutoCloseable {
                     // time, so an unreadable one is not evidence either way.
                     return UNKNOWN_LINKED_EXPORT;
                 }
-                String binding = resolveExport(starTarget, exportName, resolveSet);
+                LinkedBinding binding = resolveExport(starTarget, exportName, resolveSet);
                 if (binding == null) {
                     continue;
                 }
-                if (UNKNOWN_LINKED_EXPORT.equals(binding) || AMBIGUOUS_LINKED_EXPORT.equals(binding)) {
+                if (binding == UNKNOWN_LINKED_EXPORT || binding == AMBIGUOUS_LINKED_EXPORT) {
                     return binding;
                 }
                 if (starBinding == null) {

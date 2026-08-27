@@ -39,11 +39,24 @@ qjs4j includes features not present in the original QuickJS:
 
 ### Known limitations
 
-- **Module source is transformed textually, not parsed.** Module linking runs over a scanner rather
-  than the compiler's own AST, so module syntax that depends on real grammar can be mis-classified.
-  The cases known to be wrong are pinned as `testKnownLimitation*` in
-  `JSModuleSourceTransformTest`, which is the authoritative list. Routing modules through the
-  lexer/parser/compiler is a dedicated milestone.
+- **Module source is transformed textually, not parsed.** The parser validates `import`/`export`
+  syntax and then discards it, so modules are implemented by rewriting module source into ordinary
+  script source: imports become temporary accessors on the global object, and exports become
+  generated bindings declared beside the author's own code. Three consequences are known to be
+  wrong, and each is pinned as a `testKnownLimitation*` test in
+  `src/test/java/com/caoccao/qjs4j/core/JSModuleKnownLimitationTest.java`, which is the
+  authoritative list — those tests assert the wrong answer on purpose, so fixing a defect makes one
+  fail:
+  - an imported binding is not usable from a closure retained after `JSContext.eval()` returns, and
+    is not live;
+  - the transformer's generated bookkeeping bindings are visible to a direct `eval` inside the
+    module;
+  - an import attribute naming an unsupported module type is ignored rather than refused.
+
+  Real module environment records, with indirect bindings the compiler can capture, are the fix for
+  all three, and are a dedicated milestone. Loading and linking are otherwise separated from
+  evaluation: a graph that names a module it cannot load, or a name nothing exports, fails before
+  any module body runs.
 - **Resource limits bound data blocks, not the heap.**
   `JSRuntimeOptions.setMaxMemoryUsage(long)` counts every byte allocated for an `ArrayBuffer` or
   `SharedArrayBuffer` and refuses an allocation past the ceiling with a catchable `RangeError`.

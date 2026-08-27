@@ -35,6 +35,16 @@ public sealed class JSError extends JSObject permits
     public static final String NAME = "Error";
     protected final JSContext context;
     private final SourceLocation sourceLocation;
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into, when it is not the source
+     * the embedder handed to {@code eval}.
+     * <p>
+     * Set after construction rather than taken as a constructor parameter because every error class
+     * in this hierarchy would otherwise need another constructor, and only module linking — which
+     * is the one place that reports a position in a file the caller never passed in — has anything
+     * to put here.
+     */
+    private String sourceName;
     private String vmMessage;
 
     /**
@@ -210,12 +220,32 @@ public sealed class JSError extends JSObject permits
      *
      * @return the source location, or {@code null} when it is unavailable
      */
+
     public SourceLocation getSourceLocation() {
         return sourceLocation;
     }
 
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into.
+     *
+     * @return the source name, or null when the location belongs to the source the embedder
+     * supplied, or when there is no location
+     */
+    public String getSourceName() {
+        return sourceName;
+    }
+
     public String getVmMessage() {
         return vmMessage;
+    }
+
+    /**
+     * Record which source this error's location indexes into.
+     *
+     * @param sourceName the source name
+     */
+    void setSourceName(String sourceName) {
+        this.sourceName = sourceName;
     }
 
     public void setVmMessage(String vmMessage) {

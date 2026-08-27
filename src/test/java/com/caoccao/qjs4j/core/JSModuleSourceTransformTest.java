@@ -41,6 +41,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * {@code testKnownLimitation*} tests asserting the wrong answer — a declaration sharing a line with
  * other code, and a regular expression literal desynchronising the character-level masker — and
  * they now assert the specified one.
+ * <p>
+ * The limitations that <em>are</em> still real live in {@link JSModuleKnownLimitationTest}, which is
+ * the authoritative list and the one the README points at. Nothing here is a known limitation; every
+ * assertion in this class is the specified behaviour.
  */
 public class JSModuleSourceTransformTest extends BaseTest {
     @TempDir
