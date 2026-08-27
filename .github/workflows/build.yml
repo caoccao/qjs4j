@@ -1,10 +1,23 @@
 name: Build
 
-# Every branch, not just main. A branch filter here means a push to a working branch produces no
-# CI at all until a pull request into main exists, so the first signal a change gets is whenever
-# someone remembers to open one — and a branch that is never proposed is never built.
+# One run per commit.
+#
+# This used to trigger on a push to any branch *and* on pull requests. For a branch in this
+# repository — which is every branch anyone with write access works on — both fire for the same
+# commit, so every push to a proposed branch built the whole matrix twice: fourteen jobs where
+# seven were asked for, two conformance runs of the same suite, and two identical results to read.
+#
+# The push trigger was written that way so that a branch nobody has proposed still gets built. That
+# is worth having, but not at the price of doubling every build that matters, and the pull_request
+# trigger is the better of the two anyway: it builds the merge of the branch with its base, which is
+# the state that will exist after merging, and it covers pull requests from forks, which a push
+# trigger in this repository never sees at all. So pushes build main, pull requests build everything
+# proposed into it, and a branch that wants CI before it is ready asks for it by being opened as a
+# draft pull request.
 on:
   push:
+    branches:
+      - main
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -12,6 +25,13 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
+
+# And one run per commit *at a time*: pushing again to an open pull request abandons the build of the
+# commit it just replaced, whose result nobody will read. Pushes to main are never cancelled, because
+# every commit on main is a state this project claims is good and needs its own answer.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
