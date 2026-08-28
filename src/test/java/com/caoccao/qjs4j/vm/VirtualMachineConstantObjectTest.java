@@ -23,6 +23,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,13 +47,20 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
         return reference.get() == null;
     }
 
-    private static long usedMemory() throws InterruptedException {
-        for (int attempt = 0; attempt < 4; attempt++) {
+    /**
+     * How many of these references still point at something, after asking the collector for a while.
+     *
+     * @param references the references to watch
+     * @return the number still live
+     */
+    private static long liveCount(List<WeakReference<JSValue>> references) throws InterruptedException {
+        long live = references.size();
+        for (int attempt = 0; attempt < 20 && live > 0; attempt++) {
             System.gc();
             Thread.sleep(25);
+            live = references.stream().filter(reference -> reference.get() != null).count();
         }
-        Runtime runtime = Runtime.getRuntime();
-        return runtime.totalMemory() - runtime.freeMemory();
+        return live;
     }
 
     private WeakReference<JSValue> evalToWeakReference(String code) {
@@ -110,18 +119,43 @@ public class VirtualMachineConstantObjectTest extends BaseTest {
     @Test
     @Timeout(120)
     public void testRepeatedConstantObjectEvaluationDoesNotRetainMemory() throws InterruptedException {
-        context.eval("function tag(strings) { return strings.length }");
-        for (int index = 0; index < 200; index++) {
-            context.eval("tag`warmup" + index + " ${1}`");
-        }
-        long before = usedMemory();
+        // Sampled weak references rather than a heap measurement.
+        //
+        // This used to compare `totalMemory() - freeMemory()` before and against a 16 MB budget,
+        // which was measured at ~46 MB with the leak and ~20 KB without — a threshold with three
+        // orders of magnitude of headroom that still failed intermittently on CI, and only there.
+        // The reason is that those two numbers are JVM-wide: they count every live object in the
+        // process, and this suite deliberately leaves worker threads running — the abandoned-worker
+        // cases in Test262RunnerOutcomeTest keep interpreting JavaScript on purpose, so a fork that
+        // schedules them alongside this class measures their allocation as this class's retention.
+        // Which classes share a fork depends on the host's processor count, which is why this failed
+        // on macOS runners and passed everywhere else.
+        //
+        // Sampling the objects themselves states the invariant directly and cannot be moved by
+        // anything else in the process: a constant object must not outlive the bytecode that owns
+        // it, whatever else the JVM is doing. With the side table that leaked, every one of these
+        // stays strongly reachable, so the failure is 200 live references rather than a number over
+        // a budget.
+        context.eval("function tag(strings) { return strings }");
+        List<WeakReference<JSValue>> sampledTemplateObjects = new ArrayList<>();
+        JSValue templateObject = null;
         for (int index = 0; index < 20000; index++) {
-            context.eval("tag`payload" + index + " ${1} ${2} ${3}`");
+            templateObject = context.eval("tag`payload" + index + " ${1} ${2} ${3}`");
+            if (index % 100 == 0) {
+                sampledTemplateObjects.add(new WeakReference<>(templateObject));
+            }
         }
-        long retainedBytes = usedMemory() - before;
-        // Measured at ~46 MB retained with the leak and ~0 MB without, for this iteration count.
-        assertThat(retainedBytes)
-                .as("retained %d bytes after 20000 tagged template evaluations", retainedBytes)
-                .isLessThan(16L * 1024 * 1024);
+        // The last one is still held by the local and by the engine's single-slot hold on the most
+        // recently compiled program; drop both, the way the case above does.
+        templateObject = null;
+        for (int index = 0; index < 20; index++) {
+            context.eval("1");
+        }
+        assertThat(templateObject).isNull();
+
+        assertThat(liveCount(sampledTemplateObjects))
+                .as("of %d template objects sampled across 20000 evaluations, none may outlive the"
+                        + " bytecode that owns it", sampledTemplateObjects.size())
+                .isZero();
     }
 }

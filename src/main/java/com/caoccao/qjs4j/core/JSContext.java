@@ -16,29 +16,13 @@
 
 package com.caoccao.qjs4j.core;
 
-import com.caoccao.qjs4j.compilation.ast.Program;
 import com.caoccao.qjs4j.compilation.ast.SourceLocation;
-import com.caoccao.qjs4j.compilation.ast.Statement;
-import com.caoccao.qjs4j.compilation.compiler.Compiler;
-import com.caoccao.qjs4j.compilation.lexer.Lexer;
-import com.caoccao.qjs4j.compilation.lexer.Token;
-import com.caoccao.qjs4j.compilation.lexer.TokenType;
-import com.caoccao.qjs4j.compilation.parser.Parser;
-import com.caoccao.qjs4j.exceptions.*;
-import com.caoccao.qjs4j.unicode.UnicodeData;
+import com.caoccao.qjs4j.exceptions.JSErrorException;
+import com.caoccao.qjs4j.exceptions.JSException;
 import com.caoccao.qjs4j.unicode.UnicodePropertyResolver;
-import com.caoccao.qjs4j.vm.StackFrame;
-import com.caoccao.qjs4j.vm.VarRef;
 import com.caoccao.qjs4j.vm.VirtualMachine;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Represents a JavaScript execution context.
@@ -54,132 +38,49 @@ import java.util.regex.Pattern;
  * from the others (separate globals, separate module namespaces).
  */
 public final class JSContext implements AutoCloseable {
-    /**
-     * Sentinel for an export name two different {@code export *} targets provide.
-     * <p>
-     * Recognised by identity, never by value, so no module can produce a binding equal to it.
-     */
-    private static final LinkedBinding AMBIGUOUS_LINKED_EXPORT = new LinkedBinding("", "ambiguous");
     private static final int DEFAULT_MAX_STACK_DEPTH = 1000;
-    private static final JSValue GLOBAL_LEXICAL_UNINITIALIZED = new JSSymbol("GlobalLexicalUninitialized");
-    /**
-     * An ECMAScript {@code IdentifierName}, as a regular-expression fragment.
-     * <p>
-     * The module transformer used to re-extract binding names with {@code [A-Za-z_$][A-Za-z0-9_$]*},
-     * which is not the identifier grammar the lexer three files away accepts. {@code café} and
-     * {@code módulo} are ordinary identifiers; so is {@code \\u0078}, which <em>is</em> {@code x}.
-     * The parser took all of them and the transformer did not, so valid source was handed to one
-     * component that accepted it and another that assigned it different semantics — a module
-     * exporting {@code café} reported no such export, and a namespace bound to {@code módulo} was
-     * not defined when the module body ran.
-     * <p>
-     * Deliberately a little wider than the real grammar: whatever this matches is decoded by
-     * {@link #decodeIdentifierEscapes(String)} and then checked against the Unicode tables by
-     * {@link #isValidIdentifierName(String)}, which is the authority. Matching slightly too much
-     * costs a rejection with a message; matching too little silently loses a binding.
-     */
-    private static final String IDENTIFIER_NAME_REGEX =
-            "(?:[\\p{L}\\p{Nl}$_]|\\\\u[0-9A-Fa-f]{4}|\\\\u\\{[0-9A-Fa-f]{1,6}\\})"
-                    + "(?:[\\p{L}\\p{Nl}\\p{Mn}\\p{Mc}\\p{Nd}\\p{Pc}$_\\u200C\\u200D]"
-                    + "|\\\\u[0-9A-Fa-f]{4}|\\\\u\\{[0-9A-Fa-f]{1,6}\\})*";
-    private static final Pattern DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN =
-            Pattern.compile("^class\\s+(" + IDENTIFIER_NAME_REGEX + ")");
-    private static final Pattern DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN =
-            Pattern.compile("^(?:async\\s+)?function(?:\\s*\\*)?\\s+(" + IDENTIFIER_NAME_REGEX + ")");
     /**
      * Upper bound on the failures retained by {@link #recordMicrotaskFailure(Throwable)}, so a
      * repeatedly failing microtask cannot itself become a leak.
      */
     private static final int MAX_RECORDED_MICROTASK_FAILURES = 64;
-    private static final Pattern MODULE_EXPORT_SYNTAX_PATTERN =
-            Pattern.compile("(?m)^\\s*export\\s");
-    /**
-     * The pseudo export name a namespace binding is recorded under — {@code import * as ns} and
-     * {@code export * as ns from}, whose binding is a module's namespace object rather than a name
-     * that module exports.
-     */
-    private static final String MODULE_NAMESPACE_EXPORT_NAME = "*namespace*";
-    /**
-     * The body of a module specifier's string literal, as a regular-expression fragment.
-     * <p>
-     * A backslash escapes whatever follows it, so a quote character does not necessarily end the
-     * literal and a line terminator does not necessarily end the declaration. The previous
-     * {@code [^'"\r\n]+} could express neither: {@code './a\'b.mjs'} matched nothing at all, and
-     * so did a specifier written across a LineContinuation.
-     */
-    private static final String MODULE_SPECIFIER_BODY_REGEX = "(?:\\\\[\\s\\S]|[^'\"\\\\\\r\\n])+";
-    private static final Pattern MODULE_BINDING_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*([^;]*?)\\s+from\\s+(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
-                    + ")\\2(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
-    private static final Pattern MODULE_NAMESPACE_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(?:(defer)\\s+)?\\*\\s*as\\s+(" + IDENTIFIER_NAME_REGEX
-                    + ")\\s+from\\s+(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
-                    + ")\\3(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
-    private static final Pattern MODULE_SIDE_EFFECT_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(['\"])(" + MODULE_SPECIFIER_BODY_REGEX
-                    + ")\\1(?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
-    private static final Pattern MODULE_STATIC_IMPORT_PATTERN =
-            Pattern.compile("(?m)^\\s*import\\s*(?:defer\\s+)?(?:[^;]*?\\s+from\\s+)?['\"]("
-                    + MODULE_SPECIFIER_BODY_REGEX + ")['\"](?:\\s+with\\s*\\{[^}]*\\})?\\s*;?\\s*$");
-    private static final Pattern MODULE_STATIC_IMPORT_SYNTAX_PATTERN =
-            Pattern.compile("(?m)^\\s*import(?!\\s*\\(|\\s*\\.)");
-    private static final Pattern MODULE_TOP_LEVEL_AWAIT_PATTERN =
-            Pattern.compile("(?m)^\\s*await\\b");
-    private static final Pattern MODULE_WITH_CLAUSE_PATTERN =
-            Pattern.compile("with\\s*\\{([^}]*)\\}");
-    /**
-     * Sentinel for an export the link pass cannot decide about, because a module it would have to
-     * read is not one this pass can read. Evaluation still decides those.
-     * <p>
-     * Recognised by identity, never by value, so no module can produce a binding equal to it.
-     */
-    private static final LinkedBinding UNKNOWN_LINKED_EXPORT = new LinkedBinding("", "unknown");
     // Call stack management
     private final Deque<JSStackFrame> callStack;
-    private final Map<String, JSDynamicImportModule> dynamicImportModuleCache;
-    // Stack trace capture
-    private final List<StackTraceElement> errorStackTrace;
-    private final Deque<EvalOverlayFrame> evalOverlayFrames;
+    // Builds error values and their stack traces; see JSErrorReporter
+    private final JSErrorReporter errorReporter;
+    // The temporary global-object overlays a module's imports are installed as
+    private final EvalOverlayManager evalOverlayManager;
+    // Runs source: the eval pipeline; see EvalRunner
+    private final EvalRunner evalRunner;
     private final List<JSFinalizationRegistry> finalizationRegistries;
     // Global declaration tracking for cross-script collision detection
     // Following QuickJS global_var_obj pattern (GlobalDeclarationInstantiation)
-    private final Set<String> globalConstDeclarations;
-    private final Set<String> globalLexDeclarations;
-    private final Map<String, JSValue> globalLexicalBindings;
-    private final Set<String> globalVarDeclarations;
-    private final Map<String, JSObject> importMetaCache;
-    // Shared iterator prototypes by toStringTag (e.g., "Array Iterator" → %ArrayIteratorPrototype%)
-    private final Map<String, JSObject> iteratorPrototypes;
+    private final GlobalLexicalScope globalLexicalScope;
+    // Installs a module's imports and exports where running code can see them
+    private final ImportBindingInstaller importBindingInstaller;
     private final JSGlobalObject jsGlobalObject;
     // Failures that escaped a microtask, oldest first
     private final List<Throwable> microtaskFailures = new ArrayList<>();
     // Microtask queue for promise resolution and async operations
     private final JSMicrotaskQueue microtaskQueue;
-    private final String[] regExpLegacyCaptures;
+    // Links a module graph before any of it is evaluated; see ModuleLinker
+    private final ModuleLinker moduleLinker;
+    // Loads, caches and orders the evaluation of modules; see ModuleLoader
+    private final ModuleLoader moduleLoader;
+    // The realm's intrinsic objects and prototype-resolution rules; see RealmIntrinsics
+    private final RealmIntrinsics realmIntrinsics;
+    // RegExp.input / .lastMatch / .lastParen / .leftContext / .rightContext / .$1-$9
+    private final RegExpLegacyStatics regExpLegacyStatics;
     private final JSRuntime runtime;
     private final UnicodePropertyResolver unicodePropertyResolver;
+    // Allocates built-in objects with their prototypes attached; see JSValueFactory
+    private final JSValueFactory valueFactory;
     private final VirtualMachine virtualMachine;
-    private boolean activeGlobalFunctionBindingConfigurable;
-    private Set<String> activeGlobalFunctionBindingInitializations;
-    // Counter for tracking the order modules have their async evaluation set
-    private int asyncEvaluationOrderCounter;
-    // Internal constructor references (not exposed in global scope)
-    private JSObject asyncFunctionConstructor;
-    private JSObject asyncGeneratorFunctionPrototype;
-    // Async generator prototype chain (not exposed in global scope)
-    private JSObject asyncGeneratorPrototype;
-    private JSObject cachedDatePrototype;
-    // Cached Object.prototype for fast internal object creation
-    private JSObject cachedObjectPrototype;
-    private JSObject cachedPromisePrototype;
-    private JSObject cachedRegExpConstructor;
-    private JSObject cachedRegExpPrototype;
     private boolean closed;
     // Temporarily holds new.target during native constructor calls
     // so native constructors can check if called directly vs from subclass
     private JSValue constructorNewTarget;
     private JSValue currentThis;
-    private int evalOverlayLookupSuppressionDepth;
     /**
      * Whether the module body about to run was pulled in to satisfy an import.
      * <p>
@@ -192,8 +93,6 @@ public final class JSContext implements AutoCloseable {
      * See {@link #getFailedModuleBodyEvaluationCount()}.
      */
     private int failedModuleBodyEvaluationCount;
-    // Generator prototype chain (not exposed in global scope)
-    private JSObject generatorFunctionPrototype;
     /**
      * How many of the module bodies that ran were pulled in to satisfy an import.
      * <p>
@@ -214,23 +113,14 @@ public final class JSContext implements AutoCloseable {
      */
     private int moduleBodyEvaluationCount;
     private JSValue nativeConstructorNewTarget;
-    private boolean pendingClassFieldEval;
-    private int pendingDirectEvalCalls;
     // Exception state
     private JSValue pendingException;
     // Promise rejection callback
     private IJSPromiseRejectCallback promiseRejectCallback;
-    private String regExpLegacyInput;
-    private String regExpLegacyLastMatch;
-    private String regExpLegacyLastParen;
-    private String regExpLegacyLeftContext;
-    private String regExpLegacyRightContext;
     private int stackDepth;
     // Execution state
     private boolean strictMode;
     private boolean suppressEvalMicrotaskProcessing;
-    // The %ThrowTypeError% intrinsic (shared across Function.prototype and strict arguments)
-    private JSNativeFunction throwTypeErrorIntrinsic;
     private boolean waitable;
 
     /**
@@ -238,19 +128,13 @@ public final class JSContext implements AutoCloseable {
      */
     JSContext(JSRuntime runtime) {
         this.callStack = new ArrayDeque<>();
-        this.activeGlobalFunctionBindingConfigurable = false;
-        this.activeGlobalFunctionBindingInitializations = null;
-        this.errorStackTrace = new ArrayList<>();
-        this.globalConstDeclarations = new HashSet<>();
-        this.globalLexDeclarations = new HashSet<>();
-        this.globalLexicalBindings = new HashMap<>();
-        this.globalVarDeclarations = new HashSet<>();
-        this.importMetaCache = new HashMap<>();
+        this.errorReporter = new JSErrorReporter(this);
+        this.evalOverlayManager = new EvalOverlayManager(this);
+        this.globalLexicalScope = new GlobalLexicalScope();
         this.waitable = true;
         this.inCatchHandler = false;
-        this.evalOverlayFrames = new ArrayDeque<>();
         this.finalizationRegistries = new ArrayList<>();
-        this.iteratorPrototypes = new HashMap<>();
+        this.realmIntrinsics = new RealmIntrinsics(this);
         this.jsGlobalObject = new JSGlobalObject(this);
         // Derived from the runtime's configured stack budget rather than hard-coded, so
         // JSRuntimeOptions.setMaxStackSize is a limit the engine actually applies. The default
@@ -259,25 +143,23 @@ public final class JSContext implements AutoCloseable {
                 ? runtime.getOptions().getMaxStackDepth()
                 : DEFAULT_MAX_STACK_DEPTH;
         this.microtaskQueue = new JSMicrotaskQueue(this);
-        this.dynamicImportModuleCache = new HashMap<>();
+        // A local, not a field: the transformer is given to the three collaborators that use it and
+        // the context itself never asks for it again. Keeping a reference would be realm state that
+        // nothing reads.
+        ModuleSourceTransformer moduleSourceTransformer = new ModuleSourceTransformer(this);
+        this.evalRunner = new EvalRunner(this, moduleSourceTransformer);
+        this.moduleLinker = new ModuleLinker(this, moduleSourceTransformer);
+        this.importBindingInstaller =
+                new ImportBindingInstaller(this, moduleSourceTransformer, moduleLinker);
+        this.moduleLoader = new ModuleLoader(this, moduleSourceTransformer, moduleLinker);
         this.pendingException = null;
         this.runtime = runtime;
         this.unicodePropertyResolver = new UnicodePropertyResolver();
-        this.asyncEvaluationOrderCounter = 0;
-        this.evalOverlayLookupSuppressionDepth = 0;
         this.inBareVariableAssignment = false;
-        this.pendingDirectEvalCalls = 0;
-        this.regExpLegacyCaptures = new String[9];
-        this.regExpLegacyInput = "";
-        this.regExpLegacyLastMatch = "";
-        this.regExpLegacyLastParen = "";
-        this.regExpLegacyLeftContext = "";
-        this.regExpLegacyRightContext = "";
-        for (int captureIndex = 0; captureIndex < regExpLegacyCaptures.length; captureIndex++) {
-            regExpLegacyCaptures[captureIndex] = "";
-        }
+        this.regExpLegacyStatics = new RegExpLegacyStatics();
         this.stackDepth = 0;
         this.strictMode = false;
+        this.valueFactory = new JSValueFactory(this);
         this.virtualMachine = new VirtualMachine(this);
         this.nativeConstructorNewTarget = null;
 
@@ -286,557 +168,23 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * The index of the last token of a module declaration whose extent is identifiable without
-     * parsing.
+     * The live call stack, innermost frame first.
      * <p>
-     * That is every {@code import} form, and the {@code export} forms that end at a module
-     * specifier or at the closing brace of an export clause. {@code export default …} and
-     * {@code export <declaration>} are not included: their extent is a declaration body, which is
-     * the parser's job, and the transformer's existing multi-line lookahead already handles them.
+     * Package-private and not a copy: {@link JSErrorReporter} walks it once per captured trace, and
+     * {@link #getCallStack()} is the public, defensive-copy view.
      *
-     * @param tokens the token list
-     * @param start  the index of the {@code import} or {@code export} token
-     * @return the index of the declaration's last token, or -1 when it is not identifiable
+     * @return the call stack itself
      */
-    private static int findModuleDeclarationEnd(List<Token> tokens, int start) {
-        boolean isExport = tokens.get(start).type() == TokenType.EXPORT;
-        int depth = 0;
-        int clauseEnd = -1;
-        for (int index = start + 1; index < tokens.size(); index++) {
-            Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> {
-                    depth = Math.max(0, depth - 1);
-                    if (depth == 0 && token.type() == TokenType.RBRACE && clauseEnd < 0) {
-                        // The closing brace of an import/export clause: `{ a, b }`.
-                        clauseEnd = index;
-                    }
-                }
-                default -> {
-                }
-            }
-            if (depth != 0) {
-                continue;
-            }
-            if (token.type() == TokenType.STRING && isModuleSpecifierPosition(tokens, start, index)) {
-                // The module specifier. Anything after it is a with-clause or a semicolon.
-                return skipModuleDeclarationTail(tokens, index);
-            }
-            if (isExport && clauseEnd == index) {
-                // `export { a, b };` with no `from`: the clause closes the declaration unless a
-                // `from` follows, which the STRING branch above then picks up.
-                if (index + 1 < tokens.size() && tokens.get(index + 1).type() == TokenType.FROM) {
-                    continue;
-                }
-                return skipModuleDeclarationTail(tokens, index);
-            }
-            if (token.type() == TokenType.SEMICOLON) {
-                return index;
-            }
-            if (isExport && clauseEnd < 0 && index == start + 1
-                    && token.type() != TokenType.MUL && token.type() != TokenType.LBRACE) {
-                // `export default …` or `export <declaration>`: not identifiable here.
-                return -1;
-            }
-        }
-        return -1;
+    Deque<JSStackFrame> callStackFrames() {
+        return callStack;
     }
 
-    /**
-     * Whether a string token is the module specifier of a declaration rather than a module export
-     * name.
-     * <p>
-     * A specifier follows {@code from}, or the {@code import} keyword itself in
-     * {@code import 'spec'}. Treating any top-level string as the specifier broke
-     * {@code export * as "All" from './m.js'}, whose export name is also a top-level string
-     * (ES2022 arbitrary module namespace names).
-     *
-     * @param tokens the token list
-     * @param start  the index of the {@code import} or {@code export} token
-     * @param index  the index of the string token
-     * @return true when the string is the module specifier
-     */
-    private static boolean isModuleSpecifierPosition(List<Token> tokens, int start, int index) {
-        if (index == start + 1) {
-            return tokens.get(start).type() == TokenType.IMPORT;
-        }
-        return tokens.get(index - 1).type() == TokenType.FROM;
+    void captureErrorStackTrace() {
+        errorReporter.captureErrorStackTrace();
     }
 
-    /**
-     * Whether the given text is a well-formed ECMAScript IdentifierName.
-     *
-     * @param name the candidate identifier
-     * @return true when every code point is a legal identifier character
-     */
-    private static boolean isValidIdentifierName(String name) {
-        if (name == null || name.isEmpty()) {
-            return false;
-        }
-        int firstCodePoint = name.codePointAt(0);
-        if (!UnicodeData.isIdentifierStart(firstCodePoint)) {
-            return false;
-        }
-        for (int offset = Character.charCount(firstCodePoint); offset < name.length(); ) {
-            int codePoint = name.codePointAt(offset);
-            if (!UnicodeData.isIdentifierPart(codePoint)) {
-                return false;
-            }
-            offset += Character.charCount(codePoint);
-        }
-        return true;
-    }
-
-    private static int parseHex(String text) {
-        if (text == null || text.isEmpty()) {
-            return -1;
-        }
-        int value = 0;
-        for (int i = 0; i < text.length(); i++) {
-            int digit = Character.digit(text.charAt(i), 16);
-            if (digit < 0) {
-                return -1;
-            }
-            if (value > (Integer.MAX_VALUE - digit) / 16) {
-                return -1;
-            }
-            value = (value << 4) | digit;
-        }
-        return value;
-    }
-
-    /**
-     * Consume an optional {@code with}/{@code assert} attributes clause and an optional semicolon.
-     *
-     * @param tokens the token list
-     * @param index  the index of the last token consumed so far
-     * @return the index of the declaration's last token
-     */
-    private static int skipModuleDeclarationTail(List<Token> tokens, int index) {
-        int end = index;
-        int next = end + 1;
-        if (next < tokens.size()
-                && ("with".equals(tokens.get(next).value()) || "assert".equals(tokens.get(next).value()))
-                && next + 1 < tokens.size()
-                && tokens.get(next + 1).type() == TokenType.LBRACE) {
-            int depth = 0;
-            for (int scan = next + 1; scan < tokens.size(); scan++) {
-                if (tokens.get(scan).type() == TokenType.LBRACE) {
-                    depth++;
-                } else if (tokens.get(scan).type() == TokenType.RBRACE) {
-                    depth--;
-                    if (depth == 0) {
-                        end = scan;
-                        break;
-                    }
-                }
-            }
-            next = end + 1;
-        }
-        if (next < tokens.size() && tokens.get(next).type() == TokenType.SEMICOLON) {
-            end = next;
-        }
-        return end;
-    }
-
-    /**
-     * Tokenise module source into a list.
-     *
-     * @param sourceCode the source
-     * @return the tokens, without the terminating {@code EOF}
-     */
-    private static List<Token> tokenizeModuleSource(String sourceCode) {
-        Lexer lexer = new Lexer(sourceCode);
-        List<Token> tokens = new ArrayList<>();
-        while (true) {
-            Token token = lexer.nextToken();
-            if (token == null || token.type() == TokenType.EOF) {
-                return tokens;
-            }
-            tokens.add(token);
-        }
-    }
-
-    private void appendDynamicImportDefaultExportNameFixup(
-            StringBuilder transformedSourceBuilder,
-            String rawLocalName,
-            String moduleSpecifier) {
-        String localName = requireGeneratedIdentifier(
-                rawLocalName, "default export binding '" + rawLocalName + "'", moduleSpecifier);
-        transformedSourceBuilder.append("if (typeof ")
-                .append(localName)
-                .append(" === \"function\" && (!Object.prototype.hasOwnProperty.call(")
-                .append(localName)
-                .append(", \"name\") || ")
-                .append(localName)
-                .append(".name === \"\" || ")
-                .append(localName)
-                .append(".name === \"")
-                .append(localName)
-                .append("\")) {\n")
-                .append("  Object.defineProperty(")
-                .append(localName)
-                .append(", \"name\", { value: \"default\", configurable: true });\n")
-                .append("}\n");
-    }
-
-    private void appendDynamicImportExportAssignments(
-            StringBuilder transformedSourceBuilder,
-            String generatedNamePrefix,
-            String exportBindingName,
-            List<JSDynamicImportModule.LocalExportBinding> localExportBindings,
-            Set<String> importedBindingNames,
-            String moduleSpecifier) {
-        String moduleExportsName = generatedNamePrefix + "ModuleExports";
-        transformedSourceBuilder.append("const ").append(moduleExportsName).append(" = ")
-                .append(exportBindingName)
-                .append(";\n");
-        for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
-            String escapedName = escapeJavaScriptString(localExportBinding.exportedName());
-            // The exported name lands in string position, so escaping is enough. The local name
-            // lands in identifier position, where only a real identifier is safe.
-            String localName = requireGeneratedIdentifier(
-                    localExportBinding.localName(),
-                    "local binding of export '" + localExportBinding.exportedName() + "'",
-                    moduleSpecifier);
-            // Exports are always live bindings, including re-exported imports.
-            transformedSourceBuilder.append("Object.defineProperty(").append(moduleExportsName).append(", \"")
-                    .append(escapedName)
-                    .append("\", { enumerable: true, configurable: false, get() { return ")
-                    .append(localName)
-                    .append("; } });\n");
-        }
-    }
-
-    /**
-     * Append the character a {@code \\uHHHH} or {@code \\u\{H+\}} escape denotes.
-     *
-     * @param text           the literal body
-     * @param uIndex         the index of the {@code u}
-     * @param decodedBuilder collects the decoded text
-     * @return the index of the escape's last character
-     */
-    private int appendModuleUnicodeEscape(String text, int uIndex, StringBuilder decodedBuilder) {
-        if (uIndex + 1 < text.length() && text.charAt(uIndex + 1) == '{') {
-            int braceEnd = text.indexOf('}', uIndex + 2);
-            int codePoint = braceEnd < 0 ? -1 : parseHex(text.substring(uIndex + 2, braceEnd));
-            if (codePoint < 0 || codePoint > Character.MAX_CODE_POINT) {
-                decodedBuilder.append('u');
-                return uIndex;
-            }
-            decodedBuilder.appendCodePoint(codePoint);
-            return braceEnd;
-        }
-        int codeUnit = uIndex + 4 < text.length()
-                ? parseHex(text.substring(uIndex + 1, uIndex + 5))
-                : -1;
-        if (codeUnit < 0) {
-            decodedBuilder.append('u');
-            return uIndex;
-        }
-        decodedBuilder.append((char) codeUnit);
-        return uIndex + 4;
-    }
-
-    private void applyImportClauseBindings(
-            JSObject globalObject,
-            Map<String, JSValue> savedGlobals,
-            Set<String> absentKeys,
-            JSObject namespaceObject,
-            String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty()) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            bindNamedImports(globalObject, savedGlobals, absentKeys, namespaceObject, clause);
-            return;
-        }
-
-        int commaIndex = clause.indexOf(',');
-        if (commaIndex < 0) {
-            bindImportOverlayLiveBinding(globalObject, savedGlobals, absentKeys, clause, namespaceObject, "default");
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIndex).trim();
-        if (!defaultBinding.isEmpty()) {
-            bindImportOverlayLiveBinding(globalObject, savedGlobals, absentKeys, defaultBinding, namespaceObject, "default");
-        }
-
-        String remainder = clause.substring(commaIndex + 1).trim();
-        if (remainder.startsWith("*")) {
-            String namespaceBinding = remainder.replaceFirst("^\\*\\s*as\\s+", "").trim();
-            if (!namespaceBinding.isEmpty()) {
-                bindImportOverlayValue(globalObject, savedGlobals, absentKeys, namespaceBinding, namespaceObject);
-            }
-        } else if (remainder.startsWith("{")) {
-            bindNamedImports(globalObject, savedGlobals, absentKeys, namespaceObject, remainder);
-        }
-    }
-
-    /**
-     * Bind an import as a live binding using a getter that reads from the namespace.
-     * This ensures that changes to the exported value are reflected in the import.
-     */
-    private void bindImportOverlayLiveBinding(
-            JSObject globalObject,
-            Map<String, JSValue> savedGlobals,
-            Set<String> absentKeys,
-            String localName,
-            JSObject namespaceObject,
-            String importedName) {
-        // The overlay key is the decoded name, because that is what module code writes to reach
-        // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
-        // property nothing in the module can name.
-        String bindingName = decodeIdentifierEscapes(localName.trim());
-        if (bindingName.isEmpty()) {
-            return;
-        }
-        PropertyKey key = PropertyKey.fromString(bindingName);
-        if (globalObject.has(key)) {
-            if (!savedGlobals.containsKey(bindingName)) {
-                JSValue currentValue = globalObject.get(key);
-                savedGlobals.put(bindingName, currentValue);
-            }
-        } else {
-            absentKeys.add(bindingName);
-        }
-        PropertyKey importKey = PropertyKey.fromString(importedName);
-        JSNativeFunction getter = new JSNativeFunction(this, "get " + bindingName, 0,
-                (context, thisArg, args) -> {
-                    JSValue val = namespaceObject.get(importKey);
-                    if (context != null && context.hasPendingException()) {
-                        JSValue exception = context.getPendingException();
-                        context.clearPendingException();
-                        throw new JSException(exception);
-                    }
-                    if (val == JSUndefined.INSTANCE && namespaceObject instanceof JSImportNamespaceObject namespace) {
-                        JSValue earlyValue = namespace.getEarlyExportBinding(importedName);
-                        if (earlyValue != null) {
-                            return earlyValue;
-                        }
-                    }
-                    return val != null ? val : JSUndefined.INSTANCE;
-                });
-        getter.initializePrototypeChain(this);
-        // Setter distinguishes bare variable assignment (PUT_VAR, e.g., check = true)
-        // from property-based writes (PUT_FIELD, e.g., globalThis.check = true).
-        // Bare variable assignment to an import binding throws TypeError (ES2024 immutable binding).
-        // Property-based writes update savedGlobals for correct value restoration.
-        JSNativeFunction setter = new JSNativeFunction(this, "set " + bindingName, 1,
-                (ctx, thisArg, args) -> {
-                    if (ctx != null && ctx.isInBareVariableAssignment()) {
-                        ctx.throwTypeError("Assignment to constant variable.");
-                        return JSUndefined.INSTANCE;
-                    }
-                    JSValue val = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    savedGlobals.put(bindingName, val);
-                    return JSUndefined.INSTANCE;
-                });
-        setter.initializePrototypeChain(this);
-        PropertyDescriptor descriptor = new PropertyDescriptor();
-        descriptor.setGetter(getter);
-        descriptor.setSetter(setter);
-        descriptor.setConfigurable(true);
-        descriptor.setEnumerable(true);
-        globalObject.defineProperty(key, descriptor);
-    }
-
-    private void bindImportOverlayValue(
-            JSObject globalObject,
-            Map<String, JSValue> savedGlobals,
-            Set<String> absentKeys,
-            String localName,
-            JSValue value) {
-        // The overlay key is the decoded name, because that is what module code writes to reach
-        // this binding: `import { x as \\u0079 }` binds `y`, and a key spelled `\\u0079` is a
-        // property nothing in the module can name.
-        String bindingName = decodeIdentifierEscapes(localName.trim());
-        if (bindingName.isEmpty()) {
-            return;
-        }
-        PropertyKey key = PropertyKey.fromString(bindingName);
-        if (globalObject.has(key)) {
-            if (!savedGlobals.containsKey(bindingName)) {
-                savedGlobals.put(bindingName, globalObject.get(key));
-            }
-        } else {
-            absentKeys.add(bindingName);
-        }
-        PropertyDescriptor descriptor = new PropertyDescriptor();
-        descriptor.setValue(value != null ? value : JSUndefined.INSTANCE);
-        descriptor.setWritable(false);
-        descriptor.setEnumerable(true);
-        descriptor.setConfigurable(true);
-        globalObject.defineProperty(key, descriptor);
-    }
-
-    private void bindNamedImports(
-            JSObject globalObject,
-            Map<String, JSValue> savedGlobals,
-            Set<String> absentKeys,
-            JSObject namespaceObject,
-            String namedClause) {
-        String clause = namedClause.trim();
-        if (!clause.startsWith("{") || !clause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = clause.substring(1, clause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            String localName;
-            int asIndex = findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-                localName = specifier.substring(asIndex + 2).trim();
-            } else {
-                importedName = parseModuleExportNameValue(specifier);
-                localName = importedName;
-            }
-            // ES2024 16.2.1.6.3: If the imported binding doesn't exist in a
-            // finalized module namespace, it is a SyntaxError (linking error).
-            if (namespaceObject instanceof JSImportNamespaceObject nsObj && nsObj.isFinalized()) {
-                PropertyKey importKey = PropertyKey.fromString(importedName);
-                if (!nsObj.has(importKey)) {
-                    throw new JSSyntaxErrorException(
-                            "The requested module does not provide an export named '" + importedName + "'");
-                }
-            }
-            bindImportOverlayLiveBinding(globalObject, savedGlobals, absentKeys, localName, namespaceObject, importedName);
-        }
-    }
-
-    /**
-     * Capture stack trace when exception is thrown.
-     */
-    private void captureErrorStackTrace() {
-        clearErrorStackTrace();
-        for (JSStackFrame frame : callStack) {
-            errorStackTrace.add(new StackTraceElement(
-                    "JavaScript",
-                    frame.functionName(),
-                    frame.filename(),
-                    frame.lineNumber()
-            ));
-        }
-    }
-
-    /**
-     * Capture stack trace and attach to error object.
-     */
-    private void captureStackTrace(JSObject error) {
-        StringBuilder stackTrace = new StringBuilder();
-
-        StackFrame vmStackFrame = virtualMachine != null ? virtualMachine.getCurrentFrame() : null;
-        while (vmStackFrame != null) {
-            JSFunction frameFunction = vmStackFrame.getFunction();
-            String functionName = "<anonymous>";
-            if (frameFunction != null) {
-                String candidateFunctionName = frameFunction.getName();
-                if (candidateFunctionName != null && !candidateFunctionName.isEmpty()) {
-                    functionName = candidateFunctionName;
-                }
-            }
-            String filename = frameFunction != null ? frameFunction.getImportMetaFilename() : null;
-            if (filename == null || filename.isEmpty()) {
-                filename = "<eval>";
-            }
-            stackTrace.append("    at ")
-                    .append(functionName)
-                    .append(" (")
-                    .append(filename)
-                    .append(":")
-                    .append(1)
-                    .append(")\n");
-            vmStackFrame = vmStackFrame.getCaller();
-        }
-
-        for (JSStackFrame frame : callStack) {
-            stackTrace.append("    at ")
-                    .append(frame.functionName())
-                    .append(" (")
-                    .append(frame.filename())
-                    .append(":")
-                    .append(frame.lineNumber())
-                    .append(")\n");
-        }
-
-        error.defineProperty(
-                PropertyKey.STACK,
-                PropertyDescriptor.dataDescriptor(
-                        new JSString(stackTrace.toString()),
-                        PropertyDescriptor.DataState.ConfigurableWritable));
-    }
-
-    private void chainImportPromiseOntoAsyncDependencies(
-            List<JSPromise> dependencyPromises,
-            JSObject namespace,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        int[] remaining = new int[]{dependencyPromises.size()};
-        for (JSPromise dependencyPromise : dependencyPromises) {
-            JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
-                    (ctx, thisArg, args) -> {
-                        remaining[0]--;
-                        if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            importPromise.resolve(ctx, namespace);
-                        }
-                        return JSUndefined.INSTANCE;
-                    });
-            onFulfill.initializePrototypeChain(this);
-            JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
-                    (ctx, thisArg, args) -> {
-                        if (!resolveState.alreadyResolved) {
-                            resolveState.alreadyResolved = true;
-                            JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                            importPromise.reject(reason);
-                        }
-                        return JSUndefined.INSTANCE;
-                    });
-            onReject.initializePrototypeChain(this);
-            dependencyPromise.addReactions(
-                    new JSPromise.ReactionRecord(onFulfill, this, null, null),
-                    new JSPromise.ReactionRecord(onReject, this, null, null));
-        }
-    }
-
-    private void chainImportPromiseOntoAsyncModule(
-            JSDynamicImportModule moduleRecord,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        JSObject namespace = moduleRecord.namespace();
-        JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
-                (ctx, thisArg, args) -> {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        importPromise.resolve(ctx, namespace);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-        onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
-                (ctx, thisArg, args) -> {
-                    if (!resolveState.alreadyResolved) {
-                        resolveState.alreadyResolved = true;
-                        JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                        importPromise.reject(reason);
-                    }
-                    return JSUndefined.INSTANCE;
-                });
-        onReject.initializePrototypeChain(this);
-        moduleRecord.asyncEvaluationPromise().addReactions(
-                new JSPromise.ReactionRecord(onFulfill, this, null, null),
-                new JSPromise.ReactionRecord(onReject, this, null, null));
+    void captureStackTrace(JSObject error) {
+        errorReporter.captureStackTrace(error);
     }
 
     /**
@@ -853,8 +201,8 @@ public final class JSContext implements AutoCloseable {
         callStack.clear();
     }
 
-    private void clearErrorStackTrace() {
-        this.errorStackTrace.clear();
+    void clearErrorStackTrace() {
+        errorReporter.clearErrorStackTrace();
     }
 
     /**
@@ -865,18 +213,22 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Clear the module cache.
-     */
-    private void clearModuleCache() {
-        dynamicImportModuleCache.clear();
-        importMetaCache.clear();
-    }
-
-    /**
      * Clear the pending exception.
      */
     public void clearPendingException() {
         this.pendingException = null;
+    }
+
+    /**
+     * Reset the transient execution state an eval activation leaves behind.
+     * <p>
+     * The stack depth is re-derived from the call stack rather than decremented, so a frame the VM
+     * abandoned on an abrupt exit cannot leave the counter drifting.
+     */
+    void clearTransientEvalState() {
+        stackDepth = callStack.size();
+        inCatchHandler = false;
+        currentThis = jsGlobalObject.getGlobalObject();
     }
 
     /**
@@ -902,7 +254,7 @@ public final class JSContext implements AutoCloseable {
         }
         closed = true;
         // Clear all caches
-        clearModuleCache();
+        moduleLoader.clearModuleCache();
         clearCallStack();
         clearPendingException();
         clearErrorStackTrace();
@@ -911,42 +263,21 @@ public final class JSContext implements AutoCloseable {
         // registries, eval overlays and import.meta cache all stayed reachable through the
         // context object.
         microtaskQueue.clear();
-        globalLexicalBindings.clear();
-        iteratorPrototypes.clear();
+        globalLexicalScope.clear();
         finalizationRegistries.clear();
-        evalOverlayFrames.clear();
-        importMetaCache.clear();
+        evalOverlayManager.clear();
         microtaskFailures.clear();
-        dynamicImportModuleCache.clear();
-        globalConstDeclarations.clear();
-        globalLexDeclarations.clear();
-        globalVarDeclarations.clear();
-        activeGlobalFunctionBindingInitializations = null;
         // Host callbacks: an embedder's listener can reach arbitrary application state.
         microtaskFailureCallback = null;
         promiseRejectCallback = null;
         // Cached intrinsics. Each one is a live handle on the realm.
-        asyncFunctionConstructor = null;
-        asyncGeneratorFunctionPrototype = null;
-        asyncGeneratorPrototype = null;
-        cachedDatePrototype = null;
-        cachedObjectPrototype = null;
-        cachedPromisePrototype = null;
-        cachedRegExpConstructor = null;
-        cachedRegExpPrototype = null;
-        generatorFunctionPrototype = null;
-        throwTypeErrorIntrinsic = null;
+        realmIntrinsics.release();
         // Transient execution values.
         constructorNewTarget = null;
         nativeConstructorNewTarget = null;
         currentThis = null;
         // RegExp legacy static state holds the last subject string, which can be arbitrarily large.
-        Arrays.fill(regExpLegacyCaptures, "");
-        regExpLegacyInput = null;
-        regExpLegacyLastMatch = null;
-        regExpLegacyLastParen = null;
-        regExpLegacyLeftContext = null;
-        regExpLegacyRightContext = null;
+        regExpLegacyStatics.release();
         virtualMachine.reset();
         // Last: everything above may still need the realm while it runs.
         jsGlobalObject.getGlobalObject().releaseProperties();
@@ -954,1038 +285,254 @@ public final class JSContext implements AutoCloseable {
         runtime.destroyContext(this);
     }
 
-    private Map<String, JSSymbol> collectEvalPrivateSymbols(JSBytecodeFunction callerFunction) {
-        if (callerFunction == null) {
-            return Map.of();
-        }
-        LinkedHashMap<String, JSSymbol> privateSymbolsByName = new LinkedHashMap<>();
-        IdentityHashMap<JSSymbol, JSSymbol> symbolRemap = callerFunction.getClassPrivateSymbolRemap();
-        if (symbolRemap != null && !symbolRemap.isEmpty()) {
-            for (Map.Entry<JSSymbol, JSSymbol> entry : symbolRemap.entrySet()) {
-                JSSymbol templateSymbol = entry.getKey();
-                if (templateSymbol == null) {
-                    continue;
-                }
-                String description = templateSymbol.getDescription();
-                if (description == null || description.length() < 2 || description.charAt(0) != '#') {
-                    continue;
-                }
-                String privateName = description.substring(1);
-                JSSymbol activeSymbol = entry.getValue() != null ? entry.getValue() : templateSymbol;
-                privateSymbolsByName.putIfAbsent(privateName, activeSymbol);
-            }
-        }
-        if (!privateSymbolsByName.isEmpty()) {
-            return privateSymbolsByName;
-        }
-        Set<JSSymbol> classPrivateSymbols = callerFunction.getClassPrivateSymbols();
-        if (classPrivateSymbols == null || classPrivateSymbols.isEmpty()) {
-            return Map.of();
-        }
-        for (JSSymbol symbol : classPrivateSymbols) {
-            if (symbol == null) {
-                continue;
-            }
-            String description = symbol.getDescription();
-            if (description == null || description.length() < 2 || description.charAt(0) != '#') {
-                continue;
-            }
-            privateSymbolsByName.putIfAbsent(description.substring(1), symbol);
-        }
-        return privateSymbolsByName;
-    }
-
-    private void collectImportBindings(
-            String importLine,
-            Set<String> bindingNames,
-            Map<String, ImportBinding> importedBindings) {
-        Matcher namespaceMatcher = MODULE_NAMESPACE_IMPORT_PATTERN.matcher(importLine);
-        if (namespaceMatcher.find()) {
-            boolean deferredImport = "defer".equals(namespaceMatcher.group(1));
-            String localName = namespaceMatcher.group(2);
-            String sourceSpecifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-            registerImportedBinding(
-                    localName,
-                    sourceSpecifier,
-                    MODULE_NAMESPACE_EXPORT_NAME,
-                    deferredImport,
-                    bindingNames,
-                    importedBindings);
-            return;
-        }
-        Matcher bindingMatcher = MODULE_BINDING_IMPORT_PATTERN.matcher(importLine);
-        if (!bindingMatcher.find()) {
-            return;
-        }
-        String clause = bindingMatcher.group(1).trim();
-        String sourceSpecifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
-        if (clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            collectNamedImportBindings(clause, sourceSpecifier, bindingNames, importedBindings);
-            return;
-        }
-        int commaIndex = clause.indexOf(',');
-        if (commaIndex < 0) {
-            registerImportedBinding(clause, sourceSpecifier, "default", false, bindingNames, importedBindings);
-            return;
-        }
-        String defaultName = clause.substring(0, commaIndex).trim();
-        if (!defaultName.isEmpty()) {
-            registerImportedBinding(defaultName, sourceSpecifier, "default", false, bindingNames, importedBindings);
-        }
-        String remainder = clause.substring(commaIndex + 1).trim();
-        if (remainder.startsWith("{")) {
-            collectNamedImportBindings(remainder, sourceSpecifier, bindingNames, importedBindings);
-        } else if (remainder.startsWith("*")) {
-            String namespaceBinding = remainder.replaceFirst("^\\*\\s*as\\s+", "").trim();
-            if (!namespaceBinding.isEmpty()) {
-                registerImportedBinding(
-                        namespaceBinding,
-                        sourceSpecifier,
-                        MODULE_NAMESPACE_EXPORT_NAME,
-                        false,
-                        bindingNames,
-                        importedBindings);
-            }
-        }
-    }
-
-    private void collectNamedImportBindings(
-            String namedClause,
-            String sourceSpecifier,
-            Set<String> bindingNames,
-            Map<String, ImportBinding> importedBindings) {
-        String clause = namedClause.trim();
-        if (!clause.startsWith("{") || !clause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = clause.substring(1, clause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            String localName;
-            int asIndex = findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-                localName = specifier.substring(asIndex + 2).trim();
-            } else {
-                importedName = parseModuleExportNameValue(specifier);
-                localName = importedName;
-            }
-            registerImportedBinding(localName, sourceSpecifier, importedName, false, bindingNames, importedBindings);
-        }
-    }
-
     public boolean consumeGlobalFunctionBindingInitialization(String name) {
-        return activeGlobalFunctionBindingInitializations != null
-                && activeGlobalFunctionBindingInitializations.remove(name);
+        return globalLexicalScope.consumeFunctionBindingInitialization(name);
     }
 
     public boolean consumeScheduledClassFieldEvalCall() {
-        boolean result = pendingClassFieldEval;
-        pendingClassFieldEval = false;
-        return result;
+        return evalRunner.consumeScheduledClassFieldEvalCall();
     }
 
     public boolean consumeScheduledDirectEvalCall() {
-        if (pendingDirectEvalCalls > 0) {
-            pendingDirectEvalCalls--;
-            return true;
-        }
-        return false;
+        return evalRunner.consumeScheduledDirectEvalCall();
     }
 
+    /**
+     * The {@code import.meta} object for a module, created on first use and cached per file name.
+     *
+     * @param filename the module's file name
+     * @return the module's {@code import.meta}
+     */
     public JSObject createImportMetaObject(String filename) {
-        String cacheKey = filename != null ? filename : "";
-        JSObject importMetaObject = importMetaCache.get(cacheKey);
-        if (importMetaObject == null) {
-            importMetaObject = new JSObject(this);
-            importMetaObject.setPrototype(null);
-            if (filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
-                importMetaObject.set(PropertyKey.fromString("url"), new JSString(filename));
-            }
-            importMetaCache.put(cacheKey, importMetaObject);
-        }
-        return importMetaObject;
+        return moduleLoader.createImportMetaObject(filename);
     }
 
     public JSAggregateError createJSAggregateError(String message) {
-        JSAggregateError jsError = new JSAggregateError(this, message);
-        transferPrototype(jsError, JSAggregateError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSAggregateError(message);
     }
 
-    /**
-     * Create a new JSArray with proper prototype chain.
-     * Sets the array's prototype to Array.prototype from the global object.
-     *
-     * @return A new JSArray instance with prototype set
-     */
     public JSArray createJSArray() {
-        return createJSArray(0);
+        return valueFactory.createJSArray();
     }
 
-    /**
-     * Create a new JSArray with specified length and proper prototype chain.
-     * Sets the array's prototype to Array.prototype from the global object.
-     *
-     * @param length Initial length of the array; must be in {@code [0, 2^32 - 1]}
-     * @return A new JSArray instance with prototype set
-     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
-     *                                                            ECMAScript array length
-     */
-    public JSArray createJSArray(long length) {
-        // A JavaScript array length is a uint32, so narrowing it to int for the capacity hint can
-        // produce a negative value (4294967295L narrows to -1) and a NegativeArraySizeException.
-        // Clamp instead: the hint is only a dense-storage sizing suggestion. The length itself is
-        // validated by the JSArray constructor, which rejects anything outside [0, 2^32 - 1].
-        return createJSArray(length, (int) Math.min(Math.max(length, 0), JSArray.MAX_DENSE_SIZE));
-    }
-
-    /**
-     * Create a new JSArray with specified length, capacity, and proper prototype chain.
-     * Sets the array's prototype to Array.prototype from the global object.
-     *
-     * @param length   Initial length of the array; must be in {@code [0, 2^32 - 1]}
-     * @param capacity Initial capacity of the array
-     * @return A new JSArray instance with prototype set
-     * @throws com.caoccao.qjs4j.exceptions.JSRangeErrorException when {@code length} is not a valid
-     *                                                            ECMAScript array length
-     */
-    public JSArray createJSArray(long length, int capacity) {
-        JSArray jsArray = new JSArray(this, length, capacity);
-        transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
-    }
-
-    /**
-     * Create a new JSArray with specified values and proper prototype chain.
-     * Sets the array's prototype to Array.prototype from the global object.
-     *
-     * @param values Initial values of the array
-     * @return A new JSArray instance with prototype set
-     */
     public JSArray createJSArray(JSValue... values) {
-        JSArray jsArray = new JSArray(this, values);
-        transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
+        return valueFactory.createJSArray(values);
     }
 
-    /**
-     * Create a new JSArray taking ownership of a freshly allocated values array.
-     * Internal fast path to avoid an extra defensive copy in hot built-in paths.
-     */
+    public JSArray createJSArray(long length) {
+        return valueFactory.createJSArray(length);
+    }
+
     public JSArray createJSArray(JSValue[] values, boolean takeOwnership) {
-        JSArray jsArray = new JSArray(this, values, takeOwnership);
-        transferPrototype(jsArray, JSArray.NAME);
-        return jsArray;
+        return valueFactory.createJSArray(values, takeOwnership);
     }
 
-    /**
-     * Create a new JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength The length in bytes
-     * @return A new JSArrayBuffer instance with prototype set
-     */
+    public JSArray createJSArray(long length, int capacity) {
+        return valueFactory.createJSArray(length, capacity);
+    }
+
     public JSArrayBuffer createJSArrayBuffer(int byteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(this, byteLength);
-        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
+        return valueFactory.createJSArrayBuffer(byteLength);
     }
 
-    /**
-     * Create a new resizable JSArrayBuffer with proper prototype chain.
-     *
-     * @param byteLength    The initial length in bytes
-     * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
-     * @return A new JSArrayBuffer instance with prototype set
-     */
     public JSArrayBuffer createJSArrayBuffer(int byteLength, int maxByteLength) {
-        JSArrayBuffer jsArrayBuffer = new JSArrayBuffer(this, byteLength, maxByteLength);
-        transferPrototype(jsArrayBuffer, JSArrayBuffer.NAME);
-        return jsArrayBuffer;
+        return valueFactory.createJSArrayBuffer(byteLength, maxByteLength);
     }
 
-    /**
-     * ES2024 7.3.34 ArraySpeciesCreate(originalArray, length).
-     * Following QuickJS JS_ArraySpeciesCreate.
-     *
-     * @return the new array-like object, or null if an exception was set on context
-     */
     public JSValue createJSArraySpecies(JSObject originalArray, long length) {
-        // Step 3: If IsArray(originalArray) is false, return ArrayCreate(length)
-        int isArr = JSTypeChecking.isArray(this, originalArray);
-        if (isArr < 0) {
-            return null;
-        }
-        if (isArr == 0) {
-            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
-            if (length > 0xFFFFFFFFL) {
-                return throwRangeError("Invalid array length");
-            }
-            return createJSArray(length, 0);
-        }
-
-        // Step 4: Let C be ? Get(originalArray, "constructor")
-        JSValue ctor = originalArray.get(PropertyKey.CONSTRUCTOR);
-        if (hasPendingException()) {
-            return null;
-        }
-
-        // Step 5: If IsConstructor(C) is true, cross-realm check.
-        // ES2024 10.4.2.3 ArraySpeciesCreate step 6.a-c:
-        // if constructor realm differs and C is that realm's intrinsic %Array%,
-        // treat C as undefined.
-        if (JSTypeChecking.isConstructor(ctor) && ctor instanceof JSObject ctorObject) {
-            JSContext constructorRealm = getFunctionRealm(ctorObject);
-            if (hasPendingException()) {
-                return null;
-            }
-            if (constructorRealm != this) {
-                JSValue realmArrayConstructor = constructorRealm.getGlobalObject().get(JSArray.NAME);
-                if (ctor == realmArrayConstructor) {
-                    ctor = JSUndefined.INSTANCE;
-                }
-            }
-        }
-
-        // Step 6: If Type(C) is Object, get Symbol.species
-        if (ctor instanceof JSObject ctorObj) {
-            ctor = ctorObj.get(PropertyKey.SYMBOL_SPECIES);
-            if (hasPendingException()) {
-                return null;
-            }
-            if (ctor instanceof JSNull) {
-                ctor = JSUndefined.INSTANCE;
-            }
-        }
-
-        // Step 7: If C is undefined, return ArrayCreate(length)
-        if (ctor instanceof JSUndefined) {
-            // ArrayCreate(length): throw RangeError if length > 2^32 - 1
-            if (length > 0xFFFFFFFFL) {
-                return throwRangeError("Invalid array length");
-            }
-            return createJSArray(length, 0);
-        }
-
-        // Step 8: If IsConstructor(C) is false, throw a TypeError exception
-        if (!JSTypeChecking.isConstructor(ctor)) {
-            return throwTypeError("Species constructor is not a constructor");
-        }
-
-        // Step 9: Return ? Construct(C, « length »)
-        JSValue result = JSReflectObject.constructSimple(this, ctor, new JSValue[]{JSNumber.of(length)});
-        if (hasPendingException()) {
-            return null;
-        }
-        return result;
+        return valueFactory.createJSArraySpecies(originalArray, length);
     }
 
-    /**
-     * Create a new JSBigInt64Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSBigInt64Array instance with prototype set
-     */
     public JSBigInt64Array createJSBigInt64Array(int length) {
-        return initializeTypedArray(new JSBigInt64Array(this, length), JSBigInt64Array.NAME);
+        return valueFactory.createJSBigInt64Array(length);
     }
 
     public JSBigInt64Array createJSBigInt64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSBigInt64Array(this, buffer, byteOffset, length), JSBigInt64Array.NAME);
+        return valueFactory.createJSBigInt64Array(buffer, byteOffset, length);
     }
 
     public JSBigIntObject createJSBigIntObject(JSBigInt value) {
-        JSBigIntObject wrapper = new JSBigIntObject(this, value);
-        transferPrototype(wrapper, JSBigIntObject.NAME);
-        return wrapper;
+        return valueFactory.createJSBigIntObject(value);
     }
 
-    /**
-     * Create a new JSBigUint64Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSBigUint64Array instance with prototype set
-     */
     public JSBigUint64Array createJSBigUint64Array(int length) {
-        return initializeTypedArray(new JSBigUint64Array(this, length), JSBigUint64Array.NAME);
+        return valueFactory.createJSBigUint64Array(length);
     }
 
     public JSBigUint64Array createJSBigUint64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSBigUint64Array(this, buffer, byteOffset, length), JSBigUint64Array.NAME);
+        return valueFactory.createJSBigUint64Array(buffer, byteOffset, length);
     }
 
     public JSBooleanObject createJSBooleanObject(JSBoolean value) {
-        JSBooleanObject wrapper = new JSBooleanObject(this, value);
-        transferPrototype(wrapper, JSBooleanObject.NAME);
-        return wrapper;
+        return valueFactory.createJSBooleanObject(value);
     }
 
-    /**
-     * Create a new JSDataView with proper prototype chain.
-     *
-     * @param buffer     The ArrayBuffer to view
-     * @param byteOffset The offset in bytes
-     * @param byteLength The length in bytes
-     * @return A new JSDataView instance with prototype set
-     */
     public JSDataView createJSDataView(IJSArrayBuffer buffer, int byteOffset, int byteLength) {
-        JSDataView jsDataView = new JSDataView(this, buffer, byteOffset, byteLength);
-        transferPrototype(jsDataView, JSDataView.NAME);
-        return jsDataView;
+        return valueFactory.createJSDataView(buffer, byteOffset, byteLength);
     }
 
-    /**
-     * Create a new JSDate with proper prototype chain.
-     *
-     * @param timeValue The time value in milliseconds
-     * @return A new JSDate instance with prototype set
-     */
     public JSDate createJSDate(double timeValue) {
-        JSDate jsDate = new JSDate(this, timeValue);
-        if (cachedDatePrototype != null) {
-            jsDate.setPrototype(cachedDatePrototype);
-        } else {
-            transferPrototype(jsDate, JSDate.NAME);
-        }
-        return jsDate;
+        return valueFactory.createJSDate(timeValue);
     }
 
     public JSDisposableStack createJSDisposableStack() {
-        JSDisposableStack stack = new JSDisposableStack(this);
-        transferPrototype(stack, JSDisposableStack.NAME);
-        return stack;
+        return valueFactory.createJSDisposableStack();
     }
 
     public JSError createJSError(String message) {
-        JSError jsError = new JSError(this, message);
-        transferPrototype(jsError, JSError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSError(message);
     }
 
     public JSEvalError createJSEvalError(String message) {
-        JSEvalError jsError = new JSEvalError(this, message);
-        transferPrototype(jsError, JSEvalError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSEvalError(message);
     }
 
-    /**
-     * Create a new JSFloat16Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSFloat16Array instance with prototype set
-     */
     public JSFloat16Array createJSFloat16Array(int length) {
-        return initializeTypedArray(new JSFloat16Array(this, length), JSFloat16Array.NAME);
+        return valueFactory.createJSFloat16Array(length);
     }
 
     public JSFloat16Array createJSFloat16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat16Array(this, buffer, byteOffset, length), JSFloat16Array.NAME);
+        return valueFactory.createJSFloat16Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSFloat32Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSFloat32Array instance with prototype set
-     */
     public JSFloat32Array createJSFloat32Array(int length) {
-        return initializeTypedArray(new JSFloat32Array(this, length), JSFloat32Array.NAME);
+        return valueFactory.createJSFloat32Array(length);
     }
 
     public JSFloat32Array createJSFloat32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat32Array(this, buffer, byteOffset, length), JSFloat32Array.NAME);
+        return valueFactory.createJSFloat32Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSFloat64Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSFloat64Array instance with prototype set
-     */
     public JSFloat64Array createJSFloat64Array(int length) {
-        return initializeTypedArray(new JSFloat64Array(this, length), JSFloat64Array.NAME);
+        return valueFactory.createJSFloat64Array(length);
     }
 
     public JSFloat64Array createJSFloat64Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSFloat64Array(this, buffer, byteOffset, length), JSFloat64Array.NAME);
+        return valueFactory.createJSFloat64Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSInt16Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSInt16Array instance with prototype set
-     */
     public JSInt16Array createJSInt16Array(int length) {
-        return initializeTypedArray(new JSInt16Array(this, length), JSInt16Array.NAME);
+        return valueFactory.createJSInt16Array(length);
     }
 
     public JSInt16Array createJSInt16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt16Array(this, buffer, byteOffset, length), JSInt16Array.NAME);
+        return valueFactory.createJSInt16Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSInt32Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSInt32Array instance with prototype set
-     */
     public JSInt32Array createJSInt32Array(int length) {
-        return initializeTypedArray(new JSInt32Array(this, length), JSInt32Array.NAME);
+        return valueFactory.createJSInt32Array(length);
     }
 
     public JSInt32Array createJSInt32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt32Array(this, buffer, byteOffset, length), JSInt32Array.NAME);
+        return valueFactory.createJSInt32Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSInt8Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSInt8Array instance with prototype set
-     */
     public JSInt8Array createJSInt8Array(int length) {
-        return initializeTypedArray(new JSInt8Array(this, length), JSInt8Array.NAME);
+        return valueFactory.createJSInt8Array(length);
     }
 
     public JSInt8Array createJSInt8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSInt8Array(this, buffer, byteOffset, length), JSInt8Array.NAME);
+        return valueFactory.createJSInt8Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSMap with proper prototype chain.
-     *
-     * @return A new JSMap instance with prototype set
-     */
     public JSMap createJSMap() {
-        JSMap jsMap = new JSMap(this);
-        transferPrototype(jsMap, JSMap.NAME);
-        return jsMap;
+        return valueFactory.createJSMap();
     }
 
     public JSNumberObject createJSNumberObject(JSNumber value) {
-        JSNumberObject wrapper = new JSNumberObject(this, value);
-        transferPrototype(wrapper, JSNumberObject.NAME);
-        return wrapper;
+        return valueFactory.createJSNumberObject(value);
     }
 
-    /**
-     * Create a new JSObject with proper prototype chain.
-     * Sets the object's prototype to Object.prototype from the global object.
-     *
-     * @return A new JSObject instance with prototype set
-     */
     public JSObject createJSObject() {
-        JSObject jsObject = new JSObject(this);
-        if (cachedObjectPrototype != null) {
-            jsObject.setPrototype(cachedObjectPrototype);
-        } else {
-            transferPrototype(jsObject, JSObject.NAME);
-        }
-        return jsObject;
+        return valueFactory.createJSObject();
     }
 
-    /**
-     * Create a new JSPromise with proper prototype chain.
-     *
-     * @return A new JSPromise instance with prototype set
-     */
     public JSPromise createJSPromise() {
-        JSPromise jsPromise = new JSPromise(this);
-        if (cachedPromisePrototype != null) {
-            jsPromise.setPrototype(cachedPromisePrototype);
-        } else {
-            transferPrototype(jsPromise, JSPromise.NAME);
-        }
-        return jsPromise;
+        return valueFactory.createJSPromise();
     }
 
     public JSRangeError createJSRangeError(String message) {
-        JSRangeError jsError = new JSRangeError(this, message);
-        transferPrototype(jsError, JSRangeError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSRangeError(message);
     }
 
     public JSReferenceError createJSReferenceError(String message) {
-        JSReferenceError jsError = new JSReferenceError(this, message);
-        transferPrototype(jsError, JSReferenceError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSReferenceError(message);
     }
 
-    /**
-     * Create a new JSRegExp with proper prototype chain.
-     *
-     * @param pattern The regular expression pattern
-     * @param flags   The regular expression flags
-     * @return A new JSRegExp instance with prototype set
-     */
     public JSRegExp createJSRegExp(String pattern, String flags) {
-        JSRegExp jsRegExp = new JSRegExp(this, pattern, flags);
-        if (cachedRegExpPrototype != null) {
-            jsRegExp.setPrototype(cachedRegExpPrototype);
-        } else {
-            transferPrototype(jsRegExp, JSRegExp.NAME);
-        }
-        return jsRegExp;
+        return valueFactory.createJSRegExp(pattern, flags);
     }
 
-    /**
-     * Create a new JSSet with proper prototype chain.
-     *
-     * @return A new JSSet instance with prototype set
-     */
     public JSSet createJSSet() {
-        JSSet jsSet = new JSSet(this);
-        transferPrototype(jsSet, JSSet.NAME);
-        return jsSet;
+        return valueFactory.createJSSet();
     }
 
     public JSStringObject createJSStringObject() {
-        JSStringObject wrapper = new JSStringObject(this);
-        transferPrototype(wrapper, JSStringObject.NAME);
-        return wrapper;
+        return valueFactory.createJSStringObject();
     }
 
     public JSStringObject createJSStringObject(JSString value) {
-        JSStringObject wrapper = new JSStringObject(this, value);
-        transferPrototype(wrapper, JSStringObject.NAME);
-        return wrapper;
+        return valueFactory.createJSStringObject(value);
     }
 
     public JSSuppressedError createJSSuppressedError(String message) {
-        JSSuppressedError jsError = new JSSuppressedError(this, message);
-        transferPrototype(jsError, JSSuppressedError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSSuppressedError(message);
     }
 
     public JSSymbolObject createJSSymbolObject(JSSymbol value) {
-        JSSymbolObject wrapper = new JSSymbolObject(this, value);
-        transferPrototype(wrapper, JSSymbolObject.NAME);
-        return wrapper;
+        return valueFactory.createJSSymbolObject(value);
     }
 
     public JSSyntaxError createJSSyntaxError(String message) {
-        JSSyntaxError jsError = new JSSyntaxError(this, message);
-        transferPrototype(jsError, JSSyntaxError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSSyntaxError(message);
     }
 
     public JSTypeError createJSTypeError(String message) {
-        JSTypeError jsError = new JSTypeError(this, message);
-        transferPrototype(jsError, JSTypeError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSTypeError(message);
     }
 
     public JSURIError createJSURIError(String message) {
-        JSURIError jsError = new JSURIError(this, message);
-        transferPrototype(jsError, JSURIError.NAME);
-        captureStackTrace(jsError);
-        return jsError;
+        return valueFactory.createJSURIError(message);
     }
 
-    /**
-     * Create a new JSUint16Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSUint16Array instance with prototype set
-     */
     public JSUint16Array createJSUint16Array(int length) {
-        return initializeTypedArray(new JSUint16Array(this, length), JSUint16Array.NAME);
+        return valueFactory.createJSUint16Array(length);
     }
 
     public JSUint16Array createJSUint16Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint16Array(this, buffer, byteOffset, length), JSUint16Array.NAME);
+        return valueFactory.createJSUint16Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSUint32Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSUint32Array instance with prototype set
-     */
     public JSUint32Array createJSUint32Array(int length) {
-        return initializeTypedArray(new JSUint32Array(this, length), JSUint32Array.NAME);
+        return valueFactory.createJSUint32Array(length);
     }
 
     public JSUint32Array createJSUint32Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint32Array(this, buffer, byteOffset, length), JSUint32Array.NAME);
+        return valueFactory.createJSUint32Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSUint8Array with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSUint8Array instance with prototype set
-     */
     public JSUint8Array createJSUint8Array(int length) {
-        return initializeTypedArray(new JSUint8Array(this, length), JSUint8Array.NAME);
+        return valueFactory.createJSUint8Array(length);
     }
 
     public JSUint8Array createJSUint8Array(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint8Array(this, buffer, byteOffset, length), JSUint8Array.NAME);
+        return valueFactory.createJSUint8Array(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSUint8ClampedArray with proper prototype chain.
-     *
-     * @param length The length of the array
-     * @return A new JSUint8ClampedArray instance with prototype set
-     */
     public JSUint8ClampedArray createJSUint8ClampedArray(int length) {
-        return initializeTypedArray(new JSUint8ClampedArray(this, length), JSUint8ClampedArray.NAME);
+        return valueFactory.createJSUint8ClampedArray(length);
     }
 
     public JSUint8ClampedArray createJSUint8ClampedArray(IJSArrayBuffer buffer, int byteOffset, int length) {
-        return initializeTypedArray(new JSUint8ClampedArray(this, buffer, byteOffset, length), JSUint8ClampedArray.NAME);
+        return valueFactory.createJSUint8ClampedArray(buffer, byteOffset, length);
     }
 
-    /**
-     * Create a new JSWeakMap with proper prototype chain.
-     *
-     * @return A new JSWeakMap instance with prototype set
-     */
     public JSWeakMap createJSWeakMap() {
-        JSWeakMap jsWeakMap = new JSWeakMap(this);
-        transferPrototype(jsWeakMap, JSWeakMap.NAME);
-        return jsWeakMap;
+        return valueFactory.createJSWeakMap();
     }
 
-    /**
-     * Create a new JSWeakSet with proper prototype chain.
-     *
-     * @return A new JSWeakSet instance with prototype set
-     */
     public JSWeakSet createJSWeakSet() {
-        JSWeakSet jsWeakSet = new JSWeakSet(this);
-        transferPrototype(jsWeakSet, JSWeakSet.NAME);
-        return jsWeakSet;
-    }
-
-    private String createModuleExportBindingName(String generatedNamePrefix, String resolvedSpecifier) {
-        // Unsigned, because Math.abs(Integer.MIN_VALUE) is still Integer.MIN_VALUE: a specifier
-        // whose hash landed there produced an identifier containing a minus sign, and a valid
-        // module then failed to evaluate because of what its file was called.
-        return generatedNamePrefix + "DynamicImportExports$"
-                + Integer.toUnsignedString(resolvedSpecifier.hashCode()) + "$"
-                + dynamicImportModuleCache.size();
-    }
-
-    private JSImportNamespaceObject createModuleNamespaceObject() {
-        return new JSImportNamespaceObject(this);
-    }
-
-    private String decodeIdentifierEscapes(String text) {
-        if (text == null || text.indexOf('\\') < 0) {
-            return text;
-        }
-        StringBuilder decodedTextBuilder = new StringBuilder(text.length());
-        for (int index = 0; index < text.length(); index++) {
-            char ch = text.charAt(index);
-            if (ch != '\\' || index + 1 >= text.length() || text.charAt(index + 1) != 'u') {
-                decodedTextBuilder.append(ch);
-                continue;
-            }
-            int escapeStart = index;
-            index += 2;
-            if (index < text.length() && text.charAt(index) == '{') {
-                int braceEnd = text.indexOf('}', index + 1);
-                if (braceEnd < 0) {
-                    decodedTextBuilder.append(text, escapeStart, index + 1);
-                    index = escapeStart;
-                    continue;
-                }
-                String codePointText = text.substring(index + 1, braceEnd);
-                int codePoint = parseHex(codePointText);
-                if (codePoint >= 0) {
-                    decodedTextBuilder.appendCodePoint(codePoint);
-                    index = braceEnd;
-                } else {
-                    decodedTextBuilder.append(text, escapeStart, braceEnd + 1);
-                    index = braceEnd;
-                }
-                continue;
-            }
-            if (index + 3 >= text.length()) {
-                decodedTextBuilder.append(text, escapeStart, text.length());
-                break;
-            }
-            String hexText = text.substring(index, index + 4);
-            int codePoint = parseHex(hexText);
-            if (codePoint >= 0) {
-                decodedTextBuilder.append((char) codePoint);
-                index += 3;
-            } else {
-                decodedTextBuilder.append(text, escapeStart, index + 4);
-                index += 3;
-            }
-        }
-        return decodedTextBuilder.toString();
-    }
-
-    /**
-     * The {@code StringValue} of a {@code StringLiteral} body — the text between the delimiters,
-     * with every escape sequence applied.
-     * <p>
-     * A module specifier and an arbitrary module export name are {@code StringLiteral}s, and a
-     * {@code StringLiteral}'s meaning is its {@code StringValue}, not its spelling.
-     * {@code './d\\u0065p.mjs'} names {@code ./dep.mjs} and {@code "a\\u002db"} is the export name
-     * {@code a-b} — the lexer knows that, and the token-driven link pass therefore already agreed
-     * with it. The evaluation path pulled the same literals out of raw source with
-     * {@code substring} and kept the backslashes, so the two stages disagreed about module identity
-     * and about export-name identity: the link check passed and evaluation then failed to find a
-     * module or a name that was there all along, in one case after a dependency had already run.
-     * <p>
-     * Octal escapes are deliberately not decoded. They are a {@code SyntaxError} in a module, the
-     * source has already been compiled once before this runs, and inventing a value for text the
-     * grammar rejects would be worse than leaving it alone.
-     *
-     * @param literalBody the literal's text without its delimiters
-     * @return the decoded value
-     */
-    private String decodeModuleStringLiteralValue(String literalBody) {
-        if (literalBody == null || literalBody.indexOf('\\') < 0) {
-            return literalBody;
-        }
-        StringBuilder decodedBuilder = new StringBuilder(literalBody.length());
-        for (int index = 0; index < literalBody.length(); index++) {
-            char ch = literalBody.charAt(index);
-            if (ch != '\\' || index + 1 >= literalBody.length()) {
-                decodedBuilder.append(ch);
-                continue;
-            }
-            char escaped = literalBody.charAt(++index);
-            switch (escaped) {
-                case 'b' -> decodedBuilder.append('\b');
-                case 'f' -> decodedBuilder.append('\f');
-                case 'n' -> decodedBuilder.append('\n');
-                case 'r' -> decodedBuilder.append('\r');
-                case 't' -> decodedBuilder.append('\t');
-                case 'v' -> decodedBuilder.append('\u000B');
-                case 'x' -> {
-                    int value = index + 2 < literalBody.length()
-                            ? parseHex(literalBody.substring(index + 1, index + 3))
-                            : -1;
-                    if (value < 0) {
-                        decodedBuilder.append(escaped);
-                    } else {
-                        decodedBuilder.append((char) value);
-                        index += 2;
-                    }
-                }
-                case 'u' -> index = appendModuleUnicodeEscape(literalBody, index, decodedBuilder);
-                case '0' -> {
-                    if (index + 1 < literalBody.length()
-                            && Character.isDigit(literalBody.charAt(index + 1))) {
-                        // A legacy octal escape: left as written, per the note above.
-                        decodedBuilder.append('\\').append(escaped);
-                    } else {
-                        decodedBuilder.append('\0');
-                    }
-                }
-                // A LineContinuation contributes nothing, and CRLF is one line terminator.
-                case '\r' -> {
-                    if (index + 1 < literalBody.length() && literalBody.charAt(index + 1) == '\n') {
-                        index++;
-                    }
-                }
-                case '\n', '\u2028', '\u2029' -> {
-                }
-                // \' \" \\ and every other IdentityEscape stand for the character itself.
-                default -> decodedBuilder.append(escaped);
-            }
-        }
-        return decodedBuilder.toString();
-    }
-
-    /**
-     * The offset just past a default-export expression that begins at {@code start}.
-     *
-     * @param sourceCode the module source
-     * @param start      the offset of the expression's first token
-     * @param boundary   the offset of the next top-level declaration, or the end of the source
-     * @return the end offset, or -1 when the text does not parse
-     */
-    private int defaultExportExpressionEnd(String sourceCode, int start, int boundary) {
-        String expressionText = sourceCode.substring(start, Math.max(start, boundary));
-        List<Statement> statements;
-        try {
-            // The assignment target puts what follows in expression position — without it a leading
-            // `{` opens a block rather than an object literal — and costs a known two characters.
-            statements = new Parser(new Lexer("x=" + expressionText), true).parse().getBody();
-        } catch (RuntimeException notParsable) {
-            clearPendingException();
-            return -1;
-        }
-        int end = statements.size() > 1 && statements.get(1) != null
-                ? statements.get(1).getLocation().offset() - "x=".length()
-                : expressionText.length();
-        end = Math.max(0, Math.min(end, expressionText.length()));
-        // Walk back over what is not the expression: the terminating semicolon, whitespace, and
-        // comments, which masking turns into whitespace. Trimming only whitespace drew a trailing
-        // `// comment` into the expression and produced `let X = (0, e;\n// comment);`.
-        String maskedExpressionText = maskModuleComments(expressionText);
-        while (end > 0 && Character.isWhitespace(maskedExpressionText.charAt(end - 1))) {
-            end--;
-        }
-        if (end > 0 && maskedExpressionText.charAt(end - 1) == ';') {
-            end--;
-            while (end > 0 && Character.isWhitespace(maskedExpressionText.charAt(end - 1))) {
-                end--;
-            }
-        }
-        return end == 0 ? -1 : start + end;
-    }
-
-    /**
-     * Where each {@code export default <expression>} in a module really ends, decided by the
-     * parser.
-     * <p>
-     * The line-oriented transformer used to answer this by counting brackets, braces and
-     * parentheses and taking lines while they were unbalanced. Balanced delimiters do not mark the
-     * end of an AssignmentExpression: {@code export default 1 +} is balanced and incomplete, so the
-     * transform emitted {@code let X = (0, 1 +);} and a valid module failed to parse at a position
-     * in generated text. It also counted delimiters inside regular-expression literals, which it
-     * had no way to recognise, so {@code export default /\(/;} swallowed the statement after it.
-     * <p>
-     * Where an expression ends is a grammar question — operators, conditionals, member and call
-     * continuations, template substitutions, comments and automatic semicolon insertion all bear on
-     * it — and the parser is the only thing here that knows the grammar. The expression is parsed
-     * in expression position (an assignment target is prefixed, so an opening brace is an object
-     * literal rather than a block) and bounded at the next top-level declaration, so nothing after
-     * it can be drawn in.
-     *
-     * @param sourceCode the normalised module source
-     * @return the extents, by the zero-based line index of the {@code export} keyword; empty when
-     * the source cannot be scanned
-     */
-    private Map<Integer, DefaultExportExtent> defaultExportExtents(String sourceCode) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
-        if (scan == null || !scan.hasExportDeclaration()) {
-            return Map.of();
-        }
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            clearPendingException();
-            return Map.of();
-        }
-        Map<Integer, DefaultExportExtent> extents = new HashMap<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
-            Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0
-                    || token.type() != TokenType.EXPORT
-                    || index + 2 >= tokens.size()
-                    || tokens.get(index + 1).type() != TokenType.DEFAULT) {
-                continue;
-            }
-            Token firstExpressionToken = tokens.get(index + 2);
-            if (firstExpressionToken.type() == TokenType.FUNCTION
-                    || firstExpressionToken.type() == TokenType.CLASS
-                    || (firstExpressionToken.type() == TokenType.ASYNC
-                    && index + 3 < tokens.size()
-                    && tokens.get(index + 3).type() == TokenType.FUNCTION)) {
-                // A default-exported declaration ends at its body, which the transformer finds by
-                // matching braces — that much a delimiter count really can do.
-                continue;
-            }
-            int expressionStart = firstExpressionToken.offset();
-            int boundary = sourceCode.length();
-            for (int declarationOffset : scan.declarationOffsets()) {
-                if (declarationOffset > expressionStart) {
-                    boundary = declarationOffset;
-                    break;
-                }
-            }
-            int expressionEnd = defaultExportExpressionEnd(sourceCode, expressionStart, boundary);
-            if (expressionEnd < 0) {
-                continue;
-            }
-            int lineEnd = sourceCode.indexOf('\n', expressionEnd);
-            if (lineEnd < 0) {
-                lineEnd = sourceCode.length();
-            }
-            String trailingText = sourceCode.substring(expressionEnd, lineEnd).strip();
-            if (trailingText.startsWith(";")) {
-                trailingText = trailingText.substring(1).strip();
-            }
-            extents.put(
-                    lineIndexOfOffset(sourceCode, token.offset()),
-                    new DefaultExportExtent(
-                            sourceCode.substring(expressionStart, expressionEnd),
-                            lineIndexOfOffset(sourceCode, expressionEnd),
-                            trailingText));
-        }
-        return extents;
-    }
-
-    private void defineDynamicImportNamespaceForwardingBinding(
-            JSDynamicImportModule moduleRecord,
-            String exportName,
-            JSDynamicImportModule targetModuleRecord,
-            String targetSpecifier,
-            String importedName) {
-        JSImportNamespaceObject namespace = moduleRecord.namespace();
-        PropertyKey exportKey = PropertyKey.fromString(exportName);
-        if (namespace.hasDefinedOwnProperty(exportKey)) {
-            return;
-        }
-        JSNativeFunction getter = new JSNativeFunction(this, "get " + exportName, 0,
-                (ctx, thisArg, args) -> {
-                    if (MODULE_NAMESPACE_EXPORT_NAME.equals(importedName)) {
-                        return targetModuleRecord.namespace();
-                    }
-                    String resolvedImportedName = getDynamicImportModuleExport(
-                            targetModuleRecord, importedName, targetSpecifier);
-                    return targetModuleRecord.namespace().get(PropertyKey.fromString(resolvedImportedName));
-                });
-        getter.initializePrototypeChain(this);
-        PropertyDescriptor descriptor = new PropertyDescriptor();
-        descriptor.setGetter(getter);
-        descriptor.setEnumerable(true);
-        descriptor.setConfigurable(true);
-        namespace.defineExportBinding(this, exportKey, descriptor);
-        namespace.registerExportName(exportName);
-    }
-
-    private void defineDynamicImportNamespaceValue(
-            JSDynamicImportModule moduleRecord,
-            String exportName,
-            JSValue exportValue) {
-        // Use All (writable, enumerable, configurable) during construction so that
-        // mergeStarReExport can delete ambiguous bindings. finalizeNamespace() will
-        // report them as non-configurable via getOwnPropertyDescriptor override.
-        moduleRecord.namespace().defineExportBinding(
-                this,
-                PropertyKey.fromString(exportName),
-                exportValue,
-                PropertyDescriptor.DataState.All);
-        moduleRecord.namespace().registerExportName(exportName);
+        return valueFactory.createJSWeakSet();
     }
 
     /**
@@ -2005,47 +552,6 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Escape a value for interpolation into a double-quoted JavaScript string literal in generated
-     * module source.
-     * <p>
-     * Escaping only {@code \} and {@code "} is not enough: a line terminator, a control character
-     * or U+2028/U+2029 inside the value terminates the literal and turns the remainder of the value
-     * into source text.
-     *
-     * @param text the raw value
-     * @return the value with every character that is unsafe inside a string literal escaped
-     */
-    private String escapeJavaScriptString(String text) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-        StringBuilder escaped = new StringBuilder(text.length() + 8);
-        for (int characterIndex = 0; characterIndex < text.length(); characterIndex++) {
-            char character = text.charAt(characterIndex);
-            switch (character) {
-                case '\\' -> escaped.append("\\\\");
-                case '"' -> escaped.append("\\\"");
-                case '\'' -> escaped.append("\\'");
-                case '\b' -> escaped.append("\\b");
-                case '\f' -> escaped.append("\\f");
-                case '\n' -> escaped.append("\\n");
-                case '\r' -> escaped.append("\\r");
-                case '\t' -> escaped.append("\\t");
-                default -> {
-                    // Control characters, U+2028 LINE SEPARATOR and U+2029 PARAGRAPH SEPARATOR are
-                    // all line terminators or otherwise unsafe inside a JavaScript string literal.
-                    if (character < 0x20 || character == 0x2028 || character == 0x2029) {
-                        escaped.append(String.format("\\u%04x", (int) character));
-                    } else {
-                        escaped.append(character);
-                    }
-                }
-            }
-        }
-        return escaped.toString();
-    }
-
-    /**
      * Evaluate JavaScript code in this context.
      * <p>
      * In full implementation, this would:
@@ -2058,7 +564,8 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value, or exception if eval throws
      */
     public JSValue eval(String code) {
-        return evalOrThrow(eval(code, "<eval>", false, false, false, false, false, false));
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, "<eval>", false, false, false, false, false, false));
     }
 
     /**
@@ -2070,7 +577,8 @@ public final class JSContext implements AutoCloseable {
      * @return The completion value
      */
     public JSValue eval(String code, String filename, boolean isModule) {
-        return evalOrThrow(eval(code, filename, isModule, false, false, false, false, false));
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, filename, isModule, false, false, false, false, false));
     }
 
     /**
@@ -2083,868 +591,53 @@ public final class JSContext implements AutoCloseable {
      * @return the js value
      */
     public JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval) {
-        return evalOrThrow(eval(code, filename, isModule, isDirectEval, false, false, false, false));
-    }
-
-    private JSValue eval(String code, String filename, boolean isModule, boolean isDirectEval,
-                         boolean predeclareProgramLexicalsAsLocals,
-                         boolean skipGlobalDeclarationTracking,
-                         boolean inheritedStrictModeForDirectEval,
-                         boolean useDirectEvalCallerFrame) {
-        // The single gateway every public eval overload funnels through, so the lifecycle check
-        // belongs here. Duplicating it in selected overloads left eval(code, filename, isModule,
-        // isDirectEval) unguarded: a closed context ran the source, mutated the realm, and only
-        // then failed inside the automatic microtask drain — after the side effects had landed.
-        requireOpen();
-        if (code == null || code.isEmpty()) {
-            return JSUndefined.INSTANCE;
-        }
-        // Check for recursion limit
-        if (!pushStackFrame(new JSStackFrame("<eval>", filename, 1))) {
-            return throwError("RangeError", "Maximum call stack size exceeded");
-        }
-
-        JSDynamicImportModule dynamicImportEvalModuleRecord = null;
-        EvalOverlayFrame moduleNamespaceImportOverlay = null;
-        JSDynamicImportModule selfModuleRecord = null;
-        JSDynamicImportModule.Status selfModulePreviousStatus = null;
-        boolean removeSelfModuleRecordAfterEval = false;
-        JSValue evalError = null;
-        try {
-            if (isModule && !isDirectEval) {
-                // Every early error the source has is raised here, against the text the caller
-                // passed, before a single character of it is rewritten. Downstream the source is
-                // split onto more lines and then wrapped in generated module code, and neither
-                // keeps the caller's coordinate system: a duplicate `__proto__` at offset 44 of a
-                // 60-character module was reported at offset 119, which names no character of the
-                // input at all. See requireModuleSourceCompiles.
-                requireModuleSourceCompiles(code);
-                // Link before evaluating: a name this graph imports and nothing exports is a
-                // failure of the whole graph, and must be raised before any of it runs. See
-                // requireModuleGraphLinks. It runs on the source as written, not on the normalised
-                // copy below, because a position it reports has to be a position in the text the
-                // caller passed — inserting line breaks first would shift them.
-                //
-                // Not on a module's own transformed source, though: that text is generated, its
-                // `export` declarations have already been rewritten away, and linking it would ask
-                // the graph what a module with no exports left provides.
-                if (!isTransformedModuleSource(code, filename)) {
-                    requireModuleGraphLinks(code, filename);
-                }
-                // Put every top-level import/export declaration on its own lines before anything
-                // downstream classifies module source by line. The compile above has already
-                // accepted the source as written, so the split cannot silently repair it.
-                code = normalizeModuleDeclarationLines(code, false);
-            }
-            boolean skipEvaluatedDynamicImportModule = false;
-            boolean shouldTrackDynamicImportModule = isModule
-                    && !isDirectEval
-                    && filename != null
-                    && !filename.isEmpty()
-                    && !filename.startsWith("<")
-                    && (code.contains("import(") || code.contains("import.defer(")
-                    || hasModuleExportSyntax(code)
-                    || hasModuleStaticImportSyntax(code)
-                    || hasModuleTopLevelAwaitSyntax(code));
-            if (shouldTrackDynamicImportModule) {
-                String resolvedModuleSpecifier;
-                try {
-                    resolvedModuleSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
-                } catch (JSException jsException) {
-                    // A filename that does not resolve to a module on disk is normal here — the
-                    // source was handed to eval() directly. Clear the pending exception the
-                    // matching throwTypeError left on the context: catching the Java exception
-                    // alone leaves the context in an exception state, and the next activation
-                    // reports that stale error as its own failure.
-                    clearPendingException();
-                    resolvedModuleSpecifier = normalizeModuleSpecifier(filename);
-                }
-                JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(resolvedModuleSpecifier);
-                boolean executingTransformedModuleSource = existingRecord != null
-                        && !Objects.equals(existingRecord.rawSource(), code)
-                        && Objects.equals(existingRecord.transformedSource(), code);
-                if (!executingTransformedModuleSource) {
-                    dynamicImportEvalModuleRecord = existingRecord;
-                    if (dynamicImportEvalModuleRecord == null) {
-                        dynamicImportEvalModuleRecord =
-                                new JSDynamicImportModule(resolvedModuleSpecifier, createModuleNamespaceObject());
-                        dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-                        dynamicImportEvalModuleRecord.setRawSource(code);
-                        // Early errors were already raised above, against the caller's own text
-                        // rather than this normalised copy of it.
-                        parseDynamicImportModuleSource(dynamicImportEvalModuleRecord);
-                        dynamicImportModuleCache.put(resolvedModuleSpecifier, dynamicImportEvalModuleRecord);
-                    } else if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
-                        skipEvaluatedDynamicImportModule = true;
-                    }
-                }
-            }
-            boolean evaluatingRawDynamicImportModule =
-                    dynamicImportEvalModuleRecord != null
-                            && Objects.equals(dynamicImportEvalModuleRecord.rawSource(), code);
-            boolean shouldEvaluateRawModuleThroughTransformedSource =
-                    evaluatingRawDynamicImportModule
-                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                            && !dynamicImportEvalModuleRecord.hasTLA()
-                            && hasModuleStaticImportSyntax(code)
-                            && code.contains("import(");
-            boolean shouldEvaluateRawTopLevelAwaitModule =
-                    evaluatingRawDynamicImportModule
-                            && !dynamicImportEvalModuleRecord.hasExportSyntax()
-                            && dynamicImportEvalModuleRecord.hasTLA()
-                            && !hasModuleStaticImportSyntax(code);
-
-            Compiler compiler = new Compiler(code, filename).setContext(this);
-            // Per QuickJS, eval code has is_eval=true which prevents top-level return.
-            // Only syntactic direct eval should inherit caller frame semantics.
-            StackFrame directEvalCallerFrame = isDirectEval && useDirectEvalCallerFrame
-                    ? virtualMachine.getCurrentFrame()
-                    : null;
-            boolean allowNewTargetInEval = false;
-            boolean allowSuperPropertyInEval = false;
-            boolean allowSuperCallInEval = false;
-            Map<String, JSSymbol> evalPrivateSymbols = Map.of();
-            boolean isClassFieldEval = consumeScheduledClassFieldEvalCall();
-            if (isDirectEval) {
-                compiler.setEval(true);
-                if (directEvalCallerFrame != null
-                        && directEvalCallerFrame.getFunction() instanceof JSBytecodeFunction callerBytecodeFunction) {
-                    allowNewTargetInEval = callerBytecodeFunction.isNewTargetAllowed();
-                    // Arrow functions inherit super binding from their enclosing method.
-                    // Following QuickJS: eval inherits super_allowed from the calling function
-                    // regardless of whether it is an arrow function or not.
-                    allowSuperPropertyInEval = callerBytecodeFunction.getHomeObject() != null;
-                    evalPrivateSymbols = collectEvalPrivateSymbols(callerBytecodeFunction);
-                    // Per QuickJS: direct eval inherits super_call_allowed from the calling function.
-                    // This is true for derived constructors, arrows inside derived constructors,
-                    // and nested eval that already has super call allowed.
-                    if (callerBytecodeFunction.isDerivedConstructor()) {
-                        allowSuperCallInEval = true;
-                    } else if (callerBytecodeFunction.isArrow() && directEvalCallerFrame.getDerivedThisRef() != null) {
-                        allowSuperCallInEval = true;
-                    } else if (callerBytecodeFunction.isEvalSuperCallAllowed()) {
-                        allowSuperCallInEval = true;
-                    }
-                }
-                // ES2024: class field initializer eval forbids arguments, new.target resolves to undefined
-                // Per spec 16.1.7, eval in class field initializer applies "outside constructor" rules,
-                // so super() is a SyntaxError there.
-                if (isClassFieldEval) {
-                    compiler.setClassFieldEval(true);
-                    allowSuperCallInEval = false;
-                }
-                compiler.setEvalContextFlags(allowSuperPropertyInEval, allowNewTargetInEval, allowSuperCallInEval);
-                compiler.setEvalPrivateSymbols(evalPrivateSymbols);
-                // Direct eval creates a fresh lexical environment whose bindings do not leak.
-                compiler.setPredeclareProgramLexicalsAsLocals(true);
-                if (directEvalCallerFrame != null && (strictMode || inheritedStrictModeForDirectEval)) {
-                    compiler.setInheritedStrictMode(true);
-                }
-            }
-            if (predeclareProgramLexicalsAsLocals) {
-                compiler.setPredeclareProgramLexicalsAsLocals(true);
-            }
-            if (skipEvaluatedDynamicImportModule) {
-                processMicrotasks();
-                return JSUndefined.INSTANCE;
-            }
-
-            if (evaluatingRawDynamicImportModule
-                    && (dynamicImportEvalModuleRecord.hasExportSyntax()
-                    || shouldEvaluateRawModuleThroughTransformedSource
-                    || shouldEvaluateRawTopLevelAwaitModule)) {
-                JSValue evalResult = evaluateDynamicImportModule(dynamicImportEvalModuleRecord);
-                if (dynamicImportEvalModuleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                    dynamicImportEvalModuleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                    dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    dynamicImportEvalModuleRecord.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(dynamicImportEvalModuleRecord, asyncPromise, new HashSet<>());
-                } else {
-                    if (dynamicImportEvalModuleRecord.hasExportSyntax()) {
-                        resolveDynamicImportReExports(dynamicImportEvalModuleRecord, new HashSet<>());
-                        dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
-                    }
-                    dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                }
-                if (!suppressEvalMicrotaskProcessing) {
-                    processMicrotasks();
-                }
-                if (dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                    evalError = dynamicImportEvalModuleRecord.evaluationError();
-                    return null;
-                }
-                return JSUndefined.INSTANCE;
-            }
-
-            // Phase 1-3: Lexer → Parser → Compiler (compile to bytecode)
-            JSBytecodeFunction func;
-            Compiler.CompileResult compileResult = compiler.compile(isModule);
-            func = compileResult.function();
-            Set<String> globalScriptFunctionNames = null;
-            if (!isModule && !isDirectEval && !skipGlobalDeclarationTracking) {
-                // Top-level script: check GlobalDeclarationInstantiation per ES2024 16.1.7
-                func = compileResult.function();
-
-                // Collect new declarations from this script
-                Program.GlobalDeclarations globalDeclarations = compileResult.ast().getGlobalDeclarations();
-                Set<String> newConstDecls = globalDeclarations.constDeclarations();
-                Set<String> newVarDecls = globalDeclarations.varDeclarations();
-                Set<String> newLexDecls = globalDeclarations.lexicalDeclarations();
-                globalScriptFunctionNames = globalDeclarations.functionDeclarations();
-
-                // Check: let/const names must not collide with existing lex declarations
-                // or restricted global properties (non-configurable or script-level var)
-                for (String name : newLexDecls) {
-                    if (globalLexDeclarations.contains(name)) {
-                        throw new JSSyntaxErrorException(
-                                "Identifier '" + name + "' has already been declared");
-                    }
-                    // Check for non-configurable property on global object
-                    PropertyKey key = PropertyKey.fromString(name);
-                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                    if (desc != null && !desc.isConfigurable()) {
-                        throw new JSSyntaxErrorException(
-                                "Identifier '" + name + "' has already been declared");
-                    }
-                    // Check against script-level var declarations (these should be
-                    // non-configurable per spec, tracked separately)
-                    if (globalVarDeclarations.contains(name)) {
-                        throw new JSSyntaxErrorException(
-                                "Identifier '" + name + "' has already been declared");
-                    }
-                }
-
-                // Check: var/function names must not collide with existing lex declarations
-                for (String name : newVarDecls) {
-                    if (globalLexDeclarations.contains(name)) {
-                        throw new JSSyntaxErrorException(
-                                "Identifier '" + name + "' has already been declared");
-                    }
-                }
-
-                // Check CreateGlobalFunctionBinding preconditions before execution.
-                for (String functionName : globalScriptFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                    if (desc == null) {
-                        if (!jsGlobalObject.getGlobalObject().isExtensible()) {
-                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
-                        }
-                        continue;
-                    }
-                    if (!desc.isConfigurable()) {
-                        if (desc.isAccessorDescriptor()
-                                || !(desc.isWritable() && desc.isEnumerable())) {
-                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
-                        }
-                    }
-                }
-
-                // Register new declarations for future collision checks
-                globalConstDeclarations.addAll(newConstDecls);
-                globalLexDeclarations.addAll(newLexDecls);
-                globalVarDeclarations.addAll(newVarDecls);
-                for (String lexicalName : newLexDecls) {
-                    globalLexicalBindings.putIfAbsent(lexicalName, GLOBAL_LEXICAL_UNINITIALIZED);
-                }
-
-                // CreateGlobalVarDeclaration: define var bindings as non-configurable
-                // properties on the global object (per ES2024 9.1.1.4.17 / QuickJS
-                // js_closure_define_global_var with is_direct_or_indirect_eval=FALSE).
-                // This must happen BEFORE execution so bindings exist at script start.
-                for (String name : newVarDecls) {
-                    if (globalScriptFunctionNames.contains(name)) {
-                        continue;
-                    }
-                    PropertyKey key = PropertyKey.fromString(name);
-                    PropertyDescriptor existing = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                    if (existing == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
-                        throw new JSException(throwTypeError("cannot define variable '" + name + "'"));
-                    }
-                    if (existing == null) {
-                        // Property doesn't exist: create {writable, enumerable, NOT configurable}
-                        jsGlobalObject.getGlobalObject().defineProperty(key,
-                                PropertyDescriptor.dataDescriptor(
-                                        JSUndefined.INSTANCE,
-                                        PropertyDescriptor.DataState.EnumerableWritable
-                                ));
-                    }
-                }
-            }
-
-            // For eval code: EvalDeclarationInstantiation step 8 (ES2024 19.2.1.3)
-            // Check CanDeclareGlobalFunction for all function declarations before executing.
-            // If any function declaration targets a non-configurable global property that is
-            // not both writable and enumerable, throw TypeError before any code runs.
-            // Following QuickJS js_closure2 first-pass check with JS_CheckDefineGlobalVar.
-            Set<String> globalEvalFunctionNames = null;
-            if (!isModule && isDirectEval) {
-                Program.GlobalDeclarations globalDeclarations = compileResult.ast().getGlobalDeclarations();
-                Set<String> evalVarDeclarations = globalDeclarations.varDeclarations();
-                globalEvalFunctionNames = globalDeclarations.functionDeclarations();
-                for (String functionName : globalEvalFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    PropertyDescriptor desc = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                    if (desc != null && !desc.isConfigurable()) {
-                        if (desc.isAccessorDescriptor()
-                                || !(desc.isWritable() && desc.isEnumerable())) {
-                            throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
-                        }
-                    }
-                    if (desc == null && !jsGlobalObject.getGlobalObject().isExtensible()) {
-                        throw new JSException(throwTypeError("cannot define variable '" + functionName + "'"));
-                    }
-                    if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                        if (desc == null || desc.isConfigurable()) {
-                            JSValue initialValue = desc != null && desc.hasValue()
-                                    ? desc.getValue()
-                                    : JSUndefined.INSTANCE;
-                            jsGlobalObject.getGlobalObject().defineProperty(
-                                    key,
-                                    PropertyDescriptor.dataDescriptor(initialValue, PropertyDescriptor.DataState.All));
-                        }
-                    }
-                }
-                if (directEvalCallerFrame != null && directEvalCallerFrame.getCaller() == null) {
-                    for (String declarationName : evalVarDeclarations) {
-                        if (globalEvalFunctionNames.contains(declarationName)) {
-                            continue;
-                        }
-                        PropertyKey key = PropertyKey.fromString(declarationName);
-                        if (!jsGlobalObject.getGlobalObject().has(key)
-                                && !jsGlobalObject.getGlobalObject().isExtensible()) {
-                            throw new JSException(throwTypeError("cannot define variable '" + declarationName + "'"));
-                        }
-                    }
-                }
-            }
-
-            // Initialize the function's prototype chain so it inherits from Function.prototype
-            func.initializePrototypeChain(this);
-            func.setImportMetaFilename(filename);
-
-            if (isModule && !isDirectEval
-                    && filename != null && !filename.isEmpty() && !filename.startsWith("<")) {
-                // Register the current module as EVALUATING in the cache so that
-                // self-imports (import defer * as self from './thisFile.js')
-                // can detect re-entrancy and throw TypeError instead of recursing.
-                String normalizedFilename = Paths.get(filename).normalize().toString();
-                JSDynamicImportModule existingRecord = dynamicImportModuleCache.get(normalizedFilename);
-                if (existingRecord != null) {
-                    // Module already in cache (e.g. from loadJSDynamicImportModule).
-                    // Mark it as EVALUATING so self-imports detect the re-entrancy.
-                    selfModulePreviousStatus = existingRecord.status();
-                    existingRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                    selfModuleRecord = existingRecord;
-                } else {
-                    selfModuleRecord = new JSDynamicImportModule(
-                            normalizedFilename, createModuleNamespaceObject());
-                    selfModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                    selfModuleRecord.setRawSource(code);
-                    dynamicImportModuleCache.put(normalizedFilename, selfModuleRecord);
-                    removeSelfModuleRecordAfterEval = true;
-                }
-                initializeHoistedFunctionExportBindings(selfModuleRecord);
-                moduleNamespaceImportOverlay = evaluateModuleImportsInOrder(code, filename);
-            }
-
-            Set<String> globalFunctionBindingInitializations = null;
-            boolean globalFunctionBindingsConfigurable = false;
-            if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
-                globalFunctionBindingInitializations = new HashSet<>(globalScriptFunctionNames);
-            }
-            if (!isModule
-                    && isDirectEval
-                    && directEvalCallerFrame != null
-                    && directEvalCallerFrame.getCaller() == null
-                    && globalEvalFunctionNames != null) {
-                if (globalFunctionBindingInitializations == null) {
-                    globalFunctionBindingInitializations = new HashSet<>();
-                }
-                globalFunctionBindingInitializations.addAll(globalEvalFunctionNames);
-                globalFunctionBindingsConfigurable = true;
-            }
-            setGlobalFunctionBindingInitializations(
-                    globalFunctionBindingInitializations,
-                    globalFunctionBindingsConfigurable);
-
-            // Phase 4: Execute bytecode in the virtual machine
-            // For direct eval, inherit the caller's 'this' binding per ES2024 PerformEval.
-            // In strict mode functions called without receiver, 'this' is undefined, and
-            // eval('this') must see that same undefined value, not the global object.
-            // ES2024 16.2.1.6.4: Module top-level 'this' is undefined.
-            JSValue evalThisArg = isModule && !isDirectEval
-                    ? JSUndefined.INSTANCE
-                    : jsGlobalObject.getGlobalObject();
-            JSValue evalNewTarget = JSUndefined.INSTANCE;
-            if (isDirectEval && directEvalCallerFrame != null) {
-                evalThisArg = directEvalCallerFrame.getThisArg();
-                if (allowNewTargetInEval) {
-                    evalNewTarget = directEvalCallerFrame.getNewTarget();
-                }
-                if (allowSuperPropertyInEval) {
-                    func.setHomeObject(directEvalCallerFrame.getFunction().getHomeObject());
-                }
-                if (allowSuperCallInEval) {
-                    func.setEvalSuperCallAllowed(true);
-                    // Set up new.target for super() calls: inherit from caller
-                    // (including arrows that capture new.target from the constructor)
-                    JSFunction callerFunction = directEvalCallerFrame.getFunction();
-                    if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
-                        if (callerFunction instanceof JSBytecodeFunction callerBf && callerBf.isArrow()) {
-                            JSValue capturedNewTarget = callerBf.getCapturedNewTarget();
-                            if (capturedNewTarget != null) {
-                                evalNewTarget = capturedNewTarget;
-                            }
-                        }
-                        if (evalNewTarget == null || evalNewTarget instanceof JSUndefined) {
-                            evalNewTarget = directEvalCallerFrame.getNewTarget();
-                        }
-                    }
-                    // Set capturedNewTarget so arrows created inside eval can inherit it via FCLOSURE
-                    func.setCapturedNewTarget(evalNewTarget);
-                    // Set capturedActiveFunction so SPECIAL_OBJECT 2 returns the constructor
-                    if (callerFunction instanceof JSBytecodeFunction callerBf) {
-                        if (callerBf.isArrow()) {
-                            JSFunction activeFunction = callerBf.getCapturedActiveFunction();
-                            if (activeFunction != null) {
-                                func.setCapturedActiveFunction(activeFunction);
-                            }
-                        } else if (callerBf.isEvalSuperCallAllowed() && callerBf.getCapturedActiveFunction() != null) {
-                            func.setCapturedActiveFunction(callerBf.getCapturedActiveFunction());
-                        } else {
-                            func.setCapturedActiveFunction(callerFunction);
-                        }
-                    }
-                    // Set capturedDerivedThisRef so INIT_CTOR can find the shared this binding
-                    VarRef callerDerivedThisRef = directEvalCallerFrame.getDerivedThisRef();
-                    if (callerDerivedThisRef != null) {
-                        func.setCapturedDerivedThisRef(callerDerivedThisRef);
-                    }
-                }
-                if (allowNewTargetInEval) {
-                    func.setNewTargetAllowed(true);
-                }
-            }
-            JSValue result;
-            boolean evaluatingModuleBody = isModule && !isDirectEval;
-            if (evaluatingModuleBody) {
-                // Everything a module needs linked is linked by now — imports were resolved and
-                // the modules behind them were pulled in above. Crossing this line is the
-                // observable boundary between the two phases a negative module test distinguishes.
-                moduleBodyEvaluationCount++;
-                if (evaluatingImportedModule) {
-                    importedModuleBodyEvaluationCount++;
-                }
-            }
-            try {
-                result = virtualMachine.execute(func, evalThisArg, JSValue.NO_ARGS, evalNewTarget);
-                if (evaluatingModuleBody && result == null) {
-                    // A pending exception rather than a thrown one, but the body still did not
-                    // finish.
-                    failedModuleBodyEvaluationCount++;
-                }
-            } catch (RuntimeException | Error moduleBodyFailure) {
-                if (evaluatingModuleBody) {
-                    failedModuleBodyEvaluationCount++;
-                }
-                throw moduleBodyFailure;
-            } finally {
-                setGlobalFunctionBindingInitializations(null, false);
-            }
-            if (isModule
-                    && !isDirectEval
-                    && moduleNamespaceImportOverlay != null
-                    && evaluatingRawDynamicImportModule
-                    && dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.hasExportSyntax()
-                    && result instanceof JSPromise asyncModulePromise) {
-                registerDeferredEvalOverlayRestore(asyncModulePromise, moduleNamespaceImportOverlay);
-                moduleNamespaceImportOverlay = null;
-            }
-
-            if (!isModule
-                    && isDirectEval
-                    && directEvalCallerFrame != null
-                    && directEvalCallerFrame.getCaller() == null) {
-                if (globalEvalFunctionNames == null) {
-                    globalEvalFunctionNames = new LinkedHashSet<>();
-                }
-                for (String functionName : globalEvalFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    if (!jsGlobalObject.getGlobalObject().has(key)) {
-                        continue;
-                    }
-                    JSValue functionValue = jsGlobalObject.getGlobalObject().get(key);
-                    PropertyDescriptor existingDescriptor = jsGlobalObject.getGlobalObject().getOwnPropertyDescriptor(key);
-                    PropertyDescriptor descriptor = new PropertyDescriptor();
-                    descriptor.setValue(functionValue);
-                    if (existingDescriptor == null || existingDescriptor.isConfigurable()) {
-                        descriptor.setWritable(true);
-                        descriptor.setEnumerable(true);
-                        descriptor.setConfigurable(true);
-                    } else {
-                        descriptor.setWritable(existingDescriptor.isWritable());
-                        descriptor.setEnumerable(existingDescriptor.isEnumerable());
-                        descriptor.setConfigurable(false);
-                    }
-                    jsGlobalObject.getGlobalObject().defineProperty(key, descriptor);
-                }
-            }
-            if (!isModule && !isDirectEval && globalScriptFunctionNames != null) {
-                for (String functionName : globalScriptFunctionNames) {
-                    PropertyKey key = PropertyKey.fromString(functionName);
-                    if (!jsGlobalObject.getGlobalObject().has(key)) {
-                        continue;
-                    }
-                    JSValue functionValue = jsGlobalObject.getGlobalObject().get(key);
-                    PropertyDescriptor descriptor = new PropertyDescriptor();
-                    descriptor.setValue(functionValue);
-                    descriptor.setWritable(true);
-                    descriptor.setEnumerable(true);
-                    descriptor.setConfigurable(false);
-                    jsGlobalObject.getGlobalObject().defineProperty(key, descriptor);
-                }
-            }
-
-            // Check if there's a pending exception
-            if (hasPendingException()) {
-                evalError = getPendingException();
-                return null;
-            }
-
-            // Process all pending microtasks before returning
-            if (!suppressEvalMicrotaskProcessing) {
-                processMicrotasks();
-            }
-
-            if (evaluatingRawDynamicImportModule
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportEvalModuleRecord.namespace().finalizeNamespace();
-                dynamicImportEvalModuleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-            }
-
-            return result != null ? result : JSUndefined.INSTANCE;
-        } catch (JSException e) {
-            evalError = e.getErrorValue();
-            return null;
-        } catch (JSSyntaxErrorException e) {
-            evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
-            return null;
-        } catch (JSCompilerException e) {
-            evalError = throwSyntaxError(e.getMessage(), e.getSourceLocation());
-            return null;
-        } catch (JSVirtualMachineException e) {
-            if (e.getJsError() != null) {
-                evalError = e.getJsError();
-            } else if (e.getJsValue() != null) {
-                evalError = e.getJsValue();
-            } else if (hasPendingException()) {
-                evalError = getPendingException();
-            } else {
-                evalError = throwError("VM error: " + e.getMessage());
-            }
-            return null;
-        } catch (JSErrorException e) {
-            evalError = throwError(e);
-            return null;
-        } catch (Exception e) {
-            evalError = throwError("Execution error: " + e.getMessage());
-            return null;
-        } finally {
-            if (evalError != null && dynamicImportEvalModuleRecord != null
-                    && dynamicImportEvalModuleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                dynamicImportModuleCache.remove(dynamicImportEvalModuleRecord.resolvedSpecifier());
-            }
-            if (selfModuleRecord != null) {
-                if (removeSelfModuleRecordAfterEval) {
-                    if (dynamicImportModuleCache.get(selfModuleRecord.resolvedSpecifier()) == selfModuleRecord
-                            && selfModuleRecord.status() == JSDynamicImportModule.Status.EVALUATING) {
-                        dynamicImportModuleCache.remove(selfModuleRecord.resolvedSpecifier());
-                    }
-                } else if (selfModuleRecord.status() == JSDynamicImportModule.Status.EVALUATING
-                        && selfModulePreviousStatus != null) {
-                    selfModuleRecord.setStatus(selfModulePreviousStatus);
-                }
-            }
-            restoreEvalOverlayFrame(moduleNamespaceImportOverlay);
-            popStackFrame();
-            // Clear ALL possible dirty state to ensure clean slate for next eval()
-            stackDepth = callStack.size();
-            inCatchHandler = false;
-            currentThis = jsGlobalObject.getGlobalObject();
-            evalOverlayLookupSuppressionDepth = 0;
-            clearPendingException();
-            clearErrorStackTrace();
-            if (evalError != null) {
-                setPendingException(evalError);
-            }
-        }
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, filename, isModule, isDirectEval, false, false, false, false));
     }
 
     public JSValue evalDirect(String code, String filename, boolean inheritedStrictMode) {
-        return evalOrThrow(eval(code, filename, false, true, false, false, inheritedStrictMode, true));
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, filename, false, true, false, false, inheritedStrictMode, true));
     }
 
     JSValue evalDirectInternal(String code, String filename, boolean inheritedStrictMode) {
-        return eval(code, filename, false, true, false, false, inheritedStrictMode, true);
+        return evalRunner.eval(code, filename, false, true, false, false, inheritedStrictMode, true);
     }
 
     public JSValue evalIndirect(String code, String filename) {
-        return evalOrThrow(eval(code, filename, false, true, false, false, false, false));
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, filename, false, true, false, false, false, false));
     }
 
     JSValue evalIndirectInternal(String code, String filename) {
-        return eval(code, filename, false, true, false, false, false, false);
+        return evalRunner.eval(code, filename, false, true, false, false, false, false);
     }
 
     /**
-     * Convert a null return from the private eval() into a JSException throw.
-     * Used by all public eval methods to maintain the throwing API contract.
+     * The realm's eval-overlay stack.
+     *
+     * @return the eval overlay manager
      */
-    private JSValue evalOrThrow(JSValue result) {
-        if (result == null) {
-            JSValue error = getPendingException();
-            clearPendingException();
-            throw new JSException(error);
-        }
-        return result;
+    EvalOverlayManager evalOverlayManager() {
+        return evalOverlayManager;
     }
 
     public JSValue evalWithProgramLexicalsAsLocals(String code, String filename, boolean isModule) {
-        return evalOrThrow(eval(code, filename, isModule, false, true, true, false, false));
-    }
-
-    JSValue evaluateDynamicImportModule(JSDynamicImportModule moduleRecord) {
-        if (!moduleRecord.hasExportSyntax()) {
-            validateModuleScriptEarlyErrors(moduleRecord.rawSource());
-            return eval(moduleRecord.transformedSource(), moduleRecord.resolvedSpecifier(), true);
-        }
-        String exportBindingName = moduleRecord.exportBindingName();
-        JSObject globalObject = getGlobalObject();
-        JSObject moduleNamespace = moduleRecord.namespace();
-        globalObject.set(PropertyKey.fromString(exportBindingName), moduleNamespace);
-        try {
-            String transformedSource = moduleRecord.transformedSource();
-            return eval(transformedSource, moduleRecord.resolvedSpecifier(), true);
-        } finally {
-            globalObject.delete(PropertyKey.fromString(exportBindingName));
-        }
+        return evalRunner.evalOrThrow(
+                evalRunner.eval(code, filename, isModule, false, true, true, false, false));
     }
 
     /**
-     * Process all module imports in source order, handling side-effect, namespace, and binding
-     * imports together. This ensures deferred modules' async dependencies are pre-evaluated
-     * in the correct position relative to other imports.
+     * Evaluate one module's body, through its transformed source.
+     * <p>
+     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace
+     * through it; the work itself belongs to {@link ModuleLoader}.
+     *
+     * @param moduleRecord the module to evaluate
+     * @return the body's completion value, or its evaluation promise for a top-level-await module
      */
-    private EvalOverlayFrame evaluateModuleImportsInOrder(String code, String filename) {
-        String scanCode = maskModuleComments(code);
-        JSObject globalObject = getGlobalObject();
-        Map<String, JSValue> savedGlobals = new HashMap<>();
-        Set<String> absentKeys = new HashSet<>();
-
-        // Collect all import matches with their positions for ordered processing
-        List<int[]> importPositions = new ArrayList<>();
-        // type 0=side-effect, 1=namespace, 2=binding
-        Matcher sideEffectMatcher = MODULE_SIDE_EFFECT_IMPORT_PATTERN.matcher(scanCode);
-        while (sideEffectMatcher.find()) {
-            importPositions.add(new int[]{sideEffectMatcher.start(), 0, importPositions.size()});
-        }
-        Matcher namespaceMatcher = MODULE_NAMESPACE_IMPORT_PATTERN.matcher(scanCode);
-        while (namespaceMatcher.find()) {
-            importPositions.add(new int[]{namespaceMatcher.start(), 1, importPositions.size()});
-        }
-        Matcher bindingMatcher = MODULE_BINDING_IMPORT_PATTERN.matcher(scanCode);
-        while (bindingMatcher.find()) {
-            importPositions.add(new int[]{bindingMatcher.start(), 2, importPositions.size()});
-        }
-        importPositions.sort((a, b) -> Integer.compare(a[0], b[0]));
-
-        // Suppress microtask processing during import evaluation to prevent
-        // nested eval() calls from prematurely draining the microtask queue.
-        // This ensures async TLA module completions happen after ALL imports
-        // are processed, producing correct evaluation order.
-        boolean prevSuppress = suppressEvalMicrotaskProcessing;
-        suppressEvalMicrotaskProcessing = true;
-        try {
-            // Re-match each import in source order
-            for (int[] pos : importPositions) {
-                int type = pos[1];
-                int start = pos[0];
-
-                if (type == 0) {
-                    // Side-effect import
-                    sideEffectMatcher.reset(scanCode);
-                    if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                        String specifier = decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
-                        Map<String, String> importAttributes = extractImportAttributes(sideEffectMatcher.group(0));
-                        loadDynamicImportModule(specifier, filename, importAttributes);
-                        // If this side-effect import was generated for an export-from,
-                        // resolve the corresponding re-export binding immediately so
-                        // self-imports see the re-exported names in the namespace.
-                        resolveIncrementalReExport(specifier, filename);
-                    }
-                } else if (type == 1) {
-                    // Namespace import
-                    namespaceMatcher.reset(scanCode);
-                    if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
-                        String deferKeyword = namespaceMatcher.group(1);
-                        String localName = namespaceMatcher.group(2);
-                        String specifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-                        Map<String, String> importAttributes = extractImportAttributes(namespaceMatcher.group(0));
-                        JSObject namespaceObject;
-                        if ("defer".equals(deferKeyword)) {
-                            namespaceObject = loadDynamicImportModuleDeferred(specifier, filename, importAttributes);
-                        } else {
-                            namespaceObject = loadDynamicImportModule(specifier, filename, importAttributes);
-                        }
-                        bindImportOverlayValue(globalObject, savedGlobals, absentKeys, localName, namespaceObject);
-                    }
-                } else {
-                    // Binding import
-                    bindingMatcher.reset(scanCode);
-                    if (bindingMatcher.find(start) && bindingMatcher.start() == start) {
-                        String importClause = bindingMatcher.group(1).trim();
-                        if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                            continue;
-                        }
-                        String specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                        Map<String, String> importAttributes = extractImportAttributes(bindingMatcher.group(0));
-                        if (specifier.endsWith(".json")
-                                && importAttributes != null
-                                && "json".equals(importAttributes.get("type"))) {
-                            if (hasNonDefaultNamedBindings(importClause)) {
-                                throw new JSSyntaxErrorException(
-                                        "JSON modules do not support named exports");
-                            }
-                        }
-                        if (importAttributes != null) {
-                            String attrType = importAttributes.get("type");
-                            if ("text".equals(attrType) || "bytes".equals(attrType)) {
-                                if (hasNonDefaultNamedBindings(importClause)) {
-                                    throw new JSSyntaxErrorException(
-                                            (("text".equals(attrType)) ? "Text" : "Bytes")
-                                                    + " modules do not support named exports");
-                                }
-                            }
-                        }
-                        JSObject namespaceObject = loadDynamicImportModule(specifier, filename, importAttributes);
-                        applyImportClauseBindings(
-                                globalObject,
-                                savedGlobals,
-                                absentKeys,
-                                namespaceObject,
-                                importClause);
-                    }
-                }
-            }
-        } finally {
-            suppressEvalMicrotaskProcessing = prevSuppress;
-        }
-
-        // Post-import linking validation: verify that all named import bindings
-        // actually exist in their (now finalized) module namespaces.
-        // ES2024 16.2.1.6.3: Missing bindings are SyntaxError at link time.
-        for (int[] pos : importPositions) {
-            if (pos[1] != 2) {
-                continue; // only check binding imports
-            }
-            bindingMatcher.reset(scanCode);
-            if (bindingMatcher.find(pos[0]) && bindingMatcher.start() == pos[0]) {
-                String importClause = bindingMatcher.group(1).trim();
-                if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                    continue;
-                }
-                Map<String, String> importAttributes = extractImportAttributes(bindingMatcher.group(0));
-                if (importAttributes != null) {
-                    String importType = importAttributes.get("type");
-                    if ("text".equals(importType) || "bytes".equals(importType)) {
-                        continue;
-                    }
-                }
-                String specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                String resolvedSpec;
-                try {
-                    resolvedSpec = resolveDynamicImportSpecifier(specifier, filename, specifier);
-                } catch (Exception e) {
-                    continue;
-                }
-                JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpec);
-                if (moduleRecord != null
-                        && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED
-                        && moduleRecord.namespace().isFinalized()) {
-                    validateNamedImportBindings(moduleRecord.namespace(), importClause);
-                } else if (moduleRecord != null
-                        && (moduleRecord.status() == JSDynamicImportModule.Status.LOADING
-                        || moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING)) {
-                    // For self-referencing or circular imports, the namespace may not be finalized.
-                    // Validate through recursive ResolveExport instead of namespace properties.
-                    validateNamedImportBindingsAgainstExplicitExports(moduleRecord, importClause);
-                }
-            }
-        }
-
-        // Drain microtasks to settle any EVALUATING_ASYNC modules before
-        // the module body runs. This ensures TLA deps complete in the right order.
-        if (!suppressEvalMicrotaskProcessing) {
-            processMicrotasks();
-        }
-
-        // ES2024: If any imported module's evaluation failed (e.g., TLA rejection),
-        // propagate the error to the importing module before its body runs.
-        // Skip deferred imports — their errors are deferred until namespace access.
-        for (int[] pos : importPositions) {
-            int type = pos[1];
-            int start = pos[0];
-            String specifier = null;
-            if (type == 0) {
-                sideEffectMatcher.reset(scanCode);
-                if (sideEffectMatcher.find(start) && sideEffectMatcher.start() == start) {
-                    specifier = decodeModuleStringLiteralValue(sideEffectMatcher.group(2));
-                }
-            } else if (type == 1) {
-                namespaceMatcher.reset(scanCode);
-                if (namespaceMatcher.find(start) && namespaceMatcher.start() == start) {
-                    // Skip deferred namespace imports — evaluation errors are deferred
-                    // until the namespace is accessed (EnsureDeferredNamespaceEvaluation).
-                    String deferKeyword = namespaceMatcher.group(1);
-                    if ("defer".equals(deferKeyword)) {
-                        continue;
-                    }
-                    specifier = decodeModuleStringLiteralValue(namespaceMatcher.group(4));
-                }
-            } else {
-                bindingMatcher.reset(scanCode);
-                if (bindingMatcher.find(start) && bindingMatcher.start() == start) {
-                    // Skip deferred namespace imports that also match the binding pattern.
-                    // These are handled by the namespace (type==1) branch above.
-                    String importClause = bindingMatcher.group(1).trim();
-                    if (importClause.startsWith("*") || importClause.startsWith("defer *")) {
-                        continue;
-                    }
-                    specifier = decodeModuleStringLiteralValue(bindingMatcher.group(3));
-                }
-            }
-            if (specifier != null) {
-                try {
-                    String resolvedSpec = resolveDynamicImportSpecifier(specifier, filename, specifier);
-                    JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpec);
-                    if (moduleRecord != null
-                            && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                        throw new JSException(moduleRecord.evaluationError());
-                    }
-                } catch (JSException e) {
-                    throw e;
-                } catch (Exception ignored) {
-                    // Specifier resolution failure is handled elsewhere
-                }
-            }
-        }
-
-        if (savedGlobals.isEmpty() && absentKeys.isEmpty()) {
-            return null;
-        }
-        return new EvalOverlayFrame(savedGlobals, absentKeys);
+    JSValue evaluateDynamicImportModule(JSDynamicImportModule moduleRecord) {
+        return moduleLoader.evaluateDynamicImportModule(moduleRecord);
     }
 
     /**
@@ -2954,578 +647,32 @@ public final class JSContext implements AutoCloseable {
         this.strictMode = false;
     }
 
-    private void extractDestructuringNames(String innerText, List<String> names) {
-        // Split on top-level commas and extract bound names
-        String trimmed = innerText.trim();
-        if (trimmed.isEmpty()) {
-            return;
-        }
-        int depth = 0;
-        int start = 0;
-        for (int i = 0; i < trimmed.length(); i++) {
-            char ch = trimmed.charAt(i);
-            if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ',' && depth == 0) {
-                extractSingleDestructuringName(trimmed.substring(start, i).trim(), names);
-                start = i + 1;
-            }
-        }
-        extractSingleDestructuringName(trimmed.substring(start).trim(), names);
-    }
-
-    /**
-     * The name a {@code function} or {@code class} declaration binds, decoded.
-     * <p>
-     * Decoded because the declared binding is the decoded name: {@code export function café()}
-     * declares {@code café}, and the generated export bookkeeping has to name it the way the rest of
-     * the module names it.
-     *
-     * @param exportClause the declaration text, with {@code export} already removed
-     * @return the bound name, or null when the declaration is anonymous
-     */
-    private String extractExportedFunctionOrClassName(String exportClause) {
-        Matcher functionMatcher = DYNAMIC_IMPORT_EXPORT_FUNCTION_NAME_PATTERN.matcher(exportClause);
-        if (functionMatcher.find()) {
-            return decodeIdentifierEscapes(functionMatcher.group(1));
-        }
-        Matcher classMatcher = DYNAMIC_IMPORT_EXPORT_CLASS_NAME_PATTERN.matcher(exportClause);
-        if (classMatcher.find()) {
-            String candidateName = decodeIdentifierEscapes(classMatcher.group(1));
-            if (JSKeyword.EXTENDS.equals(candidateName)) {
-                return null;
-            }
-            return candidateName;
-        }
-        return null;
-    }
-
-    private Map<String, String> extractImportAttributes(String importStatement) {
-        Matcher withMatcher = MODULE_WITH_CLAUSE_PATTERN.matcher(importStatement);
-        if (!withMatcher.find()) {
-            return null;
-        }
-        String withBody = withMatcher.group(1).trim();
-        if (withBody.isEmpty()) {
-            return new HashMap<>();
-        }
-        Map<String, String> attributes = new HashMap<>();
-        String[] pairs = withBody.split(",");
-        for (String pair : pairs) {
-            String trimmed = pair.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            int colonIndex = trimmed.indexOf(':');
-            if (colonIndex < 0) {
-                continue;
-            }
-            String key = trimmed.substring(0, colonIndex).trim();
-            String value = trimmed.substring(colonIndex + 1).trim();
-            // Remove surrounding quotes from value
-            if (value.length() >= 2
-                    && ((value.startsWith("'") && value.endsWith("'"))
-                    || (value.startsWith("\"") && value.endsWith("\"")))) {
-                value = value.substring(1, value.length() - 1);
-            }
-            attributes.put(key, value);
-        }
-        return attributes;
-    }
-
-    private List<String> extractSimpleDeclarationNames(String declarationSource) {
-        String declarationText = declarationSource.trim();
-        int firstSpaceIndex = declarationText.indexOf(' ');
-        if (firstSpaceIndex < 0 || firstSpaceIndex >= declarationText.length() - 1) {
-            return List.of();
-        }
-        String declaratorsText = declarationText.substring(firstSpaceIndex + 1).trim();
-        if (declaratorsText.endsWith(";")) {
-            declaratorsText = declaratorsText.substring(0, declaratorsText.length() - 1).trim();
-        }
-        if (declaratorsText.isEmpty()) {
-            return List.of();
-        }
-        // Split on commas at the top level only (not inside parens, brackets, braces, or strings)
-        List<String> declarators = new ArrayList<>();
-        int depth = 0;
-        int start = 0;
-        boolean inString = false;
-        char stringChar = 0;
-        for (int i = 0; i < declaratorsText.length(); i++) {
-            char ch = declaratorsText.charAt(i);
-            if (inString) {
-                if (ch == stringChar && (i == 0 || declaratorsText.charAt(i - 1) != '\\')) {
-                    inString = false;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                inString = true;
-                stringChar = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == ',' && depth == 0) {
-                declarators.add(declaratorsText.substring(start, i));
-                start = i + 1;
-            }
-        }
-        declarators.add(declaratorsText.substring(start));
-        List<String> declarationNames = new ArrayList<>(declarators.size());
-        for (String declarator : declarators) {
-            String declaratorText = declarator.trim();
-            int assignmentIndex = findTopLevelAssignment(declaratorText);
-            if (assignmentIndex >= 0) {
-                declaratorText = declaratorText.substring(0, assignmentIndex).trim();
-            }
-            if (!declaratorText.isEmpty()) {
-                if (declaratorText.startsWith("{") && declaratorText.endsWith("}")) {
-                    // Object destructuring pattern: { a, b, c: d } → extract bound names
-                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1), declarationNames);
-                } else if (declaratorText.startsWith("[") && declaratorText.endsWith("]")) {
-                    // Array destructuring pattern: [a, b, c] → extract bound names
-                    extractDestructuringNames(declaratorText.substring(1, declaratorText.length() - 1), declarationNames);
-                } else {
-                    // The binding is called by its decoded name: `export const \\u0078 = 1` declares
-                    // `x`, and the generated export bookkeeping has to name it that way too.
-                    declarationNames.add(decodeIdentifierEscapes(declaratorText));
-                }
-            }
-        }
-        return declarationNames;
-    }
-
-    private void extractSingleDestructuringName(String element, List<String> names) {
-        if (element.isEmpty() || element.equals("...")) {
-            return;
-        }
-        // Handle rest element: ...name
-        if (element.startsWith("...")) {
-            element = element.substring(3).trim();
-        }
-        // Handle rename: key: value
-        int colonIndex = element.indexOf(':');
-        if (colonIndex >= 0) {
-            element = element.substring(colonIndex + 1).trim();
-        }
-        // Handle default value: name = defaultVal
-        int eqIndex = findTopLevelAssignment(element);
-        if (eqIndex >= 0) {
-            element = element.substring(0, eqIndex).trim();
-        }
-        // Check for nested destructuring
-        if (element.startsWith("{") && element.endsWith("}")) {
-            extractDestructuringNames(element.substring(1, element.length() - 1), names);
-        } else if (element.startsWith("[") && element.endsWith("]")) {
-            extractDestructuringNames(element.substring(1, element.length() - 1), names);
-        } else if (!element.isEmpty()) {
-            names.add(decodeIdentifierEscapes(element));
-        }
-    }
-
-    /**
-     * Find the end of a function/class declaration body in the given text.
-     * Scans for the first '{' and its matching '}', returning the index
-     * just after the closing brace. Returns -1 if not found.
-     */
-    private int findEndOfDeclarationBody(String text) {
-        String trimmedText = text.stripLeading();
-        if (trimmedText.startsWith(JSKeyword.CLASS)
-                && (trimmedText.length() == JSKeyword.CLASS.length()
-                || !Character.isJavaIdentifierPart(trimmedText.charAt(JSKeyword.CLASS.length())))) {
-            int classBodyOpenBraceIndex = findLikelyClassBodyOpenBrace(text);
-            if (classBodyOpenBraceIndex < 0) {
-                return -1;
-            }
-            int classBodyCloseBraceIndex = findMatchingClosingBrace(text, classBodyOpenBraceIndex);
-            if (classBodyCloseBraceIndex < 0) {
-                return -1;
-            }
-            return classBodyCloseBraceIndex + 1;
-        }
-        int braceDepth = 0;
-        boolean foundOpen = false;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplate = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (inLineComment) {
-                if (ch == '\n') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                if (ch == '*' && i + 1 < text.length() && text.charAt(i + 1) == '/') {
-                    inBlockComment = false;
-                    i++;
-                }
-                continue;
-            }
-            if (ch == '/' && i + 1 < text.length()) {
-                if (text.charAt(i + 1) == '/') {
-                    inLineComment = true;
-                    i++;
-                    continue;
-                }
-                if (text.charAt(i + 1) == '*') {
-                    inBlockComment = true;
-                    i++;
-                    continue;
-                }
-            }
-            if (inSingleQuote) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-            if (inDoubleQuote) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplate) {
-                if (ch == '\\') {
-                    i++;
-                } else if (ch == '`') {
-                    inTemplate = false;
-                }
-                continue;
-            }
-            if (ch == '\'') {
-                inSingleQuote = true;
-            } else if (ch == '"') {
-                inDoubleQuote = true;
-            } else if (ch == '`') {
-                inTemplate = true;
-            } else if (ch == '{') {
-                foundOpen = true;
-                braceDepth++;
-            } else if (ch == '}') {
-                braceDepth--;
-                if (foundOpen && braceDepth == 0) {
-                    return i + 1;
-                }
-            }
-        }
-        return -1;
-    }
-
-    private int findLikelyClassBodyOpenBrace(String text) {
-        int openBraceIndex = text.indexOf('{');
-        while (openBraceIndex >= 0) {
-            int closeBraceIndex = findMatchingClosingBrace(text, openBraceIndex);
-            if (closeBraceIndex < 0) {
-                return -1;
-            }
-            int nextTokenIndex = skipWhitespace(text, closeBraceIndex + 1);
-            if (nextTokenIndex >= text.length()) {
-                return openBraceIndex;
-            }
-            if (!isExpressionContinuationCharacter(text.charAt(nextTokenIndex))) {
-                return openBraceIndex;
-            }
-            openBraceIndex = text.indexOf('{', openBraceIndex + 1);
-        }
-        return -1;
-    }
-
-    /**
-     * Find the matching '}' for the '{' at the given position, skipping quoted strings.
-     */
-    private int findMatchingCloseBrace(String text, int openBraceIndex) {
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = openBraceIndex + 1; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (ch == '}' && !inSingleQuote && !inDoubleQuote) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private int findMatchingClosingBrace(String text, int openBraceIndex) {
-        if (openBraceIndex < 0 || openBraceIndex >= text.length() || text.charAt(openBraceIndex) != '{') {
-            return -1;
-        }
-        int braceDepth = 1;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplate = false;
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        for (int index = openBraceIndex + 1; index < text.length(); index++) {
-            char ch = text.charAt(index);
-            if (inLineComment) {
-                if (ch == '\n') {
-                    inLineComment = false;
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                if (ch == '*' && index + 1 < text.length() && text.charAt(index + 1) == '/') {
-                    inBlockComment = false;
-                    index++;
-                }
-                continue;
-            }
-            if (ch == '/' && index + 1 < text.length()) {
-                if (text.charAt(index + 1) == '/') {
-                    inLineComment = true;
-                    index++;
-                    continue;
-                }
-                if (text.charAt(index + 1) == '*') {
-                    inBlockComment = true;
-                    index++;
-                    continue;
-                }
-            }
-            if (inSingleQuote) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-            if (inDoubleQuote) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplate) {
-                if (ch == '\\') {
-                    index++;
-                } else if (ch == '`') {
-                    inTemplate = false;
-                }
-                continue;
-            }
-            if (ch == '\'') {
-                inSingleQuote = true;
-                continue;
-            }
-            if (ch == '"') {
-                inDoubleQuote = true;
-                continue;
-            }
-            if (ch == '`') {
-                inTemplate = true;
-                continue;
-            }
-            if (ch == '{') {
-                braceDepth++;
-            } else if (ch == '}') {
-                braceDepth--;
-                if (braceDepth == 0) {
-                    return index;
-                }
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * Find the index of " as " keyword at the top level (not inside quotes).
-     * Returns the index of 'a' in "as", or -1 if not found.
-     */
-    private int findTopLevelAs(String text) {
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = 0; i < text.length() - 3; i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (!inSingleQuote && !inDoubleQuote
-                    && Character.isWhitespace(ch)
-                    && text.charAt(i + 1) == 'a'
-                    && text.charAt(i + 2) == 's'
-                    && i + 3 < text.length()
-                    && Character.isWhitespace(text.charAt(i + 3))) {
-                return i + 1;
-            }
-        }
-        return -1;
-    }
-
-    private int findTopLevelAssignment(String text) {
-        int depth = 0;
-        boolean inString = false;
-        char stringChar = 0;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (inString) {
-                if (ch == stringChar && (i == 0 || text.charAt(i - 1) != '\\')) {
-                    inString = false;
-                }
-            } else if (ch == '\'' || ch == '"' || ch == '`') {
-                inString = true;
-                stringChar = ch;
-            } else if (ch == '(' || ch == '[' || ch == '{') {
-                depth++;
-            } else if (ch == ')' || ch == ']' || ch == '}') {
-                depth--;
-            } else if (ch == '=' && depth == 0 && i + 1 < text.length() && text.charAt(i + 1) != '=') {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /**
-     * ES2024 16.2.1.5.2.4 GatherAvailableAncestors.
-     * Collects all ancestor modules whose pending async dependencies have all resolved.
-     */
-    private void gatherAvailableAncestors(JSDynamicImportModule module,
-                                          List<JSDynamicImportModule> execList) {
-        List<JSDynamicImportModule> dependents = new ArrayList<>(module.pendingDependents());
-        module.pendingDependents().clear();
-        for (JSDynamicImportModule dependent : dependents) {
-            if (execList.contains(dependent)) {
-                continue;
-            }
-            dependent.decrementPendingAsyncDependencyCount();
-            if (dependent.pendingAsyncDependencyCount() <= 0) {
-                execList.add(dependent);
-                if (!dependent.hasTLA()) {
-                    // Non-TLA modules will execute synchronously, so their ancestors
-                    // might also become available immediately.
-                    gatherAvailableAncestors(dependent, execList);
-                }
-            }
-        }
-    }
-
-    private void gatherDeferredAsyncDependencySpecifiers(
-            String resolvedSpecifier,
-            String sourceCode,
-            Set<String> visitedSpecifiers,
-            Set<String> asyncDependencySpecifiers) {
-        if (!visitedSpecifiers.add(resolvedSpecifier)) {
-            return;
-        }
-        String scanSourceCode = maskModuleComments(sourceCode);
-        if (MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(scanSourceCode).find()) {
-            asyncDependencySpecifiers.add(resolvedSpecifier);
-            return;
-        }
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
-        while (matcher.find()) {
-            String childSpecifier = decodeModuleStringLiteralValue(matcher.group(1));
-            String resolvedChildSpecifier = resolveDynamicImportSpecifier(
-                    childSpecifier,
-                    resolvedSpecifier,
-                    childSpecifier);
-            String childSourceCode;
-            try {
-                JSDynamicImportModule childRecord = dynamicImportModuleCache.get(resolvedChildSpecifier);
-                if (childRecord != null && childRecord.rawSource() != null && !childRecord.rawSource().isEmpty()) {
-                    childSourceCode = childRecord.rawSource();
-                } else {
-                    childSourceCode = Files.readString(Path.of(resolvedChildSpecifier));
-                }
-            } catch (IOException ioException) {
-                throw new JSException(throwTypeError("Cannot find module '" + childSpecifier + "'"));
-            }
-            gatherDeferredAsyncDependencySpecifiers(
-                    resolvedChildSpecifier,
-                    childSourceCode,
-                    visitedSpecifiers,
-                    asyncDependencySpecifiers);
-        }
-    }
-
-    /**
-     * A prefix for this module's generated bindings that the module's own source does not use.
-     * <p>
-     * The transformer declares its bookkeeping bindings in the module's own scope, where they are
-     * ordinary, writable, observable names. {@code __qjs4jDefaultExport$0} is a legal identifier, so
-     * a module that happened to declare it had its value replaced by the transformer's — silently,
-     * and only for that one name. Choosing a prefix the source does not contain keeps the generated
-     * names out of the author's way whatever the author writes.
-     * <p>
-     * Whether the source uses the prefix is asked of the identifiers the lexer produces, not of the
-     * source text. An identifier may be written with Unicode escapes — {@code __qjs4jDefault
-     * Export$0} is the identifier {@code __qjs4jDefaultExport$0} — and a substring search does not
-     * see through those, so a module that legally declared the name under an escape was rejected
-     * with a syntax error in generated source. The decoded name is the one that has to be avoided,
-     * because the decoded name is what the binding is called.
-     * <p>
-     * This is containment, not a fix, and it is not complete containment. The generated bindings
-     * are still declared in the module's own scope and are still observable from it: direct eval
-     * can build any name at run time — {@code eval('typeof __q' + 'js4jModuleExports')} answers
-     * {@code "object"} where it must answer {@code "undefined"} — and no choice of prefix can hide
-     * a binding from a name the source never spells. Only real module environments, which do not
-     * put bookkeeping in the author's scope at all, remove them.
-     *
-     * @param sourceCode the module source the generated bindings will sit beside
-     * @return a prefix no identifier in the source begins with
-     */
-    private String generatedModuleNamePrefix(String sourceCode) {
-        String prefix = "__qjs4j";
-        if (sourceCode == null || (!sourceCode.contains("qjs4j") && !sourceCode.contains("\\u"))) {
-            // Neither the text nor an escape in it can decode to a name starting with the prefix.
-            return prefix;
-        }
-        // Null when the source does not tokenise, in which case the text search is all there is —
-        // and the compiler is about to reject the source anyway.
-        Set<String> identifierNames = moduleIdentifierNames(sourceCode);
-        for (int salt = -1; salt < Integer.MAX_VALUE; salt++) {
-            String candidate = salt < 0 ? prefix : prefix + salt + "_";
-            boolean taken = identifierNames == null
-                    ? sourceCode.contains(candidate)
-                    : identifierNames.stream().anyMatch(name -> name.startsWith(candidate));
-            if (!taken) {
-                return candidate;
-            }
-        }
-        return prefix;
-    }
-
-    /**
-     * Get the AsyncFunction constructor (internal use only).
-     * Used for setting up prototype chains for async functions.
-     */
     public JSObject getAsyncFunctionConstructor() {
-        return asyncFunctionConstructor;
+        return realmIntrinsics.getAsyncFunctionConstructor();
     }
 
     public JSObject getAsyncGeneratorFunctionPrototype() {
-        return asyncGeneratorFunctionPrototype;
+        return realmIntrinsics.getAsyncGeneratorFunctionPrototype();
     }
 
     public JSObject getAsyncGeneratorPrototype() {
-        return asyncGeneratorPrototype;
+        return realmIntrinsics.getAsyncGeneratorPrototype();
+    }
+
+    JSObject getCachedDatePrototype() {
+        return realmIntrinsics.getCachedDatePrototype();
+    }
+
+    JSObject getCachedPromisePrototype() {
+        return realmIntrinsics.getCachedPromisePrototype();
     }
 
     public JSObject getCachedRegExpConstructor() {
-        return cachedRegExpConstructor;
+        return realmIntrinsics.getCachedRegExpConstructor();
     }
 
     public JSObject getCachedRegExpPrototype() {
-        return cachedRegExpPrototype;
+        return realmIntrinsics.getCachedRegExpPrototype();
     }
 
     /**
@@ -3556,115 +703,16 @@ public final class JSContext implements AutoCloseable {
         return currentThis;
     }
 
-    private String getDynamicImportCacheKey(String resolvedSpecifier, Map<String, String> importAttributes) {
-        if (importAttributes == null) {
-            return resolvedSpecifier;
-        }
-        String importType = importAttributes.get("type");
-        if ("text".equals(importType) || "bytes".equals(importType)) {
-            return resolvedSpecifier + "\u0000type=" + importType;
-        }
-        return resolvedSpecifier;
-    }
-
-    private String getDynamicImportModuleExport(
-            JSDynamicImportModule moduleRecord,
-            String exportName,
-            String targetSpecifier) {
-        DynamicImportExportResolution resolution = resolveDynamicImportExport(
-                moduleRecord,
-                exportName,
-                new HashSet<>(),
-                new HashSet<>());
-        if (resolution.ambiguous()) {
-            throw new JSException(throwSyntaxError("ambiguous indirect export: " + exportName));
-        }
-        if (!resolution.found()) {
-            throw new JSException(throwSyntaxError(
-                    "module '" + targetSpecifier + "' does not provide export '" + exportName + "'"));
-        }
-        return resolution.bindingName();
-    }
-
-    /**
-     * Get the error stack trace.
-     */
     public List<StackTraceElement> getErrorStackTrace() {
-        return new ArrayList<>(errorStackTrace);
-    }
-
-    private List<JSPromise> getEvaluatingAsyncDependencyPromises(JSDynamicImportModule moduleRecord) {
-        String scanSource = maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
-        List<JSPromise> dependencyPromises = new ArrayList<>();
-        Set<String> seenSpecifiers = new HashSet<>();
-        JSDynamicImportModule moduleCycleRoot =
-                moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
-        while (matcher.find()) {
-            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord == null) {
-                    continue;
-                }
-                JSDynamicImportModule effectiveDep = depRecord;
-                if (depRecord.cycleRoot() != null) {
-                    JSDynamicImportModule depCycleRoot = depRecord.cycleRoot();
-                    if (depCycleRoot != moduleCycleRoot) {
-                        effectiveDep = depCycleRoot;
-                    }
-                }
-                if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                        && effectiveDep.asyncEvaluationPromise() != null
-                        && seenSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                    dependencyPromises.add(effectiveDep.asyncEvaluationPromise());
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Discarding the Java exception is not enough: the
-                // matching throwTypeError also left a pending exception on the context, and a
-                // later activation would otherwise pick up that stale error.
-                clearPendingException();
-            }
-        }
-        return dependencyPromises;
+        return errorReporter.getErrorStackTrace();
     }
 
     public JSContext getFunctionRealm(JSObject constructor) {
-        return getFunctionRealmInternal(constructor, 0);
+        return realmIntrinsics.getFunctionRealm(constructor);
     }
 
-    private JSContext getFunctionRealmInternal(JSValue value, int depth) {
-        if (depth > 1000) {
-            throwTypeError("too much recursion");
-            return this;
-        }
-        if (value instanceof JSBoundFunction boundFunction) {
-            return getFunctionRealmInternal(boundFunction.getTarget(), depth + 1);
-        }
-        if (value instanceof JSProxy proxy) {
-            if (proxy.isRevoked()) {
-                throwTypeError("Cannot perform 'get' on a proxy that has been revoked");
-                return this;
-            }
-            return getFunctionRealmInternal(proxy.getTarget(), depth + 1);
-        }
-        if (value instanceof JSFunction function) {
-            JSContext functionContext = function.getHomeContext();
-            if (functionContext != null) {
-                return functionContext;
-            }
-        }
-        return this;
-    }
-
-    /**
-     * Get the GeneratorFunction prototype (internal use only).
-     * Used for setting up prototype chains for generator functions.
-     */
     public JSObject getGeneratorFunctionPrototype() {
-        return generatorFunctionPrototype;
+        return realmIntrinsics.getGeneratorFunctionPrototype();
     }
 
     /**
@@ -3676,7 +724,7 @@ public final class JSContext implements AutoCloseable {
      * @return a snapshot of the global lexical binding names
      */
     public Set<String> getGlobalLexicalBindingNames() {
-        return new HashSet<>(globalLexicalBindings.keySet());
+        return globalLexicalScope.getBindingNames();
     }
 
     public JSObject getGlobalObject() {
@@ -3699,127 +747,15 @@ public final class JSContext implements AutoCloseable {
     }
 
     public String getIntrinsicDefaultPrototypeName(JSFunction function) {
-        JSConstructorType constructorType = function.getConstructorType();
-        if (constructorType != null) {
-            return switch (constructorType) {
-                case AGGREGATE_ERROR -> JSAggregateError.NAME;
-                case ARRAY -> JSArray.NAME;
-                case ARRAY_BUFFER -> JSArrayBuffer.NAME;
-                case ASYNC_DISPOSABLE_STACK -> JSAsyncDisposableStack.NAME;
-                case BIG_INT_OBJECT -> JSBigIntObject.NAME;
-                case BOOLEAN_OBJECT -> JSBooleanObject.NAME;
-                case DATA_VIEW -> JSDataView.NAME;
-                case DATE -> JSDate.NAME;
-                case DISPOSABLE_STACK -> JSDisposableStack.NAME;
-                case ERROR -> JSError.NAME;
-                case EVAL_ERROR -> JSEvalError.NAME;
-                case FINALIZATION_REGISTRY -> JSFinalizationRegistry.NAME;
-                case MAP -> JSMap.NAME;
-                case NUMBER_OBJECT -> JSNumberObject.NAME;
-                case PROMISE -> JSPromise.NAME;
-                case PROXY -> JSObject.NAME;
-                case RANGE_ERROR -> JSRangeError.NAME;
-                case REFERENCE_ERROR -> JSReferenceError.NAME;
-                case REGEXP -> JSRegExp.NAME;
-                case SET -> JSSet.NAME;
-                case SHARED_ARRAY_BUFFER -> JSSharedArrayBuffer.NAME;
-                case STRING_OBJECT -> JSStringObject.NAME;
-                case SUPPRESSED_ERROR -> JSSuppressedError.NAME;
-                case SYMBOL_OBJECT -> JSSymbolObject.NAME;
-                case SYNTAX_ERROR -> JSSyntaxError.NAME;
-                case TYPED_ARRAY_BIGINT64 -> JSBigInt64Array.NAME;
-                case TYPED_ARRAY_BIGUINT64 -> JSBigUint64Array.NAME;
-                case TYPED_ARRAY_FLOAT16 -> JSFloat16Array.NAME;
-                case TYPED_ARRAY_FLOAT32 -> JSFloat32Array.NAME;
-                case TYPED_ARRAY_FLOAT64 -> JSFloat64Array.NAME;
-                case TYPED_ARRAY_INT16 -> JSInt16Array.NAME;
-                case TYPED_ARRAY_INT32 -> JSInt32Array.NAME;
-                case TYPED_ARRAY_INT8 -> JSInt8Array.NAME;
-                case TYPED_ARRAY_UINT16 -> JSUint16Array.NAME;
-                case TYPED_ARRAY_UINT32 -> JSUint32Array.NAME;
-                case TYPED_ARRAY_UINT8 -> JSUint8Array.NAME;
-                case TYPED_ARRAY_UINT8_CLAMPED -> JSUint8ClampedArray.NAME;
-                case TYPE_ERROR -> JSTypeError.NAME;
-                case URI_ERROR -> JSURIError.NAME;
-                case WEAK_MAP -> JSWeakMap.NAME;
-                case WEAK_REF -> JSWeakRef.NAME;
-                case WEAK_SET -> JSWeakSet.NAME;
-            };
-        }
-        if (function instanceof JSClass) {
-            return JSObject.NAME;
-        }
-        String functionName = function.getName();
-        if (JSFunction.NAME.equals(functionName)) {
-            return JSFunction.NAME;
-        }
-        if ("GeneratorFunction".equals(functionName)) {
-            return "GeneratorFunction";
-        }
-        if ("AsyncFunction".equals(functionName)) {
-            return "AsyncFunction";
-        }
-        if ("AsyncGeneratorFunction".equals(functionName)) {
-            return "AsyncGeneratorFunction";
-        }
-        if (JSIterator.NAME.equals(functionName)) {
-            return JSIterator.NAME;
-        }
-        return JSObject.NAME;
-    }
-
-    private JSObject getIntrinsicPrototype(JSContext realmContext, String intrinsicDefaultPrototypeName) {
-        if (JSObject.NAME.equals(intrinsicDefaultPrototypeName)) {
-            return realmContext.getObjectPrototype();
-        }
-        if ("GeneratorFunction".equals(intrinsicDefaultPrototypeName)) {
-            JSObject generatorFunctionPrototype = realmContext.getGeneratorFunctionPrototype();
-            if (generatorFunctionPrototype != null) {
-                return generatorFunctionPrototype;
-            }
-            return realmContext.getObjectPrototype();
-        }
-        if ("AsyncGeneratorFunction".equals(intrinsicDefaultPrototypeName)) {
-            JSObject asyncGeneratorFunctionPrototype = realmContext.getAsyncGeneratorFunctionPrototype();
-            if (asyncGeneratorFunctionPrototype != null) {
-                return asyncGeneratorFunctionPrototype;
-            }
-            return realmContext.getObjectPrototype();
-        }
-        if ("AsyncFunction".equals(intrinsicDefaultPrototypeName)) {
-            JSObject asyncFunctionConstructor = realmContext.getAsyncFunctionConstructor();
-            if (asyncFunctionConstructor != null) {
-                JSValue asyncFunctionPrototype = asyncFunctionConstructor.get(PropertyKey.PROTOTYPE);
-                if (asyncFunctionPrototype instanceof JSObject asyncFunctionPrototypeObject) {
-                    return asyncFunctionPrototypeObject;
-                }
-            }
-            JSValue fallbackFunctionConstructor = realmContext.getGlobalObject().get(JSFunction.NAME);
-            if (fallbackFunctionConstructor instanceof JSObject fallbackFunctionObject) {
-                JSValue fallbackFunctionPrototype = fallbackFunctionObject.get(PropertyKey.PROTOTYPE);
-                if (fallbackFunctionPrototype instanceof JSObject fallbackFunctionPrototypeObject) {
-                    return fallbackFunctionPrototypeObject;
-                }
-            }
-            return realmContext.getObjectPrototype();
-        }
-
-        JSValue intrinsicConstructor = realmContext.getGlobalObject().get(intrinsicDefaultPrototypeName);
-        if (intrinsicConstructor instanceof JSObject intrinsicObject) {
-            JSValue intrinsicPrototype = intrinsicObject.get(PropertyKey.PROTOTYPE);
-            if (intrinsicPrototype instanceof JSObject intrinsicPrototypeObject) {
-                return intrinsicPrototypeObject;
-            }
-        }
-        return realmContext.getObjectPrototype();
+        return realmIntrinsics.getIntrinsicDefaultPrototypeName(function);
     }
 
     public JSObject getIteratorPrototype(String tag) {
-        return iteratorPrototypes.get(tag);
+        return realmIntrinsics.getIteratorPrototype(tag);
     }
 
     public Collection<JSObject> getIteratorPrototypes() {
-        return iteratorPrototypes.values();
+        return realmIntrinsics.getIteratorPrototypes();
     }
 
     public JSGlobalObject getJSGlobalObject() {
@@ -3882,7 +818,7 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject getObjectPrototype() {
-        return cachedObjectPrototype;
+        return realmIntrinsics.getObjectPrototype();
     }
 
     public JSValue getPendingException() {
@@ -3894,51 +830,31 @@ public final class JSContext implements AutoCloseable {
     }
 
     public JSObject getPrototypeFromConstructor(JSObject constructor, String intrinsicDefaultPrototypeName) {
-        JSValue prototype = constructor.get(PropertyKey.PROTOTYPE);
-        if (hasPendingException()) {
-            return null;
-        }
-        if (prototype instanceof JSObject prototypeObject) {
-            return prototypeObject;
-        }
-
-        JSContext functionRealm = getFunctionRealm(constructor);
-        if (hasPendingException()) {
-            return null;
-        }
-        return getIntrinsicPrototype(functionRealm, intrinsicDefaultPrototypeName);
+        return realmIntrinsics.getPrototypeFromConstructor(constructor, intrinsicDefaultPrototypeName);
     }
 
     public String getRegExpLegacyCapture(int captureIndex) {
-        if (captureIndex < 1 || captureIndex > regExpLegacyCaptures.length) {
-            return "";
-        }
-        String captureValue = regExpLegacyCaptures[captureIndex - 1];
-        if (captureValue == null) {
-            return "";
-        } else {
-            return captureValue;
-        }
+        return regExpLegacyStatics.getCapture(captureIndex);
     }
 
     public String getRegExpLegacyInput() {
-        return regExpLegacyInput;
+        return regExpLegacyStatics.getInput();
     }
 
     public String getRegExpLegacyLastMatch() {
-        return regExpLegacyLastMatch;
+        return regExpLegacyStatics.getLastMatch();
     }
 
     public String getRegExpLegacyLastParen() {
-        return regExpLegacyLastParen;
+        return regExpLegacyStatics.getLastParen();
     }
 
     public String getRegExpLegacyLeftContext() {
-        return regExpLegacyLeftContext;
+        return regExpLegacyStatics.getLeftContext();
     }
 
     public String getRegExpLegacyRightContext() {
-        return regExpLegacyRightContext;
+        return regExpLegacyStatics.getRightContext();
     }
 
     public JSRuntime getRuntime() {
@@ -3952,13 +868,8 @@ public final class JSContext implements AutoCloseable {
         return stackDepth;
     }
 
-    /**
-     * Get the %ThrowTypeError% intrinsic function.
-     * This is the single shared function used for Function.prototype caller/arguments
-     * and strict mode arguments.callee per ES spec.
-     */
     public JSNativeFunction getThrowTypeErrorIntrinsic() {
-        return throwTypeErrorIntrinsic;
+        return realmIntrinsics.getThrowTypeErrorIntrinsic();
     }
 
     public UnicodePropertyResolver getUnicodePropertyResolver() {
@@ -3972,58 +883,33 @@ public final class JSContext implements AutoCloseable {
         return virtualMachine;
     }
 
+    /**
+     * The realm's global lexical environment.
+     *
+     * @return the global lexical scope
+     */
+    GlobalLexicalScope globalLexicalScope() {
+        return globalLexicalScope;
+    }
+
     public boolean hasEvalOverlayBinding(String name) {
-        if (evalOverlayLookupSuppressionDepth > 0) {
-            return false;
-        }
-        for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
-            if (evalOverlayFrame.savedGlobals().containsKey(name)
-                    || evalOverlayFrame.absentKeys().contains(name)) {
-                return true;
-            }
-        }
-        return false;
+        return evalOverlayManager.hasBinding(name);
     }
 
     public boolean hasEvalOverlayFrames() {
-        if (evalOverlayLookupSuppressionDepth > 0) {
-            return false;
-        }
-        return !evalOverlayFrames.isEmpty();
-    }
-
-    private boolean hasEvaluatingAsyncDependency(JSDynamicImportModule moduleRecord) {
-        String scanSource = maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
-        while (matcher.find()) {
-            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord != null
-                        && depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                    return true;
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Clear the pending exception the matching
-                // throwTypeError left behind, so the context does not stay in an exception state.
-                clearPendingException();
-            }
-        }
-        return false;
+        return evalOverlayManager.hasFrames();
     }
 
     public boolean hasGlobalConstDeclaration(String name) {
-        return globalConstDeclarations.contains(name);
+        return globalLexicalScope.hasConstDeclaration(name);
     }
 
     public boolean hasGlobalLexDeclaration(String name) {
-        return globalLexDeclarations.contains(name);
+        return globalLexicalScope.hasLexDeclaration(name);
     }
 
     public boolean hasGlobalLexicalBinding(String name) {
-        return globalLexicalBindings.containsKey(name);
+        return globalLexicalScope.hasLexicalBinding(name);
     }
 
     /**
@@ -4047,53 +933,6 @@ public final class JSContext implements AutoCloseable {
         return failedModuleBodyEvaluationCount > 0;
     }
 
-    private boolean hasModuleExportSyntax(String code) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
-        return scan == null
-                ? MODULE_EXPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
-                : scan.hasExportDeclaration();
-    }
-
-    private boolean hasModuleStaticImportSyntax(String code) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(code);
-        return scan == null
-                ? MODULE_STATIC_IMPORT_SYNTAX_PATTERN.matcher(maskModuleComments(code)).find()
-                : scan.hasImportDeclaration();
-    }
-
-    private boolean hasModuleTopLevelAwaitSyntax(String code) {
-        return MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(maskModuleComments(code)).find();
-    }
-
-    /**
-     * Check if an import clause contains named bindings other than 'default'.
-     * E.g., {@code {name}} returns true, {@code {default as x}} returns false.
-     */
-    private boolean hasNonDefaultNamedBindings(String importClause) {
-        int braceStart = importClause.indexOf('{');
-        if (braceStart < 0) {
-            return false;
-        }
-        int braceEnd = importClause.indexOf('}', braceStart);
-        if (braceEnd < 0) {
-            return false;
-        }
-        String body = importClause.substring(braceStart + 1, braceEnd);
-        for (String entry : body.split(",")) {
-            String trimmed = entry.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            // Get the imported name (before 'as')
-            String[] parts = trimmed.split("\\s+as\\s+");
-            String importedName = parts[0].trim();
-            if (!"default".equals(importedName)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /**
      * Check if there's a pending exception.
      */
@@ -4102,138 +941,30 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
+     * The realm's import-binding installer.
+     * <p>
+     * Package-private, and reached through the context rather than injected, because the linker is
+     * built before the installer that it calls back into.
+     *
+     * @return the import-binding installer
+     */
+    ImportBindingInstaller importBindingInstaller() {
+        return importBindingInstaller;
+    }
+
+    /**
      * Initialize the global object with built-in properties.
      * Delegates to JSGlobalObject to set up all global functions and properties.
      */
     private void initializeGlobalObject() {
         jsGlobalObject.initialize();
-        // Cache Object.prototype for fast access in hot paths (e.g., iteratorResult, createJSObject)
-        JSValue objectCtor = jsGlobalObject.getGlobalObject().get(JSObject.NAME);
-        if (objectCtor instanceof JSObject objCtorObj) {
-            JSValue proto = objCtorObj.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                this.cachedObjectPrototype = protoObj;
-            }
-        }
-        JSValue dateCtor = jsGlobalObject.getGlobalObject().get(JSDate.NAME);
-        if (dateCtor instanceof JSObject dateCtorObj) {
-            JSValue proto = dateCtorObj.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                this.cachedDatePrototype = protoObj;
-            }
-        }
-        JSValue promiseCtor = jsGlobalObject.getGlobalObject().get(JSPromise.NAME);
-        if (promiseCtor instanceof JSObject promiseCtorObject) {
-            JSValue proto = promiseCtorObject.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                this.cachedPromisePrototype = protoObj;
-            }
-        }
-        JSValue regExpCtor = jsGlobalObject.getGlobalObject().get(JSRegExp.NAME);
-        if (regExpCtor instanceof JSObject regExpCtorObject) {
-            this.cachedRegExpConstructor = regExpCtorObject;
-            JSValue proto = regExpCtorObject.get(PropertyKey.PROTOTYPE);
-            if (proto instanceof JSObject protoObj) {
-                this.cachedRegExpPrototype = protoObj;
-            }
-        }
-    }
-
-    private void initializeHoistedFunctionExportBindings(JSDynamicImportModule moduleRecord) {
-        if (moduleRecord == null
-                || moduleRecord.hoistedFunctionExportBindingsInitialized()) {
-            return;
-        }
-        List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedBindings =
-                moduleRecord.hoistedFunctionExportBindings();
-        if (hoistedBindings.isEmpty()) {
-            moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
-            return;
-        }
-
-        StringBuilder sourceBuilder = new StringBuilder();
-        sourceBuilder.append("(function () {\n");
-        for (JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding : hoistedBindings) {
-            sourceBuilder.append(hoistedBinding.functionDeclarationSource()).append('\n');
-        }
-        sourceBuilder.append("return {");
-        for (int bindingIndex = 0; bindingIndex < hoistedBindings.size(); bindingIndex++) {
-            JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding = hoistedBindings.get(bindingIndex);
-            if (bindingIndex > 0) {
-                sourceBuilder.append(", ");
-            }
-            sourceBuilder.append("\"")
-                    .append(escapeJavaScriptString(hoistedBinding.localName()))
-                    .append("\": ")
-                    .append(requireGeneratedIdentifier(
-                            hoistedBinding.localName(),
-                            "hoisted function export '" + hoistedBinding.localName() + "'",
-                            moduleRecord.resolvedSpecifier()));
-        }
-        sourceBuilder.append("};\n})();");
-
-        JSValue bindingsValue = eval(
-                sourceBuilder.toString(),
-                "<hoisted-export-init>",
-                true,
-                false);
-        if (!(bindingsValue instanceof JSObject functionBindingsObject)) {
-            moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
-            return;
-        }
-
-        JSImportNamespaceObject namespaceObject = moduleRecord.namespace();
-        for (JSDynamicImportModule.HoistedFunctionExportBinding hoistedBinding : hoistedBindings) {
-            PropertyKey localKey = PropertyKey.fromString(hoistedBinding.localName());
-            JSValue functionValue = functionBindingsObject.get(localKey);
-            if (hasPendingException()) {
-                JSValue pendingError = getPendingException();
-                clearPendingException();
-                throw new JSException(pendingError);
-            }
-            if (!(functionValue instanceof JSFunction)) {
-                continue;
-            }
-            namespaceObject.setEarlyExportBinding(hoistedBinding.exportedName(), functionValue);
-        }
-        moduleRecord.setHoistedFunctionExportBindingsInitialized(true);
-    }
-
-    private <T extends JSTypedArray> T initializeTypedArray(T typedArray, String constructorName) {
-        transferPrototype(typedArray, constructorName);
-        var buffer = typedArray.getBuffer();
-        if (buffer instanceof JSObject jsObject && jsObject.getPrototype() == null) {
-            transferPrototype(jsObject, buffer.isShared() ? JSSharedArrayBuffer.NAME : JSArrayBuffer.NAME);
-        }
-        return typedArray;
+        // Cache the hot-path prototypes (e.g., iteratorResult, createJSObject) now that the
+        // constructors they hang off exist.
+        realmIntrinsics.cacheFromGlobalObject(jsGlobalObject.getGlobalObject());
     }
 
     public boolean isActiveGlobalFunctionBindingConfigurable() {
-        return activeGlobalFunctionBindingConfigurable;
-    }
-
-    /**
-     * Whether an expression's brackets, braces and parentheses all close.
-     * <p>
-     * Comments, strings and templates are masked first, so a delimiter inside one of them does not
-     * count. This decides only whether a default-export expression has run past the end of its
-     * line; it is not a parser, and cannot be one at this layer.
-     *
-     * @param expressionText the text scanned so far
-     * @return true when nothing is left open
-     */
-    private boolean isBalancedExpressionText(String expressionText) {
-        String maskedExpressionText = maskModuleComments(expressionText);
-        int depth = 0;
-        for (int index = 0; index < maskedExpressionText.length(); index++) {
-            switch (maskedExpressionText.charAt(index)) {
-                case '(', '[', '{' -> depth++;
-                case ')', ']', '}' -> depth--;
-                default -> {
-                }
-            }
-        }
-        return depth <= 0;
+        return globalLexicalScope.isActiveFunctionBindingConfigurable();
     }
 
     /**
@@ -4245,1584 +976,105 @@ public final class JSContext implements AutoCloseable {
         return closed;
     }
 
-    private boolean isCompleteStaticImportStatement(String importStatement) {
-        if (importStatement == null || importStatement.isBlank()) {
-            return false;
-        }
-        String normalizedImportStatement = importStatement.strip();
-        if (MODULE_NAMESPACE_IMPORT_PATTERN.matcher(normalizedImportStatement).matches()) {
-            return true;
-        }
-        if (MODULE_BINDING_IMPORT_PATTERN.matcher(normalizedImportStatement).matches()) {
-            return true;
-        }
-        return MODULE_SIDE_EFFECT_IMPORT_PATTERN.matcher(normalizedImportStatement).matches();
-    }
-
-    private boolean isDynamicImportDefaultDeclarationClause(String defaultClause) {
-        return defaultClause.startsWith("function")
-                || defaultClause.startsWith("async function")
-                || defaultClause.startsWith("class");
-    }
-
-    private boolean isExpressionContinuationCharacter(char ch) {
-        return ch == ')' || ch == ']' || ch == '}'
-                || ch == ',' || ch == '.' || ch == ':'
-                || ch == '?' || ch == '+'
-                || ch == '-' || ch == '*'
-                || ch == '/' || ch == '%'
-                || ch == '<' || ch == '>'
-                || ch == '=' || ch == '&'
-                || ch == '|' || ch == '^';
+    /**
+     * Whether the module body about to run was pulled in to satisfy an import.
+     *
+     * @return true when the current evaluation is of an imported module
+     */
+    boolean isEvaluatingImportedModule() {
+        return evaluatingImportedModule;
     }
 
     public boolean isGlobalLexicalBindingInitialized(String name) {
-        JSValue value = globalLexicalBindings.get(name);
-        return value != null && value != GLOBAL_LEXICAL_UNINITIALIZED;
+        return globalLexicalScope.isBindingInitialized(name);
     }
 
     public boolean isInBareVariableAssignment() {
         return inBareVariableAssignment;
     }
 
-    private boolean isSelfImportBinding(ImportBinding importBinding, String moduleSpecifier) {
-        if (importBinding == null
-                || importBinding.sourceSpecifier() == null
-                || importBinding.sourceSpecifier().isEmpty()) {
-            return false;
-        }
-        try {
-            String resolvedImportSpecifier = resolveDynamicImportSpecifier(
-                    importBinding.sourceSpecifier(),
-                    moduleSpecifier,
-                    importBinding.sourceSpecifier());
-            Path resolvedImportPath = Path.of(resolvedImportSpecifier).normalize().toAbsolutePath();
-            Path modulePath = Path.of(moduleSpecifier).normalize().toAbsolutePath();
-            String resolvedImportPathString = resolvedImportPath.toString();
-            String modulePathString = modulePath.toString();
-            if (resolvedImportPathString.equals(modulePathString)) {
-                return true;
-            }
-            return resolvedImportPathString.equalsIgnoreCase(modulePathString);
-        } catch (JSException ignored) {
-            clearPendingException();
-            return false;
-        } catch (Exception ignored) {
-            clearPendingException();
-            return false;
-        }
-    }
-
-    private boolean isStaticImportLine(String trimmedLine) {
-        if (trimmedLine == null || !trimmedLine.startsWith("import")) {
-            return false;
-        }
-        if (trimmedLine.startsWith("import(") || trimmedLine.startsWith("import.")) {
-            return false;
-        }
-        if (trimmedLine.length() == "import".length()) {
-            return false;
-        }
-        char nextChar = trimmedLine.charAt("import".length());
-        return !Character.isLetterOrDigit(nextChar) && nextChar != '_' && nextChar != '$';
-    }
-
-    /**
-     * Check if in strict mode.
-     */
     public boolean isStrictMode() {
         return strictMode;
     }
 
     /**
-     * Whether the source about to be evaluated is a module's own generated source rather than the
-     * text an author wrote.
-     * <p>
-     * A module with exports is evaluated by handing its rewritten source back to {@code eval} under
-     * the same file name, and in that text the {@code export} declarations have already become
-     * ordinary assignments. Anything that reads it as a module therefore sees a module that
-     * exports nothing.
-     *
-     * @param code     the source about to be evaluated
-     * @param filename the name it is being evaluated under
-     * @return true when this is a cached module's transformed source
+     * Check if in strict mode.
      */
-    private boolean isTransformedModuleSource(String code, String filename) {
-        if (filename == null || filename.isEmpty() || filename.startsWith("<")) {
-            return false;
-        }
-        String resolvedSpecifier;
-        try {
-            resolvedSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
-        } catch (JSException unresolvable) {
-            clearPendingException();
-            resolvedSpecifier = normalizeModuleSpecifier(filename);
-        }
-        JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(resolvedSpecifier);
-        return moduleRecord != null
-                && !Objects.equals(moduleRecord.rawSource(), code)
-                && Objects.equals(moduleRecord.transformedSource(), code);
+    /**
+     * Whether an {@code eval} that finishes now should leave the microtask queue alone.
+     * <p>
+     * The module loader raises this while it evaluates a graph's dependencies, so that a nested
+     * {@code eval} cannot drain the queue before every import has been processed — which is what
+     * decides the order asynchronous module completions run in.
+     *
+     * @return true while microtask processing is suppressed
+     */
+    boolean isSuppressingEvalMicrotasks() {
+        return suppressEvalMicrotaskProcessing;
     }
 
     public boolean isWaitable() {
         return waitable;
     }
 
-    /**
-     * The zero-based index of the line an offset falls on.
-     *
-     * @param sourceCode the source
-     * @param offset     the offset
-     * @return the line index
-     */
-    private int lineIndexOfOffset(String sourceCode, int offset) {
-        int lineIndex = 0;
-        for (int index = 0; index < offset && index < sourceCode.length(); index++) {
-            if (sourceCode.charAt(index) == '\n') {
-                lineIndex++;
-            }
-        }
-        return lineIndex;
-    }
-
-    /**
-     * Every module a source names, and every export name it asks that module for, read from the
-     * engine's own tokens.
-     * <p>
-     * This used to be pulled out of the source with string operations — {@code indexOf(" as ")} for
-     * a renaming specifier, {@code isValidIdentifierName} over everything before the first brace
-     * for a default binding — which recognised one particular spelling of each form and quietly
-     * ignored the rest. A tab instead of a space around {@code as}, a line break inside the clause,
-     * a comment between the tokens, {@code import d, * as ns from '…'}, or a string import name
-     * ({@code import \{ "a-b" as c \}}) all produced no request at all, so the link check passed and
-     * the dependency ran before the same failure was found. Whether the engine preserved module
-     * stage ordering came down to how the source happened to be formatted.
-     * <p>
-     * Tokens answer all of those the same way the compiler does, and carry positions, which is what
-     * lets a failure name where the request was written. {@code export \{ a \} from '…'} asks for a
-     * name exactly as an import does and is read here for the same reason.
-     *
-     * @param sourceCode the module source, as written
-     * @return one entry per declaration that names a module, or null when the source does not
-     * tokenise
-     */
-    private List<LinkedModuleRequest> linkedModuleRequests(String sourceCode) {
-        if (sourceCode == null || (!sourceCode.contains("import") && !sourceCode.contains("export"))) {
-            return List.of();
-        }
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            // Source that does not tokenise is not this pass's problem to report: the compiler
-            // rejects it with a proper SyntaxError.
-            clearPendingException();
-            return null;
-        }
-        List<LinkedModuleRequest> requests = new ArrayList<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
-            Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0 || index + 1 >= tokens.size()) {
-                continue;
-            }
-            if (token.type() == TokenType.EXPORT) {
-                index = readExportDeclaration(tokens, index, sourceCode, requests);
-                continue;
-            }
-            if (token.type() != TokenType.IMPORT
-                    || tokens.get(index + 1).type() == TokenType.LPAREN
-                    || tokens.get(index + 1).type() == TokenType.DOT) {
-                // `import(...)` and `import.meta` are expressions, not declarations.
-                continue;
-            }
-            index = readImportDeclaration(tokens, index, sourceCode, requests);
-        }
-        return requests;
-    }
-
     public JSObject loadDynamicImportModule(String specifier, String referrerFilename) {
-        return loadDynamicImportModule(specifier, referrerFilename, null);
+        return moduleLoader.loadDynamicImportModule(specifier, referrerFilename);
     }
 
     public JSObject loadDynamicImportModule(
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes) {
-        return loadDynamicImportModule(specifier, referrerFilename, importAttributes, null, null);
+        return moduleLoader.loadDynamicImportModule(specifier, referrerFilename, importAttributes);
     }
 
-    /**
-     * Load a dynamic import module. When importPromise and resolveState are provided
-     * (from a dynamic import() expression), the method chains the import promise onto
-     * the module's async evaluation promise if the module has TLA.
-     * Returns null when the import promise is handled internally.
-     */
     public JSObject loadDynamicImportModule(
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes,
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
-        // Everything evaluated from here down is a module pulled in to satisfy an import,
-        // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
-        boolean previouslyEvaluatingImportedModule = evaluatingImportedModule;
-        evaluatingImportedModule = true;
-        try {
-            return loadDynamicImportModuleInternal(
-                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
-        } finally {
-            evaluatingImportedModule = previouslyEvaluatingImportedModule;
-        }
+        return moduleLoader.loadDynamicImportModule(
+                specifier, referrerFilename, importAttributes, importPromise, resolveState);
     }
 
     public JSObject loadDynamicImportModuleDeferred(
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes) {
-        return loadDynamicImportModuleDeferred(specifier, referrerFilename, importAttributes, null, null);
+        return moduleLoader.loadDynamicImportModuleDeferred(
+                specifier, referrerFilename, importAttributes);
     }
 
-    /**
-     * Load a module in deferred mode. When importPromise and resolveState are provided
-     * (dynamic import.defer() case), the method handles resolving the import promise
-     * internally — chaining it onto TLA evaluation promises if needed.
-     * Returns null when the import promise is handled internally.
-     */
     public JSObject loadDynamicImportModuleDeferred(
             String specifier,
             String referrerFilename,
             Map<String, String> importAttributes,
             JSPromise importPromise,
             JSPromise.ResolveState resolveState) {
-        // Everything evaluated from here down is a module pulled in to satisfy an import,
-        // not the module the host asked for. See getImportedModuleBodyEvaluationCount().
-        boolean previouslyEvaluatingImportedModule = evaluatingImportedModule;
-        evaluatingImportedModule = true;
-        try {
-            return loadDynamicImportModuleDeferredInternal(
-                    specifier, referrerFilename, importAttributes, importPromise, resolveState);
-        } finally {
-            evaluatingImportedModule = previouslyEvaluatingImportedModule;
-        }
-    }
-
-    private JSObject loadDynamicImportModuleDeferredInternal(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
-        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
-        JSDynamicImportModule moduleRecord = dynamicImportModuleCache.get(moduleCacheKey);
-        if (moduleRecord == null) {
-            moduleRecord = new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
-            moduleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-            moduleRecord.setDeferredPreload(true);
-            dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
-            try {
-                String importType = importAttributes != null ? importAttributes.get("type") : null;
-                // Handle type: 'text' import attribute
-                if ("text".equals(importType)) {
-                    // The payload is data, not source. Putting it through the module normaliser
-                    // meant a text file whose bytes happened to look like a declaration was
-                    // tokenised and compiled as JavaScript, so `export {}; this is arbitrary text`
-                    // was a SyntaxError instead of a string.
-                    String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                    moduleRecord.setRawSource(sourceCode);
-                    defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    return moduleRecord.namespace();
-                }
-                // Handle type: 'bytes' import attribute
-                if ("bytes".equals(importType)) {
-                    byte[] fileBytes = Files.readAllBytes(Path.of(resolvedSpecifier));
-                    moduleRecord.setRawSource("");
-                    JSArrayBuffer arrayBuffer = new JSArrayBuffer(this, fileBytes);
-                    transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
-                    arrayBuffer.setImmutable(true);
-                    JSUint8Array uint8Array = createJSUint8Array(arrayBuffer, 0, fileBytes.length);
-                    defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    return moduleRecord.namespace();
-                }
-                String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
-                if (resolvedSpecifier.endsWith(".json")) {
-                    if (!"json".equals(importType)) {
-                        throw new JSException(throwTypeError("Import attribute type must be 'json'"));
-                    }
-                    JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                    defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
-                    moduleRecord.explicitExportNames().add("default");
-                    moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    return moduleRecord.namespace();
-                }
-                parseDynamicImportModuleSource(moduleRecord);
-                // Eagerly validate syntax of deferred modules per spec.
-                // SyntaxErrors are not deferred — they must be detected at linking time.
-                requireDependencyModuleSourceCompiles(sourceCode, resolvedSpecifier);
-            } catch (IOException ioException) {
-                dynamicImportModuleCache.remove(moduleCacheKey);
-                throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
-            } catch (JSException jsException) {
-                dynamicImportModuleCache.remove(moduleCacheKey);
-                throw jsException;
-            }
-        }
-
-        if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED
-                || moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            // Even for already-evaluated (or error) modules, return the deferred namespace wrapper.
-            // Deferred namespaces are distinct objects from eager namespaces per spec.
-            // For EVALUATED_ERROR, ensureEvaluated() will rethrow the cached error.
-            if (moduleRecord.deferredNamespace() == null) {
-                moduleRecord.setDeferredNamespace(new JSDeferredModuleNamespace(this, moduleRecord));
-            }
-            return moduleRecord.deferredNamespace();
-        }
-
-        LinkedHashSet<String> asyncDependencySpecifiers = new LinkedHashSet<>();
-        gatherDeferredAsyncDependencySpecifiers(
-                resolvedSpecifier,
-                moduleRecord.rawSource(),
-                new HashSet<>(),
-                asyncDependencySpecifiers);
-        List<JSPromise> tlaEvaluationPromises = new ArrayList<>();
-        boolean prevSuppress = suppressEvalMicrotaskProcessing;
-        suppressEvalMicrotaskProcessing = true;
-        try {
-            for (String asyncDependencySpecifier : asyncDependencySpecifiers) {
-                if (asyncDependencySpecifier.equals(resolvedSpecifier)
-                        && moduleRecord.status() == JSDynamicImportModule.Status.LOADING) {
-                    // Self-module with TLA: set EVALUATING before eval so nested
-                    // deferred imports of this module see the correct state.
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                    JSValue evalResult = evaluateDynamicImportModule(moduleRecord);
-                    if (moduleRecord.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                        moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                        moduleRecord.setAsyncEvaluationPromise(asyncPromise);
-                        registerAsyncModuleCompletion(moduleRecord, asyncPromise, new HashSet<>());
-                        tlaEvaluationPromises.add(asyncPromise);
-                    } else {
-                        resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-                        moduleRecord.namespace().finalizeNamespace();
-                        moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    }
-                } else {
-                    JSDynamicImportModule depRecord =
-                            loadJSDynamicImportModule(asyncDependencySpecifier, new HashSet<>(), importAttributes);
-                    if (depRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                            && depRecord.asyncEvaluationPromise() != null) {
-                        tlaEvaluationPromises.add(depRecord.asyncEvaluationPromise());
-                    }
-                }
-            }
-        } finally {
-            suppressEvalMicrotaskProcessing = prevSuppress;
-        }
-
-        if (moduleRecord.deferredNamespace() == null) {
-            moduleRecord.setDeferredNamespace(new JSDeferredModuleNamespace(this, moduleRecord));
-        }
-
-        // When called from dynamic import.defer() (importPromise != null) and there are
-        // pending TLA evaluation promises, chain the import promise resolution onto them
-        // using a Promise.all-like counter. This avoids relying on processMicrotasks()
-        // which is a no-op when called re-entrantly from within a microtask.
-        if (importPromise != null && !tlaEvaluationPromises.isEmpty()) {
-            JSObject deferredNs = moduleRecord.deferredNamespace();
-            int[] remaining = {tlaEvaluationPromises.size()};
-            for (JSPromise tlaPromise : tlaEvaluationPromises) {
-                JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
-                        (ctx, thisArg, args) -> {
-                            remaining[0]--;
-                            if (remaining[0] == 0 && !resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                importPromise.resolve(ctx, deferredNs);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
-                onFulfill.initializePrototypeChain(this);
-                JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
-                        (ctx, thisArg, args) -> {
-                            if (!resolveState.alreadyResolved) {
-                                resolveState.alreadyResolved = true;
-                                JSValue reason = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                                importPromise.reject(reason);
-                            }
-                            return JSUndefined.INSTANCE;
-                        });
-                onReject.initializePrototypeChain(this);
-                tlaPromise.addReactions(
-                        new JSPromise.ReactionRecord(onFulfill, this, null, null),
-                        new JSPromise.ReactionRecord(onReject, this, null, null));
-            }
-            return null; // Import promise will be resolved via TLA promise chain
-        }
-
-        // Static import defer case: drain microtasks to complete EVALUATING_ASYNC modules.
-        // Only drain when not called from evaluateModuleImportsInOrder
-        // (which has its own drain after all imports are processed).
-        if (!suppressEvalMicrotaskProcessing && !asyncDependencySpecifiers.isEmpty()) {
-            processMicrotasks();
-        }
-
-        return moduleRecord.deferredNamespace();
-    }
-
-    private JSObject loadDynamicImportModuleInternal(
-            String specifier,
-            String referrerFilename,
-            Map<String, String> importAttributes,
-            JSPromise importPromise,
-            JSPromise.ResolveState resolveState) {
-        String resolvedSpecifier = resolveDynamicImportSpecifier(specifier, referrerFilename, specifier);
-        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
-        // Check if the module was pre-loaded (deferred) but not yet evaluated.
-        JSDynamicImportModule preloaded = dynamicImportModuleCache.get(moduleCacheKey);
-        if (preloaded != null && preloaded.status() == JSDynamicImportModule.Status.LOADING
-                && preloaded.deferredPreload()) {
-            try {
-                evaluateDynamicImportModule(preloaded);
-                resolveDynamicImportReExports(preloaded, new HashSet<>());
-                preloaded.namespace().finalizeNamespace();
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED);
-            } catch (JSException jsException) {
-                preloaded.setEvaluationError(jsException.getErrorValue());
-                preloaded.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                throw jsException;
-            }
-            return preloaded.namespace();
-        }
-        JSDynamicImportModule moduleRecord =
-                loadJSDynamicImportModule(resolvedSpecifier, new HashSet<>(), importAttributes);
-        // If the module is still completing async evaluation, chain the import promise
-        // onto the module's async evaluation promise instead of resolving immediately.
-        if (importPromise != null && resolveState != null
-                && moduleRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                && moduleRecord.asyncEvaluationPromise() != null) {
-            chainImportPromiseOntoAsyncModule(moduleRecord, importPromise, resolveState);
-            return null;
-        }
-        if (importPromise != null && resolveState != null
-                && moduleRecord.status() != JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            List<JSPromise> asyncDependencyPromises = getEvaluatingAsyncDependencyPromises(moduleRecord);
-            if (!asyncDependencyPromises.isEmpty()) {
-                chainImportPromiseOntoAsyncDependencies(
-                        asyncDependencyPromises,
-                        moduleRecord.namespace(),
-                        importPromise,
-                        resolveState);
-                return null;
-            }
-        }
-        // If the module evaluation failed, throw so the import() promise gets rejected
-        if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            throw new JSException(moduleRecord.evaluationError());
-        }
-        return moduleRecord.namespace();
-    }
-
-    private JSDynamicImportModule loadJSDynamicImportModule(
-            String resolvedSpecifier,
-            Set<String> importResolutionStack,
-            Map<String, String> importAttributes) {
-        String moduleCacheKey = getDynamicImportCacheKey(resolvedSpecifier, importAttributes);
-        JSDynamicImportModule cachedRecord = dynamicImportModuleCache.get(moduleCacheKey);
-        if (cachedRecord != null) {
-            if (cachedRecord.status() == JSDynamicImportModule.Status.EVALUATED) {
-                return cachedRecord;
-            }
-            if (cachedRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                throw new JSException(cachedRecord.evaluationError());
-            }
-            if (cachedRecord.status() == JSDynamicImportModule.Status.LOADING
-                    || cachedRecord.status() == JSDynamicImportModule.Status.EVALUATING
-                    || cachedRecord.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                return cachedRecord;
-            }
-        }
-
-        JSDynamicImportModule moduleRecord =
-                new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
-        moduleRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-        dynamicImportModuleCache.put(moduleCacheKey, moduleRecord);
-
-        try {
-            String importType = importAttributes != null ? importAttributes.get("type") : null;
-            // Handle type: 'text' import attribute
-            if ("text".equals(importType)) {
-                // Data, not source — see the deferred path above.
-                String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource(sourceCode);
-                defineDynamicImportNamespaceValue(moduleRecord, "default", new JSString(sourceCode));
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                return moduleRecord;
-            }
-            // Handle type: 'bytes' import attribute
-            if ("bytes".equals(importType)) {
-                byte[] fileBytes = Files.readAllBytes(Path.of(resolvedSpecifier));
-                moduleRecord.setRawSource("");
-                JSArrayBuffer arrayBuffer = new JSArrayBuffer(this, fileBytes);
-                transferPrototype(arrayBuffer, JSArrayBuffer.NAME);
-                arrayBuffer.setImmutable(true);
-                JSUint8Array uint8Array = createJSUint8Array(arrayBuffer, 0, fileBytes.length);
-                defineDynamicImportNamespaceValue(moduleRecord, "default", uint8Array);
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                return moduleRecord;
-            }
-            String sourceCode = Files.readString(Path.of(resolvedSpecifier));
-            moduleRecord.setRawSource(normalizeModuleDeclarationLines(sourceCode));
-            if (resolvedSpecifier.endsWith(".json")) {
-                if (!"json".equals(importType)) {
-                    throw new JSException(throwTypeError("Import attribute type must be 'json'"));
-                }
-                JSValue jsonDefaultValue = parseJsonModuleSource(sourceCode);
-                defineDynamicImportNamespaceValue(moduleRecord, "default", jsonDefaultValue);
-                moduleRecord.explicitExportNames().add("default");
-                moduleRecord.exportOrigins().put("default", resolvedSpecifier);
-                moduleRecord.namespace().finalizeNamespace();
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                return moduleRecord;
-            }
-            // The dependency's own early errors, raised against the dependency's own text. Without
-            // this they surfaced only once the file had become generated module code, so a
-            // duplicate `__proto__` at offset 33 of a 53-character file was reported at offset 228.
-            requireDependencyModuleSourceCompiles(sourceCode, resolvedSpecifier);
-            parseDynamicImportModuleSource(moduleRecord);
-            resolveDynamicImportReExports(moduleRecord, importResolutionStack);
-            // Pre-load all static imports so we can detect EVALUATING_ASYNC dependencies.
-            // Without this, a module's deps aren't loaded until eval() → evaluateModuleImportsInOrder,
-            // which is too late for the hasEvaluatingAsyncDependency check.
-            if (suppressEvalMicrotaskProcessing) {
-                preloadStaticImports(moduleRecord, importResolutionStack, importAttributes);
-            }
-            if (suppressEvalMicrotaskProcessing
-                    && hasEvaluatingAsyncDependency(moduleRecord)) {
-                // ES2024 16.2.1.5.2.1: Module depends on an EVALUATING_ASYNC module.
-                // Don't evaluate yet; register as a pending dependent.
-                // Set EVALUATING_ASYNC so transitive dependents also defer.
-                moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                registerPendingDependent(moduleRecord);
-                return moduleRecord;
-            }
-            if (moduleRecord.hasTLA()) {
-                // Set EVALUATING before eval so nested deferred imports see correct state.
-                moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                // Suppress microtasks during eval so we can register the completion
-                // callback before the microtask drain.
-                boolean prevSuppress = suppressEvalMicrotaskProcessing;
-                suppressEvalMicrotaskProcessing = true;
-                JSValue evalResult;
-                try {
-                    evalResult = evaluateDynamicImportModule(moduleRecord);
-                } finally {
-                    suppressEvalMicrotaskProcessing = prevSuppress;
-                }
-                if (evalResult instanceof JSPromise asyncPromise) {
-                    moduleRecord.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    moduleRecord.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(moduleRecord, asyncPromise, importResolutionStack);
-                    if (!suppressEvalMicrotaskProcessing) {
-                        // Not in a suppressed context — drain microtasks now to
-                        // let the async module complete before returning.
-                        processMicrotasks();
-                    }
-                    return moduleRecord;
-                }
-                // TLA module but eval didn't return a promise (e.g., no actual await hit).
-                // Fall through to normal completion.
-            } else {
-                evaluateDynamicImportModule(moduleRecord);
-            }
-            moduleRecord.namespace().finalizeNamespace();
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-            return moduleRecord;
-        } catch (IOException ioException) {
-            throw new JSException(throwTypeError("Cannot find module '" + resolvedSpecifier + "'"));
-        } catch (JSSyntaxErrorException syntaxErrorException) {
-            JSValue error = throwSyntaxError(
-                    syntaxErrorException.getMessage(), syntaxErrorException.getSourceLocation());
-            moduleRecord.setEvaluationError(error);
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-            throw new JSException(error);
-        } catch (JSCompilerException compilerException) {
-            JSValue error = throwSyntaxError(
-                    compilerException.getMessage(), compilerException.getSourceLocation());
-            moduleRecord.setEvaluationError(error);
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-            throw new JSException(error);
-        } catch (JSException jsException) {
-            // Keep the module in cache with EVALUATED_ERROR status so that subsequent
-            // deferred imports can rethrow the same error object (per spec).
-            moduleRecord.setEvaluationError(jsException.getErrorValue());
-            moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-            throw jsException;
-        } catch (Exception exception) {
-            dynamicImportModuleCache.remove(moduleCacheKey);
-            throw new JSException(throwError(exception.getMessage() != null ? exception.getMessage() : "Module load error"));
-        }
-    }
-
-    private String maskModuleComments(String sourceCode) {
-        if (sourceCode == null || sourceCode.isEmpty()) {
-            return "";
-        }
-        StringBuilder maskedBuilder = new StringBuilder(sourceCode.length());
-        boolean inLineComment = false;
-        boolean inBlockComment = false;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        boolean inTemplateLiteral = false;
-        for (int index = 0; index < sourceCode.length(); index++) {
-            char currentChar = sourceCode.charAt(index);
-            char nextChar = index + 1 < sourceCode.length() ? sourceCode.charAt(index + 1) : '\0';
-
-            if (inLineComment) {
-                if (currentChar == '\n' || currentChar == '\r') {
-                    inLineComment = false;
-                    maskedBuilder.append(currentChar);
-                } else {
-                    maskedBuilder.append(' ');
-                }
-                continue;
-            }
-            if (inBlockComment) {
-                if (currentChar == '*' && nextChar == '/') {
-                    maskedBuilder.append(' ');
-                    maskedBuilder.append(' ');
-                    index++;
-                    inBlockComment = false;
-                    continue;
-                }
-                if (currentChar == '\n' || currentChar == '\r') {
-                    maskedBuilder.append(currentChar);
-                } else {
-                    maskedBuilder.append(' ');
-                }
-                continue;
-            }
-            if (inSingleQuote) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '\'') {
-                    inSingleQuote = false;
-                }
-                continue;
-            }
-            if (inDoubleQuote) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '"') {
-                    inDoubleQuote = false;
-                }
-                continue;
-            }
-            if (inTemplateLiteral) {
-                maskedBuilder.append(currentChar);
-                if (currentChar == '\\' && index + 1 < sourceCode.length()) {
-                    index++;
-                    maskedBuilder.append(sourceCode.charAt(index));
-                } else if (currentChar == '`') {
-                    inTemplateLiteral = false;
-                }
-                continue;
-            }
-
-            if (currentChar == '/' && nextChar == '/') {
-                maskedBuilder.append(' ');
-                maskedBuilder.append(' ');
-                index++;
-                inLineComment = true;
-                continue;
-            }
-            if (currentChar == '/' && nextChar == '*') {
-                maskedBuilder.append(' ');
-                maskedBuilder.append(' ');
-                index++;
-                inBlockComment = true;
-                continue;
-            }
-            if (currentChar == '\'') {
-                inSingleQuote = true;
-            } else if (currentChar == '"') {
-                inDoubleQuote = true;
-            } else if (currentChar == '`') {
-                inTemplateLiteral = true;
-            }
-            maskedBuilder.append(currentChar);
-        }
-        return maskedBuilder.toString();
-    }
-
-    private void mergeStarReExport(
-            JSDynamicImportModule moduleRecord,
-            JSDynamicImportModule targetModuleRecord,
-            Map<String, String> exportOrigins,
-            String targetSpecifier) {
-        Set<String> candidateExportNames = new TreeSet<>();
-        for (PropertyKey key : targetModuleRecord.namespace().getOwnPropertyKeys()) {
-            if (key.isString()) {
-                candidateExportNames.add(key.asString());
-            }
-        }
-        candidateExportNames.addAll(targetModuleRecord.explicitExportNames());
-        for (JSDynamicImportModule.ReExportBinding reExportBinding : targetModuleRecord.reExportBindings()) {
-            if (!reExportBinding.starExport()) {
-                candidateExportNames.add(reExportBinding.exportedName());
-            }
-        }
-
-        for (String exportName : candidateExportNames) {
-            if ("default".equals(exportName)) {
-                continue;
-            }
-            // Skip names already known to be ambiguous in this module
-            // (from a previous incremental or full re-export resolution pass).
-            if (moduleRecord.ambiguousExportNames().contains(exportName)) {
-                continue;
-            }
-            if (targetModuleRecord.ambiguousExportNames().contains(exportName)) {
-                moduleRecord.ambiguousExportNames().add(exportName);
-                moduleRecord.namespace().removeExportBinding(exportName);
-                exportOrigins.remove(exportName);
-                continue;
-            }
-            if (moduleRecord.explicitExportNames().contains(exportName)) {
-                continue;
-            }
-            DynamicImportExportResolution resolution = resolveDynamicImportExport(
-                    targetModuleRecord,
-                    exportName,
-                    new HashSet<>(),
-                    new HashSet<>());
-            if (resolution.ambiguous()) {
-                moduleRecord.ambiguousExportNames().add(exportName);
-                moduleRecord.namespace().removeExportBinding(exportName);
-                exportOrigins.remove(exportName);
-                continue;
-            }
-            if (!resolution.found()) {
-                continue;
-            }
-            String existingOrigin = exportOrigins.get(exportName);
-            String candidateOrigin = resolution.moduleRecord().resolvedSpecifier();
-            if (existingOrigin == null) {
-                defineDynamicImportNamespaceForwardingBinding(
-                        moduleRecord,
-                        exportName,
-                        resolution.moduleRecord(),
-                        candidateOrigin,
-                        resolution.bindingName());
-                exportOrigins.put(exportName, candidateOrigin);
-                continue;
-            }
-            if (!existingOrigin.equals(candidateOrigin)) {
-                moduleRecord.ambiguousExportNames().add(exportName);
-                moduleRecord.namespace().removeExportBinding(exportName);
-                exportOrigins.remove(exportName);
-            }
-        }
+        return moduleLoader.loadDynamicImportModuleDeferred(
+                specifier, referrerFilename, importAttributes, importPromise, resolveState);
     }
 
     /**
-     * The zero-based indices of the lines that begin a top-level module declaration.
-     * <p>
-     * The line loop in {@link #parseDynamicImportModuleSource(JSDynamicImportModule)} used to
-     * decide this by string-matching {@code import }/{@code export } at the start of a masked line,
-     * and {@link #maskModuleComments(String)} blanks comments but leaves string and template
-     * contents verbatim — so a multi-line template containing a line that reads
-     * {@code export const fake = 1;} produced an export. Membership in this set is decided by the
-     * lexer instead, so text that merely looks like a declaration is not one.
+     * The realm's module linker.
      *
-     * @param sourceCode module source that has already been normalised
-     * @return the line indices, or {@code null} when the source cannot be tokenised
+     * @return the module linker
      */
-    private Set<Integer> moduleDeclarationLineIndices(String sourceCode) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
-        if (scan == null) {
-            return null;
-        }
-        Set<Integer> lineIndices = new HashSet<>();
-        int lineIndex = 0;
-        int offset = 0;
-        for (int declarationOffset : scan.declarationOffsets()) {
-            while (offset < declarationOffset && offset < sourceCode.length()) {
-                if (sourceCode.charAt(offset) == '\n') {
-                    lineIndex++;
-                }
-                offset++;
-            }
-            lineIndices.add(lineIndex);
-        }
-        return lineIndices;
+    ModuleLinker moduleLinker() {
+        return moduleLinker;
     }
 
     /**
-     * Every identifier name a module's source contains, decoded.
+     * The realm's module loader.
+     * <p>
+     * Package-private, and reached through the context rather than injected, because the loader is
+     * built after the transformer and the linker that call back into it.
      *
-     * @param sourceCode the module source
-     * @return the names, or null when the source does not tokenise
+     * @return the module loader
      */
-    private Set<String> moduleIdentifierNames(String sourceCode) {
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException notTokenisable) {
-            clearPendingException();
-            return null;
-        }
-        Set<String> identifierNames = new HashSet<>();
-        for (Token token : tokens) {
-            if (token.type() == TokenType.IDENTIFIER) {
-                identifierNames.add(token.value());
-            }
-        }
-        return identifierNames;
-    }
-
-    /**
-     * The span one token occupies in the source it was read from.
-     * <p>
-     * A {@link Token} records where it starts but not where it ends, and its {@code value} is the
-     * decoded text, so it cannot be measured either — {@code as} is one character long as a
-     * value and six in the source. The end is therefore taken from the next token and walked back
-     * over whitespace, which is exact whenever the two are separated by nothing else.
-     *
-     * @param tokens     the token list
-     * @param index      the index of the token
-     * @param sourceCode the source the tokens came from
-     * @return the token's location
-     */
-    private SourceLocation moduleTokenLocation(List<Token> tokens, int index, String sourceCode) {
-        Token token = tokens.get(index);
-        int endOffset = index + 1 < tokens.size() ? tokens.get(index + 1).offset() : sourceCode.length();
-        endOffset = Math.min(endOffset, sourceCode.length());
-        while (endOffset > token.offset() && Character.isWhitespace(sourceCode.charAt(endOffset - 1))) {
-            endOffset--;
-        }
-        return new SourceLocation(token.line(), token.column(), token.offset(), endOffset);
-    }
-
-    /**
-     * Rewrite module source so that every top-level {@code import} and {@code export} declaration
-     * occupies whole lines.
-     * <p>
-     * The transformer that follows is line-oriented, and this is what makes that sound for the
-     * shapes it could not see before: {@code const t = 1; export const v = 15;} and
-     * {@code import { v } from './dep.mjs'; use(v);} are both valid modules whose declarations were
-     * invisible or unhoisted purely because of where the line breaks fell. Only line breaks are
-     * inserted — no token is moved, rewritten or dropped — so the only observable difference is that
-     * source positions after a break shift by a line.
-     * <p>
-     * A line terminator is not a neutral thing to insert: line terminators are what lets automatic
-     * semicolon insertion terminate a statement, so splitting unconditionally handed the parser a
-     * semicolon the author never wrote, and the engine accepted modules — {@code export {} let x =
-     * 1;} — that a conforming parser must reject. The source is therefore parsed <em>as written</em>
-     * before any break is inserted. Breaks only ever go immediately before a top-level declaration
-     * or immediately after one whose extent is identifiable, and in source the parser has already
-     * accepted both of those are statement boundaries, so the split cannot change what it means.
-     *
-     * @param sourceCode the module source
-     * @return the source with declarations on their own lines
-     * @throws JSSyntaxErrorException when the source as written is not a valid module
-     */
-    private String normalizeModuleDeclarationLines(String sourceCode) {
-        return normalizeModuleDeclarationLines(sourceCode, true);
-    }
-
-    /**
-     * Rewrite module source so that every top-level declaration occupies whole lines.
-     *
-     * @param sourceCode the module source
-     * @param validate   whether to compile the source as written first; false only when the caller
-     *                   has already done so and would otherwise pay for a second compilation
-     * @return the source with declarations on their own lines
-     * @throws JSSyntaxErrorException when the source as written is not a valid module
-     */
-    private String normalizeModuleDeclarationLines(String sourceCode, boolean validate) {
-        ModuleDeclarationScan scan = scanTopLevelModuleDeclarations(sourceCode);
-        if (scan == null || scan.lineBreakOffsets().isEmpty()) {
-            return sourceCode;
-        }
-        if (validate) {
-            requireModuleSourceCompiles(sourceCode);
-        }
-        StringBuilder normalized = new StringBuilder(sourceCode.length() + scan.lineBreakOffsets().size());
-        int copiedUpTo = 0;
-        for (int breakOffset : scan.lineBreakOffsets()) {
-            if (breakOffset <= copiedUpTo || breakOffset > sourceCode.length()) {
-                continue;
-            }
-            normalized.append(sourceCode, copiedUpTo, breakOffset).append('\n');
-            copiedUpTo = breakOffset;
-        }
-        normalized.append(sourceCode, copiedUpTo, sourceCode.length());
-        return normalized.toString();
-    }
-
-    private String normalizeModuleSpecifier(String specifier) {
-        if (specifier == null || specifier.isEmpty()) {
-            return "";
-        }
-        try {
-            return Paths.get(specifier).normalize().toString();
-        } catch (InvalidPathException invalidPathException) {
-            return specifier;
-        }
-    }
-
-    private void parseDynamicImportExportList(
-            String exportListText,
-            String sourceSpecifier,
-            List<JSDynamicImportModule.LocalExportBinding> localExportBindings,
-            List<JSDynamicImportModule.ReExportBinding> reExportBindings) {
-        // Split on commas at the top level only (not inside quoted strings)
-        List<String> exportEntries = splitOnTopLevelCommas(exportListText);
-        for (String exportEntry : exportEntries) {
-            String exportText = exportEntry.trim();
-            if (exportText.isEmpty()) {
-                continue;
-            }
-            String localName;
-            String exportedName;
-            // Parse "localName as exportedName" with support for string literals
-            int asIndex = findTopLevelAs(exportText);
-            if (asIndex >= 0) {
-                String rawLocal = exportText.substring(0, asIndex).trim();
-                String rawExported = exportText.substring(asIndex + 2).trim();
-                localName = parseModuleExportNameValue(rawLocal);
-                exportedName = parseModuleExportNameValue(rawExported);
-            } else {
-                localName = parseModuleExportNameValue(exportText);
-                exportedName = localName;
-            }
-            if (sourceSpecifier == null) {
-                localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(localName, exportedName));
-            } else {
-                reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier, localName, exportedName, false));
-            }
-        }
-    }
-
-    /**
-     * Rewrite ES module source into plain script source that the compiler can evaluate.
-     * <p>
-     * <strong>This is a line-based textual transformer, not a parser.</strong> It splits the source
-     * on {@code \n}, classifies each line, and splices generated JavaScript into the result.
-     * <p>
-     * <em>Which</em> text it classifies is no longer decided by how the source is formatted.
-     * {@link #normalizeModuleDeclarationLines(String)} tokenises the source first and puts every
-     * top-level declaration on its own lines, {@link #defaultExportExtents(String)} asks the parser
-     * where an {@code export default} expression ends, and both binding names and string literals
-     * are read as the values the lexer says they are rather than as the characters that spell
-     * them. So a declaration sharing a line with other code, a regular expression literal
-     * containing a quote, a Unicode or escaped identifier, and a string export name are all handled
-     * — those were once documented here as unsupported, and are covered by
-     * {@code JSModuleSourceTransformTest}, {@code JSModuleDefaultExportExtentTest} and
-     * {@code JSModuleIdentifierSpellingTest}.
-     * <p>
-     * What remains wrong is not a scanning problem and cannot be fixed at this layer:
-     * <ul>
-     * <li>An import is a temporary accessor on the global object, removed when the module body
-     * finishes, rather than a binding in a module environment. A closure retained past evaluation
-     * cannot read it, and it is not live.</li>
-     * <li>The generated bindings — {@code __qjs4jDefaultExport$<n>}, {@code __qjs4jModuleExports}
-     * and the namespace binding — are declared in the module's own scope and are reachable from a
-     * direct {@code eval} in it. {@link #generatedModuleNamePrefix(String)} keeps them clear of
-     * names the author writes, which is containment, not scope.</li>
-     * <li>An import attribute naming a module type the engine does not implement is ignored, and
-     * the target is loaded as JavaScript.</li>
-     * </ul>
-     * That list is executable: each entry is a {@code testKnownLimitation*} test in
-     * {@code JSModuleKnownLimitationTest} that asserts the wrong answer on purpose, so fixing one
-     * makes its test fail. Real module environment records — {@code ImportDeclaration}/{@code Export*}
-     * AST nodes the parser keeps instead of discards, and indirect bindings the
-     * {@code BytecodeCompiler} can capture — are the fix for all three, and are a dedicated
-     * milestone rather than a patch.
-     * <p>
-     * Loading and linking are separate from evaluation: see {@link #requireModuleGraphLinks(String,
-     * String)}. Every value that reaches identifier position in the generated source is validated by
-     * {@link #requireGeneratedIdentifier(String, String, String)}, and every value that reaches string
-     * position is escaped by {@link #escapeJavaScriptString(String)}, so a name the scanner
-     * mis-extracts produces a diagnosable SyntaxError rather than spliced source text.
-     *
-     * @param moduleRecord the module whose raw source is to be transformed
-     */
-    private void parseDynamicImportModuleSource(JSDynamicImportModule moduleRecord) {
-        // Put every top-level declaration on its own lines before the line-oriented scan below
-        // runs, so which text it classifies is decided by the lexer rather than by where the
-        // author happened to break lines.
-        String sourceCode = normalizeModuleDeclarationLines(moduleRecord.rawSource());
-        String scanSourceCode = maskModuleComments(sourceCode);
-        // Bookkeeping names the module's own source does not use — see generatedModuleNamePrefix.
-        String generatedNamePrefix = generatedModuleNamePrefix(sourceCode);
-        // Which lines really begin a declaration, decided by the lexer rather than by how a line
-        // reads. Null when the source did not tokenise, in which case the string match stands.
-        Set<Integer> moduleDeclarationLines = moduleDeclarationLineIndices(sourceCode);
-        // Where each `export default <expression>` really ends, decided by the parser rather than
-        // by counting delimiters.
-        Map<Integer, DefaultExportExtent> defaultExportExtents = defaultExportExtents(sourceCode);
-        StringBuilder importPreambleBuilder = new StringBuilder();
-        StringBuilder transformedSourceBuilder = new StringBuilder(sourceCode.length() + 128);
-        List<JSDynamicImportModule.HoistedFunctionExportBinding> hoistedFunctionExportBindings = new ArrayList<>();
-        List<JSDynamicImportModule.LocalExportBinding> localExportBindings = new ArrayList<>();
-        List<JSDynamicImportModule.ReExportBinding> reExportBindings = new ArrayList<>();
-        Map<String, ImportBinding> importedBindings = new HashMap<>();
-        Set<String> importedBindingNames = new HashSet<>();
-        boolean hasExportSyntax = false;
-        int defaultExportIndex = 0;
-        StringBuilder defaultExportNameFixups = new StringBuilder();
-
-        String[] lines = sourceCode.split("\n", -1);
-        String[] scanLines = scanSourceCode.split("\n", -1);
-        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-            String line = lines[lineIndex];
-            String normalizedLine = line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
-            String scanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-            String parseLine = scanLine.endsWith("\r") ? scanLine.substring(0, scanLine.length() - 1) : scanLine;
-            String trimmedLine = parseLine.stripLeading();
-            // Extract import lines to be placed before the IIFE wrapper
-            boolean isDeclarationLine = moduleDeclarationLines == null
-                    || moduleDeclarationLines.contains(lineIndex);
-            if (isDeclarationLine && isStaticImportLine(trimmedLine)) {
-                StringBuilder importStatementBuilder = new StringBuilder(normalizedLine);
-                StringBuilder importStatementScanBuilder = new StringBuilder(parseLine);
-                while (!isCompleteStaticImportStatement(importStatementScanBuilder.toString())
-                        && lineIndex + 1 < lines.length) {
-                    lineIndex++;
-                    String nextLine = lines[lineIndex];
-                    String normalizedNextLine = nextLine.endsWith("\r")
-                            ? nextLine.substring(0, nextLine.length() - 1)
-                            : nextLine;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1)
-                            : nextScanLine;
-                    importStatementBuilder.append('\n').append(normalizedNextLine);
-                    importStatementScanBuilder.append('\n').append(normalizedNextScanLine);
-                }
-                String importStatementSource = importStatementBuilder.toString();
-                String importStatementForScan = importStatementScanBuilder.toString().strip();
-                importPreambleBuilder.append(importStatementSource).append('\n');
-                collectImportBindings(importStatementForScan, importedBindingNames, importedBindings);
-                continue;
-            }
-            if (!isDeclarationLine
-                    || (!trimmedLine.startsWith("export ") && !trimmedLine.startsWith("export{")
-                    && !trimmedLine.startsWith("export*") && !trimmedLine.equals("export"))) {
-                transformedSourceBuilder.append(normalizedLine).append('\n');
-                continue;
-            }
-
-            hasExportSyntax = true;
-            String exportClause;
-            if (trimmedLine.startsWith("export ")) {
-                exportClause = trimmedLine.substring("export ".length()).trim();
-            } else if (trimmedLine.equals("export") || trimmedLine.startsWith("export") && trimmedLine.substring("export".length()).isBlank()) {
-                exportClause = "";
-            } else {
-                // export{ or export* — no space after 'export'
-                exportClause = trimmedLine.substring("export".length()).trim();
-            }
-            // If the export clause is empty (bare 'export', 'export' with trailing comments/whitespace),
-            // look ahead to subsequent lines for the continuation.
-            if (exportClause.isEmpty()) {
-                StringBuilder exportContinuation = new StringBuilder();
-                while (lineIndex + 1 < lines.length) {
-                    lineIndex++;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1) : nextScanLine;
-                    exportContinuation.append(normalizedNextScanLine.stripLeading());
-                    if (exportContinuation.toString().contains("}") || exportContinuation.toString().contains("*")) {
-                        break;
-                    }
-                }
-                exportClause = exportContinuation.toString().trim();
-            }
-            if (exportClause.startsWith("default ")) {
-                String defaultClause = exportClause.substring("default ".length()).trim();
-                if (isDynamicImportDefaultDeclarationClause(defaultClause)) {
-                    String declarationName = extractExportedFunctionOrClassName(defaultClause);
-                    String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+default\\s+", "$1");
-                    // For multi-line declarations (class/function body spans multiple lines),
-                    // accumulate subsequent lines until the body is complete.
-                    while (findEndOfDeclarationBody(declarationLine) < 0 && lineIndex + 1 < lines.length) {
-                        lineIndex++;
-                        String nextLine = lines[lineIndex];
-                        String normalizedNext = nextLine.endsWith("\r") ? nextLine.substring(0, nextLine.length() - 1) : nextLine;
-                        declarationLine = declarationLine + "\n" + normalizedNext;
-                    }
-                    boolean anonymousDefaultDeclaration = false;
-                    if (declarationName == null || declarationName.isEmpty()) {
-                        String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
-                        declarationName = defaultLocalName;
-                        // Use var assignment instead of renaming the declaration.
-                        // var hoists to the IIFE function scope, so the getter in the
-                        // export preamble can reference it before this line executes.
-                        // Split the declaration from any trailing statements on the same line
-                        // (e.g., `export default class {} if (...) { ... }`).
-                        int bodyEnd = findEndOfDeclarationBody(declarationLine);
-                        String declarationPart;
-                        String remainingCode;
-                        if (bodyEnd >= 0 && bodyEnd < declarationLine.length()) {
-                            declarationPart = declarationLine.substring(0, bodyEnd);
-                            remainingCode = declarationLine.substring(bodyEnd).trim();
-                        } else {
-                            declarationPart = declarationLine;
-                            remainingCode = "";
-                        }
-                        // For anonymous default class exports, insert a static block
-                        // at the start of the class body to set .name = "default" before
-                        // any static field initializers run. ES2024 specifies that
-                        // default-exported anonymous classes get the name "default" during
-                        // ClassDefinitionEvaluation, before static elements are evaluated.
-                        if (defaultClause.startsWith("class")) {
-                            int openBrace = findLikelyClassBodyOpenBrace(declarationPart);
-                            if (openBrace >= 0) {
-                                // ES2024 15.2.3.11: Only set name to "default" if the class
-                                // doesn't already have a "name" own property (e.g. static name method).
-                                declarationPart = declarationPart.substring(0, openBrace + 1)
-                                        + " static { if (!Object.prototype.hasOwnProperty.call(this, 'name')"
-                                        + " || this.name === ''"
-                                        + " || this.name === '" + defaultLocalName + "') { "
-                                        + "Object.defineProperty(this, 'name', {value: 'default', configurable: true}); } }"
-                                        + declarationPart.substring(openBrace + 1);
-                            }
-                        }
-                        if (defaultClause.startsWith("class")) {
-                            transformedSourceBuilder.append("let ")
-                                    .append(defaultLocalName)
-                                    .append(" = ")
-                                    .append(declarationPart)
-                                    .append(";\n");
-                            appendDynamicImportDefaultExportNameFixup(
-                                    transformedSourceBuilder, declarationName, moduleRecord.resolvedSpecifier());
-                        } else {
-                            String renamedDeclaration = renameAnonymousDefaultExportDeclaration(
-                                    declarationPart, defaultLocalName);
-                            transformedSourceBuilder.append(renamedDeclaration).append('\n');
-                            appendDynamicImportDefaultExportNameFixup(
-                                    defaultExportNameFixups, declarationName, moduleRecord.resolvedSpecifier());
-                        }
-                        if (!remainingCode.isEmpty()) {
-                            transformedSourceBuilder.append(remainingCode).append('\n');
-                        }
-                        anonymousDefaultDeclaration = true;
-                    }
-                    if (!anonymousDefaultDeclaration) {
-                        // Named default exports (e.g., export default class Foo { ... })
-                        // need var hoisting so the export preamble getter can reference
-                        // the name before the declaration executes during self-import.
-                        if (defaultClause.startsWith("class")) {
-                            int bodyEnd = findEndOfDeclarationBody(declarationLine);
-                            String declarationPart;
-                            String remainingCode;
-                            if (bodyEnd >= 0 && bodyEnd < declarationLine.length()) {
-                                declarationPart = declarationLine.substring(0, bodyEnd);
-                                remainingCode = declarationLine.substring(bodyEnd).trim();
-                            } else {
-                                declarationPart = declarationLine;
-                                remainingCode = "";
-                            }
-                            transformedSourceBuilder.append("let ")
-                                    .append(requireGeneratedIdentifier(
-                                            declarationName,
-                                            "default export declaration name '" + declarationName + "'",
-                                            moduleRecord.resolvedSpecifier()))
-                                    .append(" = ")
-                                    .append(declarationPart)
-                                    .append(";\n");
-                            if (!remainingCode.isEmpty()) {
-                                transformedSourceBuilder.append(remainingCode).append('\n');
-                            }
-                        } else {
-                            transformedSourceBuilder.append(declarationLine).append('\n');
-                        }
-                    }
-                    localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, "default"));
-                } else {
-                    // An expression may run past the end of its line, and where it ends is a
-                    // grammar question rather than a bracket count — see defaultExportExtents.
-                    String defaultExpression;
-                    String trailingCode = "";
-                    DefaultExportExtent defaultExportExtent = defaultExportExtents.get(lineIndex);
-                    if (defaultExportExtent != null) {
-                        defaultExpression = defaultExportExtent.expression();
-                        trailingCode = defaultExportExtent.trailingText();
-                        lineIndex = Math.max(lineIndex, defaultExportExtent.endLineIndex());
-                    } else {
-                        // The parser could not be asked — source that does not tokenise, or a shape
-                        // it declined. Fall back to taking lines while the delimiters are unbalanced.
-                        defaultExpression = defaultClause;
-                        while (!isBalancedExpressionText(defaultExpression) && lineIndex + 1 < lines.length) {
-                            lineIndex++;
-                            String continuationLine = lines[lineIndex];
-                            if (continuationLine.endsWith("\r")) {
-                                continuationLine = continuationLine.substring(0, continuationLine.length() - 1);
-                            }
-                            defaultExpression = defaultExpression + "\n" + continuationLine;
-                        }
-                        defaultExpression = defaultExpression.trim();
-                        while (defaultExpression.endsWith(";")) {
-                            defaultExpression = defaultExpression.substring(0, defaultExpression.length() - 1).trim();
-                        }
-                    }
-                    String defaultLocalName = generatedNamePrefix + "DefaultExport$" + defaultExportIndex++;
-                    transformedSourceBuilder.append("let ")
-                            .append(defaultLocalName)
-                            .append(" = (0, ")
-                            .append(defaultExpression)
-                            .append(");\n");
-                    appendDynamicImportDefaultExportNameFixup(
-                            transformedSourceBuilder, defaultLocalName, moduleRecord.resolvedSpecifier());
-                    if (!trailingCode.isEmpty()) {
-                        transformedSourceBuilder.append(trailingCode).append('\n');
-                    }
-                    localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(defaultLocalName, "default"));
-                }
-                continue;
-            }
-
-            if (exportClause.startsWith("var ")
-                    || exportClause.startsWith("let ")
-                    || exportClause.startsWith("const ")) {
-                transformedSourceBuilder.append(normalizedLine.replaceFirst("export\\s+", "")).append('\n');
-                for (String declarationName : extractSimpleDeclarationNames(exportClause)) {
-                    localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, declarationName));
-                }
-                continue;
-            }
-
-            if (exportClause.startsWith("function ")
-                    || exportClause.startsWith("function*")
-                    || exportClause.startsWith("async function ")
-                    || exportClause.startsWith("async function*")
-                    || exportClause.startsWith("class ")) {
-                String declarationLine = normalizedLine.replaceFirst("^(\\s*)export\\s+", "$1");
-                while (findEndOfDeclarationBody(declarationLine) < 0 && lineIndex + 1 < lines.length) {
-                    lineIndex++;
-                    String nextLine = lines[lineIndex];
-                    String normalizedNextLine = nextLine.endsWith("\r")
-                            ? nextLine.substring(0, nextLine.length() - 1)
-                            : nextLine;
-                    declarationLine = declarationLine + "\n" + normalizedNextLine;
-                }
-                int declarationBodyEnd = findEndOfDeclarationBody(declarationLine);
-                String declarationPart = declarationLine;
-                String remainingCode = "";
-                if (declarationBodyEnd >= 0 && declarationBodyEnd < declarationLine.length()) {
-                    declarationPart = declarationLine.substring(0, declarationBodyEnd);
-                    remainingCode = declarationLine.substring(declarationBodyEnd).trim();
-                }
-                transformedSourceBuilder.append(declarationPart).append('\n');
-                if (!remainingCode.isEmpty()) {
-                    transformedSourceBuilder.append(remainingCode).append('\n');
-                }
-                String declarationName = extractExportedFunctionOrClassName(exportClause);
-                if (declarationName == null || declarationName.isEmpty()) {
-                    throw new JSException(throwSyntaxError("Invalid export statement"));
-                }
-                localExportBindings.add(new JSDynamicImportModule.LocalExportBinding(declarationName, declarationName));
-                if (exportClause.startsWith("function ")
-                        || exportClause.startsWith("function*")
-                        || exportClause.startsWith("async function ")
-                        || exportClause.startsWith("async function*")) {
-                    hoistedFunctionExportBindings.add(new JSDynamicImportModule.HoistedFunctionExportBinding(
-                            declarationName,
-                            declarationName,
-                            declarationPart));
-                }
-                continue;
-            }
-
-            if (exportClause.startsWith("{")) {
-                String exportSpecifiersText = exportClause;
-                while (findMatchingCloseBrace(exportSpecifiersText, 0) < 0 && lineIndex + 1 < lines.length) {
-                    lineIndex++;
-                    String nextScanLine = lineIndex < scanLines.length ? scanLines[lineIndex] : "";
-                    String normalizedNextScanLine = nextScanLine.endsWith("\r")
-                            ? nextScanLine.substring(0, nextScanLine.length() - 1)
-                            : nextScanLine;
-                    exportSpecifiersText = exportSpecifiersText + "\n" + normalizedNextScanLine.stripLeading();
-                }
-
-                int closeBraceIndex = findMatchingCloseBrace(exportSpecifiersText, 0);
-                if (closeBraceIndex < 0) {
-                    throw new JSException(throwSyntaxError("Invalid export statement"));
-                }
-                String exportListText = exportSpecifiersText.substring(1, closeBraceIndex).trim();
-                String afterBraceText = exportSpecifiersText.substring(closeBraceIndex + 1).trim();
-                while (afterBraceText.endsWith(";")) {
-                    afterBraceText = afterBraceText.substring(0, afterBraceText.length() - 1).trim();
-                }
-                String sourceSpecifier = null;
-                if (!afterBraceText.isEmpty()) {
-                    if (!afterBraceText.startsWith("from ")) {
-                        throw new JSException(throwSyntaxError("Invalid export statement"));
-                    }
-                    String fromText = afterBraceText.substring("from ".length()).trim();
-                    sourceSpecifier = stripQuotedSpecifier(fromText);
-                    // Add side-effect import to ensure source-order evaluation.
-                    // ES2024 requires all module dependencies (imports AND re-exports)
-                    // to be evaluated in source order before the requesting module.
-                    importPreambleBuilder.append("import '").append(sourceSpecifier).append("';\n");
-                }
-                int localBindingStartIndex = localExportBindings.size();
-                parseDynamicImportExportList(exportListText, sourceSpecifier, localExportBindings, reExportBindings);
-                if (sourceSpecifier == null && localBindingStartIndex < localExportBindings.size()) {
-                    for (int localBindingIndex = localExportBindings.size() - 1;
-                         localBindingIndex >= localBindingStartIndex;
-                         localBindingIndex--) {
-                        JSDynamicImportModule.LocalExportBinding localExportBinding =
-                                localExportBindings.get(localBindingIndex);
-                        ImportBinding importBinding = importedBindings.get(localExportBinding.localName());
-                        if (importBinding == null || importBinding.deferredImport()) {
-                            continue;
-                        }
-                        localExportBindings.remove(localBindingIndex);
-                        reExportBindings.add(new JSDynamicImportModule.ReExportBinding(
-                                importBinding.sourceSpecifier(),
-                                importBinding.importedName(),
-                                localExportBinding.exportedName(),
-                                false));
-                    }
-                }
-                continue;
-            }
-
-            if (exportClause.startsWith("*")) {
-                String afterStarText = exportClause.substring(1).trim();
-                if (afterStarText.startsWith("as ")) {
-                    // Handle both identifier and string literal export names:
-                    // export * as name from '...'
-                    // export * as "name" from '...'
-                    String afterAs = afterStarText.substring(3).trim();
-                    String exportedName;
-                    String remainingAfterName;
-                    if (afterAs.startsWith("\"") || afterAs.startsWith("'")) {
-                        char quote = afterAs.charAt(0);
-                        int closeQuote = afterAs.indexOf(quote, 1);
-                        if (closeQuote < 0) {
-                            throw new JSException(throwSyntaxError("Invalid export statement"));
-                        }
-                        exportedName = afterAs.substring(1, closeQuote);
-                        remainingAfterName = afterAs.substring(closeQuote + 1).trim();
-                    } else {
-                        Matcher identMatcher = Pattern.compile("^([A-Za-z_$][A-Za-z0-9_$]*)\\s+(.*)$")
-                                .matcher(afterAs);
-                        if (!identMatcher.find()) {
-                            throw new JSException(throwSyntaxError("Invalid export statement"));
-                        }
-                        exportedName = identMatcher.group(1);
-                        remainingAfterName = identMatcher.group(2).trim();
-                    }
-                    if (!remainingAfterName.startsWith("from ")) {
-                        throw new JSException(throwSyntaxError("Invalid export statement"));
-                    }
-                    String fromText = remainingAfterName.substring(5).trim();
-                    while (fromText.endsWith(";")) {
-                        fromText = fromText.substring(0, fromText.length() - 1).trim();
-                    }
-                    String sourceSpecifier = stripQuotedSpecifier(fromText);
-                    reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier, MODULE_NAMESPACE_EXPORT_NAME, exportedName, false));
-                    // Add side-effect import for source-order evaluation
-                    importPreambleBuilder.append("import '").append(sourceSpecifier).append("';\n");
-                    continue;
-                }
-                if (afterStarText.startsWith("from ")) {
-                    String fromText = afterStarText.substring("from ".length()).trim();
-                    while (fromText.endsWith(";")) {
-                        fromText = fromText.substring(0, fromText.length() - 1).trim();
-                    }
-                    String sourceSpecifier = stripQuotedSpecifier(fromText);
-                    reExportBindings.add(new JSDynamicImportModule.ReExportBinding(sourceSpecifier, "*", "*", true));
-                    // Add side-effect import for source-order evaluation
-                    importPreambleBuilder.append("import '").append(sourceSpecifier).append("';\n");
-                    continue;
-                }
-                throw new JSException(throwSyntaxError("Invalid export statement"));
-            }
-
-            throw new JSException(throwSyntaxError("Unexpected export syntax"));
-        }
-
-        moduleRecord.setHasExportSyntax(hasExportSyntax);
-        moduleRecord.hoistedFunctionExportBindings().clear();
-        moduleRecord.hoistedFunctionExportBindings().addAll(hoistedFunctionExportBindings);
-        moduleRecord.setHoistedFunctionExportBindingsInitialized(false);
-        moduleRecord.localExportBindings().addAll(localExportBindings);
-        moduleRecord.reExportBindings().addAll(reExportBindings);
-        for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
-            moduleRecord.explicitExportNames().add(localExportBinding.exportedName());
-            moduleRecord.exportOrigins().put(localExportBinding.exportedName(), moduleRecord.resolvedSpecifier());
-            moduleRecord.namespace().registerExportName(localExportBinding.exportedName());
-        }
-        for (JSDynamicImportModule.ReExportBinding reExportBinding : reExportBindings) {
-            if (reExportBinding.starExport()) {
-                continue;
-            }
-            moduleRecord.explicitExportNames().add(reExportBinding.exportedName());
-            moduleRecord.namespace().registerExportName(reExportBinding.exportedName());
-        }
-
-        boolean hasTLA = MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(transformedSourceBuilder).find()
-                || Pattern.compile("\\bawait\\b").matcher(scanSourceCode).find();
-        moduleRecord.setHasTLA(hasTLA);
-
-        if (hasExportSyntax) {
-            String exportBindingName = createModuleExportBindingName(
-                    generatedNamePrefix, moduleRecord.resolvedSpecifier());
-            // Build the export assignment preamble separately — it goes at the START
-            // of the IIFE body so self-import getters can read from the namespace
-            // before user code executes. Getter functions are lazy (not called at
-            // definition time), so TDZ for const/class locals is not violated.
-            StringBuilder exportPreamble = new StringBuilder();
-            appendDynamicImportExportAssignments(
-                    exportPreamble, generatedNamePrefix, exportBindingName,
-                    localExportBindings, importedBindingNames, moduleRecord.resolvedSpecifier());
-            if (!defaultExportNameFixups.isEmpty()) {
-                exportPreamble.append(defaultExportNameFixups);
-            }
-            LinkedHashSet<String> importedBindingsToCapture = new LinkedHashSet<>();
-            for (JSDynamicImportModule.LocalExportBinding localExportBinding : localExportBindings) {
-                ImportBinding importBinding = importedBindings.get(localExportBinding.localName());
-                if (importBinding != null && importBinding.deferredImport()) {
-                    importedBindingsToCapture.add(localExportBinding.localName());
-                }
-            }
-            String transformedSource;
-            if (hasTLA) {
-                // For TLA export modules, capture only exportBindingName.
-                // Imported bindings from self-imports stay live to preserve TDZ behavior.
-                // Other imported bindings are captured so they remain available after
-                // import-overlay cleanup while async module evaluation continues.
-                LinkedHashSet<String> tlaImportedBindingsToCapture = new LinkedHashSet<>();
-                for (String importedBindingName : importedBindingNames) {
-                    ImportBinding importBinding = importedBindings.get(importedBindingName);
-                    if (importBinding == null
-                            || isSelfImportBinding(importBinding, moduleRecord.resolvedSpecifier())) {
-                        continue;
-                    }
-                    tlaImportedBindingsToCapture.add(importedBindingName);
-                }
-                List<String> paramNames = new ArrayList<>();
-                paramNames.add(exportBindingName);
-                paramNames.addAll(tlaImportedBindingsToCapture);
-                String paramList = String.join(", ", paramNames);
-                transformedSource = importPreambleBuilder
-                        + "(async function(" + paramList + ") {\n"
-                        + exportPreamble
-                        + transformedSourceBuilder
-                        + "})(" + paramList + ");\n";
-            } else {
-                if (importedBindingsToCapture.isEmpty()) {
-                    transformedSource = importPreambleBuilder
-                            + "(function () {\n"
-                            + exportPreamble
-                            + transformedSourceBuilder
-                            + "})();\n";
-                } else {
-                    String paramList = String.join(", ", importedBindingsToCapture);
-                    transformedSource = importPreambleBuilder
-                            + "(function (" + paramList + ") {\n"
-                            + exportPreamble
-                            + transformedSourceBuilder
-                            + "})(" + paramList + ");\n";
-                }
-            }
-            moduleRecord.setTransformedSource(transformedSource);
-            moduleRecord.setExportBindingName(exportBindingName);
-        } else if (!importedBindingNames.isEmpty() || hasTLA) {
-            // Wrap non-export modules in an IIFE to capture imported bindings in closure.
-            String paramList = String.join(", ", importedBindingNames);
-            String transformedSource = importPreambleBuilder
-                    + (hasTLA ? "(async function(" : "(function(")
-                    + paramList + ") {\n"
-                    + transformedSourceBuilder
-                    + "})(" + paramList + ");\n";
-            moduleRecord.setTransformedSource(transformedSource);
-        } else {
-            moduleRecord.setTransformedSource(sourceCode);
-        }
-    }
-
-    private JSValue parseJsonModuleSource(String sourceCode) {
-        JSValue jsonValue = getGlobalObject().get(PropertyKey.fromString("JSON"));
-        if (hasPendingException()) {
-            JSValue error = getPendingException();
-            clearPendingException();
-            throw new JSException(error);
-        }
-        if (!(jsonValue instanceof JSObject jsonObject)) {
-            throw new JSException(throwTypeError("JSON is not an object"));
-        }
-
-        JSValue parseValue = jsonObject.get(PropertyKey.fromString("parse"));
-        if (hasPendingException()) {
-            JSValue error = getPendingException();
-            clearPendingException();
-            throw new JSException(error);
-        }
-
-        JSValue[] parseArguments = new JSValue[]{new JSString(sourceCode)};
-        JSValue parsedValue;
-        if (parseValue instanceof JSFunction parseFunction) {
-            parsedValue = parseFunction.call(this, jsonObject, parseArguments);
-        } else if (parseValue instanceof JSProxy parseProxy) {
-            parsedValue = parseProxy.apply(this, jsonObject, parseArguments);
-        } else {
-            throw new JSException(throwTypeError("JSON.parse is not a function"));
-        }
-        if (hasPendingException()) {
-            JSValue error = getPendingException();
-            clearPendingException();
-            throw new JSException(error);
-        }
-        return parsedValue;
-    }
-
-    /**
-     * Parse a ModuleExportName value: either a quoted string literal or an identifier name.
-     * Removes quotes from string literals, applies identifier escape decoding to identifiers.
-     */
-    private String parseModuleExportNameValue(String raw) {
-        String trimmed = raw.trim();
-        if (trimmed.length() >= 2
-                && ((trimmed.charAt(0) == '"' && trimmed.charAt(trimmed.length() - 1) == '"')
-                || (trimmed.charAt(0) == '\'' && trimmed.charAt(trimmed.length() - 1) == '\''))) {
-            return decodeModuleStringLiteralValue(trimmed.substring(1, trimmed.length() - 1));
-        }
-        return decodeIdentifierEscapes(trimmed);
+    ModuleLoader moduleLoader() {
+        return moduleLoader;
     }
 
     void pollFinalizationRegistries() {
@@ -5832,15 +1084,11 @@ public final class JSContext implements AutoCloseable {
     }
 
     public void popEvalOverlay() {
-        if (!evalOverlayFrames.isEmpty()) {
-            evalOverlayFrames.pop();
-        }
+        evalOverlayManager.pop();
     }
 
     public void popEvalOverlayLookupSuppression() {
-        if (evalOverlayLookupSuppressionDepth > 0) {
-            evalOverlayLookupSuppressionDepth--;
-        }
+        evalOverlayManager.popLookupSuppression();
     }
 
     /**
@@ -5855,52 +1103,6 @@ public final class JSContext implements AutoCloseable {
     }
 
     /**
-     * Pre-load all static imports of a module so that EVALUATING_ASYNC dependencies
-     * are discovered before we decide whether to defer or evaluate the module.
-     */
-    private void preloadStaticImports(JSDynamicImportModule moduleRecord,
-                                      Set<String> importResolutionStack,
-                                      Map<String, String> importAttributes) {
-        String scanSource = maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
-        while (matcher.find()) {
-            // Skip import defer statements — deferred modules must not be eagerly evaluated
-            String fullMatch = matcher.group(0).stripLeading();
-            if (fullMatch.startsWith("import") && fullMatch.length() > 6) {
-                String afterImport = fullMatch.substring(6).stripLeading();
-                if (afterImport.startsWith("defer")) {
-                    continue;
-                }
-            }
-            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord != null) {
-                    // ES2024 16.2.1.5.2.1 step 11.d: If the dependency is still on the
-                    // evaluation stack (LOADING/EVALUATING), we're in a cycle. Set the
-                    // current module's cycleRoot to the dependency's root (or the dependency
-                    // itself if it has no cycle root).
-                    if (depRecord.status() == JSDynamicImportModule.Status.LOADING
-                            || depRecord.status() == JSDynamicImportModule.Status.EVALUATING) {
-                        JSDynamicImportModule root =
-                                depRecord.cycleRoot() != null ? depRecord.cycleRoot() : depRecord;
-                        moduleRecord.setCycleRoot(root);
-                    }
-                } else {
-                    loadJSDynamicImportModule(resolved,
-                            new HashSet<>(importResolutionStack), importAttributes);
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Clear the pending exception the matching
-                // throwTypeError left behind, so the context does not stay in an exception state.
-                clearPendingException();
-            }
-        }
-    }
-
-    /**
      * Process all pending microtasks.
      * This should be called at the end of each task in the event loop.
      */
@@ -5911,11 +1113,11 @@ public final class JSContext implements AutoCloseable {
     }
 
     public void pushEvalOverlay(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
-        evalOverlayFrames.push(new EvalOverlayFrame(savedGlobals, absentKeys));
+        evalOverlayManager.push(savedGlobals, absentKeys);
     }
 
     public void pushEvalOverlayLookupSuppression() {
-        evalOverlayLookupSuppressionDepth++;
+        evalOverlayManager.pushLookupSuppression();
     }
 
     /**
@@ -5931,234 +1133,32 @@ public final class JSContext implements AutoCloseable {
         return true;
     }
 
-    /**
-     * Read one {@code export} declaration, and record what it asks another module for.
-     * <p>
-     * Only the forms with a {@code from} clause name a module. {@code export \{ a \} from '…'} asks
-     * for {@code a} exactly as an import does; {@code export * from '…'} and
-     * {@code export * as ns from '…'} ask for no particular name but still name a module, which has
-     * to link.
-     *
-     * @param tokens     the token list
-     * @param start      the index of the {@code export} keyword
-     * @param sourceCode the source the tokens came from, for positions
-     * @param requests   collects the declaration, when it names a module
-     * @return the index of the last token consumed
-     */
-    private int readExportDeclaration(
-            List<Token> tokens,
-            int start,
-            String sourceCode,
-            List<LinkedModuleRequest> requests) {
-        int index = start + 1;
-        List<LinkedExportNameRequest> requestedNames = new ArrayList<>();
-        if (tokens.get(index).type() == TokenType.MUL) {
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.AS) {
-                index += 2;
-            }
-        } else if (tokens.get(index).type() == TokenType.LBRACE) {
-            index = readNamedImports(tokens, index, sourceCode, requestedNames) + 1;
-        } else {
-            // `export default …` and `export <declaration>` name no module.
-            return start;
-        }
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.FROM) {
-            // `export { a, b };` re-exports local bindings, which are this module's own.
-            return Math.min(Math.max(index - 1, start), tokens.size() - 1);
-        }
-        index++;
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.STRING) {
-            return Math.min(index, tokens.size() - 1);
-        }
-        requests.add(new LinkedModuleRequest(
-                tokens.get(index).value(),
-                moduleTokenLocation(tokens, index, sourceCode),
-                readImportAttributes(tokens, index),
-                List.copyOf(requestedNames)));
-        return skipModuleDeclarationTail(tokens, index);
-    }
-
     public JSValue readGlobalLexicalBinding(String name) {
-        return globalLexicalBindings.get(name);
+        return globalLexicalScope.readBinding(name);
     }
 
     /**
-     * Read a {@code with}/{@code assert} attributes clause that follows a module specifier.
+     * Whether a module and everything it reaches can be evaluated synchronously.
+     * <p>
+     * Kept on the context because {@link JSDeferredModuleNamespace} asks it before forcing a
+     * deferred namespace; the work itself belongs to {@link ModuleLoader}.
      *
-     * @param tokens         the token list
-     * @param specifierIndex the index of the specifier string token
-     * @return the attributes, empty when the declaration carries none
-     */
-    private Map<String, String> readImportAttributes(List<Token> tokens, int specifierIndex) {
-        int index = specifierIndex + 1;
-        if (index + 1 >= tokens.size()
-                || !("with".equals(tokens.get(index).value()) || "assert".equals(tokens.get(index).value()))
-                || tokens.get(index + 1).type() != TokenType.LBRACE) {
-            return Map.of();
-        }
-        Map<String, String> attributes = new LinkedHashMap<>();
-        index += 2;
-        while (index < tokens.size() && tokens.get(index).type() != TokenType.RBRACE) {
-            if (tokens.get(index).type() == TokenType.COMMA) {
-                index++;
-                continue;
-            }
-            String key = tokens.get(index).value();
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.COLON) {
-                index++;
-                if (index < tokens.size()) {
-                    attributes.put(key, tokens.get(index).value());
-                    index++;
-                }
-            }
-        }
-        return attributes;
-    }
-
-    /**
-     * Read one static {@code import} declaration, from its keyword to its last token.
-     *
-     * @param tokens     the token list
-     * @param start      the index of the {@code import} keyword
-     * @param sourceCode the source the tokens came from, for positions
-     * @param requests   collects the declaration, when it names a module
-     * @return the index of the declaration's last token
-     */
-    private int readImportDeclaration(
-            List<Token> tokens,
-            int start,
-            String sourceCode,
-            List<LinkedModuleRequest> requests) {
-        int index = start + 1;
-        List<LinkedExportNameRequest> importedNames = new ArrayList<>();
-        if (tokens.get(index).type() != TokenType.STRING) {
-            // `import defer * as ns from '…'` is this engine's deferred-namespace form.
-            if ("defer".equals(tokens.get(index).value())
-                    && index + 1 < tokens.size()
-                    && tokens.get(index + 1).type() == TokenType.MUL) {
-                index++;
-            }
-            if (tokens.get(index).type() == TokenType.LBRACE) {
-                index = readNamedImports(tokens, index, sourceCode, importedNames);
-            } else if (tokens.get(index).type() != TokenType.MUL) {
-                // An ImportedDefaultBinding asks for the name `default`, and fails to link exactly
-                // as any other name does.
-                importedNames.add(new LinkedExportNameRequest(
-                        "default", moduleTokenLocation(tokens, index, sourceCode)));
-                index++;
-                if (index < tokens.size() && tokens.get(index).type() == TokenType.COMMA) {
-                    index++;
-                    if (index < tokens.size() && tokens.get(index).type() == TokenType.LBRACE) {
-                        index = readNamedImports(tokens, index, sourceCode, importedNames);
-                    }
-                }
-            }
-            // Whatever the clause was, the specifier is the string after `from`.
-            while (index < tokens.size()
-                    && tokens.get(index).type() != TokenType.FROM
-                    && tokens.get(index).type() != TokenType.SEMICOLON) {
-                index++;
-            }
-            if (index >= tokens.size() || tokens.get(index).type() != TokenType.FROM) {
-                return Math.min(index, tokens.size() - 1);
-            }
-            index++;
-        }
-        if (index >= tokens.size() || tokens.get(index).type() != TokenType.STRING) {
-            return Math.min(Math.max(index, start + 1), tokens.size() - 1);
-        }
-        requests.add(new LinkedModuleRequest(
-                tokens.get(index).value(),
-                moduleTokenLocation(tokens, index, sourceCode),
-                readImportAttributes(tokens, index),
-                List.copyOf(importedNames)));
-        return skipModuleDeclarationTail(tokens, index);
-    }
-
-    /**
-     * Read a {@code \{ a, b as c, "d-e" as f \}} import clause.
-     *
-     * @param tokens        the token list
-     * @param lbraceIndex   the index of the opening brace
-     * @param sourceCode    the source the tokens came from, for positions
-     * @param importedNames collects the names the clause asks the exporting module for
-     * @return the index of the closing brace
-     */
-    private int readNamedImports(
-            List<Token> tokens,
-            int lbraceIndex,
-            String sourceCode,
-            List<LinkedExportNameRequest> importedNames) {
-        int index = lbraceIndex + 1;
-        while (index < tokens.size() && tokens.get(index).type() != TokenType.RBRACE) {
-            if (tokens.get(index).type() == TokenType.COMMA) {
-                index++;
-                continue;
-            }
-            // A ModuleExportName is an IdentifierName — reserved words included — or a string, and
-            // the token's value is the decoded one either way.
-            importedNames.add(new LinkedExportNameRequest(
-                    tokens.get(index).value(), moduleTokenLocation(tokens, index, sourceCode)));
-            index++;
-            if (index < tokens.size() && tokens.get(index).type() == TokenType.AS) {
-                // `as` and the local binding it introduces, which the exporting module never sees.
-                index += 2;
-            }
-        }
-        return Math.min(index, tokens.size() - 1);
-    }
-
-    /**
-     * Implements ReadyForSyncExecution(_module_, _seen_) from the import-defer spec.
-     * Returns true if the module and all its transitive dependencies can be evaluated synchronously.
+     * @param resolvedSpecifier the module's resolved path
+     * @param seen              the specifiers already visited, so a cycle terminates
+     * @return true when nothing in the graph needs to await
      */
     boolean readyForSyncExecution(String resolvedSpecifier, Set<String> seen) {
-        if (!seen.add(resolvedSpecifier)) {
-            return true;
-        }
-        JSDynamicImportModule record = dynamicImportModuleCache.get(resolvedSpecifier);
-        if (record != null) {
-            if (record.status() == JSDynamicImportModule.Status.EVALUATED
-                    || record.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                return true;
-            }
-            if (record.status() == JSDynamicImportModule.Status.EVALUATING
-                    || record.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC) {
-                return false;
-            }
-        }
-        // For LOADING status or no record, check the source for TLA and dependencies
-        String sourceCode = null;
-        if (record != null && record.rawSource() != null) {
-            sourceCode = record.rawSource();
-        } else {
-            try {
-                sourceCode = Files.readString(Path.of(resolvedSpecifier));
-            } catch (IOException ioException) {
-                return true;
-            }
-        }
-        String scanSourceCode = maskModuleComments(sourceCode);
-        if (MODULE_TOP_LEVEL_AWAIT_PATTERN.matcher(scanSourceCode).find()) {
-            return false;
-        }
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSourceCode);
-        while (matcher.find()) {
-            String childSpecifier = decodeModuleStringLiteralValue(matcher.group(1));
-            String resolvedChildSpecifier;
-            try {
-                resolvedChildSpecifier = resolveDynamicImportSpecifier(
-                        childSpecifier, resolvedSpecifier, childSpecifier);
-            } catch (JSException jsException) {
-                continue;
-            }
-            if (!readyForSyncExecution(resolvedChildSpecifier, seen)) {
-                return false;
-            }
-        }
-        return true;
+        return moduleLoader.readyForSyncExecution(resolvedSpecifier, seen);
+    }
+
+    /**
+     * Count a module body that failed rather than running to completion.
+     * <p>
+     * See {@link #hasModuleBodyEvaluationFailed()}. A top-level-await body that finished and then
+     * rejected counts too, which is why the module loader reports it rather than the eval pipeline.
+     */
+    void recordFailedModuleBodyEvaluation() {
+        failedModuleBodyEvaluationCount++;
     }
 
     /**
@@ -6193,267 +1193,25 @@ public final class JSContext implements AutoCloseable {
         }
     }
 
-    private void registerAsyncModuleCompletion(
-            JSDynamicImportModule moduleRecord,
-            JSPromise asyncPromise,
-            Set<String> importResolutionStack) {
-        JSNativeFunction onFulfill = new JSNativeFunction(this, "onFulfill", 0,
-                (ctx, thisArg, args) -> {
-                    resolveDynamicImportReExports(moduleRecord, new HashSet<>());
-                    moduleRecord.namespace().finalizeNamespace();
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    triggerPendingDependents(moduleRecord);
-                    return JSUndefined.INSTANCE;
-                });
-        onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction(this, "onReject", 1,
-                (ctx, thisArg, args) -> {
-                    JSValue error = args.length > 0 ? args[0] : JSUndefined.INSTANCE;
-                    // A top-level-await body that finished and then rejected still failed while
-                    // the graph was being evaluated. Counting it is what lets a host tell that
-                    // apart from a graph that never got past linking — see
-                    // hasModuleBodyEvaluationFailed().
-                    failedModuleBodyEvaluationCount++;
-                    moduleRecord.setEvaluationError(error);
-                    moduleRecord.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                    triggerPendingDependents(moduleRecord);
-                    return JSUndefined.INSTANCE;
-                });
-        onReject.initializePrototypeChain(this);
-        asyncPromise.addReactions(
-                new JSPromise.ReactionRecord(onFulfill, this, null, null),
-                new JSPromise.ReactionRecord(onReject, this, null, null));
-    }
-
-    private void registerDeferredEvalOverlayRestore(
-            JSPromise asyncModulePromise,
-            EvalOverlayFrame evalOverlayFrame) {
-        if (asyncModulePromise == null || evalOverlayFrame == null) {
-            return;
+    /**
+     * Count a module body that is about to start executing.
+     * <p>
+     * See {@link #getModuleBodyEvaluationCount()} and
+     * {@link #getImportedModuleBodyEvaluationCount()}.
+     */
+    void recordModuleBodyEvaluation() {
+        moduleBodyEvaluationCount++;
+        if (evaluatingImportedModule) {
+            importedModuleBodyEvaluationCount++;
         }
-        JSNativeFunction onFulfill = new JSNativeFunction(this, "", 0,
-                (ctx, thisArg, args) -> {
-                    restoreEvalOverlayFrame(evalOverlayFrame);
-                    return JSUndefined.INSTANCE;
-                });
-        onFulfill.initializePrototypeChain(this);
-        JSNativeFunction onReject = new JSNativeFunction(this, "", 1,
-                (ctx, thisArg, args) -> {
-                    restoreEvalOverlayFrame(evalOverlayFrame);
-                    return JSUndefined.INSTANCE;
-                });
-        onReject.initializePrototypeChain(this);
-        asyncModulePromise.addReactions(
-                new JSPromise.ReactionRecord(onFulfill, this, null, null),
-                new JSPromise.ReactionRecord(onReject, this, null, null));
     }
 
     public void registerFinalizationRegistry(JSFinalizationRegistry registry) {
         finalizationRegistries.add(registry);
     }
 
-    private void registerImportedBinding(
-            String localName,
-            String sourceSpecifier,
-            String importedName,
-            boolean deferredImport,
-            Set<String> bindingNames,
-            Map<String, ImportBinding> importedBindings) {
-        String normalizedLocalName =
-                localName == null ? "" : decodeIdentifierEscapes(localName.trim());
-        if (normalizedLocalName.isEmpty()) {
-            return;
-        }
-        bindingNames.add(normalizedLocalName);
-        if (sourceSpecifier != null && !sourceSpecifier.isEmpty()) {
-            importedBindings.put(normalizedLocalName, new ImportBinding(sourceSpecifier, importedName, deferredImport));
-        }
-    }
-
-    /**
-     * Register a module in the cache.
-     */
     public void registerIteratorPrototype(String tag, JSObject prototype) {
-        iteratorPrototypes.put(tag, prototype);
-    }
-
-    private void registerPendingDependent(JSDynamicImportModule moduleRecord) {
-        String scanSource = maskModuleComments(moduleRecord.rawSource());
-        Matcher matcher = MODULE_STATIC_IMPORT_PATTERN.matcher(scanSource);
-        int asyncDepCount = 0;
-        Set<String> registeredOnSpecifiers = new HashSet<>();
-        // Determine this module's effective cycle root for same-cycle detection.
-        JSDynamicImportModule moduleCycleRoot =
-                moduleRecord.cycleRoot() != null ? moduleRecord.cycleRoot() : moduleRecord;
-        while (matcher.find()) {
-            String specifier = decodeModuleStringLiteralValue(matcher.group(1));
-            try {
-                String resolved = resolveDynamicImportSpecifier(
-                        specifier, moduleRecord.resolvedSpecifier(), specifier);
-                JSDynamicImportModule depRecord = dynamicImportModuleCache.get(resolved);
-                if (depRecord == null) {
-                    continue;
-                }
-                // ES2024 16.2.1.5.2.1 step 11.c.iv.1: Follow CycleRoot pointer only
-                // for dependencies NOT in the same cycle. Modules in the same cycle
-                // (sharing a cycle root) register directly on each other.
-                JSDynamicImportModule effectiveDep = depRecord;
-                if (depRecord.cycleRoot() != null) {
-                    JSDynamicImportModule depCycleRoot = depRecord.cycleRoot();
-                    // Only follow CycleRoot if the dependency is in a DIFFERENT cycle.
-                    if (depCycleRoot != moduleCycleRoot) {
-                        effectiveDep = depCycleRoot;
-                    }
-                }
-                if (effectiveDep.status() == JSDynamicImportModule.Status.EVALUATING_ASYNC
-                        && registeredOnSpecifiers.add(effectiveDep.resolvedSpecifier())) {
-                    effectiveDep.pendingDependents().add(moduleRecord);
-                    asyncDepCount++;
-                }
-            } catch (JSException ignored) {
-                // Skip unresolvable specifiers. Clear the pending exception the matching
-                // throwTypeError left behind, so the context does not stay in an exception state.
-                clearPendingException();
-            }
-        }
-        moduleRecord.setPendingAsyncDependencyCount(asyncDepCount);
-    }
-
-    private String renameAnonymousDefaultExportDeclaration(
-            String declarationLine,
-            String defaultLocalName) {
-        String replacementName = Matcher.quoteReplacement(defaultLocalName);
-        String renamedFunctionDeclaration = declarationLine.replaceFirst(
-                "^(\\s*(?:async\\s+)?function(?:\\s*\\*)?)\\s*\\(",
-                "$1 " + replacementName + "(");
-        if (!renamedFunctionDeclaration.equals(declarationLine)) {
-            return renamedFunctionDeclaration;
-        }
-
-        String renamedClassDeclaration = declarationLine.replaceFirst(
-                "^(\\s*class)\\b",
-                "$1 " + replacementName);
-        if (!renamedClassDeclaration.equals(declarationLine)) {
-            return renamedClassDeclaration;
-        }
-
-        throw new JSException(throwSyntaxError("Invalid default export declaration"));
-    }
-
-    /**
-     * Require that a module loaded from disk is valid, and report its failure as a JavaScript
-     * {@code SyntaxError} carrying that file's own coordinates.
-     * <p>
-     * A dependency is compiled before it is turned into generated module code for the same reason
-     * an entry module is — see {@link #requireModuleSourceCompiles(String)} — and additionally
-     * because a Java compiler exception escaping here would leave the module cache holding a record
-     * stuck in {@code LOADING}. Converting it to a {@link JSException} lets the caller's existing
-     * handler evict that record.
-     *
-     * @param sourceCode        the dependency's source, unmodified
-     * @param resolvedSpecifier the resolved path, used as the compilation's file name
-     * @throws JSException when the dependency is not a valid module
-     */
-    private void requireDependencyModuleSourceCompiles(String sourceCode, String resolvedSpecifier) {
-        try {
-            new Compiler(sourceCode, resolvedSpecifier).setContext(this).compile(true);
-        } catch (JSSyntaxErrorException syntaxError) {
-            throw new JSException(throwSyntaxError(
-                    syntaxError.getMessage(), syntaxError.getSourceLocation()));
-        } catch (JSCompilerException compilerError) {
-            throw new JSException(throwSyntaxError(
-                    compilerError.getMessage(), compilerError.getSourceLocation()));
-        }
-    }
-
-    /**
-     * Validate a name that is about to be interpolated into generated module source in identifier
-     * position.
-     * <p>
-     * The module transformer builds JavaScript source text and evaluates it. Names extracted from
-     * the module source by the ad-hoc scanner reach identifier position unescaped, so a value that
-     * is not an identifier would splice arbitrary source into the generated program. Anything that
-     * is not a well-formed ECMAScript identifier is rejected with a SyntaxError instead.
-     *
-     * @param name            the candidate identifier
-     * @param description     what the name denotes, used in the error message
-     * @param moduleSpecifier which module is being transformed, or null when it is not known
-     * @return the name unchanged when it is a valid identifier
-     * @throws JSException wrapping a SyntaxError when the name is not a valid identifier
-     */
-    private String requireGeneratedIdentifier(String name, String description, String moduleSpecifier) {
-        if (isValidIdentifierName(name)) {
-            return name;
-        }
-        // No SourceLocation: the transformer works on rewritten text, and offsets into that name
-        // no character of the source anybody wrote. Naming the module is the part that can be made
-        // true, and it is the part an embedder with a graph of them actually needs — the message
-        // used to identify neither the module nor the position.
-        JSError error = throwSyntaxError("Unsupported module syntax: " + description
-                + " is not a valid identifier"
-                + (moduleSpecifier == null ? "" : " in module '" + moduleSpecifier + "'"));
-        error.setSourceName(moduleSpecifier);
-        throw new JSException(error);
-    }
-
-    /**
-     * Load and parse every module the graph reaches, and check every name it imports, before any
-     * module body is evaluated.
-     * <p>
-     * ECMAScript links a whole module graph and only then evaluates it. This engine loads a
-     * dependency and evaluates it in the same step, so an import naming an export nothing provides
-     * was discovered <em>after</em> the module it imports from had already run — externally visible
-     * side effects and all — for a graph that must never have begun evaluating.
-     * <p>
-     * This pass restores the ordering for the failure that is observable: it reads and parses the
-     * graph, resolves each named import against the binding the exporting module actually provides,
-     * and raises the {@code SyntaxError} before anything runs. It uses records of its own rather
-     * than the module cache, so the evaluation that follows is completely unaffected — the cost is
-     * parsing each module's source twice, and the only behavioural change is that a link failure
-     * now happens at link time.
-     * <p>
-     * It is containment, not the fix. Loading, linking and evaluating are still one operation for
-     * everything else: a dependency that <em>throws</em> still does so before the rest of the graph
-     * is linked, and only real module records with separate stages resolve that.
-     *
-     * @param sourceCode the entry module's source, as written
-     * @param filename   the entry module's name, used to resolve its specifiers
-     */
-    private void requireModuleGraphLinks(String sourceCode, String filename) {
-        String rootSpecifier;
-        try {
-            rootSpecifier = resolveDynamicImportSpecifier(filename, null, filename);
-        } catch (JSException unresolvable) {
-            clearPendingException();
-            rootSpecifier = normalizeModuleSpecifier(filename);
-        }
-        new ModuleLinkPass(rootSpecifier).linkGraph(sourceCode);
-    }
-
-    /**
-     * Require that module source is valid <em>as written</em>, before it is rewritten.
-     * <p>
-     * The grammar is the only thing that knows where a statement really ends: whether a brace closes
-     * a block or an object literal, whether a line terminator would trigger automatic semicolon
-     * insertion, whether a restricted production is in play. Re-deriving any of that from a token
-     * scan would be a second, worse implementation of the parser — and its diagnostics would be a
-     * second, worse vocabulary. Handing the source to the parser gives both for free.
-     * <p>
-     * <strong>Why this compiles rather than parses.</strong> Parsing alone answers the automatic
-     * semicolon insertion question but leaves every early error the bytecode compiler raises —
-     * duplicate {@code __proto__}, a duplicate export name, an unresolvable {@code break} target, an
-     * invalid regular expression literal — to be discovered later, by which point the source has
-     * been split onto more lines and wrapped in generated module code. The location on such an
-     * error then belongs to text the caller never wrote: a duplicate {@code __proto__} at offset 44
-     * of a 60-character module was reported at offset 119. Compiling the untouched source moves
-     * every early error in front of the rewrite, so all of them are reported in the caller's
-     * coordinates. The bytecode produced here is discarded; only the diagnostics matter.
-     *
-     * @param sourceCode the module source, unmodified
-     * @throws JSSyntaxErrorException when the source is not a valid module
-     */
-    private void requireModuleSourceCompiles(String sourceCode) {
-        new Compiler(sourceCode, "<module>").setContext(this).compile(true);
+        realmIntrinsics.registerIteratorPrototype(tag, prototype);
     }
 
     /**
@@ -6465,400 +1223,49 @@ public final class JSContext implements AutoCloseable {
      *
      * @throws IllegalStateException when this context is closed
      */
-    private void requireOpen() {
+    void requireOpen() {
         if (closed) {
             throw new IllegalStateException("JSContext is closed");
         }
     }
 
-    private DynamicImportExportResolution resolveDynamicImportExport(
-            JSDynamicImportModule moduleRecord,
-            String exportName,
-            Set<String> resolveSet,
-            Set<String> exportStarSet) {
-        if (moduleRecord.ambiguousExportNames().contains(exportName)) {
-            return DynamicImportExportResolution.ambiguousResolution();
-        }
-
-        String resolveSetKey = moduleRecord.resolvedSpecifier() + "::" + exportName;
-        if (!resolveSet.add(resolveSetKey)) {
-            // Circular resolve request. Per ES2024 ResolveExport, return null.
-            return DynamicImportExportResolution.notFoundResolution();
-        }
-
-        for (JSDynamicImportModule.LocalExportBinding localExportBinding : moduleRecord.localExportBindings()) {
-            if (exportName.equals(localExportBinding.exportedName())) {
-                return DynamicImportExportResolution.resolvedResolution(moduleRecord, exportName);
-            }
-        }
-
-        for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
-            if (reExportBinding.starExport()) {
-                continue;
-            }
-            if (!exportName.equals(reExportBinding.exportedName())) {
-                continue;
-            }
-            String targetSpecifier = resolveDynamicImportSpecifier(
-                    reExportBinding.sourceSpecifier(),
-                    moduleRecord.resolvedSpecifier(),
-                    reExportBinding.sourceSpecifier());
-            JSDynamicImportModule targetModuleRecord =
-                    loadJSDynamicImportModule(targetSpecifier, new HashSet<>(), null);
-            if (MODULE_NAMESPACE_EXPORT_NAME.equals(reExportBinding.importedName())) {
-                return DynamicImportExportResolution.resolvedResolution(targetModuleRecord, MODULE_NAMESPACE_EXPORT_NAME);
-            }
-            return resolveDynamicImportExport(
-                    targetModuleRecord,
-                    reExportBinding.importedName(),
-                    resolveSet,
-                    exportStarSet);
-        }
-
-        if ("default".equals(exportName)) {
-            return DynamicImportExportResolution.notFoundResolution();
-        }
-
-        String exportStarSetKey = moduleRecord.resolvedSpecifier() + "::" + exportName;
-        if (!exportStarSet.add(exportStarSetKey)) {
-            return DynamicImportExportResolution.notFoundResolution();
-        }
-
-        DynamicImportExportResolution starResolution = DynamicImportExportResolution.notFoundResolution();
-        for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
-            if (!reExportBinding.starExport()) {
-                continue;
-            }
-            String targetSpecifier = resolveDynamicImportSpecifier(
-                    reExportBinding.sourceSpecifier(),
-                    moduleRecord.resolvedSpecifier(),
-                    reExportBinding.sourceSpecifier());
-            JSDynamicImportModule targetModuleRecord =
-                    loadJSDynamicImportModule(targetSpecifier, new HashSet<>(), null);
-            DynamicImportExportResolution resolution = resolveDynamicImportExport(
-                    targetModuleRecord,
-                    exportName,
-                    resolveSet,
-                    exportStarSet);
-            if (resolution.ambiguous()) {
-                return resolution;
-            }
-            if (!resolution.found()) {
-                continue;
-            }
-            if (!starResolution.found()) {
-                starResolution = resolution;
-                continue;
-            }
-            boolean sameTargetModule = starResolution.moduleRecord() == resolution.moduleRecord();
-            boolean sameBindingName = Objects.equals(starResolution.bindingName(), resolution.bindingName());
-            if (!sameTargetModule || !sameBindingName) {
-                return DynamicImportExportResolution.ambiguousResolution();
-            }
-        }
-        return starResolution;
-    }
-
+    /**
+     * Resolve a module's {@code export * from} and indirect re-exports into its namespace.
+     * <p>
+     * Kept on the context because {@link JSDeferredModuleNamespace} settles a deferred namespace
+     * through it; the work itself belongs to {@link ModuleLinker}.
+     *
+     * @param moduleRecord          the module whose re-exports are being resolved
+     * @param importResolutionStack the specifiers already being resolved, so a cycle is detected
+     */
     void resolveDynamicImportReExports(
             JSDynamicImportModule moduleRecord,
             Set<String> importResolutionStack) {
-        if (moduleRecord.reExportBindings().isEmpty()) {
-            return;
-        }
-
-        if (!importResolutionStack.add(moduleRecord.resolvedSpecifier())) {
-            throw new JSException(throwSyntaxError("Circular module dependency"));
-        }
-        try {
-            Map<String, String> exportOrigins = moduleRecord.exportOrigins();
-            for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
-                String targetSpecifier = resolveDynamicImportSpecifier(
-                        reExportBinding.sourceSpecifier(),
-                        moduleRecord.resolvedSpecifier(),
-                        reExportBinding.sourceSpecifier());
-                JSDynamicImportModule targetModuleRecord =
-                        loadJSDynamicImportModule(targetSpecifier, importResolutionStack, null);
-                if (reExportBinding.starExport()) {
-                    mergeStarReExport(moduleRecord, targetModuleRecord, exportOrigins, targetSpecifier);
-                    continue;
-                }
-                String importedName = reExportBinding.importedName();
-                DynamicImportExportResolution resolution;
-                if (MODULE_NAMESPACE_EXPORT_NAME.equals(importedName)) {
-                    resolution = DynamicImportExportResolution.resolvedResolution(targetModuleRecord, MODULE_NAMESPACE_EXPORT_NAME);
-                } else {
-                    resolution = resolveDynamicImportExport(
-                            targetModuleRecord,
-                            importedName,
-                            new HashSet<>(),
-                            new HashSet<>());
-                }
-                if (resolution.ambiguous()) {
-                    throw new JSException(throwSyntaxError(
-                            "ambiguous indirect export: " + reExportBinding.exportedName()));
-                }
-                if (!resolution.found()) {
-                    throw new JSException(throwSyntaxError(
-                            "module '" + targetSpecifier + "' does not provide export '" + importedName + "'"));
-                }
-                String existingOrigin = exportOrigins.get(reExportBinding.exportedName());
-                String resolvedOrigin = resolution.moduleRecord().resolvedSpecifier();
-                if (existingOrigin != null && existingOrigin.equals(resolvedOrigin)) {
-                    continue;
-                }
-                defineDynamicImportNamespaceForwardingBinding(
-                        moduleRecord,
-                        reExportBinding.exportedName(),
-                        resolution.moduleRecord(),
-                        resolvedOrigin,
-                        resolution.bindingName());
-                moduleRecord.explicitExportNames().add(reExportBinding.exportedName());
-                exportOrigins.put(reExportBinding.exportedName(), resolvedOrigin);
-            }
-        } finally {
-            importResolutionStack.remove(moduleRecord.resolvedSpecifier());
-        }
-    }
-
-    private String resolveDynamicImportSpecifier(
-            String specifier,
-            String referrerFilename,
-            String errorSpecifier) {
-        final Path rawSpecifierPath;
-        try {
-            rawSpecifierPath = Paths.get(specifier);
-        } catch (InvalidPathException invalidPathException) {
-            throw new JSException(throwTypeError("Cannot find module '" + errorSpecifier + "'"));
-        }
-
-        Path resolvedPath = rawSpecifierPath;
-        if (!resolvedPath.isAbsolute()
-                && referrerFilename != null
-                && !referrerFilename.isEmpty()
-                && !referrerFilename.startsWith("<")) {
-            Path referrerPath = Paths.get(referrerFilename);
-            Path parentPath = referrerPath.getParent();
-            if (parentPath != null) {
-                resolvedPath = parentPath.resolve(resolvedPath);
-            }
-        }
-        resolvedPath = resolvedPath.normalize();
-        if (!Files.exists(resolvedPath)) {
-            throw new JSException(throwTypeError("Cannot find module '" + errorSpecifier + "'"));
-        }
-        return resolvedPath.toString();
-    }
-
-    /**
-     * After loading a side-effect import (from an export-from line), resolve matching
-     * re-export bindings for the current module immediately. This populates the namespace
-     * before the IIFE body runs, so self-imports can see re-exported names.
-     */
-    private void resolveIncrementalReExport(String specifier, String filename) {
-        String normalizedFilename = Paths.get(filename).normalize().toString();
-        JSDynamicImportModule currentModule = dynamicImportModuleCache.get(normalizedFilename);
-        if (currentModule == null || currentModule.reExportBindings().isEmpty()) {
-            return;
-        }
-        String resolvedTargetSpec;
-        try {
-            resolvedTargetSpec = resolveDynamicImportSpecifier(
-                    specifier, filename, specifier);
-        } catch (Exception e) {
-            return;
-        }
-        JSDynamicImportModule targetModule = dynamicImportModuleCache.get(resolvedTargetSpec);
-        if (targetModule == null || targetModule.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-            return;
-        }
-        Map<String, String> exportOrigins = currentModule.exportOrigins();
-        for (JSDynamicImportModule.ReExportBinding reExport : currentModule.reExportBindings()) {
-            String reExportTargetSpec;
-            try {
-                reExportTargetSpec = resolveDynamicImportSpecifier(
-                        reExport.sourceSpecifier(),
-                        currentModule.resolvedSpecifier(),
-                        reExport.sourceSpecifier());
-            } catch (Exception e) {
-                continue;
-            }
-            if (!reExportTargetSpec.equals(resolvedTargetSpec)) {
-                continue;
-            }
-            if (reExport.starExport()) {
-                mergeStarReExport(currentModule, targetModule, exportOrigins, reExportTargetSpec);
-            } else {
-                String importedName = reExport.importedName();
-                DynamicImportExportResolution resolution;
-                if (MODULE_NAMESPACE_EXPORT_NAME.equals(importedName)) {
-                    resolution = DynamicImportExportResolution.resolvedResolution(targetModule, MODULE_NAMESPACE_EXPORT_NAME);
-                } else {
-                    resolution = resolveDynamicImportExport(
-                            targetModule,
-                            importedName,
-                            new HashSet<>(),
-                            new HashSet<>());
-                }
-                if (resolution.ambiguous()) {
-                    throw new JSException(throwSyntaxError(
-                            "ambiguous indirect export: " + reExport.exportedName()));
-                }
-                if (!resolution.found()) {
-                    throw new JSException(throwSyntaxError(
-                            "module '" + reExportTargetSpec + "' does not provide export '" + importedName + "'"));
-                }
-                String existingOrigin = exportOrigins.get(reExport.exportedName());
-                String resolvedOrigin = resolution.moduleRecord().resolvedSpecifier();
-                if (existingOrigin != null && existingOrigin.equals(resolvedOrigin)) {
-                    continue;
-                }
-                defineDynamicImportNamespaceForwardingBinding(
-                        currentModule,
-                        reExport.exportedName(),
-                        resolution.moduleRecord(),
-                        resolvedOrigin,
-                        resolution.bindingName());
-                currentModule.explicitExportNames().add(reExport.exportedName());
-                exportOrigins.put(reExport.exportedName(), resolvedOrigin);
-            }
-        }
-    }
-
-    private void restoreEvalOverlayFrame(EvalOverlayFrame evalOverlayFrame) {
-        if (evalOverlayFrame == null) {
-            return;
-        }
-        JSObject globalObject = getGlobalObject();
-        for (var entry : evalOverlayFrame.savedGlobals().entrySet()) {
-            PropertyKey key = PropertyKey.fromString(entry.getKey());
-            // Use defineProperty to restore data properties, overwriting any accessor
-            // properties that were set up for live import bindings.
-            globalObject.defineProperty(key, entry.getValue(), PropertyDescriptor.DataState.All);
-        }
-        for (String absentKey : evalOverlayFrame.absentKeys()) {
-            globalObject.delete(PropertyKey.fromString(absentKey));
-        }
+        moduleLinker.resolveDynamicImportReExports(moduleRecord, importResolutionStack);
     }
 
     public void resumeEvalOverlays(JSGlobalObject.EvalOverlaySnapshot evalOverlaySnapshot) {
-        if (evalOverlaySnapshot == null) {
-            return;
-        }
-        JSObject globalObject = getGlobalObject();
-        for (var entry : evalOverlaySnapshot.values().entrySet()) {
-            globalObject.set(PropertyKey.fromString(entry.getKey()), entry.getValue());
-        }
-        for (String absentKey : evalOverlaySnapshot.absentKeys()) {
-            globalObject.delete(PropertyKey.fromString(absentKey));
-        }
-    }
-
-    /**
-     * Find the top-level {@code import} and {@code export} declarations in module source, by
-     * tokenising it.
-     * <p>
-     * The transformer downstream is line-oriented: it classifies a line by string-matching
-     * {@code import }/{@code export } at its start. That is only sound if a declaration really does
-     * start a line, and the engine's own lexer is the only thing that knows whether a given
-     * {@code export} is a declaration or three letters inside a template, and whether a {@code /}
-     * opens a regular expression or divides. Both questions used to be answered by
-     * {@link #maskModuleComments(String)}, a hand-written character scanner with no notion of
-     * regular expressions at all — so {@code /"/; export const v = 20;} desynchronised its quote
-     * state for the rest of the line, and {@code const t = 1; export const v = 15;} was not
-     * recognised as an export at all because the keyword was not first on its line.
-     * <p>
-     * This does not make module handling a parser: the declaration's <em>contents</em> are still
-     * read textually afterwards. What it fixes is which text that is.
-     *
-     * @param sourceCode the module source
-     * @return the scan, or {@code null} when the source cannot be tokenised, in which case callers
-     * fall back to the regular expressions
-     */
-    private ModuleDeclarationScan scanTopLevelModuleDeclarations(String sourceCode) {
-        if (sourceCode == null || sourceCode.isEmpty()) {
-            return new ModuleDeclarationScan(false, false, List.of(), List.of());
-        }
-        if (!sourceCode.contains("import") && !sourceCode.contains("export")) {
-            return new ModuleDeclarationScan(false, false, List.of(), List.of());
-        }
-        List<Token> tokens;
-        try {
-            tokens = tokenizeModuleSource(sourceCode);
-        } catch (RuntimeException e) {
-            // Source that does not tokenise is not this method's problem to report: the compiler
-            // will reject it with a proper SyntaxError. Fall back so nothing changes for it.
-            clearPendingException();
-            return null;
-        }
-
-        boolean hasImportDeclaration = false;
-        boolean hasExportDeclaration = false;
-        TreeSet<Integer> lineBreakOffsets = new TreeSet<>();
-        List<Integer> declarationOffsets = new ArrayList<>();
-        int depth = 0;
-        for (int index = 0; index < tokens.size(); index++) {
-            Token token = tokens.get(index);
-            switch (token.type()) {
-                case LBRACE, LPAREN, LBRACKET -> depth++;
-                case RBRACE, RPAREN, RBRACKET -> depth = Math.max(0, depth - 1);
-                default -> {
-                }
-            }
-            if (depth != 0) {
-                continue;
-            }
-            boolean isImportDeclaration = token.type() == TokenType.IMPORT
-                    && index + 1 < tokens.size()
-                    && tokens.get(index + 1).type() != TokenType.LPAREN
-                    && tokens.get(index + 1).type() != TokenType.DOT;
-            boolean isExportDeclaration = token.type() == TokenType.EXPORT;
-            if (!isImportDeclaration && !isExportDeclaration) {
-                continue;
-            }
-            hasImportDeclaration |= isImportDeclaration;
-            hasExportDeclaration |= isExportDeclaration;
-            declarationOffsets.add(token.offset());
-
-            // A declaration that shares its line with earlier code needs a break in front of it.
-            if (index > 0 && tokens.get(index - 1).line() == token.line()) {
-                lineBreakOffsets.add(token.offset());
-            }
-            // And one behind it, when its end is identifiable and code follows on the same line.
-            int endIndex = findModuleDeclarationEnd(tokens, index);
-            if (endIndex >= 0 && endIndex + 1 < tokens.size()
-                    && tokens.get(endIndex + 1).line() == tokens.get(endIndex).line()) {
-                lineBreakOffsets.add(tokens.get(endIndex + 1).offset());
-            }
-        }
-        return new ModuleDeclarationScan(
-                hasImportDeclaration,
-                hasExportDeclaration,
-                List.copyOf(lineBreakOffsets),
-                List.copyOf(declarationOffsets));
+        evalOverlayManager.resume(evalOverlaySnapshot);
     }
 
     public void scheduleClassFieldEvalCall() {
-        pendingClassFieldEval = true;
+        evalRunner.scheduleClassFieldEvalCall();
     }
 
     public void scheduleDirectEvalCall() {
-        pendingDirectEvalCalls++;
+        evalRunner.scheduleDirectEvalCall();
     }
 
-    /**
-     * Set the AsyncFunction constructor (internal use only).
-     * Called during global object initialization.
-     */
     public void setAsyncFunctionConstructor(JSObject asyncFunctionConstructor) {
-        this.asyncFunctionConstructor = asyncFunctionConstructor;
+        realmIntrinsics.setAsyncFunctionConstructor(asyncFunctionConstructor);
     }
 
     public void setAsyncGeneratorFunctionPrototype(JSObject asyncGeneratorFunctionPrototype) {
-        this.asyncGeneratorFunctionPrototype = asyncGeneratorFunctionPrototype;
+        realmIntrinsics.setAsyncGeneratorFunctionPrototype(asyncGeneratorFunctionPrototype);
     }
 
     public void setAsyncGeneratorPrototype(JSObject asyncGeneratorPrototype) {
-        this.asyncGeneratorPrototype = asyncGeneratorPrototype;
+        realmIntrinsics.setAsyncGeneratorPrototype(asyncGeneratorPrototype);
     }
 
     public void setConstructorNewTarget(JSValue newTarget) {
@@ -6872,17 +1279,16 @@ public final class JSContext implements AutoCloseable {
         this.currentThis = thisValue != null ? thisValue : jsGlobalObject.getGlobalObject();
     }
 
-    /**
-     * Set the GeneratorFunction prototype (internal use only).
-     * Called during global object initialization.
-     */
+    void setEvaluatingImportedModule(boolean value) {
+        this.evaluatingImportedModule = value;
+    }
+
     public void setGeneratorFunctionPrototype(JSObject generatorFunctionPrototype) {
-        this.generatorFunctionPrototype = generatorFunctionPrototype;
+        realmIntrinsics.setGeneratorFunctionPrototype(generatorFunctionPrototype);
     }
 
     public void setGlobalFunctionBindingInitializations(Set<String> functionNames, boolean configurable) {
-        activeGlobalFunctionBindingConfigurable = configurable;
-        activeGlobalFunctionBindingInitializations = functionNames;
+        globalLexicalScope.setFunctionBindingInitializations(functionNames, configurable);
     }
 
     public void setInBareVariableAssignment(boolean value) {
@@ -6930,345 +1336,91 @@ public final class JSContext implements AutoCloseable {
     }
 
     public void setRegExpLegacyInput(String inputValue) {
-        if (inputValue == null) {
-            regExpLegacyInput = "";
-        } else {
-            regExpLegacyInput = inputValue;
-        }
+        regExpLegacyStatics.setInput(inputValue);
     }
 
-    /**
-     * Set the %ThrowTypeError% intrinsic function.
-     * Called during global object initialization.
-     */
+    void setSuppressingEvalMicrotasks(boolean value) {
+        this.suppressEvalMicrotaskProcessing = value;
+    }
+
     public void setThrowTypeErrorIntrinsic(JSNativeFunction throwTypeError) {
-        this.throwTypeErrorIntrinsic = throwTypeError;
+        realmIntrinsics.setThrowTypeErrorIntrinsic(throwTypeError);
     }
 
     public void setWaitable(boolean waitable) {
         this.waitable = waitable;
     }
 
-    private int skipWhitespace(String text, int startIndex) {
-        int index = Math.max(0, startIndex);
-        while (index < text.length() && Character.isWhitespace(text.charAt(index))) {
-            index++;
-        }
-        return index;
-    }
-
-    /**
-     * Split a string on commas that are not inside quoted strings.
-     */
-    private List<String> splitOnTopLevelCommas(String text) {
-        List<String> result = new ArrayList<>();
-        int start = 0;
-        boolean inSingleQuote = false;
-        boolean inDoubleQuote = false;
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            if (ch == '\'' && !inDoubleQuote) {
-                inSingleQuote = !inSingleQuote;
-            } else if (ch == '"' && !inSingleQuote) {
-                inDoubleQuote = !inDoubleQuote;
-            } else if (ch == ',' && !inSingleQuote && !inDoubleQuote) {
-                result.add(text.substring(start, i));
-                start = i + 1;
-            }
-        }
-        result.add(text.substring(start));
-        return result;
-    }
-
-    /**
-     * The module a quoted specifier names, as a value rather than as source text.
-     *
-     * @param text the specifier literal, possibly followed by an attributes clause
-     * @return the decoded specifier
-     */
-    private String stripQuotedSpecifier(String text) {
-        String specifierText = text.trim();
-        if (specifierText.length() < 2) {
-            throw new JSException(throwSyntaxError("Invalid module specifier"));
-        }
-        char quote = specifierText.charAt(0);
-        if (quote != '\'' && quote != '"') {
-            throw new JSException(throwSyntaxError("Invalid module specifier"));
-        }
-        // A backslash escapes whatever follows it, so the first matching quote is not necessarily
-        // the closing one: `'./a\\'b.mjs'` ends at the third quote, not the second.
-        int closeQuote = -1;
-        for (int index = 1; index < specifierText.length(); index++) {
-            char ch = specifierText.charAt(index);
-            if (ch == '\\') {
-                index++;
-                continue;
-            }
-            if (ch == quote) {
-                closeQuote = index;
-                break;
-            }
-        }
-        if (closeQuote < 0) {
-            throw new JSException(throwSyntaxError("Invalid module specifier"));
-        }
-        // Everything after the closing quote (e.g. `with { ... }`) is not part of the specifier.
-        return decodeModuleStringLiteralValue(specifierText.substring(1, closeQuote));
-    }
-
     public JSGlobalObject.EvalOverlaySnapshot suspendEvalOverlays() {
-        if (evalOverlayFrames.isEmpty()) {
-            return null;
-        }
-        JSObject globalObject = getGlobalObject();
-        Set<String> overlaidKeys = new HashSet<>();
-        for (EvalOverlayFrame evalOverlayFrame : evalOverlayFrames) {
-            overlaidKeys.addAll(evalOverlayFrame.savedGlobals().keySet());
-            overlaidKeys.addAll(evalOverlayFrame.absentKeys());
-        }
-
-        Map<String, JSValue> suspendedValues = new HashMap<>();
-        Set<String> suspendedAbsentKeys = new HashSet<>();
-        for (String key : overlaidKeys) {
-            PropertyKey propertyKey = PropertyKey.fromString(key);
-            if (globalObject.has(propertyKey)) {
-                suspendedValues.put(key, globalObject.get(propertyKey));
-            } else {
-                suspendedAbsentKeys.add(key);
-            }
-        }
-
-        Iterator<EvalOverlayFrame> descendingIterator = evalOverlayFrames.descendingIterator();
-        while (descendingIterator.hasNext()) {
-            EvalOverlayFrame evalOverlayFrame = descendingIterator.next();
-            for (var entry : evalOverlayFrame.savedGlobals().entrySet()) {
-                PropertyKey overlayKey = PropertyKey.fromString(entry.getKey());
-                PropertyDescriptor currentDescriptor = globalObject.getOwnPropertyDescriptor(overlayKey);
-                if (currentDescriptor != null
-                        && currentDescriptor.isDataDescriptor()
-                        && !currentDescriptor.isWritable()) {
-                    globalObject.defineProperty(overlayKey, entry.getValue(), PropertyDescriptor.DataState.All);
-                } else {
-                    globalObject.set(overlayKey, entry.getValue());
-                }
-            }
-            for (String absentKey : evalOverlayFrame.absentKeys()) {
-                globalObject.delete(PropertyKey.fromString(absentKey));
-            }
-        }
-        return new JSGlobalObject.EvalOverlaySnapshot(suspendedValues, suspendedAbsentKeys);
+        return evalOverlayManager.suspend();
     }
 
-    /**
-     * Throw a AggregateError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwAggregateError(String message) {
-        return throwError(JSAggregateError.NAME, message);
-    }
-
-    /**
-     * Throw a JavaScript error.
-     * Creates an Error object and sets it as the pending exception.
-     *
-     * @param message Error message
-     * @return The error value (for convenience in return statements)
-     */
-    public JSError throwError(String message) {
-        return throwError(JSError.NAME, message);
-    }
-
-    /**
-     * Throw a JavaScript error of a specific type.
-     *
-     * @param errorType Error constructor name (Error, TypeError, RangeError, etc.)
-     * @param message   Error message
-     * @return The error value
-     */
-    public JSError throwError(String errorType, String message) {
-        return throwError(errorType, message, null);
-    }
-
-    /**
-     * Throw a JavaScript error of a specific type at a source location.
-     *
-     * @param errorType      Error constructor name (Error, TypeError, RangeError, etc.)
-     * @param message        Error message
-     * @param sourceLocation Source location, or {@code null} when unavailable
-     * @return The error value
-     */
-    public JSError throwError(String errorType, String message, SourceLocation sourceLocation) {
-        // Create error object using the proper error class
-        JSError jsError = switch (errorType) {
-            case JSAggregateError.NAME -> new JSAggregateError(this, message, sourceLocation);
-            case JSEvalError.NAME -> new JSEvalError(this, message, sourceLocation);
-            case JSRangeError.NAME -> new JSRangeError(this, message, sourceLocation);
-            case JSReferenceError.NAME -> new JSReferenceError(this, message, sourceLocation);
-            case JSSyntaxError.NAME -> new JSSyntaxError(this, message, sourceLocation);
-            case JSTypeError.NAME -> new JSTypeError(this, message, sourceLocation);
-            case JSURIError.NAME -> new JSURIError(this, message, sourceLocation);
-            default -> new JSError(this, message, sourceLocation);
-        };
-        return throwError(jsError);
+        return errorReporter.throwAggregateError(message);
     }
 
     public JSError throwError(JSError jsError) {
-        transferPrototype(jsError, jsError.getErrorName());
-        // Capture stack trace
-        captureStackTrace(jsError);
-        // Set as pending exception
-        setPendingException(jsError);
-        return jsError;
+        return errorReporter.throwError(jsError);
     }
 
     public JSError throwError(JSErrorException jsErrorException) {
-        if (jsErrorException == null) {
-            return throwError("Unknown error");
-        }
-        return throwError(
-                jsErrorException.getErrorType().name(),
-                jsErrorException.getMessage(),
-                jsErrorException.getSourceLocation());
+        return errorReporter.throwError(jsErrorException);
     }
 
-    /**
-     * Throw a EvalError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
+    public JSError throwError(String message) {
+        return errorReporter.throwError(message);
+    }
+
+    public JSError throwError(String errorType, String message) {
+        return errorReporter.throwError(errorType, message);
+    }
+
+    public JSError throwError(String errorType, String message, SourceLocation sourceLocation) {
+        return errorReporter.throwError(errorType, message, sourceLocation);
+    }
+
     public JSError throwEvalError(String message) {
-        return throwError(JSEvalError.NAME, message);
+        return errorReporter.throwEvalError(message);
     }
 
-    /**
-     * Throw a RangeError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwRangeError(String message) {
-        return throwError(JSRangeError.NAME, message);
+        return errorReporter.throwRangeError(message);
     }
 
-    /**
-     * Throw a ReferenceError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwReferenceError(String message) {
-        return throwError(JSReferenceError.NAME, message);
+        return errorReporter.throwReferenceError(message);
     }
 
-    /**
-     * Throw a SyntaxError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwSyntaxError(String message) {
-        return throwError(JSSyntaxError.NAME, message);
+        return errorReporter.throwSyntaxError(message);
     }
 
     public JSError throwSyntaxError(String message, SourceLocation sourceLocation) {
-        return throwError(JSSyntaxError.NAME, message, sourceLocation);
+        return errorReporter.throwSyntaxError(message, sourceLocation);
     }
 
-    /**
-     * Throw a TypeError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwTypeError(String message) {
-        return throwError(JSTypeError.NAME, message);
+        return errorReporter.throwTypeError(message);
     }
 
     public JSError throwTypeError(String message, SourceLocation sourceLocation) {
-        return throwError(JSTypeError.NAME, message, sourceLocation);
+        return errorReporter.throwTypeError(message, sourceLocation);
     }
 
-    /**
-     * Throw a URIError.
-     *
-     * @param message Error message
-     * @return The error value
-     */
     public JSError throwURIError(String message) {
-        return throwError(JSURIError.NAME, message);
-    }
-
-    public boolean transferPrototype(JSObject receiver, String constructorName) {
-        JSValue constructor = jsGlobalObject.getGlobalObject().get(constructorName);
-        if (constructor instanceof JSObject jsObject) {
-            return transferPrototype(receiver, jsObject);
-        }
-        return false;
+        return errorReporter.throwURIError(message);
     }
 
     public boolean transferPrototype(JSObject receiver, JSObject constructor) {
-        JSValue prototype = constructor.get(PropertyKey.PROTOTYPE);
-        if (prototype instanceof JSObject) {
-            receiver.setPrototype((JSObject) prototype);
-            return true;
-        }
-        return false;
+        return realmIntrinsics.transferPrototype(receiver, constructor);
     }
 
-    /**
-     * Transfer prototype using Get(constructor, "prototype") with full JS semantics.
-     * This is used by constructor paths that must observe accessors and propagate abrupt completions.
-     */
+    public boolean transferPrototype(JSObject receiver, String constructorName) {
+        return realmIntrinsics.transferPrototype(receiver, constructorName);
+    }
+
     public boolean transferPrototypeFromConstructor(JSObject receiver, JSObject constructor) {
-        JSObject prototype = getPrototypeFromConstructor(constructor, JSObject.NAME);
-        if (prototype == null) {
-            return false;
-        }
-        receiver.setPrototype(prototype);
-        return true;
-    }
-
-    private void triggerPendingDependents(JSDynamicImportModule moduleRecord) {
-        // ES2024 16.2.1.5.2.4 AsyncModuleExecutionFulfilled / 16.2.1.5.2.5 AsyncModuleExecutionRejected
-        // Step 1: Gather all ancestors that are now ready (all async deps resolved)
-        List<JSDynamicImportModule> readyModules = new ArrayList<>();
-        gatherAvailableAncestors(moduleRecord, readyModules);
-
-        // Step 2: Sort by async evaluation order (the order they were deferred during DFS)
-        readyModules.sort(Comparator.comparingInt(JSDynamicImportModule::asyncEvaluationOrder));
-
-        // Step 3: Execute each ready module in order
-        for (JSDynamicImportModule ready : readyModules) {
-            if (moduleRecord.status() == JSDynamicImportModule.Status.EVALUATED_ERROR) {
-                // Propagate error to dependents
-                ready.setEvaluationError(moduleRecord.evaluationError());
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                triggerPendingDependents(ready);
-                continue;
-            }
-            try {
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATING);
-                JSValue evalResult = evaluateDynamicImportModule(ready);
-                if (ready.hasTLA() && evalResult instanceof JSPromise asyncPromise) {
-                    ready.setAsyncEvaluationOrder(asyncEvaluationOrderCounter++);
-                    ready.setStatus(JSDynamicImportModule.Status.EVALUATING_ASYNC);
-                    ready.setAsyncEvaluationPromise(asyncPromise);
-                    registerAsyncModuleCompletion(ready, asyncPromise, new HashSet<>());
-                } else {
-                    resolveDynamicImportReExports(ready, new HashSet<>());
-                    ready.namespace().finalizeNamespace();
-                    ready.setStatus(JSDynamicImportModule.Status.EVALUATED);
-                    triggerPendingDependents(ready);
-                }
-            } catch (JSException jsException) {
-                ready.setEvaluationError(jsException.getErrorValue());
-                ready.setStatus(JSDynamicImportModule.Status.EVALUATED_ERROR);
-                triggerPendingDependents(ready);
-            }
-        }
+        return realmIntrinsics.transferPrototypeFromConstructor(receiver, constructor);
     }
 
     public void updateRegExpLegacyStatics(
@@ -7276,781 +1428,10 @@ public final class JSContext implements AutoCloseable {
             String[] captureValues,
             int[][] captureIndices,
             int fallbackStartIndex) {
-        String normalizedInput = inputValue != null ? inputValue : "";
-        regExpLegacyInput = normalizedInput;
-
-        String matchedText = "";
-        if (captureValues != null && captureValues.length > 0 && captureValues[0] != null) {
-            matchedText = captureValues[0];
-        }
-
-        int inputLength = normalizedInput.length();
-        int matchStart = 0;
-        int matchEnd = 0;
-        if (captureIndices != null
-                && captureIndices.length > 0
-                && captureIndices[0] != null
-                && captureIndices[0].length >= 2) {
-            matchStart = Math.max(0, Math.min(inputLength, captureIndices[0][0]));
-            matchEnd = Math.max(matchStart, Math.min(inputLength, captureIndices[0][1]));
-            if (matchedText.isEmpty() && matchEnd >= matchStart) {
-                matchedText = normalizedInput.substring(matchStart, matchEnd);
-            }
-        } else if (!matchedText.isEmpty()) {
-            int normalizedFallbackStart = Math.max(0, fallbackStartIndex);
-            int foundIndex = normalizedInput.indexOf(matchedText, normalizedFallbackStart);
-            if (foundIndex < 0) {
-                foundIndex = normalizedInput.indexOf(matchedText);
-            }
-            if (foundIndex >= 0) {
-                matchStart = foundIndex;
-                matchEnd = Math.min(inputLength, foundIndex + matchedText.length());
-            }
-        }
-
-        regExpLegacyLastMatch = matchedText;
-        regExpLegacyLeftContext = normalizedInput.substring(0, matchStart);
-        regExpLegacyRightContext = normalizedInput.substring(matchEnd);
-
-        for (int captureIndex = 0; captureIndex < regExpLegacyCaptures.length; captureIndex++) {
-            String captureValue = "";
-            int captureValueIndex = captureIndex + 1;
-            if (captureValues != null
-                    && captureValueIndex < captureValues.length
-                    && captureValues[captureValueIndex] != null) {
-                captureValue = captureValues[captureValueIndex];
-            }
-            regExpLegacyCaptures[captureIndex] = captureValue;
-        }
-
-        String lastParenValue = "";
-        if (captureValues != null && captureValues.length > 1) {
-            for (int captureIndex = captureValues.length - 1; captureIndex >= 1; captureIndex--) {
-                String captureValue = captureValues[captureIndex];
-                if (captureValue != null) {
-                    lastParenValue = captureValue;
-                    break;
-                }
-            }
-        }
-        regExpLegacyLastParen = lastParenValue;
-    }
-
-    private void validateImportNameAgainstModuleRecord(
-            JSDynamicImportModule moduleRecord,
-            String importedName) {
-        DynamicImportExportResolution resolution = resolveDynamicImportExport(
-                moduleRecord,
-                importedName,
-                new HashSet<>(),
-                new HashSet<>());
-        if (resolution.ambiguous()) {
-            throw new JSSyntaxErrorException(
-                    "ambiguous indirect export: " + importedName);
-        }
-        if (!resolution.found()) {
-            throw new JSSyntaxErrorException(
-                    "The requested module does not provide an export named '" + importedName + "'");
-        }
-    }
-
-    private void validateModuleScriptEarlyErrors(String sourceCode) {
-        String sourceWithoutComments = sourceCode
-                .replaceAll("(?s)/\\*.*?\\*/", "")
-                .replaceAll("(?m)//.*$", "");
-        Matcher varMatcher = Pattern.compile("\\bvar\\s+([A-Za-z_$][A-Za-z0-9_$]*)").matcher(sourceWithoutComments);
-        Set<String> varNames = new HashSet<>();
-        while (varMatcher.find()) {
-            varNames.add(varMatcher.group(1));
-        }
-        Matcher functionMatcher = Pattern.compile("\\bfunction\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*\\(")
-                .matcher(sourceWithoutComments);
-        while (functionMatcher.find()) {
-            String functionName = functionMatcher.group(1);
-            if (varNames.contains(functionName)) {
-                throw new JSException(throwSyntaxError("Identifier '" + functionName + "' has already been declared"));
-            }
-        }
-    }
-
-    /**
-     * Validate that all named imports in an import clause exist in the finalized namespace.
-     * Throws SyntaxError if any binding is missing (ES2024 linking error).
-     */
-    private void validateNamedImportBindings(JSImportNamespaceObject namespace, String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            validateNamedImportSpecifiers(namespace, clause);
-            return;
-        }
-        int commaIdx = clause.indexOf(',');
-        if (commaIdx < 0) {
-            PropertyKey defaultKey = PropertyKey.fromString("default");
-            if (!namespace.has(defaultKey)) {
-                throw new JSSyntaxErrorException(
-                        "The requested module does not provide an export named 'default'");
-            }
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIdx).trim();
-        if (!defaultBinding.isEmpty()) {
-            PropertyKey defaultKey = PropertyKey.fromString("default");
-            if (!namespace.has(defaultKey)) {
-                throw new JSSyntaxErrorException(
-                        "The requested module does not provide an export named 'default'");
-            }
-        }
-
-        String remainder = clause.substring(commaIdx + 1).trim();
-        if (remainder.startsWith("{")) {
-            validateNamedImportSpecifiers(namespace, remainder);
-        }
-    }
-
-    private void validateNamedImportBindingsAgainstExplicitExports(
-            JSDynamicImportModule moduleRecord, String importClause) {
-        String clause = importClause.trim();
-        if (clause.isEmpty() || clause.startsWith("*") || clause.startsWith("defer *")) {
-            return;
-        }
-        if (clause.startsWith("{")) {
-            validateNamedImportSpecifiersAgainstModuleRecord(moduleRecord, clause);
-            return;
-        }
-        int commaIdx = clause.indexOf(',');
-        if (commaIdx < 0) {
-            validateImportNameAgainstModuleRecord(moduleRecord, "default");
-            return;
-        }
-
-        String defaultBinding = clause.substring(0, commaIdx).trim();
-        if (!defaultBinding.isEmpty()) {
-            validateImportNameAgainstModuleRecord(moduleRecord, "default");
-        }
-
-        String remainder = clause.substring(commaIdx + 1).trim();
-        if (remainder.startsWith("{")) {
-            validateNamedImportSpecifiersAgainstModuleRecord(moduleRecord, remainder);
-        }
-    }
-
-    private void validateNamedImportSpecifiers(JSImportNamespaceObject namespace, String namedClause) {
-        if (!namedClause.startsWith("{") || !namedClause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = namedClause.substring(1, namedClause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            int asIndex = findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-            } else {
-                importedName = parseModuleExportNameValue(specifier);
-            }
-            PropertyKey importKey = PropertyKey.fromString(importedName);
-            if (!namespace.has(importKey)) {
-                throw new JSSyntaxErrorException(
-                        "The requested module does not provide an export named '" + importedName + "'");
-            }
-        }
-    }
-
-    private void validateNamedImportSpecifiersAgainstModuleRecord(
-            JSDynamicImportModule moduleRecord,
-            String namedClause) {
-        if (!namedClause.startsWith("{") || !namedClause.endsWith("}")) {
-            return;
-        }
-        String specifiersText = namedClause.substring(1, namedClause.length() - 1).trim();
-        if (specifiersText.isEmpty()) {
-            return;
-        }
-        for (String rawSpecifier : splitOnTopLevelCommas(specifiersText)) {
-            String specifier = rawSpecifier.trim();
-            if (specifier.isEmpty()) {
-                continue;
-            }
-            String importedName;
-            int asIndex = findTopLevelAs(specifier);
-            if (asIndex >= 0) {
-                importedName = parseModuleExportNameValue(specifier.substring(0, asIndex).trim());
-            } else {
-                importedName = parseModuleExportNameValue(specifier);
-            }
-            validateImportNameAgainstModuleRecord(moduleRecord, importedName);
-        }
+        regExpLegacyStatics.update(inputValue, captureValues, captureIndices, fallbackStartIndex);
     }
 
     public void writeGlobalLexicalBinding(String name, JSValue value) {
-        globalLexicalBindings.put(name, value);
-    }
-
-    /**
-     * Where one {@code export default <expression>} ends, and what follows it on its last line.
-     *
-     * @param expression   the expression's text, exactly as written
-     * @param endLineIndex the zero-based index of the line the expression ends on
-     * @param trailingText the code that followed it on that line, without the terminating
-     *                     semicolon; empty when nothing did
-     */
-    private record DefaultExportExtent(String expression, int endLineIndex, String trailingText) {
-    }
-
-    private record DynamicImportExportResolution(
-            JSDynamicImportModule moduleRecord,
-            String bindingName,
-            boolean ambiguous) {
-        private static DynamicImportExportResolution ambiguousResolution() {
-            return new DynamicImportExportResolution(null, null, true);
-        }
-
-        private static DynamicImportExportResolution notFoundResolution() {
-            return new DynamicImportExportResolution(null, null, false);
-        }
-
-        private static DynamicImportExportResolution resolvedResolution(
-                JSDynamicImportModule moduleRecord,
-                String bindingName) {
-            return new DynamicImportExportResolution(moduleRecord, bindingName, false);
-        }
-
-        private boolean found() {
-            return moduleRecord != null;
-        }
-    }
-
-    private record EvalOverlayFrame(Map<String, JSValue> savedGlobals, Set<String> absentKeys) {
-    }
-
-    private record ImportBinding(String sourceSpecifier, String importedName, boolean deferredImport) {
-    }
-
-    /**
-     * What ECMAScript's ResolveExport answers with: a module, and a name within it.
-     * <p>
-     * Two fields rather than one delimited string. The delimited form needed a separator that could
-     * not occur in either half, which meant a NUL — a byte that made the engine's largest source
-     * file read as binary to ordinary search tooling. A pair needs no separator, and its
-     * {@code equals} is exactly the binding identity that decides whether two {@code export *}
-     * routes to a name are the same binding or an ambiguity.
-     *
-     * @param specifier the resolved specifier of the module the binding lives in
-     * @param name      the name of the binding within that module
-     */
-    private record LinkedBinding(String specifier, String name) {
-    }
-
-    /**
-     * One name an import clause asks the exporting module for, and where it asked.
-     *
-     * @param name     the requested export name, decoded
-     * @param location where the name was written, in the importing module's own source
-     */
-    private record LinkedExportNameRequest(String name, SourceLocation location) {
-    }
-
-    /**
-     * One static {@code import} declaration, as the link pass needs it.
-     *
-     * @param specifier     the module specifier, decoded
-     * @param location      where the specifier was written, so a module that cannot be loaded can
-     *                      be reported at the declaration that asked for it
-     * @param attributes    the {@code with}/{@code assert} attributes, empty when there are none
-     * @param importedNames the names asked for; empty for a namespace or side-effect import, which
-     *                      still names a module that has to link
-     */
-    private record LinkedModuleRequest(
-            String specifier,
-            SourceLocation location,
-            Map<String, String> attributes,
-            List<LinkedExportNameRequest> importedNames) {
-    }
-
-    /**
-     * What a token scan found out about a source's top-level module declarations.
-     *
-     * @param hasImportDeclaration whether a static {@code import} declaration is present
-     * @param hasExportDeclaration whether an {@code export} declaration is present
-     * @param lineBreakOffsets     offsets at which a line break must be inserted so that every
-     *                             declaration occupies whole lines, ascending and distinct
-     */
-    private record ModuleDeclarationScan(
-            boolean hasImportDeclaration,
-            boolean hasExportDeclaration,
-            List<Integer> lineBreakOffsets,
-            List<Integer> declarationOffsets) {
-    }
-
-    /**
-     * One run of the link check over one module graph.
-     * <p>
-     * A class rather than a set of methods because the pass is a small algorithm with state: the
-     * records it has already parsed, and which module the caller actually handed to {@code eval},
-     * both of which every step needs. It parses into records of its own and never touches the
-     * module cache, so nothing it does is visible to the evaluation that follows.
-     */
-    private final class ModuleLinkPass {
-        private final Map<String, JSDynamicImportModule> linkRecords = new HashMap<>();
-        private final String rootSpecifier;
-
-        private ModuleLinkPass(String rootSpecifier) {
-            this.rootSpecifier = rootSpecifier;
-        }
-
-        /**
-         * Check every module one module names, and every name it asks them for, then do the same
-         * for everything it reaches.
-         * <p>
-         * Every request is decided here, and none is deferred. The pass used to skip a request it
-         * could not resolve, could not read, or that carried a {@code type} attribute, on the
-         * grounds that evaluation would report it. Evaluation does — but evaluation reaches the
-         * requests in source order, so by the time it reached the skipped one it had already run
-         * the bodies of the modules named before it. A graph containing an unloadable module must
-         * never begin evaluating, so a request this pass cannot satisfy fails here, at the
-         * declaration that made it.
-         *
-         * @param moduleRecord the module being linked
-         */
-        private void checkModuleLinks(JSDynamicImportModule moduleRecord) {
-            List<LinkedModuleRequest> moduleRequests = linkedModuleRequests(moduleRecord.rawSource());
-            if (moduleRequests == null) {
-                // Source that does not tokenise is the compiler's to reject, not this pass's.
-                return;
-            }
-            for (LinkedModuleRequest moduleRequest : moduleRequests) {
-                String resolvedSpecifier = requireModuleResolves(moduleRequest, moduleRecord);
-                String moduleType = moduleRequest.attributes().get("type");
-                if (isSyntheticModuleRequest(resolvedSpecifier, moduleType)) {
-                    checkSyntheticModuleLinks(moduleRequest, resolvedSpecifier, moduleType, moduleRecord);
-                    continue;
-                }
-                JSDynamicImportModule targetRecord =
-                        requireJavaScriptModuleLinks(moduleRequest, resolvedSpecifier, moduleRecord);
-                // A namespace import and `export *` ask for no particular name, but linking the
-                // module they name is still what surfaces that module's own unresolvable imports.
-                for (LinkedExportNameRequest requestedName : moduleRequest.importedNames()) {
-                    requireExportResolves(
-                            targetRecord,
-                            requestedName.name(),
-                            moduleRequest.specifier(),
-                            moduleRecord,
-                            requestedName.location());
-                }
-            }
-        }
-
-        /**
-         * Check a request for a module whose exports the host manufactures rather than reading out
-         * of JavaScript source: a {@code type: 'text'} or {@code type: 'bytes'} payload, or JSON.
-         * <p>
-         * Such a module provides exactly one export, {@code default}. The rules and the wording are
-         * the ones evaluation already applies; the only thing that changes is that they are applied
-         * before anything runs.
-         *
-         * @param moduleRequest     the declaration's request
-         * @param resolvedSpecifier the resolved path of the payload
-         * @param moduleType        the {@code type} attribute, or null when the declaration has none
-         * @param importerRecord    the module whose declaration made the request
-         */
-        private void checkSyntheticModuleLinks(
-                LinkedModuleRequest moduleRequest,
-                String resolvedSpecifier,
-                String moduleType,
-                JSDynamicImportModule importerRecord) {
-            String moduleKind;
-            if ("text".equals(moduleType)) {
-                moduleKind = "Text";
-            } else if ("bytes".equals(moduleType)) {
-                moduleKind = "Bytes";
-            } else if ("json".equals(moduleType)) {
-                moduleKind = "JSON";
-            } else {
-                // A .json payload is JSON whatever the declaration says, and evaluation refuses to
-                // read one it was not told to expect.
-                throw linkFailure(
-                        "Import attribute type must be 'json'",
-                        importerRecord,
-                        moduleRequest.location(),
-                        true);
-            }
-            requireModuleIsReadable(moduleRequest, resolvedSpecifier, importerRecord);
-            for (LinkedExportNameRequest requestedName : moduleRequest.importedNames()) {
-                if (!"default".equals(requestedName.name())) {
-                    throw linkFailure(
-                            moduleKind + " modules do not support named exports",
-                            importerRecord,
-                            requestedName.location(),
-                            false);
-                }
-            }
-        }
-
-        /**
-         * Whether a request names a module whose exports the host manufactures.
-         * <p>
-         * The order matters and mirrors the loader's: {@code type} chooses first, so a {@code .json}
-         * payload imported as text is text.
-         *
-         * @param resolvedSpecifier the resolved path
-         * @param moduleType        the {@code type} attribute, or null
-         * @return true when the target is not JavaScript source
-         */
-        private boolean isSyntheticModuleRequest(String resolvedSpecifier, String moduleType) {
-            return "text".equals(moduleType)
-                    || "bytes".equals(moduleType)
-                    || resolvedSpecifier.endsWith(".json");
-        }
-
-        /**
-         * Build the error for a link failure, positioned at the declaration that caused it.
-         * <p>
-         * A {@code SourceLocation} is an offset into <em>some</em> source, and on its own it does
-         * not say which. That is why a failure in a dependency used to carry no location at all: a
-         * dependency's offsets attached to a bare exception would have read as offsets into the
-         * text the caller passed to {@code eval}. The exception now carries the source's name
-         * alongside its offsets, so a dependency's position can be reported as what it is — and the
-         * embedder gets one structured diagnostic for a root failure and a transitive one alike,
-         * instead of having to parse coordinates back out of a message.
-         *
-         * @param message         what went wrong
-         * @param importerRecord  the module whose declaration made the request
-         * @param requestLocation where the request was written, or null when it is not a source name
-         * @param typeError       true for a module that cannot be loaded, false for one that links
-         *                        but does not provide what was asked of it
-         * @return the exception to throw
-         */
-        private JSException linkFailure(
-                String message,
-                JSDynamicImportModule importerRecord,
-                SourceLocation requestLocation,
-                boolean typeError) {
-            String importerSpecifier = importerRecord.resolvedSpecifier();
-            boolean importerIsEntryModule = rootSpecifier.equals(importerSpecifier);
-            String reportedMessage = importerIsEntryModule || requestLocation == null
-                    ? message
-                    : message + " (imported by " + importerSpecifier
-                      + ":" + requestLocation.line() + ":" + requestLocation.column() + ")";
-            JSError error = typeError
-                    ? throwTypeError(reportedMessage, requestLocation)
-                    : throwSyntaxError(reportedMessage, requestLocation);
-            // Which source the offsets belong to. Recorded on the error value rather than only on
-            // the exception, because eval() re-wraps its pending exception on the way out.
-            if (requestLocation != null) {
-                error.setSourceName(importerSpecifier);
-            }
-            return new JSException(error);
-        }
-
-        /**
-         * Parse and check the whole graph rooted at the entry module.
-         *
-         * @param sourceCode the entry module's source, as written
-         */
-        private void linkGraph(String sourceCode) {
-            JSDynamicImportModule rootRecord =
-                    new JSDynamicImportModule(rootSpecifier, createModuleNamespaceObject());
-            rootRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-            rootRecord.setRawSource(sourceCode);
-            parseDynamicImportModuleSource(rootRecord);
-            linkRecords.put(rootSpecifier, rootRecord);
-            checkModuleLinks(rootRecord);
-        }
-
-        /**
-         * Parse one module for linking, without evaluating it.
-         * <p>
-         * A module already in {@link #linkRecords} is returned as it stands, including one whose own
-         * links are still being checked further up the stack. That is what makes a cycle
-         * resolvable: its exports are known as soon as its source has been parsed, which happens
-         * before anything it imports is looked at, so the module on the other side of a cycle can
-         * be asked for a name even though it is only half linked. Declining to answer for a cycle
-         * meant a graph with a genuinely unresolvable name across one ran its dependencies before
-         * saying so.
-         *
-         * @param specifier the specifier as written
-         * @param filename  the importing module's name
-         * @return the parsed record, or null when the specifier is not a JavaScript module this
-         * pass can read
-         */
-        private JSDynamicImportModule linkModule(String specifier, String filename) {
-            String resolvedSpecifier;
-            try {
-                resolvedSpecifier = resolveDynamicImportSpecifier(specifier, filename, specifier);
-            } catch (JSException unresolvable) {
-                clearPendingException();
-                return null;
-            }
-            JSDynamicImportModule existingRecord = linkRecords.get(resolvedSpecifier);
-            if (existingRecord != null) {
-                return existingRecord;
-            }
-            if (resolvedSpecifier.endsWith(".json")) {
-                return null;
-            }
-            String dependencySource = readModuleSource(resolvedSpecifier);
-            if (dependencySource == null) {
-                return null;
-            }
-            return loadLinkRecord(resolvedSpecifier, dependencySource);
-        }
-
-        /**
-         * Parse one module into a link record and check what it, in turn, names.
-         * <p>
-         * ECMAScript parses every module in the graph while loading it, so a module anywhere in the
-         * graph that is not valid source is a failure of the whole graph before any of it runs.
-         * Without this the engine compiled each dependency as it reached it, so the dependencies
-         * ahead of a broken one had already been evaluated.
-         * <p>
-         * The record goes into {@link #linkRecords} before its own links are checked, which is what
-         * makes a cycle resolvable: a module's exports are known as soon as its source has been
-         * parsed, so the module on the other side of a cycle can be asked for a name even though it
-         * is only half linked.
-         *
-         * @param resolvedSpecifier the module's resolved path
-         * @param dependencySource  its source, as written
-         * @return the link record
-         */
-        private JSDynamicImportModule loadLinkRecord(String resolvedSpecifier, String dependencySource) {
-            requireDependencyModuleSourceCompiles(dependencySource, resolvedSpecifier);
-            JSDynamicImportModule linkRecord =
-                    new JSDynamicImportModule(resolvedSpecifier, createModuleNamespaceObject());
-            linkRecord.setStatus(JSDynamicImportModule.Status.LOADING);
-            linkRecord.setRawSource(dependencySource);
-            parseDynamicImportModuleSource(linkRecord);
-            linkRecords.put(resolvedSpecifier, linkRecord);
-            checkModuleLinks(linkRecord);
-            return linkRecord;
-        }
-
-        /**
-         * A module's source, or null when it cannot be read.
-         *
-         * @param resolvedSpecifier the resolved path
-         * @return the source, or null
-         */
-        private String readModuleSource(String resolvedSpecifier) {
-            try {
-                return Files.readString(Path.of(resolvedSpecifier));
-            } catch (IOException | RuntimeException unreadable) {
-                return null;
-            }
-        }
-
-        /**
-         * Require that a module being linked resolves an export name to exactly one binding.
-         *
-         * @param moduleRecord    the exporting module
-         * @param exportName      the name asked for
-         * @param specifier       the specifier the importer wrote
-         * @param importerRecord  the module that asked
-         * @param requestLocation where the name was written, or null when it is not a source name
-         */
-        private void requireExportResolves(
-                JSDynamicImportModule moduleRecord,
-                String exportName,
-                String specifier,
-                JSDynamicImportModule importerRecord,
-                SourceLocation requestLocation) {
-            LinkedBinding binding = resolveExport(moduleRecord, exportName, new HashSet<>());
-            if (binding == UNKNOWN_LINKED_EXPORT) {
-                // A star target this pass could not read may still provide the name. Evaluation
-                // reports it if it does not.
-                return;
-            }
-            if (binding == AMBIGUOUS_LINKED_EXPORT) {
-                throw linkFailure(
-                        "The requested module '" + specifier
-                                + "' contains conflicting star exports for the name '" + exportName + "'",
-                        importerRecord,
-                        requestLocation,
-                        false);
-            }
-            if (binding == null) {
-                throw linkFailure(
-                        "The requested module '" + specifier
-                                + "' does not provide an export named '" + exportName + "'",
-                        importerRecord,
-                        requestLocation,
-                        false);
-            }
-        }
-
-        /**
-         * Load, parse and link the JavaScript module a request names, or fail at the request.
-         *
-         * @param moduleRequest     the declaration's request
-         * @param resolvedSpecifier the resolved path
-         * @param importerRecord    the module whose declaration made the request
-         * @return the linked record, never null
-         */
-        private JSDynamicImportModule requireJavaScriptModuleLinks(
-                LinkedModuleRequest moduleRequest,
-                String resolvedSpecifier,
-                JSDynamicImportModule importerRecord) {
-            JSDynamicImportModule existingRecord = linkRecords.get(resolvedSpecifier);
-            if (existingRecord != null) {
-                return existingRecord;
-            }
-            String dependencySource = readModuleSource(resolvedSpecifier);
-            if (dependencySource == null) {
-                throw linkFailure(
-                        "Cannot find module '" + resolvedSpecifier + "'",
-                        importerRecord,
-                        moduleRequest.location(),
-                        true);
-            }
-            return loadLinkRecord(resolvedSpecifier, dependencySource);
-        }
-
-        /**
-         * Require that a payload the host will read is actually readable.
-         *
-         * @param moduleRequest     the declaration's request
-         * @param resolvedSpecifier the resolved path
-         * @param importerRecord    the module whose declaration made the request
-         */
-        private void requireModuleIsReadable(
-                LinkedModuleRequest moduleRequest,
-                String resolvedSpecifier,
-                JSDynamicImportModule importerRecord) {
-            // isReadable alone is true of a directory, and a directory is not a payload: the read
-            // would fail at evaluation, which is the ordering this pass exists to prevent.
-            Path payloadPath = Path.of(resolvedSpecifier);
-            if (!Files.isRegularFile(payloadPath) || !Files.isReadable(payloadPath)) {
-                throw linkFailure(
-                        "Cannot find module '" + resolvedSpecifier + "'",
-                        importerRecord,
-                        moduleRequest.location(),
-                        true);
-            }
-        }
-
-        /**
-         * Resolve a request's specifier to a path, or fail at the request.
-         *
-         * @param moduleRequest  the declaration's request
-         * @param importerRecord the module whose declaration made the request
-         * @return the resolved specifier
-         */
-        private String requireModuleResolves(
-                LinkedModuleRequest moduleRequest,
-                JSDynamicImportModule importerRecord) {
-            try {
-                return resolveDynamicImportSpecifier(
-                        moduleRequest.specifier(),
-                        importerRecord.resolvedSpecifier(),
-                        moduleRequest.specifier());
-            } catch (JSException unresolvable) {
-                // Rebuilt rather than rethrown, so it carries the position of the declaration that
-                // named the module instead of no position at all.
-                clearPendingException();
-                throw linkFailure(
-                        "Cannot find module '" + moduleRequest.specifier() + "'",
-                        importerRecord,
-                        moduleRequest.location(),
-                        true);
-            }
-        }
-
-        /**
-         * The binding a module's export name resolves to, following {@code export * from} and
-         * indirect re-exports.
-         * <p>
-         * ECMAScript's ResolveExport answers with a <em>binding</em> — a module and a name within
-         * it — and that is what makes ambiguity decidable. Two {@code export *} targets providing a
-         * name are ambiguous only when they provide different bindings; two routes to the same one
-         * are not, which is why {@code export * as foo from './m.js'} in one and
-         * {@code import * as foo from './m.js'; export \{ foo \}} in the other is legal. An earlier
-         * version of this answered with the module a name came from, could not tell those apart,
-         * and so declined to call anything ambiguous — and the graph ran.
-         *
-         * @param moduleRecord the exporting module
-         * @param exportName   the name the importer asked for
-         * @param resolveSet   the (module, name) requests already in progress, so a cycle terminates
-         * @return the binding the name resolves to, {@link #AMBIGUOUS_LINKED_EXPORT},
-         * {@link #UNKNOWN_LINKED_EXPORT}, or null when nothing provides the name
-         */
-        private LinkedBinding resolveExport(
-                JSDynamicImportModule moduleRecord,
-                String exportName,
-                Set<LinkedBinding> resolveSet) {
-            if (!resolveSet.add(new LinkedBinding(moduleRecord.resolvedSpecifier(), exportName))) {
-                // This module has already been asked for this name further up the recursion: a
-                // circular request, which resolves to nothing rather than to a second binding.
-                return null;
-            }
-            for (JSDynamicImportModule.LocalExportBinding localExportBinding
-                    : moduleRecord.localExportBindings()) {
-                if (exportName.equals(localExportBinding.exportedName())) {
-                    return new LinkedBinding(
-                            moduleRecord.resolvedSpecifier(), localExportBinding.localName());
-                }
-            }
-            for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
-                if (reExportBinding.starExport() || !exportName.equals(reExportBinding.exportedName())) {
-                    continue;
-                }
-                JSDynamicImportModule target =
-                        linkModule(reExportBinding.sourceSpecifier(), moduleRecord.resolvedSpecifier());
-                if (target == null) {
-                    return UNKNOWN_LINKED_EXPORT;
-                }
-                if (MODULE_NAMESPACE_EXPORT_NAME.equals(reExportBinding.importedName())) {
-                    // The binding is the target's namespace object, which every route to that
-                    // module shares.
-                    return new LinkedBinding(
-                            target.resolvedSpecifier(), MODULE_NAMESPACE_EXPORT_NAME);
-                }
-                return resolveExport(target, reExportBinding.importedName(), resolveSet);
-            }
-            if (moduleRecord.explicitExportNames().contains(exportName)
-                    || moduleRecord.namespace().hasExportName(exportName)) {
-                // A name the parse recorded without a binding to go with it. Treating it as the
-                // module's own is what keeps this pass from rejecting something it cannot model.
-                return new LinkedBinding(moduleRecord.resolvedSpecifier(), exportName);
-            }
-            // `export *` never re-exports `default`.
-            if ("default".equals(exportName)) {
-                return null;
-            }
-            LinkedBinding starBinding = null;
-            for (JSDynamicImportModule.ReExportBinding reExportBinding : moduleRecord.reExportBindings()) {
-                if (!reExportBinding.starExport()) {
-                    continue;
-                }
-                JSDynamicImportModule starTarget =
-                        linkModule(reExportBinding.sourceSpecifier(), moduleRecord.resolvedSpecifier());
-                if (starTarget == null) {
-                    // A star target this pass cannot read may still provide the name at evaluation
-                    // time, so an unreadable one is not evidence either way.
-                    return UNKNOWN_LINKED_EXPORT;
-                }
-                LinkedBinding binding = resolveExport(starTarget, exportName, resolveSet);
-                if (binding == null) {
-                    continue;
-                }
-                if (binding == UNKNOWN_LINKED_EXPORT || binding == AMBIGUOUS_LINKED_EXPORT) {
-                    return binding;
-                }
-                if (starBinding == null) {
-                    starBinding = binding;
-                } else if (!starBinding.equals(binding)) {
-                    return AMBIGUOUS_LINKED_EXPORT;
-                }
-            }
-            return starBinding;
-        }
+        globalLexicalScope.writeBinding(name, value);
     }
 }

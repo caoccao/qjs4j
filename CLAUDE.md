@@ -31,7 +31,29 @@ The project implements ES2024 features with full QuickJS specification complianc
 ./gradlew performanceTest         # JMH benchmarks (@Tag("performance"))
 ./gradlew test262Quick            # Quick Test262 subset
 ./gradlew test262                 # Full Test262 suite (requires ../test262, -Xmx2g)
+./gradlew test262LongRunning      # RegExp / URI / staging-Date selection excluded from the quick subset
 ./gradlew test262Language         # Language tests only
+```
+
+Every `test262*` task pins the two things a conformance count depends on, so the commands above
+mean the same thing on every machine:
+
+- **Suite revision.** `test262-revision.txt` holds the revision `../test262` must be at. The runner
+  refuses to start against any other one, and against a checkout whose revision it cannot read —
+  an export without its Git metadata, for instance — because a count for a suite nothing can
+  identify is not a count for the pinned suite. Pass `-Ptest262AllowAnyRevision=true` to run against
+  upstream tip, or an archive, deliberately. What it does not check is whether the checkout is
+  clean, so it establishes which commit is on disk, not that nobody has edited it.
+- **Time zone.** The tasks run in `UTC`. The suite reads the host's zone, and the pinned harness
+  rejects the identifier `Etc/UTC` that many Linux hosts use — so without this the same code gave
+  different answers on different machines.
+
+Every run prints both before it discovers anything, so a pass count copied out of a log or a CI
+artifact carries its own provenance:
+
+```text
+Test262 revision: 5c8206929d81b2d3d727ca6aac56c18358c8d790 (pinned)
+Test262 time zone: UTC
 ```
 
 ## Architecture Overview
@@ -46,6 +68,9 @@ com.caoccao.qjs4j/
 │   ├── lexer/             Lexer, LexerTemplateScanner
 │   └── parser/            Parser, ParserDelegates, Expression*Parser, StatementParser
 ├── core/                  ← JSContext, JSRuntime, JSGlobalObject, JSValue hierarchy
+│                            plus the package-private collaborators JSContext delegates to
+│                            (JSValueFactory, JSErrorReporter, RealmIntrinsics, EvalRunner,
+│                            ModuleSourceTransformer/Linker/Loader, …)
 ├── vm/                    ← VirtualMachine, Opcode, StackFrame, CallStack
 ├── builtins/              ← Constructor + Prototype pairs (ArrayConstructor/ArrayPrototype, etc.)
 ├── exceptions/            ← JSCompilerException, JSSyntaxErrorException, JSTypeErrorException,
@@ -86,6 +111,31 @@ com.caoccao.qjs4j/
 - **JSContext**: Independent execution context with its own global object, call stack, and exception state
 - Multiple contexts can share a runtime (isolated globals, shared resources)
 - Implements AutoCloseable for proper resource cleanup
+
+`JSContext` itself holds only realm identity — runtime, global object, call stack, `this`,
+`new.target`, pending exception, strict mode, lifecycle, microtask entry points — and delegates
+everything else to package-private collaborators in the same package, the way
+`BytecodeCompiler` delegates to `compilation/compiler`. Its public API is unchanged: every
+`context.createJSXxx(...)` / `context.throwXxx(...)` / `context.eval(...)` is a one-line
+delegation, so builtins, the VM and the tests are unaffected.
+
+| Collaborator | Owns |
+|---|---|
+| `JSValueFactory` | the ~60 `createJSXxx` allocators, with prototypes attached |
+| `JSErrorReporter` | the `throwXxx` family and stack-trace capture (QuickJS `JS_ThrowError2`) |
+| `RealmIntrinsics` | cached/hidden prototypes, iterator prototypes, `%ThrowTypeError%`, `getPrototypeFromConstructor`, `getFunctionRealm` |
+| `GlobalLexicalScope` | global `let`/`const` bindings and the declaration tables (QuickJS `global_var_obj`) |
+| `EvalOverlayManager` | the temporary global-object overlays a module's imports are installed as |
+| `RegExpLegacyStatics` | `RegExp.input` / `.lastMatch` / `.$1`–`.$9` |
+| `EvalRunner` | the eval pipeline (QuickJS `JS_EvalInternal`); `EvalActivation` runs it phase by phase |
+| `ModuleSourceTransformer` | the textual module rewrite, all `MODULE_*` patterns, identifier/string decoding |
+| `ModuleLinker` | the link-before-evaluate pass, ResolveExport, import/export token readers |
+| `ModuleLoader` | module cache, specifier resolution, JSON/text/bytes payloads, async evaluation ordering |
+| `ImportBindingInstaller` | installing import bindings and namespace exports where running code sees them |
+
+Collaborators hold a `JSContext` reference and are built in dependency order in the constructor;
+where two of them need each other (the transformer and linker call back into the loader), the
+later one is reached through a package-private accessor on the context rather than injected.
 
 #### Virtual Machine (vm/)
 - **VirtualMachine**: Stack-based bytecode interpreter

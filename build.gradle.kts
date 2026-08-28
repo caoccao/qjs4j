@@ -168,67 +168,142 @@ tasks.test {
 
 // Create a separate task for performance tests
 tasks.register<Test>("performanceTest") {
+    // The built-in `test` task is given these by the java plugin; a Test task registered here is
+    // not, and one with no test classes and no runtime classpath is not an empty run — it is
+    // `NO-SOURCE`, which Gradle reports as a successful build having executed nothing. The one
+    // advertised way to check a performance claim was therefore a guaranteed green with zero
+    // measurements, and stayed that way through every change to the hot paths it names.
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("performance")
+    }
+    // The JMH annotation processor generates a shadow class per benchmark, each a subclass of the
+    // class it was generated from — so each one inherits that class's @Test methods and JUnit runs
+    // the whole wrapper again, four extra times, once the task can see them at all.
+    exclude("**/jmh_generated/**")
+    // One fork. JMH takes a process-global lock, so wrappers running side by side do not measure
+    // anything twice — all but the first fail outright with "Another JMH instance might be
+    // running". Benchmarks that did share a machine would be measuring the contention rather than
+    // the engine, so this is what the task wants regardless.
+    //
+    // Setting it here is not by itself enough: the `withType<Test>` block below is configured
+    // second and its assignment wins, which is how a task documented as single-forked started
+    // twelve executors and measured the first benchmark iterations while the Octane workload had
+    // the same machine. That block now leaves this task's value alone, so this is the only place
+    // the number is decided and the outcome no longer depends on configuration order.
+    maxParallelForks = 1
+    // No coverage agent. JaCoCo attaches to every Test task, and this one launches JMH, so the
+    // benchmark ran instrumented — which is not an equal handicap for both sides of the
+    // comparison it exists to make: the qjs4j half is Java the agent instruments, and the V8 half
+    // is native code it cannot, so the ratio was biased against qjs4j by the act of measuring it.
+    // Coverage of a benchmark is worth nothing anyway; the unit-test task is what feeds the gate.
+    configure<JacocoTaskExtension> {
+        isEnabled = false
     }
     group = "verification"
     description = "Runs performance tests using JMH"
     shouldRunAfter(tasks.test)
+    // Both guarantees above are about configuration that another block can silently overwrite, and
+    // both were being overwritten. Asserted here rather than trusted: `doFirst` runs after all
+    // configuration, so it sees the values the task is really about to run with, and says which one
+    // is wrong instead of leaving a green run whose measurements mean something else.
+    doFirst {
+        val performanceTest = this as Test
+        check(performanceTest.maxParallelForks == 1) {
+            "performanceTest must run in a single fork, because JMH takes a process-global lock " +
+                "and benchmarks sharing a machine measure the contention; it is configured for " +
+                "${performanceTest.maxParallelForks}. Something configured after the task's own " +
+                "block has overwritten maxParallelForks."
+        }
+        check(!performanceTest.extensions.getByType<JacocoTaskExtension>().isEnabled) {
+            "performanceTest must not run under the JaCoCo agent: it instruments the qjs4j half " +
+                "of every comparison benchmark and cannot instrument the native V8 half, so the " +
+                "measurements are biased by the act of taking them."
+        }
+    }
 }
 
-// Create a task for running test262 conformance tests
-tasks.register<JavaExec>("test262") {
-    group = "verification"
-    description = "Run Test262 ECMAScript conformance tests"
-    
+// The performance-tagged cases that assert an outcome rather than measure one.
+//
+// `performanceTest` is two different things under one tag: an end-to-end Octane v7 regression and
+// three Temporal hot-path cases, which assert a result and either pass or fail — and two JMH
+// wrappers, which report a number that only means something on a quiet machine. The first kind
+// belongs on a shared CI runner and the second does not, so a continuous-integration job that
+// wanted the regressions had to pay for a benchmark it could not trust, and consequently neither
+// ran: the Octane case is the regression for issue 7 and nothing gates it.
+//
+// This is the selection such a job runs. It is about eleven seconds; `performanceTest` is ninety,
+// almost all of it JMH.
+tasks.register<Test>("slowRegressionTest") {
+    testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    // Pass test262 root path (default: ../test262)
-    args = listOf("../test262")
-    
-    // Increase heap for large test suite
-    jvmArgs = listOf("-Xmx2g")
-}
-
-// Quick test262 validation (limited tests)
-tasks.register<JavaExec>("test262Quick") {
+    useJUnitPlatform {
+        includeTags("performance & !benchmark")
+    }
+    exclude("**/jmh_generated/**")
     group = "verification"
-    description = "Run a quick subset of Test262 tests for validation"
-    
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    args = listOf("../test262", "--quick")
-    
-    jvmArgs = listOf("-Xmx2g")
+    description = "Runs the slow functional regressions, without the JMH benchmarks"
+    shouldRunAfter(tasks.test)
 }
 
-// Long-running tests (e.g. decodeURI heavy loops)
-tasks.register<JavaExec>("test262LongRunning") {
-    group = "verification"
-    description = "Run long-running Test262 tests"
+// The zone every conformance run reads dates in.
+//
+// The suite reads the host's zone, so without pinning one the result depends on what the machine
+// happens to be set to — which is how the same code and the same suite gave opposite answers
+// depending on whether the task was invoked by a CI wrapper that set TZ or by Gradle as documented.
+// Pinned here rather than there, so the task itself owns the guarantee and every caller gets it.
+//
+// UTC rather than the runner's own Etc/UTC: those are the same instant but not the same identifier,
+// and the pinned harness's isCanonicalizedStructurallyValidTimeZoneName still applies the
+// pre-canonical-tz rule that rejects "Etc/UTC" — while canonicalize-utc-timezone.js, in the same
+// suite, asserts the engine must preserve it. The engine follows the newer rule and is right; only
+// the harness is behind. Both spellings are set because the JVM reads user.timezone on every
+// platform and TZ only on some.
+val test262TimeZone = "UTC"
 
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+// The revision the suite has to be at, from the one file that holds it, so the Gradle tasks and the
+// runner cannot drift apart from each other or from what this repository records. The runner
+// refuses a checkout at any other revision; see test262-revision.txt and Test262Environment.
+val test262Revision = providers.fileContents(layout.projectDirectory.file("test262-revision.txt"))
+    .asText
+    .map { contents ->
+        contents.lineSequence()
+            .map(String::trim)
+            .firstOrNull { line -> line.isNotEmpty() && !line.startsWith("#") }
+            .orEmpty()
+    }
+    .getOrElse("")
 
-    args = listOf("../test262", "--long-running")
+val test262AllowAnyRevision = providers.gradleProperty("test262AllowAnyRevision").getOrElse("false")
 
-    jvmArgs = listOf("-Xmx2g")
-}
+// Register one Test262 selection.
+//
+// Every selection gets the same heap, the same pinned zone and the same pinned revision. These were
+// four copies of one block, which is how the zone and the revision came to be guaranteed by a CI
+// workflow rather than by the tasks contributors are told to run.
+fun registerTest262Task(name: String, taskDescription: String, vararg modeArguments: String) =
+    tasks.register<JavaExec>(name) {
+        group = "verification"
+        description = taskDescription
 
-// Language tests only
-tasks.register<JavaExec>("test262Language") {
-    group = "verification"
-    description = "Run Test262 language tests only"
-    
-    classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
-    
-    args = listOf("../test262", "--language")
-    
-    jvmArgs = listOf("-Xmx2g")
-}
+        classpath = sourceSets["test"].runtimeClasspath
+        mainClass.set("com.caoccao.qjs4j.test262.Test262Runner")
+
+        // Pass test262 root path (default: ../test262)
+        args = listOf("../test262", *modeArguments)
+
+        // Increase heap for large test suite
+        jvmArgs("-Xmx2g", "-Duser.timezone=$test262TimeZone")
+        environment("TZ", test262TimeZone)
+        systemProperty("qjs4j.test262.revision", test262Revision)
+        systemProperty("qjs4j.test262.allowAnyRevision", test262AllowAnyRevision)
+    }
+
+registerTest262Task("test262", "Run Test262 ECMAScript conformance tests")
+registerTest262Task("test262Quick", "Run a quick subset of Test262 tests for validation", "--quick")
+registerTest262Task("test262LongRunning", "Run long-running Test262 tests", "--long-running")
+registerTest262Task("test262Language", "Run Test262 language tests only", "--language")
 
 // Coverage measurement. There was none, so nothing said which of the ~450 main source files the
 // suite exercised at all.
@@ -252,9 +327,9 @@ tasks.named<JacocoReport>("jacocoTestReport") {
 // ~450 files of ported engine written long before any suite existed — a 100% whole-tree rule would
 // be a fiction that had to be disabled to commit anything. Raise the floors as coverage rises;
 // never lower them to make a build pass.
-// Measured on this tree: 59.21% line, 45.11% branch.
-val minimumLineCoverage = "0.59".toBigDecimal()
-val minimumBranchCoverage = "0.45".toBigDecimal()
+// Measured on this tree: 61.03% line, 46.80% branch.
+val minimumLineCoverage = "0.60".toBigDecimal()
+val minimumBranchCoverage = "0.46".toBigDecimal()
 
 // A single whole-tree rule is not a gate on any particular subsystem: a change can leave an entire
 // critical package untested while unrelated covered code holds the aggregate above the floor. The
@@ -285,7 +360,14 @@ val packageCoverageFloors = mapOf(
 // individually covered, so none can quietly become dead-but-shipped code again.
 val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/core/JSRuntime" to "0.95",
-    "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.90",
+    // 0.95, above the 0.90 this used to be. It was briefly lowered to 0.85 for margin, on a guess
+    // that a run reporting 39 of 44 lines where every other run reported 41 had lost exec data —
+    // which lowering an assertion does nothing about, while it does let three covered lines quietly
+    // stop being covered. The three that were missing were the rollback around registering a
+    // reservation, unreachable from the public API because nothing in the class can throw between
+    // the charge and the handle; they now have a test that injects a registry that can, so the
+    // class measures 44 of 44 and this floor demands 42. Stricter than it was, with more room.
+    "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.95",
     "com/caoccao/qjs4j/core/JSWeakEntryTable" to "0.85",
     "com/caoccao/qjs4j/exceptions/JSException" to "0.95",
     "com/caoccao/qjs4j/exceptions/JSVirtualMachineException" to "0.80",
@@ -297,6 +379,16 @@ val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/core/JSArrayBuffer" to "0.70",
     "com/caoccao/qjs4j/utils/ByteArrayAtomics" to "0.65",
     "com/caoccao/qjs4j/utils/DynamicBuffer" to "0.70",
+    // The realm collaborators JSContext was decomposed into. A package floor cannot protect any of
+    // these: `core` is large and well covered in aggregate, so the whole of ModuleLoader could stop
+    // being exercised without the package rule noticing. Each sits just under what it measures.
+    "com/caoccao/qjs4j/core/EvalOverlayManager" to "0.95",
+    "com/caoccao/qjs4j/core/RegExpLegacyStatics" to "0.95",
+    "com/caoccao/qjs4j/core/ModuleSourceTransformer" to "0.78",
+    // Lower than its neighbours because it is: the loader's TLA and deferred-evaluation ordering is
+    // reached only by evaluating real module graphs, and much of it is still only covered that way.
+    // It is a floor to raise, not a figure to be satisfied with.
+    "com/caoccao/qjs4j/core/ModuleLoader" to "0.50",
 )
 
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
@@ -400,11 +492,18 @@ tasks {
         // busy suite, reporting the same RangeError for a quite different reason. A larger stack
         // makes the engine's limit the one being observed.
         jvmArgs("-Xss8m")
-        val cpuCount = Runtime.getRuntime().availableProcessors()
-        maxParallelForks = maxOf(
-            1,
-            if (os.isMacOsX) cpuCount * 3 / 4 else cpuCount / 2
-        )
+        // Every Test task but the performance one. That task sets its own single fork and says why;
+        // this block is configured second, so an unconditional assignment here silently replaced it
+        // with a machine-dependent number — twelve executors on the reviewed machine, benchmarks
+        // overlapping each other, and a result that varied with the host's CPU count. Named rather
+        // than ordered so the two cannot be put back the wrong way round.
+        if (name != "performanceTest") {
+            val cpuCount = Runtime.getRuntime().availableProcessors()
+            maxParallelForks = maxOf(
+                1,
+                if (os.isMacOsX) cpuCount * 3 / 4 else cpuCount / 2
+            )
+        }
     }
 }
 

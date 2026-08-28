@@ -101,6 +101,33 @@ public class Test262Runner {
     }
 
     /**
+     * State what this run is, report what is wrong with its premises, and say whether it should go
+     * ahead.
+     * <p>
+     * The revision and the zone are printed whatever happens. A pass count means nothing without
+     * them, and a log is where a count outlives the machine that produced it — the CI artifact is
+     * this output and nothing else, so a summary copied out of it has to carry its own provenance.
+     * <p>
+     * A suite whose revision is not the pinned one, or cannot be read at all, is refused: counts
+     * from another revision are not comparable with anything this repository records, and a suite
+     * that cannot be identified cannot be said to be the pinned one. A host in a zone the pinned
+     * harness dislikes is only printed — it costs a handful of intl402 interpretations, not the
+     * meaning of the run.
+     *
+     * @param test262Root the suite root
+     * @return true when the run should be refused
+     */
+    private static boolean reportEnvironment(Path test262Root) {
+        System.out.println(Test262Environment.describe(test262Root));
+        boolean refused = false;
+        for (Test262Environment.Diagnostic diagnostic : Test262Environment.check(test262Root)) {
+            System.err.println((diagnostic.fatal() ? "Error: " : "Warning: ") + diagnostic.message());
+            refused |= diagnostic.fatal();
+        }
+        return refused;
+    }
+
+    /**
      * Parse the command line, run the suite and decide the process status.
      * <p>
      * Anything that means "the suite did not demonstrate conformance" is a nonzero status: a
@@ -159,6 +186,14 @@ public class Test262Runner {
                 }
                 mode = argument;
                 argIndex++;
+            }
+
+            // A pass count means nothing without the suite revision that produced it and the zone
+            // the host read dates in. Both used to be arranged in one CI workflow, so the
+            // documented Gradle command accepted whatever was on disk; a run that cannot say what
+            // it tested is checked here instead, once, before anything is discovered.
+            if (reportEnvironment(test262Root)) {
+                return 1;
             }
 
             Test262Config config = mode == null

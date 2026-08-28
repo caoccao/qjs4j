@@ -22,8 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,6 +36,59 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  */
 public class JSMemoryAccountingTest extends BaseTest {
     /**
+     * How much larger than the largest data block a heap has to be before it could really satisfy
+     * one.
+     * <p>
+     * A bare {@code maxMemory() < blockLength} comparison decides this on a knife edge, and the
+     * build's {@code -Xmx2g} lands on the wrong side of it by twelve bytes: G1 and ZGC report
+     * {@code maxMemory()} as exactly 2,147,483,648 while the largest block is 2,147,483,636, so the
+     * premise read as "the heap can satisfy it" — and ParallelGC and SerialGC, which report a
+     * little less than the nominal heap, read the opposite. Which collector the JVM picks depends on
+     * how many processors and how much memory it sees, so the same two tests ran on one machine and
+     * skipped on the next, and the suite quietly tested less on some runners than on others.
+     * <p>
+     * A heap only marginally larger than the block cannot satisfy it in any case: the array needs
+     * contiguous space and the heap is already holding the engine and the suite. Requiring real
+     * headroom before believing otherwise makes the premise mean what it says.
+     */
+    private static final long HEAP_HEADROOM_BYTES = 256L * 1024 * 1024;
+
+    /**
+     * Accounting whose reservation registry refuses to register anything.
+     * <p>
+     * Nothing in the class as it stands can throw between the charge and the handle that owns it —
+     * the registry is a {@code ConcurrentHashMap} key set and the handle is a {@code WeakReference}
+     * — which is precisely why the rollback that guards the gap cannot be reached from the public
+     * API, and why it would otherwise ship untested until the day a change made it reachable.
+     * <p>
+     * Given to the constructor rather than written over the field afterwards. The reflective version
+     * of this erased the field's element type, depended on the field's name, and left the object in
+     * a state its own construction cannot produce; this is typed, so a change to how reservations
+     * are held stops compiling here instead of failing at runtime.
+     *
+     * @param limit the ceiling for the accounting
+     * @return accounting that throws {@code IllegalStateException} when a reservation is registered
+     */
+    private static JSMemoryAccounting accountingThatCannotRegisterReservations(long limit) {
+        return new JSMemoryAccounting(limit, new AbstractSet<>() {
+            @Override
+            public boolean add(JSMemoryAccounting.Reservation reservation) {
+                throw new IllegalStateException("injected registration failure");
+            }
+
+            @Override
+            public Iterator<JSMemoryAccounting.Reservation> iterator() {
+                return Collections.emptyIterator();
+            }
+
+            @Override
+            public int size() {
+                return 0;
+            }
+        });
+    }
+
+    /**
      * Require that the JVM cannot satisfy the largest data block the engine will accept.
      * <p>
      * The largest block is capped near two gigabytes, so on a big enough heap the request succeeds
@@ -46,7 +98,8 @@ public class JSMemoryAccountingTest extends BaseTest {
      * exercising anything.
      */
     private static void assumeTheJvmRefusesTheLargestBlock() {
-        assumeTrue(Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength(),
+        assumeTrue(
+                Runtime.getRuntime().maxMemory() < (long) unallocatableByteLength() + HEAP_HEADROOM_BYTES,
                 "the JVM heap is large enough to allocate the biggest block the engine allows, so "
                         + "there is no allocation failure to observe");
     }
@@ -82,7 +135,7 @@ public class JSMemoryAccountingTest extends BaseTest {
     /**
      * A data-block length the JVM will refuse outright.
      * <p>
-     * The test task pins {@code -Xmx1g}, so a request of the largest array HotSpot supports fails
+     * The test tasks pin {@code -Xmx2g}, so a request of the largest array HotSpot supports fails
      * immediately with {@code OutOfMemoryError} — without heap pressure, because the size exceeds
      * the maximum heap before anything is committed.
      *
@@ -105,6 +158,23 @@ public class JSMemoryAccountingTest extends BaseTest {
         assertThat(accounting.reserve(owner, 1024)).isNotNull();
         assertThat(accounting.getReservedBytes()).isEqualTo(1024);
         assertThat(owner).isNotNull();
+    }
+
+    @Test
+    public void testAReservationThatCannotBeRegisteredGivesItsChargeBack() {
+        // The charge lands before the handle exists, deliberately — a reservation the limit would
+        // refuse has to be refused before any memory is touched. That leaves a gap: if registering
+        // the handle fails, nothing else holds the bytes, so they would stay charged for the
+        // runtime's whole life and permanently shrink the ceiling the embedder configured.
+        JSMemoryAccounting accounting = accountingThatCannotRegisterReservations(1024);
+
+        assertThatThrownBy(() -> accounting.reserve(new Object(), 256))
+                .as("the failure is reported, not swallowed into a null reservation")
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("injected registration failure");
+        assertThat(accounting.getReservedBytes())
+                .as("a charge whose handle never existed must not stay charged")
+                .isZero();
     }
 
     @Test
