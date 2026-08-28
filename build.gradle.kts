@@ -277,6 +277,14 @@ val test262Revision = providers.fileContents(layout.projectDirectory.file("test2
 
 val test262AllowAnyRevision = providers.gradleProperty("test262AllowAnyRevision").getOrElse("false")
 
+// What a revision has to look like for the pin to mean anything: a full SHA-1 or SHA-256 object
+// name. Not a prefix — an abbreviation is not what the runner compares against, and not the empty
+// string a missing, empty or comment-only file produces. That empty string used to reach the runner
+// as "nothing is pinned", which the runner read as "nothing to enforce": the one file that defines
+// what reproducible means here could disable the guard by going missing. Both ends now refuse, and
+// -Ptest262AllowAnyRevision=true remains the single explicit way to run without a pin.
+val test262RevisionPattern = Regex("[0-9a-fA-F]{40}|[0-9a-fA-F]{64}")
+
 // Register one Test262 selection.
 //
 // Every selection gets the same heap, the same pinned zone and the same pinned revision. These were
@@ -298,6 +306,19 @@ fun registerTest262Task(name: String, taskDescription: String, vararg modeArgume
         environment("TZ", test262TimeZone)
         systemProperty("qjs4j.test262.revision", test262Revision)
         systemProperty("qjs4j.test262.allowAnyRevision", test262AllowAnyRevision)
+
+        // Checked before the suite is discovered rather than after it has run, so a pin that has
+        // gone missing costs a second instead of a full conformance run whose count turns out to
+        // describe nothing in particular.
+        doFirst {
+            check(test262AllowAnyRevision.toBoolean() || test262Revision.matches(test262RevisionPattern)) {
+                "test262-revision.txt must contain the full commit of tc39/test262 this repository " +
+                    "measures itself against; it currently yields \"$test262Revision\". Every " +
+                    "conformance count recorded here is a count against that revision and means " +
+                    "nothing without it. Restore the file, or pass -Ptest262AllowAnyRevision=true " +
+                    "to run against whatever is on disk."
+            }
+        }
     }
 
 registerTest262Task("test262", "Run Test262 ECMAScript conformance tests")
@@ -361,12 +382,13 @@ val packageCoverageFloors = mapOf(
 val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/core/JSRuntime" to "0.95",
     // 0.95, above the 0.90 this used to be. It was briefly lowered to 0.85 for margin, on a guess
-    // that a run reporting 39 of 44 lines where every other run reported 41 had lost exec data —
-    // which lowering an assertion does nothing about, while it does let three covered lines quietly
-    // stop being covered. The three that were missing were the rollback around registering a
+    // that a run reporting fewer covered lines than every other run had lost exec data — which
+    // lowering an assertion does nothing about, while it does let three covered lines quietly stop
+    // being covered. The three that were missing were the rollback around registering a
     // reservation, unreachable from the public API because nothing in the class can throw between
-    // the charge and the handle; they now have a test that injects a registry that can, so the
-    // class measures 44 of 44 and this floor demands 42. Stricter than it was, with more room.
+    // the charge and the handle; they now have a test that injects a registry that can, and the
+    // class is fully covered. Stricter than it was, with more room. No covered-line count is quoted
+    // here on purpose: the last one went stale on the very commit that added the test.
     "com/caoccao/qjs4j/core/JSMemoryAccounting" to "0.95",
     "com/caoccao/qjs4j/core/JSWeakEntryTable" to "0.85",
     "com/caoccao/qjs4j/exceptions/JSException" to "0.95",
@@ -381,18 +403,58 @@ val criticalClassLineFloors = mapOf(
     "com/caoccao/qjs4j/utils/DynamicBuffer" to "0.70",
     // The realm collaborators JSContext was decomposed into. A package floor cannot protect any of
     // these: `core` is large and well covered in aggregate, so the whole of ModuleLoader could stop
-    // being exercised without the package rule noticing. Each sits just under what it measures.
+    // being exercised without the package rule noticing — all 291 covered lines of ModuleLinker
+    // could go uncovered and the package would still measure about 61.5% against its 58% floor.
+    // Each sits just under what it measures. Four of the eleven were listed here to begin with,
+    // which left the other seven as anonymous lines in a large package: the decomposition is what
+    // makes them independently maintainable, and a ratchet that does not name them does not keep
+    // them that way.
     "com/caoccao/qjs4j/core/EvalOverlayManager" to "0.95",
+    "com/caoccao/qjs4j/core/GlobalLexicalScope" to "0.95",
     "com/caoccao/qjs4j/core/RegExpLegacyStatics" to "0.95",
+    "com/caoccao/qjs4j/core/JSErrorReporter" to "0.90",
+    "com/caoccao/qjs4j/core/JSValueFactory" to "0.80",
     "com/caoccao/qjs4j/core/ModuleSourceTransformer" to "0.78",
+    "com/caoccao/qjs4j/core/EvalRunner" to "0.75",
+    "com/caoccao/qjs4j/core/ImportBindingInstaller" to "0.72",
+    "com/caoccao/qjs4j/core/ModuleLinker" to "0.70",
+    "com/caoccao/qjs4j/core/RealmIntrinsics" to "0.70",
+    // A class rule names one class and not the classes nested in it, and in these two that is where
+    // most of the code is: EvalActivation is the eval pipeline run phase by phase and is larger than
+    // EvalRunner itself, and ModuleLinkPass is the link-before-evaluate pass. A floor on the outer
+    // class alone would gate less than half of what it appears to name.
+    "com/caoccao/qjs4j/core/EvalRunner.EvalActivation" to "0.75",
+    "com/caoccao/qjs4j/core/ModuleLinker.ModuleLinkPass" to "0.85",
     // Lower than its neighbours because it is: the loader's TLA and deferred-evaluation ordering is
     // reached only by evaluating real module graphs, and much of it is still only covered that way.
     // It is a floor to raise, not a figure to be satisfied with.
     "com/caoccao/qjs4j/core/ModuleLoader" to "0.50",
 )
 
+// Branch floors, for the three collaborators whose job is control flow rather than allocation.
+//
+// A line floor is a weak gate on these: EvalRunner decides which of the eval phases a call goes
+// through, ModuleLinker decides how a name resolves across a graph, and RealmIntrinsics decides
+// which prototype a constructor gets. Every one of those is a branch, and a line can be covered by
+// whichever side of it a test happened to take. Kept separate from the line floors rather than
+// widening that map to pairs, so a class that needs only a line floor still reads as one line.
+val criticalClassBranchFloors = mapOf(
+    "com/caoccao/qjs4j/core/EvalRunner" to "0.57",
+    "com/caoccao/qjs4j/core/EvalRunner.EvalActivation" to "0.62",
+    "com/caoccao/qjs4j/core/ModuleLinker" to "0.59",
+    "com/caoccao/qjs4j/core/ModuleLinker.ModuleLinkPass" to "0.75",
+    "com/caoccao/qjs4j/core/RealmIntrinsics" to "0.55",
+)
+
 tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
     dependsOn(tasks.named("test"))
+    // The report is the diagnostic for this task's failure: it is what says which package or class
+    // crossed a floor. The two were siblings, and a command line naming both imposes no order on
+    // them — the reviewed run happened to verify first — so the one failure that most needs the
+    // report could be the one that never produced it. Depending on it, rather than trusting the
+    // order the tasks are typed in, means the report exists whenever a floor is checked, whether
+    // this task is reached through `check`, through `build`, or on its own.
+    dependsOn(tasks.named("jacocoTestReport"))
     violationRules {
         rule {
             limit {
@@ -433,11 +495,35 @@ tasks.named<JacocoCoverageVerification>("jacocoTestCoverageVerification") {
                 }
             }
         }
+        criticalClassBranchFloors.forEach { (className, floor) ->
+            rule {
+                element = "CLASS"
+                includes = listOf(className.replace('/', '.'))
+                limit {
+                    counter = "BRANCH"
+                    value = "COVEREDRATIO"
+                    minimum = floor.toBigDecimal()
+                }
+            }
+        }
     }
 }
 
 tasks.named("check") {
     dependsOn(tasks.named("jacocoTestCoverageVerification"))
+    // And the slow functional regressions, which nothing ran.
+    //
+    // Registering the task was only half of it: `test` excludes the `performance` tag, `check` did
+    // not name this one, and no job invoked it — so the end-to-end regression for issue 7 and the
+    // three Temporal hot-path assertions were absent from every gate while every gate stayed green.
+    // A task nothing depends on is a task that can also break without anything noticing.
+    //
+    // Here rather than as a step in the workflow, so `./gradlew build` means the same thing on a
+    // contributor's machine as it does in CI, and so the guarantee does not depend on a file the
+    // build cannot see. The cost is about thirteen seconds per invocation. It buys a gate on the
+    // one bug this repository has an end-to-end regression for; the ninety-second JMH half stays
+    // out, which is what the `benchmark` tag separates.
+    dependsOn(tasks.named("slowRegressionTest"))
 }
 
 tasks.register("sourceJar") {

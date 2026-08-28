@@ -6,8 +6,12 @@
 # tip of tc39/test262, so upstream adding tests for features this engine has not implemented turned
 # it red without a line of this repository changing.
 #
-# The Gradle test262* tasks read this file and refuse to run against a checkout at another revision.
-# Pass -Ptest262AllowAnyRevision=true to test upstream tip deliberately.
+# The Gradle test262* tasks read this file and refuse to run against a checkout at another revision,
+# against one whose revision cannot be read, and against one at this revision that has been edited
+# since — discovery walks the working tree rather than the commit, so an untracked test is executed
+# and an edited harness file changes thousands of outcomes. They also refuse to run if this file
+# stops naming a revision: emptying or deleting it is not a way to turn the check off.
+# Pass -Ptest262AllowAnyRevision=true to test upstream tip, or an edited checkout, deliberately.
 #
 # Bumping it is a deliberate, reviewable act that says which new tests are being taken on. The
 # `ref:` of the test262 checkout step in .github/workflows/build.yml has to be moved with it.

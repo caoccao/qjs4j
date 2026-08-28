@@ -727,15 +727,19 @@ Results:
   follow-up below replaces outright rather than splits further. Approximate on purpose: an exact
   count here is a number that goes stale on the next small commit and then misreports the result it
   was written to record.
-- Zero public API changes; builtins and the VM are untouched, and so is every existing test but
-  two — `JSMemoryAccountingTest` and `ModuleSourceTransformerTest`, both changed because the
-  extraction made something newly reachable to test rather than because behaviour moved.
+- Zero public API changes; builtins and the VM are untouched. No existing test changed because
+  behaviour moved: the tests this branch touches — `JSMemoryAccountingTest`,
+  `ModuleSourceTransformerTest`, `PrimeNumberTest`, `Test262RunnerOutcomeTest`,
+  `Test262EnvironmentTest` and `VirtualMachineConstantObjectTest` — changed because the extraction
+  made something newly reachable to test, or because the build and conformance gating around them
+  did.
 - `./gradlew test` green, and `./gradlew test262` unchanged at 101,607 passed / 430 skipped / 0 failed
   against tc39/test262 `5c8206929d81b2d3d727ca6aac56c18358c8d790` — the revision now pinned in
-  `test262-revision.txt`. Every conformance task refuses a checkout at another revision, and one
-  whose revision it cannot read at all, unless `-Ptest262AllowAnyRevision=true` says otherwise; a
-  dirty checkout at the pinned revision is not detected, so the guard establishes which commit is on
-  disk and not that nothing has been edited since.
+  `test262-revision.txt`. Every conformance task refuses a checkout at another revision, one whose
+  revision it cannot read at all, one at the pinned revision that has been edited since, and a
+  build with no pin configured — unless `-Ptest262AllowAnyRevision=true` says otherwise. Discovery
+  walks the working tree rather than the commit, so cleanliness is part of what the pin has to mean;
+  it is asked of `git`, and not being able to ask is refused rather than assumed clean.
 - `ModuleSourceTransformerTest`, `ModuleLoaderTest` and `EvalOverlayManagerTest` are new: the
   extracted collaborators are now directly testable, which is what the escape-decoding and
   Unicode-identifier defects needed and never had. Writing the loader's cache-eviction cases found

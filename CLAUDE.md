@@ -28,22 +28,34 @@ The project implements ES2024 features with full QuickJS specification complianc
 
 ### Performance & Conformance Testing
 ```bash
-./gradlew performanceTest         # JMH benchmarks (@Tag("performance"))
+./gradlew slowRegressionTest      # Slow functional regressions: @Tag("performance") minus @Tag("benchmark")
+./gradlew performanceTest         # The above *plus* the JMH benchmarks — every @Tag("performance") case
 ./gradlew test262Quick            # Quick Test262 subset
 ./gradlew test262                 # Full Test262 suite (requires ../test262, -Xmx2g)
 ./gradlew test262LongRunning      # RegExp / URI / staging-Date selection excluded from the quick subset
 ./gradlew test262Language         # Language tests only
 ```
 
+`performance` covers two different kinds of case. `slowRegressionTest` is the correctness half —
+the end-to-end Octane v7 regression for issue 7 and the Temporal hot-path assertions, which pass or
+fail and are worth running anywhere; `check` depends on it, so `./gradlew build` runs it. The other
+half is the JMH benchmarks, tagged `benchmark`, which report a number that only means something on a
+quiet machine: `performanceTest` runs both and takes about ninety seconds, almost all of it JMH.
+
 Every `test262*` task pins the two things a conformance count depends on, so the commands above
 mean the same thing on every machine:
 
 - **Suite revision.** `test262-revision.txt` holds the revision `../test262` must be at. The runner
-  refuses to start against any other one, and against a checkout whose revision it cannot read —
-  an export without its Git metadata, for instance — because a count for a suite nothing can
-  identify is not a count for the pinned suite. Pass `-Ptest262AllowAnyRevision=true` to run against
-  upstream tip, or an archive, deliberately. What it does not check is whether the checkout is
-  clean, so it establishes which commit is on disk, not that nobody has edited it.
+  refuses to start against any other one; against a checkout whose revision it cannot read — an
+  export without its Git metadata, for instance — because a count for a suite nothing can identify
+  is not a count for the pinned suite; against a checkout at the pinned revision that has been
+  edited since, because discovery walks the working tree rather than the commit, so one untracked
+  `.js` file changes the total and one edited harness file changes thousands of outcomes; and
+  against no pin at all, so the one file that defines what reproducible means here cannot turn the
+  check off by going missing. Cleanliness is the one premise that asks `git` rather than reading a
+  file, and not being able to ask is refused like any other premise that cannot be established.
+  Pass `-Ptest262AllowAnyRevision=true` to run against upstream tip, an archive, or a checkout with
+  local edits, deliberately.
 - **Time zone.** The tasks run in `UTC`. The suite reads the host's zone, and the pinned harness
   rejects the identifier `Etc/UTC` that many Linux hosts use — so without this the same code gave
   different answers on different machines.

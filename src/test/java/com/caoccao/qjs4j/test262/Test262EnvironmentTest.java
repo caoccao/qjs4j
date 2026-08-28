@@ -20,27 +20,59 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * The premises a conformance run states before it starts: which revision of the suite is on disk,
- * and which zone the host will read dates in.
+ * whether it still holds that revision's files, and which zone the host will read dates in.
  * <p>
- * Both used to live in one CI workflow, which meant the documented Gradle command was reproducible
- * only by reverse-engineering that file. These cases fabricate checkouts on disk rather than
- * running Git, because that is what the runner does — a container can have the files without the
- * tool, and shelling out would answer differently there.
+ * The first and the third used to live in one CI workflow, which meant the documented Gradle command
+ * was reproducible only by reverse-engineering that file. Most of these cases fabricate checkouts on
+ * disk rather than running Git, because that is what the revision reader does — a container can have
+ * the files without the tool, and shelling out would answer differently there. Cleanliness is the
+ * one premise that does ask Git, so the cases for it either supply the answer through the reader
+ * seam or build a real repository and check what Git actually says.
  */
 public class Test262EnvironmentTest {
+    private static final String OTHER = "0123456789abcdef0123456789abcdef01234567";
     private static final String PINNED = "5c8206929d81b2d3d727ca6aac56c18358c8d790";
 
     @TempDir
     Path workingDirectory;
+
+    /**
+     * A reader standing for a checkout holding exactly the files its revision names.
+     *
+     * @return the reader
+     */
+    private static Test262Environment.WorktreeStatusReader clean() {
+        return root -> Test262Environment.WorktreeStatus.clean();
+    }
+
+    /**
+     * A reader that fails the test if the run asks it anything.
+     * <p>
+     * Used where the answer cannot matter: a suite whose revision cannot be read is already refused,
+     * and a run with the check waived has said it does not care. Asking Git there is a subprocess
+     * spent on a question nobody will read the answer to.
+     *
+     * @return the reader
+     */
+    private static Test262Environment.WorktreeStatusReader neverAsked() {
+        return root -> {
+            throw new AssertionError("the worktree should not have been inspected for " + root);
+        };
+    }
 
     /**
      * Run something with the revision check waived, exactly as {@code -Ptest262AllowAnyRevision}
@@ -62,6 +94,58 @@ public class Test262EnvironmentTest {
         }
     }
 
+    /**
+     * A repository with one committed harness file and one committed test, or no repository at all
+     * when this host has no Git to build one with.
+     *
+     * @return the checkout root
+     * @throws IOException if the files cannot be written
+     */
+    private Path committedCheckout() throws IOException {
+        Path checkout = workingDirectory.resolve("test262");
+        Files.createDirectories(checkout);
+        assumeTrue(git(checkout, "init", "--quiet") == 0, "git is not available on this host");
+        write(checkout.resolve("harness/assert.js"), "function assert() {}\n");
+        write(checkout.resolve("test/language/example.js"), "assert(true);\n");
+        assertThat(git(checkout, "add", ".")).isZero();
+        assertThat(git(
+                checkout,
+                "-c", "user.name=qjs4j",
+                "-c", "user.email=qjs4j@example.com",
+                "-c", "commit.gpgsign=false",
+                "commit", "--quiet", "-m", "pinned"))
+                .isZero();
+        return checkout;
+    }
+
+    /**
+     * Run Git in a checkout, discarding what it says.
+     *
+     * @param directory where to run it
+     * @param arguments what to run
+     * @return the exit status, or -1 when Git could not be run at all
+     * @throws IOException if waiting for it fails
+     */
+    private int git(Path directory, String... arguments) throws IOException {
+        List<String> command = new ArrayList<>(List.of("git", "-C", directory.toString()));
+        command.addAll(List.of(arguments));
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.redirectErrorStream(true);
+        try {
+            Process process = builder.start();
+            try (InputStream stream = process.getInputStream()) {
+                // Drained so the process cannot block on a full pipe; nothing here reads it.
+                stream.transferTo(OutputStream.nullOutputStream());
+            }
+            return process.waitFor();
+        } catch (IOException unrunnable) {
+            return -1;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException(interrupted);
+        }
+    }
+
     private Path gitDirectory() throws IOException {
         Path gitDirectory = workingDirectory.resolve(".git");
         Files.createDirectories(gitDirectory);
@@ -70,17 +154,17 @@ public class Test262EnvironmentTest {
 
     @Test
     public void testACheckoutAtAnotherRevisionIsRefusedAndSaysWhichOne() throws IOException {
-        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        write(gitDirectory().resolve("HEAD"), OTHER + "\n");
 
         List<Test262Environment.Diagnostic> diagnostics =
-                Test262Environment.check(workingDirectory, PINNED, "UTC");
+                Test262Environment.check(workingDirectory, PINNED, "UTC", neverAsked());
 
         assertThat(diagnostics).hasSize(1);
         assertThat(diagnostics.get(0).fatal())
                 .as("counts from another revision are not comparable, so the run is refused")
                 .isTrue();
         assertThat(diagnostics.get(0).message())
-                .contains("0123456789abcdef0123456789abcdef01234567")
+                .contains(OTHER)
                 .contains(PINNED)
                 .contains("-Ptest262AllowAnyRevision=true");
     }
@@ -88,9 +172,52 @@ public class Test262EnvironmentTest {
     @Test
     public void testACheckoutAtThePinnedRevisionHasNothingToReport() throws IOException {
         write(gitDirectory().resolve("HEAD"), PINNED + "\n");
-        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC")).isEmpty();
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC", clean())).isEmpty();
         // Git writes lower case; a revision typed in upper case names the same commit.
-        assertThat(Test262Environment.check(workingDirectory, PINNED.toUpperCase(), "UTC")).isEmpty();
+        assertThat(Test262Environment.check(workingDirectory, PINNED.toUpperCase(), "UTC", clean()))
+                .isEmpty();
+    }
+
+    @Test
+    public void testACheckoutEditedSinceThePinnedRevisionIsRefused() throws IOException {
+        // Naming the right commit is not executing it: discovery walks the working tree, so an
+        // untracked .js file adds an interpretation the pinned suite does not contain and an edited
+        // harness file changes the outcome of thousands — while HEAD goes on naming the pin. This
+        // used to pass, and the count it produced was quoted as the pinned baseline.
+        write(gitDirectory().resolve("HEAD"), PINNED + "\n");
+
+        List<Test262Environment.Diagnostic> diagnostics = Test262Environment.check(
+                workingDirectory,
+                PINNED,
+                "UTC",
+                root -> Test262Environment.WorktreeStatus.modified("M harness/assert.js"));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.get(0).fatal()).isTrue();
+        assertThat(diagnostics.get(0).message())
+                .contains("has been edited")
+                .contains("M harness/assert.js")
+                .contains("-Ptest262AllowAnyRevision=true");
+    }
+
+    @Test
+    public void testACheckoutWhoseStateCannotBeEstablishedIsRefused() throws IOException {
+        // The same fail-closed rule an unreadable revision follows. Not knowing whether the suite
+        // has been edited is not evidence that it has not been.
+        write(gitDirectory().resolve("HEAD"), PINNED + "\n");
+
+        List<Test262Environment.Diagnostic> diagnostics = Test262Environment.check(
+                workingDirectory,
+                PINNED,
+                "UTC",
+                root -> Test262Environment.WorktreeStatus.unknown("git could not be run: no such file"));
+
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.get(0).fatal()).isTrue();
+        assertThat(diagnostics.get(0).message())
+                .contains("Cannot tell whether")
+                .contains("git could not be run: no such file")
+                .contains("-Ptest262AllowAnyRevision=true");
     }
 
     @Test
@@ -101,7 +228,7 @@ public class Test262EnvironmentTest {
         // nobody reads when the build is green, while the count it qualified went on being quoted
         // as the pinned one. The override below is how a suite without history is run deliberately.
         List<Test262Environment.Diagnostic> diagnostics =
-                Test262Environment.check(workingDirectory, PINNED, "UTC");
+                Test262Environment.check(workingDirectory, PINNED, "UTC", neverAsked());
 
         assertThat(diagnostics).hasSize(1);
         assertThat(diagnostics.get(0).fatal()).isTrue();
@@ -112,13 +239,14 @@ public class Test262EnvironmentTest {
     }
 
     @Test
-    public void testAnUnusableTimeZoneIsReportedWithoutRefusingTheRun() {
+    public void testAnUnusableTimeZoneIsReportedWithoutRefusingTheRun() throws IOException {
         // The pinned harness rejects exactly these two identifiers. A few intl402 interpretations
         // fail because of it, which is worth saying — and is not a reason to refuse to run the
         // other hundred thousand.
+        write(gitDirectory().resolve("HEAD"), PINNED + "\n");
         for (String timeZoneId : List.of("Etc/UTC", "Etc/GMT")) {
             List<Test262Environment.Diagnostic> diagnostics =
-                    Test262Environment.check(workingDirectory, null, timeZoneId);
+                    Test262Environment.check(workingDirectory, PINNED, timeZoneId, clean());
             assertThat(diagnostics).as(timeZoneId).hasSize(1);
             assertThat(diagnostics.get(0).fatal()).isFalse();
             assertThat(diagnostics.get(0).message())
@@ -126,9 +254,10 @@ public class Test262EnvironmentTest {
                     .contains("-Duser.timezone=UTC");
         }
         // GMT is not Etc/GMT, and the harness accepts it.
-        assertThat(Test262Environment.check(workingDirectory, null, "GMT")).isEmpty();
-        assertThat(Test262Environment.check(workingDirectory, null, "UTC")).isEmpty();
-        assertThat(Test262Environment.check(workingDirectory, null, "Asia/Shanghai")).isEmpty();
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "GMT", clean())).isEmpty();
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC", clean())).isEmpty();
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "Asia/Shanghai", clean()))
+                .isEmpty();
     }
 
     @Test
@@ -194,18 +323,48 @@ public class Test262EnvironmentTest {
         // Git writes commondir relative; an absolute one names the same directory.
         write(worktreeDirectory.resolve("commondir"), commonDirectory + "\n");
         assertThat(Test262Environment.checkoutRevision(workingDirectory)).isEqualTo(PINNED);
-
-        // A per-worktree reference beside HEAD still wins over the common directory, which is what
-        // Git does: HEAD, and the bisect and rebase references, belong to this worktree alone.
-        write(worktreeDirectory.resolve("refs/heads/pinned"), "0123456789abcdef0123456789abcdef01234567\n");
-        assertThat(Test262Environment.checkoutRevision(workingDirectory))
-                .isEqualTo("0123456789abcdef0123456789abcdef01234567");
     }
 
     @Test
     public void testCheckoutRevisionReadsADetachedHead() throws IOException {
         // What a pinned CI checkout looks like: HEAD holds the revision itself.
         write(gitDirectory().resolve("HEAD"), PINNED + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory)).isEqualTo(PINNED);
+    }
+
+    @Test
+    public void testCheckoutRevisionResolvesWorktreeReferencesTheWayGitDoes() throws IOException {
+        // refs/heads/ is common, not per-worktree: when commondir is present Git ignores a file of
+        // that name beside the worktree's HEAD. Reading it first — which this used to do, and had a
+        // case asserting it — let a stale or hand-made file make the run report a revision the
+        // worktree does not have checked out, which is the disagreement with Git this parser exists
+        // to avoid.
+        Path worktreeDirectory = workingDirectory.resolve("main/.git/worktrees/conformance");
+        Path commonDirectory = workingDirectory.resolve("main/.git");
+        write(workingDirectory.resolve(".git"), "gitdir: main/.git/worktrees/conformance\n");
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/heads/pinned\n");
+        write(worktreeDirectory.resolve("commondir"), "../..\n");
+        write(commonDirectory.resolve("refs/heads/pinned"), PINNED + "\n");
+        write(worktreeDirectory.resolve("refs/heads/pinned"), OTHER + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory))
+                .as("a branch beside the worktree HEAD is a file Git ignores")
+                .isEqualTo(PINNED);
+
+        // The namespaces that really are per-worktree are read beside HEAD, which is where Git
+        // keeps them: refs/bisect/, refs/rewritten/ and refs/worktree/.
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/worktree/pinned\n");
+        write(worktreeDirectory.resolve("refs/worktree/pinned"), PINNED + "\n");
+        write(commonDirectory.resolve("refs/worktree/pinned"), OTHER + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory))
+                .as("refs/worktree/ belongs to this worktree alone")
+                .isEqualTo(PINNED);
+
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/bisect/bad\n");
+        write(worktreeDirectory.resolve("refs/bisect/bad"), PINNED + "\n");
+        assertThat(Test262Environment.checkoutRevision(workingDirectory)).isEqualTo(PINNED);
+
+        write(worktreeDirectory.resolve("HEAD"), "ref: refs/rewritten/onto\n");
+        write(worktreeDirectory.resolve("refs/rewritten/onto"), PINNED + "\n");
         assertThat(Test262Environment.checkoutRevision(workingDirectory)).isEqualTo(PINNED);
     }
 
@@ -259,26 +418,89 @@ public class Test262EnvironmentTest {
                         "Test262 revision: " + PINNED + " (pinned)",
                         "Test262 time zone: UTC");
 
-        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        write(gitDirectory().resolve("HEAD"), OTHER + "\n");
         assertThat(Test262Environment.describe(workingDirectory, PINNED, "Asia/Shanghai").lines())
                 .containsExactly(
-                        "Test262 revision: 0123456789abcdef0123456789abcdef01234567 (not the pinned "
-                                + PINNED + ")",
+                        "Test262 revision: " + OTHER + " (not the pinned " + PINNED + ")",
                         "Test262 time zone: Asia/Shanghai");
 
         assertThat(Test262Environment.describe(workingDirectory, null, "UTC").lines())
                 .containsExactly(
-                        "Test262 revision: 0123456789abcdef0123456789abcdef01234567 (nothing pinned)",
+                        "Test262 revision: " + OTHER + " (nothing pinned)",
                         "Test262 time zone: UTC");
+    }
+
+    @Test
+    public void testGitWorktreeStatusSaysItDoesNotKnowRatherThanGuessing() throws IOException {
+        // A directory with no repository in it, and a path with nothing at it at all. Neither is
+        // evidence that the suite is unedited, so neither may be reported as clean.
+        Path notARepository = workingDirectory.resolve("archive");
+        Files.createDirectories(notARepository);
+        assumeTrue(git(workingDirectory, "--version") == 0, "git is not available on this host");
+
+        Test262Environment.WorktreeStatus archive = Test262Environment.gitWorktreeStatus(notARepository);
+        assertThat(archive.state()).isEqualTo(Test262Environment.WorktreeStatus.State.UNKNOWN);
+        assertThat(archive.detail()).isNotEmpty();
+
+        Test262Environment.WorktreeStatus missing =
+                Test262Environment.gitWorktreeStatus(workingDirectory.resolve("nowhere"));
+        assertThat(missing.state()).isEqualTo(Test262Environment.WorktreeStatus.State.UNKNOWN);
+        assertThat(missing.detail()).isNotEmpty();
+    }
+
+    @Test
+    public void testGitWorktreeStatusSeesEveryKindOfEdit() throws IOException {
+        // Against a real repository, because a partial reimplementation of `git status` would be
+        // wrong in exactly the quiet ways that make a conformance count wrong. Each of these is a
+        // way the executed suite stops being the committed one while HEAD goes on naming it.
+        Path checkout = committedCheckout();
+        assertThat(Test262Environment.gitWorktreeStatus(checkout).state())
+                .as("what CI checks out")
+                .isEqualTo(Test262Environment.WorktreeStatus.State.CLEAN);
+
+        write(checkout.resolve("test/language/example.js"), "assert(false);\n");
+        Test262Environment.WorktreeStatus modified = Test262Environment.gitWorktreeStatus(checkout);
+        assertThat(modified.state()).isEqualTo(Test262Environment.WorktreeStatus.State.MODIFIED);
+        assertThat(modified.detail()).contains("test/language/example.js");
+        assertThat(git(checkout, "checkout", "--", ".")).isZero();
+
+        write(checkout.resolve("harness/assert.js"), "function assert() { throw 1; }\n");
+        assertThat(Test262Environment.gitWorktreeStatus(checkout).detail())
+                .as("one harness file changes the outcome of thousands of interpretations")
+                .contains("harness/assert.js");
+        assertThat(git(checkout, "checkout", "--", ".")).isZero();
+
+        Files.delete(checkout.resolve("test/language/example.js"));
+        assertThat(Test262Environment.gitWorktreeStatus(checkout).state())
+                .as("a deleted test is one the pinned suite contains and this run would not")
+                .isEqualTo(Test262Environment.WorktreeStatus.State.MODIFIED);
+        assertThat(git(checkout, "checkout", "--", ".")).isZero();
+
+        write(checkout.resolve("test/language/untracked.js"), "assert(true);\n");
+        Test262Environment.WorktreeStatus untracked = Test262Environment.gitWorktreeStatus(checkout);
+        assertThat(untracked.state())
+                .as("discovery walks the working tree, so an untracked test is executed")
+                .isEqualTo(Test262Environment.WorktreeStatus.State.MODIFIED);
+        assertThat(untracked.detail()).contains("test/language/untracked.js");
+
+        // A checkout can differ in thousands of places; the diagnostic quotes the first few and
+        // says there are more, because one nobody can read is one nobody reads.
+        for (int index = 0; index < 6; index++) {
+            write(checkout.resolve("test/language/untracked" + index + ".js"), "assert(true);\n");
+        }
+        assertThat(Test262Environment.gitWorktreeStatus(checkout).detail()).endsWith("; ...");
     }
 
     @Test
     public void testPinnedRevisionIgnoresCommentsAndBlankLines() throws IOException {
         // The file is the one place the revision is written down, so it has to be able to say why.
-        write(workingDirectory.resolve(Test262Environment.REVISION_FILE_NAME), """
-                # The revision this repository measures itself against.
-                
-                """ + PINNED + "\n");
+        // Written with explicit newlines rather than as a text block: a blank line inside one is
+        // indented to the block's margin, which is trailing whitespace in the source and fails
+        // `git diff --check`.
+        write(workingDirectory.resolve(Test262Environment.REVISION_FILE_NAME),
+                "# The revision this repository measures itself against.\n"
+                        + "\n"
+                        + PINNED + "\n");
         assertThat(Test262Environment.pinnedRevision(workingDirectory)).isEqualTo(PINNED);
     }
 
@@ -294,28 +516,52 @@ public class Test262EnvironmentTest {
         // The override exists for running against upstream tip on purpose, which is the case most
         // in need of a revision in the log — and the one that used to report none, because the
         // diagnostic path returns before reading one and the log printed only what it produced.
-        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
+        write(gitDirectory().resolve("HEAD"), OTHER + "\n");
         withRevisionCheckWaived(() -> {
-            assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC"))
+            assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC", neverAsked()))
                     .as("the wrong revision is what was asked for, so there is nothing to report")
+                    .isEmpty();
+            assertThat(Test262Environment.check(workingDirectory, null, "UTC", neverAsked()))
+                    .as("and the waiver is the one way to run with no pin configured")
                     .isEmpty();
             assertThat(Test262Environment.describe(workingDirectory, PINNED, "UTC").lines())
                     .containsExactly(
-                            "Test262 revision: 0123456789abcdef0123456789abcdef01234567"
+                            "Test262 revision: " + OTHER
                                     + " (revision check waived, pinned " + PINNED + ")",
                             "Test262 time zone: UTC");
         });
-        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC"))
+        assertThat(Test262Environment.check(workingDirectory, PINNED, "UTC", clean()))
                 .as("and the waiver lasts no longer than it was asked for")
                 .hasSize(1);
     }
 
     @Test
-    public void testWithNothingPinnedThereIsNothingToEnforce() throws IOException {
-        // A caller that has not said which revision it expects cannot be told it has the wrong one.
-        write(gitDirectory().resolve("HEAD"), "0123456789abcdef0123456789abcdef01234567\n");
-        assertThat(Test262Environment.check(workingDirectory, null, "UTC")).isEmpty();
-        assertThat(Test262Environment.check(workingDirectory, "", "UTC")).isEmpty();
+    public void testWithNothingPinnedTheRunIsRefused() throws IOException {
+        // This used to be "a caller that has not said which revision it expects cannot be told it
+        // has the wrong one", and the caller is the build, which reads the one checked-in file that
+        // says what reproducible means here. So deleting that file, emptying it, or leaving nothing
+        // but comments in it turned the guard off without saying so — the same fail-open pattern
+        // the unreadable-revision case had, and the one thing a guard must not be able to do.
+        write(gitDirectory().resolve("HEAD"), PINNED + "\n");
+        AtomicInteger inspections = new AtomicInteger();
+        Test262Environment.WorktreeStatusReader counting = root -> {
+            inspections.incrementAndGet();
+            return Test262Environment.WorktreeStatus.clean();
+        };
+
+        for (String unconfigured : new String[]{null, ""}) {
+            List<Test262Environment.Diagnostic> diagnostics =
+                    Test262Environment.check(workingDirectory, unconfigured, "UTC", counting);
+            assertThat(diagnostics).hasSize(1);
+            assertThat(diagnostics.get(0).fatal()).isTrue();
+            assertThat(diagnostics.get(0).message())
+                    .contains("No pinned test262 revision is configured")
+                    .contains(Test262Environment.REVISION_FILE_NAME)
+                    .contains("-Ptest262AllowAnyRevision=true");
+        }
+        assertThat(inspections)
+                .as("there is nothing to compare the checkout against, so nothing asks Git")
+                .hasValue(0);
     }
 
     private void write(Path path, String contents) throws IOException {
