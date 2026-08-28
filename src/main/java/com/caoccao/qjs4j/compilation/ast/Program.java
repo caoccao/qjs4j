@@ -49,6 +49,9 @@ public final class Program extends ASTNode {
     private static void scanAnnexBForCollisionCheck(
             Statement statement, Set<String> lexicalBindingNames, Set<String> annexBFunctionNames) {
         if (statement instanceof BlockStatement blockStatement) {
+            if (blockStatement.getBody().isEmpty()) {
+                return;
+            }
             Set<String> blockLexicalNames = new HashSet<>(lexicalBindingNames);
             collectBlockLexicals(blockStatement.getBody(), blockLexicalNames);
 

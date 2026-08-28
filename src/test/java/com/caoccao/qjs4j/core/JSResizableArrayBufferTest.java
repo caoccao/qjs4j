@@ -111,4 +111,26 @@ public class JSResizableArrayBufferTest extends BaseJavetTest {
                 b.resize(64);
                 [new Uint8Array(b)[8], b.byteLength].join(',');""");
     }
+
+    @Test
+    public void testTypedArrayCachedViewTracksBackingStoreChanges() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const buffer = new ArrayBuffer(4, { maxByteLength: 64 });
+                  const tracking = new Uint16Array(buffer);
+                  tracking[0] = 0x1234;
+                  if (tracking[0] !== 0x1234) return false;
+                
+                  buffer.resize(16);
+                  tracking[7] = 0x5678;
+                  if (tracking.length !== 8 || tracking[7] !== 0x5678) return false;
+                
+                  buffer.resize(2);
+                  if (tracking.length !== 1 || tracking[0] !== 0x1234) return false;
+                
+                  buffer.resize(64);
+                  tracking[31] = 0x9abc;
+                  return tracking.length === 32 && tracking[31] === 0x9abc;
+                })()""");
+    }
 }

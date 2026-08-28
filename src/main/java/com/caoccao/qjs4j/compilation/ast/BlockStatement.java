@@ -70,7 +70,7 @@ public final class BlockStatement extends Statement {
     @Override
     public List<VariableDeclarator> getVarDeclarators() {
         if (varDeclarators == null) {
-            if (body == null) {
+            if (body == null || body.isEmpty()) {
                 varDeclarators = List.of();
             } else {
                 List<VariableDeclarator> collectedVarDeclarators = new ArrayList<>();

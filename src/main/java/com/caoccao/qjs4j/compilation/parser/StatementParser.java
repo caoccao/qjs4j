@@ -307,6 +307,11 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
         SourceLocation location = parserContext.getLocation();
         parserContext.expect(TokenType.LBRACE);
 
+        if (parserContext.match(TokenType.RBRACE)) {
+            parserContext.expect(TokenType.RBRACE);
+            return new BlockStatement(List.of(), location);
+        }
+
         List<Statement> body = new ArrayList<>();
         while (!parserContext.match(TokenType.RBRACE) && !parserContext.match(TokenType.EOF)) {
             Statement stmt = parseStatement();
@@ -1511,6 +1516,9 @@ record StatementParser(ParserContext parserContext, ParserDelegates delegates) {
     }
 
     private void validateBlockEarlyErrors(List<Statement> statements) {
+        if (statements.isEmpty()) {
+            return;
+        }
         Set<String> lexicalNames = new HashSet<>();
         Set<String> simpleFunctionLexicalNames = new HashSet<>();
         Set<String> varNames = new HashSet<>();

@@ -45,6 +45,9 @@ public sealed abstract class JSTypedArray extends JSObject permits
     protected final int bytesPerElement;
     protected final int length;
     protected final boolean trackRab;
+    private ByteBuffer cachedBackingBuffer;
+    private ByteBuffer cachedByteBuffer;
+    private int cachedByteLength = -1;
 
     /**
      * Create a TypedArray with a new buffer of the given length.
@@ -495,12 +498,19 @@ public sealed abstract class JSTypedArray extends JSObject permits
             throw new JSTypeErrorException("TypedArray buffer is detached");
         }
         ByteBuffer backingBuffer = buffer.getBuffer();
+        int currentByteLength = getByteLength();
+        if (cachedBackingBuffer == backingBuffer && cachedByteLength == currentByteLength) {
+            return cachedByteBuffer;
+        }
         ByteBuffer buf = backingBuffer.duplicate();
         buf.position(byteOffset);
-        buf.limit(byteOffset + getByteLength());
+        buf.limit(byteOffset + currentByteLength);
         ByteBuffer slice = buf.slice();
         slice.order(backingBuffer.order());
-        return slice;
+        cachedBackingBuffer = backingBuffer;
+        cachedByteLength = currentByteLength;
+        cachedByteBuffer = slice;
+        return cachedByteBuffer;
     }
 
     /**

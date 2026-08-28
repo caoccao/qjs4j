@@ -2349,13 +2349,36 @@ public final class ArrayPrototype {
             return context.throwRangeError("Invalid array length");
         }
 
-        // Create new array with spliced result
+        // Small results fit entirely in JSArray's dense storage. Build that storage directly so
+        // every copied value is still an own data property, including undefined values copied
+        // from source holes, without repeatedly growing the array or walking its prototype.
+        if (newLen <= JSArray.MAX_DENSE_SIZE) {
+            JSValue[] elements = new JSValue[(int) newLen];
+            int resultIndex = 0;
+            for (long i = 0; i < start; i++) {
+                elements[resultIndex++] = getElement(context, obj, i);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+            for (int i = 2; i < args.length; i++) {
+                elements[resultIndex++] = args[i];
+            }
+            for (long i = start + deleteCount; i < length; i++) {
+                elements[resultIndex++] = getElement(context, obj, i);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
+            }
+            return context.createJSArray(elements, true);
+        }
+
+        // Create a sparse-capable result for lengths beyond dense storage.
         JSArray result = context.createJSArray(0, (int) newLen);
 
         // Copy elements before start
         for (long i = 0; i < start; i++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            result.push(obj.get(key));
+            result.push(getElement(context, obj, i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
@@ -2368,8 +2391,7 @@ public final class ArrayPrototype {
 
         // Copy elements after deleted portion
         for (long i = start + deleteCount; i < length; i++) {
-            PropertyKey key = PropertyKey.fromString(Long.toString(i));
-            result.push(obj.get(key));
+            result.push(getElement(context, obj, i));
             if (context.hasPendingException()) {
                 return context.getPendingException();
             }
