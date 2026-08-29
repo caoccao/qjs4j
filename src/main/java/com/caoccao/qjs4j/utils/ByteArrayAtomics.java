@@ -44,23 +44,62 @@ import java.util.Set;
  * different widths stay consistent with each other.
  */
 public final class ByteArrayAtomics {
-    private static final VarHandle BYTE_VH = MethodHandles.arrayElementVarHandle(byte[].class);
-    private static final VarHandle INT_VH =
-            MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
+    /**
+     * The array-element handle for {@code byte[]}. Not a view handle: it addresses the array's own
+     * elements and needs no heap {@code byte[]} alignment, so it works wherever {@code VarHandle}
+     * itself does. Like the view handles below it is created inside the {@code static} block's
+     * {@code try}, so a runtime without it degrades to the locked path rather than failing the class.
+     */
+    private static final VarHandle BYTE_VH;
     /**
      * Locks for the fallback path. A power of two so the stripe is a mask of the identity hash;
      * enough of them that unrelated buffers rarely collide, few enough to be free when unused.
      */
     private static final int LOCK_COUNT = 64;
     private static final Object[] LOCKS = createLocks();
-    private static final VarHandle LONG_VH =
-            MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
-    private static final VarHandle SHORT_VH =
-            MethodHandles.byteArrayViewVarHandle(short[].class, ByteOrder.LITTLE_ENDIAN);
     /**
-     * Whether the JDK's byte-array view handles still offer atomic access modes.
+     * The byte-array view handles and the array-element handle. Deliberately not field initialisers:
+     * on a runtime whose {@code MethodHandles.byteArrayViewVarHandle} or
+     * {@code MethodHandles.arrayElementVarHandle} is missing or throws on the call itself — most
+     * Android ART ports, and some JDK builds — a field initialiser would fail the whole class with an
+     * {@code ExceptionInInitializerError} before {@link #supportsAtomicAccessModes()} could probe
+     * anything. Creating them inside a {@code try} that also degrades {@code LOCK_FREE} lets a
+     * {@code NoSuchMethodError}, an {@code UnsupportedOperationException} or any other failure of
+     * creation fall back to the locked path instead of taking the class down.
      */
-    private static final boolean LOCK_FREE = supportsAtomicAccessModes();
+    private static final VarHandle SHORT_VH;
+    private static final VarHandle INT_VH;
+    private static final VarHandle LONG_VH;
+    /**
+     * Whether the JDK's byte-array view handles still offer atomic access modes. Computed after the
+     * handles are created; if creating any of them failed, this is {@code false} and every
+     * operation routes through {@link Fallback}.
+     */
+    private static final boolean LOCK_FREE;
+
+    static {
+        VarHandle byteVh = null;
+        VarHandle shortVh = null;
+        VarHandle intVh = null;
+        VarHandle longVh = null;
+        boolean handle = true;
+        try {
+            byteVh = MethodHandles.arrayElementVarHandle(byte[].class);
+            shortVh = MethodHandles.byteArrayViewVarHandle(short[].class, ByteOrder.LITTLE_ENDIAN);
+            intVh = MethodHandles.byteArrayViewVarHandle(int[].class, ByteOrder.LITTLE_ENDIAN);
+            longVh = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
+        } catch (Throwable creationFailure) {
+            // Any failure to build a handle means the direct path cannot exist; the locked fallback
+            // is the whole implementation. Throwable, not RuntimeException, because a
+            // NoSuchMethodError (an Error) is the most likely symptom on an ART port.
+            handle = false;
+        }
+        BYTE_VH = byteVh;
+        SHORT_VH = shortVh;
+        INT_VH = intVh;
+        LONG_VH = longVh;
+        LOCK_FREE = handle && supportsAtomicAccessModes();
+    }
 
     private ByteArrayAtomics() {
     }

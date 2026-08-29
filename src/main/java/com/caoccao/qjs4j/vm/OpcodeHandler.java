@@ -2691,7 +2691,7 @@ public final class OpcodeHandler {
                 executionContext.push(JSUndefined.INSTANCE);
             } else {
                 if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
-                    if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+                    if (executionContext.virtualMachine.propertyAccessChain.length() > 0) {
                         executionContext.virtualMachine.propertyAccessChain.append('.');
                     }
                     executionContext.virtualMachine.propertyAccessChain.append(fieldName);
@@ -2724,7 +2724,7 @@ public final class OpcodeHandler {
                 executionContext.push(JSUndefined.INSTANCE);
             } else {
                 if (executionContext.virtualMachine.trackPropertyAccess && !executionContext.virtualMachine.propertyAccessLock) {
-                    if (!executionContext.virtualMachine.propertyAccessChain.isEmpty()) {
+                    if (executionContext.virtualMachine.propertyAccessChain.length() > 0) {
                         executionContext.virtualMachine.propertyAccessChain.append('.');
                     }
                     executionContext.virtualMachine.propertyAccessChain.append(fieldName);
@@ -6608,7 +6608,7 @@ public final class OpcodeHandler {
             // Not a function - set pending TypeError so JS catch handlers can process it
             // Generate a descriptive error message similar to V8/QuickJS
             String message;
-            if (!virtualMachine.propertyAccessChain.isEmpty()) {
+            if (virtualMachine.propertyAccessChain.length() > 0) {
                 // Use the tracked property access for better error messages
                 message = virtualMachine.propertyAccessChain + " is not a function";
             } else if (callee instanceof JSUndefined) {
