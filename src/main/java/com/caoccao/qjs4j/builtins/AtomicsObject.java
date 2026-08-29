@@ -20,15 +20,18 @@ import com.caoccao.qjs4j.core.*;
 import com.caoccao.qjs4j.exceptions.JSErrorException;
 import com.caoccao.qjs4j.exceptions.JSRangeErrorException;
 import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
+import com.caoccao.qjs4j.utils.ByteArrayAtomics;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Implementation of Atomics object methods.
@@ -40,7 +43,22 @@ import java.util.concurrent.locks.ReentrantLock;
  * Each JSRuntime owns an AtomicsObject instance so that wait/notify coordination
  * is scoped to the agent cluster (runtime), not shared globally across the JVM.
  */
-public final class AtomicsObject {
+public final class AtomicsObject implements AutoCloseable {
+    /**
+     * How long {@link #close()} waits for the {@code waitAsync} executor to stop.
+     */
+    private static final long WAIT_EXECUTOR_SHUTDOWN_TIMEOUT_MS = 5_000L;
+    /**
+     * In-flight {@code Atomics.waitAsync} operations, grouped by the runtime that started them, so
+     * closing a runtime can end its own waits and no others. The map holds runtimes weakly: a
+     * shared {@code AtomicsObject} outlives any one member of its agent cluster.
+     */
+    private final Map<JSRuntime, Set<AsyncWaitRegistration>> asyncWaits =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    // Atomic access to the backing byte[] goes through ByteArrayAtomics, which keeps the lock-free
+    // VarHandle path where the JDK offers it and falls back to a striped lock where it does not.
+    // Calling byteArrayViewVarHandle directly from here is what broke every 16-, 32- and 64-bit
+    // Atomics operation on JDK 25, where those view handles no longer support any atomic mode.
     // Shared thread pool for Atomics.waitAsync() — reuses threads instead of creating one per call.
     // Cached pool: idle threads are terminated after 60s, new threads created on demand.
     private final ExecutorService waitAsyncExecutor = Executors.newCachedThreadPool(r -> {
@@ -48,8 +66,18 @@ public final class AtomicsObject {
         t.setDaemon(true);
         return t;
     });
-    // Wait lists indexed by SharedArrayBuffer + index, scoped per runtime (agent cluster)
-    private final Map<String, WaitList> waitLists = new ConcurrentHashMap<>();
+    /**
+     * Wait lists, keyed by the identity of the data block and then by the byte offset within it.
+     * <p>
+     * The key used to be the string {@code System.identityHashCode(bytes) + ":" + offset}. Identity
+     * hash codes are not unique, so two live and unrelated {@code SharedArrayBuffer}s could share a
+     * wait list and {@code Atomics.notify} on one would wake — and count — waiters on the other.
+     * The outer map compares the {@code byte[]} itself, which is identity because arrays do not
+     * override {@code equals}; it holds the array weakly so a collected buffer takes its wait lists
+     * with it.
+     */
+    private final Map<byte[], Map<Integer, WaitList>> waitLists =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private static JSValue createBigUint64(long value) {
         BigInteger unsigned = value >= 0
@@ -93,10 +121,15 @@ public final class AtomicsObject {
         return Math.max(timeoutNumber, 0.0);
     }
 
-    private static String getWaitKey(JSTypedArray typedArray, int index) {
-        byte[] sharedBytes = requireAtomicArray(typedArray);
-        int absoluteByteOffset = typedArray.getByteOffset() + (index * typedArray.getBytesPerElement());
-        return System.identityHashCode(sharedBytes) + ":" + absoluteByteOffset;
+    /**
+     * The byte offset of an element within its data block.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the absolute byte offset
+     */
+    private static int getWaitOffset(JSTypedArray typedArray, int index) {
+        return typedArray.getByteOffset() + (index * typedArray.getBytesPerElement());
     }
 
     private static byte[] requireAtomicArray(JSTypedArray typedArray) {
@@ -427,6 +460,70 @@ public final class AtomicsObject {
     }
 
     /**
+     * End every {@code Atomics.waitAsync} a runtime started, without touching any other runtime's.
+     * <p>
+     * Called from {@link JSRuntime#close()}. A cancelled wait settles as {@code "timed-out"} if its
+     * promise is still worth settling, and is dropped otherwise, so an infinite wait no longer
+     * pins a daemon thread, a promise and a closed context for the life of the process.
+     *
+     * @param runtime the closing runtime
+     * @return how many waits were cancelled
+     */
+    public int cancelAsyncWaits(JSRuntime runtime) {
+        Set<AsyncWaitRegistration> registrations = asyncWaits.remove(runtime);
+        if (registrations == null) {
+            return 0;
+        }
+        List<AsyncWaitRegistration> snapshot;
+        synchronized (registrations) {
+            snapshot = new ArrayList<>(registrations);
+        }
+        for (AsyncWaitRegistration registration : snapshot) {
+            registration.cancel();
+        }
+        return snapshot.size();
+    }
+
+    /**
+     * Release this object's own resources: cancel every wait it is holding and stop its executor.
+     * <p>
+     * Deliberately <em>not</em> called by {@link JSRuntime#close()}, which cancels only its own
+     * waits: an {@code AtomicsObject} can be shared by a whole agent cluster through
+     * {@link JSRuntimeOptions#setAtomicsObject(AtomicsObject)}, so the first runtime to close is
+     * not entitled to shut it down. An embedder that owns one exclusively calls this.
+     */
+    @Override
+    public void close() {
+        List<Set<AsyncWaitRegistration>> allRegistrations;
+        synchronized (asyncWaits) {
+            allRegistrations = new ArrayList<>(asyncWaits.values());
+            asyncWaits.clear();
+        }
+        for (Set<AsyncWaitRegistration> registrations : allRegistrations) {
+            List<AsyncWaitRegistration> snapshot;
+            synchronized (registrations) {
+                snapshot = new ArrayList<>(registrations);
+            }
+            for (AsyncWaitRegistration registration : snapshot) {
+                registration.cancel();
+            }
+        }
+        waitAsyncExecutor.shutdownNow();
+        // Every waiter has been cancelled, so the tasks unwind immediately; waiting makes close a
+        // point after which the object holds no thread, rather than a request that it stop soon.
+        try {
+            if (!waitAsyncExecutor.awaitTermination(WAIT_EXECUTOR_SHUTDOWN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+                // The threads are daemons, so a wait that will not unwind cannot outlive the JVM.
+                Logger.getLogger(AtomicsObject.class.getName())
+                        .log(Level.WARNING, "Atomics waitAsync executor did not stop within "
+                                + WAIT_EXECUTOR_SHUTDOWN_TIMEOUT_MS + " ms");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
      * Atomics.compareExchange(typedArray, index, expectedValue, replacementValue)
      * ES2017 24.4.5
      * Atomically compares and exchanges if equal, returns the old value.
@@ -633,9 +730,45 @@ public final class AtomicsObject {
     }
 
     /**
+     * The wait list for one location, or {@code null} when nobody has ever waited there.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the wait list, or {@code null}
+     */
+    WaitList findWaitList(JSTypedArray typedArray, int index) {
+        Map<Integer, WaitList> byOffset = waitLists.get(requireAtomicArray(typedArray));
+        return byOffset == null ? null : byOffset.get(getWaitOffset(typedArray, index));
+    }
+
+    /**
+     * How many {@code Atomics.waitAsync} operations a runtime still has in flight.
+     *
+     * @param runtime the runtime
+     * @return the count
+     */
+    public int getPendingAsyncWaitCount(JSRuntime runtime) {
+        Set<AsyncWaitRegistration> registrations = asyncWaits.get(runtime);
+        if (registrations == null) {
+            return 0;
+        }
+        synchronized (registrations) {
+            return registrations.size();
+        }
+    }
+
+    /**
      * Atomics.isLockFree(size)
      * ES2017 24.4.2
      * Returns whether operations on a given size are lock-free.
+     * <p>
+     * This is a capability query, so it has to report the path the engine actually took.
+     * {@link ByteArrayAtomics} detects that JDK 25 withdrew the atomic access modes from byte-array
+     * view {@code VarHandle}s and routes every width through striped locks there — one flag for all
+     * widths, because operations of different widths overlap on the same data block and must agree
+     * on a protocol. Answering from the width alone told guest code the implementation guarantees
+     * lock-free progress when it does not, which is exactly the premise an algorithm chooses itself
+     * on.
      */
     public JSValue isLockFree(JSContext context, JSValue thisArg, JSValue[] args) {
         if (args.length == 0) {
@@ -775,8 +908,7 @@ public final class AtomicsObject {
                     ? Integer.MAX_VALUE
                     : (int) Math.min(clampedCount, Integer.MAX_VALUE);
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.get(waitKey);
+            WaitList waitList = findWaitList(typedArray, index);
             if (waitList == null) {
                 return JSNumber.of(0);
             }
@@ -903,6 +1035,52 @@ public final class AtomicsObject {
         // Java 9+ Thread.onSpinWait() provides a hint to the JVM that we're in a spin-wait loop
         Thread.onSpinWait();
         return JSUndefined.INSTANCE;
+    }
+
+    /**
+     * Take a place in the wait list for one location, creating the list if needed.
+     * <p>
+     * Looking the list up and joining it are one operation from the caller's point of view: a list
+     * that was retired between the two refuses the registration, and the loop then takes the
+     * successor that is actually in the lookup. That is what makes a waiter reachable by
+     * {@code Atomics.notify} the moment it exists.
+     *
+     * @param typedArray the view
+     * @param index      the element index
+     * @return the caller's registration
+     */
+    WaitRegistration registerWaiter(JSTypedArray typedArray, int index) {
+        byte[] block = requireAtomicArray(typedArray);
+        int offset = getWaitOffset(typedArray, index);
+        while (true) {
+            Map<Integer, WaitList> byOffset = waitLists.computeIfAbsent(block, key -> new ConcurrentHashMap<>());
+            WaitList waitList = byOffset.computeIfAbsent(offset, key -> new WaitList());
+            WaitList.Waiter waiter = waitList.registerIfLive();
+            if (waiter != null) {
+                return new WaitRegistration(waitList, waiter, block, offset);
+            }
+        }
+    }
+
+    /**
+     * Drop a wait list once its last waiter has gone.
+     * <p>
+     * Emptiness, retirement and removal from the lookup happen under the wait list's own lock, so
+     * they are one step as far as {@link #registerWaiter(JSTypedArray, int)} is concerned. Testing
+     * emptiness and then removing as two steps left a window in which an agent that had already
+     * looked the list up could join it after it stopped being reachable: a later
+     * {@code Atomics.notify} would look in the map, find nothing or a fresh list, report zero, and
+     * leave that agent blocked — forever, for a wait with no timeout.
+     *
+     * @param registration the registration returned by {@link #registerWaiter(JSTypedArray, int)}
+     */
+    void releaseWaitList(WaitRegistration registration) {
+        registration.waitList().retireIfEmpty(() -> {
+            Map<Integer, WaitList> byOffset = waitLists.get(registration.block());
+            if (byOffset != null) {
+                byOffset.remove(registration.offset(), registration.waitList());
+            }
+        });
     }
 
     /**
@@ -1142,12 +1320,16 @@ public final class AtomicsObject {
                 return new JSString("timed-out");
             }
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
             long timeout = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            String result = waitList.await(timeout);
+            WaitRegistration registration = registerWaiter(typedArray, index);
+            String result;
+            try {
+                result = registration.waitList().await(registration.waiter(), timeout);
+            } finally {
+                releaseWaitList(registration);
+            }
             return new JSString(result);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -1216,8 +1398,6 @@ public final class AtomicsObject {
                 return createWaitAsyncSyncResult(context, "timed-out");
             }
 
-            String waitKey = getWaitKey(typedArray, index);
-            WaitList waitList = waitLists.computeIfAbsent(waitKey, k -> new WaitList());
             JSPromise promise = context.createJSPromise();
             JSObject result = context.createJSObject();
             result.set(PropertyKey.ASYNC, JSBoolean.TRUE);
@@ -1225,19 +1405,36 @@ public final class AtomicsObject {
             long timeoutMillis = Double.isInfinite(timeoutDouble)
                     ? -1L
                     : Math.min((long) timeoutDouble, Long.MAX_VALUE);
-            waitList.registerWaiter();
+            WaitRegistration waitRegistration = registerWaiter(typedArray, index);
+            JSRuntime owningRuntime = context.getRuntime();
+            AsyncWaitRegistration registration =
+                    new AsyncWaitRegistration(waitRegistration.waitList(), waitRegistration.waiter());
+            Set<AsyncWaitRegistration> registrations = asyncWaits.computeIfAbsent(
+                    owningRuntime, key -> Collections.synchronizedSet(new LinkedHashSet<>()));
+            registrations.add(registration);
             try {
                 waitAsyncExecutor.execute(() -> {
+                    String waitResult;
                     try {
-                        String waitResult = waitList.awaitRegisteredWaiter(timeoutMillis);
-                        promise.fulfill(new JSString(waitResult));
+                        waitResult = waitRegistration.waitList()
+                                .await(waitRegistration.waiter(), timeoutMillis);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
-                        promise.fulfill(new JSString("timed-out"));
+                        waitResult = "timed-out";
+                    } finally {
+                        registrations.remove(registration);
+                        releaseWaitList(waitRegistration);
+                    }
+                    // A wait cancelled because its runtime closed must not touch that runtime's
+                    // promise: the context it belongs to is gone.
+                    if (!registration.isCancelled()) {
+                        promise.fulfill(new JSString(waitResult));
                     }
                 });
             } catch (RejectedExecutionException e) {
-                waitList.cancelRegisteredWaiter();
+                registrations.remove(registration);
+                waitRegistration.waitList().cancel(waitRegistration.waiter());
+                releaseWaitList(waitRegistration);
                 promise.fulfill(new JSString("timed-out"));
             }
             return result;
@@ -1340,104 +1537,209 @@ public final class AtomicsObject {
     }
 
     /**
-     * WaitList manages threads waiting on specific SharedArrayBuffer locations.
-     * This is used by Atomics.wait() and Atomics.notify().
+     * An {@code Atomics.waitAsync} in flight, owned by the runtime whose script started it.
+     * <p>
+     * Registration is what lets {@link #cancelAsyncWaits(JSRuntime)} end an unbounded wait when its
+     * runtime closes. Without it, {@code Atomics.waitAsync(i, 0, 0)} with no timeout held a daemon
+     * thread, a promise and that promise's context for the life of the JVM, and closing the runtime
+     * changed nothing.
      */
-    private static class WaitList {
+
+    private static final class AsyncWaitRegistration {
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final WaitList waitList;
+        private final WaitList.Waiter waiter;
+
+        private AsyncWaitRegistration(WaitList waitList, WaitList.Waiter waiter) {
+            this.waitList = waitList;
+            this.waiter = waiter;
+        }
+
+        private void cancel() {
+            if (cancelled.compareAndSet(false, true)) {
+                waitList.cancel(waiter);
+            }
+        }
+
+        private boolean isCancelled() {
+            return cancelled.get();
+        }
+    }
+
+    /**
+     * The agents waiting on one {@code SharedArrayBuffer} location.
+     * <p>
+     * Each wait is its own queued node with its own {@link Condition}, so {@code Atomics.notify}
+     * wakes exactly the waiters it selected. The previous design counted notifications in a shared
+     * {@code pendingSignals} field, which made a notification a token any waiter could spend: after
+     * {@code notifyWaiters} signalled an existing waiter and released the lock, a waiter that
+     * arrived in between could take the lock first, see the token, consume it and return
+     * {@code "ok"} — leaving the agent the notification was actually meant for still blocked.
+     */
+    static final class WaitList {
         private final Lock lock = new ReentrantLock();
-        private final Condition condition = lock.newCondition();
-        private int pendingSignals = 0;
-        private int waitingCount = 0;
+        private final List<Waiter> waiters = new ArrayList<>();
+        private boolean retired;
 
-        public String await(long timeoutMs) throws InterruptedException {
-            return await(timeoutMs, null);
-        }
-
-        public String await(long timeoutMs, CountDownLatch registrationLatch) throws InterruptedException {
+        /**
+         * Block on a node until it is notified, cancelled, or the timeout expires.
+         *
+         * @param waiter    the node from {@link #register()}
+         * @param timeoutMs the timeout, or a negative value to wait forever
+         * @return {@code "ok"} or {@code "timed-out"}
+         * @throws InterruptedException if the waiting thread is interrupted
+         */
+        String await(Waiter waiter, long timeoutMs) throws InterruptedException {
             lock.lock();
-            try {
-                waitingCount++;
-                if (registrationLatch != null) {
-                    registrationLatch.countDown();
-                }
-                return awaitRegisteredWaiterInternal(timeoutMs);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        public String awaitRegisteredWaiter(long timeoutMs) throws InterruptedException {
-            lock.lock();
-            try {
-                return awaitRegisteredWaiterInternal(timeoutMs);
-            } finally {
-                lock.unlock();
-            }
-        }
-
-        private String awaitRegisteredWaiterInternal(long timeoutMs) throws InterruptedException {
             try {
                 if (timeoutMs < 0) {
-                    while (pendingSignals == 0) {
-                        condition.await();
+                    while (waiter.state == Waiter.State.WAITING) {
+                        waiter.condition.await();
                     }
-                    pendingSignals--;
-                    return "ok";
-                }
-
-                long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
-                while (pendingSignals == 0) {
-                    if (remainingNanos <= 0) {
-                        return "timed-out";
+                } else {
+                    long remainingNanos = TimeUnit.MILLISECONDS.toNanos(timeoutMs);
+                    while (waiter.state == Waiter.State.WAITING) {
+                        if (remainingNanos <= 0) {
+                            break;
+                        }
+                        remainingNanos = waiter.condition.awaitNanos(remainingNanos);
                     }
-                    remainingNanos = condition.awaitNanos(remainingNanos);
                 }
-                pendingSignals--;
-                return "ok";
+                return waiter.state == Waiter.State.NOTIFIED ? "ok" : "timed-out";
             } finally {
-                waitingCount--;
-                if (pendingSignals > waitingCount) {
-                    pendingSignals = waitingCount;
-                }
+                waiters.remove(waiter);
+                lock.unlock();
             }
         }
 
-        public void cancelRegisteredWaiter() {
+        /**
+         * Wake a node without notifying it, so its wait ends as a timeout. Used when the owning
+         * runtime closes.
+         *
+         * @param waiter the node to cancel
+         */
+        void cancel(Waiter waiter) {
             lock.lock();
             try {
-                if (waitingCount > 0) {
-                    waitingCount--;
-                    if (pendingSignals > waitingCount) {
-                        pendingSignals = waitingCount;
-                    }
+                if (waiter.state == Waiter.State.WAITING) {
+                    waiter.state = Waiter.State.CANCELLED;
+                    waiter.condition.signal();
                 }
+                waiters.remove(waiter);
             } finally {
                 lock.unlock();
             }
         }
 
-        public int notifyWaiters(int count) {
+        /**
+         * Whether nobody is waiting here any more.
+         *
+         * @return true when the queue is empty
+         */
+        boolean isEmpty() {
             lock.lock();
             try {
-                int availableToSignal = Math.max(waitingCount - pendingSignals, 0);
-                int toNotify = Math.min(Math.max(count, 0), availableToSignal);
-                pendingSignals += toNotify;
-                for (int i = 0; i < toNotify; i++) {
-                    condition.signal();
-                }
-                return toNotify;
+                return waiters.isEmpty();
             } finally {
                 lock.unlock();
             }
         }
 
-        public void registerWaiter() {
+        /**
+         * Wake the given number of waiters, oldest first.
+         *
+         * @param count how many to wake
+         * @return how many were woken
+         */
+        int notifyWaiters(int count) {
             lock.lock();
             try {
-                waitingCount++;
+                int notified = 0;
+                for (Waiter waiter : waiters) {
+                    if (notified >= count) {
+                        break;
+                    }
+                    if (waiter.state == Waiter.State.WAITING) {
+                        waiter.state = Waiter.State.NOTIFIED;
+                        waiter.condition.signal();
+                        notified++;
+                    }
+                }
+                return notified;
             } finally {
                 lock.unlock();
             }
         }
+
+        /**
+         * Join the queue, unless this list has already been retired from the lookup.
+         *
+         * @return the caller's node, or {@code null} when the list is no longer reachable and the
+         * caller must take the one that replaced it
+         */
+        Waiter registerIfLive() {
+            lock.lock();
+            try {
+                if (retired) {
+                    return null;
+                }
+                Waiter waiter = new Waiter(lock.newCondition());
+                waiters.add(waiter);
+                return waiter;
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        /**
+         * Retire this list and remove it from the lookup, but only while it is still empty.
+         * <p>
+         * The removal runs under this list's lock so that retirement and unreachability are one
+         * step: a registration that arrives in between blocks on the lock and is then refused,
+         * rather than joining a list nothing can find any more.
+         *
+         * @param removeFromLookup removes this list from the wait-list map
+         */
+        void retireIfEmpty(Runnable removeFromLookup) {
+            lock.lock();
+            try {
+                if (retired || !waiters.isEmpty()) {
+                    return;
+                }
+                retired = true;
+                removeFromLookup.run();
+            } finally {
+                lock.unlock();
+            }
+        }
+
+        /**
+         * One agent's place in the queue.
+         */
+        static final class Waiter {
+            private final Condition condition;
+            private State state = State.WAITING;
+
+            private Waiter(Condition condition) {
+                this.condition = condition;
+            }
+
+            private enum State {
+                WAITING,
+                NOTIFIED,
+                CANCELLED
+            }
+        }
+    }
+
+    /**
+     * One agent's place in a wait list, together with what it takes to drop that list again.
+     *
+     * @param waitList the list the waiter joined
+     * @param waiter   the waiter's node
+     * @param block    the data block the list belongs to
+     * @param offset   the byte offset within that block
+     */
+    record WaitRegistration(WaitList waitList, WaitList.Waiter waiter, byte[] block, int offset) {
     }
 }

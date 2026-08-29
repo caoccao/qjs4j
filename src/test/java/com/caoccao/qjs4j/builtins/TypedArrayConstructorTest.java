@@ -132,6 +132,17 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testDefaultSortPrimitivePaths() {
+        assertBooleanWithJavet(
+                "new Int16Array([32767, -1, -32768, 0]).sort().toString() === '-32768,-1,0,32767'",
+                "new Uint16Array([65535, 1, 0, 32768]).sort().toString() === '0,1,32768,65535'",
+                "(() => { const a = new Int16Array(65536); for (let i = 0; i < a.length; i++) a[i] = 32767 - i; a.sort(); return a[0] === -32768 && a[32768] === 0 && a[65535] === 32767; })()",
+                "(() => { const a = new Float64Array([NaN, 0, -0, 3, -Infinity]).sort(); return a[0] === -Infinity && Object.is(a[1], -0) && Object.is(a[2], 0) && a[3] === 3 && Number.isNaN(a[4]); })()",
+                "new BigInt64Array([3n, -1n, 2n]).sort().toString() === '-1,2,3'",
+                "new Int16Array([1, 3, 2]).sort((a, b) => b - a).toString() === '3,2,1'");
+    }
+
+    @Test
     public void testDescriptorsAndAliases() {
         assertStringWithJavet(
                 """
@@ -178,6 +189,15 @@ public class TypedArrayConstructorTest extends BaseJavetTest {
                           && result[0] === 1n
                           && result[1] === 2n;
                         })()""");
+    }
+
+    @Test
+    public void testNumericFillAndOverlappingSet() {
+        assertBooleanWithJavet(
+                "(() => { let calls = 0; const a = new Uint8Array(4); a.fill({ valueOf() { calls++; return 7; } }); return calls === 1 && a.toString() === '7,7,7,7'; })()",
+                "(() => { const a = new BigInt64Array(3); a.fill(7n); return a.toString() === '7,7,7'; })()",
+                "(() => { const b = new ArrayBuffer(16); const source = new Float64Array(b); source[0] = 1; source[1] = 2; const target = new Uint8Array(b); target.set(source); return target[0] === 1 && target[1] === 2; })()",
+                "(() => { const source = new Float64Array([1, 257]); const target = new Uint8Array(2); target.set(source); return target[0] === 1 && target[1] === 1; })()");
     }
 
     @Test

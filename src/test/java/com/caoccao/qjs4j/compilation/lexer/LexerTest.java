@@ -19,10 +19,59 @@ package com.caoccao.qjs4j.compilation.lexer;
 import com.caoccao.qjs4j.exceptions.JSSyntaxErrorException;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class LexerTest {
+    /**
+     * The token types a source lexes to, without the terminating EOF.
+     *
+     * @param source the source
+     * @return the token types
+     */
+    private static List<TokenType> tokenTypes(String source) {
+        Lexer lexer = new Lexer(source);
+        List<TokenType> types = new ArrayList<>();
+        while (true) {
+            Token token = lexer.nextToken();
+            if (token == null || token.type() == TokenType.EOF) {
+                return types;
+            }
+            types.add(token.type());
+        }
+    }
+
+    @Test
+    void testDefaultAsAPropertyNameIsFollowedByDivision() {
+        // `default` is the one keyword that is also a legal property name, and there the '/' is
+        // division. Reading it as a regular expression would swallow the rest of the line.
+        assertThat(tokenTypes("x.default / 2"))
+                .containsExactly(TokenType.IDENTIFIER, TokenType.DOT, TokenType.DEFAULT,
+                        TokenType.DIV, TokenType.NUMBER);
+        assertThat(tokenTypes("x?.default / 2"))
+                .containsExactly(TokenType.IDENTIFIER, TokenType.OPTIONAL_CHAINING, TokenType.DEFAULT,
+                        TokenType.DIV, TokenType.NUMBER);
+    }
+
+    @Test
+    void testExportDefaultIsFollowedByARegularExpression() {
+        // `export default` takes an AssignmentExpression, so a '/' after it opens a regular
+        // expression. It was read as division, and `export default /\(/;` did not lex at all
+        // because the escape after it is not the start of an identifier.
+        assertThat(tokenTypes("export default /a/;"))
+                .containsExactly(TokenType.EXPORT, TokenType.DEFAULT, TokenType.REGEX,
+                        TokenType.SEMICOLON);
+        Lexer lexer = new Lexer("export default /\\(/;");
+        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.EXPORT);
+        assertThat(lexer.nextToken().type()).isEqualTo(TokenType.DEFAULT);
+        Token regexToken = lexer.nextToken();
+        assertThat(regexToken.type()).isEqualTo(TokenType.REGEX);
+        assertThat(regexToken.value()).isEqualTo("/\\(/");
+    }
+
     @Test
     void testIdentifierUnicodeEscapes() {
         Token identifierToken = new Lexer("\\u0061").nextToken();
@@ -99,6 +148,16 @@ class LexerTest {
                 .isInstanceOf(JSSyntaxErrorException.class);
         assertThatThrownBy(() -> new Lexer("'\\u{110000}'").nextToken())
                 .isInstanceOf(JSSyntaxErrorException.class);
+    }
+
+    @Test
+    void testSwitchDefaultIsStillFollowedByARegularExpression() {
+        // The colon separates the clause from what follows, so this went through a different branch
+        // already and must keep working.
+        assertThat(tokenTypes("switch (x) { default: /a/; }"))
+                .containsExactly(TokenType.SWITCH, TokenType.LPAREN, TokenType.IDENTIFIER,
+                        TokenType.RPAREN, TokenType.LBRACE, TokenType.DEFAULT, TokenType.COLON,
+                        TokenType.REGEX, TokenType.SEMICOLON, TokenType.RBRACE);
     }
 
     @Test

@@ -27,8 +27,12 @@ import java.util.Arrays;
  * Based on cutils.c implementation.
  */
 public final class DynamicBuffer {
+    /**
+     * The largest array the JVM will allocate, less a margin HotSpot reserves.
+     */
+    public static final int MAX_CAPACITY = Integer.MAX_VALUE - 8;
+    private final int maxCapacity;
     private byte[] buffer;
-    private boolean error;
     private int size;
 
     /**
@@ -42,9 +46,22 @@ public final class DynamicBuffer {
      * Create a new dynamic buffer with specified initial capacity.
      */
     public DynamicBuffer(int initialCapacity) {
-        this.buffer = new byte[Math.max(initialCapacity, 16)];
+        this(initialCapacity, MAX_CAPACITY);
+    }
+
+    /**
+     * Create a buffer with an explicit ceiling.
+     * <p>
+     * The ceiling exists so the growth-failure path can be exercised without exhausting the test
+     * JVM, which is otherwise the only way to reach it.
+     *
+     * @param initialCapacity the starting capacity
+     * @param maxCapacity     the largest capacity this buffer may reach
+     */
+    public DynamicBuffer(int initialCapacity, int maxCapacity) {
+        this.maxCapacity = Math.min(Math.max(maxCapacity, 16), MAX_CAPACITY);
+        this.buffer = new byte[Math.min(Math.max(initialCapacity, 16), this.maxCapacity)];
         this.size = 0;
-        this.error = false;
     }
 
     /**
@@ -52,9 +69,7 @@ public final class DynamicBuffer {
      */
     public void append(byte b) {
         ensureCapacity(size + 1);
-        if (!error) {
-            buffer[size++] = b;
-        }
+        buffer[size++] = b;
     }
 
     /**
@@ -74,15 +89,13 @@ public final class DynamicBuffer {
             return;
         }
 
-        if (offset < 0 || length < 0 || offset + length > bytes.length) {
+        if (offset < 0 || length < 0 || (long) offset + (long) length > bytes.length) {
             throw new IndexOutOfBoundsException("Invalid offset or length");
         }
 
         ensureCapacity(size + length);
-        if (!error) {
-            System.arraycopy(bytes, offset, buffer, size, length);
-            size += length;
-        }
+        System.arraycopy(bytes, offset, buffer, size, length);
+        size += length;
     }
 
     /**
@@ -97,13 +110,21 @@ public final class DynamicBuffer {
 
     /**
      * Append an unsigned 16-bit value (little-endian).
+     * <p>
+     * A value outside {@code 0..65535} is a caller bug, not data: the old behaviour of writing the
+     * low two bytes of whatever arrived is what turned a 65,538-byte RegExp payload into a
+     * declared length of 2, with no diagnostic anywhere.
+     *
+     * @param value the value to append
+     * @throws IllegalArgumentException when the value does not fit in 16 bits
      */
     public void appendU16(int value) {
-        ensureCapacity(size + 2);
-        if (!error) {
-            buffer[size++] = (byte) value;
-            buffer[size++] = (byte) (value >> 8);
+        if (value < 0 || value > 0xFFFF) {
+            throw new IllegalArgumentException("Value does not fit in an unsigned 16-bit field: " + value);
         }
+        ensureCapacity(size + 2);
+        buffer[size++] = (byte) value;
+        buffer[size++] = (byte) (value >> 8);
     }
 
     /**
@@ -111,12 +132,10 @@ public final class DynamicBuffer {
      */
     public void appendU32(long value) {
         ensureCapacity(size + 4);
-        if (!error) {
-            buffer[size++] = (byte) value;
-            buffer[size++] = (byte) (value >> 8);
-            buffer[size++] = (byte) (value >> 16);
-            buffer[size++] = (byte) (value >> 24);
-        }
+        buffer[size++] = (byte) value;
+        buffer[size++] = (byte) (value >> 8);
+        buffer[size++] = (byte) (value >> 16);
+        buffer[size++] = (byte) (value >> 24);
     }
 
     /**
@@ -124,16 +143,14 @@ public final class DynamicBuffer {
      */
     public void appendU64(long value) {
         ensureCapacity(size + 8);
-        if (!error) {
-            buffer[size++] = (byte) value;
-            buffer[size++] = (byte) (value >> 8);
-            buffer[size++] = (byte) (value >> 16);
-            buffer[size++] = (byte) (value >> 24);
-            buffer[size++] = (byte) (value >> 32);
-            buffer[size++] = (byte) (value >> 40);
-            buffer[size++] = (byte) (value >> 48);
-            buffer[size++] = (byte) (value >> 56);
-        }
+        buffer[size++] = (byte) value;
+        buffer[size++] = (byte) (value >> 8);
+        buffer[size++] = (byte) (value >> 16);
+        buffer[size++] = (byte) (value >> 24);
+        buffer[size++] = (byte) (value >> 32);
+        buffer[size++] = (byte) (value >> 40);
+        buffer[size++] = (byte) (value >> 48);
+        buffer[size++] = (byte) (value >> 56);
     }
 
     /**
@@ -155,31 +172,37 @@ public final class DynamicBuffer {
      */
     public void clear() {
         size = 0;
-        error = false;
     }
 
     /**
-     * Ensure the buffer has enough capacity for the required size.
-     * Grows the buffer by doubling if necessary.
+     * Ensure the buffer has enough capacity for the required size, growing by doubling.
+     * <p>
+     * Growth failure <strong>throws</strong>. It used to set an {@code error} flag and make every
+     * later append a silent no-op, and {@code RegExpCompiler.compile()} never read the flag: under
+     * memory pressure it appended a final {@code MATCH} that was also ignored and returned the
+     * truncated bytes as a valid program, so the symptom surfaced later as a wrong match or an
+     * opcode error with nothing left to say the allocation had failed.
+     * <p>
+     * An {@code OutOfMemoryError} is not caught either. Converting one into a flag is what turned a
+     * fatal, diagnosable condition into corrupt output.
+     *
+     * @param required the capacity needed
+     * @throws JSRangeErrorException when the required capacity exceeds this buffer's ceiling
      */
     private void ensureCapacity(int required) {
-        if (required <= buffer.length) {
+        if (required >= 0 && required <= buffer.length) {
             return;
         }
-
-        try {
-            // Calculate new capacity (at least double, or required size)
-            int newCapacity = Math.max(buffer.length * 2, required);
-
-            // Limit maximum capacity to avoid OutOfMemoryError
-            if (newCapacity < 0 || newCapacity > Integer.MAX_VALUE - 8) {
-                newCapacity = required;
-            }
-
-            buffer = Arrays.copyOf(buffer, newCapacity);
-        } catch (OutOfMemoryError e) {
-            error = true;
+        // Checked in long: `size + length` can overflow to a negative required size, which would
+        // silently satisfy the test above.
+        long requiredCapacity = required & 0xFFFFFFFFL;
+        if (required < 0 || requiredCapacity > maxCapacity) {
+            throw new JSRangeErrorException(
+                    "Buffer cannot grow beyond " + maxCapacity + " bytes");
         }
+        long doubled = (long) buffer.length * 2L;
+        int newCapacity = (int) Math.min(Math.max(doubled, requiredCapacity), maxCapacity);
+        buffer = Arrays.copyOf(buffer, newCapacity);
     }
 
     /**
@@ -194,31 +217,41 @@ public final class DynamicBuffer {
      * Get a range of bytes from the buffer.
      */
     public byte[] getRange(int offset, int length) {
-        if (offset < 0 || length < 0 || offset + length > size) {
+        // `offset + length` is checked in long: two large positive ints sum to a negative one,
+        // which passes the int comparison and then reaches Arrays.copyOfRange.
+        if (offset < 0 || length < 0 || (long) offset + (long) length > size) {
             throw new IndexOutOfBoundsException("Invalid range");
         }
         return Arrays.copyOfRange(buffer, offset, offset + length);
     }
 
     /**
-     * Check if an error occurred during buffer operations.
-     */
-    public boolean hasError() {
-        return error;
-    }
-
-    /**
      * Insert bytes at the specified position.
+     * <p>
+     * The length was not validated, so {@code insert(5, -1)} on a ten-byte buffer performed a
+     * perfectly legal overlapping copy from index 5 to index 4 and then set the size to 9: it
+     * deleted a byte and reported success, where an invalid insertion should have been an argument
+     * error. The arithmetic is checked in {@code long} for the same reason {@code ensureCapacity}
+     * is — {@code size + length} can overflow into a value that passes an {@code int} test.
+     *
+     * @param position where to open the gap
+     * @param length   how many bytes to open
+     * @throws IndexOutOfBoundsException when the position or the length is out of range
+     * @throws JSRangeErrorException     when the result would exceed this buffer's ceiling
      */
     public void insert(int position, int length) {
         if (position < 0 || position > size) {
             throw new IndexOutOfBoundsException("Invalid position");
         }
-        ensureCapacity(size + length);
-        if (!error) {
-            System.arraycopy(buffer, position, buffer, position + length, size - position);
-            size += length;
+        if (length < 0) {
+            throw new IndexOutOfBoundsException("Invalid length: " + length);
         }
+        if ((long) size + (long) length > maxCapacity) {
+            throw new JSRangeErrorException("Buffer cannot grow beyond " + maxCapacity + " bytes");
+        }
+        ensureCapacity(size + length);
+        System.arraycopy(buffer, position, buffer, position + length, size - position);
+        size += length;
     }
 
     /**
@@ -226,17 +259,16 @@ public final class DynamicBuffer {
      */
     public void reset(int newCapacity) {
         if (newCapacity > 0) {
-            buffer = new byte[newCapacity];
+            buffer = new byte[Math.min(newCapacity, maxCapacity)];
         }
         size = 0;
-        error = false;
     }
 
     /**
      * Set a 32-bit value at the specified position (little-endian).
      */
     public void setU32(int position, int value) {
-        if (position < 0 || position + 4 > size) {
+        if (position < 0 || (long) position + 4L > size) {
             throw new IndexOutOfBoundsException("Invalid position");
         }
         buffer[position] = (byte) (value & 0xFF);
@@ -278,7 +310,7 @@ public final class DynamicBuffer {
 
     @Override
     public String toString() {
-        return "DynamicBuffer{size=" + size + ", capacity=" + buffer.length + ", error=" + error + "}";
+        return "DynamicBuffer{size=" + size + ", capacity=" + buffer.length + "}";
     }
 
     /**

@@ -188,6 +188,34 @@ public final class TypedArrayPrototype {
         return typedArray;
     }
 
+    private static boolean countingSort16BitIntegerArray(JSTypedArray typedArray, int length) {
+        if (length < (1 << 16)) {
+            return false;
+        }
+        int valueOffset;
+        if (typedArray instanceof JSInt16Array) {
+            valueOffset = 1 << 15;
+        } else if (typedArray instanceof JSUint16Array) {
+            valueOffset = 0;
+        } else {
+            return false;
+        }
+
+        int[] counts = new int[1 << 16];
+        for (int i = 0; i < length; i++) {
+            counts[(int) typedArray.getElement(i) + valueOffset]++;
+        }
+        int outputIndex = 0;
+        for (int countIndex = 0; countIndex < counts.length; countIndex++) {
+            int count = counts[countIndex];
+            double value = countIndex - valueOffset;
+            for (int i = 0; i < count; i++) {
+                typedArray.setElement(outputIndex++, value);
+            }
+        }
+        return true;
+    }
+
     public static JSValue entries(JSContext context, JSValue thisArg, JSValue[] args) {
         JSTypedArray typedArray = toTypedArray(context, thisArg, "TypedArray.prototype.entries");
         if (typedArray == null) {
@@ -307,10 +335,17 @@ public final class TypedArrayPrototype {
         end = Math.min(end, currentLength);
         start = Math.min(start, end);
 
-        for (int i = start; i < end; i++) {
-            typedArray.set(PropertyKey.fromIndex(i), convertedValue);
-            if (context.hasPendingException()) {
-                return context.getPendingException();
+        if (convertedValue instanceof JSNumber number) {
+            double value = number.value();
+            for (int i = start; i < end; i++) {
+                typedArray.setElement(i, value);
+            }
+        } else {
+            for (int i = start; i < end; i++) {
+                typedArray.set(PropertyKey.fromIndex(i), convertedValue);
+                if (context.hasPendingException()) {
+                    return context.getPendingException();
+                }
             }
         }
         return typedArray;
@@ -1013,9 +1048,24 @@ public final class TypedArrayPrototype {
             return context.throwTypeError("Cannot mix BigInt and non-BigInt typed arrays");
         }
 
-        // Step 15: If same buffer, clone source values first to avoid overlap
+        // Numeric typed arrays can copy primitive values directly. This avoids boxing every
+        // element as JSNumber, creating a PropertyKey, and converting the same value back to a
+        // number at the target. A temporary primitive array is still required for overlapping
+        // views because writes may otherwise change source elements that have not been read yet.
         boolean sameBuffer = target.getBuffer() == source.getBuffer();
-        if (sameBuffer) {
+        if (!targetIsBigInt && sameBuffer) {
+            double[] tempValues = new double[srcLength];
+            for (int i = 0; i < srcLength; i++) {
+                tempValues[i] = source.getElement(i);
+            }
+            for (int i = 0; i < srcLength; i++) {
+                target.setElement(targetOffset + i, tempValues[i]);
+            }
+        } else if (!targetIsBigInt) {
+            for (int i = 0; i < srcLength; i++) {
+                target.setElement(targetOffset + i, source.getElement(i));
+            }
+        } else if (sameBuffer) {
             // Clone source values into temporary array
             JSValue[] tempValues = new JSValue[srcLength];
             for (int i = 0; i < srcLength; i++) {
@@ -1187,6 +1237,24 @@ public final class TypedArrayPrototype {
         }
         int length = typedArray.getLength();
         if (length <= 1) {
+            return typedArray;
+        }
+
+        // The default numeric ordering is exactly Java's primitive double ordering: NaN values
+        // sort last and -0 sorts before +0. Keep BigInt and user callbacks on the JSValue path,
+        // where their comparison semantics cannot be represented by a primitive double array.
+        if (compareArg instanceof JSUndefined && !isBigIntTypedArray(typedArray)) {
+            if (countingSort16BitIntegerArray(typedArray, length)) {
+                return typedArray;
+            }
+            double[] elements = new double[length];
+            for (int i = 0; i < length; i++) {
+                elements[i] = typedArray.getElement(i);
+            }
+            Arrays.sort(elements);
+            for (int i = 0; i < length; i++) {
+                typedArray.setElement(i, elements[i]);
+            }
             return typedArray;
         }
 

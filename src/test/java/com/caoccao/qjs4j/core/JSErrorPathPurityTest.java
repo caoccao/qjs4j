@@ -258,6 +258,84 @@ public class JSErrorPathPurityTest extends BaseJavetTest {
     }
 
     @Test
+    public void testUncaughtErrorInstanceStillReportsItsOwnDataMessage() {
+        // The hardening must not cost the diagnostic: an ordinary error still reads normally.
+        assertThatThrownBy(() -> context.eval("throw new TypeError('ordinary message');"))
+                .isInstanceOf(JSException.class)
+                .hasMessage("TypeError: ordinary message");
+        assertThatThrownBy(() -> context.eval("throw new RangeError();"))
+                .isInstanceOf(JSException.class)
+                .hasMessage("RangeError");
+    }
+
+    @Test
+    public void testUncaughtErrorInstanceWithAMessageGetterDoesNotRunIt() {
+        // An Error instance took a "fast path" that read `message` through JSObject.get, on both
+        // routes an uncaught error takes out of the interpreter: JSException.formatErrorMessage and
+        // the JSVirtualMachineException(JSError) constructor. A guest could therefore have code run
+        // twice merely by throwing an error whose message is an accessor.
+        context.getGlobalObject().set(PropertyKey.fromString("calls"), JSNumber.of(0));
+        try {
+            context.eval(
+                    """
+                            const error = new Error();
+                            Object.defineProperty(error, 'message', {
+                                get() { globalThis.calls++; return 'boom' },
+                            });
+                            throw error;""");
+        } catch (RuntimeException ignored) {
+            // The throw is expected; what matters is whether the getter ran.
+        }
+        assertThat(context.getGlobalObject().get(PropertyKey.fromString("calls")))
+                .as("a message getter on a thrown Error must not run while it is reported")
+                .isEqualTo(JSNumber.of(0));
+    }
+
+    @Test
+    public void testUncaughtErrorInstanceWithANameGetterDoesNotRunIt() {
+        context.getGlobalObject().set(PropertyKey.fromString("calls"), JSNumber.of(0));
+        try {
+            context.eval(
+                    """
+                            const error = new Error('ordinary');
+                            Object.defineProperty(error, 'name', {
+                                get() { globalThis.calls++; return 'Weird' },
+                            });
+                            throw error;""");
+        } catch (RuntimeException ignored) {
+            // The throw is expected; what matters is whether the getter ran.
+        }
+        assertThat(context.getGlobalObject().get(PropertyKey.fromString("calls")))
+                .as("a name getter on a thrown Error must not run while it is reported")
+                .isEqualTo(JSNumber.of(0));
+    }
+
+    @Test
+    public void testUncaughtErrorInstanceWithAThrowingMessageGetterDoesNotRunIt() {
+        // The worst case: a getter that raises a second error while the first is being unwound.
+        context.getGlobalObject().set(PropertyKey.fromString("calls"), JSNumber.of(0));
+        assertThatThrownBy(() -> context.eval(
+                """
+                        const error = new Error();
+                        Object.defineProperty(error, 'message', {
+                            get() { globalThis.calls++; throw new Error('secondary') },
+                        });
+                        throw error;"""))
+                .isInstanceOf(JSException.class)
+                .hasMessage("Error");
+        assertThat(context.getGlobalObject().get(PropertyKey.fromString("calls")))
+                .isEqualTo(JSNumber.of(0));
+    }
+
+    @Test
+    public void testUncaughtErrorInstanceWithAnOwnNameDataPropertyUsesIt() {
+        assertThatThrownBy(() -> context.eval(
+                "const e = new Error('m'); e.name = 'Custom'; throw e;"))
+                .isInstanceOf(JSException.class)
+                .hasMessage("Custom: m");
+    }
+
+    @Test
     public void testUncaughtThrowWithANonStringMessageIsStillDescribed() {
         // safeExceptionToString runs on the VM unwinding path, so the throw has to be uncaught: a
         // JavaScript catch handles the value before the VM ever reports it. A non-string own

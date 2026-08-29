@@ -2090,9 +2090,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean delete(PropertyKey key) {
+        public boolean delete(PropertyKey key, boolean throwOnFailure) {
             materialize();
-            return super.delete(key);
+            return super.delete(key, throwOnFailure);
         }
 
         @Override
@@ -2266,9 +2266,9 @@ public final class IteratorPrototype {
         }
 
         @Override
-        public boolean delete(PropertyKey key) {
+        public boolean delete(PropertyKey key, boolean throwOnFailure) {
             pristine = false;
-            return super.delete(key);
+            return super.delete(key, throwOnFailure);
         }
 
         @Override

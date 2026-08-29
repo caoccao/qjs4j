@@ -47,6 +47,14 @@ public final class JSSymbol implements JSValue {
     private final String description;
     private final int id;
     private final boolean registered;
+    /**
+     * {@code WeakMap}/{@code WeakSet} entries naming this symbol as their key. Unregistered
+     * symbols became legal weak-collection keys in ES2023.
+     *
+     * @see JSWeakEntryTable
+     */
+    private JSWeakEntryTable weakEntryTable;
+
 
     public JSSymbol(String description) {
         this.id = nextId.getAndIncrement();
@@ -125,5 +133,19 @@ public final class JSSymbol implements JSValue {
     @Override
     public JSValueType type() {
         return JSValueType.SYMBOL;
+    }
+
+    /**
+     * The weak-collection entries naming this symbol as their key.
+     *
+     * @param create true to create the table when absent
+     * @return the table, or {@code null} when absent and {@code create} is false
+     * @see JSWeakEntryTable
+     */
+    JSWeakEntryTable weakEntries(boolean create) {
+        if (weakEntryTable == null && create) {
+            weakEntryTable = new JSWeakEntryTable();
+        }
+        return weakEntryTable;
     }
 }

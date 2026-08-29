@@ -37,6 +37,9 @@ import java.math.BigInteger;
  * - ToLength
  */
 public final class JSTypeConversions {
+    private static final int MAX_CACHED_NUMBER_STRING_LENGTH = 256;
+    private static volatile NumberStringCacheEntry numberStringCacheEntry;
+
     /**
      * Abstract Equality Comparison (==).
      * ES2020 7.2.14
@@ -387,6 +390,46 @@ public final class JSTypeConversions {
         return JSNumber.of(parseBigIntegerDigits(digits, radix).doubleValue());
     }
 
+    private static JSNumber parseStringToNumber(String str) {
+        // Trim whitespace using ES spec whitespace definition (includes U+00A0, U+2007, U+202F, etc.)
+        str = stripEcmaWhitespace(str);
+
+        if (str.isEmpty()) {
+            return JSNumber.of(0.0);
+        }
+
+        // Handle special values
+        if (str.equals("Infinity") || str.equals("+Infinity")) {
+            return JSNumber.of(Double.POSITIVE_INFINITY);
+        }
+        if (str.equals("-Infinity")) {
+            return JSNumber.of(Double.NEGATIVE_INFINITY);
+        }
+
+        // Handle hex numbers (0x / 0X)
+        if (str.startsWith("0x") || str.startsWith("0X")) {
+            return parseRadixLiteral(str.substring(2), 16);
+        }
+
+        // Handle binary numbers (0b / 0B) - ES2015
+        if (str.startsWith("0b") || str.startsWith("0B")) {
+            return parseRadixLiteral(str.substring(2), 2);
+        }
+
+        // Handle octal numbers (0o / 0O) - ES2015
+        if (str.startsWith("0o") || str.startsWith("0O")) {
+            return parseRadixLiteral(str.substring(2), 8);
+        }
+
+        // Handle legacy octal (e.g., "010" is NOT octal in ToNumber, it's decimal 10)
+        // Per ES spec, ToNumber does not support legacy octal - only 0o/0O prefix.
+
+        if (!isValidDecimalNumberString(str)) {
+            return JSNumber.of(Double.NaN);
+        }
+        return JSNumber.of(Double.parseDouble(str));
+    }
+
     private static void setPendingExceptionFromInvocation(JSContext context, Throwable throwable) {
         if (context == null) {
             return;
@@ -523,43 +566,19 @@ public final class JSTypeConversions {
      * Convert string to number following ES2020 rules.
      */
     private static JSNumber stringToNumber(String str) {
-        // Trim whitespace using ES spec whitespace definition (includes U+00A0, U+2007, U+202F, etc.)
-        str = stripEcmaWhitespace(str);
-
-        if (str.isEmpty()) {
-            return JSNumber.of(0.0);
+        NumberStringCacheEntry cachedEntry = numberStringCacheEntry;
+        if (cachedEntry != null && cachedEntry.source().equals(str)) {
+            return cachedEntry.number();
         }
 
-        // Handle special values
-        if (str.equals("Infinity") || str.equals("+Infinity")) {
-            return JSNumber.of(Double.POSITIVE_INFINITY);
+        JSNumber number = parseStringToNumber(str);
+        // Keep the cache bounded to one modest string. Numeric conversion is pure, so sharing the
+        // most recent result between contexts is safe; the length guard prevents one conversion
+        // from retaining an arbitrarily large source string for the life of the class loader.
+        if (str.length() <= MAX_CACHED_NUMBER_STRING_LENGTH) {
+            numberStringCacheEntry = new NumberStringCacheEntry(str, number);
         }
-        if (str.equals("-Infinity")) {
-            return JSNumber.of(Double.NEGATIVE_INFINITY);
-        }
-
-        // Handle hex numbers (0x / 0X)
-        if (str.startsWith("0x") || str.startsWith("0X")) {
-            return parseRadixLiteral(str.substring(2), 16);
-        }
-
-        // Handle binary numbers (0b / 0B) - ES2015
-        if (str.startsWith("0b") || str.startsWith("0B")) {
-            return parseRadixLiteral(str.substring(2), 2);
-        }
-
-        // Handle octal numbers (0o / 0O) - ES2015
-        if (str.startsWith("0o") || str.startsWith("0O")) {
-            return parseRadixLiteral(str.substring(2), 8);
-        }
-
-        // Handle legacy octal (e.g., "010" is NOT octal in ToNumber, it's decimal 10)
-        // Per ES spec, ToNumber does not support legacy octal - only 0o/0O prefix.
-
-        if (!isValidDecimalNumberString(str)) {
-            return JSNumber.of(Double.NaN);
-        }
-        return JSNumber.of(Double.parseDouble(str));
+        return number;
     }
 
     /**
@@ -1013,5 +1032,8 @@ public final class JSTypeConversions {
         TRUE,
         FALSE,
         UNDEFINED
+    }
+
+    private record NumberStringCacheEntry(String source, JSNumber number) {
     }
 }

@@ -70,6 +70,8 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
         functionContext.isInGeneratorFunction = funcDecl.isGenerator();
         // Inherit class inner name so eval() inside nested functions can resolve it.
         compilerContext.functionExpressionCompiler.inheritClassInnerNameCapture(functionContext);
+        Set<String> enclosingParameterScopeFunctionNames =
+                compilerContext.functionExpressionCompiler.inheritParameterScopeFunctionNameCapture(functionContext);
         compilerContext.functionExpressionCompiler.inheritVisibleLexicalCapturesForDirectEvalInBody(
                 functionContext,
                 funcDecl.getBody(),
@@ -259,6 +261,9 @@ final class FunctionDeclarationCompiler extends AstNodeCompiler<FunctionDeclarat
                 selfCaptureIndex // closure self-reference index (-1 if none)
         );
         function.setHasParameterExpressions(funcDecl.getFunctionParams().hasNonSimpleParameters());
+        // Declared inside enclosing default initializers, so the captured
+        // named-function-expression bindings are in scope for this function's whole lifetime.
+        function.setInheritedParameterScopeFunctionNames(enclosingParameterScopeFunctionNames);
 
         compilerContext.emitHelpers.emitCapturedValues(functionCompiler, function);
         // Emit FCLOSURE opcode with function in constant pool

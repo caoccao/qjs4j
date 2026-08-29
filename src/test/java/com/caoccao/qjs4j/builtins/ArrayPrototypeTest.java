@@ -1650,6 +1650,28 @@ public class ArrayPrototypeTest extends BaseJavetTest {
     }
 
     @Test
+    public void testToSplicedCreatesDenseOwnPropertiesInGetOrder() {
+        assertBooleanWithJavet("""
+                (() => {
+                  const reads = [];
+                  const source = {
+                    length: 4,
+                    get 0() { reads.push(0); return 'a'; },
+                    get 1() { reads.push(1); return undefined; },
+                    get 3() { reads.push(3); return 'd'; }
+                  };
+                  const result = Array.prototype.toSpliced.call(source, 2, 1, 'x');
+                  return reads.join(',') === '0,1,3'
+                    && result.length === 4
+                    && result[0] === 'a'
+                    && Object.hasOwn(result, 1)
+                    && result[1] === undefined
+                    && result[2] === 'x'
+                    && result[3] === 'd';
+                })()""");
+    }
+
+    @Test
     public void testToString() {
         JSArray jsArray = new JSArray(context);
         jsArray.push(new JSString("a"));

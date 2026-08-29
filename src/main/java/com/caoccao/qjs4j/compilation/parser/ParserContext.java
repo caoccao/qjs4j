@@ -129,6 +129,26 @@ final class ParserContext {
         this.nextToken = lexer.nextToken();
     }
 
+    /**
+     * Whether an expression is an {@code IdentifierReference}.
+     * <p>
+     * {@code this}, {@code new.target} and {@code import.meta} are parsed into {@link Identifier}
+     * nodes because they resolve like one, but grammatically they are a {@code PrimaryExpression}
+     * and a {@code MetaProperty}, not an {@code IdentifierReference}. Rules that are stated over
+     * {@code IdentifierReference} — the strict-mode {@code delete} early error, the
+     * {@code for}-{@code in}/{@code of} assignment target — must not catch them.
+     *
+     * @param expression the expression to classify
+     * @return true when the expression is a real identifier reference
+     */
+    static boolean isIdentifierReference(Expression expression) {
+        if (!(expression instanceof Identifier identifier)) {
+            return false;
+        }
+        String name = identifier.getName();
+        return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+    }
+
     void advance() {
         previousTokenLine = currentToken.line();
         previousTokenEndOffset = currentToken.offset() + currentToken.value().length();
@@ -144,11 +164,69 @@ final class ParserContext {
         if (hasNewlineBefore() || match(TokenType.RBRACE) || match(TokenType.EOF)) {
             return;
         }
-        throw new JSSyntaxErrorException("Unexpected token '" + currentToken.value() + "'");
+        throw new JSSyntaxErrorException(describeUnexpectedToken());
+    }
+
+    /**
+     * Name the current token the way a diagnostic should, when it is the token that cannot follow.
+     * <p>
+     * Quoting the raw text for everything is wrong for whole categories: a number, a string or a
+     * template has no name worth quoting, and a word that is reserved is reserved rather than
+     * unexpected-as-written — {@code export {} let x = 1;} is rejected because {@code let} is a
+     * reserved word in module code, not because a token called "let" turned up. The categories
+     * below are the ones ECMAScript itself distinguishes, and they are what V8 reports too, so
+     * differential tests can compare the message rather than only the error type.
+     *
+     * @return the diagnostic message
+     */
+    String describeUnexpectedToken() {
+        String value = currentToken.value();
+        return switch (currentToken.type()) {
+            case EOF -> "Unexpected end of input";
+            case NUMBER, BIGINT -> "Unexpected number";
+            case STRING -> "Unexpected string";
+            case TEMPLATE -> "Unexpected template string";
+            case REGEX -> "Unexpected regular expression";
+            case AWAIT -> "Unexpected reserved word";
+            // `as` and `from` carry their own token types here only because module declarations
+            // need to spot them; everywhere else they are ordinary identifiers, and this is
+            // everywhere else. `let` and `yield` are routed through the same check so that whether
+            // they are reserved is decided by the language mode rather than by the token type.
+            case IDENTIFIER, PRIVATE_NAME, AS, FROM, LET, YIELD -> describeUnexpectedWord(value);
+            default -> "Unexpected token '" + value + "'";
+        };
+    }
+
+    /**
+     * Name a word-shaped token: reserved, reserved in strict mode only, or an identifier.
+     *
+     * @param name the word
+     * @return the diagnostic message
+     */
+    private String describeUnexpectedWord(String name) {
+        if (JSKeyword.ENUM.equals(name)) {
+            return "Unexpected reserved word";
+        }
+        if (strictMode && isStrictReservedIdentifierName(name)) {
+            return "Unexpected strict mode reserved word";
+        }
+        if (JSKeyword.GET.equals(name) || JSKeyword.SET.equals(name)) {
+            // Scanned as identifiers here, but they are contextual keywords of the grammar and are
+            // named as tokens, like `of` and `async` which do have their own token types.
+            return "Unexpected token '" + name + "'";
+        }
+        return "Unexpected identifier '" + name + "'";
     }
 
     Token expect(TokenType type) {
         if (!match(type)) {
+            if (currentToken.type() == TokenType.EOF) {
+                // Source that simply stops early is not a token mismatch, and naming the token type
+                // the parser wanted describes the parser rather than the program. `export {} from`
+                // reported "Expected STRING but got EOF at line 1, column 15" where every engine
+                // says the input ended.
+                throw new JSSyntaxErrorException("Unexpected end of input");
+            }
             throw new JSSyntaxErrorException("Expected " + type + " but got " + currentToken.type() +
                     " at line " + currentToken.line() + ", column " + currentToken.column());
         }
@@ -341,9 +419,8 @@ final class ParserContext {
     }
 
     boolean isValidForInOfTarget(Expression expr) {
-        if (expr instanceof Identifier identifier) {
-            String name = identifier.getName();
-            return !"import.meta".equals(name) && !"new.target".equals(name) && !JSKeyword.THIS.equals(name);
+        if (expr instanceof Identifier) {
+            return isIdentifierReference(expr);
         }
         if (expr instanceof MemberExpression) {
             return true;

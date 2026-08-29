@@ -26,6 +26,20 @@ import com.caoccao.qjs4j.core.*;
 public class JSException extends RuntimeException {
     private final JSValue errorValue;
     private final SourceLocation sourceLocation;
+    /**
+     * The name of the source {@link #sourceLocation} indexes into.
+     * <p>
+     * A {@code SourceLocation} is a pair of offsets, and offsets alone do not say which text they
+     * are offsets into. While every located error came from the source the embedder had just
+     * handed to {@code eval}, that was implicit and safe. It stopped being either when module
+     * linking began reporting failures that belong to a <em>dependency</em>: those coordinates
+     * index a file the caller never passed in, so attaching them without saying so would have
+     * described a position in the wrong text. The location was therefore dropped for those errors
+     * and the coordinates were appended to the message instead, which left embedders parsing prose
+     * to find something the engine already knew. Naming the source makes the pair complete, and the
+     * location can be carried in every case.
+     */
+    private final String sourceName;
 
     public JSException(String name, String message) {
         this(name, message, null);
@@ -35,6 +49,7 @@ public class JSException extends RuntimeException {
         super(name + ": " + message, cause);
         errorValue = new JSString(name + ": " + message);
         sourceLocation = null;
+        sourceName = null;
     }
 
     public JSException(JSValue errorValue) {
@@ -44,7 +59,11 @@ public class JSException extends RuntimeException {
     public JSException(JSValue errorValue, Throwable cause) {
         super(formatErrorMessage(errorValue), cause);
         this.errorValue = errorValue;
+        // Read off the thrown value, not passed in alongside it, so that the identity of the text
+        // the offsets belong to survives every place the engine re-wraps a pending exception into a
+        // fresh JSException on its way out of eval().
         sourceLocation = errorValue instanceof JSError jsError ? jsError.getSourceLocation() : null;
+        sourceName = errorValue instanceof JSError jsError ? jsError.getSourceName() : null;
     }
 
     /**
@@ -59,16 +78,15 @@ public class JSException extends RuntimeException {
      * @return a description built without running any script
      */
     private static String formatErrorMessage(JSValue error) {
-        if (error instanceof JSError jsError) {
-            // Fast path. A JSError already holds its name and message, so there is no reason to go
-            // through descriptor lookups — and this runs on every thrown engine error.
-            String name = jsError.getErrorName();
-            JSString message = jsError.getMessage();
-            String messageText = message == null ? "" : message.value();
-            return messageText.isEmpty() ? name : name + ": " + messageText;
-        }
         if (error instanceof JSObject errorObj) {
-            String name = ownDataPropertyAsString(errorObj, PropertyKey.NAME, "Error");
+            // A JSError takes the same physical-storage path as any other thrown object; only its
+            // default name differs, and getErrorName() is a per-class constant that runs nothing.
+            // The old fast path called JSError.getMessage(), which is an ordinary
+            // get(PropertyKey.MESSAGE) — so a guest could replace `message` with an accessor and
+            // have it run while the engine was already unwinding an exception, which is exactly
+            // what the rest of this method exists to prevent.
+            String defaultName = error instanceof JSError jsError ? jsError.getErrorName() : "Error";
+            String name = ownDataPropertyAsString(errorObj, PropertyKey.NAME, defaultName);
             String message = ownDataPropertyAsString(errorObj, PropertyKey.MESSAGE, "");
 
             if (message.isEmpty()) {
@@ -120,5 +138,15 @@ public class JSException extends RuntimeException {
      */
     public SourceLocation getSourceLocation() {
         return sourceLocation;
+    }
+
+    /**
+     * The name of the source {@link #getSourceLocation()} indexes into.
+     *
+     * @return the source name, or {@code null} when the location belongs to the source the
+     * embedder itself supplied, or when there is no location
+     */
+    public String getSourceName() {
+        return sourceName;
     }
 }

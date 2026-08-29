@@ -31,14 +31,20 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /**
  * The ES module loader rewrites module source textually before evaluating it (see
  * {@code JSContext.parseDynamicImportModuleSource}). These tests pin the module source shapes the
- * transformer actually supports, so the eventual move to a compiler-based module pipeline has a
- * behavioural safety net, and cover the hardening that keeps a mis-scanned name from being spliced
- * into generated source.
+ * transformer supports, so the eventual move to a compiler-based module pipeline has a behavioural
+ * safety net, and cover the hardening that keeps a mis-scanned name from being spliced into
+ * generated source.
  * <p>
- * The {@code testKnownLimitation*} tests document behaviour that is wrong per the ECMAScript
- * specification but not fixable at this layer, because the transformer classifies lines by
- * string-matching rather than by parsing. They exist so the compiler-based module pipeline that
- * replaces this code has an explicit checklist of what it must start getting right.
+ * The transformer is still line-oriented, but <em>which</em> text it classifies is now decided by
+ * the engine's own lexer: {@code JSContext.normalizeModuleDeclarationLines} tokenises the source
+ * and puts every top-level declaration on its own lines first. The three cases below used to be
+ * {@code testKnownLimitation*} tests asserting the wrong answer — a declaration sharing a line with
+ * other code, and a regular expression literal desynchronising the character-level masker — and
+ * they now assert the specified one.
+ * <p>
+ * The limitations that <em>are</em> still real live in {@link JSModuleKnownLimitationTest}, which is
+ * the authoritative list and the one the README points at. Nothing here is a known limitation; every
+ * assertion in this class is the specified behaviour.
  */
 public class JSModuleSourceTransformTest extends BaseTest {
     @TempDir
@@ -56,6 +62,39 @@ public class JSModuleSourceTransformTest extends BaseTest {
     private String evalModuleToString(String dependencySource, String mainSource) throws IOException {
         evalModule(dependencySource, mainSource);
         return JSTypeConversions.toString(context, context.eval("String(globalThis.__out)")).value();
+    }
+
+    @Test
+    public void testCommentBetweenDeclarationsOnOneLineIsHandled() throws IOException {
+        assertThat(evalModuleToString(
+                "export const v = 31; /* trailing */ export const w = 32;",
+                """
+                        import { v, w } from './dep.mjs';
+                        globalThis.__out = v + ',' + w;"""))
+                .isEqualTo("31,32");
+    }
+
+    @Test
+    public void testDivisionIsNotMistakenForARegexpLiteral() throws IOException {
+        assertThat(evalModuleToString(
+                """
+                        const a = 10, b = 2; const q = a / b / 1; export const v = q;""",
+                """
+                        import { v } from './dep.mjs';
+                        globalThis.__out = v;"""))
+                .isEqualTo("5");
+    }
+
+    @Test
+    public void testDynamicImportOnALineWithOtherCodeIsNotTreatedAsADeclaration() throws IOException {
+        // `import(...)` is an expression, not a declaration, and must not be hoisted out of its
+        // statement.
+        assertThat(evalModuleToString(
+                "export const v = 24;",
+                """
+                        globalThis.__out = 'pending';
+                        import('./dep.mjs').then(ns => { globalThis.__out = ns.v; });"""))
+                .isEqualTo("24");
     }
 
     @Test
@@ -139,6 +178,22 @@ public class JSModuleSourceTransformTest extends BaseTest {
     }
 
     @Test
+    public void testExportInsideATemplateOrStringIsNotAnExport() throws IOException {
+        // The other direction: text that merely looks like a declaration must not become one.
+        assertThat(evalModuleToString(
+                """
+                        const text = `
+                        export const fake = 1;
+                        `;
+                        const other = "export const alsoFake = 2;";
+                        export const v = text.length > 0 && other.length > 0;""",
+                """
+                        import * as ns from './dep.mjs';
+                        globalThis.__out = Object.keys(ns).sort().join(',');"""))
+                .isEqualTo("v");
+    }
+
+    @Test
     public void testExportIsIgnoredInsideCommentsAndStrings() throws IOException {
         assertThat(evalModuleToString(
                 """
@@ -187,6 +242,36 @@ public class JSModuleSourceTransformTest extends BaseTest {
     }
 
     @Test
+    public void testExportSharingALineWithOtherCodeIsStillAnExport() throws IOException {
+        // The keyword is not first on its line, which used to make the binding absent from the
+        // namespace entirely.
+        assertThat(evalModuleToString(
+                "const t = 1; export const v = 15;",
+                """
+                        import { v } from './dep.mjs';
+                        globalThis.__out = v;"""))
+                .isEqualTo("15");
+    }
+
+    @Test
+    public void testImportedModuleMissingARequiredSemicolonIsASyntaxError() throws IOException {
+        // The declaration-splitting pass runs on every module the loader reads, not only on the one
+        // handed to eval, so a dependency that depends on a semicolon it does not have has to be
+        // rejected there too — and as an ordinary SyntaxError, not a raw Java exception.
+        Files.writeString(moduleDirectory.resolve("dep.mjs"), "export {} let x = 1;\n");
+        Path mainPath = moduleDirectory.resolve("main.mjs");
+        String mainSource = """
+                import { v } from './dep.mjs';
+                globalThis.__out = v;""";
+        Files.writeString(mainPath, mainSource);
+        assertThatThrownBy(() -> context.eval(mainSource, mainPath.toString(), true))
+                .isInstanceOf(JSException.class)
+                // Module code is strict, so `let` is a reserved word there — the parser's own
+                // diagnostic, identical to V8's for the same source.
+                .hasMessage("SyntaxError: Unexpected strict mode reserved word");
+    }
+
+    @Test
     public void testIndentedExportIsImportable() throws IOException {
         assertThat(evalModuleToString(
                 "    export const v = 14;",
@@ -194,45 +279,6 @@ public class JSModuleSourceTransformTest extends BaseTest {
                         import { v } from './dep.mjs';
                         globalThis.__out = v;"""))
                 .isEqualTo("14");
-    }
-
-    @Test
-    public void testKnownLimitationExportMustStartItsLine() {
-        // Per spec this exports `v`. The scanner only recognises `export` as the first token on a
-        // line, so the binding is absent from the module namespace.
-        assertThatThrownBy(() -> evalModule(
-                "const t = 1; export const v = 15;",
-                """
-                        import { v } from './dep.mjs';
-                        globalThis.__out = v;"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("does not provide an export named 'v'");
-    }
-
-    @Test
-    public void testKnownLimitationRegexpLiteralDesynchronisesTheScanner() {
-        // `maskModuleComments` masks strings, templates and comments, but not regexp literals, so
-        // the quote inside /"/ desynchronises its quote state for the rest of the line and the
-        // `export` that follows is never seen.
-        assertThatThrownBy(() -> evalModule(
-                """
-                        const r = /"/; export const v = 20;""",
-                """
-                        import { v } from './dep.mjs';
-                        globalThis.__out = v;"""))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("does not provide an export named 'v'");
-    }
-
-    @Test
-    public void testKnownLimitationStaticImportMustBeAloneOnItsLine() {
-        // Per spec the import is hoisted and `v` is in scope. The scanner only recognises an
-        // import declaration that occupies its whole line.
-        assertThatThrownBy(() -> evalModule(
-                "export const v = 22;",
-                "import { v } from './dep.mjs'; globalThis.__out = v;"))
-                .isInstanceOf(JSException.class)
-                .hasMessageContaining("v is not defined");
     }
 
     @Test
@@ -248,6 +294,46 @@ public class JSModuleSourceTransformTest extends BaseTest {
     }
 
     @Test
+    public void testRegexpLiteralDoesNotHideAFollowingExport() throws IOException {
+        // The quote inside /"/ used to desynchronise the character-level masker's quote state for
+        // the rest of the line, hiding the export. The lexer knows a regular expression from a
+        // division.
+        assertThat(evalModuleToString(
+                """
+                        const r = /"/; export const v = 20;""",
+                """
+                        import { v } from './dep.mjs';
+                        globalThis.__out = v;"""))
+                .isEqualTo("20");
+    }
+
+    @Test
+    public void testSeveralExportsOnOneLineAreAllExported() throws IOException {
+        assertThat(evalModuleToString(
+                "export const a = 1; export const b = 2; const c = 3;",
+                """
+                        import { a, b } from './dep.mjs';
+                        globalThis.__out = a + ',' + b;"""))
+                .isEqualTo("1,2");
+    }
+
+    @Test
+    public void testStaticImportSharingALineWithOtherCodeIsStillHoisted() throws IOException {
+        assertThat(evalModuleToString(
+                "export const v = 22;",
+                "import { v } from './dep.mjs'; globalThis.__out = v;"))
+                .isEqualTo("22");
+    }
+
+    @Test
+    public void testStaticImportWithAnAttributesClauseSharingALine() throws IOException {
+        assertThat(evalModuleToString(
+                "export const v = 23;",
+                "import { v } from './dep.mjs' with {}; globalThis.__out = v;"))
+                .isEqualTo("23");
+    }
+
+    @Test
     public void testStringExportNamesAreEscapedIntoGeneratedSource() throws IOException {
         // The exported name reaches string position in generated source, so it must be escaped
         // rather than concatenated raw.
@@ -259,6 +345,19 @@ public class JSModuleSourceTransformTest extends BaseTest {
                         import * as ns from './dep.mjs';
                         globalThis.__out = Object.keys(ns).sort().join('|');"""))
                 .isEqualTo("we ird|we-ird");
+    }
+
+    @Test
+    public void testStringModuleExportNameIsNotMistakenForASpecifier() throws IOException {
+        // `export * as "All" from './dep.mjs'` has two top-level strings. Treating the first as the
+        // module specifier cut the declaration in half.
+        assertThat(evalModuleToString(
+                "export const v = 30;",
+                """
+                        export * as "All" from './dep.mjs';
+                        import * as self from './main.mjs';
+                        globalThis.__out = self.All.v;"""))
+                .isEqualTo("30");
     }
 
     @Test

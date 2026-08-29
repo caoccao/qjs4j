@@ -23,6 +23,7 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import java.util.function.Supplier;
 
 /**
  * Represents a JavaScript ArrayBuffer object.
@@ -33,11 +34,27 @@ import java.util.Arrays;
  */
 public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     public static final String NAME = "ArrayBuffer";
-    private final ByteBuffer buffer;
+    /**
+     * The largest data block the JVM can hold in one {@code byte[]}.
+     * <p>
+     * HotSpot refuses array lengths within a few words of {@link Integer#MAX_VALUE}, so a request
+     * that survives the specification's own {@code INT32_MAX} check can still be unallocatable.
+     * Rejecting it here makes that a {@code RangeError} the script can catch instead of an
+     * {@code OutOfMemoryError} escaping as an internal engine failure.
+     */
+    static final int MAX_DATA_BLOCK_BYTE_LENGTH = Integer.MAX_VALUE - 8;
     private final int maxByteLength;
     private final boolean resizable;
+    /**
+     * Non-final: a resizable buffer allocates what it currently needs and reallocates on growth,
+     * rather than reserving {@code maxByteLength} up front. Nothing in the engine holds the
+     * {@code ByteBuffer} across a {@link #resize(int)} — typed arrays and {@code DataView} re-read
+     * {@link #getBuffer()} per access — so replacing it is safe.
+     */
+    private ByteBuffer buffer;
     private boolean detached;
     private boolean immutable;
+    private JSMemoryAccounting.Reservation reservation;
 
     /**
      * Create an ArrayBuffer with the specified byte length.
@@ -50,6 +67,10 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
 
     /**
      * Create an ArrayBuffer with the specified byte length and max byte length.
+     * <p>
+     * A resizable buffer allocates its <em>current</em> length, not its maximum. Allocating
+     * {@code maxByteLength} eagerly meant {@code new ArrayBuffer(1, {maxByteLength: 1 << 25})} cost
+     * 32 MiB the moment it was constructed, whether or not the script ever grew it.
      *
      * @param byteLength    The initial length in bytes
      * @param maxByteLength The maximum length in bytes, or -1 for non-resizable
@@ -62,14 +83,13 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         if (maxByteLength != -1 && maxByteLength < byteLength) {
             throw new JSRangeErrorException("ArrayBuffer maxByteLength must be >= byteLength");
         }
-        int rawSize = maxByteLength != -1 ? maxByteLength : byteLength;
-        // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
-        this.buffer = ByteBuffer.allocate((rawSize + 3) & ~3);
+        this.resizable = (maxByteLength != -1);
+        this.maxByteLength = (maxByteLength != -1) ? maxByteLength : byteLength;
+        int capacity = paddedCapacity(byteLength);
+        this.buffer = allocateAccountedBlock(context, capacity);
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
         this.buffer.limit(byteLength);
         this.detached = false;
-        this.resizable = (maxByteLength != -1);
-        this.maxByteLength = (maxByteLength != -1) ? maxByteLength : byteLength;
     }
 
     /**
@@ -80,14 +100,16 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     public JSArrayBuffer(JSContext context, byte[] bytes) {
         super(context);
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
-        int allocSize = (bytes.length + 3) & ~3;
+        int allocSize = paddedCapacity(bytes.length);
         if (allocSize > bytes.length) {
-            byte[] padded = new byte[allocSize];
-            System.arraycopy(bytes, 0, padded, 0, bytes.length);
-            this.buffer = ByteBuffer.wrap(padded);
+            this.buffer = accountBlock(context, allocSize, () -> {
+                byte[] padded = new byte[allocSize];
+                System.arraycopy(bytes, 0, padded, 0, bytes.length);
+                return ByteBuffer.wrap(padded);
+            });
             this.buffer.limit(bytes.length);
         } else {
-            this.buffer = ByteBuffer.wrap(bytes);
+            this.buffer = accountBlock(context, allocSize, () -> ByteBuffer.wrap(bytes));
         }
         this.buffer.order(ByteOrder.LITTLE_ENDIAN);
         this.detached = false;
@@ -168,6 +190,28 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
+     * The allocation size for a logical byte length, padded to a multiple of four.
+     * <p>
+     * The padding lets {@code Atomics} operate on 16-bit views through the enclosing aligned
+     * 32-bit word. Computed in {@code long}: {@code (byteLength + 3) & ~3} on an {@code int} wraps
+     * to {@link Integer#MIN_VALUE} at {@link Integer#MAX_VALUE}, which reached
+     * {@code ByteBuffer.allocate} as {@code IllegalArgumentException: capacity < 0} — an internal
+     * failure no {@code try}/{@code catch} could see, at a length the allocation check explicitly
+     * permits.
+     *
+     * @param byteLength the logical length
+     * @return the padded capacity
+     * @throws JSRangeErrorException when the padded size cannot be allocated
+     */
+    static int paddedCapacity(int byteLength) {
+        long padded = ((long) byteLength + 3L) & ~3L;
+        if (padded > MAX_DATA_BLOCK_BYTE_LENGTH) {
+            throw new JSRangeErrorException("Invalid array buffer length");
+        }
+        return (int) padded;
+    }
+
+    /**
      * Validate ArrayBuffer constructor arguments.
      * Returns [byteLength, maxByteLength] as longs (-1 for no maxByteLength).
      * Performs ToIndex and options parsing but NOT allocation limit checks.
@@ -197,11 +241,68 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
     }
 
     /**
+     * Reserve capacity, produce the block, and only then bind the reservation to this buffer.
+     * <p>
+     * The reservation has to be taken before the allocation — refusing after the memory is already
+     * committed would defeat the point — so the failing path has to give it back. It used to reserve
+     * and register unconditionally: a JVM allocation failure left the bytes charged until the
+     * half-constructed buffer was collected, and until then a runtime's ceiling was inflated by an
+     * allocation that never happened.
+     *
+     * <p>
+     * Package-private so a test can hand it an allocator that fails on demand. Reaching that path
+     * through the JVM's own allocation limit needs a request larger than the heap, which makes the
+     * test's premise a property of the build's {@code -Xmx} rather than of the code under test.
+     *
+     * @param context   the owning context
+     * @param capacity  the number of bytes being charged
+     * @param allocator produces the block
+     * @return the allocated block
+     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     */
+    ByteBuffer accountBlock(JSContext context, int capacity, Supplier<ByteBuffer> allocator) {
+        JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
+        JSMemoryAccounting.Reservation pendingReservation = accounting.reserve(this, capacity);
+        if (pendingReservation == null) {
+            throw new JSRangeErrorException(
+                    "Array buffer allocation failed: the runtime memory limit of "
+                            + accounting.getLimit() + " bytes would be exceeded");
+        }
+        ByteBuffer allocated;
+        try {
+            allocated = allocator.get();
+        } catch (RuntimeException | Error allocationFailure) {
+            pendingReservation.release();
+            throw allocationFailure;
+        }
+        this.reservation = pendingReservation;
+        return allocated;
+    }
+
+    /**
+     * Charge a data block against the runtime's memory accounting and allocate it.
+     *
+     * @param context  the owning context
+     * @param capacity the number of bytes to allocate
+     * @return the allocated block
+     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     */
+    private ByteBuffer allocateAccountedBlock(JSContext context, int capacity) {
+        return accountBlock(context, capacity, () -> ByteBuffer.allocate(capacity));
+    }
+
+    /**
      * Detach this ArrayBuffer, making it unusable.
      * ES2020 24.1.1.3
      */
     public void detach() {
         this.detached = true;
+        this.buffer = null;
+        // Give the reservation back now rather than when the collector gets round to the buffer:
+        // a detach is the point at which the data block is unreachable by definition.
+        if (reservation != null) {
+            reservation.release();
+        }
     }
 
     /**
@@ -236,6 +337,42 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
      */
     public int getMaxByteLength() {
         return maxByteLength;
+    }
+
+    /**
+     * Grow this buffer's reservation, produce the larger block, and give the growth back if
+     * producing it fails.
+     * <p>
+     * The reservation grows before the copy, so a buffer declared with a large
+     * {@code maxByteLength} is charged as it actually grows rather than all at once — and can still
+     * be refused when the runtime limit is reached. A failed copy therefore has to hand the growth
+     * back: leaving it charged kept the old buffer alive with a reservation sized for a block that
+     * was never allocated, phantom bytes for the runtime's whole life since nothing later releases
+     * them.
+     * <p>
+     * Package-private for the same reason as {@link #accountBlock}: a test can hand it an
+     * allocator that fails on demand instead of asking for more memory than the JVM has.
+     *
+     * @param additionalBytes how much bigger the block is becoming
+     * @param allocator       produces the larger block
+     * @return the larger block
+     * @throws JSRangeErrorException when the runtime's limit would be exceeded
+     */
+    byte[] growAccountedBlock(int additionalBytes, Supplier<byte[]> allocator) {
+        if (reservation != null && !reservation.grow(additionalBytes)) {
+            JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
+            throw new JSRangeErrorException(
+                    "Array buffer resize failed: the runtime memory limit of "
+                            + accounting.getLimit() + " bytes would be exceeded");
+        }
+        try {
+            return allocator.get();
+        } catch (RuntimeException | Error allocationFailure) {
+            if (reservation != null) {
+                reservation.shrink(additionalBytes);
+            }
+            throw allocationFailure;
+        }
     }
 
     /**
@@ -295,6 +432,24 @@ public final class JSArrayBuffer extends JSObject implements IJSArrayBuffer {
         }
 
         int oldByteLength = buffer.limit();
+        if (newByteLength > buffer.capacity()) {
+            // Growing past what was allocated. The reservation grows with the allocation, so a
+            // buffer declared with a large maxByteLength is charged as it actually grows rather
+            // than all at once — and can still be refused if the runtime limit is reached.
+            int newCapacity = paddedCapacity(newByteLength);
+            int additionalBytes = newCapacity - buffer.capacity();
+            byte[] source = buffer.array();
+            byte[] grown = growAccountedBlock(
+                    additionalBytes, () -> Arrays.copyOf(source, newCapacity));
+            // Bytes between the old length and the old capacity can hold data from before an
+            // earlier shrink; ES2024 requires newly accessible bytes to read as zero.
+            Arrays.fill(grown, oldByteLength, newByteLength, (byte) 0);
+            ByteBuffer replacement = ByteBuffer.wrap(grown);
+            replacement.order(ByteOrder.LITTLE_ENDIAN);
+            replacement.limit(newByteLength);
+            this.buffer = replacement;
+            return;
+        }
         buffer.limit(newByteLength);
         if (newByteLength > oldByteLength) {
             // Zero newly accessible bytes per ES2024 spec

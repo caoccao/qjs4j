@@ -71,6 +71,67 @@ public final class RegExpCompiler {
         this.unicodePropertyResolver = unicodePropertyResolver;
     }
 
+    /**
+     * Emit everything a {@code RANGE}/{@code NOT_RANGE} opcode carries after its opcode byte: the
+     * byte length of the rest of the instruction, the number of ranges, and the ranges themselves
+     * as inclusive 32-bit code point pairs.
+     * <p>
+     * Both header fields are 32 bits. They were 16 bits and neither was checked, so a class of
+     * 8,192 disjoint ranges produced a 65,538-byte payload whose length field wrapped to 2: the
+     * matcher then resumed decoding opcodes in the middle of range data, and a valid pattern
+     * silently matched the wrong thing rather than being rejected. The arithmetic also lived at
+     * seven call sites, each with its own hand-written {@code 2 + n * 8}; it lives here now.
+     *
+     * @param context the compile context
+     * @param ranges  inclusive code point pairs, {@code [start0, end0, start1, end1, ...]}
+     */
+    private static void emitRangePayload(CompileContext context, int[] ranges) {
+        int numRanges = ranges.length / 2;
+        // Four bytes for the count field, eight per range.
+        long dataSize = 4L + (long) numRanges * 8L;
+        context.buffer.appendU32(dataSize);
+        context.buffer.appendU32(numRanges);
+        for (int range : ranges) {
+            context.buffer.appendU32(range);
+        }
+    }
+
+    /**
+     * The declared payload length of a {@code RANGE}-family instruction.
+     * <p>
+     * The compiler re-reads its own bytecode when it decides whether a quantifier body always
+     * advances and whether it needs per-iteration capture resets, so the header layout is known in
+     * two places besides the matcher. When the length field was widened from 16 to 32 bits these
+     * readers kept decoding two bytes, walked off the end of the instruction, and concluded that a
+     * body as ordinary as {@code \D} might not advance — which added an advance check and a
+     * register to every iteration and made a long subject exhaust the backtracking budget.
+     *
+     * @param code   the atom bytecode
+     * @param offset the offset of the opcode byte
+     * @return the number of payload bytes following the length field
+     */
+    private static int readRangePayloadLength(byte[] code, int offset) {
+        return (code[offset + 1] & 0xFF)
+                | ((code[offset + 2] & 0xFF) << 8)
+                | ((code[offset + 3] & 0xFF) << 16)
+                | ((code[offset + 4] & 0xFF) << 24);
+    }
+
+    /**
+     * The inclusive ranges {@code \w} matches.
+     *
+     * @param context the compile context
+     * @return code point pairs
+     */
+    private static int[] wordCharacterRanges(CompileContext context) {
+        if (context.isUnicodeMode() && context.isIgnoreCase()) {
+            // Unicode ignoreCase adds the two code points that canonicalize into [a-zA-Z]:
+            // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
+            return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z', 0x017F, 0x017F, 0x212A, 0x212A};
+        }
+        return new int[]{'0', '9', 'A', 'Z', '_', '_', 'a', 'z'};
+    }
+
     private long appendDecimalDigitWithClamp(long currentValue, int digit) {
         if (currentValue >= MAX_QUANTIFIER_BOUND) {
             return MAX_QUANTIFIER_BOUND;
@@ -406,17 +467,7 @@ public final class RegExpCompiler {
             emittedRanges = normalizeRangePairs(emittedRanges);
         }
 
-        // Calculate size: 2 bytes for count + (numRanges * 8 bytes per range)
-        int numRanges = emittedRanges.length / 2;
-        int dataSize = 2 + (numRanges * 8);
-
-        context.buffer.appendU16(dataSize);
-        context.buffer.appendU16(numRanges);
-
-        for (int i = 0; i < emittedRanges.length; i += 2) {
-            context.buffer.appendU32(emittedRanges[i]);
-            context.buffer.appendU32(emittedRanges[i + 1]);
-        }
+        emitRangePayload(context, emittedRanges);
         if (isBackwardDirection) {
             context.buffer.appendU8(RegExpOpcode.PREV.getCode());
         }
@@ -474,10 +525,7 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
-                context.buffer.appendU16(10); // length of range data = 1 range * 2 codepoints * 4 bytes + 2 bytes count
-                context.buffer.appendU16(1);  // 1 range
-                context.buffer.appendU32('0');
-                context.buffer.appendU32('9');
+                emitRangePayload(context, new int[]{'0', '9'});
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -488,10 +536,7 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
-                context.buffer.appendU16(10); // length of range data = 1 range * 2 codepoints * 4 bytes + 2 bytes count
-                context.buffer.appendU16(1);  // 1 range
-                context.buffer.appendU32('0');
-                context.buffer.appendU32('9');
+                emitRangePayload(context, new int[]{'0', '9'});
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -503,30 +548,7 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.RANGE.getCode());
-                boolean includeUnicodeIgnoreCaseWordExtras = context.isUnicodeMode() && context.isIgnoreCase();
-                int rangeCount = includeUnicodeIgnoreCaseWordExtras ? 6 : 4;
-                context.buffer.appendU16(2 + (rangeCount * 8));
-                context.buffer.appendU16(rangeCount);
-                // Range 1: '0'-'9'
-                context.buffer.appendU32('0');
-                context.buffer.appendU32('9');
-                // Range 2: 'A'-'Z'
-                context.buffer.appendU32('A');
-                context.buffer.appendU32('Z');
-                // Range 3: '_'-'_'
-                context.buffer.appendU32('_');
-                context.buffer.appendU32('_');
-                // Range 4: 'a'-'z'
-                context.buffer.appendU32('a');
-                context.buffer.appendU32('z');
-                if (includeUnicodeIgnoreCaseWordExtras) {
-                    // ES Unicode ignoreCase adds canonicalized matches for \w:
-                    // U+017F LATIN SMALL LETTER LONG S and U+212A KELVIN SIGN.
-                    context.buffer.appendU32(0x017F);
-                    context.buffer.appendU32(0x017F);
-                    context.buffer.appendU32(0x212A);
-                    context.buffer.appendU32(0x212A);
-                }
+                emitRangePayload(context, wordCharacterRanges(context));
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -538,34 +560,7 @@ public final class RegExpCompiler {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
                 context.buffer.appendU8(RegExpOpcode.NOT_RANGE.getCode());
-                boolean includeUnicodeIgnoreCaseWordExtras = context.isUnicodeMode() && context.isIgnoreCase();
-                if (includeUnicodeIgnoreCaseWordExtras) {
-                    context.buffer.appendU16(2 + (6 * 8));
-                    context.buffer.appendU16(6);
-                    context.buffer.appendU32('0');
-                    context.buffer.appendU32('9');
-                    context.buffer.appendU32('A');
-                    context.buffer.appendU32('Z');
-                    context.buffer.appendU32('_');
-                    context.buffer.appendU32('_');
-                    context.buffer.appendU32('a');
-                    context.buffer.appendU32('z');
-                    context.buffer.appendU32(0x017F);
-                    context.buffer.appendU32(0x017F);
-                    context.buffer.appendU32(0x212A);
-                    context.buffer.appendU32(0x212A);
-                } else {
-                    context.buffer.appendU16(2 + (4 * 8));
-                    context.buffer.appendU16(4);
-                    context.buffer.appendU32('0');
-                    context.buffer.appendU32('9');
-                    context.buffer.appendU32('A');
-                    context.buffer.appendU32('Z');
-                    context.buffer.appendU32('_');
-                    context.buffer.appendU32('_');
-                    context.buffer.appendU32('a');
-                    context.buffer.appendU32('z');
-                }
+                emitRangePayload(context, wordCharacterRanges(context));
                 if (isBackwardDirection) {
                     context.buffer.appendU8(RegExpOpcode.PREV.getCode());
                 }
@@ -1357,15 +1352,7 @@ public final class RegExpCompiler {
                 ? (context.isIgnoreCase() ? RegExpOpcode.NOT_RANGE_I.getCode() : RegExpOpcode.NOT_RANGE.getCode())
                 : (context.isIgnoreCase() ? RegExpOpcode.RANGE_I.getCode() : RegExpOpcode.RANGE.getCode()));
 
-        int numRanges = ranges.length / 2;
-        int dataSize = 2 + (numRanges * 8);
-        context.buffer.appendU16(dataSize);
-        context.buffer.appendU16(numRanges);
-
-        for (int i = 0; i < ranges.length; i += 2) {
-            context.buffer.appendU32(ranges[i]);
-            context.buffer.appendU32(ranges[i + 1]);
-        }
+        emitRangePayload(context, ranges);
     }
 
     /**
@@ -1621,8 +1608,7 @@ public final class RegExpCompiler {
                 case CHAR, CHAR_I, CHAR32, CHAR32_I, DOT, ANY, SPACE, NOT_SPACE, PREV:
                     break;
                 case RANGE, RANGE_I, RANGE32, RANGE32_I, NOT_RANGE, NOT_RANGE_I: {
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
+                    pos += 5 + readRangePayloadLength(atomCode, pos);
                     continue;
                 }
                 case LINE_START, LINE_START_M, LINE_END, LINE_END_M,
@@ -1662,20 +1648,17 @@ public final class RegExpCompiler {
                     break;
                 case RANGE, RANGE_I: {
                     // Variable length - read the range data length
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
+                    pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }
                 case RANGE32, RANGE32_I: {
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
+                    pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }
                 case NOT_RANGE, NOT_RANGE_I: {
-                    int rangeLen = ((atomCode[pos + 1] & 0xFF) | ((atomCode[pos + 2] & 0xFF) << 8));
-                    pos += 3 + rangeLen;
+                    pos += 5 + readRangePayloadLength(atomCode, pos);
                     needCheck = false;
                     continue;
                 }

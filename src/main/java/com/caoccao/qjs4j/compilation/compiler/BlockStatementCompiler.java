@@ -29,6 +29,9 @@ final class BlockStatementCompiler extends AstNodeCompiler<BlockStatement> {
 
     @Override
     void compile(BlockStatement block) {
+        if (block.getBody().isEmpty()) {
+            return;
+        }
         compilerContext.pushState();
         compilerContext.scopeManager.enterScope();
         compilerContext.inGlobalScope = false;

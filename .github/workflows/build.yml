@@ -1,5 +1,19 @@
 name: Build
 
+# One run per commit.
+#
+# This used to trigger on a push to any branch *and* on pull requests. For a branch in this
+# repository — which is every branch anyone with write access works on — both fire for the same
+# commit, so every push to a proposed branch built the whole matrix twice: fourteen jobs where
+# seven were asked for, two conformance runs of the same suite, and two identical results to read.
+#
+# The push trigger was written that way so that a branch nobody has proposed still gets built. That
+# is worth having, but not at the price of doubling every build that matters, and the pull_request
+# trigger is the better of the two anyway: it builds the merge of the branch with its base, which is
+# the state that will exist after merging, and it covers pull requests from forks, which a push
+# trigger in this repository never sees at all. So pushes build main, pull requests build everything
+# proposed into it, and a branch that wants CI before it is ready asks for it by being opened as a
+# draft pull request.
 on:
   push:
     branches: [ origin ]
@@ -11,6 +25,13 @@ on:
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
+
+# And one run per commit *at a time*: pushing again to an open pull request abandons the build of the
+# commit it just replaced, whose result nobody will read. Pushes to main are never cancelled, because
+# every commit on main is a state this project claims is good and needs its own answer.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
@@ -79,6 +100,15 @@ jobs:
 
   test262:
     runs-on: ubuntu-latest
+    # The suite reads the host's default time zone, so without pinning one the result depends on
+    # what the runner happens to be set to. UTC rather than the runner's own Etc/UTC: those are the
+    # same instant but not the same identifier, and the pinned harness's
+    # isCanonicalizedStructurallyValidTimeZoneName still applies the pre-canonical-tz rule that
+    # rejects "Etc/UTC" — while canonicalize-utc-timezone.js, in the same suite, asserts the engine
+    # must preserve it. The engine follows the newer rule and is right to; only the harness is
+    # behind, and only on a host whose own zone is spelled that way.
+    env:
+      TZ: UTC
     steps:
     - name: Checkout qjs4j
       uses: actions/checkout@v4
@@ -86,10 +116,17 @@ jobs:
         path: qjs4j
 
     # The Gradle tasks resolve the suite at ../test262 relative to the project directory.
+    #
+    # Pinned, because a conformance gate that follows a moving suite is not a gate. Unpinned, this
+    # tracked the tip of tc39/test262, so upstream adding tests for features the engine has not
+    # implemented turned the job red without a line of this repository changing — which is what
+    # happened here, and it fails identically on every branch and on main. Bumping the pin is then
+    # a deliberate, reviewable act that says which new tests are being taken on.
     - name: Checkout test262
       uses: actions/checkout@v4
       with:
         repository: tc39/test262
+        ref: 5c8206929d81b2d3d727ca6aac56c18358c8d790
         path: test262
 
     - name: Set up JDK 17

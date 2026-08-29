@@ -22,6 +22,7 @@ import com.caoccao.qjs4j.exceptions.JSTypeErrorException;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Represents a JavaScript SharedArrayBuffer object.
@@ -41,9 +42,18 @@ import java.nio.ByteOrder;
 public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffer {
     public static final String NAME = "SharedArrayBuffer";
     private final ByteBuffer buffer;
+    /**
+     * The current length, which every agent sharing this buffer reads and any of them may grow.
+     * <p>
+     * A plain {@code int} gave neither guarantee the class's own contract needs. Two agents could
+     * read the same old length, request 50 and 100, and write 100 then 50 — both calls reporting
+     * success while the buffer observably shrank — and an agent on another thread had no
+     * happens-before edge that made a new length visible at all. The compare-and-set loop below
+     * makes growth monotonic, and the volatile read makes it visible.
+     */
+    private final AtomicInteger byteLength;
     private final boolean growable;
     private final int maxByteLength;
-    private int byteLength;
 
     /**
      * Create a SharedArrayBuffer with the specified byte length.
@@ -64,6 +74,17 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         this(context, byteLength, maxByteLength, true);
     }
 
+    /**
+     * Allocate a shared data block.
+     * <p>
+     * A growable {@code SharedArrayBuffer} allocates {@code maxByteLength} up front, unlike
+     * {@link JSArrayBuffer}, and deliberately so: the backing {@code byte[]} is handed to other
+     * agents — {@code Atomics} reaches it through {@code getBuffer().array()} — so it cannot be
+     * replaced on growth without those agents silently continuing to read a stale block. V8
+     * reserves address space and commits lazily; the JVM has no equivalent. The size is charged to
+     * the runtime's memory accounting instead, so declaring a large {@code maxByteLength} is
+     * refused by the configured limit rather than by the heap running out.
+     */
     private JSSharedArrayBuffer(JSContext context, int byteLength, int maxByteLength, boolean growable) {
         super(context);
         if (byteLength < 0) {
@@ -74,9 +95,27 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         }
         // Use heap buffer so backing byte[] is accessible for VarHandle atomics
         // Pad to multiple of 4 so VarHandle int-width CAS works for short-typed atomics
-        this.buffer = ByteBuffer.allocate((maxByteLength + 3) & ~3);
+        int capacity = JSArrayBuffer.paddedCapacity(maxByteLength);
+        JSMemoryAccounting accounting = context.getRuntime().getMemoryAccounting();
+        JSMemoryAccounting.Reservation pendingReservation = accounting.reserve(this, capacity);
+        if (pendingReservation == null) {
+            throw new JSRangeErrorException(
+                    "Shared array buffer allocation failed: the runtime memory limit of "
+                            + accounting.getLimit() + " bytes would be exceeded");
+        }
+        ByteBuffer allocated;
+        try {
+            allocated = ByteBuffer.allocate(capacity);
+        } catch (RuntimeException | Error allocationFailure) {
+            // Reserving before allocating is deliberate, so a failed allocation has to hand the
+            // bytes back rather than leave the runtime's ceiling inflated by a block that does not
+            // exist.
+            pendingReservation.release();
+            throw allocationFailure;
+        }
+        this.buffer = allocated;
         this.buffer.order(ByteOrder.LITTLE_ENDIAN); // JavaScript uses little-endian
-        this.byteLength = byteLength;
+        this.byteLength = new AtomicInteger(byteLength);
         this.maxByteLength = maxByteLength;
         this.growable = growable;
     }
@@ -188,7 +227,7 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      * @return The byte length
      */
     public int getByteLength() {
-        return byteLength;
+        return byteLength.get();
     }
 
     /**
@@ -210,10 +249,21 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
         if (!growable) {
             throw new JSTypeErrorException("array buffer is not growable");
         }
-        if (newByteLength < byteLength || newByteLength > maxByteLength) {
+        if (newByteLength > maxByteLength) {
             throw new JSRangeErrorException("invalid array buffer length");
         }
-        this.byteLength = newByteLength;
+        // Compare against the length this attempt actually observed, and publish only a larger
+        // one. A request below the current length is rejected however the agents interleave, and
+        // a request that loses the race to a larger one is rejected rather than shrinking it back.
+        while (true) {
+            int currentByteLength = byteLength.get();
+            if (newByteLength < currentByteLength) {
+                throw new JSRangeErrorException("invalid array buffer length");
+            }
+            if (byteLength.compareAndSet(currentByteLength, newByteLength)) {
+                return;
+            }
+        }
     }
 
     /**
@@ -260,18 +310,21 @@ public final class JSSharedArrayBuffer extends JSObject implements IJSArrayBuffe
      * @return A new SharedArrayBuffer
      */
     public JSSharedArrayBuffer slice(int begin, int end) {
+        // One read of the shared length, so both ends are normalised against the same value.
+        int currentByteLength = byteLength.get();
+
         // Normalize begin
         if (begin < 0) {
-            begin = Math.max(byteLength + begin, 0);
+            begin = Math.max(currentByteLength + begin, 0);
         } else {
-            begin = Math.min(begin, byteLength);
+            begin = Math.min(begin, currentByteLength);
         }
 
         // Normalize end
         if (end < 0) {
-            end = Math.max(byteLength + end, 0);
+            end = Math.max(currentByteLength + end, 0);
         } else {
-            end = Math.min(end, byteLength);
+            end = Math.min(end, currentByteLength);
         }
 
         // Calculate new length

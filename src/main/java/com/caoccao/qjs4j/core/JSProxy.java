@@ -283,9 +283,9 @@ public final class JSProxy extends JSObject {
      * Override delete to intercept property deletion.
      */
     @Override
-    public boolean delete(PropertyKey key) {
+    public boolean delete(PropertyKey key, boolean throwOnFailure) {
         JSContext executionContext = resolveExecutionContext(null);
-        boolean strictMode = executionContext.isStrictMode();
+        boolean strictMode = throwOnFailure;
         if (revoked) {
             executionContext.throwTypeError("Cannot perform 'delete' on a proxy that has been revoked");
             return false;
@@ -327,8 +327,8 @@ public final class JSProxy extends JSObject {
             return success;
         }
 
-        // No trap, forward to target with the target context strictness.
-        return targetObj.delete(key);
+        // No trap, forward to target.
+        return targetObj.delete(key, throwOnFailure);
     }
 
     @Override
@@ -919,6 +919,18 @@ public final class JSProxy extends JSObject {
     @Override
     public boolean hasOwnProperty(PropertyKey key) {
         return getOwnPropertyDescriptor(key) != null;
+    }
+
+    /**
+     * A proxy's traps decide the whole lookup, so a proxy in someone else's prototype chain is
+     * always dispatched to rather than walked through.
+     *
+     * @param key the property being looked up
+     * @return always true
+     */
+    @Override
+    protected boolean interceptsPropertyLookup(PropertyKey key) {
+        return true;
     }
 
     /**

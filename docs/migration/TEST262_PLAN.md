@@ -2,8 +2,10 @@
 
 > This is the runner's **design document**, not a conformance report. Results are not recorded in
 > this repository — run `./gradlew test262` or `./gradlew test262Quick` for the current numbers. CI
-> publishes a fresh run of the quick subset on every push and uploads it as the `test262-quick-log`
-> artifact (see `.github/workflows/build.yml`).
+> publishes a fresh run of the quick subset for every pull request and every push to `main`, and
+> uploads it as the `test262-quick-log` artifact (see `.github/workflows/build.yml`). A branch with
+> no pull request open gets no run, and the long-running partition is not run by CI at all: reach
+> both with `./gradlew test262Quick test262LongRunning` locally.
 
 ## Overview
 
