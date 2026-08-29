@@ -790,6 +790,15 @@ public final class AtomicsObject implements AutoCloseable {
     }
 
     /**
+     * Whether the {@code waitAsync} executor has stopped.
+     *
+     * @return true when no wait thread remains
+     */
+    public boolean isWaitExecutorTerminated() {
+        return waitAsyncExecutor.isTerminated();
+    }
+
+    /**
      * Atomics.load(typedArray, index)
      * ES2017 24.4.7
      * Atomically loads and returns the value at index.
