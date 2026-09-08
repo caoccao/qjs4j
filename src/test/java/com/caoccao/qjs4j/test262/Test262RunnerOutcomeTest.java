@@ -23,6 +23,8 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -273,11 +275,13 @@ public class Test262RunnerOutcomeTest {
                 .setWorkerTerminationTimeoutMilliseconds(50);
         CountDownLatch started = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
+        List<Thread> workerThreads = new CopyOnWriteArrayList<>();
         ThreadPoolExecutor pool = new ThreadPoolExecutor(
                 1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 runnable -> {
                     Thread worker = new Thread(runnable, Test262Runner.WORKER_THREAD_NAME_PREFIX + "uninterruptible");
                     worker.setDaemon(true);
+                    workerThreads.add(worker);
                     return worker;
                 });
         try {
@@ -296,7 +300,7 @@ public class Test262RunnerOutcomeTest {
             assertThat(started.await(10, TimeUnit.SECONDS)).isTrue();
             pool.shutdownNow();
 
-            Test262Runner.WorkerShutdown shutdown = runner.awaitWorkerTermination(pool);
+            Test262Runner.WorkerShutdown shutdown = runner.awaitWorkerTermination(pool, workerThreads);
             assertThat(shutdown.clean()).isFalse();
             assertThat(shutdown.abandonedWorkers()).isEqualTo(1);
         } finally {

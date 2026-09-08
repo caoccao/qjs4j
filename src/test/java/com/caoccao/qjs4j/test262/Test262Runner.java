@@ -229,28 +229,46 @@ public class Test262Runner {
      * caller has already been given.
      *
      * @param executorService the pool, already shut down
+     * @param workerThreads   every thread created by the pool's thread factory
      * @return how the wait ended
      */
-    WorkerShutdown awaitWorkerTermination(ThreadPoolExecutor executorService) {
+    WorkerShutdown awaitWorkerTermination(ThreadPoolExecutor executorService, List<Thread> workerThreads) {
         boolean interrupted = false;
         long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(workerTerminationTimeoutMilliseconds);
-        long pollMilliseconds = Math.max(1L, Math.min(TimeUnit.MINUTES.toMillis(1), workerTerminationTimeoutMilliseconds));
+        long pollNanoseconds = TimeUnit.MINUTES.toNanos(1);
         while (true) {
             try {
-                if (executorService.awaitTermination(pollMilliseconds, TimeUnit.MILLISECONDS)) {
-                    return new WorkerShutdown(!interrupted, 0);
+                long remainingNanoseconds = Math.max(0L, deadline - System.nanoTime());
+                if (executorService.awaitTermination(
+                        Math.min(pollNanoseconds, remainingNanoseconds), TimeUnit.NANOSECONDS)) {
+                    // The pool signals termination from its last worker's exit bookkeeping,
+                    // before that thread has returned from run(). Join the actual threads so
+                    // a clean outcome also guarantees that none is still alive. Every join
+                    // shares the pool's deadline, including retries after interruption.
+                    for (Thread worker : workerThreads) {
+                        remainingNanoseconds = deadline - System.nanoTime();
+                        if (worker.isAlive() && remainingNanoseconds > 0) {
+                            TimeUnit.NANOSECONDS.timedJoin(worker, remainingNanoseconds);
+                        }
+                    }
+                    if (workerThreads.stream().noneMatch(Thread::isAlive)) {
+                        return new WorkerShutdown(!interrupted, 0);
+                    }
                 }
-                if (System.nanoTime() - deadline >= 0) {
-                    int abandonedWorkers = Math.max(1, executorService.getActiveCount());
-                    System.err.println("Gave up waiting for " + abandonedWorkers
-                            + " test task(s) to finish; abandoning them");
-                    return new WorkerShutdown(false, abandonedWorkers);
+                if (System.nanoTime() - deadline < 0) {
+                    System.out.println("Waiting for remaining test tasks to finish...");
                 }
-                System.out.println("Waiting for remaining test tasks to finish...");
             } catch (InterruptedException e) {
                 // Absorbed here and re-raised by the caller once the pool has stopped.
                 interrupted = true;
                 executorService.shutdownNow();
+            }
+            if (System.nanoTime() - deadline >= 0) {
+                // getActiveCount() is already zero during the thread-exit window above.
+                int abandonedWorkers = Math.max(1, (int) workerThreads.stream().filter(Thread::isAlive).count());
+                System.err.println("Gave up waiting for " + abandonedWorkers
+                        + " test task(s) to finish; abandoning them");
+                return new WorkerShutdown(false, abandonedWorkers);
             }
         }
     }
@@ -384,6 +402,7 @@ public class Test262Runner {
         System.out.println("Starting test execution with " + threadCount + " threads...\n");
 
         AtomicInteger workerNumber = new AtomicInteger();
+        List<Thread> workerThreads = new CopyOnWriteArrayList<>();
         ThreadPoolExecutor executorService = new ThreadPoolExecutor(
                 threadCount, threadCount, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<>(),
                 runnable -> {
@@ -391,6 +410,7 @@ public class Test262Runner {
                     // stop cannot keep the JVM alive after run() has returned.
                     Thread worker = new Thread(runnable, workerThreadNamePrefix + workerNumber.incrementAndGet());
                     worker.setDaemon(true);
+                    workerThreads.add(worker);
                     return worker;
                 });
         AtomicInteger testCount = new AtomicInteger(0);
@@ -488,7 +508,7 @@ public class Test262Runner {
             }
             executorService.shutdownNow();
         }
-        WorkerShutdown shutdown = awaitWorkerTermination(executorService);
+        WorkerShutdown shutdown = awaitWorkerTermination(executorService, workerThreads);
         interrupted |= !shutdown.clean();
         // Whatever the workers are doing now, the run is over: the counts stop moving here, so the
         // summary that is printed and the outcome that is returned are the same snapshot. A worker
