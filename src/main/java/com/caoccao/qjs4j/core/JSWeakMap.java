@@ -39,108 +39,13 @@ public final class JSWeakMap extends JSObject {
         super(context);
     }
 
-    private static void closeIterator(JSContext context, JSValue iterator) {
-        if (!(iterator instanceof JSObject iteratorObject)) {
-            return;
-        }
-        JSValue pendingException = context.getPendingException();
-        if (pendingException != null) {
-            context.clearPendingException();
-        }
-        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
-        if (returnMethod instanceof JSFunction returnFunction) {
-            try {
-                returnFunction.call(context, iterator, JSValue.NO_ARGS);
-            } catch (RuntimeException ignored) {
-                // Preserve the original abrupt completion.
-            }
-        }
-        if (pendingException != null) {
-            context.clearPendingException();
-            context.setPendingException(pendingException);
-        }
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         JSWeakMap weakMapObj = context.createJSWeakMap();
-        initializePrototypeFromNewTarget(context, weakMapObj);
+        CollectionInitializer.initializePrototypeFromNewTarget(context, weakMapObj, NAME);
         if (context.hasPendingException()) {
-            return returnAbruptResult(context, weakMapObj);
+            return CollectionInitializer.returnAbruptResult(context, weakMapObj);
         }
-
-        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-            JSValue iterableArg = args[0];
-
-            JSValue adder = weakMapObj.get(PropertyKey.SET);
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, weakMapObj);
-            }
-            if (!(adder instanceof JSFunction adderFunction)) {
-                return context.throwTypeError("set/add is not a function");
-            }
-
-            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, weakMapObj);
-            }
-            if (!(iterator instanceof JSObject)) {
-                return context.throwTypeError("Object is not iterable");
-            }
-
-            while (true) {
-                JSObject nextResult;
-                try {
-                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                } catch (RuntimeException e) {
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, weakMapObj);
-                }
-                if (nextResult == null) {
-                    return context.throwTypeError("Iterator result must be an object");
-                }
-
-                JSValue done = nextResult.get(PropertyKey.DONE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, weakMapObj);
-                }
-                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                    break;
-                }
-
-                JSValue entry = nextResult.get(PropertyKey.VALUE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, weakMapObj);
-                }
-                if (!(entry instanceof JSObject entryObj)) {
-                    closeIterator(context, iterator);
-                    return context.throwTypeError("Iterator value must be an object");
-                }
-
-                JSValue key = entryObj.get(PropertyKey.ZERO);
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, weakMapObj);
-                }
-                JSValue value = entryObj.get(PropertyKey.ONE);
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, weakMapObj);
-                }
-                try {
-                    adderFunction.call(context, weakMapObj, new JSValue[]{key, value});
-                } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, weakMapObj);
-                }
-            }
-        }
-        return weakMapObj;
+        return CollectionInitializer.initializeFromIterable(context, weakMapObj, args, true);
     }
 
     /**
@@ -164,20 +69,6 @@ public final class JSWeakMap extends JSObject {
         return ((JSSymbol) key).weakEntries(create);
     }
 
-    private static void initializePrototypeFromNewTarget(JSContext context, JSWeakMap weakMapObject) {
-        JSValue newTarget = context.getNativeConstructorNewTarget();
-        if (!(newTarget instanceof JSObject newTargetObject)) {
-            return;
-        }
-        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSWeakMap.NAME);
-        if (context.hasPendingException()) {
-            return;
-        }
-        if (resolvedPrototype != null) {
-            weakMapObject.setPrototype(resolvedPrototype);
-        }
-    }
-
     /**
      * Whether a value may be held weakly as a key.
      * <p>
@@ -196,14 +87,6 @@ public final class JSWeakMap extends JSObject {
             return !s.isRegistered();
         }
         return false;
-    }
-
-    private static JSObject returnAbruptResult(JSContext context, JSWeakMap fallbackObject) {
-        JSValue pendingException = context.getPendingException();
-        if (pendingException instanceof JSObject pendingObject) {
-            return pendingObject;
-        }
-        return fallbackObject;
     }
 
     /**

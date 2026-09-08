@@ -38,114 +38,13 @@ public final class JSSet extends JSObject {
         this.nextEntryId = 1;
     }
 
-    private static void closeIterator(JSContext context, JSValue iterator) {
-        if (!(iterator instanceof JSObject iteratorObject)) {
-            return;
-        }
-        JSValue pendingException = context.getPendingException();
-        if (pendingException != null) {
-            context.clearPendingException();
-        }
-        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
-        if (returnMethod instanceof JSFunction returnFunction) {
-            try {
-                returnFunction.call(context, iterator, JSValue.NO_ARGS);
-            } catch (RuntimeException ignored) {
-                // Preserve the original abrupt completion.
-            }
-        }
-        if (pendingException != null) {
-            context.clearPendingException();
-            context.setPendingException(pendingException);
-        }
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         JSSet setObj = context.createJSSet();
-        initializePrototypeFromNewTarget(context, setObj);
+        CollectionInitializer.initializePrototypeFromNewTarget(context, setObj, NAME);
         if (context.hasPendingException()) {
-            return returnAbruptResult(context, setObj);
+            return CollectionInitializer.returnAbruptResult(context, setObj);
         }
-
-        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-            JSValue iterableArg = args[0];
-
-            JSValue adder = setObj.get(PropertyKey.fromString("add"));
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, setObj);
-            }
-            if (!(adder instanceof JSFunction adderFunction)) {
-                return context.throwTypeError("set/add is not a function");
-            }
-
-            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, setObj);
-            }
-            if (!(iterator instanceof JSObject)) {
-                return context.throwTypeError("Object is not iterable");
-            }
-
-            while (true) {
-                JSObject nextResult;
-                try {
-                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                } catch (RuntimeException e) {
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, setObj);
-                }
-                if (nextResult == null) {
-                    return context.throwTypeError("Iterator result must be an object");
-                }
-                JSValue done = nextResult.get(PropertyKey.DONE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, setObj);
-                }
-                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                    break;
-                }
-
-                JSValue value = nextResult.get(PropertyKey.VALUE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, setObj);
-                }
-                try {
-                    adderFunction.call(context, setObj, new JSValue[]{value});
-                } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, setObj);
-                }
-            }
-        }
-        return setObj;
-    }
-
-    private static void initializePrototypeFromNewTarget(JSContext context, JSSet setObject) {
-        JSValue newTarget = context.getNativeConstructorNewTarget();
-        if (!(newTarget instanceof JSObject newTargetObject)) {
-            return;
-        }
-        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSSet.NAME);
-        if (context.hasPendingException()) {
-            return;
-        }
-        if (resolvedPrototype != null) {
-            setObject.setPrototype(resolvedPrototype);
-        }
-    }
-
-    private static JSObject returnAbruptResult(JSContext context, JSSet fallbackObject) {
-        JSValue pendingException = context.getPendingException();
-        if (pendingException instanceof JSObject pendingObject) {
-            return pendingObject;
-        }
-        return fallbackObject;
+        return CollectionInitializer.initializeFromIterable(context, setObj, args, false);
     }
 
     public IterationCursor createIterationCursor() {

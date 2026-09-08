@@ -38,135 +38,13 @@ public final class JSMap extends JSObject {
         this.nextEntryId = 1;
     }
 
-    /**
-     * Close an iterator, preserving the pending exception.
-     * Based on QuickJS JS_IteratorClose which preserves the original error
-     * even if iterator.return() throws a different error.
-     */
-    private static void closeIterator(JSContext context, JSValue iterator) {
-        if (!(iterator instanceof JSObject iteratorObject)) {
-            return;
-        }
-        JSValue pendingException = context.getPendingException();
-        if (pendingException != null) {
-            context.clearPendingException();
-        }
-        JSValue returnMethod = iteratorObject.get(PropertyKey.RETURN);
-        if (returnMethod instanceof JSFunction returnFunction) {
-            try {
-                returnFunction.call(context, iterator, JSValue.NO_ARGS);
-            } catch (RuntimeException ignored) {
-                // Per spec, the original error takes precedence over iterator close errors
-            }
-        }
-        // Clear any exception set by the return call, then restore the original
-        if (pendingException != null) {
-            context.clearPendingException();
-            context.setPendingException(pendingException);
-        }
-    }
-
     public static JSObject create(JSContext context, JSValue... args) {
         JSMap mapObj = context.createJSMap();
-        initializePrototypeFromNewTarget(context, mapObj);
+        CollectionInitializer.initializePrototypeFromNewTarget(context, mapObj, NAME);
         if (context.hasPendingException()) {
             return mapObj;
         }
-
-        if (args.length > 0 && !(args[0] instanceof JSUndefined) && !(args[0] instanceof JSNull)) {
-            JSValue iterableArg = args[0];
-
-            JSValue adder = mapObj.get(PropertyKey.SET);
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, mapObj);
-            }
-            if (!(adder instanceof JSFunction adderFunction)) {
-                return context.throwTypeError("set/add is not a function");
-            }
-
-            JSValue iterator = JSIteratorHelper.getIterator(context, iterableArg);
-            if (context.hasPendingException()) {
-                return returnAbruptResult(context, mapObj);
-            }
-            if (!(iterator instanceof JSObject)) {
-                return context.throwTypeError("Object is not iterable");
-            }
-
-            while (true) {
-                JSObject nextResult;
-                try {
-                    nextResult = JSIteratorHelper.iteratorNext(iterator, context);
-                } catch (RuntimeException e) {
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, mapObj);
-                }
-                if (nextResult == null) {
-                    return context.throwTypeError("Iterator result must be an object");
-                }
-                JSValue done = nextResult.get(PropertyKey.DONE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, mapObj);
-                }
-                if (JSTypeConversions.toBoolean(done).isBooleanTrue()) {
-                    break;
-                }
-
-                JSValue entry = nextResult.get(PropertyKey.VALUE);
-                if (context.hasPendingException()) {
-                    return returnAbruptResult(context, mapObj);
-                }
-                if (!(entry instanceof JSObject entryObj)) {
-                    closeIterator(context, iterator);
-                    return context.throwTypeError("Iterator value must be an object");
-                }
-
-                JSValue key = entryObj.get(PropertyKey.fromIndex(0));
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, mapObj);
-                }
-                JSValue value = entryObj.get(PropertyKey.fromIndex(1));
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, mapObj);
-                }
-                try {
-                    adderFunction.call(context, mapObj, new JSValue[]{key, value});
-                } catch (RuntimeException e) {
-                    closeIterator(context, iterator);
-                    throw e;
-                }
-                if (context.hasPendingException()) {
-                    closeIterator(context, iterator);
-                    return returnAbruptResult(context, mapObj);
-                }
-            }
-        }
-        return mapObj;
-    }
-
-    private static void initializePrototypeFromNewTarget(JSContext context, JSMap mapObject) {
-        JSValue newTarget = context.getNativeConstructorNewTarget();
-        if (!(newTarget instanceof JSObject newTargetObject)) {
-            return;
-        }
-        JSObject resolvedPrototype = context.getPrototypeFromConstructor(newTargetObject, JSMap.NAME);
-        if (context.hasPendingException()) {
-            return;
-        }
-        if (resolvedPrototype != null) {
-            mapObject.setPrototype(resolvedPrototype);
-        }
-    }
-
-    private static JSObject returnAbruptResult(JSContext context, JSMap fallbackObject) {
-        JSValue pendingException = context.getPendingException();
-        if (pendingException instanceof JSObject pendingObject) {
-            return pendingObject;
-        }
-        return fallbackObject;
+        return CollectionInitializer.initializeFromIterable(context, mapObj, args, true);
     }
 
     public IterationCursor createIterationCursor() {

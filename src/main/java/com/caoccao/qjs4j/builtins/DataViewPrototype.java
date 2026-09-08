@@ -18,6 +18,8 @@ package com.caoccao.qjs4j.builtins;
 
 import com.caoccao.qjs4j.core.*;
 
+import java.util.function.BiFunction;
+
 /**
  * Implementation of DataView.prototype methods.
  * Based on QuickJS DataView semantics.
@@ -44,37 +46,13 @@ public final class DataViewPrototype {
     }
 
     public static JSValue getBigInt64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getBigInt64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        return dataView.getBigInt64(byteOffset, littleEndian);
+        return getValue(context, thisArg, args, "DataView.prototype.getBigInt64 called on non-DataView", 8,
+                JSDataView::getBigInt64);
     }
 
     public static JSValue getBigUint64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getBigUint64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        return dataView.getBigUint64(byteOffset, littleEndian);
+        return getValue(context, thisArg, args, "DataView.prototype.getBigUint64 called on non-DataView", 8,
+                JSDataView::getBigUint64);
     }
 
     /**
@@ -117,148 +95,63 @@ public final class DataViewPrototype {
     }
 
     public static JSValue getFloat16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getFloat16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getFloat16(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getFloat16 called on non-DataView", 2,
+                (view, offset, littleEndian) -> JSNumber.of(view.getFloat16(offset, littleEndian)));
     }
 
     // Float32 methods
     public static JSValue getFloat32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getFloat32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getFloat32(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getFloat32 called on non-DataView", 4,
+                (view, offset, littleEndian) -> JSNumber.of(view.getFloat32(offset, littleEndian)));
     }
 
     // Float64 methods
     public static JSValue getFloat64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getFloat64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getFloat64(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getFloat64 called on non-DataView", 8,
+                (view, offset, littleEndian) -> JSNumber.of(view.getFloat64(offset, littleEndian)));
     }
 
     // Int16 methods
     public static JSValue getInt16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getInt16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getInt16(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getInt16 called on non-DataView", 2,
+                (view, offset, littleEndian) -> JSNumber.of(view.getInt16(offset, littleEndian)));
     }
 
     // Int32 methods
     public static JSValue getInt32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getInt32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getInt32(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getInt32 called on non-DataView", 4,
+                (view, offset, littleEndian) -> JSNumber.of(view.getInt32(offset, littleEndian)));
     }
 
     // Int8 methods
     public static JSValue getInt8(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getInt8 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSValue error = checkAccess(context, dataView, byteOffset, 1);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getInt8(byteOffset));
+        return getValue(context, thisArg, args, "DataView.prototype.getInt8 called on non-DataView", 1,
+                (view, offset, littleEndian) -> JSNumber.of(view.getInt8(offset)));
     }
 
     public static JSValue getUint16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getUint16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getUint16(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getUint16 called on non-DataView", 2,
+                (view, offset, littleEndian) -> JSNumber.of(view.getUint16(offset, littleEndian)));
     }
 
     public static JSValue getUint32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getUint32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 1 && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        return JSNumber.of(dataView.getUint32(byteOffset, littleEndian));
+        return getValue(context, thisArg, args, "DataView.prototype.getUint32 called on non-DataView", 4,
+                (view, offset, littleEndian) -> JSNumber.of(view.getUint32(offset, littleEndian)));
     }
 
     // Uint8 methods
     public static JSValue getUint8(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.getUint8 called on non-DataView");
+        return getValue(context, thisArg, args, "DataView.prototype.getUint8 called on non-DataView", 1,
+                (view, offset, littleEndian) -> JSNumber.of(view.getUint8(offset)));
+    }
+
+    /**
+     * GetViewValue: validate the receiver, convert the offset, then check the current buffer state.
+     */
+    private static JSValue getValue(
+            JSContext context, JSValue thisArg, JSValue[] args, String receiverError,
+            int size, DataViewReader reader) {
+        JSDataView dataView = requireDataView(context, thisArg, receiverError);
         if (dataView == null) {
             return context.getPendingException();
         }
@@ -266,11 +159,13 @@ public final class DataViewPrototype {
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        boolean littleEndian = size > 1 && args.length > 1
+                && JSTypeConversions.toBoolean(args[1]) == JSBoolean.TRUE;
+        JSValue error = checkAccess(context, dataView, byteOffset, size);
         if (error != null) {
             return error;
         }
-        return JSNumber.of(dataView.getUint8(byteOffset));
+        return reader.read(dataView, byteOffset, littleEndian);
     }
 
     private static JSBigInt parseBigInt(JSContext context, String value) {
@@ -291,256 +186,79 @@ public final class DataViewPrototype {
     }
 
     public static JSValue setBigInt64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setBigInt64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSBigInt value = toBigInt(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        dataView.setBigInt64(byteOffset, value, littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setBigInt64 called on non-DataView", 8,
+                DataViewPrototype::toBigInt,
+                (view, offset, value, littleEndian) -> view.setBigInt64(offset, value, littleEndian));
     }
 
     public static JSValue setBigUint64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setBigUint64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSBigInt value = toBigInt(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        dataView.setBigUint64(byteOffset, value, littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setBigUint64 called on non-DataView", 8,
+                DataViewPrototype::toBigInt,
+                (view, offset, value, littleEndian) -> view.setBigUint64(offset, value, littleEndian));
     }
 
     public static JSValue setFloat16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setFloat16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSNumber numberValue = JSTypeConversions.toNumber(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        dataView.setFloat16(byteOffset, numberValue.value(), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setFloat16 called on non-DataView", 2,
+                JSTypeConversions::toNumber,
+                (view, offset, value, littleEndian) -> view.setFloat16(offset, value.value(), littleEndian));
     }
 
     public static JSValue setFloat32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setFloat32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSNumber numberValue = JSTypeConversions.toNumber(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        dataView.setFloat32(byteOffset, (float) numberValue.value(), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setFloat32 called on non-DataView", 4,
+                JSTypeConversions::toNumber,
+                (view, offset, value, littleEndian) -> view.setFloat32(offset, (float) value.value(), littleEndian));
     }
 
     public static JSValue setFloat64(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setFloat64 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        JSNumber numberValue = JSTypeConversions.toNumber(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (context.hasPendingException()) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 8);
-        if (error != null) {
-            return error;
-        }
-        dataView.setFloat64(byteOffset, numberValue.value(), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setFloat64 called on non-DataView", 8,
+                JSTypeConversions::toNumber,
+                (view, offset, value, littleEndian) -> view.setFloat64(offset, value.value(), littleEndian));
     }
 
     public static JSValue setInt16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setInt16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        dataView.setInt16(byteOffset, (short) (uint32Value & 0xFFFF), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setInt16 called on non-DataView", 2,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setInt16(offset, (short) (value & 0xFFFF), littleEndian));
     }
 
     public static JSValue setInt32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setInt32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        dataView.setInt32(byteOffset, (int) (uint32Value & 0xFFFFFFFFL), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setInt32 called on non-DataView", 4,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setInt32(offset, (int) (value & 0xFFFFFFFFL), littleEndian));
     }
 
     public static JSValue setInt8(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setInt8 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
-            return context.getPendingException();
-        }
-        JSValue error = checkAccess(context, dataView, byteOffset, 1);
-        if (error != null) {
-            return error;
-        }
-        dataView.setInt8(byteOffset, (byte) (uint32Value & 0xFF));
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setInt8 called on non-DataView", 1,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setInt8(offset, (byte) (value & 0xFF)));
     }
 
     public static JSValue setUint16(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setUint16 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 2);
-        if (error != null) {
-            return error;
-        }
-        dataView.setUint16(byteOffset, (int) (uint32Value & 0xFFFF), littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setUint16 called on non-DataView", 2,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setUint16(offset, (int) (value & 0xFFFF), littleEndian));
     }
 
     public static JSValue setUint32(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setUint32 called on non-DataView");
-        if (dataView == null) {
-            return context.getPendingException();
-        }
-        if (dataView.isImmutable()) {
-            return context.throwTypeError("cannot write to an immutable ArrayBuffer");
-        }
-        Integer byteOffset = toDataViewIndex(context, args.length > 0 ? args[0] : JSUndefined.INSTANCE);
-        if (byteOffset == null) {
-            return context.getPendingException();
-        }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
-            return context.getPendingException();
-        }
-        boolean littleEndian = args.length > 2 && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
-        JSValue error = checkAccess(context, dataView, byteOffset, 4);
-        if (error != null) {
-            return error;
-        }
-        dataView.setUint32(byteOffset, uint32Value, littleEndian);
-        return JSUndefined.INSTANCE;
+        return setValue(context, thisArg, args, "DataView.prototype.setUint32 called on non-DataView", 4,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setUint32(offset, value, littleEndian));
     }
 
     public static JSValue setUint8(JSContext context, JSValue thisArg, JSValue[] args) {
-        JSDataView dataView = requireDataView(context, thisArg, "DataView.prototype.setUint8 called on non-DataView");
+        return setValue(context, thisArg, args, "DataView.prototype.setUint8 called on non-DataView", 1,
+                DataViewPrototype::toUint32,
+                (view, offset, value, littleEndian) -> view.setUint8(offset, (int) (value & 0xFF)));
+    }
+
+    /**
+     * SetViewValue: offset and value conversion precede buffer bounds checks, since either
+     * conversion can resize or detach the buffer. The writer receives the converted value.
+     */
+    private static <T> JSValue setValue(
+            JSContext context, JSValue thisArg, JSValue[] args, String receiverError, int size,
+            BiFunction<JSContext, JSValue, T> converter, DataViewWriter<T> writer) {
+        JSDataView dataView = requireDataView(context, thisArg, receiverError);
         if (dataView == null) {
             return context.getPendingException();
         }
@@ -551,15 +269,17 @@ public final class DataViewPrototype {
         if (byteOffset == null) {
             return context.getPendingException();
         }
-        Long uint32Value = toUint32(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
-        if (uint32Value == null) {
+        T value = converter.apply(context, args.length > 1 ? args[1] : JSUndefined.INSTANCE);
+        if (value == null || context.hasPendingException()) {
             return context.getPendingException();
         }
-        JSValue error = checkAccess(context, dataView, byteOffset, 1);
+        boolean littleEndian = size > 1 && args.length > 2
+                && JSTypeConversions.toBoolean(args[2]) == JSBoolean.TRUE;
+        JSValue error = checkAccess(context, dataView, byteOffset, size);
         if (error != null) {
             return error;
         }
-        dataView.setUint8(byteOffset, (int) (uint32Value & 0xFF));
+        writer.write(dataView, byteOffset, value, littleEndian);
         return JSUndefined.INSTANCE;
     }
 
@@ -612,5 +332,15 @@ public final class DataViewPrototype {
             return null;
         }
         return uint32Value;
+    }
+
+    @FunctionalInterface
+    private interface DataViewReader {
+        JSValue read(JSDataView view, int byteOffset, boolean littleEndian);
+    }
+
+    @FunctionalInterface
+    private interface DataViewWriter<T> {
+        void write(JSDataView view, int byteOffset, T value, boolean littleEndian);
     }
 }

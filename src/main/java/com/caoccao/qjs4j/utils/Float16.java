@@ -646,8 +646,8 @@ public final class Float16 {
 
         int value;
         if (a > 0x7ff0000000000000L) {
-            // NaN
-            value = 0x7c01;
+            // Use V8's quiet NaN encoding, also used by the float overload.
+            value = NaN;
         } else if (a < 0x3f10000000000000L) {
             // Subnormal fp16 or zero.
             if (a <= 0x3e60000000000000L) {

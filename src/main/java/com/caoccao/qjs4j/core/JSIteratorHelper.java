@@ -113,11 +113,17 @@ public final class JSIteratorHelper {
      * @return An iterator, or null if the object is not iterable
      */
     public static JSValue getIterator(JSContext context, JSValue iterable) {
-        // Handle string primitives specially
         if (iterable instanceof JSString jsString) {
             return JSIterator.stringIterator(context, jsString);
         }
+        IteratorRecord record = getIteratorRecord(context, iterable);
+        return record != null ? record.iterator() : null;
+    }
 
+    /**
+     * GetIterator with its next method captured once, so iteration does not repeat property access.
+     */
+    static IteratorRecord getIteratorRecord(JSContext context, JSValue iterable) {
         JSObject iterableObject;
         if (iterable instanceof JSObject jsObject) {
             iterableObject = jsObject;
@@ -154,8 +160,8 @@ public final class JSIteratorHelper {
             if (context.hasPendingException()) {
                 return null;
             }
-            if (nextMethod instanceof JSFunction) {
-                return iterator;
+            if (nextMethod instanceof JSFunction nextFunction) {
+                return new IteratorRecord(iteratorObj, nextFunction);
             }
         }
 
@@ -372,5 +378,8 @@ public final class JSIteratorHelper {
          * @return true to continue iteration, false to break
          */
         boolean iterate(JSValue value);
+    }
+
+    record IteratorRecord(JSObject iterator, JSFunction nextMethod) {
     }
 }

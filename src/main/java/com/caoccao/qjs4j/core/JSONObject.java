@@ -1550,14 +1550,14 @@ public final class JSONObject {
     }
 
     private record ParseResult(int endIndex, int sourceEnd, int sourceStart, JSValue value) {
-            ParseResult(JSValue value, int endIndex) {
-                this(endIndex, -1, -1, value);
-            }
-
-            ParseResult(JSValue value, int endIndex, int sourceStart, int sourceEnd) {
-                this(endIndex, sourceEnd, sourceStart, value);
-            }
+        ParseResult(JSValue value, int endIndex) {
+            this(endIndex, -1, -1, value);
         }
+
+        ParseResult(JSValue value, int endIndex, int sourceStart, int sourceEnd) {
+            this(endIndex, sourceEnd, sourceStart, value);
+        }
+    }
 
     /**
      * Tracks the source text and original parsed value for a property.
