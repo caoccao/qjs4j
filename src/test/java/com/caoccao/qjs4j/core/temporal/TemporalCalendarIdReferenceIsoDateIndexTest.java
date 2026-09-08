@@ -18,8 +18,12 @@ package com.caoccao.qjs4j.core.temporal;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TemporalCalendarIdReferenceIsoDateIndexTest {
     private IsoDate findReferenceIsoDateAtOrBelowManual(TemporalCalendarId calendarId, String monthCode,
@@ -32,6 +36,17 @@ public class TemporalCalendarIdReferenceIsoDateIndexTest {
             }
         }
         return null;
+    }
+
+    @Test
+    public void testCalendarYearCacheKeysDoNotCollide() {
+        Set<Long> keys = new HashSet<>();
+        for (TemporalCalendarId calendarId : TemporalCalendarId.values()) {
+            for (int year : new int[]{Integer.MIN_VALUE, -1, 0, 1, Integer.MAX_VALUE}) {
+                assertTrue(keys.add(TemporalUtils.getCalendarYearCacheKey(calendarId, year)),
+                        () -> "Cache key collision for " + calendarId + " in year " + year);
+            }
+        }
     }
 
     @Test

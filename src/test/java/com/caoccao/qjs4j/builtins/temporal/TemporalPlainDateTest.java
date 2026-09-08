@@ -20,7 +20,6 @@ import com.caoccao.qjs4j.BaseJavetTest;
 import org.junit.jupiter.api.Test;
 
 public class TemporalPlainDateTest extends BaseJavetTest {
-
     @Test
     public void testAdd() {
         assertStringWithJavet("new Temporal.PlainDate(2024, 1, 15).add({days: 10}).toString()");
@@ -130,6 +129,22 @@ public class TemporalPlainDateTest extends BaseJavetTest {
     @Test
     public void testDaysInYear() {
         assertIntegerWithJavet("new Temporal.PlainDate(2024, 3, 15).daysInYear");
+    }
+
+    @Test
+    public void testDifferenceRoundingAcrossUnitBoundaries() {
+        for (String method : new String[]{"since", "until"}) {
+            for (String[] dates : new String[][]{{"2022-01-01", "2023-12-25"}, {"2023-12-25", "2022-01-01"},
+                    {"2023-01-01", "2023-01-31"}, {"2023-01-31", "2023-01-01"}}) {
+                for (String largestUnit : new String[]{"year", "month", "week"}) {
+                    String smallestUnit = "year".equals(largestUnit) ? "month" : "day";
+                    assertStringWithJavet(
+                            "Temporal.PlainDate.from('" + dates[0] + "')." + method + "(Temporal.PlainDate.from('"
+                                    + dates[1] + "'), {largestUnit: '" + largestUnit + "', smallestUnit: '"
+                                    + smallestUnit + "', roundingMode: 'expand', roundingIncrement: 2}).toString()");
+                }
+            }
+        }
     }
 
     @Test

@@ -124,8 +124,27 @@ public final class TemporalUtils {
     }
 
     public static long getCalendarYearCacheKey(TemporalCalendarId calendarId, int calendarYear) {
+        // Explicit identities keep the packed cache key independent of enum declaration order.
+        int calendarKey = switch (calendarId) {
+            case ISO8601 -> 0;
+            case BUDDHIST -> 1;
+            case CHINESE -> 2;
+            case COPTIC -> 3;
+            case DANGI -> 4;
+            case ETHIOAA -> 5;
+            case ETHIOPIC -> 6;
+            case GREGORY -> 7;
+            case HEBREW -> 8;
+            case INDIAN -> 9;
+            case ISLAMIC_CIVIL -> 10;
+            case ISLAMIC_TBLA -> 11;
+            case ISLAMIC_UMALQURA -> 12;
+            case JAPANESE -> 13;
+            case PERSIAN -> 14;
+            case ROC -> 15;
+        };
         long normalizedYear = (long) calendarYear - Integer.MIN_VALUE;
-        return ((long) calendarId.ordinal() << 32) | (normalizedYear & 0xFFFF_FFFFL);
+        return ((long) calendarKey << 32) | (normalizedYear & 0xFFFF_FFFFL);
     }
 
     /**

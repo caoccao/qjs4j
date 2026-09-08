@@ -26,7 +26,6 @@ import com.caoccao.qjs4j.vm.StackFrame;
 import com.caoccao.qjs4j.vm.VarRef;
 
 import java.util.*;
-import java.util.stream.Stream;
 
 /**
  * The global object with built-in functions. Based on ECMAScript specification global properties and functions.
@@ -1026,8 +1025,16 @@ public final class JSGlobalObject {
      * Initialize Error constructors.
      */
     private void initializeErrorConstructors() {
-        Stream.of(JSErrorType.values()).forEach(type -> globalObject.defineProperty(PropertyKey.fromString(type.name()),
-                type.create(context), PropertyDescriptor.DataState.ConfigurableWritable));
+        // NativeError prototypes inherit from Error.prototype, so create Error first,
+        // independently of the declaration order of JSErrorType.
+        globalObject.defineProperty(PropertyKey.fromString(JSError.NAME), JSErrorType.Error.create(context),
+                PropertyDescriptor.DataState.ConfigurableWritable);
+        for (JSErrorType type : JSErrorType.values()) {
+            if (type != JSErrorType.Error) {
+                globalObject.defineProperty(PropertyKey.fromString(type.name()), type.create(context),
+                        PropertyDescriptor.DataState.ConfigurableWritable);
+            }
+        }
     }
 
     /**

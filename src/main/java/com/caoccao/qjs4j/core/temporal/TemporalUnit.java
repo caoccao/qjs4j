@@ -23,7 +23,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * Temporal unit enum, ordered from largest (YEAR) to smallest (NANOSECOND).
+ * Temporal units with explicit ranks from largest (YEAR) to smallest (NANOSECOND).
  */
 public enum TemporalUnit {
     DAY("day", 3), HOUR("hour", 4), MICROSECOND("microsecond", 8), MILLISECOND("millisecond", 7), MINUTE("minute",

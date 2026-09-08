@@ -27,6 +27,21 @@ public class TemporalTimeZoneCanonicalizationParityTest extends BaseJavetTest {
     }
 
     @Test
+    public void testCanonicalAliasHistoricalOffsets() {
+        for (String[] zones : new String[][]{{"Asia/Choibalsan", "Asia/Ulaanbaatar"}, {"CET", "Europe/Brussels"},
+                {"EST", "America/Panama"}, {"Europe/Kiev", "Europe/Kyiv"}}) {
+            for (String date : new String[]{"1900-01-01", "1970-01-01", "2020-07-01"}) {
+                assertBooleanWithJavet("(() => { const epoch = Temporal.Instant.from('" + date
+                        + "T00:00Z').epochNanoseconds; return new Temporal.ZonedDateTime(epoch, '" + zones[0]
+                        + "').offsetNanoseconds === new Temporal.ZonedDateTime(epoch, '" + zones[1]
+                        + "').offsetNanoseconds; })()");
+                assertStringWithJavet(
+                        "Temporal.PlainDate.from('" + date + "').toZonedDateTime('" + zones[0] + "').timeZoneId");
+            }
+        }
+    }
+
+    @Test
     public void testCanonicalDistinctNotEqual() {
         assertBooleanWithJavet(
                 "new Temporal.ZonedDateTime(0n, 'Europe/Berlin').equals(new Temporal.ZonedDateTime(0n, 'Europe/Paris'))");

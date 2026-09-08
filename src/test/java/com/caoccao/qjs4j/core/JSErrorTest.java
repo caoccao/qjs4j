@@ -25,6 +25,19 @@ public class JSErrorTest extends BaseJavetTest {
     }
 
     @Test
+    public void testNativeErrorPrototypeChains() {
+        for (JSErrorType type : JSErrorType.values()) {
+            if (type == JSErrorType.Error) {
+                continue;
+            }
+            assertBooleanWithJavet("Object.getPrototypeOf(" + type.name() + ") === Error",
+                    "Object.getPrototypeOf(" + type.name() + ".prototype) === Error.prototype");
+        }
+        assertBooleanWithJavet("AggregateError.prototype.hasOwnProperty('errors')");
+        assertStringWithJavet("new AggregateError([], 'message').toString()");
+    }
+
+    @Test
     public void testSuppressedError() {
         assertStringWithJavet(
                 "const e1 = new SuppressedError(new Error('main'), new Error('suppressed'), 'custom message'); e1.name + ': ' + e1.message",

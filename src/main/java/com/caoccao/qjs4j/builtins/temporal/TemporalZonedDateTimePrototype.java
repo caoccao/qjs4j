@@ -21,7 +21,6 @@ import com.caoccao.qjs4j.core.temporal.*;
 
 import java.math.BigInteger;
 import java.time.DateTimeException;
-import java.util.Map;
 
 /**
  * Implementation of Temporal.ZonedDateTime prototype methods.
@@ -32,85 +31,6 @@ public final class TemporalZonedDateTimePrototype {
     private static final long MAX_ROUNDING_INCREMENT = TemporalConstants.MAX_ROUNDING_INCREMENT;
     private static final BigInteger NS_PER_HOUR = TemporalConstants.BI_HOUR_NANOSECONDS;
     private static final BigInteger NS_PER_MS = TemporalConstants.BI_MILLISECOND_NANOSECONDS;
-    private static final Map<String, String> TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS = Map.ofEntries(
-            Map.entry("europe/nicosia", "Asia/Nicosia"), Map.entry("asia/ashkhabad", "Asia/Ashgabat"),
-            Map.entry("asia/calcutta", "Asia/Kolkata"), Map.entry("asia/choibalsan", "Asia/Ulaanbaatar"),
-            Map.entry("asia/chongqing", "Asia/Shanghai"), Map.entry("asia/chungking", "Asia/Shanghai"),
-            Map.entry("asia/dacca", "Asia/Dhaka"), Map.entry("asia/harbin", "Asia/Shanghai"),
-            Map.entry("asia/istanbul", "Europe/Istanbul"), Map.entry("asia/kashgar", "Asia/Urumqi"),
-            Map.entry("asia/katmandu", "Asia/Kathmandu"), Map.entry("asia/macao", "Asia/Macau"),
-            Map.entry("asia/rangoon", "Asia/Yangon"), Map.entry("asia/saigon", "Asia/Ho_Chi_Minh"),
-            Map.entry("asia/tel_aviv", "Asia/Jerusalem"), Map.entry("asia/thimbu", "Asia/Thimphu"),
-            Map.entry("asia/ujung_pandang", "Asia/Makassar"), Map.entry("asia/ulan_bator", "Asia/Ulaanbaatar"),
-            Map.entry("africa/asmera", "Africa/Asmara"), Map.entry("africa/timbuktu", "Africa/Bamako"),
-            Map.entry("antarctica/south_pole", "Antarctica/McMurdo"), Map.entry("australia/act", "Australia/Sydney"),
-            Map.entry("australia/canberra", "Australia/Sydney"), Map.entry("australia/currie", "Australia/Hobart"),
-            Map.entry("australia/lhi", "Australia/Lord_Howe"), Map.entry("australia/nsw", "Australia/Sydney"),
-            Map.entry("australia/north", "Australia/Darwin"), Map.entry("australia/queensland", "Australia/Brisbane"),
-            Map.entry("australia/south", "Australia/Adelaide"), Map.entry("australia/tasmania", "Australia/Hobart"),
-            Map.entry("australia/victoria", "Australia/Melbourne"), Map.entry("australia/west", "Australia/Perth"),
-            Map.entry("australia/yancowinna", "Australia/Broken_Hill"),
-            Map.entry("pacific/enderbury", "Pacific/Kanton"), Map.entry("pacific/johnston", "Pacific/Honolulu"),
-            Map.entry("pacific/ponape", "Pacific/Pohnpei"), Map.entry("pacific/samoa", "Pacific/Pago_Pago"),
-            Map.entry("pacific/truk", "Pacific/Chuuk"), Map.entry("pacific/yap", "Pacific/Chuuk"),
-            Map.entry("europe/belfast", "Europe/London"), Map.entry("europe/kiev", "Europe/Kyiv"),
-            Map.entry("europe/tiraspol", "Europe/Chisinau"), Map.entry("europe/uzhgorod", "Europe/Kyiv"),
-            Map.entry("europe/zaporozhye", "Europe/Kyiv"),
-            Map.entry("america/argentina/comodrivadavia", "America/Argentina/Catamarca"),
-            Map.entry("america/atka", "America/Adak"),
-            Map.entry("america/buenos_aires", "America/Argentina/Buenos_Aires"),
-            Map.entry("america/catamarca", "America/Argentina/Catamarca"),
-            Map.entry("america/coral_harbour", "America/Atikokan"),
-            Map.entry("america/cordoba", "America/Argentina/Cordoba"), Map.entry("america/ensenada", "America/Tijuana"),
-            Map.entry("america/fort_wayne", "America/Indiana/Indianapolis"),
-            Map.entry("america/godthab", "America/Nuuk"),
-            Map.entry("america/indianapolis", "America/Indiana/Indianapolis"),
-            Map.entry("america/jujuy", "America/Argentina/Jujuy"), Map.entry("america/knox_in", "America/Indiana/Knox"),
-            Map.entry("america/louisville", "America/Kentucky/Louisville"),
-            Map.entry("america/mendoza", "America/Argentina/Mendoza"), Map.entry("america/montreal", "America/Toronto"),
-            Map.entry("america/nipigon", "America/Toronto"), Map.entry("america/pangnirtung", "America/Iqaluit"),
-            Map.entry("america/porto_acre", "America/Rio_Branco"), Map.entry("america/rainy_river", "America/Winnipeg"),
-            Map.entry("america/rosario", "America/Argentina/Cordoba"),
-            Map.entry("america/santa_isabel", "America/Tijuana"), Map.entry("america/shiprock", "America/Denver"),
-            Map.entry("america/thunder_bay", "America/Toronto"), Map.entry("america/virgin", "America/St_Thomas"),
-            Map.entry("america/yellowknife", "America/Edmonton"), Map.entry("us/alaska", "America/Anchorage"),
-            Map.entry("us/aleutian", "America/Adak"), Map.entry("us/arizona", "America/Phoenix"),
-            Map.entry("us/central", "America/Chicago"), Map.entry("us/east-indiana", "America/Indiana/Indianapolis"),
-            Map.entry("us/eastern", "America/New_York"), Map.entry("us/hawaii", "Pacific/Honolulu"),
-            Map.entry("us/indiana-starke", "America/Indiana/Knox"), Map.entry("us/michigan", "America/Detroit"),
-            Map.entry("us/mountain", "America/Denver"), Map.entry("us/pacific", "America/Los_Angeles"),
-            Map.entry("us/samoa", "Pacific/Pago_Pago"), Map.entry("atlantic/faeroe", "Atlantic/Faroe"),
-            Map.entry("atlantic/jan_mayen", "Arctic/Longyearbyen"), Map.entry("brazil/acre", "America/Rio_Branco"),
-            Map.entry("brazil/denoronha", "America/Noronha"), Map.entry("brazil/east", "America/Sao_Paulo"),
-            Map.entry("brazil/west", "America/Manaus"), Map.entry("cet", "Europe/Brussels"),
-            Map.entry("cst6cdt", "America/Chicago"), Map.entry("canada/atlantic", "America/Halifax"),
-            Map.entry("canada/central", "America/Winnipeg"), Map.entry("canada/eastern", "America/Toronto"),
-            Map.entry("canada/mountain", "America/Edmonton"), Map.entry("canada/newfoundland", "America/St_Johns"),
-            Map.entry("canada/pacific", "America/Vancouver"), Map.entry("canada/saskatchewan", "America/Regina"),
-            Map.entry("canada/yukon", "America/Whitehorse"), Map.entry("chile/continental", "America/Santiago"),
-            Map.entry("chile/easterisland", "Pacific/Easter"), Map.entry("cuba", "America/Havana"),
-            Map.entry("eet", "Europe/Athens"), Map.entry("est", "America/Panama"),
-            Map.entry("est5edt", "America/New_York"), Map.entry("egypt", "Africa/Cairo"),
-            Map.entry("eire", "Europe/Dublin"), Map.entry("etc/gmt", "UTC"), Map.entry("etc/gmt+0", "UTC"),
-            Map.entry("etc/gmt-0", "UTC"), Map.entry("etc/gmt0", "UTC"), Map.entry("etc/greenwich", "UTC"),
-            Map.entry("etc/uct", "UTC"), Map.entry("etc/utc", "UTC"), Map.entry("etc/universal", "UTC"),
-            Map.entry("etc/zulu", "UTC"), Map.entry("gb", "Europe/London"), Map.entry("gb-eire", "Europe/London"),
-            Map.entry("gmt", "UTC"), Map.entry("gmt+0", "UTC"), Map.entry("gmt-0", "UTC"), Map.entry("gmt0", "UTC"),
-            Map.entry("greenwich", "UTC"), Map.entry("hst", "Pacific/Honolulu"),
-            Map.entry("hongkong", "Asia/Hong_Kong"), Map.entry("iceland", "Atlantic/Reykjavik"),
-            Map.entry("iran", "Asia/Tehran"), Map.entry("israel", "Asia/Jerusalem"),
-            Map.entry("jamaica", "America/Jamaica"), Map.entry("japan", "Asia/Tokyo"),
-            Map.entry("kwajalein", "Pacific/Kwajalein"), Map.entry("libya", "Africa/Tripoli"),
-            Map.entry("met", "Europe/Brussels"), Map.entry("mst", "America/Phoenix"),
-            Map.entry("mst7mdt", "America/Denver"), Map.entry("mexico/bajanorte", "America/Tijuana"),
-            Map.entry("mexico/bajasur", "America/Mazatlan"), Map.entry("mexico/general", "America/Mexico_City"),
-            Map.entry("nz", "Pacific/Auckland"), Map.entry("nz-chat", "Pacific/Chatham"),
-            Map.entry("navajo", "America/Denver"), Map.entry("prc", "Asia/Shanghai"),
-            Map.entry("pst8pdt", "America/Los_Angeles"), Map.entry("poland", "Europe/Warsaw"),
-            Map.entry("portugal", "Europe/Lisbon"), Map.entry("roc", "Asia/Taipei"), Map.entry("rok", "Asia/Seoul"),
-            Map.entry("singapore", "Asia/Singapore"), Map.entry("turkey", "Europe/Istanbul"), Map.entry("uct", "UTC"),
-            Map.entry("universal", "UTC"), Map.entry("w-su", "Europe/Moscow"), Map.entry("wet", "Europe/Lisbon"),
-            Map.entry("utc", "UTC"), Map.entry("zulu", "UTC"));
     private static final String TYPE_NAME = "Temporal.ZonedDateTime";
 
     private TemporalZonedDateTimePrototype() {
@@ -348,12 +268,12 @@ public final class TemporalZonedDateTimePrototype {
         }
 
         String startCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
-                startZonedDateTime.getTimeZoneId(), TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
+                startZonedDateTime.getTimeZoneId());
         if (context.hasPendingException()) {
             return null;
         }
         String endCanonicalTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
-                endZonedDateTime.getTimeZoneId(), TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
+                endZonedDateTime.getTimeZoneId());
         if (context.hasPendingException()) {
             return null;
         }
@@ -440,12 +360,12 @@ public final class TemporalZonedDateTimePrototype {
             }
         }
         String receiverTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
-                zonedDateTime.getTimeZoneId(), TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
+                zonedDateTime.getTimeZoneId());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }
         String argumentTimeZoneId = TemporalTimeZone.canonicalizeTimeZoneIdentifierForEquals(context,
-                other.getTimeZoneId(), TIME_ZONE_PRIMARY_IDENTIFIERS_FOR_EQUALS);
+                other.getTimeZoneId());
         if (context.hasPendingException()) {
             return JSUndefined.INSTANCE;
         }

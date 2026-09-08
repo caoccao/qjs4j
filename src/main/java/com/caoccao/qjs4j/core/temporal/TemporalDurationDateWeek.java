@@ -318,11 +318,11 @@ public record TemporalDurationDateWeek(long years, long months, long weeks, long
             return duration;
         }
 
-        TemporalUnit[] units = TemporalUnit.values();
-        int largestUnitIndex = largestUnit.rank();
-        int smallestUnitIndex = smallestUnit.rank();
-        for (int unitIndex = smallestUnitIndex - 1; unitIndex >= largestUnitIndex; unitIndex--) {
-            TemporalUnit unit = units[unitIndex];
+        // Bubble through progressively larger calendar units, independently of enum positions.
+        for (TemporalUnit unit : new TemporalUnit[]{TemporalUnit.WEEK, TemporalUnit.MONTH, TemporalUnit.YEAR}) {
+            if (!unit.isLargerThan(smallestUnit) || unit.isLargerThan(largestUnit)) {
+                continue;
+            }
             if (unit == TemporalUnit.WEEK && largestUnit != TemporalUnit.WEEK) {
                 continue;
             }
